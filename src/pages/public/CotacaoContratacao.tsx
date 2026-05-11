@@ -1080,8 +1080,20 @@ export default function CotacaoContratacao() {
                   ) : cotacao?.tipo_vistoria === 'agendada' ? (
                     // ========== FLUXO VISTORIA PRESENCIAL (AGENDADA) ==========
                     // Cliente já agendou na Etapa 3 - NUNCA mostrar formulário de agendamento aqui
-                    cotacao?.vistoria_data_agendada ? (
+                    // Aceita tanto colunas vistoria_* (presencial direto) quanto vistoria_completa_* (rota pós-pagamento)
+                    (cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada) ? (
                       // Tem dados do agendamento - mostrar detalhes
+                      (() => {
+                        const dataAg = cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada;
+                        const horarioAg = cotacao?.vistoria_horario_agendado || cotacao?.vistoria_completa_horario_agendado;
+                        const periodoAg = cotacao?.vistoria_periodo || cotacao?.vistoria_completa_periodo;
+                        const endLog = cotacao?.vistoria_endereco_logradouro || cotacao?.vistoria_completa_endereco_logradouro;
+                        const endNum = cotacao?.vistoria_endereco_numero || cotacao?.vistoria_completa_endereco_numero;
+                        const endBai = cotacao?.vistoria_endereco_bairro || cotacao?.vistoria_completa_endereco_bairro;
+                        const endCid = cotacao?.vistoria_endereco_cidade || cotacao?.vistoria_completa_endereco_cidade;
+                        const endUf = cotacao?.vistoria_endereco_estado || cotacao?.vistoria_completa_endereco_estado;
+                        const periodoLabel = periodoAg === 'manha' ? 'Manhã (08:00 às 12:00)' : periodoAg === 'tarde' ? 'Tarde (13:00 às 17:00)' : null;
+                        return (
                       <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-6">
                           <motion.div 
@@ -1104,41 +1116,42 @@ export default function CotacaoContratacao() {
 
                           {/* Detalhes do agendamento */}
                           <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
-                            {cotacao?.vistoria_data_agendada && (
+                            {dataAg && (
                               <div className="flex items-center gap-3">
                                 <Calendar className="h-5 w-5 text-primary flex-shrink-0" />
                                 <div>
-                                  <p className="text-sm text-muted-foreground">Data</p>
+                                  <p className="text-sm text-muted-foreground">Data{periodoLabel ? ' e período' : ''}</p>
                                   <p className="font-medium">
-                                    {format(new Date(cotacao.vistoria_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                    {format(new Date(dataAg + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                    {periodoLabel ? ` — ${periodoLabel}` : ''}
                                   </p>
                                 </div>
                               </div>
                             )}
                             
-                            {cotacao?.vistoria_horario_agendado && (
+                            {horarioAg && !periodoLabel && (
                               <div className="flex items-center gap-3">
                                 <Clock className="h-5 w-5 text-primary flex-shrink-0" />
                                 <div>
                                   <p className="text-sm text-muted-foreground">Horário</p>
-                                  <p className="font-medium">{cotacao.vistoria_horario_agendado}</p>
+                                  <p className="font-medium">{horarioAg}</p>
                                 </div>
                               </div>
                             )}
                             
-                            {cotacao?.vistoria_endereco_logradouro && (
+                            {endLog && (
                               <div className="flex items-start gap-3">
                                 <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                                 <div>
                                   <p className="text-sm text-muted-foreground">Local</p>
                                   <p className="font-medium">
-                                    {cotacao.vistoria_endereco_logradouro}
-                                    {cotacao.vistoria_endereco_numero && `, ${cotacao.vistoria_endereco_numero}`}
+                                    {endLog}
+                                    {endNum && `, ${endNum}`}
                                   </p>
                                   <p className="text-sm text-muted-foreground">
-                                    {cotacao.vistoria_endereco_bairro}
-                                    {cotacao.vistoria_endereco_cidade && ` - ${cotacao.vistoria_endereco_cidade}`}
-                                    {cotacao.vistoria_endereco_estado && `/${cotacao.vistoria_endereco_estado}`}
+                                    {endBai}
+                                    {endCid && ` - ${endCid}`}
+                                    {endUf && `/${endUf}`}
                                   </p>
                                 </div>
                               </div>
@@ -1176,6 +1189,8 @@ export default function CotacaoContratacao() {
                           </p>
                         </CardContent>
                       </Card>
+                        );
+                      })()
                     ) : isLoadingAgendamento ? (
                       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-4">
