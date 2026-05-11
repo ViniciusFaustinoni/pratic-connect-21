@@ -11,7 +11,7 @@ export const trocaTitularidade: Tutorial = {
   descricao:
     'Quando o veículo é vendido e o novo dono quer manter a proteção: como localizar o contrato atual e iniciar a troca de titular sem perder a carência.',
   categoria: 'Operação Comercial',
-  tempoEstimadoMin: 6,
+  tempoEstimadoMin: 10,
   novo: true,
   steps: [
     {
