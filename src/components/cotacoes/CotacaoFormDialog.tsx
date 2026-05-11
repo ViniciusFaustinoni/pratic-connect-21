@@ -1883,10 +1883,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                   key={a.id}
                                   type="button"
                                   className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors"
-                                  onClick={() => {
-                                    setIndicadorId(a.id);
-                                    setIndicadorNome(a.nome);
-                                    setBuscaIndicador('');
+                                  onClick={async () => {
+                                    try {
+                                      if (a.origem_sga) {
+                                        toast.info('Importando indicador do SGA...');
+                                      }
+                                      const localId = await resolverAssociadoLocalId(a);
+                                      setIndicadorId(localId);
+                                      setIndicadorNome(a.nome);
+                                      setBuscaIndicador('');
+                                    } catch (e) {
+                                      toast.error(e instanceof Error ? e.message : 'Não foi possível selecionar este indicador');
+                                    }
                                   }}
                                 >
                                   <span className="font-medium">{a.nome}</span>
