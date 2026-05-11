@@ -369,6 +369,35 @@ export function TrocaTitularidadeDialog({
             })()}
           </div>
 
+          {veiculoId && situacaoPorId[veiculoId] && (() => {
+            const s = situacaoPorId[veiculoId];
+            if (s.loading) {
+              return (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Consultando situação financeira no SGA…
+                </div>
+              );
+            }
+            const cls =
+              s.status === 'ADIMPLENTE'
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                : s.status === 'INADIMPLENTE'
+                  ? 'bg-destructive/15 text-destructive border-destructive/30'
+                  : 'bg-muted text-muted-foreground border-border';
+            const label =
+              s.status === 'ADIMPLENTE'
+                ? 'Situação financeira: ADIMPLENTE'
+                : s.status === 'INADIMPLENTE'
+                  ? 'Situação financeira: INADIMPLENTE'
+                  : 'Situação financeira: indisponível no SGA';
+            return (
+              <div className={`text-xs font-medium inline-flex items-center rounded border px-2 py-1 ${cls}`}>
+                {label}
+              </div>
+            );
+          })()}
+
           {veiculoId && (boletosPorIdLocal[veiculoId]?.length ?? 0) > 0 && (() => {
             const boletos = boletosPorIdLocal[veiculoId] || [];
             const total = saldoPorIdLocal[veiculoId] || 0;
