@@ -1607,6 +1607,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
         const novaCotacao = await createCotacao.mutateAsync({
           ...cotacaoData,
+          // Guard: indicador_id é UUID; nunca enviar matrícula/string vazia
+          indicador_id: isUuid(cotacaoData.indicador_id) ? cotacaoData.indicador_id : null,
           solicitar_fipe_menor: solicitarFipeMenor,
           status: 'rascunho',
           vendedor_id: vendedorIdFinal,
