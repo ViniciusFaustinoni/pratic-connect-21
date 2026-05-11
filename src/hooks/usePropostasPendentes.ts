@@ -562,14 +562,21 @@ export function usePropostasPendentes() {
           if (cotacao.plano_escolhido_id) {
             planoNome = mPlano.get(cotacao.plano_escolhido_id)?.nome || null;
           }
-          if (cotacao.vistoria_data_agendada) {
+          // Prioriza vistoria_completa_* (fluxo público de rota / autovistoria),
+          // cai para vistoria_* (presencial simples). Mantém o item visível na
+          // fila enquanto o agendamento existir, mesmo antes da materialização.
+          const dataAgEff = (cotacao as any).vistoria_completa_data_agendada || cotacao.vistoria_data_agendada;
+          const horarioAgEff = (cotacao as any).vistoria_completa_horario_agendado
+            || (cotacao as any).vistoria_completa_periodo
+            || cotacao.vistoria_horario_agendado
+            || (cotacao as any).vistoria_periodo;
+          if (dataAgEff) {
             instalacaoAgendada = {
-              data: cotacao.vistoria_data_agendada,
-              horario: cotacao.vistoria_horario_agendado || '---',
+              data: dataAgEff,
+              horario: horarioAgEff || '---',
               permite_encaixe: cotacao.vistoria_permite_encaixe || false,
             };
           }
-        }
 
         // Sobrescrever com instalação ATIVA (verdade)
         const instAtiva = mInstAtiva.get(contrato.id);
