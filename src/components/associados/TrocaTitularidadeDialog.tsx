@@ -333,6 +333,77 @@ export function TrocaTitularidadeDialog({
             })()}
           </div>
 
+          {veiculoId && (boletosPorIdLocal[veiculoId]?.length ?? 0) > 0 && (() => {
+            const boletos = boletosPorIdLocal[veiculoId] || [];
+            const total = saldoPorIdLocal[veiculoId] || 0;
+            const fmtBRL = (n: number) =>
+              new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+            const fmtData = (s: string | null) => {
+              if (!s) return '—';
+              const [y, m, d] = s.split('-');
+              return d && m && y ? `${d}/${m}/${y}` : s;
+            };
+            const copiar = async (linha: string) => {
+              try {
+                await navigator.clipboard.writeText(linha);
+                toast.success('Linha digitável copiada');
+              } catch {
+                toast.error('Não foi possível copiar');
+              }
+            };
+            return (
+              <Alert variant="destructive" className="border-destructive/40">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <strong>Boletos pendentes do veículo</strong>
+                    <span className="font-semibold">{fmtBRL(total)}</span>
+                  </div>
+                  <ul className="space-y-2">
+                    {boletos.map((b, i) => {
+                      const vencido = (b.situacao_label || '').toLowerCase().includes('venc');
+                      return (
+                        <li key={`${b.nosso_numero || i}`} className="flex flex-wrap items-center gap-2 rounded border border-border/50 bg-background/40 p-2">
+                          <span className="text-xs">Vence {fmtData(b.data_vencimento)}</span>
+                          <span className="text-xs font-medium">{fmtBRL(b.valor)}</span>
+                          <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${vencido ? 'bg-destructive text-destructive-foreground' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'}`}>
+                            {b.situacao_label || (vencido ? 'vencido' : 'pendente')}
+                          </span>
+                          <div className="ml-auto flex gap-1">
+                            {b.link_boleto && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => window.open(b.link_boleto!, '_blank', 'noopener,noreferrer')}
+                              >
+                                <ExternalLink className="h-3 w-3 mr-1" /> Abrir boleto
+                              </Button>
+                            )}
+                            {b.linha_digitavel && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => copiar(b.linha_digitavel!)}
+                              >
+                                <Copy className="h-3 w-3 mr-1" /> Copiar
+                              </Button>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            );
+          })()}
+
+          {veiculoId && (boletosPorIdLocal[veiculoId]?.length ?? 0) === 0 && veiculosSgaMapeados.some(v => v.id === veiculoId) && (
+            <p className="text-xs text-muted-foreground">Sem boletos pendentes para este veículo.</p>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="novo-titular-nome">Nome completo do novo titular *</Label>
             <Input id="novo-titular-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
