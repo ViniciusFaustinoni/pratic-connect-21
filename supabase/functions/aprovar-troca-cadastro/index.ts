@@ -55,26 +55,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3) Trava: débito do antigo (relacionamento_debitos_pendentes em 'aberto')
-    const { data: debitoAberto } = await admin
-      .from('relacionamento_debitos_pendentes')
-      .select('id, valor_total, quantidade_boletos')
-      .eq('associado_id', sol.associado_antigo_id)
-      .eq('status', 'aberto')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (debitoAberto) {
-      return new Response(
-        JSON.stringify({
-          error: 'Aprovação bloqueada: o titular antigo possui débitos em aberto no SGA. A liberação ocorre automaticamente após a quitação.',
-          code: 'DEBITO_PENDENTE_ANTIGO',
-          valor_total: debitoAberto.valor_total,
-          quantidade_boletos: debitoAberto.quantidade_boletos,
-        }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
+    // (Removido) Trava por débito do antigo: a troca não exige mais adimplência.
 
     // 4) Resolver profile.id do aprovador
     const { data: prof } = await admin
