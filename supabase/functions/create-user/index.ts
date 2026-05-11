@@ -251,8 +251,9 @@ serve(async (req) => {
           await supabaseAdmin.functions.invoke('whatsapp-send-text', {
             body: {
               telefone,
-              template: 'boas_vindas_agencia_v1',
-              params: [nomeIdentificado, magicLink],
+              mensagem: `Bem-vindo(a) à PRATIC, ${nomeIdentificado}! Acesse: ${magicLink}`,
+              template_name: 'boas_vindas_agencia_v1',
+              template_params: [nomeIdentificado, magicLink],
             }
           });
           console.log('WhatsApp de boas-vindas enviado para agência');
