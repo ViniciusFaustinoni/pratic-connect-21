@@ -150,6 +150,32 @@ export function TrocaTitularidadeDialog({
   // Fonte final dos veículos exibidos no select
   const veiculos: VeiculoOpcao[] = usandoFallback ? veiculosFallback : veiculosSgaMapeados;
 
+  // Situação financeira por veículo (chama edge sga-sync-financeiro-veiculo em paralelo)
+  const situacaoQueries = useQueries({
+    queries: veiculos.map((v) => ({
+      queryKey: ['troca-tit-sit-fin', v.id],
+      queryFn: async () => {
+        const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
+          body: { veiculo_id: v.id },
+        });
+        if (error) throw error;
+        return data as { success?: boolean; situacao_financeira?: string | null };
+      },
+      enabled: open && !!v.id,
+      staleTime: 5 * 60 * 1000,
+      retry: 0,
+    })),
+  });
+  const situacaoPorId: Record<string, { status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido'; loading: boolean }> = {};
+  veiculos.forEach((v, i) => {
+    const q = situacaoQueries[i];
+    const raw = (q?.data?.situacao_financeira || '').toString().toUpperCase();
+    const status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido' =
+      raw === 'ADIMPLENTE' ? 'ADIMPLENTE' : raw === 'INADIMPLENTE' ? 'INADIMPLENTE' : 'desconhecido';
+    situacaoPorId[v.id] = { status, loading: !!q?.isLoading };
+  });
+
+
   // Auto-seleciona se só houver 1
   useEffect(() => {
     if (open && veiculos.length === 1 && !veiculoId) {
