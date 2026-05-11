@@ -243,6 +243,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (import.meta.env.DEV) console.log('[AuthContext] Mesmo usuário já carregado, atualizando session silenciosamente');
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
+          // Garantir que loading não fique preso true caso signIn() tenha
+          // setado true antes de um SIGNED_IN do mesmo usuário (re-login,
+          // refresh de token, etc.) — sem isso o spinner do AppLogin/AuthGuard
+          // fica eterno.
+          setLoading(false);
+          setInitialized(true);
           return;
         }
 
