@@ -191,13 +191,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 </div>
               </TabsContent>
 
-              <TabsContent value="financeiro" className="pt-3">
-                <RelatorioFinanceiroAntigo
-                  associadoId={solicitacao.associado_antigo_id}
-                  codigoHinova={(solicitacao.associado_antigo as any)?.codigo_hinova ?? null}
-                  cpf={solicitacao.associado_antigo?.cpf ?? null}
-                />
-              </TabsContent>
+              {/* (Removida) Aba "Financeiro Antigo" — checagem financeira não se aplica mais */}
 
               <TabsContent value="termo" className="pt-3 space-y-3">
                 <div className="rounded border p-3 space-y-2">
