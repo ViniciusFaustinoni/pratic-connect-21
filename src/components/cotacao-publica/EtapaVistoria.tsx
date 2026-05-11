@@ -171,61 +171,48 @@ export function EtapaVistoria({
                 </div>
               </button>
 
-              {/* Card 2: Técnico vai até o cliente */}
-              <button
-                onClick={() => setModo('agendada')}
-                className={cn(
-                  "w-full p-4 rounded-xl border bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left",
-                  tipoInstalacao === 'rota' ? "border-primary/40" : "border-border/50"
-                )}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center shrink-0 group-hover:bg-muted transition-colors">
-                    <Home className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-foreground">Quero que o técnico venha até mim</h3>
-                      {tipoInstalacao === 'rota' && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                          Sugerido
+              {/* Card 2: Técnico vai até o cliente — escondido quando cenário é Base */}
+              {tipoInstalacao !== 'base' && (
+                <button
+                  onClick={() => setModo('agendada')}
+                  className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center shrink-0 group-hover:bg-muted transition-colors">
+                      <Home className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground">Quero que o técnico venha até mim</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Um técnico vai ao seu endereço realizar a vistoria/instalação.
+                      </p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Agendamento em até 48h
                         </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Um técnico vai ao seu endereço realizar a vistoria/instalação.
-                    </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        Agendamento em até 48h
-                      </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              )}
 
-              {/* Card 3: Cliente leva à Base */}
-              <button
-                onClick={() => setModo('escolha-base')}
-                className={cn(
-                  "w-full p-4 rounded-xl border bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left",
-                  tipoInstalacao === 'base' ? "border-primary/40" : "border-border/50"
-                )}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 group-hover:bg-orange-500/20 transition-colors">
-                    <Building2 className="h-6 w-6 text-orange-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-foreground">Quero levar meu veículo à Base</h3>
-                      {tipoInstalacao === 'base' && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                          Sugerido
-                        </span>
-                      )}
+              {/* Card 3: Cliente leva à Base — escondido quando cenário é Rota */}
+              {tipoInstalacao !== 'rota' && (
+                <button
+                  onClick={() => setModo('escolha-base')}
+                  className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 group-hover:bg-orange-500/20 transition-colors">
+                      <Building2 className="h-6 w-6 text-orange-600" />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground">Quero levar meu veículo à Base</h3>
+                      </div>
                     <p className="text-sm text-muted-foreground">
                       Leve o veículo a uma unidade Praticcar para realizar a vistoria/instalação.
                     </p>

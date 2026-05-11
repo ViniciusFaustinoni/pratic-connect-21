@@ -1,43 +1,39 @@
-## Causa raiz
-O erro `invalid input syntax for type uuid: "24668"` ocorre porque o vendedor selecionou um **indicador encontrado pelo fallback SGA** (associado existente no Hinova mas ainda não importado para a base local).
+## Problema
 
-Em `src/hooks/useAssociadoSearch.ts` (linha 66), o resultado SGA-only é montado com:
+Na etapa de Vistoria da contratação pública (ex.: placa LTB4J74), o cliente vê as 3 opções (Autovistoria, Técnico vai até mim, Levar à Base) mesmo quando o consultor já travou o cenário de adesão como **+ Base** (isenta_adesao + base ou cobra_adesao + base). A opção "Quero que o técnico venha até mim" é incoerente nesse caso, pois implica instalação em rota.
 
-```ts
-return [{
-  id: String(data.codigo_associado),  // ← "24668" (matrícula), não UUID
-  ...
-  origem_sga: true,
-}];
-```
+A cotação já tem `tipo_instalacao` salvo (`'rota'` ou `'base'`), derivado do `cenario_adesao` escolhido pelo consultor, e esse valor já é passado como prop `tipoInstalacao` para `EtapaVistoria` e `EscolhaLocalVistoria`. Hoje ele é usado apenas para marcar uma das opções como "Sugerido" — não para esconder a opção contrária.
 
-Esse `id` virou `indicadorId` do form e foi enviado ao banco em `cotacoes.indicador_id` (coluna UUID), causando a falha. O SEVERINO FERNANDES ALVES (codigo_hinova 24668) já existe localmente — então a busca também deveria ter encontrado pela base local; o vendedor provavelmente buscou por nome/telefone (caso 2) onde só o LOCAL é consultado, ou buscou por CPF e o fallback foi acionado por algum motivo. Independente disso, o bug é entregar uma matrícula como `id` UUID.
+## Solução
 
-## Correção
+Tornar `tipoInstalacao` decisivo (não apenas sugestivo) na escolha do local da vistoria/instalação:
 
-### 1. `src/hooks/useAssociadoSearch.ts`
-- Não usar `String(codigo_associado)` como `id`. Tornar `id` opcional/null quando `origem_sga=true` e expor `codigo_associado` separadamente.
-- Tipo: `id: string | null`.
+- `tipoInstalacao === 'base'` → esconder o card **"Quero que o técnico venha até mim"** (rota)
+- `tipoInstalacao === 'rota'` → esconder o card **"Quero levar meu veículo à Base"**
+- `tipoInstalacao` nulo/indefinido → manter as duas opções (comportamento atual)
+- O card **Autovistoria** continua sempre visível quando o plano tem cobertura R&F (regra atual, não muda)
 
-### 2. `src/components/cotacao/EtapaDadosAssociado.tsx` (`handleSelectIndicador`) e `src/pages/vendas/Cotador.tsx` (handler análogo) e `src/components/cotacoes/CotacaoFormDialog.tsx` (handler do indicador)
-- Ao selecionar um resultado:
-  - Se `associado.id` é UUID válido → comportamento atual.
-  - Se `origem_sga === true` (sem UUID local) → invocar a edge function `importar-associado-sga` com o CPF; usar o `associado_id` retornado como `indicadorId`. Mostrar toast "Importando associado do SGA..." durante o processo e tratar erro com toast amigável.
-- Bloquear o botão enquanto importa (estado local `isImportandoIndicador`).
+Como consequência, o badge "Sugerido" deixa de fazer sentido (sobra só uma opção) — remover o badge nesses cards.
 
-### 3. Defesa em profundidade (validação client-side)
-- No submit do form (`CotacaoFormDialog` e `Cotador.tsx`), antes de chamar `createCotacao`, validar `indicadorId` com regex UUID. Se não for UUID e `isIndicacao` estiver ligado → toast "Indicador inválido, selecione novamente" e abortar.
+## Arquivos a alterar
 
-### 4. Sem mudança de schema
-Não há mudança no banco. Apenas frontend + reuso da edge function existente.
+1. **`src/components/cotacao-publica/EtapaVistoria.tsx`**
+   - Envolver o "Card 2: Técnico vai até o cliente" em `{tipoInstalacao !== 'base' && (...)}`
+   - Envolver o "Card 3: Cliente leva à Base" em `{tipoInstalacao !== 'rota' && (...)}`
+   - Remover os spans "Sugerido" desses dois cards (ficam redundantes)
 
-## Arquivos afetados
-- `src/hooks/useAssociadoSearch.ts`
-- `src/components/cotacao/EtapaDadosAssociado.tsx`
-- `src/pages/vendas/Cotador.tsx`
-- `src/components/cotacoes/CotacaoFormDialog.tsx`
+2. **`src/components/cotacao-publica/EscolhaLocalVistoria.tsx`**
+   - Mesma lógica: ocultar o card `Home` quando `tipoInstalacao === 'base'` e ocultar o card `Building2` quando `tipoInstalacao === 'rota'`
+   - Atualizar o comentário "Sempre mostrar as 2 opções" e o subtítulo conforme o caso (quando há só uma opção, simplificar o texto introdutório)
+
+## Não muda
+
+- Backend, edge functions, schema e regras de pricing/comissão
+- Lógica de Autovistoria (continua condicionada ao plano R&F)
+- `tipo_instalacao` continua vindo da cotação (não é recalculado aqui)
 
 ## Validação
-- Buscar por CPF de associado SGA-only → ao selecionar, deve importar e gravar UUID local; cotação cria normalmente.
-- Buscar por CPF de associado local → comportamento inalterado.
-- Forçar indicadorId inválido programaticamente → bloqueio com toast claro (sem chegar ao banco).
+
+- Cotação com `cenario_adesao = 'isenta_base'` ou `'cobra_base'` → etapa Vistoria mostra apenas Autovistoria (se elegível) + Levar à Base
+- Cotação com `cenario_adesao = 'isenta_rota'` ou `'cobra_rota'` → mostra apenas Autovistoria (se elegível) + Técnico vai até mim
+- Cotação sem cenário definido → mostra as 3 opções (fallback atual)
