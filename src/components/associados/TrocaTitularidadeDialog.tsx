@@ -419,16 +419,40 @@ export function TrocaTitularidadeDialog({
                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                 : s.status === 'INADIMPLENTE'
                   ? 'bg-destructive/15 text-destructive border-destructive/30'
-                  : 'bg-muted text-muted-foreground border-border';
+                  : s.status === 'transitorio'
+                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                    : 'bg-muted text-muted-foreground border-border';
             const label =
               s.status === 'ADIMPLENTE'
                 ? 'Situação financeira: ADIMPLENTE'
                 : s.status === 'INADIMPLENTE'
                   ? 'Situação financeira: INADIMPLENTE'
-                  : 'Situação financeira: indisponível no SGA';
+                  : s.status === 'transitorio'
+                    ? 'Situação financeira: SGA temporariamente indisponível — tente em alguns instantes'
+                    : s.status === 'nao_reconciliado'
+                      ? (s.motivo === 'associado_nao_reconciliado'
+                          ? 'Associado não reconciliado no SGA — situação financeira indisponível'
+                          : s.motivo === 'veiculo_nao_reconciliado'
+                            ? 'Veículo não reconciliado no SGA — situação financeira indisponível'
+                            : 'Veículo/associado não encontrados no SGA')
+                      : 'Situação financeira: indisponível no SGA';
             return (
-              <div className={`text-xs font-medium inline-flex items-center rounded border px-2 py-1 ${cls}`}>
-                {label}
+              <div className="space-y-2">
+                <div className={`text-xs font-medium inline-flex items-center rounded border px-2 py-1 ${cls}`}>
+                  {label}
+                </div>
+                {(s.status === 'nao_reconciliado' || s.status === 'transitorio') && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    disabled={sincronizando}
+                    onClick={() => handleSincronizarHinova()}
+                  >
+                    {sincronizando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                    Sincronizar com SGA agora
+                  </Button>
+                )}
               </div>
             );
           })()}
