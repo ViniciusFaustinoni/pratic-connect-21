@@ -170,9 +170,19 @@ export function TrocaTitularidadeDialog({
       const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
         body: { cpf: cpfAntigo },
       });
+      if (error) {
+        let msgAmigavel: string | undefined;
+        try {
+          const anyErr = error as any;
+          if (anyErr?.context && typeof anyErr.context.json === 'function') {
+            const body = await anyErr.context.json();
+            msgAmigavel = body?.error;
+          }
+        } catch { /* ignore */ }
+        throw new Error(msgAmigavel || error.message);
+      }
       const msgAmigavel = (data as any)?.error;
       if (msgAmigavel) throw new Error(msgAmigavel);
-      if (error) throw error;
       await refetchLocal();
       await sga.refetch();
       await refetchLocais();
