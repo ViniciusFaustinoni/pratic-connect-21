@@ -486,7 +486,7 @@ serve(async (req) => {
       } else {
         // Softruck (padrão) - with fallback ID resolution
         let vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
-        const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+        let deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
 
         // Try softruck_vehicle_id from veiculos table if not on rastreador
         if (!rastreador.plataforma_veiculo_id) {
@@ -520,14 +520,34 @@ serve(async (req) => {
 
         const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY') || '';
 
-        posicao = await getPosicaoSoftruckComRetry(
-          supabaseUrl,
-          supabaseKey,
-          vehicleId,
-          deviceId,
-          baseUrl,
-          publicKey
-        );
+        try {
+          posicao = await getPosicaoSoftruckComRetry(
+            supabaseUrl, supabaseKey,
+            vehicleId, deviceId, baseUrl, publicKey,
+          );
+        } catch (errPos) {
+          const msg = errPos instanceof Error ? errPos.message : String(errPos);
+          if (isSoftruckStaleIdError(msg) && rastreador.imei) {
+            console.warn(`[posicao-veiculo] IDs stale (${msg}). Re-resolvendo via IMEI ${rastreador.imei}...`);
+            const resolved = await resolverSoftruckIdsPorImei(
+              supabaseAdmin, supabaseUrl, supabaseKey,
+              rastreador.imei, rastreador.id, baseUrl,
+            );
+            if (resolved && (resolved.deviceId !== deviceId || resolved.vehicleId !== vehicleId)) {
+              console.log(`[posicao-veiculo] Re-resolvido device=${resolved.deviceId} vehicle=${resolved.vehicleId}`);
+              deviceId = resolved.deviceId;
+              vehicleId = resolved.vehicleId;
+              posicao = await getPosicaoSoftruckComRetry(
+                supabaseUrl, supabaseKey,
+                vehicleId, deviceId, baseUrl, publicKey,
+              );
+            } else {
+              throw new Error('IDs Softruck inválidos — re-resolução por IMEI não retornou IDs válidos');
+            }
+          } else {
+            throw errPos;
+          }
+        }
       }
 
     } catch (apiError) {
