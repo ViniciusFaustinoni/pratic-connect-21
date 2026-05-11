@@ -49,6 +49,8 @@ export function useCotacoesRealtime(options?: UseCotacoesRealtimeOptions) {
 
   useEffect(() => {
     if (!enabled) return;
+    // Evita ciclo "subscribe → unsubscribe" enquanto permissões carregam (vendedorId chega depois).
+    if (viewScope === 'own' && !vendedorId) return;
     dlog('[useCotacoesRealtime] Iniciando listeners realtime');
 
     const useVendorFilter = viewScope === 'own' && !!vendedorId;

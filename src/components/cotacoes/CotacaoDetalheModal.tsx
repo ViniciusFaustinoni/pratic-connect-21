@@ -15,7 +15,7 @@ import { AlertCircle, Shield, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { useHistoricoCotacao, registrarEventoCotacao } from '@/hooks/useCotacaoHistorico';
-import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
+// Realtime é gerenciado pela listagem (Cotacoes.tsx); evitar canal duplicado aqui.
 import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 
 import { CotacaoHeader } from '@/components/cotacoes/CotacaoHeader';
@@ -56,7 +56,6 @@ export function CotacaoDetalheModal({ cotacaoId, open, onOpenChange }: CotacaoDe
   const { hasPerm } = usePermissions();
   const isDiretor = hasPerm('canDeleteCotacao');
 
-  useCotacoesRealtime();
 
   const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();

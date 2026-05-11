@@ -1,17 +1,37 @@
-Reset do teste de troca de titularidade — limpeza via edge function `delete-associado` (que agora trata `solicitacoes_troca_titularidade`).
+Faz total sentido. Os logs mostram dois problemas:
 
-## Alvos identificados
+1. **Realtime "subindo → fechando → subindo"** — não é "complexidade", é re-subscribe causado por dependência instável: `vendedorId` chega `undefined` na 1ª renderização (enquanto `permissions` carrega) e logo depois muda para o id real. O `useEffect` derruba o canal e abre outro. Em dev, o StrictMode ainda duplica isso. Cada ciclo gasta ~300–800 ms de handshake WebSocket.
 
-- **MARCUS VINICIUS FAUSTINONI DE FREITAS** — `a4e62fa5-c217-48c3-acd7-9390f13985eb` (CPF 12493649737)
-  - Veículo **LTB4J74** — `8a1b4af8-880c-4d71-b6f5-8e347c55fa3f` (vinculado a ele; será removido junto)
-- **MARCOS VINICIUS DATIVO MACHADO** — `1b4ff2ba-3312-4914-a9d2-4035f8b4e137` (CPF 14194896742)
+2. **Sessão com timeout de 30 min (interno) / 60 min (app)** — você não quer mais. Hoje há `SessionTimeoutProvider` + modal de aviso 5 min antes + auto-logout.
 
-## Execução
+E ainda há um terceiro detalhe: o `CotacaoDetalheModal` chama `useCotacoesRealtime()` sem filtro, abrindo um **segundo canal global** sempre que se abre uma cotação. Soma com o canal da listagem.
 
-1. Invocar `delete-associado` para `a4e62fa5...` (Marcus Faustinoni) — remove o veículo LTB4J74 em cascata, contratos, vistorias, solicitações de troca de titularidade (antigo/novo), serviços, agendamentos.
-2. Invocar `delete-associado` para `1b4ff2ba...` (Marcos Dativo).
-3. Validar que ambos sumiram e que não restou solicitação de troca pendente referenciando-os.
+## Plano
 
-## Observação
+### 1. Remover expiração de sessão por inatividade
+- Desplugar `SessionTimeoutProvider` do `App.tsx` (manter o hook/arquivos por enquanto, só não montar).
+- Remover o modal de aviso da árvore.
+- Sessão Supabase continua com refresh automático (token nunca expira na prática enquanto a aba viver).
 
-A edge function já foi corrigida na mensagem anterior para limpar `solicitacoes_troca_titularidade` antes do delete final, então o erro de FK não deve mais ocorrer. Aprove para eu executar as duas chamadas.
+### 2. Estabilizar o canal realtime de cotações
+- Não subscrever enquanto `vendedorId` ainda for `undefined` no escopo `own` (gate: `enabled && (viewScope !== 'own' || !!vendedorId)`).
+- Tirar o `useCotacoesRealtime()` do `CotacaoDetalheModal` e do `CotacaoDetalhe.tsx` — o canal da listagem já invalida `['cotacoes', id]`. O detalhe só precisa de invalidação pontual via `queryClient.invalidateQueries` no fechamento do modal, ou de um canal **focado em uma única cotação** (`filter: id=eq.${cotacaoId}`) só quando o modal está aberto.
+- Manter throttle (3s) — já está bom.
+
+### 3. Reduzir custo do `AuthContext`
+- O timeout de 15 s buscando `profiles`+`user_roles` aparece nos logs (`[AuthContext] Timeout (15s) ao buscar profile/perfis`). Vamos:
+  - Reduzir o timeout para 5 s (já temos cache `PROFILE_PROMISES`/`PERFIS_PROMISES`; 15 s está mascarando lentidão, não resolvendo).
+  - Garantir que o segundo evento (`INITIAL_SESSION` com mesmo user) **não** dispare nova busca. Hoje há `hasLoadedData`, mas é por instância do effect — confirmar.
+
+### 4. (Opcional) Não abrir realtime fora da aba "Em Andamento"
+Já está condicionado a `isEmAndamentoTab`. Manter.
+
+## O que NÃO mexemos
+- Lógica de busca de cotações, filtros, permissões.
+- Toasts de eventos do cliente (visualizou, escolheu plano).
+- `useSessionTimeout` continua existindo no código (caso queira reativar para usuários App).
+
+## Resultado esperado
+- Cotações abre direto, sem o ciclo "CLOSED → SUBSCRIBED".
+- Sem modal de "sessão expirando".
+- Um único canal realtime ativo por aba (em vez de 2).
