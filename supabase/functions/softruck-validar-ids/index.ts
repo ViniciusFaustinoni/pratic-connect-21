@@ -50,7 +50,7 @@ async function sr(method: string, endpoint: string, token: string, retry = 0): P
 }
 
 async function listAll(path: string, attrs: string[], token: string): Promise<any[]> {
-  const limit = 200;
+  const limit = 100;
   let page = 1;
   const all: any[] = [];
   for (;;) {
