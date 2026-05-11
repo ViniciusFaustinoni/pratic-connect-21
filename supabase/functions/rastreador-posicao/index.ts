@@ -534,15 +534,41 @@ serve(async (req) => {
       }
       
       console.log(`[Softruck] Usando vehicleId=${vehicleId}, deviceId=${deviceId}`);
-      
-      posicao = await getPosicaoSoftruckComRetry(
-        supabase,
-        supabaseUrl,
-        supabaseKey,
-        vehicleId,
-        deviceId,
-        baseUrl
-      );
+
+      try {
+        posicao = await getPosicaoSoftruckComRetry(
+          supabase, supabaseUrl, supabaseKey,
+          vehicleId, deviceId, baseUrl
+        );
+      } catch (errPos) {
+        const msg = errPos instanceof Error ? errPos.message : String(errPos);
+        // IDs stale na Softruck → re-resolve via IMEI e tenta novamente uma vez
+        if (isSoftruckStaleIdError(msg) && rastreador.imei) {
+          console.warn(`[Softruck] IDs possivelmente stale (${msg}). Re-resolvendo via IMEI ${rastreador.imei}...`);
+          const resolved = await resolverSoftruckIdsPorImei(
+            supabase, supabaseUrl, supabaseKey,
+            rastreador.imei, rastreador_id, baseUrl
+          );
+          if (resolved && (resolved.deviceId !== deviceId || resolved.vehicleId !== vehicleId)) {
+            console.log(`[Softruck] Re-resolvido: device=${resolved.deviceId}, vehicle=${resolved.vehicleId}. Tentando posição novamente...`);
+            deviceId = resolved.deviceId;
+            vehicleId = resolved.vehicleId;
+            posicao = await getPosicaoSoftruckComRetry(
+              supabase, supabaseUrl, supabaseKey,
+              vehicleId, deviceId, baseUrl
+            );
+            await supabase.from('rastreadores_logs').insert({
+              rastreador_id, plataforma: 'softruck',
+              operacao: 'posicao_tempo_real', status: 'sucesso',
+              request: { re_resolvido: true },
+            });
+          } else {
+            throw new Error('IDs Softruck inválidos — re-resolução por IMEI não retornou IDs válidos');
+          }
+        } else {
+          throw errPos;
+        }
+      }
     } else if (plataformaCodigo === 'rede_veiculos') {
       const credenciais = await getCredenciaisRedeVeiculos(supabase);
       
