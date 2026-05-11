@@ -1,8 +1,9 @@
 // Aprovação da etapa de Cadastro: avança status para aguardando_monitoramento
 // Antes de aprovar:
 //   1) trava se termo de cancelamento não foi assinado
-//   2) trava se há débito pendente do titular antigo (relacionamento_debitos_pendentes 'aberto')
-//   3) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
+//   2) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
+// Obs: a checagem financeira do antigo titular foi removida — não é mais
+// requisito que o antigo esteja adimplente para aprovar a troca.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
