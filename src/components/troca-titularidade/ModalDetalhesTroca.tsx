@@ -123,15 +123,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               );
             })()}
 
-            {modo === 'cadastro' && debitoPendente && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Débito pendente do titular antigo</AlertTitle>
-                <AlertDescription>
-                  Saldo de R$ {Number(debitoPendente.valor_total || 0).toFixed(2)} em {debitoPendente.quantidade_boletos || 0} boleto(s) no SGA. A aprovação será liberada automaticamente após a quitação (verificação diária).
-                </AlertDescription>
-              </Alert>
-            )}
+            {/* (Removido) Alerta de débito pendente do antigo titular */}
 
             <Tabs defaultValue="dados">
               <TabsList className="grid w-full grid-cols-5">
