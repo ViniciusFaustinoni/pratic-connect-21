@@ -1243,9 +1243,25 @@ serve(async (req) => {
     // 10. Vincular associado ao contrato
     if (associadoId) {
       const associadoUpdate: any = { contrato_id: contrato.id };
-      // Copiar CNH validade da cotação para o associado
-      if (cotacao.cliente_cnh_validade) {
+      // Copiar dados de CNH/sexo da cotação para o associado.
+      // Buscar valores atuais para não sobrescrever edições manuais.
+      const { data: assocAtual } = await supabase
+        .from('associados')
+        .select('cnh_numero, cnh_categoria, cnh_validade, sexo')
+        .eq('id', associadoId)
+        .maybeSingle();
+      if (cotacao.cliente_cnh_validade && !assocAtual?.cnh_validade) {
         associadoUpdate.cnh_validade = cotacao.cliente_cnh_validade;
+      }
+      if ((cotacao as any).cliente_cnh && !assocAtual?.cnh_numero) {
+        associadoUpdate.cnh_numero = String((cotacao as any).cliente_cnh).slice(0, 50);
+      }
+      if ((cotacao as any).cliente_cnh_categoria && !assocAtual?.cnh_categoria) {
+        associadoUpdate.cnh_categoria = String((cotacao as any).cliente_cnh_categoria).slice(0, 10);
+      }
+      if ((cotacao as any).cliente_sexo && !assocAtual?.sexo) {
+        const s = String((cotacao as any).cliente_sexo).trim().toUpperCase();
+        if (s === 'M' || s === 'F') associadoUpdate.sexo = s;
       }
       await supabase
         .from('associados')
