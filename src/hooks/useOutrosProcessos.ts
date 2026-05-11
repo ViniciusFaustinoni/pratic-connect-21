@@ -51,6 +51,7 @@ export interface OutroProcessoItem {
   solicitacao_troca_id: string | null;
   troca_status: string | null;            // STATUS_TROCA
   termo_status: 'nao_aplicavel' | 'pendente' | 'enviado' | 'assinado' | 'recusado';
+  termo_filiacao_status: 'nao_aplicavel' | 'pendente' | 'enviado' | 'assinado';
   termo_url: string | null;
   termo_enviado_em: string | null;
   termo_assinado_em: string | null;
