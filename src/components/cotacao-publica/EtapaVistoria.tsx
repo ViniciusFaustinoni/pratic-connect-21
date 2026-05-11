@@ -233,6 +233,7 @@ export function EtapaVistoria({
                   </div>
                 </div>
               </button>
+              )}
             </CardContent>
           </Card>
         </motion.div>
