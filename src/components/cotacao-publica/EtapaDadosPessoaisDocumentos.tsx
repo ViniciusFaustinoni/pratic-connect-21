@@ -55,6 +55,7 @@ interface DadosExtraidos {
   cnh?: string;
   cnh_validade?: string;
   cnh_categoria?: string;
+  sexo?: 'M' | 'F';
   // Endereço (de Comprovante)
   cep?: string;
   logradouro?: string;
