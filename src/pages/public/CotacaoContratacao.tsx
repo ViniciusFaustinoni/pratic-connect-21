@@ -171,6 +171,15 @@ export default function CotacaoContratacao() {
   );
   const trocaLiberada = solicitacaoTroca?.status === 'liberada_para_assinatura' || solicitacaoTroca?.status === 'efetivada';
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
+  // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
+  // em "Solicitar Vistoria" (status aguardando_vistoria) OU se o cliente já
+  // escolheu/concluiu uma vistoria (tipo_vistoria preenchido).
+  const vistoriaTrocaSolicitada = isTrocaTitularidade && (
+    solicitacaoTroca?.status === 'aguardando_vistoria' || !!cotacao?.tipo_vistoria
+  );
+  // Quando é troca, foi liberada e o monitoramento NÃO pediu vistoria,
+  // pulamos completamente a etapa "Vistoria" no fluxo público.
+  const pularEtapaVistoria = isTrocaTitularidade && trocaLiberada && !vistoriaTrocaSolicitada;
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
@@ -182,20 +191,25 @@ export default function CotacaoContratacao() {
     
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
-    if (etapaBase === 3 && cotacao.tipo_vistoria) {
+    if (etapaBase === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
       return 4;
     }
     
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria]);
 
-  // STEPS dinâmico: adiciona "Instalação" como 6ª etapa apenas quando autovistoria
+  // STEPS dinâmico:
+  //  - autovistoria => adiciona "Instalação" como 6ª etapa
+  //  - troca de titularidade sem vistoria solicitada => oculta "Vistoria"
   const STEPS = useMemo<Step[]>(() => {
+    const base = pularEtapaVistoria
+      ? STEPS_BASE.filter((s) => s.id !== 'vistoria')
+      : STEPS_BASE;
     if (cotacao?.tipo_vistoria === 'autovistoria') {
-      return [...STEPS_BASE, STEP_INSTALACAO];
+      return [...base, STEP_INSTALACAO];
     }
-    return STEPS_BASE;
-  }, [cotacao?.tipo_vistoria]);
+    return base;
+  }, [cotacao?.tipo_vistoria, pularEtapaVistoria]);
 
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
@@ -218,6 +232,8 @@ export default function CotacaoContratacao() {
       case 2: // Contrato - concluído se status >= contrato_assinado
         return statusConcluidos.contrato.includes(cotacao.status_contratacao);
       case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
+        // Em troca de titularidade sem vistoria solicitada, marcamos como concluída (etapa pulada)
+        if (pularEtapaVistoria) return true;
         return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
@@ -232,7 +248,7 @@ export default function CotacaoContratacao() {
       default:
         return false;
     }
-  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido]);
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido, pularEtapaVistoria]);
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
@@ -245,14 +261,22 @@ export default function CotacaoContratacao() {
     if (cotacao?.status_contratacao) {
       let etapa = determinarEtapa(cotacao.status_contratacao);
       
-      // Se vistoria já foi escolhida/agendada, avança para pagamento
-      if (etapa === 3 && cotacao.tipo_vistoria) {
+      // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
+      // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
+      if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
         etapa = 4;
       }
       
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria]);
+
+  // Em navegação manual, se o usuário cair na etapa 3 mas ela está pulada, salta automaticamente.
+  useEffect(() => {
+    if (pularEtapaVistoria && etapaAtual === 3) {
+      setEtapaAtual(4);
+    }
+  }, [pularEtapaVistoria, etapaAtual, setEtapaAtual]);
 
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
@@ -264,22 +288,25 @@ export default function CotacaoContratacao() {
 
   // Handler para avançar para próxima etapa
   const handleAvancar = useCallback(() => {
+    // Quando vistoria está pulada, salta de 2 → 4
+    const proximo = pularEtapaVistoria && etapaAtual === 2 ? 4 : etapaAtual + 1;
     if (etapaAtual < etapaDoStatus) {
-      setEtapaAtual(etapaAtual + 1);
+      setEtapaAtual(proximo);
     }
-    // Se chegou na etapa atual do status, desativa navegação manual
-    if (etapaAtual + 1 >= etapaDoStatus) {
+    if (proximo >= etapaDoStatus) {
       setNavegacaoManual(false);
     }
-  }, [etapaAtual, etapaDoStatus, setEtapaAtual]);
+  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria]);
 
   // Handler para voltar para etapa anterior
   const handleVoltar = useCallback(() => {
     if (etapaAtual > 0) {
       setNavegacaoManual(true);
-      setEtapaAtual(etapaAtual - 1);
+      // Quando vistoria está pulada, voltar de 4 → 2
+      const anterior = pularEtapaVistoria && etapaAtual === 4 ? 2 : etapaAtual - 1;
+      setEtapaAtual(anterior);
     }
-  }, [etapaAtual, setEtapaAtual]);
+  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
@@ -542,12 +569,30 @@ export default function CotacaoContratacao() {
             transition={{ delay: 0.3, duration: 0.5 }}
           >
             <Card className="p-4 stepper-card-premium">
-              <StepperCotacao
-                steps={STEPS}
-                currentStep={etapaAtual}
-                onStepClick={handleStepClick}
-                maxReachableStep={etapaDoStatus}
-              />
+              {(() => {
+                // Mapeamento entre índice INTERNO (sempre 6 etapas: plano, documentos, contrato, vistoria, pagamento, instalacao)
+                // e o índice VISÍVEL no Stepper (que pode ter "vistoria" omitida).
+                const internalIds = ['plano','documentos','contrato','vistoria','pagamento','instalacao'] as const;
+                const internalToVisible = (i: number) => {
+                  const id = internalIds[i];
+                  const v = STEPS.findIndex((s) => s.id === id);
+                  if (v >= 0) return v;
+                  // Etapa interna "vistoria" não existe no STEPS visível -> aponta para a próxima visível (pagamento)
+                  return STEPS.findIndex((s) => s.id === 'pagamento');
+                };
+                const visibleToInternal = (i: number) => {
+                  const id = STEPS[i]?.id;
+                  return internalIds.indexOf(id as any);
+                };
+                return (
+                  <StepperCotacao
+                    steps={STEPS}
+                    currentStep={internalToVisible(etapaAtual)}
+                    onStepClick={(i) => handleStepClick(visibleToInternal(i))}
+                    maxReachableStep={internalToVisible(etapaDoStatus)}
+                  />
+                );
+              })()}
             </Card>
           </motion.div>
 

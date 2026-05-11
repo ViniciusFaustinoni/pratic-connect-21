@@ -70,9 +70,15 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     onOpenChange(false);
   };
 
+  // Vistoria foi concluída pelo novo titular no link público?
+  // (autovistoria com fotos OU presencial agendada/concluída)
+  const vistoriaClienteConcluida = !!solicitacao?.cotacao?.tipo_vistoria || !!solicitacao?.cotacao?.vistoria_concluida_em;
+
   const podeAgir = solicitacao && modo !== 'readonly' && (
     (modo === 'cadastro' && solicitacao.status === 'aguardando_cadastro') ||
-    (modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento')
+    (modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento') ||
+    // Após a vistoria ser concluída pelo cliente, monitoramento pode aprovar
+    (modo === 'monitoramento' && solicitacao.status === 'aguardando_vistoria' && vistoriaClienteConcluida)
   );
 
   return (
@@ -240,7 +246,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <Button variant="destructive" onClick={() => setConfirmandoReprovar(true)}>
                     <XCircle className="h-4 w-4 mr-2" /> Reprovar
                   </Button>
-                  {modo === 'monitoramento' && (
+                  {modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento' && (
                     <Button variant="outline" onClick={handleSolicitarVistoria} disabled={aprovarMonitoramento.isPending}>
                       {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
                       Solicitar Vistoria
@@ -288,7 +294,10 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     {modo === 'cadastro' && solicitacao.status !== 'cotacao_em_andamento' && solicitacao.status !== 'aguardando_cadastro' && (
                       <>Esta solicitação não está mais sob análise do Cadastro (status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>). Acompanhe pela Timeline.</>
                     )}
-                    {modo === 'monitoramento' && solicitacao.status !== 'aguardando_monitoramento' && (
+                    {modo === 'monitoramento' && solicitacao.status === 'aguardando_vistoria' && !vistoriaClienteConcluida && (
+                      <>Vistoria solicitada — aguardando o <strong>novo titular</strong> concluir a vistoria pelo link público de contratação. O botão <strong>Aprovar</strong> reaparece automaticamente assim que a vistoria for finalizada.</>
+                    )}
+                    {modo === 'monitoramento' && solicitacao.status !== 'aguardando_monitoramento' && solicitacao.status !== 'aguardando_vistoria' && (
                       <>O botão <strong>Aprovar</strong> só aparece quando a solicitação está em <em>Aguardando Monitoramento</em>. Status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>.</>
                     )}
                   </AlertDescription>
