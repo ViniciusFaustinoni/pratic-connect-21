@@ -1183,11 +1183,11 @@ export default function CotacaoContratacao() {
                           <p className="text-muted-foreground">Verificando status...</p>
                         </CardContent>
                       </Card>
-                    ) : (
-                      // Vistoria presencial agendada mas dados ainda não sincronizados - mostrar confirmação genérica
+                    ) : (hasVistoriaAgendada || hasInstalacaoAgendada || hasAgendamentoBase) ? (
+                      // Já existe registro operacional (vistoria/instalação/agendamento) — confirmação real
                       <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-4">
-                          <motion.div 
+                          <motion.div
                             className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
@@ -1196,11 +1196,41 @@ export default function CotacaoContratacao() {
                           </motion.div>
                           <h2 className="text-xl font-bold text-foreground">Agendamento Confirmado!</h2>
                           <p className="text-muted-foreground">
-                            Sua vistoria presencial foi agendada com sucesso.<br />
+                            Sua vistoria foi registrada com sucesso.<br />
                             Aguarde o contato do vistoriador.
                           </p>
                         </CardContent>
                       </Card>
+                    ) : (
+                      // Cotação marcada como 'agendada' mas sem dados nem registro operacional —
+                      // forçar coleta real de data/horário/endereço (evita limbo "fantasma" no monitoramento)
+                      <AgendamentoVistoriaCompleta
+                        cotacaoId={cotacao.id}
+                        tipoVistoria="agendada"
+                        tipoInstalacao={(cotacao as any).tipo_instalacao as 'rota' | 'base' | null}
+                        clienteNome={cotacao?.vistoria_responsavel_nome || cotacao?.nome_solicitante || ''}
+                        clienteTelefone={cotacao?.vistoria_responsavel_telefone || cotacao?.telefone1_solicitante}
+                        clienteEmail={cotacao?.email_solicitante}
+                        veiculoPlaca={cotacao?.veiculo_placa}
+                        veiculoDescricao={`${cotacao?.veiculo_marca || ''} ${cotacao?.veiculo_modelo || ''}`.trim()}
+                        enderecoInicial={{
+                          cep: cotacao?.cliente_cep || '',
+                          logradouro: cotacao?.cliente_logradouro || '',
+                          numero: cotacao?.cliente_numero || '',
+                          complemento: cotacao?.cliente_complemento || '',
+                          bairro: cotacao?.cliente_bairro || '',
+                          cidade: cotacao?.cliente_cidade || '',
+                          estado: cotacao?.cliente_uf || '',
+                        }}
+                        onConfirmar={() => {
+                          setAgendamentoConcluido(true);
+                          queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
+                          queryClient.invalidateQueries({ queryKey: ['instalacao-existente'] });
+                          queryClient.invalidateQueries({ queryKey: ['vistoria-existente'] });
+                          queryClient.invalidateQueries({ queryKey: ['agendamento-base-existente'] });
+                          refetch();
+                        }}
+                      />
                     )
                   ) : (cotacao?.tipo_vistoria === 'agendada_base' || hasAgendamentoBase) ? (
                     // ========== FLUXO AGENDAMENTO NA BASE ==========
