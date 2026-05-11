@@ -14,7 +14,7 @@ import { useBoletosSgaPorAssociado } from '@/hooks/useBoletosSgaPorAssociado';
 import type { BoletoAbertoSGA } from '@/hooks/useBuscaSGA';
 import { ExternalLink, Copy } from 'lucide-react';
 import { useTrocaTitularidadeFallbackLocal } from '@/hooks/useTrocaTitularidadeFallbackLocal';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
 interface TrocaTitularidadeDialogProps {
@@ -150,6 +150,32 @@ export function TrocaTitularidadeDialog({
   // Fonte final dos veículos exibidos no select
   const veiculos: VeiculoOpcao[] = usandoFallback ? veiculosFallback : veiculosSgaMapeados;
 
+  // Situação financeira por veículo (chama edge sga-sync-financeiro-veiculo em paralelo)
+  const situacaoQueries = useQueries({
+    queries: veiculos.map((v) => ({
+      queryKey: ['troca-tit-sit-fin', v.id],
+      queryFn: async () => {
+        const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
+          body: { veiculo_id: v.id },
+        });
+        if (error) throw error;
+        return data as { success?: boolean; situacao_financeira?: string | null };
+      },
+      enabled: open && !!v.id,
+      staleTime: 5 * 60 * 1000,
+      retry: 0,
+    })),
+  });
+  const situacaoPorId: Record<string, { status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido'; loading: boolean }> = {};
+  veiculos.forEach((v, i) => {
+    const q = situacaoQueries[i];
+    const raw = (q?.data?.situacao_financeira || '').toString().toUpperCase();
+    const status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido' =
+      raw === 'ADIMPLENTE' ? 'ADIMPLENTE' : raw === 'INADIMPLENTE' ? 'INADIMPLENTE' : 'desconhecido';
+    situacaoPorId[v.id] = { status, loading: !!q?.isLoading };
+  });
+
+
   // Auto-seleciona se só houver 1
   useEffect(() => {
     if (open && veiculos.length === 1 && !veiculoId) {
@@ -281,7 +307,17 @@ export function TrocaTitularidadeDialog({
                     onChange={(e) => setVeiculoId(e.target.value)}
                   >
                     <option value="">Selecione…</option>
-                    {veiculos.map(v => <option key={v.id} value={v.id}>{v.descricao}</option>)}
+                    {veiculos.map(v => {
+                      const s = situacaoPorId[v.id];
+                      const sufixo = s?.loading
+                        ? ' — verificando…'
+                        : s?.status === 'ADIMPLENTE'
+                          ? ' — ADIMPLENTE'
+                          : s?.status === 'INADIMPLENTE'
+                            ? ' — INADIMPLENTE'
+                            : '';
+                      return <option key={v.id} value={v.id}>{v.descricao}{sufixo}</option>;
+                    })}
                   </select>
                 );
               }
@@ -332,6 +368,35 @@ export function TrocaTitularidadeDialog({
               );
             })()}
           </div>
+
+          {veiculoId && situacaoPorId[veiculoId] && (() => {
+            const s = situacaoPorId[veiculoId];
+            if (s.loading) {
+              return (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Consultando situação financeira no SGA…
+                </div>
+              );
+            }
+            const cls =
+              s.status === 'ADIMPLENTE'
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                : s.status === 'INADIMPLENTE'
+                  ? 'bg-destructive/15 text-destructive border-destructive/30'
+                  : 'bg-muted text-muted-foreground border-border';
+            const label =
+              s.status === 'ADIMPLENTE'
+                ? 'Situação financeira: ADIMPLENTE'
+                : s.status === 'INADIMPLENTE'
+                  ? 'Situação financeira: INADIMPLENTE'
+                  : 'Situação financeira: indisponível no SGA';
+            return (
+              <div className={`text-xs font-medium inline-flex items-center rounded border px-2 py-1 ${cls}`}>
+                {label}
+              </div>
+            );
+          })()}
 
           {veiculoId && (boletosPorIdLocal[veiculoId]?.length ?? 0) > 0 && (() => {
             const boletos = boletosPorIdLocal[veiculoId] || [];
