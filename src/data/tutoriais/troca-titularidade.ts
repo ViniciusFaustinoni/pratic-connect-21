@@ -63,6 +63,70 @@ export const trocaTitularidade: Tutorial = {
         'Após preencher, o sistema gera o link público; a solicitação passa por aprovação do Cadastro e do Monitoramento antes da assinatura.',
       ],
     },
+    {
+      numero: 5,
+      titulo: 'Envie o link da proposta para o novo titular',
+      descricao:
+        'Salvo o cadastro, a cotação aparece em Vendas › Cotações › "Outros Processos" com badge "Troca de Titularidade". Use "Copiar link" para enviar por WhatsApp/e-mail ao novo dono ou aguarde o disparo automático configurado para o canal padrão.',
+      dicas: [
+        'A aba "Outros Processos" reúne trocas, substituições, inclusões e migrações — não confunda com cotações comuns.',
+        'O link público é único por cotação; reenviar não invalida o anterior.',
+      ],
+      links: [
+        { label: 'Cotações › Outros Processos', url: '/vendas/cotacoes' },
+      ],
+    },
+    {
+      numero: 6,
+      titulo: 'Novo titular escolhe plano, envia documentos e assina',
+      descricao:
+        'Pelo link público o novo dono escolhe o plano (a carência já cumprida pelo titular antigo é preservada), envia CNH e CRLV, e assina o contrato com biometria facial via Autentique. Concluída a assinatura, a cotação muda para "Aguardando aprovação do Cadastro" e some da fila do vendedor.',
+      dicas: [
+        'Não há cobrança de taxa de adesão na troca de titularidade — o contrato é uma continuidade.',
+        'Se a assinatura travar por crédito do Autentique, o sistema avisa o Cadastro automaticamente.',
+      ],
+    },
+    {
+      numero: 7,
+      titulo: 'Cadastro envia o Termo de Cancelamento e aprova',
+      descricao:
+        'O Cadastro abre a solicitação em Cadastro › Processos › Titularidade, dispara o Termo de Cancelamento para o titular antigo (e-mail + biometria), aguarda a assinatura e então aprova. A assinatura do termo já desvincula logicamente o veículo do antigo dono — é o que destrava a placa para a nova titularidade.',
+      dicas: [
+        'Enquanto o termo não é assinado, a aprovação fica bloqueada.',
+        'Débitos em aberto no SGA do antigo dono também travam a aprovação até quitação.',
+      ],
+      links: [
+        { label: 'Tutorial completo do Cadastro', url: '/tutoriais/aprovacao-troca-titularidade-cadastro' },
+        { label: 'Cadastro › Processos › Titularidade', url: '/cadastro/processos?tab=titularidade' },
+      ],
+    },
+    {
+      numero: 8,
+      titulo: 'Monitoramento aprova a vistoria de campo',
+      descricao:
+        'Ao aprovar no Cadastro, o sistema cria automaticamente um serviço de vistoria (origem "troca de titularidade") em Monitoramento › Serviços de Campo. O técnico fotografa o veículo (sem instalar nada novo) e a fila de Monitoramento › Aprovações › Aprovação de Associados decide. A cobertura segue suspensa até essa decisão.',
+      dicas: [
+        'A vistoria aqui é só de conferência — não há instalação de rastreador novo, o equipamento existente continua.',
+        'Reprovação volta a solicitação ao Cadastro com o motivo registrado.',
+      ],
+      links: [
+        { label: 'Monitoramento › Serviços de Campo', url: '/monitoramento/servicos-campo' },
+        { label: 'Aprovação de Associados', url: '/monitoramento/aprovacoes' },
+      ],
+    },
+    {
+      numero: 9,
+      titulo: 'Ativação automática do novo associado',
+      descricao:
+        'Aprovada a vistoria, o sistema executa a efetivação: cancela o contrato do titular antigo, ativa o contrato do novo, transfere o veículo, religa a cobertura e sincroniza tudo no SGA Hinova. O novo titular passa a constar como ativo em Cadastro › Associados, com o histórico de carência preservado.',
+      dicas: [
+        'Toda essa ativação passa pela edge function única de ativação — não é preciso rodar nada manual.',
+        'No SGA Hinova a situação do novo associado é criada como Pendente; a promoção para Ativo é manual no painel SGA.',
+      ],
+      links: [
+        { label: 'Cadastro › Associados', url: '/cadastro/associados' },
+      ],
+    },
   ],
 };
 
