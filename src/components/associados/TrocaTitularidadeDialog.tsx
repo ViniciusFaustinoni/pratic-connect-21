@@ -14,7 +14,7 @@ import { useBoletosSgaPorAssociado } from '@/hooks/useBoletosSgaPorAssociado';
 import type { BoletoAbertoSGA } from '@/hooks/useBuscaSGA';
 import { ExternalLink, Copy } from 'lucide-react';
 import { useTrocaTitularidadeFallbackLocal } from '@/hooks/useTrocaTitularidadeFallbackLocal';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
 interface TrocaTitularidadeDialogProps {
