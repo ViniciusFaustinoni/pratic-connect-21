@@ -160,16 +160,7 @@ export function useVeiculoCompleto(veiculoId: string | undefined) {
         associado = data;
       }
 
-      // Buscar rastreador vinculado ao veículo
-      let rastreador = null;
-      const { data: rast } = await supabase
-        .from('rastreadores')
-        .select('id, codigo, numero_serie, plataforma, status, ultima_comunicacao, imei')
-        .eq('veiculo_id', veiculoId)
-        .maybeSingle();
-      rastreador = rast;
-
-      // Buscar contrato ativo
+      // Buscar contrato ativo (precisamos do id antes do rastreador para fallback)
       let contrato = null;
       const { data: contr } = await supabase
         .from('contratos')
@@ -179,6 +170,23 @@ export function useVeiculoCompleto(veiculoId: string | undefined) {
         .limit(1)
         .maybeSingle();
       contrato = contr;
+
+      // Buscar rastreador: primeiro por veiculo_id, depois por contrato_id (fallback p/ vínculos antigos)
+      let rastreador: any = null;
+      const { data: rastV } = await supabase
+        .from('rastreadores')
+        .select('id, codigo, numero_serie, plataforma, status, ultima_comunicacao, imei')
+        .eq('veiculo_id', veiculoId)
+        .maybeSingle();
+      rastreador = rastV;
+      if (!rastreador && contrato?.id) {
+        const { data: rastC } = await (supabase as any)
+          .from('rastreadores')
+          .select('id, codigo, numero_serie, plataforma, status, ultima_comunicacao, imei')
+          .eq('contrato_id', contrato.id)
+          .maybeSingle();
+        rastreador = rastC;
+      }
 
       return { veiculo, associado, rastreador, contrato };
     },

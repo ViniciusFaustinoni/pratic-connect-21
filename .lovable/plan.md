@@ -1,61 +1,62 @@
-## Problema observado
+## Problema
 
-Na tela "Processos Operacionais → Titularidade → Aguardando Cadastro", ao clicar em **Aprovar**:
+No modal **Aprovação do Monitoramento → Troca de Titularidade**, dois blocos não puxam dados reais:
 
-1. O backend efetivamente avança a solicitação (`aguardando_cadastro` → `aguardando_monitoramento`), mas o frontend exibe um toast de erro e o modal não fecha.
-2. O contador "Titularidade pendente" continua mostrando **1** mesmo após a solicitação ter saído da fila.
-3. A solicitação aparece corretamente na fila do Monitoramento, comprovando que a aprovação ocorreu — só a UI não foi notificada.
+- **Aba "Financeiro Antigo"** mostra sempre `0 / 0 / 0` e badge "ADIMPLENTE" mesmo quando o associado tem boletos em aberto no SGA. Hoje o componente `RelatorioFinanceiroAntigo` lê apenas a tabela local `cobrancas` (que normalmente está vazia para associados antigos vindos do SGA).
+- **Bloco "Rastreador"** dentro do `VeiculoCompletoCard` usa `useRastreadorTempoReal(rastreador.id, false)` com `autoRefresh=false`, então só busca posição se o usuário clicar em "Atualizar"; e quando o veículo não tem `rastreadores.veiculo_id` vinculado, ele simplesmente diz "Sem rastreador instalado" mesmo havendo equipamento ativo no SGA/Softtruck.
 
-## Causa raiz
+## Endpoints corretos (já em uso e funcionando em outras telas)
 
-A edge function `aprovar-troca-cadastro` faz, **depois** do `UPDATE` de status:
+- **Financeiro do associado antigo:** edge function `sga-listar-boletos-associado` via hook `useBoletosSgaPorAssociado(codigoHinova, cpf, enabled)` — é o mesmo que a tela de **criação** da troca usa (`TrocaTitularidadeDialog`) e que já popula veículos + saldo + boletos abertos.
+- **Rastreador em tempo real:** hook `useRastreadorTempoReal(rastreadorId, autoRefresh=true)` (mesmo usado em `MapaRastreador`/drawers de rastreador) — basta habilitar `autoRefresh` quando o modal está aberto.
 
-- Snapshot de análise prévia chamando `sga-buscar-associado-completo` (Hinova, lento/instável).
-- Resolução de vendedor + `UPDATE` de cotação.
-- Notificação WhatsApp via `whatsapp-send-text` (Evolution).
+## Mudanças
 
-Quando o SGA ou o WhatsApp demoram/erram, o tempo total estoura o limite do invoke ou a função retorna em condição instável. O `supabase.functions.invoke` no hook devolve `error`, então:
+### 1. `src/components/troca-titularidade/RelatorioFinanceiroAntigo.tsx`
 
-- `onSuccess` **não roda** → `qc.invalidateQueries(['solicitacoes-troca'])` nunca dispara → contador permanece "1" até o `refetchInterval` de 30s.
-- `handleAprovar` lança e **não chega** ao `onOpenChange(false)` → modal não fecha.
-- Toast vermelho aparece, mesmo o `UPDATE` já tendo sido persistido (transação independente).
+- Trocar a query local por `useBoletosSgaPorAssociado(codigo_hinova, cpf)` (props expandidas).
+- Calcular contagens diretamente a partir do payload SGA:
+  - **Vencidas** = `veiculos[].boletos_abertos` cujo `data_vencimento < hoje`.
+  - **A vencer** = boletos abertos com vencimento `>= hoje`.
+  - **Total em atraso** = soma dos `valor` das vencidas.
+  - **Adimplente** = `!sgaPayload.tem_debito && vencidas.length === 0`.
+- Estados:
+  - Loading → skeleton.
+  - `erro_transitorio` → alert amarelo "SGA indisponível, tente novamente" + botão `refetch`.
+  - `encontrado=false` → alert "Associado não encontrado no SGA — sincronize antes de prosseguir" (sem inferir adimplência).
+  - Sucesso → cards atuais (Vencidas / A vencer / Pagas) usando dados SGA; "Pagas" deixa de existir (SGA não traz histórico) e é substituído por **Saldo devedor total** do payload (`saldo_devedor_total`).
+- Manter a listagem dos primeiros 10 boletos vencidos com vencimento + valor.
 
-## Correção
+### 2. `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
 
-### 1. `supabase/functions/aprovar-troca-cadastro/index.ts`
+- Carregar `codigo_hinova` do associado antigo (1 select adicional em `associados` ou expandir o select existente em `useSolicitacaoTroca` — preferimos expandir o hook).
+- Passar `codigoHinova` + `cpf` para `<RelatorioFinanceiroAntigo />`.
 
-Mudar a ordem para "commit primeiro, efeitos colaterais depois":
+### 3. `src/hooks/useSolicitacoesTroca.ts`
 
-- Validar travas (assinatura do termo, débito antigo) — mantém igual.
-- Resolver `aprovador_id`.
-- Executar **apenas** o `UPDATE` de status com CAS (`.eq('status','aguardando_cadastro')`) e checar se `count === 1`. Se não atualizou nada, retornar 409 idempotente ("já aprovada").
-- Retornar `200 { success: true, status: 'aguardando_monitoramento' }` **imediatamente**.
-- Disparar via `EdgeRuntime.waitUntil(...)` (ou `queueMicrotask` + `Promise` não-aguardada com try/catch global) o trabalho pesado:
-  - snapshot da análise prévia (`sga-buscar-associado-completo`) → `UPDATE analise_previa_resultado/em`.
-  - atribuição de vendedor + flag `prioridade='alta'` na cotação.
-  - WhatsApp ao vendedor.
-- Logar o resultado de cada bloco em `console.log` para auditoria; nenhum desses passos pode mais derrubar a resposta.
+- Em `useSolicitacaoTroca`, incluir `codigo_hinova` no select do `associado_antigo:associados!associado_antigo_id(...)`.
+- Adicionar o campo na interface `SolicitacaoTroca.associado_antigo`.
 
-### 2. `src/hooks/useSolicitacoesTroca.ts`
+### 4. `src/components/troca-titularidade/VeiculoCompletoCard.tsx` (bloco Rastreador)
 
-Tornar o cliente tolerante a "sucesso silencioso":
+- Trocar `useRastreadorTempoReal(rastreador.id, false)` por `useRastreadorTempoReal(rastreador.id, true)` para auto-buscar posição ao abrir o modal.
+- Quando `posicao` existir, exibir abaixo do grid: `Velocidade`, `Lat/Lng` (mono) e `Endereço` (se vier do payload), iguais ao `MapaRastreador`.
+- Se `useVeiculoCompleto` retornar `rastreador=null` mas houver rastreador vinculado por outro caminho (ex.: `rastreadores.contrato_id`), incluir um fallback no hook: buscar `rastreadores` também por `contrato_id` quando `veiculo_id` for nulo. Isso evita o "Sem rastreador" falso para registros antigos.
 
-- Em `useAprovarTrocaCadastro` e `useAprovarTrocaMonitoramento`, no `onError`, antes de mostrar o toast, refazer um `select status from solicitacoes_troca_titularidade where id=...`. Se o status já avançou (`aguardando_monitoramento` para Cadastro; `aguardando_vistoria`/`liberada_para_assinatura` para Monitoramento), tratar como sucesso: invalidar queries, fechar modal (via callback) e mostrar toast verde com aviso "Aprovada — processamento em segundo plano".
-- Sempre invalidar `['solicitacoes-troca']` e `['solicitacao-troca']` em ambos `onSuccess` e no fallback do `onError` quando o status confirmou avanço.
+### 5. (Opcional, baixo risco) `src/hooks/useVeiculoDetalhes.ts → useVeiculoCompleto`
 
-### 3. `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
-
-Mover o `onOpenChange(false)` para dentro de um `try/finally` em `handleAprovar`/`handleSolicitarVistoria`/`handleReprovar`, fechando o modal sempre que a mutação retornar (sucesso ou o "sucesso silencioso" do item 2). Em erro real (status não avançou), manter modal aberto como hoje.
-
-## Resultado esperado
-
-- Clique em Aprovar fecha o modal em <1s, mesmo com SGA/WhatsApp lentos.
-- Contador "Titularidade pendente" zera imediatamente (lista invalidada no `onSuccess`).
-- Falhas em SGA/WhatsApp ficam como warning de log, sem impacto na UX, e a `analise_previa_resultado` vai sendo gravada quando o Hinova responder.
-- Reaprovações acidentais retornam 409 com mensagem clara, sem reabrir o fluxo.
+- Melhorar a busca do rastreador: primeiro tentar `eq('veiculo_id', veiculoId)`; se vazio, tentar via `contrato_id` do contrato resolvido. Manter o select atual.
 
 ## Arquivos afetados
 
-- `supabase/functions/aprovar-troca-cadastro/index.ts`
-- `src/hooks/useSolicitacoesTroca.ts`
+- `src/components/troca-titularidade/RelatorioFinanceiroAntigo.tsx`
 - `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+- `src/components/troca-titularidade/VeiculoCompletoCard.tsx`
+- `src/hooks/useSolicitacoesTroca.ts`
+- `src/hooks/useVeiculoDetalhes.ts`
+
+## Resultado esperado
+
+- Aba "Financeiro Antigo" passa a refletir o SGA: contagens corretas, saldo devedor total e badge ADIMPLENTE/INADIMPLENTE coerente com a régua de débito que já trava a aprovação no backend.
+- Bloco "Rastreador" carrega posição em tempo real ao abrir o modal e identifica equipamento mesmo quando o vínculo está só no contrato.
+- Nenhuma duplicação de lógica: tudo passa pelos hooks/edge functions já consagrados nas telas de criação da troca e de monitoramento de rastreadores.

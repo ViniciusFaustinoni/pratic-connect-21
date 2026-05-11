@@ -220,7 +220,11 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               </TabsContent>
 
               <TabsContent value="financeiro" className="pt-3">
-                <RelatorioFinanceiroAntigo associadoId={solicitacao.associado_antigo_id} />
+                <RelatorioFinanceiroAntigo
+                  associadoId={solicitacao.associado_antigo_id}
+                  codigoHinova={(solicitacao.associado_antigo as any)?.codigo_hinova ?? null}
+                  cpf={solicitacao.associado_antigo?.cpf ?? null}
+                />
               </TabsContent>
 
               <TabsContent value="termo" className="pt-3 space-y-3">
