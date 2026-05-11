@@ -127,7 +127,7 @@ export const trocaTitularidade: Tutorial = {
       numero: 10,
       titulo: 'Monitoramento aprova a solicitação',
       descricao:
-        'A solicitação cai na fila de Monitoramento › Aprovações › Aprovação de Associados. O Monitoramento valida documentos e fotos prévias e libera o serviço de vistoria de campo (origem "troca de titularidade") para a fila de atribuição.',
+        'A solicitação cai na fila de Monitoramento › Aprovações › Aprovação de Associados. O Monitoramento valida documentos e fotos prévias e libera a cotação de volta para o consultor (badge "Liberada p/ assinatura") na aba Outros Processos, para o reenvio do link público ao novo titular.',
       dicas: [
         'A cobertura segue suspensa até a decisão final do Monitoramento após a vistoria.',
         'Reprovação volta a solicitação ao Cadastro com o motivo registrado.',
@@ -138,6 +138,20 @@ export const trocaTitularidade: Tutorial = {
     },
     {
       numero: 11,
+      titulo: 'Consultor reabre a cotação e envia o link ao novo associado',
+      descricao:
+        'Após a aprovação do Monitoramento, em Vendas › Cotações › aba "Outros Processos" o consultor localiza a cotação da troca (badge "Liberada p/ assinatura") e usa "Abrir página da cotação" (ícone vermelho) ou "Copiar link" para enviar o link público ao novo titular por WhatsApp/e-mail. O novo associado acessa o link, escolhe o plano e segue o restante do fluxo como em uma nova adesão — preservando a carência cumprida pelo titular antigo.',
+      dicas: [
+        'A aba "Outros Processos" reúne trocas, substituições, inclusões e migrações — não confunda com cotações comuns.',
+        'O link público é único por cotação; reenviar não invalida o anterior.',
+        'A escolha do plano e o envio dos documentos pelo novo titular ocorrem nessa etapa, igual a uma nova adesão.',
+      ],
+      links: [
+        { label: 'Cotações › Outros Processos', url: '/vendas/cotacoes' },
+      ],
+    },
+    {
+      numero: 12,
       titulo: 'Atribuição manual e vistoria do técnico',
       descricao:
         'Em Monitoramento › Serviços de Campo › Atribuição Manual, o serviço (marcado como encaixe) é atribuído ao técnico. O técnico vai até o veículo e realiza a vistoria de conferência — apenas fotografa, sem instalar nada novo, pois o rastreador já existe. O resultado volta para aprovação final do Monitoramento.',
