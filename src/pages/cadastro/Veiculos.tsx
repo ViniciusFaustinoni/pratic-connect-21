@@ -113,8 +113,22 @@ const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect
   const temInstalacaoAtiva = instalacoes.some((i) =>
     ['pendente', 'agendada', 'em_execucao', 'concluida'].includes(i.status)
   );
-  const labelOverride =
-    veiculoStatus === 'instalacao_pendente' && !temInstalacaoAtiva ? 'Aguardando Vistoria/Aprovação' : null;
+  // Prioridade: cobertura suspensa > instalação sem agendamento > status cru.
+  const isSuspenso = veiculo.cobertura_suspensa === true;
+  const labelOverride = isSuspenso
+    ? 'Suspenso'
+    : (veiculoStatus === 'instalacao_pendente' && !temInstalacaoAtiva ? 'Aguardando Vistoria/Aprovação' : null);
+  const badgeColor = isSuspenso ? statusColors.suspenso : statusColors[veiculoStatus];
+  const tooltipContent = isSuspenso
+    ? `${veiculo.cobertura_suspensa_motivo || 'Cobertura suspensa'}${
+        veiculo.cobertura_suspensa_em
+          ? ` — desde ${new Date(veiculo.cobertura_suspensa_em).toLocaleString('pt-BR')}`
+          : ''
+      }`
+    : null;
+  const badge = (
+    <Badge className={badgeColor}>{labelOverride ?? STATUS_VEICULO_LABELS[veiculoStatus]}</Badge>
+  );
   return (
     <TableRow
       className="cursor-pointer hover:bg-muted/50"
@@ -152,7 +166,16 @@ const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect
         </div>
       </TableCell>
       <TableCell>
-        <Badge className={statusColors[veiculoStatus]}>{labelOverride ?? STATUS_VEICULO_LABELS[veiculoStatus]}</Badge>
+        {tooltipContent ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild><span>{badge}</span></TooltipTrigger>
+              <TooltipContent className="max-w-xs">{tooltipContent}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          badge
+        )}
       </TableCell>
       {canDelete && (
         <TableCell>
