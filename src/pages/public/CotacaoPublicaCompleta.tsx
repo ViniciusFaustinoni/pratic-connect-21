@@ -433,7 +433,23 @@ export default function CotacaoPublicaCompleta() {
             }
           }
 
-          // OCR falhou OU pediu revisão → abrir editor manual
+          // CNH com CPF detectado → tenta auto-detectar inclusão de veículo (silencioso)
+          if (sucessoOcr && tipoSchema === 'cnh' && cotacao?.id) {
+            const cpfDetectado = (ocrData?.dados as any)?.cpf as string | undefined;
+            const cpf11 = (cpfDetectado || '').replace(/\D/g, '');
+            if (cpf11.length === 11) {
+              try {
+                await supabase.functions.invoke('detectar-associado-por-cpf', {
+                  body: { cotacao_id: cotacao.id, cpf: cpf11 },
+                });
+                refetch();
+              } catch (e) {
+                console.warn('detectar-associado-por-cpf falhou (silencioso):', e);
+              }
+            }
+          }
+
+
           if (!sucessoOcr || ocrData?.sugestao === 'revisar') {
             setOcrFallback({
               open: true,
