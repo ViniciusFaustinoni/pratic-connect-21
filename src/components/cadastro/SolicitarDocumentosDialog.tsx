@@ -17,7 +17,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { FileText, Send, Camera, Gauge, Car, Video } from 'lucide-react';
+import { FileText, Send, Camera, Gauge, Car } from 'lucide-react';
 
 interface SolicitarDocumentosDialogProps {
   open: boolean;
