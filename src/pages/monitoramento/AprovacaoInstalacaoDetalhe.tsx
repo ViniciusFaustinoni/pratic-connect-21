@@ -294,6 +294,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         videoAssociado,
         enderecoInstalacao,
         enderecoCadastral,
+        enderecoBase,
+        isAtendimentoBase,
       };
     },
     enabled: !!servicoId,
