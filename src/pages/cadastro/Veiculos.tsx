@@ -462,8 +462,11 @@ export default function Veiculos() {
             const temInstalacaoAtiva = instalacoes.some((i) =>
               ['pendente', 'agendada', 'em_execucao', 'concluida'].includes(i.status)
             );
-            const labelOverride =
-              veiculoStatus === 'instalacao_pendente' && !temInstalacaoAtiva ? 'Aguardando Vistoria/Aprovação' : null;
+            const isSuspenso = veiculo.cobertura_suspensa === true;
+            const labelOverride = isSuspenso
+              ? 'Suspenso'
+              : (veiculoStatus === 'instalacao_pendente' && !temInstalacaoAtiva ? 'Aguardando Vistoria/Aprovação' : null);
+            const badgeColor = isSuspenso ? statusColors.suspenso : statusColors[veiculoStatus];
             return (
               <Card
                 key={veiculo.id}
