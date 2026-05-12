@@ -65,11 +65,42 @@ interface Props {
 }
 
 export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isResending }: Props) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [criandoCotacao, setCriandoCotacao] = useState(false);
   if (!item) return null;
   const steps = buildSteps(item);
   const semEmail = !item.associado_antigo_email;
   const podeReenviar = item.tipo === 'troca_titularidade' && item.solicitacao_troca_id &&
     !item.termo_assinado_em && !!item.termo_enviado_em && !semEmail;
+
+  const podeRealizarCotacao = item.tipo === 'troca_titularidade'
+    && !!item.solicitacao_troca_id
+    && !item.cotacao_id
+    && !!item.termo_assinado_em;
+
+  const handleRealizarCotacao = async () => {
+    if (!item.solicitacao_troca_id) return;
+    setCriandoCotacao(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('criar-cotacao-troca-titularidade', {
+        body: { solicitacao_id: item.solicitacao_troca_id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const cotacaoId = (data as any)?.cotacao_id as string | undefined;
+      if (!cotacaoId) throw new Error('Cotação não retornada pelo servidor');
+      qc.invalidateQueries({ queryKey: ['outros-processos'] });
+      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+      toast.success('Cotação criada com sucesso');
+      onOpenChange(false);
+      navigate(`/vendas/cotacoes?abrir=${cotacaoId}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao criar cotação');
+    } finally {
+      setCriandoCotacao(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
