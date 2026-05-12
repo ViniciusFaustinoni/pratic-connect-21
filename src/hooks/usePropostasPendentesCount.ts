@@ -9,10 +9,14 @@ export function usePropostasPendentesCount() {
   return useQuery({
     queryKey: ['propostas-pendentes-count'],
     queryFn: async () => {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('contratos')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['assinado', 'em_analise'] as any);
+        .eq('status', 'assinado');
+      if (error) {
+        console.warn('[usePropostasPendentesCount]', error.message);
+        return 0;
+      }
       return count || 0;
     },
     staleTime: 30_000,
