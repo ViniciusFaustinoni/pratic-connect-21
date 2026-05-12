@@ -402,11 +402,20 @@ serve(async (req) => {
           enterpriseId?: string;
         };
 
+        // 0KM: quando placa estiver ausente ou for placeholder "0KM*", usa o chassi como placa
+        // para satisfazer a validação da Softruck (plate é obrigatório no /v2/vehicles).
+        const placaSan = placa?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+        const chassiSan = chassi?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+        const isZeroKm = !placaSan || /^0KM/i.test(placaSan);
+        const plateFinal = isZeroKm && chassiSan
+          ? chassiSan.substring(0, 16)
+          : placaSan.substring(0, 16);
+
         const vehicleData = {
           data: [{
             attributes: {
-              plate: placa?.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 16),
-              vin: chassi?.substring(0, 20),
+              plate: plateFinal,
+              vin: chassiSan ? chassiSan.substring(0, 20) : chassi?.substring(0, 20),
               type: tipo ? mapVehicleType(tipo) : 'car',
               brand: marca?.substring(0, 20),
               model: modelo?.substring(0, 20),
