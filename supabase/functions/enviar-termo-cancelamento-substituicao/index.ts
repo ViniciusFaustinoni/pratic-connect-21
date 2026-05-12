@@ -326,9 +326,48 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           console.warn('[enviar-termo-cancelamento-substituicao] meta_config_ausente');
           await logErro('meta_config_ausente: phone_number_id/access_token não configurados');
         } else if (!slugAutentique) {
-          waStatus = 'falhou';
-          console.warn('[enviar-termo-cancelamento-substituicao] autentique_short_link_indisponivel após retries');
-          await logErro('autentique_short_link_indisponivel: slug do termo não disponível para botão URL do template');
+          // Fallback texto via Evolution: URL Autentique completa sempre resolve
+          console.warn('[enviar-termo-cancelamento-substituicao] short_link indisponível — fallback texto com URL Autentique');
+          const mensagemTexto =
+            `Olá, ${primeiroNome}!\n\n` +
+            `Recebemos sua solicitação de substituição de placa do veículo` +
+            `${veiculo?.placa ? ` (${veiculo.placa})` : ''}.\n\n` +
+            `Para liberar a substituição, assine o Termo de Cancelamento (reconhecimento facial):\n` +
+            `${termoUrl}\n\n` +
+            `Após sua assinatura, o processo segue automaticamente.\n— PRATICCAR`;
+          try {
+            const { data: sendData, error: sendErr } = await admin.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telTo,
+                mensagem: mensagemTexto,
+                referencia_tipo: 'substituicao_placa',
+                referencia_id: solicitacao_id,
+                force_provider: 'evolution',
+              },
+            });
+            if (sendErr || (sendData && sendData.success === false)) {
+              const errTxt = sendErr?.message || sendData?.error || 'erro desconhecido';
+              waStatus = 'falhou';
+              await admin.from('whatsapp_mensagens').insert({
+                direcao: 'saida', telefone: telTo, mensagem: mensagemTexto, status: 'erro',
+                template_id: 'fallback_texto_short_link_indisponivel',
+                referencia_tipo: 'substituicao_placa', referencia_id: solicitacao_id,
+                erro_mensagem: `evolution_erro: ${errTxt}`,
+              }).then(() => {}).catch(() => {});
+            } else {
+              waStatus = 'enviado';
+              await admin.from('whatsapp_mensagens').insert({
+                direcao: 'saida', telefone: telTo, mensagem: mensagemTexto, status: 'enviada',
+                template_id: 'fallback_texto_short_link_indisponivel',
+                referencia_tipo: 'substituicao_placa', referencia_id: solicitacao_id,
+                message_id: sendData?.message_id || sendData?.mensagem_id || null,
+              }).then(() => {}).catch(() => {});
+            }
+          } catch (e) {
+            waStatus = 'falhou';
+            const errMsg = e instanceof Error ? e.message : String(e);
+            await logErro(`fallback_texto_excecao: ${errMsg}`);
+          }
         } else {
           const payload = {
             messaging_product: 'whatsapp',
