@@ -367,7 +367,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
             .in('user_id', consultorIds as string[]);
           (profs || []).forEach((p: any) => profilesMap.set(p.user_id, p));
         }
-        substItems = (substs || []).map<OutroProcessoItem>((s: any) => {
+        substItems = ((substs || []) as any[]).map((s: any): OutroProcessoItem => {
           const snapV = s.veiculo_antigo_snapshot || {};
           const snapA = s.associado_snapshot || {};
           const consultorKey = s.consultor_id || s.criado_por;
