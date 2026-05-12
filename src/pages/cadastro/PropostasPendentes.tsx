@@ -151,10 +151,17 @@ export default function PropostasPendentes() {
   // então usamos os dados já filtrados pela lista para evitar divergência).
   const stats = (() => {
     if (!propostas) return statsRaw;
-    const aguardando = propostas.filter(p => p.status === 'assinado').length;
+    const isPendVist = (p: PropostaPendente) =>
+      p.status === 'assinado' &&
+      p.cadastro_aprovado === true &&
+      p.tipo_vistoria !== 'autovistoria' &&
+      (!p.instalacao_info || p.instalacao_info.status !== 'concluida');
+    const aguardando = propostas.filter(p => p.status === 'assinado' && !isPendVist(p)).length;
+    const pendVistoria = propostas.filter(isPendVist).length;
     const emAnalise = propostas.filter(p => p.status === 'em_analise').length;
     return {
       aguardando,
+      pendVistoria,
       emAnalise,
       aprovadosHoje: statsRaw?.aprovadosHoje || 0,
       reprovadosHoje: statsRaw?.reprovadosHoje || 0,
