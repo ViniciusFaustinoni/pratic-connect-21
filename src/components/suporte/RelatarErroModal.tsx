@@ -185,21 +185,32 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
 
           <div className="space-y-1.5">
             <Label>Anexos do erro (prints ou PDF) <span className="text-destructive">*</span></Label>
-            <label
-              htmlFor="erro-files"
-              className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors"
-            >
-              <Upload className="h-5 w-5" />
-              <span className="text-sm">Clique para anexar imagens ou PDF (até {MAX_FILES} arquivos, 10MB cada)</span>
-              <input
-                id="erro-files"
-                type="file"
-                multiple
-                accept="image/*,application/pdf"
-                className="hidden"
-                onChange={(e) => handleFiles(e.target.files)}
-              />
-            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label
+                htmlFor="erro-files"
+                className="flex-1 flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors"
+              >
+                <Upload className="h-5 w-5" />
+                <span className="text-sm text-center">Clique, <strong>cole (Ctrl+V)</strong> ou anexe imagens/PDF (até {MAX_FILES} arquivos, 10MB cada)</span>
+                <input
+                  id="erro-files"
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={colarDaAreaTransferencia}
+                className="sm:self-stretch sm:h-auto gap-2"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+                Colar
+              </Button>
+            </div>
             {files.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 Anexe pelo menos 1 arquivo — print da tela é o ideal, mas PDF também é aceito.
