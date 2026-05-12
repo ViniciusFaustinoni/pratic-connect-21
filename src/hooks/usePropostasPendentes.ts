@@ -1718,6 +1718,45 @@ export function useSolicitarDocumentos() {
         // Não falhar por causa da notificação
       }
 
+      // 5. Notificar o VENDEDOR responsável pelo contrato (não bloqueia o fluxo)
+      try {
+        const vendedorId = (contratoComLink as any)?.vendedor_id as string | null | undefined;
+        if (vendedorId) {
+          const { data: vendedor } = await supabase
+            .from('profiles')
+            .select('nome, telefone')
+            .eq('id', vendedorId)
+            .maybeSingle();
+
+          const telVendedor = (vendedor?.telefone || '').replace(/\D/g, '');
+          if (telVendedor && telVendedor.length >= 10) {
+            const primeiroNomeVend = (vendedor?.nome || 'Vendedor').split(' ')[0];
+            const clienteNome = (contratoComLink as any)?.cliente_nome || 'cliente';
+            const placa = (contratoComLink as any)?.veiculo_placa || '---';
+            const numero = (contratoComLink as any)?.numero || contratoId.slice(0, 8);
+            const qtd = documentos.length;
+            const mensagemVend =
+              `O Cadastro solicitou ${qtd} documento(s) ao associado ${clienteNome} ` +
+              `(placa ${placa} • contrato ${numero}). ` +
+              (linkPendencias ? `Link do cliente: ${linkPendencias}` : 'Acompanhe pelo painel.');
+
+            await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telVendedor,
+                mensagem: `📄 Pendência documental\n\n${mensagemVend}`,
+                template_name: 'notificacao_geral_v1',
+                template_params: [primeiroNomeVend, 'documentação', mensagemVend.substring(0, 600)],
+              },
+            });
+            console.log('[useSolicitarDocumentos] WhatsApp enviado ao vendedor', vendedorId);
+          } else {
+            console.log('[useSolicitarDocumentos] Vendedor sem telefone válido — notificação pulada');
+          }
+        }
+      } catch (vendErr) {
+        console.warn('[useSolicitarDocumentos] Erro ao notificar vendedor (não crítico):', vendErr);
+      }
+
       await supabase.from('logs_auditoria').insert({
         usuario_id: profile.id,
         usuario_nome: (profile as any)?.nome || (profile as any)?.email || 'Cadastro',
