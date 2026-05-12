@@ -294,9 +294,10 @@ export function VistoriaFotoSequencial({
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-emerald-600">
                   <img
                     key={fotoAtual.id}
-                    src={fotoUrl}
+                    src={transformedUrl(fotoUrl, PREVIEW)}
                     alt={fotoAtual.nome}
                     decoding="async"
+                    loading="lazy"
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute bottom-3 right-3">
