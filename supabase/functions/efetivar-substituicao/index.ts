@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getConfiguracaoNumero } from '../_shared/config-helper.ts'
 import { getParametroPontuacao, registrarEventoPontuacao } from '../_shared/pontuacao-helper.ts'
+import { alterarSituacaoParaVeiculoHinova } from '../_shared/hinova-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,6 +82,34 @@ Deno.serve(async (req) => {
     } catch (e) {
       results.push({ step: 1, name: 'Inativar veículo antigo', success: false, error: (e as Error).message })
       criticalFailure = true
+    }
+
+    // ─── STEP 1b: Inativar veículo antigo no SGA Hinova (situação 2 = inativo) — não-bloqueante ───
+    try {
+      const { data: veiculoAntigo } = await supabase
+        .from('veiculos')
+        .select('codigo_veiculo_sga')
+        .eq('id', substituicao.veiculo_antigo_id)
+        .maybeSingle()
+      const codigoSga = (veiculoAntigo as any)?.codigo_veiculo_sga
+      if (codigoSga) {
+        const r = await alterarSituacaoParaVeiculoHinova(supabase, Number(codigoSga), 2)
+        if (r.ok) {
+          results.push({ step: 1.5, name: 'Inativar veículo antigo no SGA (situação 2)', success: true })
+        } else {
+          results.push({
+            step: 1.5,
+            name: 'Inativar veículo antigo no SGA (situação 2)',
+            success: false,
+            error: `HTTP ${r.status} — ${r.errors.join('; ') || r.mensagem || 'sem detalhe'}`,
+          })
+        }
+      } else {
+        results.push({ step: 1.5, name: 'Inativar veículo antigo no SGA (situação 2)', success: false, error: 'veículo sem codigo_veiculo_sga' })
+      }
+    } catch (e) {
+      // não bloqueia substituição
+      results.push({ step: 1.5, name: 'Inativar veículo antigo no SGA (situação 2)', success: false, error: (e as Error).message })
     }
 
     // ─── STEP 2: Ativar veículo novo ───

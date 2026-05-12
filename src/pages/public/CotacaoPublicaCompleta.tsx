@@ -25,6 +25,7 @@ import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { FOTOS_VISTORIA_COMPLETA } from '@/data/vistoriaConfigCompleta';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
+import { BadgeInclusaoVeiculo } from '@/components/cotacao-publica/BadgeInclusaoVeiculo';
 
 import { 
   useCotacaoPublica, 
@@ -432,7 +433,23 @@ export default function CotacaoPublicaCompleta() {
             }
           }
 
-          // OCR falhou OU pediu revisão → abrir editor manual
+          // CNH com CPF detectado → tenta auto-detectar inclusão de veículo (silencioso)
+          if (sucessoOcr && tipoSchema === 'cnh' && cotacao?.id) {
+            const cpfDetectado = (ocrData?.dados as any)?.cpf as string | undefined;
+            const cpf11 = (cpfDetectado || '').replace(/\D/g, '');
+            if (cpf11.length === 11) {
+              try {
+                await supabase.functions.invoke('detectar-associado-por-cpf', {
+                  body: { cotacao_id: cotacao.id, cpf: cpf11 },
+                });
+                refetch();
+              } catch (e) {
+                console.warn('detectar-associado-por-cpf falhou (silencioso):', e);
+              }
+            }
+          }
+
+
           if (!sucessoOcr || ocrData?.sugestao === 'revisar') {
             setOcrFallback({
               open: true,
@@ -724,9 +741,14 @@ export default function CotacaoPublicaCompleta() {
   // RENDER PRINCIPAL
   // ──────────────────────────────────────────────────────────
 
+  const isInclusaoVeiculo = (cotacao as any)?.tipo_entrada === 'inclusao'
+    || (cotacao as any)?.tipo_entrada === 'inclusao_veiculo';
+  const nomeAssociadoInclusao = ((cotacao as any)?.dados_extras?.auto_inclusao?.nome
+    || (cotacao as any)?.nome_solicitante) as string | null | undefined;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 overflow-y-auto overflow-x-hidden">
-      {/* Header */}
+      {isInclusaoVeiculo && <BadgeInclusaoVeiculo nomeAssociado={nomeAssociadoInclusao} />}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-lg mx-auto px-4 py-3">
           <div className="mb-3">

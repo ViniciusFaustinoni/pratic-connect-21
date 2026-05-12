@@ -22,7 +22,7 @@ import { maskCPF } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-type EntradaTipo = 'substituicao' | 'troca_titularidade' | 'migracao' | 'inclusao';
+type EntradaTipo = 'substituicao' | 'troca_titularidade' | 'migracao';
 
 interface EntradaOption {
   key: EntradaTipo;
@@ -49,12 +49,6 @@ const OPCOES: EntradaOption[] = [
     label: 'Migração',
     description: 'O cliente está em outra associação e quer vir para a Praticcar sem perder a carência.',
     icon: FileInput,
-  },
-  {
-    key: 'inclusao',
-    label: 'Inclusão de Veículo',
-    description: 'O associado já tem um veículo protegido e quer incluir um segundo.',
-    icon: PlusCircle,
   },
 ];
 
@@ -128,28 +122,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch associado details for inclusão (status + veículos ativos)
-  const { data: associadoInclusaoData, isLoading: loadingAssociadoInclusao } = useQuery({
-    queryKey: ['associado-inclusao-check', selectedAssociadoId],
-    queryFn: async () => {
-      if (!selectedAssociadoId) return null;
-      // Get associado status + details
-      const { data: assoc } = await supabase
-        .from('associados')
-        .select('id, nome, cpf, telefone, email, status')
-        .eq('id', selectedAssociadoId)
-        .single();
-      if (!assoc) return null;
-      // Get active vehicles
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('id, placa, marca, modelo, ano_fabricacao, status')
-        .eq('associado_id', selectedAssociadoId)
-        .in('status', ['ativo', 'instalacao_pendente']);
-      return { ...assoc, veiculos: veiculos || [] };
-    },
-    enabled: !!selectedAssociadoId && selectedTipo === 'inclusao',
-  });
+  // Inclusão de veículo deixou de ser uma entrada manual — agora é detectada
+  // automaticamente via OCR da CNH no link público.
+  const associadoInclusaoData = null as null | { status: string; veiculos: Array<{ id: string; placa: string; marca: string; modelo: string; ano_fabricacao: number; status: string }> };
+  const loadingAssociadoInclusao = false;
 
   // Repasse maior config for substituicao
   const { data: repasseConfig } = useQuery({
@@ -257,7 +233,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   };
 
   const handleSelectAssociado = async (associado: AssociadoSearchResult) => {
-    if (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') {
+    if (selectedTipo === 'substituicao') {
       setSelectedAssociadoId(associado.id);
       setSelectedAssociadoNome(associado.nome);
       setSelectedAssociadoCpf(associado.cpf);
@@ -357,9 +333,6 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       } catch (e: any) {
         toast.error(e?.message || 'Falha ao criar solicitação');
       }
-    } else if (selectedTipo === 'inclusao') {
-      onOpenChange(false);
-      navigate(`/vendas/cotacoes?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
     }
   };
 
@@ -369,24 +342,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   };
 
   const temDebitos = debitosData?.temDebito === true;
-  
-  // Inclusão: compute full eligibility
-  const inclusaoStatusCheck = (() => {
-    if (selectedTipo !== 'inclusao' || !selectedAssociadoId) return null;
-    // 1. Débitos
-    if (bloqueioInclusaoAtivo && temDebitos) return 'debitos' as const;
-    // 2. Status do associado
-    if (associadoInclusaoData && associadoInclusaoData.status !== 'ativo') return 'status_invalido' as const;
-    // 3. Limite de veículos
-    const limite = limiteVeiculosConfig || 0;
-    if (limite > 0 && associadoInclusaoData && associadoInclusaoData.veiculos.length >= limite) return 'limite_atingido' as const;
-    // All checks passed
-    if (associadoInclusaoData && !loadingDebitos && !loadingAssociadoInclusao) return 'aprovado' as const;
-    return null;
-  })();
+
+  const inclusaoStatusCheck = null as null | 'aprovado' | 'debitos' | 'status_invalido' | 'limite_atingido';
 
   const bloqueado = selectedAssociadoId && (
-    (selectedTipo === 'inclusao' && (inclusaoStatusCheck === 'debitos' || inclusaoStatusCheck === 'status_invalido' || inclusaoStatusCheck === 'limite_atingido')) ||
     (selectedTipo === 'substituicao' && temDebitos)
   );
 
@@ -670,74 +629,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                   </div>
 
                   <div className="max-h-[320px] overflow-y-auto">
-                    {selectedAssociadoId && selectedTipo === 'inclusao' ? (
-                      <div className="p-3 space-y-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Car className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{selectedAssociadoNome}</span>
-                        </div>
-
-                        {(loadingDebitos || loadingAssociadoInclusao) ? (
-                          <div className="flex items-center justify-center py-6">
-                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground ml-2">Verificando elegibilidade...</span>
-                          </div>
-                        ) : bloqueado ? (
-                          temDebitos && debitosData ? (
-                            <DebitosCard
-                              debitos={debitosData.debitosPorVeiculo}
-                              saldoTotal={debitosData.saldoTotal}
-                              bloqueante
-                              cpf={selectedAssociadoId || undefined}
-                              titulo="Inclusão bloqueada — associado inadimplente"
-                              descricao="O associado possui débitos em aberto. Após pagar, clique em 'Verificar pagamento' para liberar a inclusão imediatamente, sem esperar a rotina noturna."
-                            />
-                          ) : (
-                            <Alert variant="destructive">
-                              <AlertTriangle className="h-4 w-4" />
-                              <AlertTitle>Inclusão bloqueada</AlertTitle>
-                              <AlertDescription>
-                                <p className="text-xs">
-                                  {inclusaoStatusCheck === 'status_invalido'
-                                    ? `O associado está com status "${associadoInclusaoData?.status}". Apenas associados ativos podem incluir novos veículos.`
-                                    : inclusaoStatusCheck === 'limite_atingido'
-                                    ? `O associado já possui ${associadoInclusaoData?.veiculos.length} veículo(s) ativo(s), atingindo o limite máximo de ${limiteVeiculosConfig} configurado.`
-                                    : 'O associado está inadimplente.'}
-                                </p>
-                              </AlertDescription>
-                            </Alert>
-                          )
-                        ) : inclusaoStatusCheck === 'aprovado' ? (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
-                              <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                              <span className="text-sm font-medium">Associado elegível para inclusão</span>
-                            </div>
-                            {associadoInclusaoData && associadoInclusaoData.veiculos.length > 0 && (
-                              <div className="space-y-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">Veículos ativos:</p>
-                                {associadoInclusaoData.veiculos.map((v) => (
-                                  <div key={v.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-muted/50">
-                                    <span>{v.marca} {v.modelo} {v.ano_fabricacao}</span>
-                                    <span className="font-mono">{v.placa}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            <Button className="w-full" onClick={handleProsseguir}>
-                              Confirmar e iniciar inclusão
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Nenhum débito em aberto encontrado.</p>
-                            <Button className="w-full" onClick={handleProsseguir}>
-                              Prosseguir com {opcaoAtual?.label}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
+                    {false ? null : (
                       <div className="p-1">
                         {(() => {
                           const cleaned = searchTerm.replace(/\D/g, '');
