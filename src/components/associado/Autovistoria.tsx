@@ -351,6 +351,25 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {placaMismatch && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1 text-sm">
+              <p className="font-semibold">Placa não confere</p>
+              <p className="text-xs leading-relaxed">{placaMismatch}</p>
+            </div>
+          </div>
+        )}
+        {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && (
+          <div className={`rounded-lg p-2.5 flex items-center gap-2 border text-xs ${placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel ? 'bg-green-500/10 border-green-500/30 text-green-700' : 'bg-destructive/10 border-destructive/30 text-destructive'}`}>
+            <ScanLine className="h-4 w-4 shrink-0" />
+            {placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel
+              ? <span>Placa confere: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong></span>
+              : !placaOcrPorFoto[fotoAtual.id].legivel
+                ? <span>Placa ilegível — refaça a foto.</span>
+                : <span>Placa lida: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong> — diferente da cadastrada.</span>}
+          </div>
+        )}
         {/* Captura de Localização - OBRIGATÓRIO */}
         <LocationCapture 
           onLocationCapture={setCoordenadas}
