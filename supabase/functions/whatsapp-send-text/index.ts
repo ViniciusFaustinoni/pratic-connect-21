@@ -295,15 +295,7 @@ async function enviarViaMeta(
       },
     };
 
-    // Registra warn no log para que QA detecte callers a corrigir
-    await supabase.from("whatsapp_mensagens").insert({
-      telefone: telefoneFormatado, tipo: "text", mensagem,
-      direcao: "saida", status: "enviada",
-      erro_mensagem: `auto_fallback_template: caller esqueceu template_name; usado '${fallbackName}'`,
-      template_id: fallbackName,
-      template_variaveis: { params: fallbackParams } as any,
-      provedor: "meta_oficial",
-    });
+    console.log(`[whatsapp-send-text] auto_fallback_template aplicado: '${fallbackName}' params=${JSON.stringify(fallbackParams)}`);
   }
 
   const response = await fetch(
