@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     // Buscar serviço com dados do associado
     const { data: servico, error: sErr } = await supabase
       .from("servicos")
-      .select("id, reagendamento_token, associado_id, tipo, reagendamento_enviado_em")
+      .select("id, reagendamento_token, associado_id, tipo, reagendamento_enviado_em, cotacao_id, vistoria_origem_id, veiculo_id")
       .eq("id", servico_id)
       .single();
 
