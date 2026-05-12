@@ -438,7 +438,114 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
         });
       }
 
-      return [...substItems, ...cotacaoItems].sort(
+      // 7) Solicitações de troca de titularidade SEM cotação ainda (cotacao_id IS NULL)
+      // A cotação só é criada manualmente após o termo de cancelamento ser assinado.
+      let trocaSemCotacaoItems: OutroProcessoItem[] = [];
+      if (tipos.includes('troca_titularidade')) {
+        let tq = (supabase as any)
+          .from('solicitacoes_troca_titularidade')
+          .select('id, status, cotacao_id, veiculo_id, novo_titular_dados, associado_antigo_id, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, aprovado_cadastro_em, aprovado_monitoramento_em, efetivada_em, reprovado_em, motivo_reprovacao, criado_por, created_at, updated_at')
+          .is('cotacao_id', null)
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (effectiveScope === 'own' && effectiveVendedorId) {
+          tq = tq.eq('criado_por', effectiveVendedorId);
+        } else if (consultorId) {
+          tq = tq.eq('criado_por', consultorId);
+        }
+        const { data: trocasSC } = await tq;
+        const trocasSCList = (trocasSC || []) as any[];
+
+        // veículos e associados antigos
+        const veiculoIds = Array.from(new Set(trocasSCList.map((t) => t.veiculo_id).filter(Boolean)));
+        const veiculosMap = new Map<string, any>();
+        if (veiculoIds.length > 0) {
+          const { data: vs } = await supabase
+            .from('veiculos')
+            .select('id, placa, marca, modelo, ano_modelo, ano_fabricacao')
+            .in('id', veiculoIds as string[]);
+          (vs || []).forEach((v: any) => veiculosMap.set(v.id, v));
+        }
+        const aaIds = Array.from(new Set(trocasSCList.map((t) => t.associado_antigo_id).filter(Boolean)));
+        const aaMap = new Map<string, any>();
+        if (aaIds.length > 0) {
+          const { data: as_ } = await supabase
+            .from('associados')
+            .select('id, nome, cpf, email, telefone')
+            .in('id', aaIds as string[]);
+          (as_ || []).forEach((a: any) => aaMap.set(a.id, a));
+        }
+        // criadores (profiles.id)
+        const criadores = Array.from(new Set(trocasSCList.map((t) => t.criado_por).filter(Boolean)));
+        const profMap = new Map<string, any>();
+        if (criadores.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, user_id, nome, full_name')
+            .in('id', criadores as string[]);
+          (profs || []).forEach((p: any) => profMap.set(p.id, p));
+        }
+
+        trocaSemCotacaoItems = trocasSCList.map((t: any): OutroProcessoItem => {
+          const v = t.veiculo_id ? veiculosMap.get(t.veiculo_id) : null;
+          const aa = t.associado_antigo_id ? aaMap.get(t.associado_antigo_id) : null;
+          const novo = t.novo_titular_dados || {};
+          const prof = t.criado_por ? profMap.get(t.criado_por) : null;
+          const etapa = TROCA_STATUS_LABELS[t.status] || { label: t.status, tone: 'info' as const };
+          const termoStatus: OutroProcessoItem['termo_status'] =
+            t.status === 'cancelada' || t.status === 'reprovada_cadastro' || t.status === 'reprovada_monitoramento'
+              ? 'recusado'
+              : t.termo_cancelamento_assinado_em ? 'assinado'
+              : t.termo_cancelamento_enviado_em ? 'enviado'
+              : 'pendente';
+          return {
+            id: `troca-${t.id}`,
+            tipo: 'troca_titularidade',
+            cotacao_id: null,
+            cotacao_numero: null,
+            cotacao_token: null,
+            cotacao_status: t.status,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+            vendedor_id: prof?.user_id ?? null,
+            vendedor_nome: prof?.full_name || prof?.nome || null,
+            titular_origem_nome: aa?.nome ?? null,
+            titular_origem_cpf: aa?.cpf ?? null,
+            titular_destino_nome: novo?.nome ?? null,
+            titular_destino_cpf: novo?.cpf ?? null,
+            veiculo_placa: v?.placa ?? null,
+            veiculo_marca: v?.marca ?? null,
+            veiculo_modelo: v?.modelo ?? null,
+            veiculo_ano: v?.ano_modelo ?? v?.ano_fabricacao ?? null,
+            solicitacao_troca_id: t.id,
+            troca_status: t.status,
+            solicitacao_substituicao_id: null,
+            substituicao_status: null,
+            termo_status: termoStatus,
+            termo_filiacao_status: 'nao_aplicavel',
+            termo_url: t.termo_cancelamento_url ?? null,
+            termo_enviado_em: t.termo_cancelamento_enviado_em ?? null,
+            termo_assinado_em: t.termo_cancelamento_assinado_em ?? null,
+            termo_whatsapp_status: t.termo_whatsapp_status ?? null,
+            termo_reenvios_count: t.termo_reenvios_count ?? 0,
+            termo_ultimo_reenvio_em: t.termo_ultimo_reenvio_em ?? null,
+            associado_antigo_email: aa?.email ?? null,
+            associado_antigo_telefone: aa?.telefone ?? null,
+            aprovado_cadastro_em: t.aprovado_cadastro_em ?? null,
+            aprovado_monitoramento_em: t.aprovado_monitoramento_em ?? null,
+            efetivada_em: t.efetivada_em ?? null,
+            reprovado_em: t.reprovado_em ?? null,
+            motivo_reprovacao: t.motivo_reprovacao ?? null,
+            pendencia_qtd: 0,
+            pendencia_total: 0,
+            etapa_label: etapa.label,
+            etapa_tone: etapa.tone,
+            pode_editar: false,
+          };
+        });
+      }
+
+      return [...trocaSemCotacaoItems, ...substItems, ...cotacaoItems].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
     },
