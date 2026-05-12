@@ -66,6 +66,7 @@ export interface UploadFotoResult {
   url: string;
   kmExtraido?: number;
   ocrFalhou?: boolean;
+  placaOcr?: PlacaOcrResultado;
 }
 
 export function useUploadFotoCotacaoVistoria() {
