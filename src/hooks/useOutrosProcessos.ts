@@ -302,6 +302,8 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           veiculo_ano: c.veiculo_ano ?? null,
           solicitacao_troca_id: troca?.id ?? null,
           troca_status: troca?.status ?? null,
+          solicitacao_substituicao_id: (c.dados_extras as any)?.solicitacao_substituicao_id ?? null,
+          substituicao_status: null,
           termo_status: deriveTermoStatus(troca),
           termo_filiacao_status: (() => {
             if (tipo !== 'troca_titularidade' || !troca) return 'nao_aplicavel' as const;
