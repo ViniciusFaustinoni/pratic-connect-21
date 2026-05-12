@@ -556,15 +556,19 @@ export function usePropostasPendentes() {
         // - Autovistoria: sai assim que o Cadastro aprova (vai p/ /cadastro/associados)
         // - Não-autovistoria (agendada / agendada_base / null): permanece com badge
         //   "Pendente Vistoria Inicial" até a INSTALAÇÃO ser concluída
+        //   ou a VISTORIA NA BASE ser realizada (vai p/ Aprovações do Monitoramento)
         const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
         const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
         const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
         const autovistoriaJaAprovadaPeloCadastro = cadastroAprovado && isAutovistoria;
+        // Vistoria na Base realizada → migra para fila do Monitoramento
+        const vistoriaBaseRealizada = !!(contrato.cotacao_id && mAgendBase.get(contrato.cotacao_id)?.status === 'realizado');
 
         const propostaJaConcluida =
           instalacaoConcluida ||
           veiculoJaConcluidoOperacionalmente ||
-          autovistoriaJaAprovadaPeloCadastro;
+          autovistoriaJaAprovadaPeloCadastro ||
+          vistoriaBaseRealizada;
         if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;
@@ -1461,69 +1465,67 @@ export function usePropostaStats() {
       const hojeISO = hoje.toISOString();
 
       // ========================================
-      // AGUARDANDO: Usar mesma lógica da lista
-      // Só conta propostas PRONTAS para análise:
-      // - Com autovistoria (fotos enviadas) OU
-      // - Com instalação/vistoria concluída
+      // AGUARDANDO: bate exatamente com a lista de Propostas Pendentes.
+      // Conta contratos.status='assinado' EXCLUINDO os que já migraram para
+      // outras filas (Aprovação do Monitoramento ou /cadastro/associados):
+      //   - instalacao concluída (tabela `instalacoes`)
+      //   - vistoria na base realizada (`agendamentos_base.status='realizado'`)
+      //   - veículo já em status 'ativo'
+      //   - autovistoria já aprovada pelo Cadastro (cadastro_aprovado=true)
       // ========================================
       const { data: contratosAssinados } = await supabase
         .from('contratos')
-        .select('id, cotacao_id')
+        .select('id, cotacao_id, veiculo_id, cadastro_aprovado')
         .eq('status', 'assinado');
 
       let aguardando = 0;
 
       if (contratosAssinados && contratosAssinados.length > 0) {
-        // Buscar instalações concluídas para todos os contratos
         const contratoIds = contratosAssinados.map(c => c.id);
-        const { data: instalacoesConcluidas } = await supabase
-          .from('instalacoes')
-          .select('contrato_id')
-          .in('contrato_id', contratoIds)
-          .eq('status', 'concluida');
+        const cotacaoIds = contratosAssinados.map(c => c.cotacao_id).filter(Boolean) as string[];
+        const veiculoIds = contratosAssinados.map(c => c.veiculo_id).filter(Boolean) as string[];
 
-        const contratosComInstalacao = new Set(
-          instalacoesConcluidas?.map(i => i.contrato_id) || []
-        );
+        const [
+          instalacoesConcluidasRes,
+          agendamentosBaseRealizadosRes,
+          veiculosAtivosRes,
+          cotacoesAutovistoriaRes,
+        ] = await Promise.all([
+          supabase
+            .from('instalacoes')
+            .select('contrato_id')
+            .in('contrato_id', contratoIds)
+            .eq('status', 'concluida'),
+          cotacaoIds.length
+            ? supabase
+                .from('agendamentos_base')
+                .select('cotacao_id')
+                .in('cotacao_id', cotacaoIds)
+                .eq('status', 'realizado')
+            : Promise.resolve({ data: [] as any[] }),
+          veiculoIds.length
+            ? supabase.from('veiculos').select('id').in('id', veiculoIds).eq('status', 'ativo')
+            : Promise.resolve({ data: [] as any[] }),
+          cotacaoIds.length
+            ? supabase
+                .from('cotacoes')
+                .select('id, tipo_vistoria')
+                .in('id', cotacaoIds)
+                .eq('tipo_vistoria', 'autovistoria')
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
 
-        // Buscar cotações com fotos de autovistoria
-        const cotacaoIds = contratosAssinados
-          .map(c => c.cotacao_id)
-          .filter(Boolean) as string[];
+        const setInstalacaoConcluida = new Set((instalacoesConcluidasRes.data || []).map((r: any) => r.contrato_id));
+        const setBaseRealizada = new Set((agendamentosBaseRealizadosRes.data || []).map((r: any) => r.cotacao_id));
+        const setVeiculoAtivo = new Set((veiculosAtivosRes.data || []).map((r: any) => r.id));
+        const setCotacaoAutovistoria = new Set((cotacoesAutovistoriaRes.data || []).map((r: any) => r.id));
 
-        let cotacoesComFotos = new Set<string>();
-        if (cotacaoIds.length > 0) {
-          const { data: fotosData } = await supabase
-            .from('cotacoes_vistoria_fotos')
-            .select('cotacao_id')
-            .in('cotacao_id', cotacaoIds);
-
-          cotacoesComFotos = new Set(fotosData?.map(f => f.cotacao_id) || []);
-        }
-
-        // NOVO: Buscar agendamentos base realizados
-        let cotacoesComVistoriaBase = new Set<string>();
-        if (cotacaoIds.length > 0) {
-          const { data: agendamentosRealizados } = await supabase
-            .from('agendamentos_base')
-            .select('cotacao_id')
-            .in('cotacao_id', cotacaoIds)
-            .eq('status', 'realizado');
-
-          cotacoesComVistoriaBase = new Set(
-            agendamentosRealizados?.map(a => a.cotacao_id).filter(Boolean) as string[] || []
-          );
-        }
-
-        // Contar apenas propostas prontas para análise
-        aguardando = contratosAssinados.filter(contrato => {
-          // Tem instalação concluída?
-          if (contratosComInstalacao.has(contrato.id)) return true;
-          // Tem autovistoria com fotos?
-          if (contrato.cotacao_id && cotacoesComFotos.has(contrato.cotacao_id)) return true;
-          // NOVO: Tem vistoria na base realizada?
-          if (contrato.cotacao_id && cotacoesComVistoriaBase.has(contrato.cotacao_id)) return true;
-          return false;
+        aguardando = contratosAssinados.filter((c: any) => {
+          if (setInstalacaoConcluida.has(c.id)) return false;
+          if (c.cotacao_id && setBaseRealizada.has(c.cotacao_id)) return false;
+          if (c.veiculo_id && setVeiculoAtivo.has(c.veiculo_id)) return false;
+          if (c.cadastro_aprovado === true && c.cotacao_id && setCotacaoAutovistoria.has(c.cotacao_id)) return false;
+          return true;
         }).length;
       }
 
