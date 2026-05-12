@@ -1,54 +1,31 @@
-## Objetivo
+## Diagnóstico
 
-Eliminar a entrada prematura da Troca de Titularidade na fila do Monitoramento. Hoje o card aparece logo após a aprovação do Cadastro, sem fotos. Passa a aparecer somente depois que a vistoria/autovistoria do novo titular for concluída.
+Verifiquei a placa **KRN6G76** no banco:
 
-## Novo ciclo
+| Campo | Valor |
+|---|---|
+| `veiculos.status` | `instalacao_pendente` |
+| `cobertura_suspensa` | **true** |
+| `cobertura_suspensa_em` | 10/05/2026 18:07 |
+| `cobertura_suspensa_motivo` | "Instalação não realizada no prazo de 48h após assinatura" |
+| `contratos.data_assinatura` | 08/05/2026 17:11 |
 
-```
-aguardando_cadastro
-  → (cadastro aprova)               → liberada_para_assinatura       (NOVO destino direto)
-  → (novo titular assina + paga + faz vistoria/autovistoria)
-  → (vistoria concluída no link público) → aguardando_monitoramento  (entra na fila com fotos)
-  → (monitoramento aprova ou reprova) → efetivada / cancelada
-```
+A suspensão automática **funcionou corretamente** no backend (cron + trigger marcaram `cobertura_suspensa=true` ~48h após a assinatura). O problema é puramente de **apresentação na lista de Veículos**:
 
-A fila do Monitoramento (`AprovacoesTroca.tsx` aba "Pendentes") passa a representar exatamente o caso "vistoria concluída, aguardando análise das fotos".
+- A lista (`src/pages/cadastro/Veiculos.tsx` + `src/hooks/useVeiculos.ts`) hoje só lê `veiculos.status`. Como o campo `status` continua `instalacao_pendente` (estado de fluxo, conforme arquitetura — suspensão é um flag separado de cobertura, não substitui o status do veículo), o badge cai no fallback "Aguardando Vistoria/Aprovação".
+- O selo `Suspenso` (laranja) já existe no mapa de cores (`statusColors.suspenso`), mas nunca é renderizado para casos de suspensão por não-instalação, porque a UI nunca consulta `cobertura_suspensa`.
 
-## Mudanças
+## O que vou alterar (apenas UI)
 
-### 1. `supabase/functions/aprovar-troca-cadastro/index.ts`
-- Trocar o destino do CAS (linha 72 e 78): `status: 'liberada_para_assinatura'` em vez de `'aguardando_monitoramento'`. CAS continua de `'aguardando_cadastro'`.
-- Mensagens de retorno passam a refletir o novo status.
-- Mantém todo o background work (snapshot SGA, atribuição de vendedor, WhatsApp).
+1. **`src/hooks/useVeiculos.ts`** — adicionar `cobertura_suspensa, cobertura_suspensa_em, cobertura_suspensa_motivo` ao `select` do `useVeiculos` e do `useVeiculosPaginados`.
+2. **`src/pages/cadastro/Veiculos.tsx`** (componente `VeiculoRow` + render da tabela paginada na linha ~442):
+   - Se `veiculo.cobertura_suspensa === true`, o badge passa a renderizar **"Suspenso"** com a cor `statusColors.suspenso` (laranja), sobrepondo o fallback atual de "Aguardando Vistoria/Aprovação".
+   - Tooltip no badge mostrando o motivo (`cobertura_suspensa_motivo`) e a data (`cobertura_suspensa_em`) para o operador entender por que está suspenso sem precisar abrir o detalhe.
+   - Ordem de prioridade do label: `suspenso` (flag) → `instalacao_pendente sem instalação` → status cru.
+3. **Filtro de status** no topo da listagem: incluir a opção "Suspenso" que filtra por `cobertura_suspensa=true` (independente de `veiculos.status`), para que a equipe consiga isolar a fila.
 
-### 2. Trigger pós-vistoria (SQL migration)
-Criar `fn_troca_titularidade_pos_vistoria()` + trigger em `vistorias` (ou `servicos` quando `tipo='vistoria_entrada'` e `origem='troca_titularidade'` muda para `concluida`/`em_analise`):
-- Localiza `solicitacoes_troca_titularidade` por `servico_vistoria_id` ou por `veiculo_id` + `efetivada_em IS NULL`.
-- Se status atual ∈ (`liberada_para_assinatura`, `aguardando_vistoria`), avança para `aguardando_monitoramento`.
-- Idempotente.
+Sem mudanças em backend, triggers, ou no campo `veiculos.status` — respeitando a arquitetura atual (suspensão é flag de cobertura, não estado de ciclo de vida).
 
-### 3. `supabase/functions/contrato-gerar/index.ts` (linhas 1340-1450)
-- Já cria o `servico vistoria_entrada` quando aplicável. Sem mudança de lógica — apenas garantir que `solTroca.status` continua válido para o novo fluxo (o gancho atual checava `'aguardando_vistoria'` para antecipar criação; manter como está).
+## Resultado esperado
 
-### 4. `supabase/functions/aprovar-troca-monitoramento/index.ts`
-- Validação atual: aceita `aguardando_monitoramento` e `aguardando_vistoria`. Manter.
-- Remover/ajustar o ramo `solicitar_vistoria` (não faz mais sentido — a vistoria já foi feita quando entra no Monitoramento). Substituir por `reprovar` (devolve para `liberada_para_assinatura` ou cancela). Se preferir, manter `solicitar_vistoria` como reagendamento; combinamos no implementação.
-
-### 5. UI — `src/pages/monitoramento/AprovacoesTroca.tsx` e `src/hooks/useSolicitacoesTroca.ts`
-- Atualizar labels: "Pendentes (vistoria concluída)" para a aba pendentes.
-- Remover/renomear aba "Em vistoria" se vazia no novo fluxo.
-- Botão "Solicitar vistoria" some / vira "Reprovar fotos" conforme decisão acima.
-
-### 6. Backfill (SQL migration)
-Para solicitações hoje paradas em `aguardando_monitoramento` SEM vistoria concluída → mover para `liberada_para_assinatura` (idempotente, via WHERE com checagem do `servicos`/`vistorias`).
-
-### 7. Memória
-Adicionar `mem://logic/operations/troca-titularidade-monitoramento-pos-vistoria` registrando: "Troca de Titularidade só entra em `aguardando_monitoramento` APÓS vistoria do novo titular concluída. Aprovação de Cadastro vai direto para `liberada_para_assinatura`."
-
-## Pergunta aberta para a implementação
-
-No passo 4, você prefere:
-- (a) manter o botão "Solicitar nova vistoria" no card do Monitoramento (devolve para `liberada_para_assinatura` para o novo titular refazer), ou
-- (b) substituir por "Reprovar fotos" que cancela a troca?
-
-Posso seguir com (a) por padrão se não responder.
+A linha do KRN6G76 passa a mostrar o badge **"Suspenso"** (laranja) com tooltip "Instalação não realizada no prazo de 48h após assinatura — desde 10/05/2026", e fica filtrável pelo seletor de status.
