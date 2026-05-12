@@ -629,74 +629,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                   </div>
 
                   <div className="max-h-[320px] overflow-y-auto">
-                    {selectedAssociadoId && selectedTipo === 'inclusao' ? (
-                      <div className="p-3 space-y-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Car className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{selectedAssociadoNome}</span>
-                        </div>
-
-                        {(loadingDebitos || loadingAssociadoInclusao) ? (
-                          <div className="flex items-center justify-center py-6">
-                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground ml-2">Verificando elegibilidade...</span>
-                          </div>
-                        ) : bloqueado ? (
-                          temDebitos && debitosData ? (
-                            <DebitosCard
-                              debitos={debitosData.debitosPorVeiculo}
-                              saldoTotal={debitosData.saldoTotal}
-                              bloqueante
-                              cpf={selectedAssociadoId || undefined}
-                              titulo="Inclusão bloqueada — associado inadimplente"
-                              descricao="O associado possui débitos em aberto. Após pagar, clique em 'Verificar pagamento' para liberar a inclusão imediatamente, sem esperar a rotina noturna."
-                            />
-                          ) : (
-                            <Alert variant="destructive">
-                              <AlertTriangle className="h-4 w-4" />
-                              <AlertTitle>Inclusão bloqueada</AlertTitle>
-                              <AlertDescription>
-                                <p className="text-xs">
-                                  {inclusaoStatusCheck === 'status_invalido'
-                                    ? `O associado está com status "${associadoInclusaoData?.status}". Apenas associados ativos podem incluir novos veículos.`
-                                    : inclusaoStatusCheck === 'limite_atingido'
-                                    ? `O associado já possui ${associadoInclusaoData?.veiculos.length} veículo(s) ativo(s), atingindo o limite máximo de ${limiteVeiculosConfig} configurado.`
-                                    : 'O associado está inadimplente.'}
-                                </p>
-                              </AlertDescription>
-                            </Alert>
-                          )
-                        ) : inclusaoStatusCheck === 'aprovado' ? (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
-                              <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                              <span className="text-sm font-medium">Associado elegível para inclusão</span>
-                            </div>
-                            {associadoInclusaoData && associadoInclusaoData.veiculos.length > 0 && (
-                              <div className="space-y-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">Veículos ativos:</p>
-                                {associadoInclusaoData.veiculos.map((v) => (
-                                  <div key={v.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-muted/50">
-                                    <span>{v.marca} {v.modelo} {v.ano_fabricacao}</span>
-                                    <span className="font-mono">{v.placa}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            <Button className="w-full" onClick={handleProsseguir}>
-                              Confirmar e iniciar inclusão
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Nenhum débito em aberto encontrado.</p>
-                            <Button className="w-full" onClick={handleProsseguir}>
-                              Prosseguir com {opcaoAtual?.label}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
+                    {false ? null : (
                       <div className="p-1">
                         {(() => {
                           const cleaned = searchTerm.replace(/\D/g, '');
