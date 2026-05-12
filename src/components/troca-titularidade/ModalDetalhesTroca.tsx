@@ -182,19 +182,52 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.novo_titular_dados?.cpf)} • {solicitacao.novo_titular_dados?.email || '-'} • {formatPhone(solicitacao.novo_titular_dados?.telefone)}</p>
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
-                {solicitacao.cotacao && (
+                {solicitacao.cotacao ? (
                   <div className="rounded border p-3 space-y-2">
                     <h4 className="font-semibold">Cotação vinculada</h4>
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Nº {solicitacao.cotacao.numero || solicitacao.cotacao.id.slice(0, 8)} — {solicitacao.cotacao.status}</span>
-                      {solicitacao.cotacao.token_publico && (
-                        <Button size="sm" variant="outline" asChild>
-                          <a href={`/cotacao/${solicitacao.cotacao.token_publico}`} target="_blank" rel="noreferrer">
-                            <ExternalLink className="h-3 w-3 mr-1" /> Abrir cotação
-                          </a>
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { onOpenChange(false); navigate(`/vendas/cotacoes?abrir=${solicitacao.cotacao!.id}`); }}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" /> Abrir cotação
+                      </Button>
                     </div>
+                  </div>
+                ) : (
+                  <div className="rounded border p-3 space-y-3 bg-muted/30">
+                    <div>
+                      <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Cotação</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {solicitacao.termo_cancelamento_assinado_em
+                          ? 'Termo de cancelamento assinado. Clique abaixo para gerar a cotação do novo titular (consulta FIPE atualizada).'
+                          : 'A cotação será gerada manualmente assim que o titular antigo assinar o termo de cancelamento.'}
+                      </p>
+                    </div>
+                    {(() => {
+                      const podeGerar = !!solicitacao.termo_cancelamento_assinado_em;
+                      const btn = (
+                        <Button
+                          onClick={handleRealizarCotacao}
+                          disabled={!podeGerar || criandoCotacao}
+                          className="w-full sm:w-auto"
+                        >
+                          {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                          Realizar Cotação
+                        </Button>
+                      );
+                      if (podeGerar) return btn;
+                      return (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild><span tabIndex={0}>{btn}</span></TooltipTrigger>
+                            <TooltipContent>Aguardando assinatura do termo de cancelamento pelo titular antigo.</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })()}
                   </div>
                 )}
               </TabsContent>
