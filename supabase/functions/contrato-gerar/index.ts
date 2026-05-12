@@ -168,8 +168,11 @@ async function detectarCategoriaVeiculo(
     });
   }
 
-  const marcaNorm = (marca || '').trim().toUpperCase();
-  const modeloNorm = (modelo || '').trim().toUpperCase();
+  // Sanity-check: se chegou aqui (carro com categoria poluída), o resultado vem
+  // direto da regra 3 (keywords de modelo) — força "Automóvel" se a marca é de carro.
+  if (categoriaPoluida && marcaEhCarro && !modeloTemKeywordMoto) {
+    return 'Automóvel';
+  }
 
   // Regra 1: Marcas exclusivas de moto (tabela configuracoes)
   if (marcaNorm) {
