@@ -50,12 +50,6 @@ const OPCOES: EntradaOption[] = [
     description: 'O cliente está em outra associação e quer vir para a Praticcar sem perder a carência.',
     icon: FileInput,
   },
-  {
-    key: 'inclusao',
-    label: 'Inclusão de Veículo',
-    description: 'O associado já tem um veículo protegido e quer incluir um segundo.',
-    icon: PlusCircle,
-  },
 ];
 
 function formatCurrency(value: number) {
