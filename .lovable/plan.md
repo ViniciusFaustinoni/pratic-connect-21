@@ -1,69 +1,63 @@
-## Objetivo
+## Problema
 
-Parar a criação automática da cotação no fluxo de Troca de Titularidade. A cotação só será gerada **manualmente** pelo operador, através de um botão **"Realizar Cotação"** dentro do modal de detalhes da troca, abrindo o cotador padrão já com os dados do veículo (e consulta FIPE) pré-preenchidos.
+Na troca de titularidade do veículo `KOU6D37` (Marcos Vinicius Dativo → Marcus Vinicius Faustinoni), o serviço `vistoria_entrada` foi gravado com `associado_id` do **titular antigo** (`6ab4887f`), mesmo a `solicitacao_troca_titularidade` já tendo `novo_associado_id` definido (`3f936bd7`) e a `vistoria` correspondente apontando para o novo titular.
 
-## Diagnóstico (estado atual)
+Como **todo o fluxo de campo** (atribuição, mapa, confirmação, imprevisto, reagendamento, follow-up, WhatsApp) lê `servicos.associado_id` para descobrir nome e telefone do destinatário, o resultado é:
 
-- `supabase/functions/criar-solicitacao-troca-titularidade/index.ts` cria a `cotacoes` no mesmo INSERT da `solicitacoes_troca_titularidade` (linhas 244-298) — antes mesmo do termo de cancelamento ser enviado/assinado. Isso gera as "cotações fantasma" com etapa "Aguardando termo de filiação" que aparecem na lista.
-- `ModalDetalhesTroca.tsx` apenas mostra link "Abrir cotação" quando `solicitacao.cotacao` existe — não há botão para gerar uma nova.
-- O fluxo de Substituição já segue o padrão desejado: ao assinar termo, exibe um Card com botão **"Criar Nova Cotação"** que navega para `/vendas/cotador?...params` (ver `ModalDetalhesSubstituicao.tsx`, linhas 49-61 e 162-178). O `Cotacao.tsx` já reconhece `tipo_entrada=substituicao` e `inclusao` e pula a etapa 1 do solicitante.
+- WhatsApp de agendamento, confirmação, imprevisto e reagendamento foi enviado para o **titular antigo**.
+- A tarefa aparece como pertencente ao titular antigo na fila e no mapa.
 
-## Mudanças
+## Causa raiz
 
-### 1. Backend — não criar cotação automaticamente
+1. O serviço `vistoria_entrada` que cobre a troca foi criado/herdado com `associado_id` do contrato antigo, não do novo. Hoje **nenhuma camada normaliza isso** após `solicitacoes_troca_titularidade.novo_associado_id` ser preenchido.
+2. As funções que disparam mensagens (`enviar-link-reagendamento`, `cron-reagendamento-automatico`, `cron-followup-reagendamento`, `enviar-confirmacao-manual`, `confirmar-vistorias-manha-cron`) **assumem** que `servicos.associado_id` já é o destinatário correto e não checam contexto de troca de titularidade.
+3. O `cron-reagendamento-automatico` clona o serviço imprevisto preservando o `associado_id` errado, propagando a falha para o serviço reagendado.
 
-**`supabase/functions/criar-solicitacao-troca-titularidade/index.ts`**
-- Remover o INSERT em `cotacoes` (linhas 244-275).
-- INSERT da `solicitacoes_troca_titularidade` passa a usar `cotacao_id: null`.
-- Remover do response `cotacao_id` e `cotacao_token` (ou retornar `null`).
-- Manter o disparo automático do termo de cancelamento (linhas 300-318).
+## Plano
 
-### 2. Backend — nova edge function `criar-cotacao-troca-titularidade`
+### 1. Garantir o `associado_id` correto em `servicos` de troca de titularidade
 
-Função idempotente que cria a cotação sob demanda quando o operador clica "Realizar Cotação". Recebe `solicitacao_id`, valida que a solicitação existe, está com `termo_cancelamento_assinado_em` preenchido e ainda não tem `cotacao_id`. Carrega `veiculos` (placa, marca, modelo, ano, combustível, cor, codigo_fipe, valor_fipe) + `novo_titular_dados` da solicitação, faz INSERT na `cotacoes` com os campos hoje feitos no `criar-solicitacao-troca-titularidade` e atualiza `solicitacoes_troca_titularidade.cotacao_id`. Retorna `{ cotacao_id, cotacao_token }`. A consulta FIPE atualizada acontece já no cotador (etapa de veículo) ao confirmar — nada além é necessário aqui, já carregamos `codigo_fipe` e `valor_fipe` do veículo de origem.
+- Criar trigger `trg_servicos_troca_titularidade_normaliza_associado` em `servicos` (BEFORE INSERT/UPDATE) que, quando `cotacao_id` ou `vistoria_origem_id` apontar para uma `solicitacoes_troca_titularidade` com `novo_associado_id` definido (e ainda não `efetivada`), força:
+  - `associado_id := novo_associado_id`
+  - `contrato_id := contrato novo (cotacao_id da solicitação, status assinado/ativo/aguardando_instalacao)` quando nulo.
+- Atualizar `fn_troca_pos_assinatura_pagamento` e o bloco equivalente em `contrato-gerar` para sempre gravar `associado_id = novo_associado_id` (já fazem, mas adicionar fallback explícito buscando `solicitacoes_troca_titularidade.novo_associado_id` por `cotacao_id`).
+- Backfill SQL: para todo `servicos` com `vistoria_origem_id`/`cotacao_id` ligado a `solicitacoes_troca_titularidade` com `novo_associado_id` e `status` não-terminal, reescrever `associado_id` e `contrato_id` para os do novo titular. Inclui o caso atual (KOU6D37, serviços `2b58b302` e `7bc4f730`).
 
-### 3. Frontend — `Cotacao.tsx` reconhecer `tipo_entrada=troca_titularidade`
+### 2. Endurecer todas as funções de notificação para resolver o destinatário pelo contexto
 
-- Aceitar `tipo_entrada=troca_titularidade` como mais um caso de `skipEtapa1`.
-- Ler params: `solicitacao_troca_id`, `veiculo_id`, dados básicos do veículo (placa, marca, modelo, ano, fipe).
-- Pré-preencher os campos do solicitante a partir de `novo_titular_dados` (nome/cpf/email/telefone) — buscando-os via `solicitacoes_troca_titularidade.id` (não pelo associado, já que o novo titular ainda não é associado).
-- Pré-preencher o veículo (placa, marca, modelo, ano, combustível, cor) e disparar a busca FIPE no carregamento da etapa 2 — reutilizar o mesmo botão/efeito que já existe no flow padrão.
-- No submit final, persistir `dados_extras.tipo_entrada='troca_titularidade'`, `dados_extras.solicitacao_troca_id`, `dados_extras.veiculo_origem_id` e atualizar `solicitacoes_troca_titularidade.cotacao_id` com a cotação criada (ou usar a edge `criar-cotacao-troca-titularidade` antes de redirecionar — ver alternativa abaixo).
+Nas funções abaixo, adicionar helper único que, dado um `servico`, retorna `{ associado_id, telefone, nome }` consultando primeiro `solicitacoes_troca_titularidade` (via `cotacao_id` ou `servico_vistoria_id`) quando aplicável e caindo em `servicos.associado_id` no caso geral:
 
-### 4. Frontend — `ModalDetalhesTroca.tsx`
+- `supabase/functions/enviar-link-reagendamento/index.ts`
+- `supabase/functions/cron-reagendamento-automatico/index.ts` (tanto na propagação de campos quanto no `INSERT` do novo `servicos`)
+- `supabase/functions/cron-followup-reagendamento/index.ts`
+- `supabase/functions/enviar-confirmacao-manual/index.ts`
+- `supabase/functions/confirmar-vistorias-manha-cron/index.ts`
 
-- Quando `solicitacao.cotacao_id` for `null`:
-  - Esconder o card "Cotação vinculada".
-  - Após o card de Termo, exibir um Card "Próximo passo" com botão **"Realizar Cotação"** (ícone `FileText`/`Plus`):
-    - **Habilitado** apenas quando `termo_cancelamento_assinado_em` estiver preenchido (status já estará em `aguardando_cadastro`). Antes disso, o botão fica disabled com tooltip "Aguardando assinatura do termo de cancelamento".
-    - Ao clicar: chama a edge `criar-cotacao-troca-titularidade` (ou apenas navega passando params se preferirmos criar a cotação dentro do cotador). Recomendado: chamar a edge primeiro para garantir um `cotacao_id` único e evitar duplicação, depois navegar para `/vendas/cotador?cotacao=<id>` (ou `/vendas/cotacoes?cotacao=<id>` para abrir o editor existente da cotação rascunho).
-    - Em caso de erro, toast com mensagem.
-- Quando `solicitacao.cotacao_id` existir, manter o comportamento atual ("Abrir cotação").
-- Ajustar o Alert "Próximo passo" da seção `cotacao_em_andamento` (linhas 111-131) para também mencionar que após assinatura aparece o botão "Realizar Cotação".
+Com o item 1, esse fallback é um cinto-extra; sem ele, evita repetir o problema enquanto serviços antigos não migram.
 
-### 5. Lista de cotações — filtro
+### 3. Ajustes mínimos de UI
 
-- A lista `Outros Processos` em `Cotacoes.tsx` hoje exibe a cotação rascunho da troca. Como elas deixarão de existir até o operador gerar manualmente, nenhum ajuste no SQL é estritamente necessário. Validar que `useOutrosProcessos` continua mostrando a `solicitacao_troca_titularidade` mesmo sem `cotacao_id` (ele já lê de `solicitacoes_troca_titularidade`, então OK).
+- `useTarefaAtual` / cards do mapa e da fila do técnico já leem `associado` por `servicos.associado_id`. Após o fix em (1) e o backfill, passam a mostrar o nome correto sem alteração de código.
 
-## Migração de dados existentes
+### 4. Verificação
 
-Solicitações já criadas com `status='cotacao_em_andamento'` + `cotacao_id` preenchido continuam funcionando normalmente (modal mostra "Abrir cotação"). Não tocaremos nelas.
+- Rodar query confirmando que, para a placa `KOU6D37`, todos os `servicos` ativos passam a apontar para `3f936bd7` (Marcus Vinicius Faustinoni).
+- Disparar manualmente `enviar-link-reagendamento` para o serviço `7bc4f730` em ambiente de teste e validar que o destino é o telefone do novo titular.
 
-Solicitações novas terão `cotacao_id = NULL` até o operador acionar o botão.
+## Detalhes técnicos
 
-## Fora de escopo
+- Migration nova com:
+  - função `fn_normalizar_associado_servico_troca()` + trigger BEFORE INSERT OR UPDATE em `servicos`.
+  - UPDATE de backfill restrito a `solicitacoes_troca_titularidade` com `novo_associado_id IS NOT NULL` e `efetivada_em IS NULL`.
+- Helper TS `resolveDestinatarioServico(servico)` em arquivo compartilhado de cada função (cada edge function tem seu próprio bundle, então duplicamos o helper inline — sem import cruzado entre funções).
+- Nenhuma alteração em RLS, esquema de cotações ou no fluxo de pagamento.
 
-- Mudanças visuais no cotador padrão.
-- Alterações no fluxo público (`/cotacao/:token`) ou nas regras de aprovação subsequentes (cadastro/monitoramento já funcionam consumindo `cotacao_id` quando ele existe).
-- Renomear/remover a etapa "Aguardando termo de filiação" — ela apenas deixa de aparecer na lista de cotações porque a cotação não nasce mais junto.
+## Arquivos afetados
 
-## Critérios de aceite
-
-1. Ao criar uma nova solicitação de troca de titularidade, **nenhuma cotação** é criada automaticamente.
-2. Termo de cancelamento continua sendo disparado automaticamente para o titular antigo.
-3. Após o titular antigo assinar o termo, ao abrir o modal da troca aparece o botão **"Realizar Cotação"**.
-4. Clicar no botão abre o cotador padrão com:
-   - Solicitante (novo titular) pré-preenchido (nome/cpf/contato).
-   - Veículo pré-preenchido (placa, marca, modelo, ano, combustível, cor) e busca FIPE disparada.
-5. Concluir a cotação vincula-a à solicitação (`solicitacoes_troca_titularidade.cotacao_id`) e a partir daí o modal exibe "Abrir cotação" como hoje.
-6. Trocas antigas (com cotação já criada) continuam funcionando sem regressão.
+- Migration nova (Supabase) — trigger + backfill.
+- `supabase/functions/contrato-gerar/index.ts` — fallback `associado_id` por solicitação.
+- `supabase/functions/enviar-link-reagendamento/index.ts`
+- `supabase/functions/cron-reagendamento-automatico/index.ts`
+- `supabase/functions/cron-followup-reagendamento/index.ts`
+- `supabase/functions/enviar-confirmacao-manual/index.ts`
+- `supabase/functions/confirmar-vistorias-manha-cron/index.ts`
