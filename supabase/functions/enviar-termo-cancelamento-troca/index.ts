@@ -280,10 +280,25 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
     }
 
     // Disparo WhatsApp + persistência do status
+    // Usa template genérico `n` (3 params: nome, título, descrição) — sem botão URL.
+    // O link de assinatura segue por e-mail (Autentique PF_FACIAL).
     let waStatus: 'enviado' | 'falhou' | 'sem_telefone' = 'sem_telefone';
     if (associadoAntigo.telefone) {
       const primeiroNome = (associadoAntigo.nome || '').trim().split(/\s+/)[0] || associadoAntigo.nome || 'Cliente';
-      const descricaoDoc = `Termo de Cancelamento - Troca de Titularidade${veiculo?.placa ? ` (${veiculo.placa})` : ''}`;
+      const titulo = 'Solicitação de troca de titularidade iniciada';
+      const veiculoTxt = `${veiculo?.marca || ''} ${veiculo?.modelo || ''}`.trim() || 'seu veículo';
+      const placaTxt = veiculo?.placa ? ` placa ${veiculo.placa}` : '';
+      const emailMascarado = (() => {
+        const em = (associadoAntigo.email || '').trim();
+        const at = em.indexOf('@');
+        if (at < 1) return em;
+        const user = em.slice(0, at);
+        const dom = em.slice(at);
+        const visible = user.length <= 2 ? user[0] || '' : user.slice(0, 2);
+        return `${visible}${'*'.repeat(Math.max(1, user.length - visible.length))}${dom}`;
+      })();
+      const descricao = `Recebemos a solicitação de troca de titularidade do veículo ${veiculoTxt}${placaTxt}. Enviamos o Termo de Cancelamento para o seu e-mail (${emailMascarado}). Por favor, assine para dar prosseguimento. — PRATICCAR`;
+
       const telDigits = (associadoAntigo.telefone || '').replace(/\D/g, '');
       const telTo = telDigits.startsWith('55') ? telDigits : `55${telDigits}`;
 
@@ -291,9 +306,9 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
         await admin.from('whatsapp_mensagens').insert({
           direcao: 'saida',
           telefone: telTo,
-          mensagem: `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`,
+          mensagem: `[template n] ${primeiroNome} — ${titulo}`,
           status: 'erro',
-          template_id: 'assinatura_documento_v2',
+          template_id: 'n',
           referencia_tipo: 'troca_titularidade',
           referencia_id: solicitacao_id,
           erro_mensagem: motivo,
@@ -313,31 +328,22 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           waStatus = 'falhou';
           console.warn('[enviar-termo-cancelamento-troca] meta_config_ausente');
           await logErro('meta_config_ausente: phone_number_id/access_token não configurados');
-        } else if (!slugAutentique) {
-          waStatus = 'falhou';
-          console.warn('[enviar-termo-cancelamento-troca] autentique_short_link_indisponivel após retries');
-          await logErro('autentique_short_link_indisponivel: slug do termo não disponível para botão URL do template');
         } else {
           const payload = {
             messaging_product: 'whatsapp',
             to: telTo,
             type: 'template',
             template: {
-              name: 'assinatura_documento_v2',
+              name: 'n',
               language: { code: 'pt_BR' },
               components: [
                 {
                   type: 'body',
                   parameters: [
                     { type: 'text', text: primeiroNome },
-                    { type: 'text', text: descricaoDoc },
+                    { type: 'text', text: titulo },
+                    { type: 'text', text: descricao },
                   ],
-                },
-                {
-                  type: 'button',
-                  sub_type: 'url',
-                  index: '0',
-                  parameters: [{ type: 'text', text: slugAutentique }],
                 },
               ],
             },
@@ -357,9 +363,9 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
             await admin.from('whatsapp_mensagens').insert({
               direcao: 'saida',
               telefone: telTo,
-              mensagem: `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`,
+              mensagem: `[template n] ${primeiroNome} — ${titulo} — ${descricao}`,
               status: 'enviada',
-              template_id: 'assinatura_documento_v2',
+              template_id: 'n',
               referencia_tipo: 'troca_titularidade',
               referencia_id: solicitacao_id,
               mensagem_id_externo: metaJson?.messages?.[0]?.id || null,
@@ -378,6 +384,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
         await logErro(`meta_excecao: ${errMsg}`);
       }
     }
+
 
     const update: Record<string, any> = {
       termo_cancelamento_autentique_id: docId,

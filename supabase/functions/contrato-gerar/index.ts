@@ -1439,28 +1439,9 @@ serve(async (req) => {
 
           console.log(`[CONTRATO-GERAR] Troca ${solTroca.id}: contrato gerado (status mantido=${solTroca.status}); vistoria=${servicoVistoriaId || 'pendente pós-pagamento'}`);
 
-          // 4) Notificar novo titular (best-effort) — termo no e-mail
-          try {
-            const tel = cotacao.telefone1_solicitante;
-            if (tel) {
-              const primeiroNome = (nomeFinal || 'Cliente').trim().split(/\s+/)[0];
-              const msg = `Olá, ${nomeFinal}! Seu contrato de troca de titularidade (Nº ${contrato.numero}) foi gerado e o termo de filiação foi enviado para o seu e-mail para assinatura. Após assinar e finalizar o pagamento da adesão, agendaremos a vistoria do veículo para concluir a troca.`;
-              await supabase.functions.invoke('whatsapp-send-text', {
-                body: {
-                  telefone: tel,
-                  mensagem: msg,
-                  template_name: 'sinistro_atualizado',
-                  template_params: [
-                    primeiroNome,
-                    `Contrato ${contrato.numero} gerado`,
-                    'Troca de titularidade: termo enviado por e-mail. Após assinar e pagar a adesão, agendaremos a vistoria.',
-                  ],
-                },
-              });
-            }
-          } catch (waErr) {
-            console.warn('[CONTRATO-GERAR][troca] notificação WhatsApp falhou:', waErr);
-          }
+          // 4) Notificação WhatsApp removida — fluxo de troca de titularidade
+          //    é avisado em outros pontos (enviar-termo-cancelamento-troca para o
+          //    associado anterior; demais marcos por triggers próprios).
         } else if (solTroca?.efetivada_em) {
           console.log(`[CONTRATO-GERAR] Troca ${solTroca.id} já estava efetivada (idempotente)`);
         }
