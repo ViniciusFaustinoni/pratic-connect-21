@@ -374,7 +374,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
               template_id: 'assinatura_documento_v2',
               referencia_tipo: 'substituicao_placa',
               referencia_id: solicitacao_id,
-              mensagem_id_externo: metaJson?.messages?.[0]?.id || null,
+              message_id: metaJson?.messages?.[0]?.id || null,
             }).then(() => {}).catch(() => {});
           } else {
             const errMsg = metaJson?.error?.message || `HTTP ${metaResp.status}`;
