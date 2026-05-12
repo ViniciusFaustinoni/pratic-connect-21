@@ -34101,6 +34101,10 @@ export type Database = {
       }
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
       fn_get_cotas_veiculo: { Args: { p_veiculo_id: string }; Returns: number }
+      fn_inativar_associado_se_orfao: {
+        Args: { _associado_id: string; _motivo: string }
+        Returns: boolean
+      }
       fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
       fn_listar_supervisores_vendedor: {
         Args: { p_data_referencia?: string; p_vendedor_id: string }
