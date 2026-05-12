@@ -171,10 +171,23 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.ano_fabricacao': String(dados.veiculo.ano_fabricacao || dados.veiculo.ano || '—'),
     'veiculo.cor': dados.veiculo.cor || '—',
     'veiculo.combustivel': dados.veiculo.combustivel || '—',
-    // CATEGORIA do CRLV (Particular/Aluguel) — já resolvida em mapearDadosParaTemplate
-    'veiculo.categoria': dados.veiculo.categoria || 'Particular',
-    // Tipo de carroceria (carro/moto/utilitário) — vem de tipo_veiculo se existir, senão fallback histórico
-    'veiculo.tipo': (dados.veiculo as any).tipo_veiculo || 'Automóvel',
+    // CATEGORIA de uso (Particular/Aplicativo) — já resolvida em mapearDadosParaTemplate
+    'veiculo.categoria': (() => {
+      const c = (dados.veiculo.categoria || '').toString().trim().toLowerCase();
+      if (c === 'aluguel' || c === 'aluguer' || c === 'aplicativo') return 'Aplicativo';
+      if (c === 'particular' || c === 'passeio') return 'Particular';
+      return dados.veiculo.categoria || 'Particular';
+    })(),
+    // Tipo de carroceria (carro/moto/utilitário) — normalizado para rótulo de exibição
+    'veiculo.tipo': (() => {
+      const raw = ((dados.veiculo as any).tipo_veiculo || '').toString().trim().toLowerCase();
+      if (raw === 'moto' || raw === 'motocicleta') return 'Motocicleta';
+      if (raw === 'utilitario' || raw === 'utilitário') return 'Utilitário';
+      if (raw === 'caminhao' || raw === 'caminhão') return 'Caminhão';
+      if (raw === 'carro' || raw === 'automovel' || raw === 'automóvel' || raw === '') return 'Automóvel';
+      // Já formatado (ex.: "Automóvel") — devolve com primeira maiúscula
+      return raw.charAt(0).toUpperCase() + raw.slice(1);
+    })(),
     'veiculo.tipo_uso': dados.veiculo.tipo_uso || 'Particular',
     'veiculo.codigo_fipe': dados.veiculo.codigo_fipe || '—',
     'veiculo.valor_fipe': formatCurrency(dados.veiculo.valor_fipe),

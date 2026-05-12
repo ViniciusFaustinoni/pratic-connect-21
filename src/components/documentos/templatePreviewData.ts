@@ -39,7 +39,7 @@ const DADOS_FICTICIOS: Record<string, string> = {
   // Veículo
   'veiculo.marca': 'Toyota',
   'veiculo.modelo': 'Corolla XEi 2.0',
-  'veiculo.ano': '2023',
+  'veiculo.ano': '2024',
   'veiculo.ano_fabricacao': '2023',
   'veiculo.cor': 'Prata',
   'veiculo.placa': 'ABC1D23',
@@ -48,7 +48,7 @@ const DADOS_FICTICIOS: Record<string, string> = {
   'veiculo.valor_fipe': 'R$ 135.000,00',
   'veiculo.codigo_fipe': '015547-0',
   'veiculo.combustivel': 'Flex',
-  'veiculo.categoria': 'Automóvel',
+  'veiculo.categoria': 'Particular',
   'veiculo.tipo': 'Automóvel',
   'veiculo.tipo_uso': 'Particular',
   'veiculo.alienado': 'Não',

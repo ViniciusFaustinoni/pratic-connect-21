@@ -372,9 +372,9 @@ function resolverCategoriaCrlv(
   usoAplicativo: boolean | null | undefined,
 ): string {
   const t = (tipoUso || '').toString().trim().toLowerCase();
-  if (t === 'aluguel' || t === 'aluguer') return 'Aluguel';
+  if (t === 'aluguel' || t === 'aluguer' || t === 'aplicativo') return 'Aplicativo';
   if (t === 'particular' || t === 'passeio') return 'Particular';
-  return usoAplicativo ? 'Aluguel' : 'Particular';
+  return usoAplicativo ? 'Aplicativo' : 'Particular';
 }
 
 function ehLeilao(categoria: string | null | undefined, procedencia?: string | null): boolean {
