@@ -1,25 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { usePropostasPendentes } from './usePropostasPendentes';
 
 /**
- * Conta o total de propostas pendentes (Cadastro › Propostas Pendentes):
- * contratos com status 'assinado' ou 'em_analise'. Usado para o badge da sidebar.
+ * Contagem do badge da sidebar para "Propostas Pendentes".
+ * Reusa EXATAMENTE a mesma query/regra da tela /cadastro/propostas
+ * (usePropostasPendentes) para garantir paridade entre badge e lista.
+ *
+ * Como compartilha a mesma queryKey ['propostas-pendentes'] do React Query,
+ * não há requisição extra: o hook apenas observa o cache.
  */
 export function usePropostasPendentesCount() {
-  return useQuery({
-    queryKey: ['propostas-pendentes-count'],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('contratos')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'assinado');
-      if (error) {
-        console.warn('[usePropostasPendentesCount]', error.message);
-        return 0;
-      }
-      return count || 0;
-    },
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
-  });
+  const query = usePropostasPendentes();
+  return {
+    ...query,
+    data: query.data?.length ?? 0,
+  };
 }
