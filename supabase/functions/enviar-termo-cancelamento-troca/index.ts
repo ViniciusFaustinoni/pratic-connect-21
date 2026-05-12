@@ -194,13 +194,6 @@ Deno.serve(async (req) => {
       'empresa.nome': 'PRATICCAR',
       'regras.multa_rastreador': multaRastreadorTxt,
     };
-      'contrato.valor_mensal': contrato?.valor_mensal ? `R$ ${Number(contrato.valor_mensal).toFixed(2).replace('.', ',')}` : '—',
-      'cancelamento.motivo': motivoTxt,
-      'cancelamento.data': dataAtualBr,
-      'sistema.data_atual': dataAtualBr,
-      'sistema.data_extenso': dataExtenso,
-      'empresa.nome': 'PRATICCAR',
-    };
 
     let html: string;
     if (template?.conteudo) {
