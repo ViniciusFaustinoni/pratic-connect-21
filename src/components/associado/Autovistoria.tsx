@@ -449,7 +449,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         )}
 
         {/* Fallback manual: OCR não conseguiu ler o odômetro */}
-        {fotoAtual.id === 'odometro' && kmOcrFalhou && !kmIdentificado && (
+        {(fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado') && kmOcrFalhou && !kmIdentificado && (
           <div className="space-y-2">
             <OcrFallbackBanner
               documento="a quilometragem do odômetro"
