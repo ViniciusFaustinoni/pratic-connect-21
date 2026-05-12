@@ -224,31 +224,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     e.target.value = '';
   };
 
-  const handleVideoCapture = async (file: File) => {
-    setUploadingVideo(true);
-    setVideoUploadProgress(0);
-    try {
-      const result = await uploadMutation.mutateAsync({
-        cotacaoId,
-        fotoId: 'video_360',
-        file,
-        onProgress: (pct: number) => setVideoUploadProgress(pct),
-      } as any);
-      setVideoUrl(result.url);
-      toast.success('Vídeo 360° enviado com sucesso!');
-    } catch (error) {
-      console.error('[AutovistoriaCotacao] Erro no upload do vídeo:', error);
-      // Mensagem amigável já tratada pelo helper / hook
-    } finally {
-      setUploadingVideo(false);
-      setVideoUploadProgress(0);
-    }
-  };
-
-  const handleVideoReset = () => {
-    setVideoUrl(null);
-  };
-  
   const handleFinalizar = async () => {
     if (finalizandoRef.current || finalizarMutation.isPending) return;
     finalizandoRef.current = true;
@@ -266,8 +241,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   };
   
   const fotoJaEnviada = !!fotosEnviadas[fotoAtual?.id];
-  const isUploading = uploadMutation.isPending && !uploadingVideo;
-  
+  const isUploading = uploadMutation.isPending;
+
   if (carregandoFotos) {
     return (
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
