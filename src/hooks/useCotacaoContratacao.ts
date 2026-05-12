@@ -532,8 +532,10 @@ export function useCotacaoContratacao(token: string | undefined) {
           // Fallback manual: marcação 0KM e procedência
           veiculo_zero_km: dados.veiculo_zero_km ?? null,
           veiculo_procedencia: dados.veiculo_procedencia || null,
-          // Persistir categoria se ainda não definida
-          ...((!cotacao.categoria) ? { categoria: detectarCategoriaPorModelo(cotacao.veiculo_modelo, cotacao.veiculo_marca) } : {}),
+          // NÃO escrever `categoria` aqui: este campo é reservado a "situação especial"
+          // do veículo (taxi/leilão/aplicativo). Tipo de veículo (moto vs automóvel) é
+          // derivado em runtime via detectarTipoVeiculo(modelo, marca).
+          // Ver mem://logic/operations/cotacao-categoria-vs-tipo-veiculo
       };
 
       // CAUSA RAIZ #fix: sanitizar TODOS os campos com limite de tamanho antes

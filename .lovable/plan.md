@@ -1,88 +1,90 @@
-# Bug: Instalação Base duplicada como Instalação Rota
+## Diagnóstico (Carlos Roberto Alves / RJM3D69 — Chevrolet Onix)
 
-## Diagnóstico (caso Carlos Roberto Alves / RJM3D69)
-
-Linha do tempo no banco:
+Confirmado em DB:
 
 ```text
-12:05:15  agendamentos_base 7bf883da   status=confirmado
-            vistoria_id   = a5dc8dda
-            cotacao_id    = 6c6871ae...
-12:13:03  vistorias  a5dc8dda          tipo=entrada  local=base
-            + servicos 70bcf6c5         tipo=vistoria_entrada  status=em_andamento
-              (Wallace — cobre vistoria + instalação na base)
-12:14:29  instalacoes 93c2038b         local=base    status=agendada
-            + servicos 74e0cec9         tipo=instalacao        status=agendada
-              (sem técnico — DUPLICATA visível em "Serviços Pendentes")
+cotacoes.id      = 6c6871ae-547c-4967-b466-19fee4fce30f
+  veiculo_marca  = 'Chevrolet'
+  veiculo_modelo = 'onix 10mt Lt2'
+  veiculo_categoria = NULL
+  categoria      = 'moto'   ← campo errado, propaga p/ tudo
+  plano          = "Select One - Passeio 5%"  (plano de carro!)
+
+contratos (gerado a partir da cotação)
+  veiculo_categoria = 'moto'   ← copiado da cotação
+
+veiculos.RJM3D69 → não tem coluna `tipo`, mas a UI lê
+  `proposta.veiculo_categoria` (do contrato) e mostra "moto".
 ```
 
-A cotação tem `tipo_vistoria='agendada_base'` e `tipo_instalacao='base'`. O serviço `vistoria_entrada` que o Wallace executa JÁ inclui a instalação do rastreador na oficina. Mesmo assim, `criar-instalacao-pos-pagamento` rodou ~1 min depois e criou um `instalacoes` paralelo. O trigger `sync_instalacao_to_servicos` então materializou um `servicos` `instalacao` separado — a duplicata da imagem.
+### Por que o app mobile do instalador mostra "Checklist de Moto"
 
-## Causa raiz
+`InstaladorChecklist.tsx:205` chama `detectarTipoVeiculo(undefined, modelo, marca)` do `vistoriaConfigCompleta.ts`. Para `marca='Chevrolet'`, `CARRO_BRANDS` deveria devolver `'automovel'`. **Mas a regra atual do detector ignora a categoria já gravada na cotação/contrato e não tem fonte única**: o que aparece na ficha "CATEGORIA: moto" vem de `contratos.veiculo_categoria='moto'`, e essa string foi escrita por `contrato-gerar`.
 
-Em `supabase/functions/criar-instalacao-pos-pagamento/index.ts`, o bloco `if (tipoVistoria === 'agendada_base')` (linhas 218–285) lê o `agendamentos_base`, mas **não verifica** se o fluxo Base já materializou a vistoria. O guard de idempotência das linhas 508–519 só checa `instalacoes` da mesma cotação+veículo — não cobre o caso onde a operação foi materializada como `vistorias` (fluxo Base, sem `instalacoes`).
+### Causa raiz — duas falhas em série
 
-Caminhos que disparam a chamada redundante: `aprovar-proposta` (fallback ~linha 428), `agendar-vistoria-completa`, `asaas-webhook`.
+1. **Campo `cotacoes.categoria` está sendo usado para dois propósitos incompatíveis**: 
+   - "situação especial" do veículo (taxi/leilão/aplicativo) — único uso legítimo, vide `categorias_veiculo` em `configuracoes`.
+   - "tipo de veículo" (moto/carro) — escrito por `useCotacaoContratacao.ts:536` (fluxo público OCR), pelo `useCotacao.ts:402` e variações. Esse desvio gera o valor `'moto'` mesmo sem a opção existir no select de categorias.
+
+2. **`contrato-gerar/index.ts:detectarCategoriaVeiculo` (linha 134) confia cegamente em `categoriaExistente`**:
+   ```ts
+   if (categoriaExistente && categoriaExistente !== 'nenhuma') return categoriaExistente;
+   ```
+   Recebe `cotacao.categoria='moto'` e devolve `'moto'` para `contratos.veiculo_categoria`, mesmo quando a marca é `Chevrolet` (CARRO_BRANDS) — sem nenhuma sanidade contra marca/modelo.
+
+Resultado: qualquer ruído em `cotacoes.categoria` vira a verdade do contrato, e cascateia para a ficha do veículo, vistoria e instalação.
 
 ## Correção
 
-### 1. `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — guard anti-duplicação no fluxo Base
+### 1. `supabase/functions/contrato-gerar/index.ts` — sanity-check obrigatório em `detectarCategoriaVeiculo`
 
-Logo depois de carregar `agBase` (linhas 222–231), antes de qualquer endereço/insert, executar:
+Reescrever o early-return para **só aceitar `categoriaExistente` quando ela for compatível com marca/modelo**:
 
-```text
-SELECT id, status FROM vistorias
- WHERE cotacao_id  = :cotacaoId
-   AND local_vistoria = 'base'
-   AND status NOT IN ('cancelada','reprovada')
- LIMIT 1
+- Se `categoriaExistente` indicar moto (`/moto|motocicleta|ciclomotor/i`) **e** `marca` estiver em `CARRO_BRANDS_LOCAL` (Chevrolet, Fiat, VW, Ford, Toyota, etc.) **e** o modelo não bater MOTO_KEYWORDS por word boundary → ignora `categoriaExistente` e segue regras 1→3 normais.
+- Se `categoriaExistente` for um valor de "situação especial" do `configuracoes.categorias_veiculo` (taxi/leilão/aplicativo/etc.) → continua respeitando (não é tipo de veículo).
+- Replicar a lista `CARRO_BRANDS` que já existe no front (`vistoriaConfigCompleta.ts`) num módulo compartilhado da edge function (constante local) para a sanidade.
+
+### 2. Frontend — parar de poluir `cotacoes.categoria` com tipo de veículo
+
+- `src/hooks/useCotacaoContratacao.ts:536`: remover o bloco que escreve `categoria: detectarCategoriaPorModelo(...)`. O tipo já é detectado em runtime pelo instalador / vistoria via `detectarTipoVeiculo` a partir de marca+modelo. O campo `categoria` na cotação fica reservado a "situação especial" (taxi/leilão).
+- `src/hooks/useCotacao.ts:402` (e equivalentes): manter `categoria: payload.categoria_veiculo` somente quando `categoria_veiculo` for um valor da lista `categorias_veiculo` do `configuracoes` (whitelist). Bloquear `'moto'/'carro'/'automovel'` antes do insert.
+
+### 3. `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx:205`
+
+Trocar a fonte do label "Categoria" do veículo para um derivado **on-the-fly** via `detectarTipoVeiculo(undefined, proposta.veiculo_modelo, proposta.veiculo_marca)` mostrado como `"Automóvel" | "Motocicleta"`. Não ler mais `proposta.veiculo_categoria` (que ficará reservado a "Táxi/Leilão/Aplicativo"). Quando houver situação especial, exibir como badge separado.
+
+### 4. Migração one-shot — corrigir o registro do Carlos Roberto
+
+```sql
+-- Limpa categoria poluída
+UPDATE cotacoes
+   SET categoria = NULL,
+       updated_at = NOW()
+ WHERE id = '6c6871ae-547c-4967-b466-19fee4fce30f';
+
+-- Corrige veiculo_categoria do contrato
+UPDATE contratos
+   SET veiculo_categoria = 'Automóvel',
+       updated_at = NOW()
+ WHERE id = '13899c82-97b0-4069-9440-86b4c34f6e6a';
 ```
 
-Se encontrada → log + `return 200` com `{ success: true, skipped: 'base_vistoria_exists', vistoriaId }`. Não cria `instalacoes`, não dispara trigger, não gera `servicos` duplicado. Caso contrário, o fluxo segue como hoje.
+Não toca em `veiculos` (a tabela não tem coluna `tipo`/`categoria`; a UI mobile derivará certo via marca Chevrolet → CARRO_BRANDS).
 
-Esse guard é específico para `tipo_vistoria === 'agendada_base'`. Os modos `agendada` (presencial cliente) e `autovistoria` continuam intactos — eles precisam materializar `instalacoes` por design.
+### 5. Memória nova
 
-### 2. Higiene one-shot do registro do Carlos Roberto Alves
-
-Migração para zerar a duplicata atual sem mexer no atendimento do Wallace:
-
-```text
-- UPDATE servicos
-    SET status='cancelada',
-        observacoes = COALESCE(observacoes,'') ||
-          E'\n[fix duplicata base/rota] Cancelado — coberto pela vistoria_entrada da base.'
-  WHERE id = '74e0cec9-cf85-4ecb-ac3e-6f9e4d3df1d6';
-
-- UPDATE instalacoes
-    SET status='cancelada',
-        observacoes = COALESCE(observacoes,'') ||
-          E'\n[fix duplicata base/rota] Cancelada — duplicava vistoria base existente.'
-  WHERE id = '93c2038b-755d-4354-8cdc-6ea1d8bc4a05';
-
-- UPDATE agendamentos_base
-    SET instalacao_id = NULL
-  WHERE id = '7bf883da-ad69-46fb-8f0c-a78eb2b9ddee';
-```
-
-Resultado: o cartão "Instalação RJM3D69 — Hoje" some de Serviços Pendentes; o atendimento do Wallace permanece como está.
-
-### 3. Memória nova
-
-Após implementar:
-
-```text
-mem://logic/operations/base-nao-duplica-instalacao
-"Quando tipo_vistoria='agendada_base' e a vistoria base já foi materializada
- (vistorias.local_vistoria='base'), criar-instalacao-pos-pagamento NÃO cria
- instalacoes — vistoria_entrada já cobre vistoria + instalação na oficina."
-```
-
-## Fora de escopo
-
-- Não tocar nos modos `agendada` (cliente) e `autovistoria`.
-- Não alterar triggers existentes (`sync_instalacao_to_servicos`, `dedupe_instalacoes_on_insert`) — eles funcionam corretamente quando o input não é redundante.
+`mem://logic/operations/cotacao-categoria-vs-tipo-veiculo`:
+> `cotacoes.categoria` e `contratos.veiculo_categoria` armazenam **APENAS situação especial do veículo** (taxi, leilão, aplicativo, ex-táxi, placa vermelha, etc.) — listadas em `configuracoes.categorias_veiculo`. NUNCA gravar `'moto'/'carro'/'automovel'` nesses campos. Tipo de veículo (moto vs automóvel) é derivado em runtime via `detectarTipoVeiculo(tipo_api, modelo, marca)`. `contrato-gerar/detectarCategoriaVeiculo` deve ignorar `categoriaExistente` quando ela for `moto/motocicleta` mas marca pertencer a `CARRO_BRANDS`.
 
 ## Validação
 
-- Repetir uma cotação `tipo_vistoria=agendada_base` ponta-a-ponta e confirmar no banco que existe **só** `vistorias` + `servicos.tipo='vistoria_entrada'` (zero registros novos em `instalacoes`/`servicos.tipo='instalacao'`).
-- Mapa › Atribuição Manual deixa de listar RJM3D69 em Serviços Pendentes para o caso atual.
+- Reabrir a ficha do Carlos Roberto: aba Veículo deve mostrar "CATEGORIA: Automóvel".
+- Reabrir o link de vistoria do instalador no celular: badge passa a "Checklist de Automóvel (31 fotos)".
+- Criar nova cotação Onix sem nenhum input de categoria → `cotacoes.categoria` permanece NULL e o termo gerado traz `veiculo_categoria='Automóvel'`.
+
+## Fora de escopo
+
+- Não alterar a lógica de planos de moto (`usePlanosCotacao`/`usePlansAdmin`), que usa um `categoria='moto'` interno do plano (não da cotação/contrato).
+- Não alterar fluxos de inclusão/substituição/troca além das chamadas dos hooks acima.
+- Não criar tabela nova para tipo de veículo — o derivado por `detectarTipoVeiculo(marca, modelo)` já é suficiente e tem fallback dinâmico via `marcas_exclusivas_moto`.
