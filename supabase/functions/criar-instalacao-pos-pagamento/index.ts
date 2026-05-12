@@ -220,6 +220,33 @@ serve(async (req) => {
       console.log('[CriarInstalacaoPosPagamento] Modo: agendada_base (oficina/base)');
       localVistoriaForce = 'base';
 
+      // GUARD ANTI-DUPLICAÇÃO: no fluxo Base, a vistoria_entrada já cobre vistoria + instalação
+      // na oficina. Se a vistoria base já foi materializada (a partir de agendamentos_base),
+      // NÃO criar uma `instalacoes` paralela — isso geraria um `servicos` instalacao duplicado
+      // via trigger sync_instalacao_to_servicos.
+      const { data: vistoriaBaseExistente } = await supabase
+        .from('vistorias')
+        .select('id, status')
+        .eq('cotacao_id', cotacaoId)
+        .eq('local_vistoria', 'base')
+        .not('status', 'in', '(cancelada,reprovada)')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (vistoriaBaseExistente?.id) {
+        console.log(`[CriarInstalacaoPosPagamento] Vistoria base já existe (${vistoriaBaseExistente.id}) — pulando criação de instalação para evitar duplicata.`);
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: 'base_vistoria_exists',
+          vistoriaId: vistoriaBaseExistente.id,
+          message: 'Vistoria base já cobre a instalação na oficina'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       const { data: agBase } = await supabase
         .from('agendamentos_base')
         .select('id, data_agendada, horario, oficina_id, cliente_nome, cliente_telefone')
