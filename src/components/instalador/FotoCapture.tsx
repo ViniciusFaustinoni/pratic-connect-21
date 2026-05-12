@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { toast } from 'sonner';
+import { transformedUrl, PREVIEW } from '@/lib/storage/imageTransform';
 
 interface FotoCaptureProps {
   tipo: string;
