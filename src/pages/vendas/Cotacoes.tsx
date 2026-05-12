@@ -167,14 +167,26 @@ export default function Cotacoes() {
   const [pageEmAndamento, setPageEmAndamento] = useState(1);
   const [pageFinalizadas, setPageFinalizadas] = useState(1);
 
+  // Filtros aplicados client-side (etapa, status, mes, data, orfas) precisam
+  // que TODA a base do statusGroup esteja carregada — caso contrário o filtro
+  // só "vê" a página atual e parece quebrado. Quando algum desses filtros
+  // está ativo, desligamos a paginação server-side e trazemos até 1000 linhas.
+  const hasClientSideFilter =
+    etapaFunilFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    mesFilter !== 'all' ||
+    !!dataFilter ||
+    filtroOrfas;
+  const effectivePageSize = hasClientSideFilter ? 1000 : PAGE_SIZE;
+
   // Reset de paginação ao mudar busca/filtros relevantes
   useEffect(() => {
     setPageEmAndamento(1);
     setPageFinalizadas(1);
-  }, [search, permissions.cotacao.viewScope, permissions.userId, consultorFilter]);
+  }, [search, permissions.cotacao.viewScope, permissions.userId, consultorFilter, etapaFunilFilter, statusFilter, mesFilter, dataFilter, filtroOrfas]);
 
   const isEmAndamentoTab = activeTab === 'em_andamento';
-  const currentPage = isEmAndamentoTab ? pageEmAndamento : pageFinalizadas;
+  const currentPage = hasClientSideFilter ? 1 : (isEmAndamentoTab ? pageEmAndamento : pageFinalizadas);
   const setCurrentPage = isEmAndamentoTab ? setPageEmAndamento : setPageFinalizadas;
 
   const { data: paginatedResult, isLoading, isFetching } = useCotacoesPaginadas({
@@ -183,13 +195,13 @@ export default function Cotacoes() {
     searchTerm: search,
     consultorId: consultorFilter !== 'all' ? consultorFilter : null,
     page: currentPage,
-    pageSize: PAGE_SIZE,
+    pageSize: effectivePageSize,
     statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
     excluirTiposEntrada: ['troca_titularidade', 'substituicao_placa', 'substituicao', 'inclusao_veiculo', 'inclusao', 'migracao'],
   });
   const cotacoes = paginatedResult?.data;
   const totalPaginaAtual = paginatedResult?.count ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalPaginaAtual / PAGE_SIZE));
+  const totalPages = hasClientSideFilter ? 1 : Math.max(1, Math.ceil(totalPaginaAtual / PAGE_SIZE));
 
   // Contadores do funil calculados no servidor — independente do array carregado
   const { data: funilCounts } = useCotacoesFunilCounts({
