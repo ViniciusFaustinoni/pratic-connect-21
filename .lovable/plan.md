@@ -1,104 +1,95 @@
-
 ## Objetivo
 
-Hoje, ao escolher "Substituição de Placa" em **Outras Entradas**, o sistema busca a placa no SGA e já joga o consultor direto no Cotador. Falta a etapa intermediária de **solicitação** com **termo de cancelamento do veículo antigo** antes de gerar a nova cotação — exatamente como já existe na Troca de Titularidade.
+Eliminar a opção manual "Inclusão de Veículo" do menu Outras Entradas e transformar a inclusão de veículo em um processo **automático e silencioso**, disparado quando a IA reconhecer no OCR da CNH (link público) um CPF que já corresponde a um associado existente (local ou no SGA). Além disso, garantir que toda substituição inative o veículo antigo no SGA.
 
-A proposta é replicar o padrão da troca de titularidade para substituição, sem duplicar o que já existe.
+## 1. Remover entrada manual "Inclusão de Veículo"
 
-## O que JÁ está pronto (reuso)
+- `src/components/vendas/OutrasEntradasMenu.tsx`
+  - Remover o card/opção `'inclusao'` do array `ENTRADAS`.
+  - Remover o tipo `'inclusao'` da union `EntradaTipo`, o `useQuery` `associado-inclusao-check`, o bloco de UI condicional (`selectedTipo === 'inclusao'`) e o branch `else if (selectedTipo === 'inclusao')` do `handleProsseguir`.
+  - Manter apenas: substituição de placa, troca de titularidade, migração.
+- Não tocar em `useOutrosProcessos.ts` (registros antigos com `tipo_entrada='inclusao_veiculo'` continuam visíveis no histórico).
 
-- Busca por placa no SGA → `useBuscaPlaca` + edge `sga-buscar-associado-completo` (já retorna veículo, associado, boletos, débito)
-- Listagem em "Outros Processos" → `useOutrosProcessos` já tem `tipo: 'substituicao_placa'`
-- Geração de termo de cancelamento Autentique → edge `enviar-termo-cancelamento-troca` + função `autentique-cancelamento-create` (reutilizável; só precisa parametrizar)
-- Webhook Autentique já atualiza `termo_cancelamento_assinado_em` para troca — basta replicar gatilho para substituição
-- Cotador `/vendas/cotacoes?associado_id=...&tipo_entrada=substituicao&veiculo_antigo_id=...` já existe e gera link público com fluxo padrão (plano, filiação, docs, vistoria, pagamento)
-- Tabela `substituicoes_veiculo` existe mas é a tabela de **resultado** (mensalidade nova, contrato, taxa) — vamos manter o uso atual e criar uma tabela nova para a **solicitação**
+## 2. Auto‑detecção de associado via OCR da CNH (link público)
 
-## O que muda
+Hoje o OCR já roda em `src/pages/public/CotacaoPublicaCompleta.tsx::handleUploadDocumento` (linhas 349‑469) para `crlv`, `cnh_frente|cnh_verso` e `comprovante`, e o `document-ocr` já extrai `cpf` da CNH com validação dos dígitos verificadores.
 
-### 1. Nova tabela `solicitacoes_substituicao_placa`
+Mudanças (somente no caminho `tipoSchema === 'cnh'`):
 
-Espelhada em `solicitacoes_troca_titularidade`, com:
+1. Após `sucessoOcr`, ler `dados.cpf`. Se válido (`validateCPF` no client) e diferente do CPF já gravado na cotação, chamar uma nova edge function:
 
-- `associado_id` (uuid local, importado do SGA se preciso)
-- `sga_codigo_associado`, `sga_codigo_veiculo`
-- `veiculo_antigo_snapshot` (jsonb — placa, modelo, marca, fipe, cota, situacao vindo do SGA)
-- `associado_snapshot` (jsonb — nome, cpf, email, telefones, endereço)
-- `cotacao_id` (preenchido depois que o consultor cria a nova cotação)
-- `status`: `aguardando_termo` → `termo_enviado` → `termo_assinado` → `cotacao_criada` → `efetivada` / `cancelada`
-- `termo_cancelamento_autentique_id`, `termo_cancelamento_url`, `termo_cancelamento_enviado_em`, `termo_cancelamento_assinado_em`, `termo_whatsapp_status`, `termo_reenvios_count`
-- `criado_por`, `consultor_id`, `created_at`, `updated_at`
-- `motivo_cancelamento`, `cancelada_em`
+   - **`detectar-associado-por-cpf`** (nova, pública/anon, com `verify_jwt = false`)
+     - Body: `{ cotacao_id, cpf }`.
+     - Passos:
+       1. `select` em `associados` por CPF normalizado.
+       2. Se não encontrado localmente → `sga-buscar-associado-completo` (já existe) com `buscar_por='cpf'`. Se vier 200 e veículos, importa snapshot mínimo via `importar-associado-sga` (já existe) e cria/atualiza o associado local.
+       3. **Guarda anti‑sequestro** (memória `no-cross-owner-vehicle-reuse`): comparar `associado.nome` com `cotacao.solicitante_nome`. Se divergir além de tolerância (Levenshtein/normalização de acentos), retornar `{ match: false, motivo: 'nome_divergente' }` — **sem** vincular.
+       4. Se nome bate, fazer `update` em `cotacoes`:
+          - `associado_id = <id>`
+          - `tipo_entrada = 'inclusao_veiculo'`
+          - `dados_extras = jsonb_set(coalesce(dados_extras,'{}'), '{auto_inclusao}', '{"detectado_em":"<ts>","origem":"ocr_cnh","sga_codigo_associado":"..."}')`
+          - Copiar PII (telefone, email, endereço) do associado para a cotação se o solicitante já tiver confirmado o nome correspondente.
+       5. Retornar `{ match: true, associado_id, nome, sga_codigo_associado }`.
+     - Resposta sempre 200 com `{ match: boolean, motivo?: string }` (nunca lançar erro pro front quebrar UX).
 
-RLS: leitura para autenticados internos; escrita só por consultores/cadastro.
+2. No `CotacaoPublicaCompleta.tsx`, ao receber `{ match: true }`:
+   - Adicionar estado `inclusaoDetectada: { nome: string } | null`.
+   - Disparar `refetch()` da cotação.
+   - **Não** mostrar toast/modal/diálogo — apenas seta o estado.
 
-### 2. Edge functions
+3. Renderizar **badge fixo** no topo:
+   - Novo componente `src/components/cotacao-publica/BadgeInclusaoVeiculo.tsx`:
+     - `position: fixed; top: 0; right: 0` (responsivo: `top-2 right-2 sm:top-4 sm:right-4`), `z-50`, `bg-primary text-primary-foreground`, ícone `CarFront` + texto `INCLUSÃO DE VEÍCULO` + nome do associado em fonte menor.
+     - Tokens semânticos do design system, sem cor hardcoded.
+   - Renderizar dentro do layout do `CotacaoPublicaCompleta` quando `cotacao.tipo_entrada === 'inclusao_veiculo'` (cobre tanto a detecção atual quanto reload de sessão).
 
-- **`criar-solicitacao-substituicao`** (nova) — recebe `placa`, importa associado do SGA se não existir local (reutiliza `importar-associado-sga`), grava snapshot, cria registro com status `aguardando_termo`. Retorna `solicitacao_id`.
-- **`enviar-termo-cancelamento-substituicao`** (nova; clona `enviar-termo-cancelamento-troca`) — gera doc Autentique para o associado titular cancelando o veículo antigo. Atualiza `status='termo_enviado'`. Webhook Autentique existente passa a olhar essa tabela também e marcar `termo_assinado` quando assinado.
-- **`autentique-webhook`** (ajuste) — adiciona branch para a nova tabela.
-- Marca `veiculos.em_substituicao=true` no veículo antigo ao enviar termo (espelha padrão `em_troca_titularidade`) — protege contra outras operações concorrentes.
+## 3. Fluxo público continua o mesmo
 
-### 3. UI — `OutrasEntradasMenu.tsx` (substituição)
+Nenhuma mudança nas etapas (escolha de plano, termo de filiação, documentos, vistoria, pagamento). O `tipo_entrada='inclusao_veiculo'` apenas faz com que o `contrato-gerar` (já existente) anexe o novo veículo ao mesmo `associado_id`, sem criar duplicata. Confirmar que `contrato-gerar` já trata `tipo_entrada='inclusao_veiculo'` reaproveitando o associado — se não tratar, adicionar branch que pula a criação de associado novo.
 
-Substituir o `handleProsseguir` atual (que navega direto para Cotador) por um **mini-fluxo em 2 telas dentro do próprio modal**:
+## 4. Inativação do veículo antigo no SGA (substituição)
+
+Hoje `supabase/functions/efetivar-substituicao/index.ts` (Step 1) só seta `veiculos.ativo=false` localmente. Adicionar:
+
+- **Novo helper** `supabase/functions/_shared/sga-veiculo-situacao.ts` exportando `alterarSituacaoVeiculoSGA(supabase, codigo_veiculo, codigo_situacao)` que faz `GET ${apiUrl}/veiculo/alterar-situacao-para/${codigo_situacao}/${codigo_veiculo}` via `hinovaFetch` (mesmo padrão das outras funções SGA).
+- **Em `efetivar-substituicao` (Step 1‑bis, novo, após inativação local)**:
+  - Buscar `veiculo_antigo.codigo_veiculo_sga`.
+  - Chamar `alterarSituacaoVeiculoSGA(supabase, codigo, 2)` (situação **2 = inativo**, conforme escolha do usuário).
+  - Logar resultado em `results` como step não‑crítico (falha não bloqueia substituição; aparece em log).
+- **Webhook de cancelamento** (mesma função): se a função efetivar termina com sucesso e o veículo antigo tem `codigo_veiculo_sga`, garantir o disparo idempotente (checar `dados_extras.sga_inativacao_feita` para não repetir).
+
+## 5. Memória
+
+Atualizar `mem://index.md` adicionando uma referência:
+- `[Inclusão automática por CNH](mem://logic/sales/inclusao-automatica-cnh-ocr)` — Sem entrada manual; auto‑detecta associado via CPF da CNH no link público; badge fixa "INCLUSÃO DE VEÍCULO"; bloqueio anti‑sequestro pelo nome.
+- `[SGA inativar veículo substituído](mem://logic/operations/sga-inativar-veiculo-substituido)` — `efetivar-substituicao` chama `veiculo/alterar-situacao-para/2/:codigo` para o veículo antigo (não bloqueante).
+
+## Detalhes técnicos
 
 ```text
-[busca placa SGA] → [card resumo: veículo + associado + situação financeira]
-                                                                         │
-                                                          [Criar Solicitação] (botão primário)
-                                                                         │
-                                  redireciona para /vendas/outros-processos?destacar={id}
+Fluxo OCR CNH:
+upload CNH → document-ocr → cpf válido?
+  └── sim → detectar-associado-por-cpf (anon)
+        ├── local hit → guard nome → update cotacao (tipo_entrada=inclusao_veiculo)
+        ├── SGA hit  → importar-associado-sga → guard nome → update cotacao
+        └── miss / nome divergente → no-op silencioso
+  └── refetch → BadgeInclusaoVeiculo aparece fixa no topo
 ```
 
-Mostra alerta amarelo se houver débitos (não bloqueia — confirmado pelo usuário).
+**Arquivos a criar**
+- `supabase/functions/detectar-associado-por-cpf/index.ts`
+- `supabase/functions/_shared/sga-veiculo-situacao.ts`
+- `src/components/cotacao-publica/BadgeInclusaoVeiculo.tsx`
 
-### 4. UI — `ModalDetalhesOutroProcesso` para substituição
+**Arquivos a editar**
+- `src/components/vendas/OutrasEntradasMenu.tsx` (remoção da opção "Inclusão de Veículo")
+- `src/pages/public/CotacaoPublicaCompleta.tsx` (chamada à detecção + render do badge)
+- `supabase/functions/efetivar-substituicao/index.ts` (chamada SGA inativar)
+- `supabase/functions/contrato-gerar/index.ts` (apenas se não reusa associado em `tipo_entrada='inclusao_veiculo'` — verificar antes)
+- `mem://index.md` (referências novas)
 
-Hoje há `ModalDetalhesTroca`. Vamos criar **`ModalDetalhesSubstituicao`** (estrutura idêntica, layout reutilizando blocos):
-
-Aba **Resumo**:
-- Card "Associado" (nome, CPF, contatos, situação SGA)
-- Card "Veículo a substituir" (placa, modelo, FIPE, cota, mensalidade)
-- Card "Situação financeira" (boletos abertos via SGA — reaproveita `AnalisePreviaNovoTitularCard` adaptado)
-
-Aba **Termo de Cancelamento**:
-- Estado `aguardando_termo` → botão **"Enviar Termo de Cancelamento do veículo {PLACA}"**
-- Estado `termo_enviado` → status + botão "Reenviar por WhatsApp", contador de reenvios, link Autentique
-- Estado `termo_assinado` → ✓ assinado em {data} + botão **"Criar Nova Cotação"** (verde, primário)
-
-Aba **Nova Cotação**:
-- Antes de criada: placeholder "Aguardando assinatura do termo"
-- Depois: card com link público da cotação + status (escolha de plano, termo filiação, docs, vistoria, pagamento) — reutiliza `CotacaoStatusCard`
-
-### 5. Botão "Criar Nova Cotação"
-
-Não cria entidade nova — apenas navega para o Cotador já existente, passando `solicitacao_substituicao_id` na URL além dos params atuais. O Cotador grava esse id em `cotacoes.dados_extras.solicitacao_substituicao_id`. Trigger atualiza a solicitação com `cotacao_id` e move status para `cotacao_criada`. Daí em diante o fluxo público é 100% o do Cotador (sem alteração).
-
-### 6. Hook `useOutrosProcessos`
-
-Atualizar a query para também ler de `solicitacoes_substituicao_placa` (LEFT JOIN), preenchendo `solicitacao_substituicao_id`, `termo_status`, `termo_url`, etc. Os campos da interface já existem genéricos — só mapear.
-
-## Fora do escopo
-
-- Não alteramos `substituicoes_veiculo` (continua sendo o registro de fechamento pós-pagamento)
-- Não mexemos no fluxo público do associado (escolha plano/filiação/docs/vistoria/pagamento)
-- Não bloqueamos por débito (decisão do usuário)
-- Sem aprovação Cadastro/Monitoramento entre termo assinado e nova cotação (decisão do usuário)
-
-## Arquivos a criar / editar
-
-**Novos:**
-- migration `solicitacoes_substituicao_placa` (tabela + RLS + trigger updated_at)
-- `supabase/functions/criar-solicitacao-substituicao/index.ts`
-- `supabase/functions/enviar-termo-cancelamento-substituicao/index.ts`
-- `src/hooks/useSolicitacoesSubstituicao.ts`
-- `src/components/substituicao/ModalDetalhesSubstituicao.tsx`
-- `src/components/substituicao/CardResumoSubstituicao.tsx` (etapa 2 do menu)
-
-**Editar:**
-- `src/components/vendas/OutrasEntradasMenu.tsx` — trocar `handleProsseguir` da substituição pelo novo fluxo de 2 etapas
-- `src/hooks/useOutrosProcessos.ts` — incluir join com a nova tabela
-- `src/pages/vendas/Cotacoes.tsx` (ou Cotador) — ler `solicitacao_substituicao_id` da URL e gravar em `dados_extras`
-- `supabase/functions/autentique-webhook/index.ts` — branch para nova tabela
-- Memória do projeto — registrar o novo fluxo
+## Fora de escopo
+- Reescrever histórico de cotações antigas marcadas como `inclusao_veiculo` manual.
+- Detectar inclusão por CRLV/comprovante (apenas CNH, conforme escolha).
+- Sobrescrever cota quando nome diverge — permanece bloqueado pela regra atual.
+- Mudar etapas do link público.
