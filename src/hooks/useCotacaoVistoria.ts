@@ -121,7 +121,9 @@ export function useUploadFotoCotacaoVistoria() {
       
       let kmExtraido: number | undefined;
       let ocrFalhou = false;
-      if (fotoId === 'odometro') {
+      // OCR de odômetro: agora a foto canônica é 'painel_ligado'.
+      // Mantém compatibilidade com 'odometro' (legado).
+      if (fotoId === 'odometro' || fotoId === 'painel_ligado') {
         try {
           const { data: ocrData } = await supabase.functions.invoke('odometro-ocr', { body: { url } });
           if (ocrData?.km && (ocrData.confianca == null || ocrData.confianca >= 0.7)) {
@@ -131,10 +133,38 @@ export function useUploadFotoCotacaoVistoria() {
           }
         } catch (e) {
           ocrFalhou = true;
-          console.warn('OCR falhou:', e);
+          console.warn('OCR odômetro falhou:', e);
         }
       }
-      return { fotoId, url, kmExtraido, ocrFalhou };
+
+      // OCR de placa: roda nas 6 fotos com placa visível.
+      let placaOcr: PlacaOcrResultado | undefined;
+      if (isFotoComValidacaoPlaca(fotoId)) {
+        try {
+          const { data: cot } = await publicSupabase
+            .from('cotacoes')
+            .select('placa, aguardando_placa_definitiva')
+            .eq('id', cotacaoId)
+            .maybeSingle();
+          const placaEsperada = (cot as any)?.placa || '';
+          const aguardando = !!(cot as any)?.aguardando_placa_definitiva;
+          if (!placaEsperada || aguardando || isPlacaPlaceholder(placaEsperada)) {
+            // 0KM ou sem placa real — não valida.
+            placaOcr = { placa: null, match: true, legivel: true, confianca: 1, skipped: true };
+          } else {
+            const { data: ocrPlaca } = await supabase.functions.invoke('placa-ocr', {
+              body: { url, placaEsperada, fotoTipo: fotoId },
+            });
+            if (ocrPlaca) {
+              placaOcr = ocrPlaca as PlacaOcrResultado;
+            }
+          }
+        } catch (e) {
+          console.warn('[placa-ocr] falha — não bloqueia upload:', e);
+        }
+      }
+      return { fotoId, url, kmExtraido, ocrFalhou, placaOcr };
+
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', variables.cotacaoId] });
