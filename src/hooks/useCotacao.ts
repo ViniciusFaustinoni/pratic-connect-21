@@ -422,6 +422,9 @@ export function useCriarCotacao() {
             veiculo_antigo_placa: payload.veiculo_antigo_placa || null,
             veiculo_antigo_modelo: payload.veiculo_antigo_modelo || null,
           }),
+          ...(payload.solicitacao_substituicao_id && {
+            solicitacao_substituicao_id: payload.solicitacao_substituicao_id,
+          }),
         } : null,
       };
 

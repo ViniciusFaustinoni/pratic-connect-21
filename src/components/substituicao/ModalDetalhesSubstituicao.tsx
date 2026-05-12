@@ -57,7 +57,7 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
       solicitacao_substituicao_id: sol.id,
     });
     onOpenChange(false);
-    navigate(`/vendas/cotacoes?${params.toString()}`);
+    navigate(`/vendas/cotador?${params.toString()}`);
   };
 
   return (

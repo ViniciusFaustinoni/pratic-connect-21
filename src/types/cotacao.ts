@@ -190,4 +190,5 @@ export interface CriarCotacaoPayload {
   veiculo_antigo_id?: string | null;
   veiculo_antigo_placa?: string | null;
   veiculo_antigo_modelo?: string | null;
+  solicitacao_substituicao_id?: string | null;
 }
