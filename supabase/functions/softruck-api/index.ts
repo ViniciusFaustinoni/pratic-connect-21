@@ -455,8 +455,16 @@ serve(async (req) => {
         const updateData: Record<string, unknown> = { data: { attributes: {} } };
         const attrs = (updateData.data as Record<string, unknown>).attributes as Record<string, unknown>;
         
-        if (placa) attrs.plate = placa.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 16);
-        if (chassi) attrs.vin = chassi.substring(0, 20);
+        if (placa) {
+          const placaSan = placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const chassiSan = chassi?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+          // 0KM: usa chassi como placa enquanto não há placa definitiva
+          const isZeroKm = !placaSan || /^0KM/i.test(placaSan);
+          attrs.plate = isZeroKm && chassiSan
+            ? chassiSan.substring(0, 16)
+            : placaSan.substring(0, 16);
+        }
+        if (chassi) attrs.vin = chassi.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 20);
         if (marca) attrs.brand = marca.substring(0, 20);
         if (modelo) attrs.model = modelo.substring(0, 20);
         if (ano) attrs.year = ano.substring(0, 10);
