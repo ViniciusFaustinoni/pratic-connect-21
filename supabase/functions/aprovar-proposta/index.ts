@@ -650,7 +650,9 @@ serve(async (req) => {
       : !planoTemRouboFurto
         ? 'Proposta aprovada! Plano de assistência ativado (sem cobertura de Roubo/Furto).'
         : algumPrecisouRastreador
-          ? 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+          ? (autovistoriaAprovada
+              ? 'Análise documental aprovada! Cobertura Roubo/Furto liberada. Aguardando agendamento da instalação para Proteção 360º.'
+              : 'Análise documental aprovada! Aguardando o cliente concluir a autovistoria para liberar a Cobertura Roubo/Furto.')
           : 'Proposta aprovada! Proteção 360° ativada (sem necessidade de rastreador).';
 
     console.log('[aprovar-proposta] Concluído:', mensagemRetorno);
