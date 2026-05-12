@@ -741,9 +741,14 @@ export default function CotacaoPublicaCompleta() {
   // RENDER PRINCIPAL
   // ──────────────────────────────────────────────────────────
 
+  const isInclusaoVeiculo = (cotacao as any)?.tipo_entrada === 'inclusao'
+    || (cotacao as any)?.tipo_entrada === 'inclusao_veiculo';
+  const nomeAssociadoInclusao = ((cotacao as any)?.dados_extras?.auto_inclusao?.nome
+    || (cotacao as any)?.nome_solicitante) as string | null | undefined;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 overflow-y-auto overflow-x-hidden">
-      {/* Header */}
+      {isInclusaoVeiculo && <BadgeInclusaoVeiculo nomeAssociado={nomeAssociadoInclusao} />}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-lg mx-auto px-4 py-3">
           <div className="mb-3">
