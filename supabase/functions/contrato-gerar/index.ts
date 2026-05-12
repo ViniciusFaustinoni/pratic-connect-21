@@ -124,6 +124,19 @@ const MOTO_MODEL_KEYWORDS = [
   'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon', 'sahara',
 ];
 
+// Marcas exclusivamente automotivas — espelhado de src/data/vistoriaConfigCompleta.ts.
+// Usadas para sanity-check: se uma `categoriaExistente='moto'` chega de uma cotação
+// poluída mas a marca está aqui, ignoramos a string e detectamos do zero.
+const CARRO_BRANDS_LOCAL = new Set([
+  'CHEVROLET', 'GM', 'GENERAL MOTORS',
+  'VOLKSWAGEN', 'VW',
+  'FIAT', 'FORD', 'TOYOTA', 'HYUNDAI', 'RENAULT', 'PEUGEOT',
+  'CITROEN', 'CITROËN', 'JEEP', 'NISSAN', 'MITSUBISHI', 'KIA',
+  'AUDI', 'MERCEDES-BENZ', 'MERCEDES', 'VOLVO', 'LAND ROVER', 'PORSCHE',
+  'SUBARU', 'MAZDA', 'CHERY', 'CAOA', 'CAOA CHERY', 'RAM', 'DODGE',
+  'JAGUAR', 'MINI', 'LEXUS', 'JAC', 'GWM', 'BYD', 'SMART', 'TROLLER', 'IVECO',
+]);
+
 /** Detecção dinâmica via banco (3 regras), com fallback para keywords de modelo */
 async function detectarCategoriaVeiculo(
   supabase: any,
@@ -131,7 +144,29 @@ async function detectarCategoriaVeiculo(
   modelo?: string,
   categoriaExistente?: string
 ): Promise<string> {
-  if (categoriaExistente && categoriaExistente !== 'nenhuma') return categoriaExistente;
+  const marcaNorm = (marca || '').trim().toUpperCase();
+  const modeloNorm = (modelo || '').trim().toUpperCase();
+
+  // Sanity-check: se a categoria existente diz "moto" mas a marca é
+  // notoriamente de carro (e o modelo não tem keyword de moto), ignoramos
+  // a string poluída e detectamos do zero.
+  const categoriaIndicaMoto = categoriaExistente
+    ? /moto|motocicleta|ciclomotor|triciclo/i.test(categoriaExistente)
+    : false;
+  const marcaEhCarro = marcaNorm ? CARRO_BRANDS_LOCAL.has(marcaNorm) : false;
+  const modeloTemKeywordMoto = modeloNorm
+    ? MOTO_MODEL_KEYWORDS.some(kw => modeloNorm.toLowerCase().includes(kw))
+    : false;
+  const categoriaPoluida = categoriaIndicaMoto && marcaEhCarro && !modeloTemKeywordMoto;
+
+  if (!categoriaPoluida && categoriaExistente && categoriaExistente !== 'nenhuma') {
+    return categoriaExistente;
+  }
+  if (categoriaPoluida) {
+    console.warn('[detectarCategoriaVeiculo] Ignorando categoria poluída', {
+      marca, modelo, categoriaExistente,
+    });
+  }
 
   const marcaNorm = (marca || '').trim().toUpperCase();
   const modeloNorm = (modelo || '').trim().toUpperCase();
