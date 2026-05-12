@@ -72,31 +72,18 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   useEffect(() => {
     if (fotosExistentes && fotosExistentes.length > 0 && !hidratado) {
       const fotosMap: Record<string, string> = {};
-      let videoExistente: string | null = null;
-      
+
       for (const foto of fotosExistentes) {
-        if (foto.tipo && foto.arquivo_url) {
-          if (foto.tipo === 'video_360') {
-            videoExistente = foto.arquivo_url;
-          } else {
-            fotosMap[foto.tipo] = foto.arquivo_url;
-          }
+        if (foto.tipo && foto.arquivo_url && foto.tipo !== 'video_360') {
+          fotosMap[foto.tipo] = foto.arquivo_url;
         }
       }
-      
+
       if (Object.keys(fotosMap).length > 0) {
         setFotosEnviadas(fotosMap);
+        toast.success(`${Object.keys(fotosMap).length} foto(s) carregada(s) de sessão anterior`);
       }
-      
-      if (videoExistente) {
-        setVideoUrl(videoExistente);
-      }
-      
-      const totalCarregados = Object.keys(fotosMap).length + (videoExistente ? 1 : 0);
-      if (totalCarregados > 0) {
-        toast.success(`${totalCarregados} arquivo(s) carregado(s) de sessão anterior`);
-      }
-      
+
       // Ir para próxima foto pendente
       const indexPendente = fotos.findIndex(f => !fotosMap[f.id]);
       if (indexPendente >= 0) {
