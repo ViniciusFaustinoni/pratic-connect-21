@@ -66,10 +66,14 @@ Deno.serve(async (req) => {
     const aprovadorId = prof?.id ?? null;
 
     // 5) COMMIT PRIMEIRO: avançar status com CAS (idempotente)
+    // NOVO FLUXO: cadastro aprovado → liberada_para_assinatura DIRETO.
+    // O Monitoramento só vê o caso depois que o novo titular concluir a vistoria
+    // (trigger fn_troca_promover_monitoramento_pos_vistoria promove para
+    // `aguardando_monitoramento` ao detectar vistoria em_analise/concluida).
     const { data: updated, error: updErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
-        status: 'aguardando_monitoramento',
+        status: 'liberada_para_assinatura',
         aprovado_cadastro_por: aprovadorId,
         aprovado_cadastro_em: new Date().toISOString(),
         observacao_cadastro: observacao || null,
@@ -85,7 +89,7 @@ Deno.serve(async (req) => {
 
     if (!updated || updated.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, already_advanced: true, status: 'aguardando_monitoramento' }),
+        JSON.stringify({ success: true, already_advanced: true, status: 'liberada_para_assinatura' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
