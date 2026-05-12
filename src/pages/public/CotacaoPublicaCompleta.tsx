@@ -25,6 +25,7 @@ import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { FOTOS_VISTORIA_COMPLETA } from '@/data/vistoriaConfigCompleta';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
+import { BadgeInclusaoVeiculo } from '@/components/cotacao-publica/BadgeInclusaoVeiculo';
 
 import { 
   useCotacaoPublica, 
