@@ -128,15 +128,29 @@ export function CotacoesFiltrosSheet(props: CotacoesFiltrosSheetProps) {
               <SelectContent>
                 <SelectItem value="all">Todas as etapas</SelectItem>
                 <SelectItem value="rascunho">Rascunho</SelectItem>
-                <SelectItem value="enviada">Enviada — aguardando cliente</SelectItem>
-                <SelectItem value="escolhendo_plano">Escolhendo plano</SelectItem>
-                <SelectItem value="enviando_documentos">Enviando documentos</SelectItem>
-                <SelectItem value="em_analise">Documentos em análise</SelectItem>
-                <SelectItem value="assinando_contrato">Aguardando assinatura</SelectItem>
-                <SelectItem value="pagando_taxa">Pagando taxa</SelectItem>
-                <SelectItem value="agendando_vistoria">Agendando vistoria</SelectItem>
-                <SelectItem value="concluido">Convertida em associado</SelectItem>
-                <SelectItem value="perdida">Perdida / expirada</SelectItem>
+                {([
+                  'cotacao_realizada',
+                  'escolhendo_plano',
+                  'enviando_documentos',
+                  'escolha_vistoria',
+                  'realizando_autovistoria',
+                  'assinando_contrato',
+                  'realizando_pagamento',
+                  'aguardando_vistoria',
+                  'vistoria_agendada',
+                  'instalacao_agendada',
+                  'realizando_vistoria',
+                  'vistoria_realizada',
+                  'em_analise',
+                  'associado_ativo',
+                  'veiculo_recusado',
+                  'cancelado',
+                ] as EtapaVenda[]).map((etapa) => (
+                  <SelectItem key={etapa} value={etapa}>
+                    {etapaVendaConfig[etapa].label}
+                  </SelectItem>
+                ))}
+                <SelectItem value="expirada">Expirada</SelectItem>
               </SelectContent>
             </Select>
           </div>
