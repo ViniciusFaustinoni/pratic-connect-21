@@ -252,24 +252,27 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
 
     // Slug curto (assina.ae/XYZ) — necessário para o botão URL do template Meta
     const sigs = json.data?.createDocument?.signatures || [];
+    // IMPORTANTE: somente o `link.short_link` do Autentique é resolvível em assina.ae.
+    // O `public_id` (32 chars hex) NÃO funciona como slug — usá-lo gera 404.
+    const SLUG_RE = /^[A-Za-z0-9]{4,16}$/;
     const extractSlug = (signatures: any[]): string | null => {
-      const fromShort = signatures
-        .map((s: any) => s?.link?.short_link)
-        .find((u: any) => typeof u === 'string' && u.includes('assina.ae'));
-      if (fromShort) {
-        return fromShort.replace(/^https?:\/\/assina\.ae\//i, '').replace(/\/+$/, '');
+      for (const s of signatures || []) {
+        const url = s?.link?.short_link;
+        if (typeof url !== 'string' || !url.toLowerCase().includes('assina.ae')) continue;
+        const slug = url.replace(/^https?:\/\/assina\.ae\//i, '').replace(/\/+$/, '');
+        if (SLUG_RE.test(slug)) return slug;
       }
-      // Fallback: usa public_id (assina.ae/{public_id} resolve para a página de assinatura)
-      const pid = signatures.map((s: any) => s?.public_id).find((p: any) => typeof p === 'string' && p.length > 0);
-      return pid || null;
+      return null;
     };
 
     let slugAutentique: string | null = extractSlug(sigs);
 
-    // Se ainda não temos slug, tenta refazer a query do documento (Autentique pode demorar a popular short_link)
+    // Backoff progressivo (1.5s, 3s, 5s, 8s ≈ 17.5s) — Autentique demora alguns
+    // segundos para gerar `link.short_link` em docs com PF_FACIAL.
     if (!slugAutentique) {
-      for (let attempt = 0; attempt < 2 && !slugAutentique; attempt++) {
-        await new Promise((r) => setTimeout(r, 1500));
+      const delays = [1500, 3000, 5000, 8000];
+      for (let attempt = 0; attempt < delays.length && !slugAutentique; attempt++) {
+        await new Promise((r) => setTimeout(r, delays[attempt]));
         try {
           const followUp = await fetch(AUTENTIQUE_URL, {
             method: 'POST',
@@ -323,9 +326,48 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           console.warn('[enviar-termo-cancelamento-substituicao] meta_config_ausente');
           await logErro('meta_config_ausente: phone_number_id/access_token não configurados');
         } else if (!slugAutentique) {
-          waStatus = 'falhou';
-          console.warn('[enviar-termo-cancelamento-substituicao] autentique_short_link_indisponivel após retries');
-          await logErro('autentique_short_link_indisponivel: slug do termo não disponível para botão URL do template');
+          // Fallback texto via Evolution: URL Autentique completa sempre resolve
+          console.warn('[enviar-termo-cancelamento-substituicao] short_link indisponível — fallback texto com URL Autentique');
+          const mensagemTexto =
+            `Olá, ${primeiroNome}!\n\n` +
+            `Recebemos sua solicitação de substituição de placa do veículo` +
+            `${veiculo?.placa ? ` (${veiculo.placa})` : ''}.\n\n` +
+            `Para liberar a substituição, assine o Termo de Cancelamento (reconhecimento facial):\n` +
+            `${termoUrl}\n\n` +
+            `Após sua assinatura, o processo segue automaticamente.\n— PRATICCAR`;
+          try {
+            const { data: sendData, error: sendErr } = await admin.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telTo,
+                mensagem: mensagemTexto,
+                referencia_tipo: 'substituicao_placa',
+                referencia_id: solicitacao_id,
+                force_provider: 'evolution',
+              },
+            });
+            if (sendErr || (sendData && sendData.success === false)) {
+              const errTxt = sendErr?.message || sendData?.error || 'erro desconhecido';
+              waStatus = 'falhou';
+              await admin.from('whatsapp_mensagens').insert({
+                direcao: 'saida', telefone: telTo, mensagem: mensagemTexto, status: 'erro',
+                template_id: 'fallback_texto_short_link_indisponivel',
+                referencia_tipo: 'substituicao_placa', referencia_id: solicitacao_id,
+                erro_mensagem: `evolution_erro: ${errTxt}`,
+              }).then(() => {}).catch(() => {});
+            } else {
+              waStatus = 'enviado';
+              await admin.from('whatsapp_mensagens').insert({
+                direcao: 'saida', telefone: telTo, mensagem: mensagemTexto, status: 'enviada',
+                template_id: 'fallback_texto_short_link_indisponivel',
+                referencia_tipo: 'substituicao_placa', referencia_id: solicitacao_id,
+                message_id: sendData?.message_id || sendData?.mensagem_id || null,
+              }).then(() => {}).catch(() => {});
+            }
+          } catch (e) {
+            waStatus = 'falhou';
+            const errMsg = e instanceof Error ? e.message : String(e);
+            await logErro(`fallback_texto_excecao: ${errMsg}`);
+          }
         } else {
           const payload = {
             messaging_product: 'whatsapp',
@@ -371,7 +413,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
               template_id: 'assinatura_documento_v2',
               referencia_tipo: 'substituicao_placa',
               referencia_id: solicitacao_id,
-              mensagem_id_externo: metaJson?.messages?.[0]?.id || null,
+              message_id: metaJson?.messages?.[0]?.id || null,
             }).then(() => {}).catch(() => {});
           } else {
             const errMsg = metaJson?.error?.message || `HTTP ${metaResp.status}`;

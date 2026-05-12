@@ -35,12 +35,18 @@ interface ResultadoEnvio {
 const PRIMARY_TEMPLATE = 'termo_filiacao_assinatura_v2';
 const FALLBACK_TEMPLATE = 'assinatura_documento_v2';
 
+// Slugs assina.ae são tipicamente alfanuméricos curtos (4–16 chars).
+// IDs longos (docId 50 chars hex) ou public_id (32 chars hex) NÃO resolvem em assina.ae.
+const SLUG_RE = /^[A-Za-z0-9]{4,16}$/;
+
 function extrairToken(url: string): string | null {
   if (!url) return null;
   try {
     const cleaned = url.trim().replace(/\/+$/, '');
-    const last = cleaned.split('/').pop();
-    return last || null;
+    // Só aceita URLs que sejam realmente de assina.ae
+    if (!/assina\.ae/i.test(cleaned)) return null;
+    const last = cleaned.split('/').pop() || '';
+    return SLUG_RE.test(last) ? last : null;
   } catch {
     return null;
   }

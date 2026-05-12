@@ -1,66 +1,41 @@
-## Diagnóstico
+## Diagnóstico — KOU6D37 (Marcos Dativo → Marcus Vinicius)
 
-Conferi as vistorias do ALEXANDRE (xandiboladao5@gmail.com / Moto G 15) e ele lida com **31 fotos por vistoria** (`vistorias.id=e86d7c19...`, `nfotos=31`). Cada foto está armazenada em ~180 KB JPEG, mas quando renderizada como `<img src="...jpg">` sem transform, o navegador **decodifica a imagem em tamanho original (≈1280×960)**, ocupando ~5 MB de RAM por foto na memória de pixels — independentemente do CSS dizer "10×10 px".
+### O que aconteceu
+- Solicitação `c3325fd9-d7ae-4617-b9ee-8e5dde81c317` gerou doc Autentique `75e02285…774493c5e`.
+- A mensagem WhatsApp recebida pelo associado (template `assinatura_documento_v2`) trouxe o botão "Assinar Agora" apontando para `https://assina.ae/24493ba74e1811f1bb8342010a2b6020` → **404**.
+- O slug `24493ba7…2b6020` tem **32 chars hex** = é o `signatures[].public_id` retornado pelo Autentique. **Não é** o `short_link` real.
 
-O componente `VistoriaFotoSequencial` (usado em `InstaladorChecklist`, `ExecutarVistoriaCompleta` e `ExecutarRetirada`) renderiza:
-- **Strip horizontal com TODAS as 31 fotos** como `<img>` 10×10 px, mas com URL pública crua → ~150 MB de pixels decodificados.
-- Preview grande da foto atual também em URL crua (~5 MB).
-
-Em paralelo, `FotoCapture` (cards individuais em outras seções) também usa URL pública direta. No Moto G 15 (3 GB RAM, heap JS Chrome ~256 MB) isso estoura facilmente — o `imageCompressor` já é defensivo na captura, mas o problema está em **exibir** o que já foi enviado.
-
-O endpoint de transform do Supabase Storage está habilitado: testei e a mesma foto a 80×80 q=60 retorna **1.5 KB** em vez de 180 KB (e o navegador decodifica ~25 KB de pixels em vez de 5 MB) — redução de ~200×.
-
-## O que vou alterar
-
-1. **Criar `src/lib/storage/imageTransform.ts`** — helper único:
-   - `transformedUrl(url, { width, height, quality, resize })` — converte URLs `…/storage/v1/object/public/<bucket>/<path>` em `…/storage/v1/render/image/public/<bucket>/<path>?width=…&height=…&quality=…&resize=cover`. Devolve a URL original quando o padrão não bate (ex.: blob:, http externo).
-   - `THUMB`, `PREVIEW`, `FULL` presets.
-
-2. **`src/components/vistorias/VistoriaFotoSequencial.tsx`**
-   - Strip de thumbnails: usar `transformedUrl(url, THUMB /* 96×96 q60 */)` + `width={40} height={40}`.
-   - Preview principal da foto atual: `transformedUrl(url, PREVIEW /* 960×720 q75 */)`.
-   - Manter `loading="lazy"` e `decoding="async"`.
-
-3. **`src/components/instalador/FotoCapture.tsx`**
-   - Quando `fotoUrl` é remoto (não preview blob:), aplicar `transformedUrl(fotoUrl, PREVIEW)`. Preview local (blob:) continua igual.
-
-4. **`src/components/instalador/FotosManutencao.tsx`** (linha 149)
-   - Mesmo tratamento para o `<img>` da galeria de manutenção.
-
-5. **Liberar memória ao avançar de etapa em `InstaladorChecklist`**
-   - Pequeno ajuste: ao trocar `etapaAtual`, chamar um `requestIdleCallback` que itera `document.querySelectorAll('img[data-vistoria-foto]')` removidas e força GC (apenas garantia; o ganho real está no item 1-4).
-
-## Impacto esperado
-
-- Strip de 31 thumbnails: de ~150 MB → ~0.8 MB de pixels decodificados.
-- Preview grande: de ~5 MB → ~2.7 MB (960×720).
-- Bytes baixados: de ~5.6 MB (31 × 180 KB) → ~50 KB (31 × 1.5 KB) por vistoria — **carregamento 100× mais leve em rede 3G/4G fraca**.
-- Sem mudanças no fluxo, no banco, em policies de storage ou nas edge functions. Sem mudar a captura/compressão (já está bem).
-
-## Detalhes técnicos
+### Causa raiz
+A função `extractSlug` (em `enviar-termo-cancelamento-troca`, `enviar-termo-cancelamento-substituicao`) cai num *fallback* errado quando `signatures[0].link.short_link` ainda não foi populado pelo Autentique:
 
 ```ts
-// src/lib/storage/imageTransform.ts
-const RX = /\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/;
-export const THUMB   = { width: 96,  height: 96,  quality: 60, resize: 'cover' as const };
-export const PREVIEW = { width: 960, height: 720, quality: 75, resize: 'contain' as const };
-
-export function transformedUrl(url?: string|null, opts?: {...}) {
-  if (!url || url.startsWith('blob:') || url.startsWith('data:')) return url ?? '';
-  const m = url.match(RX);
-  if (!m) return url;
-  const [_, bucket, path] = m;
-  const base = url.split('/storage/v1/')[0];
-  const qs = new URLSearchParams();
-  if (opts?.width)   qs.set('width', String(opts.width));
-  if (opts?.height)  qs.set('height', String(opts.height));
-  if (opts?.quality) qs.set('quality', String(opts.quality));
-  if (opts?.resize)  qs.set('resize', opts.resize);
-  // preserva query original (ex.: ?v=cachebust) → mover para o final
-  const [pathOnly, originalQs] = path.split('?');
-  if (originalQs) new URLSearchParams(originalQs).forEach((v,k) => qs.set(k,v));
-  return `${base}/storage/v1/render/image/public/${bucket}/${pathOnly}?${qs.toString()}`;
-}
+// Fallback: usa public_id (assina.ae/{public_id} resolve para a página de assinatura)
+const pid = signatures.map(s => s?.public_id).find(p => typeof p === 'string' && p.length > 0);
+return pid || null;
 ```
 
-Tudo o que renderiza foto de vistoria/instalação/manutenção do instalador passa a usar esse helper. Nada muda para o usuário visualmente — só cai o consumo de RAM/banda.
+A premissa está errada: `assina.ae/{public_id}` **não resolve** — apenas `assina.ae/{short_link slug}` (geralmente 8 chars) funciona. Quando o Autentique demora a popular `link.short_link` (ocorre com PF_FACIAL recém-criado), o slug enviado é o public_id e a URL quebra.
+
+O mesmo bug existe em `_shared/enviar-termo-filiacao-whatsapp.ts` — `extrairToken` pega o último segmento da URL (que pode ser o `docId` de 50 chars) e injeta em `https://assina.ae/{{1}}`, resultando em 404.
+
+### Correção (escopo)
+1. **Remover fallback inseguro para `public_id`** em `extractSlug`/`extrairToken`. Se `short_link` indisponível após retries, **não enviar** o template com botão — caímos para template texto (`n` ou Evolution) com a URL `app.autentique.com.br/documentos/{docId}`, que sempre funciona.
+2. **Aumentar resiliência do follow-up Autentique**: subir de 2 para 4 tentativas com backoff (1.5s → 3s → 5s → 8s), totalizando ~17s — Autentique normalmente popula `short_link` em até 10s para PF_FACIAL.
+3. **Endurecer validação do slug** antes de montar o botão: aceitar apenas strings de 6–16 chars alfanuméricos (formato típico do assina.ae). Qualquer coisa fora disso → fallback texto.
+4. Aplicar a mesma correção nos três arquivos:
+   - `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
+   - `supabase/functions/enviar-termo-cancelamento-substituicao/index.ts`
+   - `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts`
+5. **Logar `whatsapp_mensagens` mesmo quando cair no fallback texto**, com `template_id='fallback_texto_short_link_indisponivel'` para auditoria/alerta.
+
+### Reenvio para o caso atual (KOU6D37)
+Após o deploy, reenviar via UI (Modal de Detalhes da Troca → "Reenviar termo de cancelamento"). A função detecta `force_resend=true`, deleta o doc anterior no Autentique e cria um novo — agora com short_link válido OU URL Autentique completa em texto.
+
+### O que NÃO mudará
+- Lógica de geração do PDF, template do Termo, fluxo de assinatura PF_FACIAL, persistência do `termo_cancelamento_url` no banco.
+- Comportamento da função para casos em que `short_link` chega normalmente (maioria).
+
+### Arquivos editados
+- `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
+- `supabase/functions/enviar-termo-cancelamento-substituicao/index.ts`
+- `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts`
