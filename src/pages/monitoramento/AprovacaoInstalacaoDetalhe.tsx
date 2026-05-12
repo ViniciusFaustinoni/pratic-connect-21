@@ -192,6 +192,87 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         enderecoInstalacao = inst || null;
       }
 
+      // Detectar atendimento na Base (vistoria_entrada ou sem instalacao vinculada)
+      const isAtendimentoBase =
+        servico.tipo === 'vistoria_entrada' || !servico.instalacao_origem_id;
+
+      let enderecoBase: any = null;
+      if (isAtendimentoBase) {
+        const { data: cfgRows } = await supabase
+          .from('configuracoes')
+          .select('chave, valor')
+          .in('chave', [
+            'base_logradouro',
+            'base_numero',
+            'base_complemento',
+            'base_bairro',
+            'base_cidade',
+            'base_uf',
+            'base_cep',
+          ]);
+        const cfg: Record<string, string> = {};
+        (cfgRows || []).forEach((r: any) => { cfg[r.chave] = r.valor; });
+
+        // Data/horário: tentar vistoria, depois agendamento_base, depois servico
+        let dataAg: string | null = null;
+        let horarioAg: string | null = null;
+        let periodoAg: string | null = null;
+
+        if (servico.vistoria_origem_id) {
+          const { data: v } = await supabase
+            .from('vistorias')
+            .select('data_agendada, horario_agendado')
+            .eq('id', servico.vistoria_origem_id)
+            .maybeSingle();
+          dataAg = v?.data_agendada || null;
+          horarioAg = (v as any)?.horario_agendado || null;
+        }
+
+        if (!dataAg && servico.contrato_id) {
+          const { data: contrato } = await supabase
+            .from('contratos')
+            .select('cotacao_id')
+            .eq('id', servico.contrato_id)
+            .maybeSingle();
+          if (contrato?.cotacao_id) {
+            const { data: ag } = await supabase
+              .from('agendamentos_base')
+              .select('data_agendada, horario')
+              .eq('cotacao_id', contrato.cotacao_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            dataAg = ag?.data_agendada || null;
+            horarioAg = ag?.horario || null;
+          }
+        }
+
+        if (!dataAg) {
+          dataAg = (servico as any).data_agendada || null;
+          horarioAg = (servico as any).horario_agendado || horarioAg;
+        }
+
+        // Marcador interno 08:00 = manhã, 13:00 = tarde
+        if (horarioAg) {
+          const h = String(horarioAg).slice(0, 5);
+          if (h === '08:00') periodoAg = 'Manhã';
+          else if (h === '13:00') periodoAg = 'Tarde';
+        }
+
+        enderecoBase = {
+          logradouro: cfg.base_logradouro,
+          numero: cfg.base_numero,
+          complemento: cfg.base_complemento,
+          bairro: cfg.base_bairro,
+          cidade: cfg.base_cidade,
+          uf: cfg.base_uf,
+          cep: cfg.base_cep,
+          data_agendada: dataAg,
+          periodo: periodoAg,
+          hora_agendada: !periodoAg ? horarioAg : null,
+        };
+      }
+
       // Endereço CADASTRAL (do associado)
       let enderecoCadastral: any = null;
       if (servico.associado_id) {
