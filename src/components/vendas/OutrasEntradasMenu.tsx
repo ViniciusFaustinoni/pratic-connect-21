@@ -122,28 +122,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch associado details for inclusão (status + veículos ativos)
-  const { data: associadoInclusaoData, isLoading: loadingAssociadoInclusao } = useQuery({
-    queryKey: ['associado-inclusao-check', selectedAssociadoId],
-    queryFn: async () => {
-      if (!selectedAssociadoId) return null;
-      // Get associado status + details
-      const { data: assoc } = await supabase
-        .from('associados')
-        .select('id, nome, cpf, telefone, email, status')
-        .eq('id', selectedAssociadoId)
-        .single();
-      if (!assoc) return null;
-      // Get active vehicles
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('id, placa, marca, modelo, ano_fabricacao, status')
-        .eq('associado_id', selectedAssociadoId)
-        .in('status', ['ativo', 'instalacao_pendente']);
-      return { ...assoc, veiculos: veiculos || [] };
-    },
-    enabled: !!selectedAssociadoId && selectedTipo === 'inclusao',
-  });
+  // Inclusão de veículo deixou de ser uma entrada manual — agora é detectada
+  // automaticamente via OCR da CNH no link público.
+  const associadoInclusaoData = null as null | { status: string; veiculos: Array<{ id: string; placa: string; marca: string; modelo: string; ano_fabricacao: number; status: string }> };
+  const loadingAssociadoInclusao = false;
 
   // Repasse maior config for substituicao
   const { data: repasseConfig } = useQuery({
