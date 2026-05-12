@@ -503,7 +503,7 @@ export default function Veiculos() {
                         <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded border border-border">
                           {veiculo.placa}
                         </span>
-                        <Badge className={`${statusColors[veiculoStatus]} text-[10px] px-1.5 py-0.5`}>
+                        <Badge className={`${badgeColor} text-[10px] px-1.5 py-0.5`}>
                           {labelOverride ?? STATUS_VEICULO_LABELS[veiculoStatus]}
                         </Badge>
                         {veiculo.uso_aplicativo && (
