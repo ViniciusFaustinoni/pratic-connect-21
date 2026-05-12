@@ -549,20 +549,45 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from("solicitacoes_troca_titularidade").delete().eq("novo_associado_id", associadoId);
 
     // 14c. Desvincular QUALQUER rastreador ainda apontando para o associado (FK rastreadores_associado_id_fkey)
-    await supabaseAdmin.rpc('set_audit_origem', { origem: 'edge:delete-associado' });
-    const rastFinalResult = await supabaseAdmin
+    try { await supabaseAdmin.rpc('set_audit_origem', { origem: 'edge:delete-associado' }); } catch (_) {}
+    const { data: rastreadoresPendentes } = await supabaseAdmin
       .from("rastreadores")
-      .update({
-        veiculo_id: null,
-        associado_id: null,
-        associado_email: null,
-        status: 'estoque',
-        plataforma_veiculo_id: null,
-        plataforma_user_id: null,
-        updated_at: new Date().toISOString(),
-      })
+      .select("id, codigo, status, veiculo_id")
       .eq("associado_id", associadoId);
-    logIfError("desvincular rastreadores por associado_id", rastFinalResult, { associadoId });
+    console.log(`[delete-associado] Rastreadores ainda vinculados ao associado: ${rastreadoresPendentes?.length ?? 0}`, rastreadoresPendentes);
+
+    if (rastreadoresPendentes && rastreadoresPendentes.length > 0) {
+      const ids = rastreadoresPendentes.map((r: any) => r.id);
+      const { error: rastUpdErr } = await supabaseAdmin
+        .from("rastreadores")
+        .update({
+          veiculo_id: null,
+          associado_id: null,
+          associado_email: null,
+          status: 'estoque',
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      if (rastUpdErr) {
+        console.error(`[delete-associado] Falha ao desvincular rastreadores:`, rastUpdErr);
+        return new Response(
+          JSON.stringify({ error: `Erro ao desvincular rastreadores: ${rastUpdErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      // Verifica
+      const { data: aindaVinculados } = await supabaseAdmin
+        .from("rastreadores")
+        .select("id, codigo")
+        .eq("associado_id", associadoId);
+      if (aindaVinculados && aindaVinculados.length > 0) {
+        console.error(`[delete-associado] Rastreadores ainda vinculados após update:`, aindaVinculados);
+        return new Response(
+          JSON.stringify({ error: `Rastreadores ainda vinculados após desvínculo: ${aindaVinculados.map((r: any) => r.codigo).join(', ')}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // 15. Finally, delete the associate
     console.log(`[delete-associado] Todas as dependências limpas. Excluindo associado...`);
