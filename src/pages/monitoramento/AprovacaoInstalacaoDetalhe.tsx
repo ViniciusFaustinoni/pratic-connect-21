@@ -498,34 +498,50 @@ export default function AprovacaoInstalacaoDetalhe() {
               <p className="text-muted-foreground italic">Não informado</p>
             )}
           </div>
-          <div className="rounded-lg border border-primary/30 p-3 bg-primary/5">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
-              Endereço de instalação
-            </p>
-            {enderecoInstalacao?.logradouro ? (
-              <>
-                <p className="font-medium text-foreground">
-                  {enderecoInstalacao.logradouro}
-                  {enderecoInstalacao.numero && `, ${enderecoInstalacao.numero}`}
-                  {enderecoInstalacao.complemento && ` — ${enderecoInstalacao.complemento}`}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {enderecoInstalacao.bairro}
-                  {enderecoInstalacao.cidade && ` · ${enderecoInstalacao.cidade}`}
-                  {enderecoInstalacao.uf && `/${enderecoInstalacao.uf}`}
-                  {enderecoInstalacao.cep && ` · CEP ${enderecoInstalacao.cep}`}
-                </p>
-                {(enderecoInstalacao.data_agendada || enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada) && (
-                  <p className="text-xs text-foreground/80 mt-1">
-                    {enderecoInstalacao.data_agendada && enderecoInstalacao.data_agendada.split('-').reverse().join('/')}
-                    {(enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada) && ` · ${enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada}`}
+          {(() => {
+            const endereco = isAtendimentoBase ? enderecoBase : enderecoInstalacao;
+            const titulo = isAtendimentoBase ? 'Local da Vistoria/Instalação' : 'Endereço de instalação';
+            return (
+              <div className="rounded-lg border border-primary/30 p-3 bg-primary/5">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">
+                    {titulo}
                   </p>
+                  {isAtendimentoBase && (
+                    <Badge variant="secondary" className="text-[10px] uppercase">
+                      Atendimento na Base
+                    </Badge>
+                  )}
+                </div>
+                {endereco?.logradouro ? (
+                  <>
+                    <p className="font-medium text-foreground">
+                      {isAtendimentoBase && 'Pratic Sede — '}
+                      {endereco.logradouro}
+                      {endereco.numero && `, ${endereco.numero}`}
+                      {endereco.complemento && !isAtendimentoBase && ` — ${endereco.complemento}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {endereco.bairro}
+                      {endereco.cidade && ` · ${endereco.cidade}`}
+                      {endereco.uf && `/${endereco.uf}`}
+                      {endereco.cep && ` · CEP ${endereco.cep}`}
+                    </p>
+                    {(endereco.data_agendada || endereco.periodo || endereco.hora_agendada) && (
+                      <p className="text-xs text-foreground/80 mt-1">
+                        {endereco.data_agendada && endereco.data_agendada.split('-').reverse().join('/')}
+                        {(endereco.periodo || endereco.hora_agendada) && ` · ${endereco.periodo || endereco.hora_agendada}`}
+                      </p>
+                    )}
+                  </>
+                ) : isAtendimentoBase ? (
+                  <p className="font-medium text-foreground">Pratic Sede — atendimento na Base</p>
+                ) : (
+                  <p className="text-muted-foreground italic">Sem instalação vinculada</p>
                 )}
-              </>
-            ) : (
-              <p className="text-muted-foreground italic">Sem instalação vinculada</p>
-            )}
-          </div>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
