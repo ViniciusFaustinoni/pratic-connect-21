@@ -155,6 +155,12 @@ export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar 
               {status.icon}
               <span className="ml-1">{status.label}</span>
             </Badge>
+
+            {isReenviado && (
+              <Badge className="text-xs bg-warning/20 text-warning border-warning/30">
+                Reenviado p/ reanálise
+              </Badge>
+            )}
           </div>
 
           {/* Data de envio */}
