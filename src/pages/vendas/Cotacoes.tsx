@@ -42,6 +42,7 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
 // gerarPdfCotacao* importados dinamicamente no handler (evita 54KB no bundle inicial)
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
+import { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacoesFiltrosSheet } from '@/components/cotacoes/CotacoesFiltrosSheet';
 import { CotacoesActiveFiltersChips } from '@/components/cotacoes/CotacoesActiveFiltersChips';
@@ -296,20 +297,13 @@ export default function Cotacoes() {
 
       let matchesEtapa = true;
       if (etapaFunilFilter !== 'all') {
-        const sc = cotacao.status_contratacao || '';
-        const st = cotacao.status;
-        switch (etapaFunilFilter) {
-          case 'rascunho': matchesEtapa = st === 'rascunho'; break;
-          case 'enviada': matchesEtapa = st === 'enviada' && !sc; break;
-          case 'escolhendo_plano': matchesEtapa = ['escolhendo_plano', 'plano_escolhido'].includes(sc); break;
-          case 'enviando_documentos': matchesEtapa = ['enviando_documentos', 'dados_preenchidos'].includes(sc); break;
-          case 'em_analise': matchesEtapa = sc === 'em_analise'; break;
-          case 'assinando_contrato': matchesEtapa = sc === 'assinando_contrato'; break;
-          case 'pagando_taxa': matchesEtapa = sc === 'pagando_taxa'; break;
-          case 'agendando_vistoria': matchesEtapa = sc === 'agendando_vistoria'; break;
-          case 'concluido': matchesEtapa = st === 'aceita' || sc === 'concluido'; break;
-          case 'perdida': matchesEtapa = ['recusada', 'expirada'].includes(st); break;
-          default: matchesEtapa = true;
+        if (etapaFunilFilter === 'rascunho') {
+          // Rascunho puro = sem etapa derivada
+          matchesEtapa = cotacao.status === 'rascunho' && getEtapaVenda(cotacao) === null;
+        } else if (etapaFunilFilter === 'expirada') {
+          matchesEtapa = cotacao.status === 'expirada';
+        } else {
+          matchesEtapa = getEtapaVenda(cotacao) === (etapaFunilFilter as EtapaVenda);
         }
       }
 
@@ -981,22 +975,36 @@ export default function Cotacoes() {
           )}
 
           <Select value={etapaFunilFilter} onValueChange={setEtapaFunilFilter}>
-            <SelectTrigger className="w-[200px] h-9 border-0 bg-background/80 shadow-sm">
+            <SelectTrigger className="w-[220px] h-9 border-0 bg-background/80 shadow-sm">
               <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Etapa do funil" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as etapas</SelectItem>
               <SelectItem value="rascunho">Rascunho</SelectItem>
-              <SelectItem value="enviada">Enviada — aguardando cliente</SelectItem>
-              <SelectItem value="escolhendo_plano">Escolhendo plano</SelectItem>
-              <SelectItem value="enviando_documentos">Enviando documentos</SelectItem>
-              <SelectItem value="em_analise">Documentos em análise</SelectItem>
-              <SelectItem value="assinando_contrato">Aguardando assinatura</SelectItem>
-              <SelectItem value="pagando_taxa">Pagando taxa</SelectItem>
-              <SelectItem value="agendando_vistoria">Agendando vistoria</SelectItem>
-              <SelectItem value="concluido">Convertida em associado</SelectItem>
-              <SelectItem value="perdida">Perdida / expirada</SelectItem>
+              {([
+                'cotacao_realizada',
+                'escolhendo_plano',
+                'enviando_documentos',
+                'escolha_vistoria',
+                'realizando_autovistoria',
+                'assinando_contrato',
+                'realizando_pagamento',
+                'aguardando_vistoria',
+                'vistoria_agendada',
+                'instalacao_agendada',
+                'realizando_vistoria',
+                'vistoria_realizada',
+                'em_analise',
+                'associado_ativo',
+                'veiculo_recusado',
+                'cancelado',
+              ] as EtapaVenda[]).map((etapa) => (
+                <SelectItem key={etapa} value={etapa}>
+                  {etapaVendaConfig[etapa].label}
+                </SelectItem>
+              ))}
+              <SelectItem value="expirada">Expirada</SelectItem>
             </SelectContent>
           </Select>
 
