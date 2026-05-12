@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useVendedores } from '@/hooks/useVendedores';
 import { TrocaTimelineDrawer } from '@/components/cotacoes/TrocaTimelineDrawer';
+import { ModalDetalhesSubstituicao } from '@/components/substituicao/ModalDetalhesSubstituicao';
 import { cn } from '@/lib/utils';
 
 function formatCurrency(value: number) {
@@ -75,6 +76,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
   const [tipoFilter, setTipoFilter] = useState<'all' | TipoOutroProcesso>('all');
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
   const [drawerItem, setDrawerItem] = useState<OutroProcessoItem | null>(null);
+  const [substItemId, setSubstItemId] = useState<string | null>(null);
   const [resendItem, setResendItem] = useState<OutroProcessoItem | null>(null);
 
   const enviarTermo = useEnviarTermoCancelamento();
@@ -106,7 +108,9 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
   const handleVerDetalhe = (item: OutroProcessoItem) => {
     if (item.tipo === 'troca_titularidade') {
       setDrawerItem(item);
-    } else {
+    } else if (item.tipo === 'substituicao_placa' && item.solicitacao_substituicao_id) {
+      setSubstItemId(item.solicitacao_substituicao_id);
+    } else if (item.cotacao_id) {
       navigate(`/vendas/cotacoes?cotacao=${item.cotacao_id}`);
     }
   };
@@ -329,6 +333,12 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
         onOpenChange={(v) => !v && setDrawerItem(null)}
         onResend={(it) => setResendItem(it)}
         isResending={enviarTermo.isPending}
+      />
+
+      <ModalDetalhesSubstituicao
+        solicitacaoId={substItemId}
+        open={!!substItemId}
+        onOpenChange={(v) => !v && setSubstItemId(null)}
       />
 
       <AlertDialog open={!!resendItem} onOpenChange={(v) => !v && setResendItem(null)}>
