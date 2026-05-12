@@ -646,14 +646,14 @@ serve(async (req) => {
     }
 
     const mensagemRetorno = jaTemInstalacaoConcluida
-      ? 'Proposta aprovada! Instalação já concluída. Proteção 360º ativada.'
+      ? 'Cadastro documental aprovado! Instalação já concluída. Proteção 360º ativada.'
       : !planoTemRouboFurto
-        ? 'Proposta aprovada! Plano de assistência ativado (sem cobertura de Roubo/Furto).'
+        ? 'Cadastro documental aprovado! Enviado para o Monitoramento para ativação.'
         : algumPrecisouRastreador
           ? (autovistoriaAprovada
-              ? 'Análise documental aprovada! Cobertura Roubo/Furto liberada. Aguardando agendamento da instalação para Proteção 360º.'
-              : 'Análise documental aprovada! Aguardando o cliente concluir a autovistoria para liberar a Cobertura Roubo/Furto.')
-          : 'Proposta aprovada! Proteção 360° ativada (sem necessidade de rastreador).';
+              ? 'Cadastro documental aprovado! Cobertura R/F liberada. Enviado para o Monitoramento agendar a instalação.'
+              : 'Cadastro documental aprovado! Enviado para o Monitoramento — ativação completa (incluindo Roubo/Furto) ocorrerá após conclusão do Monitoramento.')
+          : 'Cadastro documental aprovado! Enviado para o Monitoramento para ativação.';
 
     console.log('[aprovar-proposta] Concluído:', mensagemRetorno);
 
