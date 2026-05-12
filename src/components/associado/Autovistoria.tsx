@@ -225,12 +225,29 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         toast.success(`Foto "${fotoAtual.label}" enviada com sucesso!`);
       }
       
+      // OCR de placa (6 fotos exteriores)
+      let bloqueadoPorPlaca = false;
+      const placaOcr = (result as any).placaOcr;
+      if (placaOcr) {
+        setPlacaOcrPorFoto(prev => ({ ...prev, [fotoAtual.id]: placaOcr }));
+        if (placaOcr.skipped) {
+          // 0KM ou sem placa real
+        } else if (!placaOcr.legivel) {
+          setPlacaMismatch(null);
+          toast.warning('Não conseguimos ler a placa nesta foto. Refaça com a placa nítida.', { duration: 6000 });
+          bloqueadoPorPlaca = true;
+        } else if (!placaOcr.match) {
+          setPlacaMismatch(`Placa lida (${placaOcr.placa || 'desconhecida'}) diferente da placa cadastrada.`);
+          toast.error('Placa não confere com o veículo cadastrado.', { duration: 8000 });
+          bloqueadoPorPlaca = true;
+        } else {
+          setPlacaMismatch(null);
+        }
+      }
+
       // Avançar automaticamente para a próxima foto após sucesso
-      // (exceto se for odômetro com OCR falho — usuário precisa preencher KM manual)
-      if (!isUltimaFoto && !(fotoAtual.id === 'odometro' && (result as any).ocrFalhou)) {
-        setTimeout(() => {
-          avancarFoto();
-        }, 500);
+      if (!isUltimaFoto && !(fotoAtual.id === 'odometro' && (result as any).ocrFalhou) && !bloqueadoPorPlaca) {
+        setTimeout(() => avancarFoto(), 500);
       }
     } catch (error: any) {
       console.error('[Autovistoria] Erro no upload:', error);
