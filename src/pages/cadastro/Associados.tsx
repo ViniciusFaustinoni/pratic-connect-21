@@ -539,7 +539,7 @@ export default function Associados() {
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors peer-focus:text-primary" />
             <Input
-              placeholder="Buscar por nome, CPF, telefone ou placa..."
+              placeholder="Buscar por nome, CPF, telefone, placa ou chassi..."
               className="pl-9 bg-card peer"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
