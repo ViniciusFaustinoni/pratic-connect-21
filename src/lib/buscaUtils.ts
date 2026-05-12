@@ -54,7 +54,14 @@ export function normalizarBusca(termo: string): BuscaNormalizada {
       ? placaCandidata
       : null;
 
-  return { raw, digits, cpfFormatado, telefoneFormatado, placa, placaForte };
+  // Chassi (VIN): 4–17 alfanuméricos. Superset de placa.
+  const chassi = placaCandidata.length >= 4 && placaCandidata.length <= 17 ? placaCandidata : null;
+  const chassiForte =
+    chassi && temLetra && temDigito && placaCandidata.length > 8 && placaCandidata.length <= 17
+      ? placaCandidata
+      : null;
+
+  return { raw, digits, cpfFormatado, telefoneFormatado, placa, placaForte, chassi, chassiForte };
 }
 
 /**
