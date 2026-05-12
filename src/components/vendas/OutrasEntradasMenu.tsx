@@ -22,7 +22,7 @@ import { maskCPF } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-type EntradaTipo = 'substituicao' | 'troca_titularidade' | 'migracao' | 'inclusao';
+type EntradaTipo = 'substituicao' | 'troca_titularidade' | 'migracao';
 
 interface EntradaOption {
   key: EntradaTipo;
