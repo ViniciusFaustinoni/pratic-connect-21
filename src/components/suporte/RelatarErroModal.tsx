@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Bug, Upload, X, Image as ImageIcon, FileText, Lightbulb, AlertCircle } from 'lucide-react';
+import { Bug, Upload, X, Image as ImageIcon, FileText, Lightbulb, AlertCircle, ClipboardPaste } from 'lucide-react';
 import { useCreateErrorReport } from '@/hooks/useErrorReports';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -42,6 +42,59 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
       valid.push(f);
     }
     setFiles((prev) => [...prev, ...valid].slice(0, MAX_FILES));
+  };
+
+  const addImageFile = (blob: Blob, ext = 'png') => {
+    const file = new File([blob], `colado-${Date.now()}.${ext}`, { type: blob.type || 'image/png' });
+    handleFiles({ 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList);
+  };
+
+  // Ctrl+V global enquanto o modal estiver aberto
+  useEffect(() => {
+    if (!open) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      let pasted = 0;
+      for (const it of Array.from(items)) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const blob = it.getAsFile();
+          if (blob) {
+            addImageFile(blob, (it.type.split('/')[1] || 'png').toLowerCase());
+            pasted++;
+          }
+        }
+      }
+      if (pasted > 0) {
+        e.preventDefault();
+        toast.success(`${pasted} imagem${pasted > 1 ? 'ns' : ''} colada${pasted > 1 ? 's' : ''}`);
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [open]);
+
+  const colarDaAreaTransferencia = async () => {
+    try {
+      if (!navigator.clipboard || !('read' in navigator.clipboard)) {
+        toast.info('Use Ctrl+V para colar a imagem aqui');
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      let pasted = 0;
+      for (const item of items) {
+        const imgType = item.types.find((t) => t.startsWith('image/'));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          addImageFile(blob, (imgType.split('/')[1] || 'png').toLowerCase());
+          pasted++;
+        }
+      }
+      if (pasted === 0) toast.info('Nenhuma imagem encontrada na área de transferência');
+      else toast.success(`${pasted} imagem${pasted > 1 ? 'ns' : ''} colada${pasted > 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.info('Permissão negada. Use Ctrl+V para colar.');
+    }
   };
 
   const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
@@ -132,21 +185,32 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
 
           <div className="space-y-1.5">
             <Label>Anexos do erro (prints ou PDF) <span className="text-destructive">*</span></Label>
-            <label
-              htmlFor="erro-files"
-              className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors"
-            >
-              <Upload className="h-5 w-5" />
-              <span className="text-sm">Clique para anexar imagens ou PDF (até {MAX_FILES} arquivos, 10MB cada)</span>
-              <input
-                id="erro-files"
-                type="file"
-                multiple
-                accept="image/*,application/pdf"
-                className="hidden"
-                onChange={(e) => handleFiles(e.target.files)}
-              />
-            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label
+                htmlFor="erro-files"
+                className="flex-1 flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors"
+              >
+                <Upload className="h-5 w-5" />
+                <span className="text-sm text-center">Clique, <strong>cole (Ctrl+V)</strong> ou anexe imagens/PDF (até {MAX_FILES} arquivos, 10MB cada)</span>
+                <input
+                  id="erro-files"
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={colarDaAreaTransferencia}
+                className="sm:self-stretch sm:h-auto gap-2"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+                Colar
+              </Button>
+            </div>
             {files.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 Anexe pelo menos 1 arquivo — print da tela é o ideal, mas PDF também é aceito.
