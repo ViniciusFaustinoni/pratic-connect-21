@@ -151,10 +151,17 @@ export default function PropostasPendentes() {
   // então usamos os dados já filtrados pela lista para evitar divergência).
   const stats = (() => {
     if (!propostas) return statsRaw;
-    const aguardando = propostas.filter(p => p.status === 'assinado').length;
+    const isPendVist = (p: PropostaPendente) =>
+      p.status === 'assinado' &&
+      p.cadastro_aprovado === true &&
+      p.tipo_vistoria !== 'autovistoria' &&
+      (!p.instalacao_info || p.instalacao_info.status !== 'concluida');
+    const aguardando = propostas.filter(p => p.status === 'assinado' && !isPendVist(p)).length;
+    const pendVistoria = propostas.filter(isPendVist).length;
     const emAnalise = propostas.filter(p => p.status === 'em_analise').length;
     return {
       aguardando,
+      pendVistoria,
       emAnalise,
       aprovadosHoje: statsRaw?.aprovadosHoje || 0,
       reprovadosHoje: statsRaw?.reprovadosHoje || 0,
@@ -216,7 +223,25 @@ export default function PropostasPendentes() {
         proposta.cliente_cpf?.includes(search) ||
         proposta.veiculo_placa?.toLowerCase().includes(searchLower) ||
         proposta.veiculo_chassi?.toLowerCase().includes(searchLower);
-      const matchStatus = statusFilter === 'todos' || proposta.status === statusFilter;
+      // "Pend. Vistoria" é um status derivado (mesmo predicado do badge "Pendente Vistoria Inicial"):
+      // contrato assinado + cadastro aprovado + cenário NÃO autovistoria + instalação não concluída.
+      const isPendenteVistoria =
+        proposta.status === 'assinado' &&
+        proposta.cadastro_aprovado === true &&
+        proposta.tipo_vistoria !== 'autovistoria' &&
+        (!proposta.instalacao_info || proposta.instalacao_info.status !== 'concluida');
+
+      let matchStatus = true;
+      if (statusFilter === 'todos') {
+        matchStatus = true;
+      } else if (statusFilter === 'pendente_vistoria') {
+        matchStatus = isPendenteVistoria;
+      } else if (statusFilter === 'assinado') {
+        // "Aguardando" exclui as que já caíram no bucket Pend. Vistoria, evitando contagem duplicada visual.
+        matchStatus = proposta.status === 'assinado' && !isPendenteVistoria;
+      } else {
+        matchStatus = proposta.status === statusFilter;
+      }
       return matchSearch && matchStatus;
     })
     ?.sort((a, b) => {
