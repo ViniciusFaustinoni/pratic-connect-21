@@ -436,7 +436,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         </div>
 
         {/* Quilometragem Identificada (se for odômetro) */}
-        {fotoAtual.id === 'odometro' && kmIdentificado && (
+        {(fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado') && kmIdentificado && (
           <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg flex items-center gap-3 border border-blue-200 dark:border-blue-900">
             <Gauge className="h-5 w-5 text-blue-500" />
             <div>
