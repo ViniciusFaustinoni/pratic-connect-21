@@ -1,32 +1,37 @@
+# Plano para corrigir o badge de Propostas Pendentes
+
 ## Objetivo
+Fazer o número exibido no menu lateral de **Propostas Pendentes** refletir exatamente a mesma fila mostrada em **Cadastro > Propostas Pendentes**.
 
-Permitir busca por **chassi** na tela `Cadastro › Associados`, junto com os filtros já existentes (nome, CPF, telefone, placa).
+## O que vou fazer
+1. **Mapear a origem da divergência**
+   - O badge atual usa `usePropostasPendentesCount()` e conta todos os contratos com `status = 'assinado'`.
+   - A tela `/cadastro/propostas` usa `usePropostasPendentes()` e remove itens já concluídos, já aprovados na autovistoria, com instalação concluída ou já fora da fila operacional.
 
-## Mudanças
+2. **Unificar a lógica de contagem com a lógica da lista**
+   - Ajustar o badge para usar a mesma fonte da lista, evitando contagem simplificada por status bruto.
+   - Preferência: reutilizar `usePropostasPendentes()` e derivar `length` para o sidebar, ou extrair uma base compartilhada para que lista e badge dependam da mesma regra.
 
-### 1. `src/lib/buscaUtils.ts`
-- Adicionar dois campos ao retorno de `normalizarBusca`:
-  - `chassi: string | null` — alfanumérico uppercase com 4–17 chars (superset que cobre placa e chassi parcial/completo).
-  - `chassiForte: string | null` — quando o termo tem >8 chars alfanuméricos com letras+dígitos (claramente chassi, não placa nem CPF).
-- Atualizar a interface `BuscaNormalizada`.
+3. **Preservar performance e consistência**
+   - Garantir que a solução use React Query de forma reaproveitável, sem duplicar consultas pesadas desnecessariamente.
+   - Manter invalidação/refetch coerentes para que badge e tela atualizem juntos.
 
-### 2. `src/hooks/useAssociados.ts`
-Bloco `if (filters?.search)`:
-- Renomear `associadoIdsByPlaca` → `associadoIdsByVeiculo`.
-- Substituir o lookup em `veiculos` por uma única query com `.or('placa.ilike.%X%,chassi.ilike.%X%')` quando `placa` OU `chassi` estiverem presentes (passando os respectivos termos normalizados).
-- Ramo `placaForte || chassiForte`: mantém restrição a `nome + id.in(...)` (evita falso positivo em CPF/telefone). Se nenhum veículo casar, mantém o sentinela `id.eq.00000000-...`.
-- Ramo padrão: continua adicionando `id.in.(...)` quando houver matches.
+4. **Validar o resultado**
+   - Conferir que o badge do menu passa a bater com a quantidade real da tela.
+   - Verificar especialmente o caso reportado: sidebar mostrando 80 enquanto a lista mostra 27.
 
-### 3. `src/pages/cadastro/Associados.tsx` (linha 542)
-- Placeholder do input: `"Buscar por nome, CPF, telefone, placa ou chassi..."`.
+## Resultado esperado
+- O badge do sidebar exibirá o número real da fila de Cadastro.
+- Não haverá mais diferença entre o total do menu e o total exibido na página.
 
-## Fora do escopo
-- Outras telas que usam o mesmo placeholder/hook (manter foco em Associados — útil ressaltar se quiser propagar depois).
-- Mudanças em índices do Postgres (chassi já tem índice na maioria dos cenários — verificar somente se houver lentidão real).
-- Nova UI de filtro avançado.
-
-## Verificação
-- Buscar pelos últimos 6 dígitos do chassi de um associado conhecido → retorna o associado.
-- Buscar pelo chassi completo (17 chars) → retorna o associado.
-- Buscar uma placa existente → continua funcionando.
-- Buscar um CPF parcial de 3+ dígitos → continua funcionando (sem ser confundido com chassi).
+## Detalhes técnicos
+- Arquivos já identificados:
+  - `src/hooks/usePropostasPendentesCount.ts`
+  - `src/hooks/usePropostasPendentes.ts`
+  - `src/components/layout/AppSidebar.tsx`
+- Causa encontrada:
+  - `usePropostasPendentesCount()` faz apenas `.eq('status', 'assinado')` em `contratos`.
+  - `usePropostasPendentes()` aplica a regra completa de negócio da fila antes de montar a lista.
+- Direção da correção:
+  - Eliminar a contagem “bruta” por status para esse badge.
+  - Fazer o badge depender da mesma regra de filtragem já usada pela tela.
