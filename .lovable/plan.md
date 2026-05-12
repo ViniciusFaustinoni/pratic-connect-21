@@ -1,39 +1,44 @@
-## Problema
+## Diagnóstico — KOU6D37
 
-No `VideoCapture.tsx` (usado em Vistoria 360°, Instalação e Manutenção do app do instalador), o preview da câmera ao vivo e o player do vídeo já gravado usam `aspect-video` (16:9). Em celular no modo retrato, isso resulta em uma faixa horizontal pequena (~30% da tela), exatamente como mostra o screenshot enviado.
+**Fato técnico:**
+- Veículo `KOU6D37` (Ford Fiesta, FIPE R$ 30.835) tem **1 único serviço concluído** na tabela `servicos`:
+  - `tipo = 'vistoria_entrada'`
+  - `status = 'concluida'`
+  - `decisao_instalador = 'aprovado'`
+  - `concluida_em = 2026-05-12 21:53`
+- Estado atual: `veiculos.status = instalacao_pendente`, `contratos.cadastro_aprovado = true`, `associados.status = aguardando_instalacao`.
 
-## Solução
+**Por que foi para "Propostas Pendentes" (Cadastro) e não para "Aprovação de Associados" (Monitoramento):**
 
-Trocar o contêiner de preview por uma área **vertical grande**, ocupando a maior parte da tela durante a gravação e revisão, sem mexer em qualquer lógica de captura, upload ou compressão.
+A fila **Aprovação de Associados** (`useInstalacoesAguardandoAprovacao` + `useInstalacoesAguardandoAtivacao` + `useAprovacoesMonitoramentoCount`) filtra **estritamente por `tipo = 'instalacao'`**. Como o serviço executado em campo foi `vistoria_entrada` (Vistoria Base), ele **nunca aparece** nessa fila.
 
-### Mudanças no `src/components/instalador/VideoCapture.tsx`
+Com isso o card permanece em **Cadastro › Propostas Pendentes** com o badge "Pendente Vistoria Inicial" (regra `propostas-pendentes-saida-por-vistoria`: cadastro só sai quando há **instalação concluída**), embora a vistoria já tenha sido aprovada pelo instalador.
 
-1. **Contêiner principal do preview** (hoje `aspect-video`):
-   - Trocar para `aspect-[3/4] sm:aspect-video` com `min-h-[60vh] sm:min-h-0` para que no celular ocupe ~60% da altura visível (≈ 3x a área atual) e no desktop mantenha 16:9.
-   - Manter `object-cover` no `<video>` ao vivo e `object-contain` no player de revisão.
+Isso é exatamente o gap entre duas regras documentadas:
+1. `base-nao-duplica-instalacao` — quando há Vistoria Base, **não** se cria `tipo='instalacao'` paralelo.
+2. `vistoria-sem-rastreador-flow` / `propostas-pendentes-saida-por-vistoria` — vistoria concluída **deve** cair em fila de aprovação manual do Monitoramento.
 
-2. **Modo gravação imersivo (opcional, dentro do mesmo contêiner)**:
-   - Quando `isRecording === true`, aplicar `fixed inset-0 z-50 rounded-none` no contêiner para virar tela cheia "estilo câmera nativa", com HUDs (timer no topo, botão Parar no rodapé) já existentes — só precisam dos paddings de safe-area (`pt-[env(safe-area-inset-top)]`, `pb-[env(safe-area-inset-bottom)]`).
-   - Sair do fullscreen automaticamente em `stopRecording`.
+Resultado: nenhum registro `tipo='instalacao'` existe → as filas de Monitoramento não enxergam o caso → o associado fica preso em "Propostas Pendentes".
 
-3. **HUD do botão "Parar Gravação"**:
-   - Aumentar para `size="lg"` e botão circular vermelho (mais visível em fullscreen), mantendo o handler atual `stopRecording`.
+## Plano de correção
 
-4. **Player de revisão (`hasVideo && !isRecording`)**:
-   - Manter o mesmo contêiner ampliado (mesma `aspect-[3/4]` + `min-h-[60vh]`), garantindo que o técnico revise o vídeo no mesmo tamanho em que foi gravado.
+**Escopo:** ajustar somente o filtro das filas/contadores do Monitoramento. Não mexer em triggers, não criar serviço fantasma, não alterar regra de "Propostas Pendentes".
 
-### O que NÃO muda
+### 1. `src/hooks/useAprovacaoMonitoramento.ts`
+Trocar `.eq('tipo', 'instalacao')` por `.in('tipo', ['instalacao', 'vistoria_entrada'])` nas duas queries (lista de pendentes e contagem do header).
 
-- `getUserMedia`, `MediaRecorder`, bitrate adaptativo, fallback sem áudio, lógica de upload/confirmação, revogação de blob, detecção de in-app browser e mensagens de erro permanecem intactos.
-- Estados, refs e efeitos do componente (incluindo o attach do stream via `useEffect`) ficam idênticos.
-- Nenhuma alteração nos componentes que consomem `VideoCapture` (`VistoriaFotoSequencial`, `FotosManutencao`, fluxo de instalação) — a API do componente não muda.
+### 2. `src/hooks/useVistoriaCompletaAnalise.ts` (linha 308)
+Mesma substituição na query que monta os itens "ativacao" da fila.
 
-## Arquivo afetado
+### 3. `src/hooks/useAprovacoesMonitoramentoCount.ts`
+Atualizar o bloco "Aprovação de Associados" para considerar também `tipo='vistoria_entrada'` concluída com veículo ainda sem `cobertura_total` e associado não ativo.
 
-- `src/components/instalador/VideoCapture.tsx` (apenas classes Tailwind do contêiner e do HUD)
+### 4. Reconciliação imediata do KOU6D37
+Após o ajuste, o card aparecerá automaticamente na aba **Monitoramento › Aprovações › Aprovação de Associados**. O Coordenador aprova → trigger `fn_reativar_cobertura_pos_instalacao` + `ativar-associado` promovem associado/veículo para `ativo` (ver memória `single-source-activation`).
 
-## Validação
+### 5. Validação
+- `psql`/`read_query`: confirmar que o item passa a aparecer no resultado da query da fila.
+- UI: abrir `/monitoramento/aprovacoes#associados` logado como diretor e verificar o card.
 
-- Preview no celular (Moto G 15, viewport ~360×800): área de gravação passa de ~200px para ~480px de altura.
-- Em modo paisagem/desktop: continua 16:9 sem distorção.
-- Gravação, parar, revisar, gravar novamente e enviar funcionam igual ao fluxo atual.
+### Observação
+Não criar registro `tipo='instalacao'` retroativo — violaria `base-nao-duplica-instalacao` e poderia disparar triggers indevidos. A fila precisa enxergar o tipo correto.
