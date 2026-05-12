@@ -297,20 +297,13 @@ export default function Cotacoes() {
 
       let matchesEtapa = true;
       if (etapaFunilFilter !== 'all') {
-        const sc = cotacao.status_contratacao || '';
-        const st = cotacao.status;
-        switch (etapaFunilFilter) {
-          case 'rascunho': matchesEtapa = st === 'rascunho'; break;
-          case 'enviada': matchesEtapa = st === 'enviada' && !sc; break;
-          case 'escolhendo_plano': matchesEtapa = ['escolhendo_plano', 'plano_escolhido'].includes(sc); break;
-          case 'enviando_documentos': matchesEtapa = ['enviando_documentos', 'dados_preenchidos'].includes(sc); break;
-          case 'em_analise': matchesEtapa = sc === 'em_analise'; break;
-          case 'assinando_contrato': matchesEtapa = sc === 'assinando_contrato'; break;
-          case 'pagando_taxa': matchesEtapa = sc === 'pagando_taxa'; break;
-          case 'agendando_vistoria': matchesEtapa = sc === 'agendando_vistoria'; break;
-          case 'concluido': matchesEtapa = st === 'aceita' || sc === 'concluido'; break;
-          case 'perdida': matchesEtapa = ['recusada', 'expirada'].includes(st); break;
-          default: matchesEtapa = true;
+        if (etapaFunilFilter === 'rascunho') {
+          // Rascunho puro = sem etapa derivada
+          matchesEtapa = cotacao.status === 'rascunho' && getEtapaVenda(cotacao) === null;
+        } else if (etapaFunilFilter === 'expirada') {
+          matchesEtapa = cotacao.status === 'expirada';
+        } else {
+          matchesEtapa = getEtapaVenda(cotacao) === (etapaFunilFilter as EtapaVenda);
         }
       }
 
