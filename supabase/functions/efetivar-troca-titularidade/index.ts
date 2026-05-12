@@ -465,6 +465,26 @@ serve(async (req) => {
       dados: { cenario, contrato_anterior_id: contratoAnterior?.id, solicitacao_id },
     });
 
+    // 8.1 Inativar antigo proprietário se ficou sem vínculos ativos
+    try {
+      const { data: inativado, error: inatErr } = await supabase.rpc(
+        "fn_inativar_associado_se_orfao",
+        {
+          _associado_id: solicitacao.associado_id,
+          _motivo: `Troca de titularidade efetivada (Cenário ${cenario}) — sem vínculos ativos restantes`,
+        },
+      );
+      if (inatErr) {
+        console.warn("[efetivar-troca] fn_inativar_associado_se_orfao:", inatErr.message);
+      } else {
+        console.log(
+          `[efetivar-troca] Antigo proprietário ${solicitacao.associado_id}: ${inativado ? "inativado (sem vínculos)" : "mantido ativo (ainda possui vínculos)"}`,
+        );
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca] erro inativação antigo:", (e as Error)?.message);
+    }
+
     // 9. Sincronizar/Criar cliente ASAAS
     let asaasOk = false;
     try {
