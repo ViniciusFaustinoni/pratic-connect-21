@@ -366,6 +366,32 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      // ── SUBSTITUIÇÃO DE PLACA ─────────────────────────────────────────
+      const { data: solSubst } = await supabase
+        .from('solicitacoes_substituicao_placa')
+        .select('id, status, termo_cancelamento_assinado_em, veiculo_antigo_id')
+        .eq('termo_cancelamento_autentique_id', documentId)
+        .maybeSingle();
+      if (solSubst) {
+        const wasSigned = (eventType === 'signature.accepted') ||
+          (eventType === 'signature.updated' && payload.event?.data?.signed);
+        if (wasSigned && !solSubst.termo_cancelamento_assinado_em) {
+          await supabase
+            .from('solicitacoes_substituicao_placa')
+            .update({
+              termo_cancelamento_assinado_em: payload.event?.data?.signed || new Date().toISOString(),
+              status: 'termo_assinado',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', solSubst.id);
+          console.log('[autentique-webhook] ✓ Termo de cancelamento de SUBSTITUIÇÃO assinado para', solSubst.id);
+        }
+        return new Response(JSON.stringify({ received: true, substituicao_placa: solSubst.id }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // FALLBACK: Se não encontrou pelo documento_id, tentar buscar por email do signatário
