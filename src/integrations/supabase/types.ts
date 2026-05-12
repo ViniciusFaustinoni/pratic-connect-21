@@ -28939,6 +28939,189 @@ export type Database = {
         }
         Relationships: []
       }
+      solicitacoes_substituicao_placa: {
+        Row: {
+          associado_id: string | null
+          associado_snapshot: Json
+          cancelada_em: string | null
+          consultor_id: string | null
+          cotacao_id: string | null
+          created_at: string
+          criado_por: string | null
+          efetivada_em: string | null
+          id: string
+          motivo_cancelamento: string | null
+          observacoes: string | null
+          sga_codigo_associado: number | null
+          sga_codigo_veiculo: number | null
+          status: string
+          termo_cancelamento_assinado_em: string | null
+          termo_cancelamento_autentique_id: string | null
+          termo_cancelamento_enviado_em: string | null
+          termo_cancelamento_url: string | null
+          termo_reenvios_count: number
+          termo_ultimo_reenvio_em: string | null
+          termo_whatsapp_status: string | null
+          updated_at: string
+          veiculo_antigo_id: string | null
+          veiculo_antigo_placa: string
+          veiculo_antigo_snapshot: Json
+        }
+        Insert: {
+          associado_id?: string | null
+          associado_snapshot?: Json
+          cancelada_em?: string | null
+          consultor_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          efetivada_em?: string | null
+          id?: string
+          motivo_cancelamento?: string | null
+          observacoes?: string | null
+          sga_codigo_associado?: number | null
+          sga_codigo_veiculo?: number | null
+          status?: string
+          termo_cancelamento_assinado_em?: string | null
+          termo_cancelamento_autentique_id?: string | null
+          termo_cancelamento_enviado_em?: string | null
+          termo_cancelamento_url?: string | null
+          termo_reenvios_count?: number
+          termo_ultimo_reenvio_em?: string | null
+          termo_whatsapp_status?: string | null
+          updated_at?: string
+          veiculo_antigo_id?: string | null
+          veiculo_antigo_placa: string
+          veiculo_antigo_snapshot?: Json
+        }
+        Update: {
+          associado_id?: string | null
+          associado_snapshot?: Json
+          cancelada_em?: string | null
+          consultor_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          efetivada_em?: string | null
+          id?: string
+          motivo_cancelamento?: string | null
+          observacoes?: string | null
+          sga_codigo_associado?: number | null
+          sga_codigo_veiculo?: number | null
+          status?: string
+          termo_cancelamento_assinado_em?: string | null
+          termo_cancelamento_autentique_id?: string | null
+          termo_cancelamento_enviado_em?: string | null
+          termo_cancelamento_url?: string | null
+          termo_reenvios_count?: number
+          termo_ultimo_reenvio_em?: string | null
+          termo_whatsapp_status?: string | null
+          updated_at?: string
+          veiculo_antigo_id?: string | null
+          veiculo_antigo_placa?: string
+          veiculo_antigo_snapshot?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["cotacao_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_substituicao_placa_veiculo_antigo_id_fkey"
+            columns: ["veiculo_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       solicitacoes_troca_titularidade: {
         Row: {
           analise_previa_em: string | null

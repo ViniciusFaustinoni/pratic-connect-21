@@ -1,77 +1,104 @@
-# Análise prévia SGA do novo titular — antes da aprovação do Cadastro
 
-## Contexto
+## Objetivo
 
-Hoje o sistema só consulta o SGA para o novo titular **depois** que o Cadastro aprova a troca (a chamada roda em background dentro de `aprovar-troca-cadastro`). Ou seja, o Cadastro decide **às cegas**. A aba "Análise prévia" no `ModalDetalhesTroca` já existe mas mostra JSON cru.
+Hoje, ao escolher "Substituição de Placa" em **Outras Entradas**, o sistema busca a placa no SGA e já joga o consultor direto no Cotador. Falta a etapa intermediária de **solicitação** com **termo de cancelamento do veículo antigo** antes de gerar a nova cotação — exatamente como já existe na Troca de Titularidade.
 
-Vamos inverter: rodar a consulta **assim que o modal abre** em `aguardando_cadastro` (e em `cotacao_em_andamento`, para já estar pronto), exibir um card formatado com dados pessoais + situação financeira (boletos em aberto), e tratar explicitamente o caso "não está na base SGA".
+A proposta é replicar o padrão da troca de titularidade para substituição, sem duplicar o que já existe.
 
-Bom: a edge function `sga-buscar-associado-completo` **já retorna tudo o que precisamos** numa única chamada — dados do associado, veículos, boletos em aberto por veículo, saldo devedor agregado e flag `encontrado`. Não há nova edge function a criar nem migração de banco.
+## O que JÁ está pronto (reuso)
+
+- Busca por placa no SGA → `useBuscaPlaca` + edge `sga-buscar-associado-completo` (já retorna veículo, associado, boletos, débito)
+- Listagem em "Outros Processos" → `useOutrosProcessos` já tem `tipo: 'substituicao_placa'`
+- Geração de termo de cancelamento Autentique → edge `enviar-termo-cancelamento-troca` + função `autentique-cancelamento-create` (reutilizável; só precisa parametrizar)
+- Webhook Autentique já atualiza `termo_cancelamento_assinado_em` para troca — basta replicar gatilho para substituição
+- Cotador `/vendas/cotacoes?associado_id=...&tipo_entrada=substituicao&veiculo_antigo_id=...` já existe e gera link público com fluxo padrão (plano, filiação, docs, vistoria, pagamento)
+- Tabela `substituicoes_veiculo` existe mas é a tabela de **resultado** (mensalidade nova, contrato, taxa) — vamos manter o uso atual e criar uma tabela nova para a **solicitação**
 
 ## O que muda
 
-### 1. Edge function `aprovar-troca-cadastro/index.ts`
-- Mantém o snapshot pós-aprovação como fallback/idempotência.
-- Sem mudança funcional obrigatória; apenas garantir que se já existir snapshot recente (< 5min) **não** sobrescreve.
+### 1. Nova tabela `solicitacoes_substituicao_placa`
 
-### 2. Edge function nova: `analisar-novo-titular-troca`
-Endpoint chamado pelo modal ao abrir. Responsabilidades:
-- Receber `solicitacao_id`.
-- Validar que o usuário tem permissão (Cadastro/Monitoramento/Diretor).
-- Carregar `novo_titular_dados.cpf` da solicitação.
-- Consultar `associados` local por CPF (encontrado/não encontrado + status básico).
-- Invocar `sga-buscar-associado-completo` com `{ cpf }`.
-- Gravar resultado em `solicitacoes_troca_titularidade.analise_previa_resultado` + `analise_previa_em` (mesma coluna já usada hoje).
-- Cache: se `analise_previa_em` < 10 minutos atrás, retorna o snapshot existente sem nova chamada SGA (evita sobrecarga ao reabrir o modal).
-- Retorna `{ base_local, sga, gerado_em, do_cache }`.
+Espelhada em `solicitacoes_troca_titularidade`, com:
 
-### 3. Hook novo: `useAnalisePreviaSGA(solicitacaoId, enabled)`
-- React Query, `enabled` = modal aberto E status ∈ {`cotacao_em_andamento`, `aguardando_cadastro`, `aguardando_monitoramento`}.
-- `staleTime: 5min`, sem refetch on focus.
-- Chama a edge function nova via `supabase.functions.invoke`.
+- `associado_id` (uuid local, importado do SGA se preciso)
+- `sga_codigo_associado`, `sga_codigo_veiculo`
+- `veiculo_antigo_snapshot` (jsonb — placa, modelo, marca, fipe, cota, situacao vindo do SGA)
+- `associado_snapshot` (jsonb — nome, cpf, email, telefones, endereço)
+- `cotacao_id` (preenchido depois que o consultor cria a nova cotação)
+- `status`: `aguardando_termo` → `termo_enviado` → `termo_assinado` → `cotacao_criada` → `efetivada` / `cancelada`
+- `termo_cancelamento_autentique_id`, `termo_cancelamento_url`, `termo_cancelamento_enviado_em`, `termo_cancelamento_assinado_em`, `termo_whatsapp_status`, `termo_reenvios_count`
+- `criado_por`, `consultor_id`, `created_at`, `updated_at`
+- `motivo_cancelamento`, `cancelada_em`
 
-### 4. UI: `ModalDetalhesTroca.tsx` — aba "Análise prévia"
-Substituir o `<pre>JSON</pre>` atual por um componente novo `AnalisePreviaNovoTitularCard` com 3 estados:
+RLS: leitura para autenticados internos; escrita só por consultores/cadastro.
 
-**Carregando** — Skeleton + texto "Consultando base SGA Hinova…".
+### 2. Edge functions
 
-**Não encontrado no SGA** (`sga.encontrado === false`):
-- Alert neutro: ⚠️ *"CPF não encontrado na base SGA Hinova. O novo titular não é associado existente — o cadastro será criado do zero ao efetivar a troca."*
-- Mostra apenas `base_local` (se houver associado local com mesmo CPF, exibir como "Cadastro Lovable existente").
+- **`criar-solicitacao-substituicao`** (nova) — recebe `placa`, importa associado do SGA se não existir local (reutiliza `importar-associado-sga`), grava snapshot, cria registro com status `aguardando_termo`. Retorna `solicitacao_id`.
+- **`enviar-termo-cancelamento-substituicao`** (nova; clona `enviar-termo-cancelamento-troca`) — gera doc Autentique para o associado titular cancelando o veículo antigo. Atualiza `status='termo_enviado'`. Webhook Autentique existente passa a olhar essa tabela também e marcar `termo_assinado` quando assinado.
+- **`autentique-webhook`** (ajuste) — adiciona branch para a nova tabela.
+- Marca `veiculos.em_substituicao=true` no veículo antigo ao enviar termo (espelha padrão `em_troca_titularidade`) — protege contra outras operações concorrentes.
 
-**Encontrado no SGA**:
-- Cabeçalho: nome, CPF, código_associado, badge com `descricao_situacao` (verde se ATIVO, âmbar/vermelho caso contrário).
-- Seção **Dados pessoais**: email, telefone, endereço (se vierem), data nascimento, data cadastro.
-- Seção **Situação financeira**:
-  - Card destaque com `saldo_devedor_total` (verde se 0, vermelho se > 0).
-  - Lista de boletos em aberto (placa do veículo, vencimento, valor, situação) — agrupados por veículo.
-  - Se `tem_debito === true`: alerta âmbar "Associado possui pendências financeiras no SGA — avaliar antes de aprovar".
-- Seção **Veículos vinculados**: lista enxuta (placa, modelo, situação).
-- Rodapé: "Atualizado em {gerado_em} · [Atualizar agora]" (botão dispara refetch ignorando cache).
+### 3. UI — `OutrasEntradasMenu.tsx` (substituição)
 
-Botão **Aprovar** continua como hoje. Não há nova trava — a decisão é humana, baseada na visualização. (Se o usuário no futuro quiser bloquear aprovação quando `tem_debito === true`, fica para outro pedido.)
+Substituir o `handleProsseguir` atual (que navega direto para Cotador) por um **mini-fluxo em 2 telas dentro do próprio modal**:
 
-### 5. Sem alteração em
-- Banco de dados (coluna `analise_previa_resultado` já existe).
-- Fluxo Autentique (envio do termo ao novo titular continua disparado pelo fluxo público depois da aprovação Cadastro+Monitoramento).
-- Fluxo de aprovação Monitoramento.
+```text
+[busca placa SGA] → [card resumo: veículo + associado + situação financeira]
+                                                                         │
+                                                          [Criar Solicitação] (botão primário)
+                                                                         │
+                                  redireciona para /vendas/outros-processos?destacar={id}
+```
 
-## Fora de escopo
-- Bloquear aprovação automaticamente em caso de débito.
-- Mexer no termo de cancelamento do antigo titular.
-- Buscar histórico de sinistros do SGA.
+Mostra alerta amarelo se houver débitos (não bloqueia — confirmado pelo usuário).
 
-## Detalhes técnicos
+### 4. UI — `ModalDetalhesOutroProcesso` para substituição
 
-**Arquivos:**
-- `supabase/functions/analisar-novo-titular-troca/index.ts` (novo)
-- `src/hooks/useAnalisePreviaSGA.ts` (novo)
-- `src/components/troca-titularidade/AnalisePreviaNovoTitularCard.tsx` (novo)
-- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` (substituir conteúdo da aba `analise`)
+Hoje há `ModalDetalhesTroca`. Vamos criar **`ModalDetalhesSubstituicao`** (estrutura idêntica, layout reutilizando blocos):
 
-**Resposta da `sga-buscar-associado-completo` já contém:**
-`encontrado`, `codigo_associado`, `associado{nome,cpf,email,telefone}`, `veiculos[{placa, marca, modelo, ano, saldo_devedor, boletos_abertos[]}]`, `saldo_devedor_total`, `tem_debito`. Suficiente — não precisamos chamar `sga-listar-boletos-associado`.
+Aba **Resumo**:
+- Card "Associado" (nome, CPF, contatos, situação SGA)
+- Card "Veículo a substituir" (placa, modelo, FIPE, cota, mensalidade)
+- Card "Situação financeira" (boletos abertos via SGA — reaproveita `AnalisePreviaNovoTitularCard` adaptado)
 
-**Cache:** snapshot em `analise_previa_resultado` é fonte de verdade; reaberturas em < 10min usam cache. Botão "Atualizar agora" envia `{ force: true }`.
+Aba **Termo de Cancelamento**:
+- Estado `aguardando_termo` → botão **"Enviar Termo de Cancelamento do veículo {PLACA}"**
+- Estado `termo_enviado` → status + botão "Reenviar por WhatsApp", contador de reenvios, link Autentique
+- Estado `termo_assinado` → ✓ assinado em {data} + botão **"Criar Nova Cotação"** (verde, primário)
 
-**Tratamento de erro transitório:** quando `sga-buscar-associado-completo` retorna 503 com `erro_transitorio: true`, o card mostra alerta âmbar "SGA indisponível no momento — tente novamente em alguns minutos" e mantém botão de retry.
+Aba **Nova Cotação**:
+- Antes de criada: placeholder "Aguardando assinatura do termo"
+- Depois: card com link público da cotação + status (escolha de plano, termo filiação, docs, vistoria, pagamento) — reutiliza `CotacaoStatusCard`
+
+### 5. Botão "Criar Nova Cotação"
+
+Não cria entidade nova — apenas navega para o Cotador já existente, passando `solicitacao_substituicao_id` na URL além dos params atuais. O Cotador grava esse id em `cotacoes.dados_extras.solicitacao_substituicao_id`. Trigger atualiza a solicitação com `cotacao_id` e move status para `cotacao_criada`. Daí em diante o fluxo público é 100% o do Cotador (sem alteração).
+
+### 6. Hook `useOutrosProcessos`
+
+Atualizar a query para também ler de `solicitacoes_substituicao_placa` (LEFT JOIN), preenchendo `solicitacao_substituicao_id`, `termo_status`, `termo_url`, etc. Os campos da interface já existem genéricos — só mapear.
+
+## Fora do escopo
+
+- Não alteramos `substituicoes_veiculo` (continua sendo o registro de fechamento pós-pagamento)
+- Não mexemos no fluxo público do associado (escolha plano/filiação/docs/vistoria/pagamento)
+- Não bloqueamos por débito (decisão do usuário)
+- Sem aprovação Cadastro/Monitoramento entre termo assinado e nova cotação (decisão do usuário)
+
+## Arquivos a criar / editar
+
+**Novos:**
+- migration `solicitacoes_substituicao_placa` (tabela + RLS + trigger updated_at)
+- `supabase/functions/criar-solicitacao-substituicao/index.ts`
+- `supabase/functions/enviar-termo-cancelamento-substituicao/index.ts`
+- `src/hooks/useSolicitacoesSubstituicao.ts`
+- `src/components/substituicao/ModalDetalhesSubstituicao.tsx`
+- `src/components/substituicao/CardResumoSubstituicao.tsx` (etapa 2 do menu)
+
+**Editar:**
+- `src/components/vendas/OutrasEntradasMenu.tsx` — trocar `handleProsseguir` da substituição pelo novo fluxo de 2 etapas
+- `src/hooks/useOutrosProcessos.ts` — incluir join com a nova tabela
+- `src/pages/vendas/Cotacoes.tsx` (ou Cotador) — ler `solicitacao_substituicao_id` da URL e gravar em `dados_extras`
+- `supabase/functions/autentique-webhook/index.ts` — branch para nova tabela
+- Memória do projeto — registrar o novo fluxo
