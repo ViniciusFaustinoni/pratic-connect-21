@@ -161,8 +161,10 @@ export function VistoriaFotoSequencial({
             >
               {url ? (
                 <img
-                  src={url}
+                  src={transformedUrl(url, THUMB)}
                   alt=""
+                  width={40}
+                  height={40}
                   loading="lazy"
                   decoding="async"
                   className="w-full h-full object-cover"
