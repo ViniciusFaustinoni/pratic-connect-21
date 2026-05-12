@@ -248,8 +248,23 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     }
   };
 
+  const handleContinuar = () => {
+    if (vistoriaId) onComplete(vistoriaId);
+  };
 
-  // Se todas foram enviadas (fotos + vídeo), mostrar tela de conclusão
+  // Loading enquanto carrega vistoria existente
+  if (carregandoVistoria && !hidratado) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardContent className="pt-8 pb-8 flex flex-col items-center justify-center min-h-[300px]">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground">Carregando vistoria...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Se todas as fotos foram enviadas, mostrar tela de conclusão
   if (todasEnviadas) {
     return (
       <Card className="max-w-lg mx-auto">
