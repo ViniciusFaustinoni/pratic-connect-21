@@ -15,7 +15,6 @@ import {
   Info,
   X,
   RefreshCw,
-  Lightbulb,
   AlertTriangle,
   ScanLine,
 } from 'lucide-react';
