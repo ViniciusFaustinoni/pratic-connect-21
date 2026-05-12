@@ -254,36 +254,42 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     );
   }
 
-  
-  // ETAPA 2: Fotos (chassi + motor)
   return (
     <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
-      {/* Header com progresso */}
       <CardHeader className="pb-3 space-y-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Autovistoria</CardTitle>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
-            {fotosCompletadas}/{totalFotos} fotos • 1/1 vídeo
+            {fotosCompletadas}/{totalFotos} fotos
           </Badge>
         </div>
         <Progress value={progresso} className="h-2" />
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
-        {/* Vídeo OK indicator */}
-        <div className="flex items-center gap-2 bg-success/10 text-success rounded-lg p-2.5 border border-success/20">
-          <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-          <span className="text-sm font-medium">Vídeo 360° enviado</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto h-7 text-xs text-muted-foreground hover:text-foreground"
-            onClick={handleVideoReset}
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Regravar
-          </Button>
-        </div>
+        <InAppBrowserBanner persistent />
+
+        {capability.lowEnd && (
+          <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-900 dark:text-amber-200 flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+            <div className="space-y-1 text-sm">
+              <p className="font-semibold">Detectamos memória limitada neste aparelho</p>
+              <p className="text-xs leading-relaxed">
+                Para evitar travamentos, feche outros aplicativos antes de tirar as fotos.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {placaMismatch && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1 text-sm">
+              <p className="font-semibold">Placa não confere</p>
+              <p className="text-xs leading-relaxed">{placaMismatch}</p>
+            </div>
+          </div>
+        )}
 
         {/* Indicadores de fotos (miniaturas) */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
