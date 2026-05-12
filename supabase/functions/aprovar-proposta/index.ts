@@ -497,6 +497,27 @@ serve(async (req) => {
     }
 
     const deveAguardarInstalacao = algumPrecisouRastreador && !jaTemInstalacaoConcluida;
+
+    // Detectar se autovistoria/vistoria já foi aprovada antes da aprovação do Cadastro.
+    // Isso muda apenas a mensagem exibida — a ativação real de R/F é feita por
+    // processar-vistoria/ativar-associado.
+    let autovistoriaAprovada = false;
+    try {
+      let vistQuery = supabase
+        .from('vistorias')
+        .select('id, status')
+        .in('status', ['aprovada', 'aprovada_ressalvas'])
+        .limit(1);
+      if (contrato.cotacao_id) {
+        vistQuery = vistQuery.eq('cotacao_id', contrato.cotacao_id);
+      } else if (veiculoIdDoContrato) {
+        vistQuery = vistQuery.eq('veiculo_id', veiculoIdDoContrato);
+      }
+      const { data: vistAprov } = await vistQuery.maybeSingle();
+      autovistoriaAprovada = !!vistAprov;
+    } catch (e) {
+      console.warn('[aprovar-proposta] Falha ao checar vistoria aprovada:', e);
+    }
     // POLÍTICA: o primeiro envio ao SGA é SEMPRE 'pendente', independente de R/F,
     // auto-vistoria ou instalação já concluída. A promoção para 'ativo' acontece
     // exclusivamente após a ativação completa (segundo disparo abaixo).
