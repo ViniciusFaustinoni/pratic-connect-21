@@ -556,15 +556,19 @@ export function usePropostasPendentes() {
         // - Autovistoria: sai assim que o Cadastro aprova (vai p/ /cadastro/associados)
         // - Não-autovistoria (agendada / agendada_base / null): permanece com badge
         //   "Pendente Vistoria Inicial" até a INSTALAÇÃO ser concluída
+        //   ou a VISTORIA NA BASE ser realizada (vai p/ Aprovações do Monitoramento)
         const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
         const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
         const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
         const autovistoriaJaAprovadaPeloCadastro = cadastroAprovado && isAutovistoria;
+        // Vistoria na Base realizada → migra para fila do Monitoramento
+        const vistoriaBaseRealizada = !!(contrato.cotacao_id && mAgendBase.get(contrato.cotacao_id)?.status === 'realizado');
 
         const propostaJaConcluida =
           instalacaoConcluida ||
           veiculoJaConcluidoOperacionalmente ||
-          autovistoriaJaAprovadaPeloCadastro;
+          autovistoriaJaAprovadaPeloCadastro ||
+          vistoriaBaseRealizada;
         if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;
