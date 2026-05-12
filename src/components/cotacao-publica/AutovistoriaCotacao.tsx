@@ -187,8 +187,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       revokePreview(localUrl);
       setPreviewLocal(null);
       
-      // Se extraiu KM do odômetro
-      const odometroOcrFalhou = fotoAtual.id === 'odometro' && !result.kmExtraido && (result as any).ocrFalhou;
+      // Se extraiu KM do odômetro/painel
+      const isFotoOdometro = fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado';
+      const odometroOcrFalhou = isFotoOdometro && !result.kmExtraido && (result as any).ocrFalhou;
       if (result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
         setKmOcrFalhou(false);
@@ -227,8 +228,10 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
 
       // Avançar para próxima foto automaticamente
       // Não avança se OCR do odômetro falhou ou se placa não confere/ilegível
-      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou && !bloqueadoPorPlaca) {
-        setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 300);
+      if (!odometroOcrFalhou && !bloqueadoPorPlaca) {
+        setTimeout(() => {
+          setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
+        }, 300);
       }
     } catch (error: any) {
       console.error('[AutovistoriaCotacao] Erro no upload:', error);
