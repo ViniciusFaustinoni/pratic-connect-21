@@ -28,7 +28,7 @@ async function cancelarDocAutentique(token: string, docId: string) {
       body: JSON.stringify({ query: mutation }),
     });
   } catch (e) {
-    console.warn('[enviar-termo-cancelamento-troca] falha ao deletar doc anterior', e);
+    console.warn('[enviar-termo-cancelamento-substituicao] falha ao deletar doc anterior', e);
   }
 }
 
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const { data: solicitacao, error: solErr } = await admin
-      .from('solicitacoes_troca_titularidade')
+      .from('solicitacoes_substituicao_placa')
       .select('id, novo_titular_dados, associado_antigo_id, veiculo_id, termo_cancelamento_autentique_id, termo_cancelamento_assinado_em, termo_reenvios_count')
       .eq('id', solicitacao_id)
       .maybeSingle();
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       .eq('id', solicitacao.associado_antigo_id)
       .maybeSingle();
     if (assocErr) {
-      console.error('[enviar-termo-cancelamento-troca] erro ao buscar associado:', assocErr);
+      console.error('[enviar-termo-cancelamento-substituicao] erro ao buscar associado:', assocErr);
       throw new Error('Erro ao buscar associado antigo: ' + assocErr.message);
     }
     if (!associadoAntigo) throw new Error('Associado antigo não encontrado');
@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
     let html: string;
     if (template?.conteudo) {
-      console.log('[enviar-termo-cancelamento-troca] usando template do banco', TEMPLATE_CODIGO);
+      console.log('[enviar-termo-cancelamento-substituicao] usando template do banco', TEMPLATE_CODIGO);
       const conteudoSubstituido = substituirVariaveisEvento(template.conteudo, variaveis);
       const corpoHTML = markdownParaHTML(conteudoSubstituido);
       html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Termo de Cancelamento</title>${generateStyles()}</head><body><div class="page">
@@ -171,7 +171,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
 </div></body></html>`;
     } else {
       // Fallback resiliente — mantém comportamento anterior
-      console.warn('[enviar-termo-cancelamento-troca] template não encontrado, usando HTML embutido (fallback)');
+      console.warn('[enviar-termo-cancelamento-substituicao] template não encontrado, usando HTML embutido (fallback)');
       const veiculoTxt = `${veiculo?.marca || ''} ${veiculo?.modelo || ''} ${veiculo?.ano_modelo || ''}`.trim();
       html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Termo de Cancelamento</title>
         <style>
@@ -217,7 +217,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
         }
       }`,
       variables: {
-        document: { name: `Termo de Cancelamento - Troca - ${veiculo?.placa || ''}`, new_signature_style: true },
+        document: { name: `Termo de Cancelamento - Substituição - ${veiculo?.placa || ''}`, new_signature_style: true },
         signers: [signerObj],
         file: null,
       },
@@ -274,7 +274,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           const fSigs = followJson?.data?.document?.signatures || [];
           slugAutentique = extractSlug(fSigs);
         } catch (e) {
-          console.warn('[enviar-termo-cancelamento-troca] follow-up Autentique falhou:', e);
+          console.warn('[enviar-termo-cancelamento-substituicao] follow-up Autentique falhou:', e);
         }
       }
     }
@@ -283,7 +283,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
     let waStatus: 'enviado' | 'falhou' | 'sem_telefone' = 'sem_telefone';
     if (associadoAntigo.telefone) {
       const primeiroNome = (associadoAntigo.nome || '').trim().split(/\s+/)[0] || associadoAntigo.nome || 'Cliente';
-      const descricaoDoc = `Termo de Cancelamento - Troca de Titularidade${veiculo?.placa ? ` (${veiculo.placa})` : ''}`;
+      const descricaoDoc = `Termo de Cancelamento - Substituição de Placa${veiculo?.placa ? ` (${veiculo.placa})` : ''}`;
       const telDigits = (associadoAntigo.telefone || '').replace(/\D/g, '');
       const telTo = telDigits.startsWith('55') ? telDigits : `55${telDigits}`;
 
@@ -294,7 +294,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           mensagem: `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`,
           status: 'erro',
           template_id: 'assinatura_documento_v2',
-          referencia_tipo: 'troca_titularidade',
+          referencia_tipo: 'substituicao_placa',
           referencia_id: solicitacao_id,
           erro_mensagem: motivo,
         }).then(() => {}).catch(() => {});
@@ -311,11 +311,11 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
 
         if (!accessToken || !phoneId) {
           waStatus = 'falhou';
-          console.warn('[enviar-termo-cancelamento-troca] meta_config_ausente');
+          console.warn('[enviar-termo-cancelamento-substituicao] meta_config_ausente');
           await logErro('meta_config_ausente: phone_number_id/access_token não configurados');
         } else if (!slugAutentique) {
           waStatus = 'falhou';
-          console.warn('[enviar-termo-cancelamento-troca] autentique_short_link_indisponivel após retries');
+          console.warn('[enviar-termo-cancelamento-substituicao] autentique_short_link_indisponivel após retries');
           await logErro('autentique_short_link_indisponivel: slug do termo não disponível para botão URL do template');
         } else {
           const payload = {
@@ -360,21 +360,21 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
               mensagem: `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`,
               status: 'enviada',
               template_id: 'assinatura_documento_v2',
-              referencia_tipo: 'troca_titularidade',
+              referencia_tipo: 'substituicao_placa',
               referencia_id: solicitacao_id,
               mensagem_id_externo: metaJson?.messages?.[0]?.id || null,
             }).then(() => {}).catch(() => {});
           } else {
             const errMsg = metaJson?.error?.message || `HTTP ${metaResp.status}`;
             waStatus = 'falhou';
-            console.warn('[enviar-termo-cancelamento-troca] Meta template falhou:', errMsg);
+            console.warn('[enviar-termo-cancelamento-substituicao] Meta template falhou:', errMsg);
             await logErro(`meta_api_erro: ${errMsg}`);
           }
         }
       } catch (e) {
         waStatus = 'falhou';
         const errMsg = e instanceof Error ? e.message : String(e);
-        console.warn('[enviar-termo-cancelamento-troca] Meta exceção:', errMsg);
+        console.warn('[enviar-termo-cancelamento-substituicao] Meta exceção:', errMsg);
         await logErro(`meta_excecao: ${errMsg}`);
       }
     }
@@ -390,14 +390,14 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
       update.termo_ultimo_reenvio_em = new Date().toISOString();
     }
 
-    await admin.from('solicitacoes_troca_titularidade').update(update).eq('id', solicitacao_id);
+    await admin.from('solicitacoes_substituicao_placa').update(update).eq('id', solicitacao_id);
 
     return new Response(
       JSON.stringify({ success: true, autentique_id: docId, termo_url: termoUrl, whatsapp_status: waStatus, reenvio: !!(isResend && force_resend) }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (e) {
-    console.error('[enviar-termo-cancelamento-troca]', e);
+    console.error('[enviar-termo-cancelamento-substituicao]', e);
     const msg = e instanceof Error ? e.message : 'erro';
     return new Response(JSON.stringify({ error: msg }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
