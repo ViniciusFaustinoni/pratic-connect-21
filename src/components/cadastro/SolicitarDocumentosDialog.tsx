@@ -17,7 +17,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { FileText, Send, Camera, Gauge, Car, Video } from 'lucide-react';
+import { FileText, Send, Camera, Gauge, Car } from 'lucide-react';
 
 interface SolicitarDocumentosDialogProps {
   open: boolean;
@@ -73,11 +73,17 @@ function buildCategorias(
       {
         id: 'autovistoria',
         categoria: 'Autovistoria — Roubo e Furto',
-        icon: <Video className="h-4 w-4" />,
+        icon: <Camera className="h-4 w-4" />,
         documentos: [
+          { id: 'frente_centro', label: `Frente — Placa + Centro ${veiculoLabel}` },
+          { id: 'frente_lateral_esquerda', label: `Frente — Placa + Lateral Esquerda ${veiculoLabel}` },
+          { id: 'frente_lateral_direita', label: `Frente — Placa + Lateral Direita ${veiculoLabel}` },
+          { id: 'traseira_centro', label: `Traseira — Placa + Centro ${veiculoLabel}` },
+          { id: 'traseira_lateral_esquerda', label: `Traseira — Placa + Lateral Esquerda ${veiculoLabel}` },
+          { id: 'traseira_lateral_direita', label: `Traseira — Placa + Lateral Direita ${veiculoLabel}` },
           { id: 'chassi', label: `Foto do Chassi ${veiculoLabel}` },
           { id: 'motor', label: `Foto do Motor ${veiculoLabel}` },
-          { id: 'video_360', label: `Vídeo 360° ${veiculoLabel}` },
+          { id: 'painel_ligado', label: `Painel com ${tipoVeiculo === 'moto' ? 'a moto ligada' : 'o veículo ligado'}` },
         ],
       },
       outros,
