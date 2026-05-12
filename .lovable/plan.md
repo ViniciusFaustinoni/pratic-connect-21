@@ -1,53 +1,52 @@
-## Diagnóstico
+## Problema (causa raiz identificada)
 
-Caso **MARCUS VINICIUS FAUSTINONI (LTB4J74)**:
+O template **"Proposta de Filiação"** (`documento_templates.codigo = 'AF1'`) salvo no banco tem as duas linhas da tabela do veículo apontando para a **mesma variável**:
 
-| Tabela | Registro | Estado |
-|---|---|---|
-| `instalacoes` `c7803d08…` | local_vistoria=base, instalador=Wallace | **concluida** 12/05 11:40 |
-| `servicos` `0fdde65d…` (tipo=instalacao) | mesma origem | **concluida** 12/05 11:40 |
-| `vistorias` `16fc185f…` | local=cliente | em_analise (autovistoria) |
-| **`agendamentos_base` `0efe28b2…`** | horário 08:00, instalacao_id apontando para a concluída | **status='agendado', atendido_por=NULL** ❌ |
-
-A aba *Atribuição Manual › Serviços Pendentes* lê direto de `agendamentos_base` filtrando `atendido_por IS NULL AND status IN ('agendado','pendente')` (`useAtribuicaoManual.ts` linha 84-92). Como o agendamento da base nunca foi fechado, ele continua aparecendo mesmo depois da instalação/vistoria ter sido concluída pelo Wallace.
-
-## Causa raiz
-
-O trigger `trg_sync_agendamento_base_on_servico_terminal` (em `servicos`) só fecha o agendamento quando o serviço vai para `cancelada`, `reagendada` ou `nao_compareceu`. **Os estados terminais positivos (`concluida`, `aprovada`, `reprovada`) não são tratados** — e também não existe trigger equivalente disparando a partir de `instalacoes` quando a instalação base é finalizada.
-
-Resultado: toda instalação base concluída deixa o `agendamentos_base` órfão em status `agendado`, e a fila de Atribuição Manual exibe um "Vistoria Base" fantasma para o mesmo cliente.
-
-## Plano de correção
-
-### 1. Migration — estender o trigger
-
-Atualizar `sync_agendamento_base_on_servico_terminal()` para também tratar `concluida`/`aprovada`/`reprovada`, marcando o agendamento como `realizado` (status já usado na tabela) e preenchendo `atendido_por` com o profissional do serviço. Resolução por correspondência via `cotacao_id`, `instalacao_origem_id` ou `vistoria_origem_id` (lógica atual).
-
-### 2. Migration — novo trigger em `instalacoes`
-
-Criar `trg_sync_agendamento_base_on_instalacao_terminal` AFTER UPDATE OF status em `instalacoes`, fechando `agendamentos_base` cujo `instalacao_id = NEW.id` quando `NEW.status='concluida'` (ou `cancelada`). Necessário porque o caso do Marcus mostra que o vínculo direto é via `instalacao_id`, não pelo `cotacao_id` apenas.
-
-### 3. Backfill (data migration)
-
-Fechar todos os `agendamentos_base` órfãos:
-```sql
-UPDATE agendamentos_base ab
-   SET status='realizado', updated_at=now()
- WHERE ab.status IN ('agendado','pendente','confirmado')
-   AND EXISTS (
-     SELECT 1 FROM instalacoes i
-      WHERE i.id = ab.instalacao_id
-        AND i.status IN ('concluida','cancelada')
-   );
 ```
-E variante análoga para `vistoria_id` quando a vistoria base já estiver concluída/aprovada/reprovada.
+Categoria:  {{veiculo.tipo}}   ← ERRADO, deveria ser {{veiculo.categoria}}
+Tipo:       {{veiculo.tipo}}   ← OK
+```
 
-### 4. Memória
+Por isso ambas renderizam "Automóvel". Adicionalmente:
 
-Atualizar `mem://logic/operations/dedupe-agendamentos-rule` documentando que terminais positivos (concluida/aprovada/reprovada) também encerram o `agendamentos_base`, e que o vínculo `instalacao_id` é resolvido por trigger próprio.
+1. O resolver `veiculo.categoria` em `template-utils.ts` retorna **"Particular" / "Aluguel"**, mas o usuário pediu **"Particular" / "Aplicativo"**.
+2. `veiculo.tipo` repassa o valor cru (`carro`, `moto`, `utilitario`) sem normalizar para o rótulo de exibição (`Automóvel`, `Motocicleta`, `Utilitário`).
+3. `Ano Fab./Mod.` já usa `{{veiculo.ano_fabricacao}} - {{veiculo.ano}}` corretamente. No caso do Onix 2021/2021 os dois são realmente iguais — vamos garantir a hierarquia (contrato → veiculoDB → lead) e o fallback para que nunca repita o mesmo ano por bug.
 
-### Escopo NÃO incluído
+## Correções
 
-- Sem mudanças de UI (a fila já filtra corretamente quando o status estiver fechado).
-- Sem alteração no fluxo de aprovação da vistoria/autovistoria.
-- Sem mexer em `useAtribuicaoManual` — a query atual está correta.
+### 1. Template no banco (migration)
+Substituir, dentro do `template_html` do registro `id = eb09759f-cfbc-4ee8-8f1f-f1cc520e7279`, a célula "Categoria" para usar `{{veiculo.categoria}}`. Manter "Tipo" usando `{{veiculo.tipo}}`. Usar `REPLACE` cirúrgico no HTML (procurar pelo bloco exato `<strong>Categoria:</strong>...<p>{{veiculo.tipo}}</p>` e trocar por `{{veiculo.categoria}}`).
+
+### 2. `supabase/functions/_shared/template-utils.ts`
+- `veiculo.categoria`: manter leitura de `dados.veiculo.categoria` (já vem resolvido), mas mapear o valor "Aluguel" para **"Aplicativo"** na exibição (o usuário pede esse rótulo).
+- `veiculo.tipo`: normalizar `tipo_veiculo` para rótulo legível:
+  - `carro`/`automovel` → `Automóvel`
+  - `moto`/`motocicleta` → `Motocicleta`
+  - `utilitario` → `Utilitário`
+  - `caminhao` → `Caminhão`
+  - vazio → fallback inferido a partir de `marcas_modelos.tipo_veiculo` quando disponível, senão `Automóvel`.
+
+### 3. `supabase/functions/_shared/termo-afiliacao-utils.ts`
+Atualizar `resolverCategoriaCrlv` para retornar **"Particular" | "Aplicativo"** (em vez de "Aluguel"). Manter a mesma regra (uso_aplicativo / veiculo_tipo_uso).
+
+### 4. `src/components/documentos/templatePreviewData.ts`
+- `veiculo.categoria`: `'Particular'`
+- `veiculo.tipo`: `'Automóvel'`
+- `veiculo.ano`: `'2024'` e `veiculo.ano_fabricacao`: `'2023'` (deixar visualmente diferentes na pré-visualização para evitar confusão futura).
+
+### 5. `src/components/documentos/VariaveisSelector.tsx`
+Atualizar descrições:
+- `veiculo.categoria` → "Categoria de uso (Particular/Aplicativo)"
+- `veiculo.tipo` → "Tipo do veículo (Automóvel, Motocicleta, Utilitário)"
+
+## Validação
+1. Pré-visualização do template no admin Documentos → conferir Categoria = "Particular" e Tipo = "Automóvel".
+2. Gerar termo real via aprovar-proposta de uma cotação de teste e abrir o PDF gerado.
+3. Para um caso uso_aplicativo=true → Categoria deve aparecer "Aplicativo".
+4. Para uma moto → Tipo deve aparecer "Motocicleta".
+
+## Fora de escopo
+- Não alterar fluxo de geração/assinatura Autentique.
+- Não alterar regra de inferência de uso aplicativo (apenas o rótulo final).
+- Não tocar em outros templates além do `AF1`.
