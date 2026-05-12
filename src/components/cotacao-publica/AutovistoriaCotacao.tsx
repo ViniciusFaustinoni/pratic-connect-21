@@ -418,6 +418,25 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
               )}
             </div>
 
+            {/* Resultado do OCR de placa */}
+            {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && (
+              <div className={cn(
+                "rounded-lg p-2.5 flex items-center gap-2 border text-xs",
+                placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel
+                  ? "bg-success/10 border-success/30 text-success"
+                  : "bg-destructive/10 border-destructive/30 text-destructive"
+              )}>
+                <ScanLine className="h-4 w-4 shrink-0" />
+                {placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel ? (
+                  <span>Placa confere: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong></span>
+                ) : !placaOcrPorFoto[fotoAtual.id].legivel ? (
+                  <span>Placa ilegível — refaça a foto.</span>
+                ) : (
+                  <span>Placa lida: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong> — diferente da cadastrada.</span>
+                )}
+              </div>
+            )}
+
             {/* Confirmação pós-envio */}
             {fotoJaEnviada && !isUploading && fotoAtual.id !== 'odometro' && (
               <div className="bg-success/5 border border-success/20 rounded-lg p-3 flex items-start gap-2">
