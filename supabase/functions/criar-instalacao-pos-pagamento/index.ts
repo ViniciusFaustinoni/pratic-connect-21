@@ -247,6 +247,33 @@ serve(async (req) => {
         });
       }
 
+      // GUARD ANTI-DUPLICAÇÃO (raiz): no fluxo Base, o `agendamentos_base` JÁ é a tarefa
+      // "Vistoria Base" da fila do Monitoramento. Criar uma `instalacoes` aqui faria o
+      // trigger `sync_instalacao_to_servicos` gerar um `servicos` tipo='instalacao' paralelo,
+      // duplicando o card na Atribuição Manual. A instalação será materializada quando o
+      // técnico assumir o agendamento_base (trigger `sync_agendamento_base_to_vistoria`).
+      const { data: agBaseAtivo } = await supabase
+        .from('agendamentos_base')
+        .select('id, status')
+        .eq('cotacao_id', cotacaoId)
+        .in('status', ['agendado', 'confirmado', 'pendente'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (agBaseAtivo?.id) {
+        console.log(`[CriarInstalacaoPosPagamento] Agendamento base ativo (${agBaseAtivo.id}, status=${agBaseAtivo.status}) — pulando criação de instalação para evitar duplicata na fila.`);
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: 'agendamento_base_exists',
+          agendamentoBaseId: agBaseAtivo.id,
+          message: 'Agendamento base ativo; instalação será materializada quando o técnico assumir a vistoria.'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       const { data: agBase } = await supabase
         .from('agendamentos_base')
         .select('id, data_agendada, horario, oficina_id, cliente_nome, cliente_telefone')
