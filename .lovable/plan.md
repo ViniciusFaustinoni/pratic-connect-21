@@ -1,63 +1,54 @@
-## Causa raiz
+## Objetivo
 
-A `efetivar-troca-titularidade` faz tudo que precisa do veículo/contrato (transfere `veiculos.associado_id`, cancela `contratos` antigo, cria contrato novo, sincroniza SGA), mas **nunca toca em `associados.status` do antigo proprietário**. Resultado: mesmo após a troca, o registro do antigo continua `status='ativo'` e aparece com o badge "Associado Ativo" nas listas.
+Eliminar a entrada prematura da Troca de Titularidade na fila do Monitoramento. Hoje o card aparece logo após a aprovação do Cadastro, sem fotos. Passa a aparecer somente depois que a vistoria/autovistoria do novo titular for concluída.
 
-Confirmado em prod para KOU6D37:
-- Veículo ainda aponta para Marcos (`6ab4887f…`) — porque a troca está em `liberada_para_assinatura`, contrato novo `assinado` mas ainda não houve vistoria que dispare a efetivação.
-- Marcos tem outro veículo (QOO5C17 / `em_analise`). Ou seja: **não pode** marcar inativo cego — só se ele não tiver mais nenhum vínculo ativo após a troca.
+## Novo ciclo
 
-## Correção (raiz)
-
-### 1. Edge `efetivar-troca-titularidade` — desativação condicional do antigo
-
-Logo após a etapa 8 (cancelar contrato anterior) e antes do retorno final, adicionar bloco:
-
-```text
-- Buscar contratos do antigo titular (solicitacao.associado_id) com status IN ('ativo','assinado','pendente').
-- Buscar veiculos do antigo titular com status NOT IN ('cancelado','vendido','transferido').
-- Se ambos zerados → UPDATE associados SET status='inativo', inativado_em=now(),
-  motivo_inativacao='Troca de titularidade — sem vínculos ativos restantes' WHERE id=solicitacao.associado_id.
-- Registrar em associados_historico (tipo='inativado_troca_titularidade').
-- Caso ainda haja vínculos, log informativo (mantém ativo) e segue o fluxo.
+```
+aguardando_cadastro
+  → (cadastro aprova)               → liberada_para_assinatura       (NOVO destino direto)
+  → (novo titular assina + paga + faz vistoria/autovistoria)
+  → (vistoria concluída no link público) → aguardando_monitoramento  (entra na fila com fotos)
+  → (monitoramento aprova ou reprova) → efetivada / cancelada
 ```
 
-Nada mais muda na função; a Cenário A (pré-vistoria) e Cenário B (pós-vistoria) compartilham esse bloco porque ambos chegam ao mesmo ponto após cancelar o contrato.
+A fila do Monitoramento (`AprovacoesTroca.tsx` aba "Pendentes") passa a representar exatamente o caso "vistoria concluída, aguardando análise das fotos".
 
-### 2. Migração — função `fn_inativar_associado_se_orfao` + backfill
+## Mudanças
 
-Função reutilizável (idempotente) que aplica a mesma lógica via SQL — útil tanto para o backfill agora quanto como utilitário para qualquer outro fluxo (cancelamento, exclusão, troca):
+### 1. `supabase/functions/aprovar-troca-cadastro/index.ts`
+- Trocar o destino do CAS (linha 72 e 78): `status: 'liberada_para_assinatura'` em vez de `'aguardando_monitoramento'`. CAS continua de `'aguardando_cadastro'`.
+- Mensagens de retorno passam a refletir o novo status.
+- Mantém todo o background work (snapshot SGA, atribuição de vendedor, WhatsApp).
 
-```sql
-CREATE OR REPLACE FUNCTION public.fn_inativar_associado_se_orfao(_associado_id uuid, _motivo text)
-RETURNS boolean
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_contratos int; v_veiculos int;
-BEGIN
-  SELECT count(*) INTO v_contratos FROM contratos
-   WHERE associado_id=_associado_id AND status IN ('ativo','assinado','pendente');
-  SELECT count(*) INTO v_veiculos FROM veiculos
-   WHERE associado_id=_associado_id AND status NOT IN ('cancelado','vendido','transferido');
-  IF v_contratos=0 AND v_veiculos=0 THEN
-    UPDATE associados SET status='inativo', updated_at=now() WHERE id=_associado_id AND status<>'inativo';
-    INSERT INTO associados_historico(associado_id, tipo, descricao)
-      VALUES (_associado_id, 'inativado_orfao', _motivo);
-    RETURN true;
-  END IF;
-  RETURN false;
-END $$;
-```
+### 2. Trigger pós-vistoria (SQL migration)
+Criar `fn_troca_titularidade_pos_vistoria()` + trigger em `vistorias` (ou `servicos` quando `tipo='vistoria_entrada'` e `origem='troca_titularidade'` muda para `concluida`/`em_analise`):
+- Localiza `solicitacoes_troca_titularidade` por `servico_vistoria_id` ou por `veiculo_id` + `efetivada_em IS NULL`.
+- Se status atual ∈ (`liberada_para_assinatura`, `aguardando_vistoria`), avança para `aguardando_monitoramento`.
+- Idempotente.
 
-**Backfill** (executar uma vez): para todo `associado_antigo_id` de trocas com `efetivada_em IS NOT NULL`, chamar `fn_inativar_associado_se_orfao(...)`.
+### 3. `supabase/functions/contrato-gerar/index.ts` (linhas 1340-1450)
+- Já cria o `servico vistoria_entrada` quando aplicável. Sem mudança de lógica — apenas garantir que `solTroca.status` continua válido para o novo fluxo (o gancho atual checava `'aguardando_vistoria'` para antecipar criação; manter como está).
 
-### 3. Validação pós-deploy
+### 4. `supabase/functions/aprovar-troca-monitoramento/index.ts`
+- Validação atual: aceita `aguardando_monitoramento` e `aguardando_vistoria`. Manter.
+- Remover/ajustar o ramo `solicitar_vistoria` (não faz mais sentido — a vistoria já foi feita quando entra no Monitoramento). Substituir por `reprovar` (devolve para `liberada_para_assinatura` ou cancela). Se preferir, manter `solicitar_vistoria` como reagendamento; combinamos no implementação.
 
-1. Disparar a próxima troca real até a vistoria — ao concluir, conferir que o antigo vira `inativo` (se sem outros vínculos) ou permanece `ativo` (se ainda tem outros veículos), com log explicando.
-2. Para Marcos (KOU6D37): a troca ainda está em `liberada_para_assinatura`, então ele continuará `ativo` (correto — tem QOO5C17 em análise). Quando concluir, se QOO5C17 não estiver ativo, a função vai inativá-lo automaticamente.
-3. Conferir em `associados_historico` o registro `inativado_orfao`.
+### 5. UI — `src/pages/monitoramento/AprovacoesTroca.tsx` e `src/hooks/useSolicitacoesTroca.ts`
+- Atualizar labels: "Pendentes (vistoria concluída)" para a aba pendentes.
+- Remover/renomear aba "Em vistoria" se vazia no novo fluxo.
+- Botão "Solicitar vistoria" some / vira "Reprovar fotos" conforme decisão acima.
 
-## Arquivos afetados
+### 6. Backfill (SQL migration)
+Para solicitações hoje paradas em `aguardando_monitoramento` SEM vistoria concluída → mover para `liberada_para_assinatura` (idempotente, via WHERE com checagem do `servicos`/`vistorias`).
 
-- `supabase/functions/efetivar-troca-titularidade/index.ts` — bloco de inativação condicional do antigo.
-- Nova migração SQL — função `fn_inativar_associado_se_orfao` + backfill aplicado às trocas já efetivadas.
+### 7. Memória
+Adicionar `mem://logic/operations/troca-titularidade-monitoramento-pos-vistoria` registrando: "Troca de Titularidade só entra em `aguardando_monitoramento` APÓS vistoria do novo titular concluída. Aprovação de Cadastro vai direto para `liberada_para_assinatura`."
 
-Sem alterações de UI: o badge "Associado Ativo" já reflete `associados.status` corretamente; basta a fonte parar de ser `'ativo'` quando não houver mais vínculos.
+## Pergunta aberta para a implementação
+
+No passo 4, você prefere:
+- (a) manter o botão "Solicitar nova vistoria" no card do Monitoramento (devolve para `liberada_para_assinatura` para o novo titular refazer), ou
+- (b) substituir por "Reprovar fotos" que cancela a troca?
+
+Posso seguir com (a) por padrão se não responder.
