@@ -44,6 +44,59 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
     setFiles((prev) => [...prev, ...valid].slice(0, MAX_FILES));
   };
 
+  const addImageFile = (blob: Blob, ext = 'png') => {
+    const file = new File([blob], `colado-${Date.now()}.${ext}`, { type: blob.type || 'image/png' });
+    handleFiles({ 0: file, length: 1, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList);
+  };
+
+  // Ctrl+V global enquanto o modal estiver aberto
+  useEffect(() => {
+    if (!open) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      let pasted = 0;
+      for (const it of Array.from(items)) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const blob = it.getAsFile();
+          if (blob) {
+            addImageFile(blob, (it.type.split('/')[1] || 'png').toLowerCase());
+            pasted++;
+          }
+        }
+      }
+      if (pasted > 0) {
+        e.preventDefault();
+        toast.success(`${pasted} imagem${pasted > 1 ? 'ns' : ''} colada${pasted > 1 ? 's' : ''}`);
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [open]);
+
+  const colarDaAreaTransferencia = async () => {
+    try {
+      if (!navigator.clipboard || !('read' in navigator.clipboard)) {
+        toast.info('Use Ctrl+V para colar a imagem aqui');
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      let pasted = 0;
+      for (const item of items) {
+        const imgType = item.types.find((t) => t.startsWith('image/'));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          addImageFile(blob, (imgType.split('/')[1] || 'png').toLowerCase());
+          pasted++;
+        }
+      }
+      if (pasted === 0) toast.info('Nenhuma imagem encontrada na área de transferência');
+      else toast.success(`${pasted} imagem${pasted > 1 ? 'ns' : ''} colada${pasted > 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.info('Permissão negada. Use Ctrl+V para colar.');
+    }
+  };
+
   const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
 
   const submit = async () => {
