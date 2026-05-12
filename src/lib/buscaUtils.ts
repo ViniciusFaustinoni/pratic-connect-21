@@ -18,6 +18,10 @@ export interface BuscaNormalizada {
    * por dígitos em CPF/telefone para evitar falsos positivos.
    */
   placaForte: string | null;
+  /** Chassi (VIN) — 4–17 chars alfanuméricos. Superset que cobre placa parcial/completa. */
+  chassi: string | null;
+  /** Chassi "forte" — >8 chars alfanuméricos com letras e dígitos. Claramente chassi. */
+  chassiForte: string | null;
 }
 
 export function normalizarBusca(termo: string): BuscaNormalizada {
