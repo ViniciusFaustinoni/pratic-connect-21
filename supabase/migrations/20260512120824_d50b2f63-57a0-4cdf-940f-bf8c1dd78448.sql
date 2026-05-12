@@ -1,0 +1,1 @@
+UPDATE public.rastreadores SET status='estoque', veiculo_id=NULL, updated_at=now() WHERE id='41accc39-df57-439c-b2c8-49572d0d0711';
