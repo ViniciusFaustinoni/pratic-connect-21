@@ -26,9 +26,9 @@ export const TIPOS_OUTROS_PROCESSOS: TipoOutroProcesso[] = [
 ];
 
 export interface OutroProcessoItem {
-  id: string;                          // id da cotação (chave primária da linha)
+  id: string;                          // id da cotação ou da solicitação (chave de linha)
   tipo: TipoOutroProcesso;
-  cotacao_id: string;
+  cotacao_id: string | null;
   cotacao_numero: string | null;
   cotacao_token: string | null;
   cotacao_status: string;
@@ -50,6 +50,9 @@ export interface OutroProcessoItem {
   // Específicos de troca
   solicitacao_troca_id: string | null;
   troca_status: string | null;            // STATUS_TROCA
+  // Específicos de substituição
+  solicitacao_substituicao_id: string | null;
+  substituicao_status: string | null;
   termo_status: 'nao_aplicavel' | 'pendente' | 'enviado' | 'assinado' | 'recusado';
   termo_filiacao_status: 'nao_aplicavel' | 'pendente' | 'enviado' | 'assinado';
   termo_url: string | null;
