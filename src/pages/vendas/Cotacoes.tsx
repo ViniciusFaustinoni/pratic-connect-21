@@ -1007,13 +1007,6 @@ export default function Cotacoes() {
               <SelectItem value="expirada">Expirada</SelectItem>
             </SelectContent>
           </Select>
-              <SelectItem value="assinando_contrato">Aguardando assinatura</SelectItem>
-              <SelectItem value="pagando_taxa">Pagando taxa</SelectItem>
-              <SelectItem value="agendando_vistoria">Agendando vistoria</SelectItem>
-              <SelectItem value="concluido">Convertida em associado</SelectItem>
-              <SelectItem value="perdida">Perdida / expirada</SelectItem>
-            </SelectContent>
-          </Select>
 
           <Popover>
             <PopoverTrigger asChild>
