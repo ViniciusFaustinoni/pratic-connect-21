@@ -42,11 +42,44 @@ Deno.serve(async (req) => {
       );
     }
 
+    // BLINDAGEM: se o serviço pertence a uma solicitação de troca de titularidade
+    // ainda não efetivada, o destinatário correto é o NOVO titular — nunca o antigo.
+    let associadoIdDestinatario = servico.associado_id;
+    try {
+      let solQuery = supabase
+        .from("solicitacoes_troca_titularidade")
+        .select("novo_associado_id, efetivada_em")
+        .is("efetivada_em", null)
+        .not("novo_associado_id", "is", null)
+        .limit(1);
+      if (servico.cotacao_id) {
+        const { data: solByCot } = await solQuery.eq("cotacao_id", servico.cotacao_id).maybeSingle();
+        if (solByCot?.novo_associado_id) associadoIdDestinatario = solByCot.novo_associado_id;
+      }
+      if (associadoIdDestinatario === servico.associado_id && servico.veiculo_id) {
+        const { data: solByVeic } = await supabase
+          .from("solicitacoes_troca_titularidade")
+          .select("novo_associado_id, efetivada_em")
+          .eq("veiculo_id", servico.veiculo_id)
+          .is("efetivada_em", null)
+          .not("novo_associado_id", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (solByVeic?.novo_associado_id) associadoIdDestinatario = solByVeic.novo_associado_id;
+      }
+      if (associadoIdDestinatario !== servico.associado_id) {
+        console.log(`[enviar-link-reagendamento] Destinatário ajustado para novo titular (troca de titularidade): ${associadoIdDestinatario}`);
+      }
+    } catch (e) {
+      console.warn("[enviar-link-reagendamento] Falha ao resolver troca de titularidade (seguindo com associado_id do serviço):", e);
+    }
+
     // Buscar associado
     const { data: associado } = await supabase
       .from("associados")
       .select("nome, telefone, whatsapp")
-      .eq("id", servico.associado_id)
+      .eq("id", associadoIdDestinatario)
       .single();
 
     if (!associado) throw new Error("Associado não encontrado");
