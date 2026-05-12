@@ -1,18 +1,14 @@
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
 
 const ETAPA_LABELS: Record<string, string> = {
   rascunho: 'Rascunho',
-  enviada: 'Enviada — aguardando cliente',
-  escolhendo_plano: 'Escolhendo plano',
-  enviando_documentos: 'Enviando documentos',
-  em_analise: 'Documentos em análise',
-  assinando_contrato: 'Aguardando assinatura',
-  pagando_taxa: 'Pagando taxa',
-  agendando_vistoria: 'Agendando vistoria',
-  concluido: 'Convertida em associado',
-  perdida: 'Perdida / expirada',
+  expirada: 'Expirada',
+  ...Object.fromEntries(
+    (Object.keys(etapaVendaConfig) as EtapaVenda[]).map((k) => [k, etapaVendaConfig[k].label])
+  ),
 };
 
 const STATUS_LABELS: Record<string, string> = {
