@@ -65,7 +65,7 @@ export function useAprovacaoMonitoramentoStats() {
       const { data: pendentes } = await (supabase as any)
         .from('servicos')
         .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total)')
-        .eq('tipo', 'instalacao')
+        .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida');
 
       const aguardando = (pendentes || []).filter((s: any) => 
