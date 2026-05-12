@@ -277,26 +277,29 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
     if (!docId) throw new Error('Documento sem ID retornado');
     const termoUrl = `https://app.autentique.com.br/documentos/${docId}`;
 
-    // Slug curto (assina.ae/XYZ) — necessário para o botão URL do template Meta
+    // Slug curto (assina.ae/XYZ) — necessário para o botão URL do template Meta.
+    // IMPORTANTE: somente o `link.short_link` do Autentique é resolvível em assina.ae.
+    // O `public_id` (32 chars hex) NÃO funciona como slug — usá-lo gera 404.
     const sigs = json.data?.createDocument?.signatures || [];
+    const SLUG_RE = /^[A-Za-z0-9]{4,16}$/;
     const extractSlug = (signatures: any[]): string | null => {
-      const fromShort = signatures
-        .map((s: any) => s?.link?.short_link)
-        .find((u: any) => typeof u === 'string' && u.includes('assina.ae'));
-      if (fromShort) {
-        return fromShort.replace(/^https?:\/\/assina\.ae\//i, '').replace(/\/+$/, '');
+      for (const s of signatures || []) {
+        const url = s?.link?.short_link;
+        if (typeof url !== 'string' || !url.toLowerCase().includes('assina.ae')) continue;
+        const slug = url.replace(/^https?:\/\/assina\.ae\//i, '').replace(/\/+$/, '');
+        if (SLUG_RE.test(slug)) return slug;
       }
-      // Fallback: usa public_id (assina.ae/{public_id} resolve para a página de assinatura)
-      const pid = signatures.map((s: any) => s?.public_id).find((p: any) => typeof p === 'string' && p.length > 0);
-      return pid || null;
+      return null;
     };
 
     let slugAutentique: string | null = extractSlug(sigs);
 
-    // Se ainda não temos slug, tenta refazer a query do documento (Autentique pode demorar a popular short_link)
+    // Backoff progressivo (1.5s, 3s, 5s, 8s ≈ 17.5s) — Autentique demora alguns
+    // segundos para gerar `link.short_link` em docs com PF_FACIAL.
     if (!slugAutentique) {
-      for (let attempt = 0; attempt < 2 && !slugAutentique; attempt++) {
-        await new Promise((r) => setTimeout(r, 1500));
+      const delays = [1500, 3000, 5000, 8000];
+      for (let attempt = 0; attempt < delays.length && !slugAutentique; attempt++) {
+        await new Promise((r) => setTimeout(r, delays[attempt]));
         try {
           const followUp = await fetch(AUTENTIQUE_URL, {
             method: 'POST',
@@ -313,6 +316,9 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           console.warn('[enviar-termo-cancelamento-troca] follow-up Autentique falhou:', e);
         }
       }
+    }
+    if (!slugAutentique) {
+      console.warn('[enviar-termo-cancelamento-troca] short_link Autentique indisponível após retries — fallback para texto com URL completa');
     }
 
     // Disparo WhatsApp + persistência do status
