@@ -299,8 +299,39 @@ export default function PropostaAnalise() {
     }
   };
 
-  // Handler para aprovar documento individual em contratos_documentos
+  // Handler para aprovar documento individual
+  // Suporta dois fluxos:
+  //  - id começando com `solicitado-`  → atualiza `documentos_solicitados` + `documentos`
+  //  - caso contrário                  → atualiza `contratos_documentos`
   const handleAprovarDocumento = async (docId: string) => {
+    if (docId.startsWith('solicitado-')) {
+      const solicitadoId = docId.replace(/^solicitado-/, '');
+      const { data: sol, error: e0 } = await supabase
+        .from('documentos_solicitados')
+        .select('id, documento_id')
+        .eq('id', solicitadoId)
+        .maybeSingle();
+      if (e0 || !sol) {
+        toast.error('Erro ao aprovar documento reenviado', { description: e0?.message });
+        return;
+      }
+      if (sol.documento_id) {
+        await supabase.from('documentos').update({ status: 'aprovado' }).eq('id', sol.documento_id);
+      }
+      const { error } = await supabase
+        .from('documentos_solicitados')
+        .update({ status: 'aprovado' })
+        .eq('id', solicitadoId);
+      if (error) {
+        toast.error('Erro ao aprovar documento reenviado', { description: error.message });
+        return;
+      }
+      toast.success('Documento reenviado aprovado');
+      queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      return;
+    }
+
     const { error } = await supabase
       .from('contratos_documentos')
       .update({ status: 'aprovado' })
@@ -315,8 +346,38 @@ export default function PropostaAnalise() {
     queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
   };
 
-  // Handler para reprovar documento individual em contratos_documentos
+  // Handler para reprovar documento individual
   const handleReprovarDocumento = async (docId: string, motivo: string) => {
+    if (docId.startsWith('solicitado-')) {
+      const solicitadoId = docId.replace(/^solicitado-/, '');
+      const { data: sol } = await supabase
+        .from('documentos_solicitados')
+        .select('id, documento_id')
+        .eq('id', solicitadoId)
+        .maybeSingle();
+      if (sol?.documento_id) {
+        await supabase.from('documentos').update({ status: 'reprovado' }).eq('id', sol.documento_id);
+      }
+      // Volta a solicitação para 'pendente' para o cliente reenviar novamente
+      const { error } = await supabase
+        .from('documentos_solicitados')
+        .update({
+          status: 'pendente',
+          enviado_em: null,
+          documento_id: null,
+          observacao_cliente: motivo || null,
+        })
+        .eq('id', solicitadoId);
+      if (error) {
+        toast.error('Erro ao reprovar documento reenviado', { description: error.message });
+        return;
+      }
+      toast.success('Documento reenviado reprovado — cliente será notificado para reenviar');
+      queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      return;
+    }
+
     const { error } = await supabase
       .from('contratos_documentos')
       .update({ status: 'reprovado' })

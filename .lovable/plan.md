@@ -1,44 +1,59 @@
-# Plano — WhatsApp na solicitação de documentos
+## Problema
 
-## Causa raiz
-Ao solicitar documentos no Cadastro, a edge function `notificar-cliente` é invocada e quebra com:
+Na proposta `CTR-20260512100945-NQE90C` o cliente reenviou 1 documento (CNH) via fluxo de "Solicitar Documentos". O cabeçalho mostra corretamente "Reanálise — 1 documento(s) reenviado(s)", porém:
 
-```
-ReferenceError: associadoId is not defined
-   notificar-cliente/index.ts:609 (linha do log: 612)
-```
+- O painel **Documentações Anexadas** lista apenas as 4 doc originais (todas ainda Aprovadas), e o stepper exibe "Todos os 4 documento(s) foram analisados ✓".
+- O documento reenviado só aparece no Step 2 ("Fotos & Vistoria") dentro do `PropostaMidiaGrid` — etapa **oculta** quando o plano não tem Roubo/Furto (caso atual). Resultado: o analista não consegue ver nem aprovar o reenvio.
 
-O código usa `associadoId` num `console.log`, mas a variável correta vinda do payload é `associado_id`. Como o erro acontece **antes** da chamada a `whatsapp-send-text`, nenhum WhatsApp é enviado para o associado. (Status final do log: `whatsapp: false`.)
+Origem técnica:
+- `useProposta` carrega `documentos` apenas de `contratos_documentos` (linhas 840-860 de `src/hooks/usePropostasPendentes.ts`).
+- O reenvio cria registro em `documentos_solicitados` (status `enviado`) + `documentos`, mas estes são expostos apenas em `documentos_solicitados_enviados`, consumidos só no Step 2.
 
-Além disso, hoje o fluxo `useSolicitarDocumentos` notifica **apenas o associado**. O vendedor responsável pelo contrato **não é avisado**.
+## Solução
 
-## O que vou fazer
+Incluir os documentos reenviados na mesma lista do Step 1, já marcados como pendentes de análise, para que o analista os aprove/reprove no fluxo natural antes de concluir o cadastro.
 
-1. **Corrigir o bug que impede o envio ao associado**
-   - Substituir `associadoId` por `associado_id` no log da edge `notificar-cliente`.
-   - Validar via logs que a chamada chega em `whatsapp-send-text` e dispara a mensagem com o template Meta `documentos_solicitados`.
+### 1. `src/hooks/usePropostasPendentes.ts` (e versão de lista)
 
-2. **Notificar também o vendedor**
-   - No hook `useSolicitarDocumentos` (após criar `documentos_solicitados`), buscar `vendedor_id` do contrato e o telefone do `profile`.
-   - Disparar uma mensagem de WhatsApp para o vendedor avisando que o Cadastro solicitou documentos ao cliente, com:
-     - nome do associado, placa/numero do contrato
-     - lista resumida das pendências
-     - link de acompanhamento (`/acompanhar/{link_token}`)
-   - Usar o caminho padrão de envio (Meta/Evolution) seguindo as regras de safety/idempotência já adotadas no projeto.
-   - Falha no envio ao vendedor não pode quebrar o fluxo de solicitação (try/catch + log).
+Após carregar `documentos` (contratos_documentos) e `documentosSolicitadosEnviados`, mesclar:
 
-3. **Validar**
-   - Refazer uma solicitação de teste no contrato `CTR-20260512100945-NQE90C`.
-   - Conferir nos logs de `notificar-cliente` e `whatsapp-send-text` que ambas mensagens (associado + vendedor) saíram com sucesso.
+- Para cada item de `documentos_solicitados_enviados` com `documento.arquivo_url`, criar uma entrada virtual em `documentos`:
+  - `id`: `solicitado-{documentos_solicitados.id}` (prefixo permite roteamento na aprovação).
+  - `tipo`: `tipo_documento` do solicitado (cnh, crlv, ...) com sufixo "(reenviado)" no `arquivo_nome`.
+  - `arquivo_nome`: `documento.nome_arquivo` ou label amigável.
+  - `arquivo_url`: `documento.arquivo_url`.
+  - `status`: mapear `documento.status` → `pendente`/`em_analise`/`aprovado`/`reprovado` (default `em_analise` quando `enviado` mas ainda não decidido).
+  - `created_at`: `enviado_em`.
+  - Flag interna `_reenviado: true` (e `_solicitado_id`, `_documento_id`) para a UI marcar visualmente.
+- Inserir essas entradas no início do array `documentos` (acima das originais).
 
-## Resultado esperado
-- Cadastro solicita documentos → associado recebe WhatsApp imediatamente.
-- O vendedor responsável pelo contrato recebe um WhatsApp avisando da pendência criada.
-- Logs limpos, sem `ReferenceError`.
+Resultado: `totalDocs`, `docsPendentes` e `step1Complete` no `PropostaApprovalStepper` passam a refletir os reenvios automaticamente — sem alterar a lógica do stepper.
 
-## Detalhes técnicos
-- Arquivos afetados:
-  - `supabase/functions/notificar-cliente/index.ts` (fix do log).
-  - `src/hooks/usePropostasPendentes.ts` (`useSolicitarDocumentos`, adicionar notificação ao vendedor).
-- Telefone do vendedor sai de `profiles.telefone` (confirmado: `[TESTE] Vendedor CLT` tem telefone `12493649737`).
-- Template do associado já existe (`documentos_solicitados` no `META_TEMPLATE_MAP`); para o vendedor usaremos o template genérico já em uso para alertas internos.
+### 2. `src/components/cadastro/DocumentosAnexadosPanel.tsx`
+
+- Detectar `_reenviado` e exibir badge "Reenviado para reanálise" (cor warning) ao lado do nome do documento, mantendo o restante da UI igual.
+
+### 3. `src/pages/cadastro/PropostaAnalise.tsx` — `handleAprovarDocumento` / `handleReprovarDocumento`
+
+Adaptar para roteamento por id:
+
+- Se `docId` começa com `solicitado-`:
+  - Extrair `solicitado_id`, buscar `documento_id` correspondente.
+  - `update documentos set status='aprovado'|'reprovado' where id=documento_id`.
+  - `update documentos_solicitados set status='aprovado'|'reprovado', observacao_cliente=motivo? where id=solicitado_id`.
+  - Se reprovar: voltar `documentos_solicitados.status` para `pendente` e limpar `enviado_em`/`documento_id`, para o cliente reenviar novamente (mantém o fluxo já existente do card de reanálise).
+- Caso contrário: comportamento atual em `contratos_documentos`.
+
+Invalidate queries de `proposta` e `propostas-pendentes` ao final.
+
+### 4. Comportamento esperado (validação manual)
+
+- Abrir a proposta `CTR-20260512100945-NQE90C`: o painel deve mostrar **5** documentos, sendo a CNH reenviada com badge "Reenviado" e status pendente.
+- Stepper passa de "4/4 aprovados" para "4/5 aprovados" e bloqueia o avanço até decidir.
+- Aprovar a CNH reenviada → 5/5, libera Step 2/Final, banner de reanálise some no próximo refetch.
+- Reprovar → solicitação volta a `pendente`, cliente recebe novo pedido (fluxo existente já cobre WhatsApp).
+
+## Fora de escopo
+
+- Sem mudanças em edge functions, no fluxo de envio do cliente, ou em `documentos_solicitados_pendentes` (continua bloqueando como hoje).
+- Step 2 (`PropostaMidiaGrid`) continua mostrando o histórico de reenvios para auditoria; a duplicidade visual é intencional (lista para análise no Step 1, registro na mídia no Step 2).
