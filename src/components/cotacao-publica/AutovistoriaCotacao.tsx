@@ -15,17 +15,15 @@ import {
   Info,
   X,
   RefreshCw,
-  Video,
-  Lightbulb,
   AlertTriangle,
+  ScanLine,
 } from 'lucide-react';
-import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
-import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao } from '@/hooks/useCotacaoVistoria';
+import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
+import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao, type PlacaOcrResultado } from '@/hooks/useCotacaoVistoria';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
-import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
@@ -50,13 +48,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [salvandoKm, setSalvandoKm] = useState(false);
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [hidratado, setHidratado] = useState(false);
-  // Vídeo 360° foi removido (substituído pelas 9 fotos). Setters mantidos para
-  // não quebrar callbacks legados; valores forçados para "já confirmado".
-  const [videoUrl, setVideoUrl] = useState<string | null>('removido');
-  const [videoConfirmado, setVideoConfirmado] = useState(true);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
-  const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, { match: boolean; placa: string | null; legivel: boolean; skipped?: boolean }>>({});
+  const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, PlacaOcrResultado>>({});
+  const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -78,31 +71,18 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   useEffect(() => {
     if (fotosExistentes && fotosExistentes.length > 0 && !hidratado) {
       const fotosMap: Record<string, string> = {};
-      let videoExistente: string | null = null;
-      
+
       for (const foto of fotosExistentes) {
-        if (foto.tipo && foto.arquivo_url) {
-          if (foto.tipo === 'video_360') {
-            videoExistente = foto.arquivo_url;
-          } else {
-            fotosMap[foto.tipo] = foto.arquivo_url;
-          }
+        if (foto.tipo && foto.arquivo_url && foto.tipo !== 'video_360') {
+          fotosMap[foto.tipo] = foto.arquivo_url;
         }
       }
-      
+
       if (Object.keys(fotosMap).length > 0) {
         setFotosEnviadas(fotosMap);
+        toast.success(`${Object.keys(fotosMap).length} foto(s) carregada(s) de sessão anterior`);
       }
-      
-      if (videoExistente) {
-        setVideoUrl(videoExistente);
-      }
-      
-      const totalCarregados = Object.keys(fotosMap).length + (videoExistente ? 1 : 0);
-      if (totalCarregados > 0) {
-        toast.success(`${totalCarregados} arquivo(s) carregado(s) de sessão anterior`);
-      }
-      
+
       // Ir para próxima foto pendente
       const indexPendente = fotos.findIndex(f => !fotosMap[f.id]);
       if (indexPendente >= 0) {
@@ -225,9 +205,29 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         toast.success('Foto enviada com sucesso.');
       }
       
-      // Avançar para próxima foto automaticamente (rápido, sem delay artificial)
-      // Não avança se OCR do odômetro falhou (precisa de input manual)
-      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou) {
+      // OCR de placa (6 fotos exteriores)
+      let bloqueadoPorPlaca = false;
+      if (result.placaOcr) {
+        setPlacaOcrPorFoto((prev) => ({ ...prev, [fotoAtual.id]: result.placaOcr! }));
+        if (result.placaOcr.skipped) {
+          // 0KM ou sem placa real — não valida
+        } else if (!result.placaOcr.legivel) {
+          setPlacaMismatch(null);
+          toast.warning('Não conseguimos ler a placa nesta foto. Refaça com a placa nítida e enquadrada.', { duration: 6000 });
+          bloqueadoPorPlaca = true;
+        } else if (!result.placaOcr.match) {
+          const lida = result.placaOcr.placa || 'desconhecida';
+          setPlacaMismatch(`Placa lida (${lida}) diferente da placa cadastrada. Confirme se é o veículo correto.`);
+          toast.error('Placa não confere com o veículo cadastrado.', { duration: 8000 });
+          bloqueadoPorPlaca = true;
+        } else {
+          setPlacaMismatch(null);
+        }
+      }
+
+      // Avançar para próxima foto automaticamente
+      // Não avança se OCR do odômetro falhou ou se placa não confere/ilegível
+      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou && !bloqueadoPorPlaca) {
         setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 300);
       }
     } catch (error: any) {
@@ -243,31 +243,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     e.target.value = '';
   };
 
-  const handleVideoCapture = async (file: File) => {
-    setUploadingVideo(true);
-    setVideoUploadProgress(0);
-    try {
-      const result = await uploadMutation.mutateAsync({
-        cotacaoId,
-        fotoId: 'video_360',
-        file,
-        onProgress: (pct: number) => setVideoUploadProgress(pct),
-      } as any);
-      setVideoUrl(result.url);
-      toast.success('Vídeo 360° enviado com sucesso!');
-    } catch (error) {
-      console.error('[AutovistoriaCotacao] Erro no upload do vídeo:', error);
-      // Mensagem amigável já tratada pelo helper / hook
-    } finally {
-      setUploadingVideo(false);
-      setVideoUploadProgress(0);
-    }
-  };
-
-  const handleVideoReset = () => {
-    setVideoUrl(null);
-  };
-  
   const handleFinalizar = async () => {
     if (finalizandoRef.current || finalizarMutation.isPending) return;
     finalizandoRef.current = true;
@@ -285,8 +260,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   };
   
   const fotoJaEnviada = !!fotosEnviadas[fotoAtual?.id];
-  const isUploading = uploadMutation.isPending && !uploadingVideo;
-  
+  const isUploading = uploadMutation.isPending;
+
   if (carregandoFotos) {
     return (
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
@@ -298,137 +273,42 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     );
   }
 
-  // ETAPA 1: Vídeo 360° (obrigatório antes das fotos)
-  if (!videoConfirmado) {
-    return (
-      <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
-        <CardHeader className="pb-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Autovistoria</CardTitle>
-            <Badge variant="secondary" className="bg-primary/10 text-primary">
-              Etapa 1 de 2
-            </Badge>
-          </div>
-          <Progress value={0} className="h-2" />
-        </CardHeader>
-        
-        <CardContent className="space-y-6">
-          <InAppBrowserBanner persistent />
-
-          {capability.lowEnd && (
-            <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-900 dark:text-amber-200 flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
-              <div className="space-y-1 text-sm">
-                <p className="font-semibold">Detectamos memória limitada neste aparelho</p>
-                <p className="text-xs leading-relaxed">
-                  Para evitar travamentos, <strong>feche outros aplicativos</strong> antes de gravar o vídeo e tirar as fotos.
-                  Se preferir, podemos <strong>agendar uma vistoria presencial</strong> em uma de nossas bases.
-                </p>
-              </div>
-            </div>
-          )}
-          <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-              <Video className="h-10 w-10 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-foreground">
-                Grave o Vídeo 360°
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Siga as instruções abaixo para gravar o vídeo do veículo.
-              </p>
-            </div>
-          </div>
-
-          {/* Instruções de gravação */}
-          <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-border/50">
-            <h4 className="font-semibold text-sm flex items-center gap-2">
-              <Lightbulb className="h-4 w-4 text-amber-500" />
-              Instruções de Gravação
-            </h4>
-            <ol className="space-y-2 text-sm text-muted-foreground">
-              {getInstrucoesVideo360(tipoVeiculo).map((item) => (
-                <li key={item.passo} className="flex items-start gap-2">
-                  <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
-                    {item.passo}
-                  </span>
-                  <span>
-                    {item.texto}{' '}
-                    {item.destaque && (
-                      <strong className="text-foreground">{item.destaque}</strong>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <div className="flex items-center gap-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
-              <AlertTriangle className="h-3 w-3 text-amber-500" />
-              <span>Duração mínima: <strong>30 segundos</strong> / Máxima: <strong>2 minutos</strong></span>
-            </div>
-          </div>
-
-          <VideoCapture
-            onCapture={handleVideoCapture}
-            onReset={handleVideoReset}
-            videoUrl={videoUrl ?? undefined}
-            uploading={uploadingVideo}
-            uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
-            confirmed={!!videoUrl}
-            maxDuration={120}
-            label={getLabelVideo360(tipoVeiculo)}
-            cameraOnly={true}
-          />
-
-          {videoUrl && (
-            <Button 
-              onClick={() => {
-                // Libera memória do preview do vídeo antes da etapa de fotos.
-                // O VideoCapture já revoga seu blob local via efeito 'confirmed';
-                // aqui apenas avançamos. O videoUrl remoto segue disponível.
-                console.log('[Autovistoria] Avançando para etapa de fotos — preview do vídeo liberado');
-                setVideoConfirmado(true);
-              }} 
-              className="w-full mt-4"
-              size="lg"
-            >
-              Continuar para as Fotos →
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
-  
-  // ETAPA 2: Fotos (chassi + motor)
   return (
     <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
-      {/* Header com progresso */}
       <CardHeader className="pb-3 space-y-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Autovistoria</CardTitle>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
-            {fotosCompletadas}/{totalFotos} fotos • 1/1 vídeo
+            {fotosCompletadas}/{totalFotos} fotos
           </Badge>
         </div>
         <Progress value={progresso} className="h-2" />
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
-        {/* Vídeo OK indicator */}
-        <div className="flex items-center gap-2 bg-success/10 text-success rounded-lg p-2.5 border border-success/20">
-          <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-          <span className="text-sm font-medium">Vídeo 360° enviado</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto h-7 text-xs text-muted-foreground hover:text-foreground"
-            onClick={handleVideoReset}
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Regravar
-          </Button>
-        </div>
+        <InAppBrowserBanner persistent />
+
+        {capability.lowEnd && (
+          <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-900 dark:text-amber-200 flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+            <div className="space-y-1 text-sm">
+              <p className="font-semibold">Detectamos memória limitada neste aparelho</p>
+              <p className="text-xs leading-relaxed">
+                Para evitar travamentos, feche outros aplicativos antes de tirar as fotos.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {placaMismatch && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1 text-sm">
+              <p className="font-semibold">Placa não confere</p>
+              <p className="text-xs leading-relaxed">{placaMismatch}</p>
+            </div>
+          </div>
+        )}
 
         {/* Indicadores de fotos (miniaturas) */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
@@ -536,6 +416,25 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 </button>
               )}
             </div>
+
+            {/* Resultado do OCR de placa */}
+            {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && (
+              <div className={cn(
+                "rounded-lg p-2.5 flex items-center gap-2 border text-xs",
+                placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel
+                  ? "bg-success/10 border-success/30 text-success"
+                  : "bg-destructive/10 border-destructive/30 text-destructive"
+              )}>
+                <ScanLine className="h-4 w-4 shrink-0" />
+                {placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel ? (
+                  <span>Placa confere: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong></span>
+                ) : !placaOcrPorFoto[fotoAtual.id].legivel ? (
+                  <span>Placa ilegível — refaça a foto.</span>
+                ) : (
+                  <span>Placa lida: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong> — diferente da cadastrada.</span>
+                )}
+              </div>
+            )}
 
             {/* Confirmação pós-envio */}
             {fotoJaEnviada && !isUploading && fotoAtual.id !== 'odometro' && (

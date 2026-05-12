@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { 
-  Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge, 
-  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, RefreshCw, AlertTriangle,
-  Video
+import {
+  Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge,
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, AlertCircle, ScanLine
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,12 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, TipoVeiculo } from '@/data/autovistoriaConfig';
+import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
 import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente, useFinalizarAutovistoria } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { LocationCapture, Coordenadas } from './LocationCapture';
-import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,9 +44,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
   
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
+  const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, any>>({});
+  const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
@@ -87,8 +84,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
   const progresso = (fotosCompletadas / totalFotos) * 100;
   const todasFotosEnviadas = fotosCompletadas === totalFotos;
-  const videoObrigatorio = true; // Vídeo obrigatório para TODOS os tipos
-  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
+  const todasEnviadas = todasFotosEnviadas;
   
   const fotoAtual = fotos[indiceAtual];
   const isUltimaFoto = indiceAtual === totalFotos - 1;
@@ -229,12 +225,29 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         toast.success(`Foto "${fotoAtual.label}" enviada com sucesso!`);
       }
       
+      // OCR de placa (6 fotos exteriores)
+      let bloqueadoPorPlaca = false;
+      const placaOcr = (result as any).placaOcr;
+      if (placaOcr) {
+        setPlacaOcrPorFoto(prev => ({ ...prev, [fotoAtual.id]: placaOcr }));
+        if (placaOcr.skipped) {
+          // 0KM ou sem placa real
+        } else if (!placaOcr.legivel) {
+          setPlacaMismatch(null);
+          toast.warning('Não conseguimos ler a placa nesta foto. Refaça com a placa nítida.', { duration: 6000 });
+          bloqueadoPorPlaca = true;
+        } else if (!placaOcr.match) {
+          setPlacaMismatch(`Placa lida (${placaOcr.placa || 'desconhecida'}) diferente da placa cadastrada.`);
+          toast.error('Placa não confere com o veículo cadastrado.', { duration: 8000 });
+          bloqueadoPorPlaca = true;
+        } else {
+          setPlacaMismatch(null);
+        }
+      }
+
       // Avançar automaticamente para a próxima foto após sucesso
-      // (exceto se for odômetro com OCR falho — usuário precisa preencher KM manual)
-      if (!isUltimaFoto && !(fotoAtual.id === 'odometro' && (result as any).ocrFalhou)) {
-        setTimeout(() => {
-          avancarFoto();
-        }, 500);
+      if (!isUltimaFoto && !(fotoAtual.id === 'odometro' && (result as any).ocrFalhou) && !bloqueadoPorPlaca) {
+        setTimeout(() => avancarFoto(), 500);
       }
     } catch (error: any) {
       console.error('[Autovistoria] Erro no upload:', error);
@@ -252,61 +265,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     }
   };
 
-  const handleVideoCapture = async (file: File) => {
-    // Criar vistoria se ainda não existir
-    let currentVistoriaId = vistoriaId;
-    if (!currentVistoriaId) {
-      if (!coordenadas) {
-        toast.error('Por favor, permita o acesso à sua localização antes de gravar o vídeo.');
-        return;
-      }
-      try {
-        const result = await criarAutovistoria.mutateAsync({ 
-          contratoId, 
-          associadoId, 
-          veiculoId,
-          latitude: coordenadas.latitude,
-          longitude: coordenadas.longitude,
-        });
-        currentVistoriaId = result.id;
-        setVistoriaId(result.id);
-      } catch (error) {
-        toast.error('Erro ao iniciar autovistoria');
-        return;
-      }
-    }
-    
-    setUploadingVideo(true);
-    setVideoUploadProgress(0);
-    try {
-      const result = await uploadFoto.mutateAsync({
-        vistoriaId: currentVistoriaId!,
-        fotoId: 'video_360',
-        file,
-        contratoId,
-        onProgress: (pct: number) => setVideoUploadProgress(pct),
-      } as any);
-      setVideoUrl(result.url);
-      toast.success('Vídeo 360° enviado com sucesso!');
-    } catch (error) {
-      console.error('[Autovistoria] Erro no upload do vídeo:', error);
-      // Mensagem amigável já tratada pelo helper / hook
-    } finally {
-      setUploadingVideo(false);
-      setVideoUploadProgress(0);
-    }
-  };
-
-  const handleVideoReset = () => {
-    // O vídeo anterior já foi salvo silenciosamente no servidor
-    // Apenas limpar a referência local para permitir nova gravação
-    setVideoUrl(null);
-  };
-
   const handleContinuar = () => {
-    if (vistoriaId) {
-      onComplete(vistoriaId);
-    }
+    if (vistoriaId) onComplete(vistoriaId);
   };
 
   // Loading enquanto carrega vistoria existente
@@ -321,82 +281,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     );
   }
 
-  // NOVO FLUXO: Vídeo com instruções PRIMEIRO, depois fotos
-  // Etapa 1: Se ainda não tem vídeo, mostrar instruções + gravação
-  if (!videoUrl && !todasFotosEnviadas) {
-    return (
-      <Card className="max-w-lg mx-auto">
-        <CardContent className="pt-8 pb-8 space-y-6">
-          <InAppBrowserBanner persistent />
-          {/* Captura de Localização - OBRIGATÓRIO */}
-          <LocationCapture 
-            onLocationCapture={setCoordenadas}
-            coordenadas={coordenadas}
-            disabled={readOnly}
-          />
-
-          <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-              <Video className="h-10 w-10 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-foreground">
-                Etapa 1: Grave o Vídeo 360°
-              </h2>
-              <p className="text-muted-foreground mt-1">
-                Siga as instruções abaixo para gravar o vídeo do veículo.
-              </p>
-            </div>
-          </div>
-
-          {/* Instruções de gravação */}
-          <div className="bg-muted/50 rounded-lg p-4 space-y-3 border">
-            <h4 className="font-semibold text-sm flex items-center gap-2">
-              <Lightbulb className="h-4 w-4 text-amber-500" />
-              Instruções de Gravação
-            </h4>
-            <ol className="space-y-2 text-sm text-muted-foreground">
-              {getInstrucoesVideo360(tipoVeiculo).map((item) => (
-                <li key={item.passo} className="flex items-start gap-2">
-                  <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
-                    {item.passo}
-                  </span>
-                  <span>
-                    {item.texto}{' '}
-                    {item.destaque && (
-                      <strong className="text-foreground">{item.destaque}</strong>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <div className="flex items-center gap-2 pt-2 border-t text-xs text-muted-foreground">
-              <AlertTriangle className="h-3 w-3 text-amber-500" />
-              <span>Duração mínima: <strong>30 segundos</strong> / Máxima: <strong>2 minutos</strong></span>
-            </div>
-          </div>
-
-          <VideoCapture
-            onCapture={handleVideoCapture}
-            onReset={handleVideoReset}
-            videoUrl={videoUrl || undefined}
-            uploading={uploadingVideo}
-            uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
-            maxDuration={120}
-            label={getLabelVideo360(tipoVeiculo)}
-            cameraOnly={true}
-          />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Etapa 1.5: Vídeo gravado mas fotos pendentes - mostrar vídeo OK + ir para fotos
-  if (videoUrl && !todasFotosEnviadas) {
-    // Continua para a tela de fotos abaixo (fluxo normal de fotos)
-  }
-
-  // Se todas foram enviadas (fotos + vídeo), mostrar tela de conclusão
+  // Se todas as fotos foram enviadas, mostrar tela de conclusão
   if (todasEnviadas) {
     return (
       <Card className="max-w-lg mx-auto">
@@ -410,7 +295,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
                 Autovistoria Concluída!
               </h2>
               <p className="text-muted-foreground mt-1">
-                Todas as {totalFotos} fotos e o vídeo 360° foram enviados com sucesso.
+                Todas as {totalFotos} fotos foram enviadas com sucesso.
               </p>
             </div>
           </div>
@@ -466,6 +351,25 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {placaMismatch && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1 text-sm">
+              <p className="font-semibold">Placa não confere</p>
+              <p className="text-xs leading-relaxed">{placaMismatch}</p>
+            </div>
+          </div>
+        )}
+        {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && (
+          <div className={`rounded-lg p-2.5 flex items-center gap-2 border text-xs ${placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel ? 'bg-green-500/10 border-green-500/30 text-green-700' : 'bg-destructive/10 border-destructive/30 text-destructive'}`}>
+            <ScanLine className="h-4 w-4 shrink-0" />
+            {placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel
+              ? <span>Placa confere: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong></span>
+              : !placaOcrPorFoto[fotoAtual.id].legivel
+                ? <span>Placa ilegível — refaça a foto.</span>
+                : <span>Placa lida: <strong>{placaOcrPorFoto[fotoAtual.id].placa}</strong> — diferente da cadastrada.</span>}
+          </div>
+        )}
         {/* Captura de Localização - OBRIGATÓRIO */}
         <LocationCapture 
           onLocationCapture={setCoordenadas}
