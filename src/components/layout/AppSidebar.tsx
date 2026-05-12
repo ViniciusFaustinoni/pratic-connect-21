@@ -900,9 +900,9 @@ export function AppSidebar() {
                                 className="h-4 w-4"
                                 style={{ color: isActive(item.url) ? 'inherit' : group.color }}
                               />
-                              {item.title}
+                              <span className="truncate">{item.title}</span>
                               {item.badge && (
-                                <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                                   {item.badge}
                                 </span>
                               )}
@@ -1044,9 +1044,9 @@ export function AppSidebar() {
                                             className="h-4 w-4"
                                             style={{ color: isActive(item.url) ? 'inherit' : group.color }}
                                           />
-                                          <span>{item.title}</span>
+                                          <span className="truncate">{item.title}</span>
                                           {item.badge && (
-                                            <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                            <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                                               {item.badge}
                                             </span>
                                           )}
@@ -1108,9 +1108,9 @@ export function AppSidebar() {
                                     className="h-4 w-4" 
                                     style={{ color: isActive(item.url) ? 'inherit' : group.color }}
                                   />
-                                  <span>{item.title}</span>
+                                  <span className="truncate">{item.title}</span>
                                   {item.badge && (
-                                    <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                                       {item.badge}
                                     </span>
                                   )}
