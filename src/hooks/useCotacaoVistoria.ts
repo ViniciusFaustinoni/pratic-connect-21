@@ -4,6 +4,17 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { geocodificarEndereco } from '@/services/geocodingService';
 import { uploadVideoWithRetry, VideoUploadError } from '@/lib/videoUpload';
+import { isFotoComValidacaoPlaca } from '@/data/autovistoriaConfig';
+import { isPlacaPlaceholder } from '@/lib/placa-utils';
+
+export interface PlacaOcrResultado {
+  placa: string | null;
+  match: boolean;
+  legivel: boolean;
+  confianca: number;
+  observacao?: string | null;
+  skipped?: boolean;
+}
 
 // Interface para resultado da edge function de agendamento presencial
 interface AgendarPresencialResponse {
