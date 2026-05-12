@@ -365,14 +365,14 @@ export function VideoCapture({
               </div>
             </div>
             {/* HUD rodapé: botão parar */}
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-transparent px-3 py-3 z-10">
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/80 to-transparent px-3 pb-6 pt-8 z-10">
               <Button
-                size="sm"
+                size="lg"
                 variant="destructive"
                 onClick={stopRecording}
-                className="gap-2"
+                className="gap-2 rounded-full px-6 shadow-lg"
               >
-                <Square className="h-4 w-4" />
+                <Square className="h-5 w-5" />
                 Parar Gravação
               </Button>
             </div>
