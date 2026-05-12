@@ -192,6 +192,7 @@ Deno.serve(async (req) => {
         if (vendedorAtribuido?.telefone) {
           const numero = (cotAtual?.numero || sol.cotacao_id.slice(0, 8)).toString();
           const novoNome = ((sol.novo_titular_dados || {}) as { nome?: string }).nome || 'novo titular';
+          const primeiroNomeVendedor = (vendedorAtribuido.nome || 'Consultor').trim().split(/\s+/)[0];
           const mensagem =
             `🔁 *Troca de titularidade — cadastro aprovado*\n\n` +
             `Cotação *${numero}* foi liberada e marcada como *PRIORIDADE ALTA*.\n` +
@@ -199,7 +200,16 @@ Deno.serve(async (req) => {
             `A placa já está liberada para fechamento. Acesse o sistema para dar continuidade.`;
           try {
             await admin.functions.invoke('whatsapp-send-text', {
-              body: { telefone: vendedorAtribuido.telefone, mensagem, force_provider: 'evolution' },
+              body: {
+                telefone: vendedorAtribuido.telefone,
+                mensagem,
+                template_name: 'sinistro_atualizado',
+                template_params: [
+                  primeiroNomeVendedor,
+                  `Cotação ${numero} liberada`,
+                  `Troca de titularidade aprovada (PRIORIDADE ALTA). Novo titular: ${novoNome}. Acesse o sistema para fechamento.`,
+                ],
+              },
             });
           } catch (waCatch) {
             console.warn('[aprovar-troca-cadastro/bg] whatsapp falhou:', waCatch);
