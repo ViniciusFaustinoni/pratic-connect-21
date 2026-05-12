@@ -99,11 +99,40 @@ Deno.serve(async (req) => {
     // Contrato ativo do veículo (para variáveis)
     const { data: contrato } = await admin
       .from('contratos')
-      .select('id, numero, valor_mensal, data_inicio, created_at')
+      .select('id, numero, valor_mensal, data_inicio, created_at, plano_id')
       .eq('associado_id', solicitacao.associado_antigo_id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    let planoNome = '—';
+    if (contrato?.plano_id) {
+      const { data: plano } = await admin
+        .from('planos')
+        .select('nome')
+        .eq('id', contrato.plano_id)
+        .maybeSingle();
+      if (plano?.nome) planoNome = plano.nome;
+    }
+
+    // Multa do rastreador (configuracoes.chave='multa_rastreador')
+    let multaRastreadorTxt = '400,00';
+    try {
+      const { data: cfgMulta } = await admin
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'multa_rastreador')
+        .maybeSingle();
+      const raw = cfgMulta?.valor;
+      const num = raw == null ? NaN : Number(String(raw).replace(',', '.'));
+      if (Number.isFinite(num) && num > 0) {
+        multaRastreadorTxt = num.toFixed(2).replace('.', ',');
+      } else if (typeof raw === 'string' && raw.trim()) {
+        multaRastreadorTxt = raw.trim();
+      }
+    } catch (e) {
+      console.warn('[enviar-termo-cancelamento-troca] erro ao buscar multa_rastreador', e);
+    }
 
     const novoTitular = (solicitacao.novo_titular_dados || {}) as { nome?: string; cpf?: string };
 
