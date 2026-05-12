@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { VistoriaFotoConfig } from '@/data/vistoriaConfigCompleta';
+import { transformedUrl, THUMB, PREVIEW } from '@/lib/storage/imageTransform';
 
 interface FotoEnviada {
   tipo: string;
@@ -160,8 +161,10 @@ export function VistoriaFotoSequencial({
             >
               {url ? (
                 <img
-                  src={url}
+                  src={transformedUrl(url, THUMB)}
                   alt=""
+                  width={40}
+                  height={40}
                   loading="lazy"
                   decoding="async"
                   className="w-full h-full object-cover"
@@ -291,9 +294,10 @@ export function VistoriaFotoSequencial({
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-emerald-600">
                   <img
                     key={fotoAtual.id}
-                    src={fotoUrl}
+                    src={transformedUrl(fotoUrl, PREVIEW)}
                     alt={fotoAtual.nome}
                     decoding="async"
+                    loading="lazy"
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute bottom-3 right-3">

@@ -149,6 +149,8 @@ export function FotosManutencao({
                   <img
                     src={foto.preview}
                     alt={`Foto ${index + 1}`}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                 </div>

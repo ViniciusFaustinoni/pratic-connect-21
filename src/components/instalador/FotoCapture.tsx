@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { toast } from 'sonner';
+import { transformedUrl, PREVIEW } from '@/lib/storage/imageTransform';
 
 interface FotoCaptureProps {
   tipo: string;
@@ -119,8 +120,10 @@ export function FotoCapture({
         ) : hasPhoto ? (
           <>
             <img
-              src={displayUrl}
+              src={transformedUrl(displayUrl, PREVIEW)}
               alt={label}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full rounded-lg object-cover"
             />
             {/* Overlay de sucesso */}
