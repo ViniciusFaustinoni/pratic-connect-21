@@ -399,7 +399,15 @@ export function useCriarCotacao() {
         valor_adesao: payload.valor_adesao || resultado.valores.valor_adesao,
         status: 'rascunho' as const,
         validade_dias: 7,
-        categoria: payload.categoria_veiculo,
+        // `categoria` é reservado a "situação especial" do veículo (taxi/leilão/etc.).
+        // Bloqueia ruído tipo 'moto'/'carro'/'automovel' antes de gravar.
+        // Ver mem://logic/operations/cotacao-categoria-vs-tipo-veiculo
+        categoria: (() => {
+          const v = (payload.categoria_veiculo || '').toString().trim().toLowerCase();
+          if (!v) return null;
+          if (['moto', 'carro', 'automovel', 'automóvel', 'motocicleta'].includes(v)) return null;
+          return payload.categoria_veiculo;
+        })(),
         regiao: payload.regiao || null,
         nome_solicitante: payload.nome_solicitante || null,
         tipo_instalacao: payload.tipo_instalacao || null,
