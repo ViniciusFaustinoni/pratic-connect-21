@@ -847,6 +847,16 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
         cpfInicial={migracaoCpfParaDialog}
         consultorIdInicial={profile?.id}
       />
+
+      {/* Substituição de Placa — detalhes da solicitação */}
+      <ModalDetalhesSubstituicao
+        solicitacaoId={solicitacaoSubstituicaoId}
+        open={showDetalhesSubstituicao}
+        onOpenChange={(v) => {
+          setShowDetalhesSubstituicao(v);
+          if (!v) setSolicitacaoSubstituicaoId(null);
+        }}
+      />
     </>
   );
 }
