@@ -190,34 +190,35 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
       // Busca por nome, CPF, email, telefone ou placa
       // Aceita CPF/telefone com OU sem máscara, e placa com OU sem hífen.
       if (filters?.search) {
-        const { raw, digits, cpfFormatado, telefoneFormatado, placa, placaForte } = normalizarBusca(filters.search);
+        const { raw, digits, cpfFormatado, telefoneFormatado, placa, placaForte, chassi, chassiForte } = normalizarBusca(filters.search);
         const rawSafe = escapeOrValue(raw);
 
-        // Busca por placa em veículos vinculados
-        let associadoIdsByPlaca: string[] = [];
-        if (placa) {
+        // Busca por placa OU chassi em veículos vinculados
+        let associadoIdsByVeiculo: string[] = [];
+        if (placa || chassi) {
+          const orVeic: string[] = [];
+          if (placa) orVeic.push(`placa.ilike.%${placa}%`);
+          if (chassi) orVeic.push(`chassi.ilike.%${chassi}%`);
           const { data: veics } = await supabase
             .from('veiculos')
             .select('associado_id')
-            .ilike('placa', `%${placa}%`)
+            .or(orVeic.join(','))
             .not('associado_id', 'is', null)
             .limit(500);
-          associadoIdsByPlaca = (veics || [])
+          associadoIdsByVeiculo = (veics || [])
             .map((v: any) => v.associado_id)
             .filter(Boolean);
         }
 
         const orParts: string[] = [];
 
-        if (placaForte) {
-          // Termo é claramente uma placa. Restringir a placa + nome para
-          // evitar que os dígitos da placa casem em CPF/telefone parciais
-          // de outros associados (ex.: "SHT1E39" não deve trazer CPFs com "139").
+        if (placaForte || chassiForte) {
+          // Termo é claramente placa ou chassi. Restringir a nome + ids de veículo
+          // para evitar que dígitos casem em CPF/telefone parciais de outros associados.
           orParts.push(`nome.ilike.%${rawSafe}%`);
-          if (associadoIdsByPlaca.length > 0) {
-            orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
+          if (associadoIdsByVeiculo.length > 0) {
+            orParts.push(`id.in.(${associadoIdsByVeiculo.join(',')})`);
           } else {
-            // Nenhum veículo com essa placa: força resultado vazio do .or
             orParts.push(`id.eq.00000000-0000-0000-0000-000000000000`);
           }
         } else {
@@ -225,11 +226,9 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
           orParts.push(`email.ilike.%${rawSafe}%`);
 
           if (digits.length === 11 && cpfFormatado) {
-            // CPF completo: tenta cru e formatado
             orParts.push(`cpf.eq.${digits}`);
             orParts.push(`cpf.eq.${cpfFormatado}`);
           } else if (digits.length >= 3) {
-            // CPF parcial
             orParts.push(`cpf.ilike.%${digits}%`);
           }
 
@@ -240,8 +239,8 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
             orParts.push(`telefone.ilike.%${digits}%`);
           }
 
-          if (associadoIdsByPlaca.length > 0) {
-            orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
+          if (associadoIdsByVeiculo.length > 0) {
+            orParts.push(`id.in.(${associadoIdsByVeiculo.join(',')})`);
           }
         }
 
