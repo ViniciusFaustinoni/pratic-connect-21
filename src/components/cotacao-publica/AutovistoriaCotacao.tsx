@@ -206,9 +206,29 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         toast.success('Foto enviada com sucesso.');
       }
       
-      // Avançar para próxima foto automaticamente (rápido, sem delay artificial)
-      // Não avança se OCR do odômetro falhou (precisa de input manual)
-      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou) {
+      // OCR de placa (6 fotos exteriores)
+      let bloqueadoPorPlaca = false;
+      if (result.placaOcr) {
+        setPlacaOcrPorFoto((prev) => ({ ...prev, [fotoAtual.id]: result.placaOcr! }));
+        if (result.placaOcr.skipped) {
+          // 0KM ou sem placa real — não valida
+        } else if (!result.placaOcr.legivel) {
+          setPlacaMismatch(null);
+          toast.warning('Não conseguimos ler a placa nesta foto. Refaça com a placa nítida e enquadrada.', { duration: 6000 });
+          bloqueadoPorPlaca = true;
+        } else if (!result.placaOcr.match) {
+          const lida = result.placaOcr.placa || 'desconhecida';
+          setPlacaMismatch(`Placa lida (${lida}) diferente da placa cadastrada. Confirme se é o veículo correto.`);
+          toast.error('Placa não confere com o veículo cadastrado.', { duration: 8000 });
+          bloqueadoPorPlaca = true;
+        } else {
+          setPlacaMismatch(null);
+        }
+      }
+
+      // Avançar para próxima foto automaticamente
+      // Não avança se OCR do odômetro falhou ou se placa não confere/ilegível
+      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou && !bloqueadoPorPlaca) {
         setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 300);
       }
     } catch (error: any) {
