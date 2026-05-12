@@ -188,12 +188,16 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
 
       // 2) Trocas vinculadas
       const cotacaoIds = cotList.map((c) => c.id);
-      const { data: trocas } = await (supabase as any)
-        .from('solicitacoes_troca_titularidade')
-        .select('id, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, novo_titular_dados, associado_antigo_id, aprovado_cadastro_em, aprovado_monitoramento_em, efetivada_em, reprovado_em, motivo_reprovacao')
-        .in('cotacao_id', cotacaoIds);
+      let trocas: any[] = [];
+      if (cotacaoIds.length > 0) {
+        const { data } = await (supabase as any)
+          .from('solicitacoes_troca_titularidade')
+          .select('id, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, novo_titular_dados, associado_antigo_id, aprovado_cadastro_em, aprovado_monitoramento_em, efetivada_em, reprovado_em, motivo_reprovacao')
+          .in('cotacao_id', cotacaoIds);
+        trocas = data || [];
+      }
       const trocasMap = new Map<string, any>();
-      (trocas || []).forEach((t: any) => trocasMap.set(t.cotacao_id, t));
+      trocas.forEach((t: any) => trocasMap.set(t.cotacao_id, t));
 
       // 2b) Nome/contato do titular antigo via associados
       const associadoAntigoIds = Array.from(
