@@ -50,25 +50,29 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [salvandoKm, setSalvandoKm] = useState(false);
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [hidratado, setHidratado] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoConfirmado, setVideoConfirmado] = useState(false);
+  // Vídeo 360° foi removido (substituído pelas 9 fotos). Setters mantidos para
+  // não quebrar callbacks legados; valores forçados para "já confirmado".
+  const [videoUrl, setVideoUrl] = useState<string | null>('removido');
+  const [videoConfirmado, setVideoConfirmado] = useState(true);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
-  
+  const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, { match: boolean; placa: string | null; legivel: boolean; skipped?: boolean }>>({});
+
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
   const restauradoToastRef = useRef(false);
-  
+
   const capability = useDeviceCapability();
   const { data: fotosExistentes, isLoading: carregandoFotos } = useFotosCotacaoVistoria(cotacaoId);
   const uploadMutation = useUploadFotoCotacaoVistoria();
   const finalizarMutation = useFinalizarVistoriaCotacao();
-  
+
   const fotoAtual = fotos[fotoAtualIndex];
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
-  const progresso = ((fotosCompletadas + (videoUrl ? 1 : 0)) / (totalFotos + 1)) * 100;
+  const progresso = (fotosCompletadas / totalFotos) * 100;
   const todasFotosEnviadas = fotosCompletadas >= totalFotos;
-  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
+  const todasEnviadas = todasFotosEnviadas;
+
   
   // Reidratar fotos existentes (refresh mantém progresso)
   useEffect(() => {
