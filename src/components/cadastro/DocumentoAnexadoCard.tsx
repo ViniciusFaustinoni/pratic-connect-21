@@ -129,7 +129,8 @@ export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar 
         'p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md group',
         isContrato && documento.status === 'aprovado' && 'border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/30',
         isContrato && documento.status !== 'aprovado' && 'border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/10',
-        !isContrato && 'border-border bg-card hover:bg-muted/50'
+        !isContrato && isReenviado && 'border-warning/40 bg-warning/5 ring-1 ring-warning/30',
+        !isContrato && !isReenviado && 'border-border bg-card hover:bg-muted/50'
       )}
     >
       <div className="flex items-start gap-3">
