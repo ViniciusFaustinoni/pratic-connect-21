@@ -556,7 +556,40 @@ export function useUploadFotoAutovistoria() {
         },
       });
 
-      return { fotoId, url: publicUrl, kmExtraido, ocrFalhou, chassiValidacao: null as null };
+      // OCR de placa (6 fotos exteriores)
+      let placaOcr: PlacaOcrResultado | undefined;
+      if (isFotoComValidacaoPlaca(fotoId)) {
+        try {
+          const { data: vist } = await supabase
+            .from('vistorias')
+            .select('veiculo_id')
+            .eq('id', vistoriaId)
+            .maybeSingle();
+          let placaEsperada = '';
+          let aguardando = false;
+          if (vist?.veiculo_id) {
+            const { data: veic } = await supabase
+              .from('veiculos')
+              .select('placa, aguardando_placa_definitiva')
+              .eq('id', vist.veiculo_id)
+              .maybeSingle();
+            placaEsperada = (veic as any)?.placa || '';
+            aguardando = !!(veic as any)?.aguardando_placa_definitiva;
+          }
+          if (!placaEsperada || aguardando || isPlacaPlaceholder(placaEsperada)) {
+            placaOcr = { placa: null, match: true, legivel: true, confianca: 1, skipped: true };
+          } else {
+            const { data: ocrPlaca } = await supabase.functions.invoke('placa-ocr', {
+              body: { url: publicUrl, placaEsperada, fotoTipo: fotoId },
+            });
+            if (ocrPlaca) placaOcr = ocrPlaca as PlacaOcrResultado;
+          }
+        } catch (e) {
+          console.warn('[placa-ocr] falha — nao bloqueia upload:', e);
+        }
+      }
+
+      return { fotoId, url: publicUrl, kmExtraido, ocrFalhou, chassiValidacao: null as null, placaOcr };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
