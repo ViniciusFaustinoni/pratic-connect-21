@@ -323,18 +323,37 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setShowMigracao(true);
   };
 
-  const handleProsseguir = () => {
+  const handleProsseguir = async () => {
     if (!selectedAssociadoId) return;
     if (selectedTipo === 'substituicao') {
-      onOpenChange(false);
-      const params = new URLSearchParams({
-        associado_id: selectedAssociadoId,
-        tipo_entrada: 'substituicao',
-        veiculo_antigo_id: veiculoAntigoId || '',
-        veiculo_antigo_placa: veiculoAntigoPlaca,
-        veiculo_antigo_modelo: veiculoAntigoModelo,
-      });
-      navigate(`/vendas/cotacoes?${params.toString()}`);
+      // Cria a Solicitação de Substituição (com snapshot SGA + termo de cancelamento pendente)
+      try {
+        const placa = (veiculoAntigoPlaca || '').toUpperCase();
+        if (!placa) { toast.error('Placa não selecionada'); return; }
+        toast.info('Criando solicitação de substituição...');
+        const { data, error } = await supabase.functions.invoke('criar-solicitacao-substituicao', {
+          body: { placa },
+        });
+        if (error) {
+          let msg: string | undefined;
+          try {
+            const anyErr = error as any;
+            if (anyErr?.context && typeof anyErr.context.json === 'function') {
+              const body = await anyErr.context.json();
+              msg = body?.error;
+            }
+          } catch { /* ignore */ }
+          throw new Error(msg || error.message);
+        }
+        if ((data as any)?.error) throw new Error((data as any).error);
+        const solId = (data as any)?.id as string;
+        if (!solId) throw new Error('Solicitação não retornou id');
+        onOpenChange(false);
+        setSolicitacaoSubstituicaoId(solId);
+        setShowDetalhesSubstituicao(true);
+      } catch (e: any) {
+        toast.error(e?.message || 'Falha ao criar solicitação');
+      }
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
       navigate(`/vendas/cotacoes?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
