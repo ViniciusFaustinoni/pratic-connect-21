@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
  */
 export function useAprovacoesMonitoramentoCount() {
   return useQuery<number>({
-    queryKey: ['aprovacoes-monitoramento-count', 'v2'],
+    queryKey: ['aprovacoes-monitoramento-count', 'v3'],
     queryFn: async () => {
       const safe = async (p: Promise<number>): Promise<number> => {
         try { return await p; } catch (e) { console.warn('[aprovacoes-count] fonte falhou', e); return 0; }
