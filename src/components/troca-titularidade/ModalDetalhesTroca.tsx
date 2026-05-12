@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,7 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle, FileText } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
@@ -36,15 +40,41 @@ const STATUS_LABELS: Record<StatusTroca, { label: string; variant: 'default'|'se
 };
 
 export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: Props) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: solicitacao, isLoading } = useSolicitacaoTroca(solicitacaoId || undefined);
   const [observacao, setObservacao] = useState('');
   const [motivoReprovar, setMotivoReprovar] = useState('');
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
+  const [criandoCotacao, setCriandoCotacao] = useState(false);
 
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
+
+  const handleRealizarCotacao = async () => {
+    if (!solicitacao) return;
+    setCriandoCotacao(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('criar-cotacao-troca-titularidade', {
+        body: { solicitacao_id: solicitacao.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const cotacaoId = (data as any)?.cotacao_id as string | undefined;
+      if (!cotacaoId) throw new Error('Cotação não retornada pelo servidor');
+      qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+      toast.success('Cotação criada com sucesso');
+      onOpenChange(false);
+      navigate(`/vendas/cotacoes?abrir=${cotacaoId}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao criar cotação');
+    } finally {
+      setCriandoCotacao(false);
+    }
+  };
 
   // (Removido) Checagem de débito do antigo titular: a troca não exige mais
   // adimplência. A aprovação do Cadastro depende apenas do termo assinado.
@@ -152,19 +182,52 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.novo_titular_dados?.cpf)} • {solicitacao.novo_titular_dados?.email || '-'} • {formatPhone(solicitacao.novo_titular_dados?.telefone)}</p>
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
-                {solicitacao.cotacao && (
+                {solicitacao.cotacao ? (
                   <div className="rounded border p-3 space-y-2">
                     <h4 className="font-semibold">Cotação vinculada</h4>
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Nº {solicitacao.cotacao.numero || solicitacao.cotacao.id.slice(0, 8)} — {solicitacao.cotacao.status}</span>
-                      {solicitacao.cotacao.token_publico && (
-                        <Button size="sm" variant="outline" asChild>
-                          <a href={`/cotacao/${solicitacao.cotacao.token_publico}`} target="_blank" rel="noreferrer">
-                            <ExternalLink className="h-3 w-3 mr-1" /> Abrir cotação
-                          </a>
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { onOpenChange(false); navigate(`/vendas/cotacoes?abrir=${solicitacao.cotacao!.id}`); }}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" /> Abrir cotação
+                      </Button>
                     </div>
+                  </div>
+                ) : (
+                  <div className="rounded border p-3 space-y-3 bg-muted/30">
+                    <div>
+                      <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Cotação</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {solicitacao.termo_cancelamento_assinado_em
+                          ? 'Termo de cancelamento assinado. Clique abaixo para gerar a cotação do novo titular (consulta FIPE atualizada).'
+                          : 'A cotação será gerada manualmente assim que o titular antigo assinar o termo de cancelamento.'}
+                      </p>
+                    </div>
+                    {(() => {
+                      const podeGerar = !!solicitacao.termo_cancelamento_assinado_em;
+                      const btn = (
+                        <Button
+                          onClick={handleRealizarCotacao}
+                          disabled={!podeGerar || criandoCotacao}
+                          className="w-full sm:w-auto"
+                        >
+                          {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                          Realizar Cotação
+                        </Button>
+                      );
+                      if (podeGerar) return btn;
+                      return (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild><span tabIndex={0}>{btn}</span></TooltipTrigger>
+                            <TooltipContent>Aguardando assinatura do termo de cancelamento pelo titular antigo.</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })()}
                   </div>
                 )}
               </TabsContent>

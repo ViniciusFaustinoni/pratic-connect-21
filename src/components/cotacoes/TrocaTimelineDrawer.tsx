@@ -1,10 +1,15 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, Clock, Send, Eye, FileText, MessageCircle, AlertTriangle, Ban, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Clock, Send, Eye, FileText, MessageCircle, AlertTriangle, Ban, ExternalLink, Loader2 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import type { OutroProcessoItem } from '@/hooks/useOutrosProcessos';
 import { cn } from '@/lib/utils';
 
@@ -60,11 +65,42 @@ interface Props {
 }
 
 export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isResending }: Props) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [criandoCotacao, setCriandoCotacao] = useState(false);
   if (!item) return null;
   const steps = buildSteps(item);
   const semEmail = !item.associado_antigo_email;
   const podeReenviar = item.tipo === 'troca_titularidade' && item.solicitacao_troca_id &&
     !item.termo_assinado_em && !!item.termo_enviado_em && !semEmail;
+
+  const podeRealizarCotacao = item.tipo === 'troca_titularidade'
+    && !!item.solicitacao_troca_id
+    && !item.cotacao_id
+    && !!item.termo_assinado_em;
+
+  const handleRealizarCotacao = async () => {
+    if (!item.solicitacao_troca_id) return;
+    setCriandoCotacao(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('criar-cotacao-troca-titularidade', {
+        body: { solicitacao_id: item.solicitacao_troca_id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const cotacaoId = (data as any)?.cotacao_id as string | undefined;
+      if (!cotacaoId) throw new Error('Cotação não retornada pelo servidor');
+      qc.invalidateQueries({ queryKey: ['outros-processos'] });
+      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+      toast.success('Cotação criada com sucesso');
+      onOpenChange(false);
+      navigate(`/vendas/cotacoes?abrir=${cotacaoId}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao criar cotação');
+    } finally {
+      setCriandoCotacao(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,6 +163,27 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
               )}
             </div>
           </div>
+
+          {podeRealizarCotacao && (
+            <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FileText className="h-4 w-4 text-primary" /> Pronto para gerar a cotação
+              </div>
+              <p className="text-xs text-muted-foreground">
+                O termo de cancelamento foi assinado. Clique para gerar a cotação do novo titular (consulta FIPE atualizada).
+              </p>
+              <Button size="sm" className="w-full" disabled={criandoCotacao} onClick={handleRealizarCotacao}>
+                {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                Realizar Cotação
+              </Button>
+            </div>
+          )}
+
+          {item.tipo === 'troca_titularidade' && item.cotacao_id && (
+            <Button size="sm" variant="outline" className="w-full" onClick={() => { onOpenChange(false); navigate(`/vendas/cotacoes?abrir=${item.cotacao_id}`); }}>
+              <ExternalLink className="h-3.5 w-3.5 mr-1" /> Abrir cotação vinculada
+            </Button>
+          )}
 
           {/* Timeline */}
           <div className="space-y-3">

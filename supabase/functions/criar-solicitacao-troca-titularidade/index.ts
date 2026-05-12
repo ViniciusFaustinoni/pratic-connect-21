@@ -234,46 +234,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { data: associadoAntigo } = await admin
-      .from('associados')
-      .select('id, nome, cidade, estado')
-      .eq('id', associado_antigo_id)
-      .maybeSingle();
-
-    // Criar cotação base com tipo_entrada=troca_titularidade em dados_extras
-    const tokenPublico = crypto.randomUUID().replace(/-/g, '');
-    const { data: cotacao, error: cotacaoErr } = await admin
-      .from('cotacoes')
-      .insert({
-        nome_solicitante: novo_titular.nome,
-        cliente_cpf: novo_titular.cpf,
-        email_solicitante: novo_titular.email || null,
-        telefone1_solicitante: novo_titular.telefone || null,
-        veiculo_marca: veiculo.marca,
-        veiculo_modelo: veiculo.modelo,
-        veiculo_ano: veiculo.ano_modelo || veiculo.ano_fabricacao,
-        veiculo_placa: veiculo.placa,
-        veiculo_combustivel: veiculo.combustivel,
-        veiculo_cor: veiculo.cor,
-        codigo_fipe: veiculo.codigo_fipe,
-        valor_fipe: veiculo.valor_fipe,
-        valor_cota: 0,
-        valor_adesao: 0,
-        valor_total_mensal: 0,
-        cidade: associadoAntigo?.cidade,
-        token_publico: tokenPublico,
-        status: 'rascunho',
-        validade_dias: 15,
-        dados_extras: {
-          tipo_entrada: 'troca_titularidade',
-          associado_antigo_id,
-          veiculo_origem_id: veiculo.id,
-        },
-      })
-      .select('id, token_publico')
-      .single();
-    if (cotacaoErr) throw cotacaoErr;
-
     // criado_por referencia profiles.id (não auth.users.id)
     const { data: profileRow } = await admin
       .from('profiles')
@@ -282,13 +242,16 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const criadoPorProfileId = profileRow?.id ?? null;
 
-    // Criar solicitação
+    // Criar solicitação SEM cotação vinculada.
+    // A cotação é criada manualmente pelo operador (botão "Realizar Cotação"
+    // no modal de detalhes), apenas APÓS o titular antigo assinar o termo de
+    // cancelamento. Edge dedicada: criar-cotacao-troca-titularidade.
     const { data: solicitacao, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .insert({
         associado_antigo_id,
         veiculo_id: veiculo.id,
-        cotacao_id: cotacao.id,
+        cotacao_id: null,
         novo_titular_dados: novo_titular,
         status: 'cotacao_em_andamento',
         criado_por: criadoPorProfileId,
@@ -321,8 +284,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         solicitacao_id: solicitacao.id,
-        cotacao_id: cotacao.id,
-        cotacao_token: cotacao.token_publico,
+        cotacao_id: null,
+        cotacao_token: null,
         solicitacao_token: solicitacao.token_publico,
         termo_enviado_automaticamente,
         termo_envio_erro,
