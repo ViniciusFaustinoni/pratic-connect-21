@@ -1,63 +1,67 @@
-## Problema
-
-Na troca de titularidade do veículo `KOU6D37` (Marcos Vinicius Dativo → Marcus Vinicius Faustinoni), o serviço `vistoria_entrada` foi gravado com `associado_id` do **titular antigo** (`6ab4887f`), mesmo a `solicitacao_troca_titularidade` já tendo `novo_associado_id` definido (`3f936bd7`) e a `vistoria` correspondente apontando para o novo titular.
-
-Como **todo o fluxo de campo** (atribuição, mapa, confirmação, imprevisto, reagendamento, follow-up, WhatsApp) lê `servicos.associado_id` para descobrir nome e telefone do destinatário, o resultado é:
-
-- WhatsApp de agendamento, confirmação, imprevisto e reagendamento foi enviado para o **titular antigo**.
-- A tarefa aparece como pertencente ao titular antigo na fila e no mapa.
-
 ## Causa raiz
 
-1. O serviço `vistoria_entrada` que cobre a troca foi criado/herdado com `associado_id` do contrato antigo, não do novo. Hoje **nenhuma camada normaliza isso** após `solicitacoes_troca_titularidade.novo_associado_id` ser preenchido.
-2. As funções que disparam mensagens (`enviar-link-reagendamento`, `cron-reagendamento-automatico`, `cron-followup-reagendamento`, `enviar-confirmacao-manual`, `confirmar-vistorias-manha-cron`) **assumem** que `servicos.associado_id` já é o destinatário correto e não checam contexto de troca de titularidade.
-3. O `cron-reagendamento-automatico` clona o serviço imprevisto preservando o `associado_id` errado, propagando a falha para o serviço reagendado.
+No fluxo "Vistoria na Base", o cliente é registrado em `agendamentos_base` (que já é a tarefa "Vistoria Base" da fila do Monitoramento). Porém, ao aprovar o cadastro, a edge function `criar-instalacao-pos-pagamento` está criando paralelamente uma linha em `instalacoes` com `local_vistoria='base'`. Essa instalação dispara o trigger `sync_instalacao_to_servicos`, gerando um `servicos` `tipo='instalacao'`. O hook `useServicosParaAtribuir` mescla `servicos` + `agendamentos_base` na fila de Atribuição Manual — daí o card duplicado (1 "Instalação" de rota + 1 "Vistoria Base").
 
-## Plano
+O guard anti-duplicação em `criar-instalacao-pos-pagamento` (linhas 223-248) só dispara quando já existe linha em `vistorias` com `local_vistoria='base'`. Mas no fluxo Base essa vistoria só é materializada *depois* que o técnico assume o agendamento_base (trigger `sync_agendamento_base_to_vistoria`). Como aprovar-proposta roda antes disso, o guard falha e a `instalacoes` fantasma é criada.
 
-### 1. Garantir o `associado_id` correto em `servicos` de troca de titularidade
+Confirmado em produção: 3 cotações com a duplicata exata (RJH6G17, LLV7A09, SIO3C68).
 
-- Criar trigger `trg_servicos_troca_titularidade_normaliza_associado` em `servicos` (BEFORE INSERT/UPDATE) que, quando `cotacao_id` ou `vistoria_origem_id` apontar para uma `solicitacoes_troca_titularidade` com `novo_associado_id` definido (e ainda não `efetivada`), força:
-  - `associado_id := novo_associado_id`
-  - `contrato_id := contrato novo (cotacao_id da solicitação, status assinado/ativo/aguardando_instalacao)` quando nulo.
-- Atualizar `fn_troca_pos_assinatura_pagamento` e o bloco equivalente em `contrato-gerar` para sempre gravar `associado_id = novo_associado_id` (já fazem, mas adicionar fallback explícito buscando `solicitacoes_troca_titularidade.novo_associado_id` por `cotacao_id`).
-- Backfill SQL: para todo `servicos` com `vistoria_origem_id`/`cotacao_id` ligado a `solicitacoes_troca_titularidade` com `novo_associado_id` e `status` não-terminal, reescrever `associado_id` e `contrato_id` para os do novo titular. Inclui o caso atual (KOU6D37, serviços `2b58b302` e `7bc4f730`).
+## Correção (raiz)
 
-### 2. Endurecer todas as funções de notificação para resolver o destinatário pelo contexto
+### 1. Edge function `criar-instalacao-pos-pagamento` (única alteração de código)
 
-Nas funções abaixo, adicionar helper único que, dado um `servico`, retorna `{ associado_id, telefone, nome }` consultando primeiro `solicitacoes_troca_titularidade` (via `cotacao_id` ou `servico_vistoria_id`) quando aplicável e caindo em `servicos.associado_id` no caso geral:
+No branch `tipoVistoria === 'agendada_base'`, expandir o guard anti-duplicação para verificar **também `agendamentos_base` ATIVO**:
 
-- `supabase/functions/enviar-link-reagendamento/index.ts`
-- `supabase/functions/cron-reagendamento-automatico/index.ts` (tanto na propagação de campos quanto no `INSERT` do novo `servicos`)
-- `supabase/functions/cron-followup-reagendamento/index.ts`
-- `supabase/functions/enviar-confirmacao-manual/index.ts`
-- `supabase/functions/confirmar-vistorias-manha-cron/index.ts`
+```text
+Se existir agendamento_base com status IN ('agendado','confirmado','pendente') 
+para a cotação → retornar { skipped: 'agendamento_base_exists' } SEM criar instalação.
+```
 
-Com o item 1, esse fallback é um cinto-extra; sem ele, evita repetir o problema enquanto serviços antigos não migram.
+A `instalacoes` será materializada naturalmente quando o técnico assumir a vistoria base (já existe trigger `sync_agendamento_base_to_vistoria` que vincula tudo via `agendamentos_base.instalacao_id` → `vistoria_id`). Nada mais precisa mudar no caminho feliz.
 
-### 3. Ajustes mínimos de UI
+### 2. Migração de backfill (limpa as duplicatas já criadas)
 
-- `useTarefaAtual` / cards do mapa e da fila do técnico já leem `associado` por `servicos.associado_id`. Após o fix em (1) e o backfill, passam a mostrar o nome correto sem alteração de código.
+```sql
+-- Cancela instalações fantasma que ainda estão na fila com agendamento_base ativo paralelo
+UPDATE instalacoes i
+   SET status = 'cancelada',
+       observacoes = COALESCE(observacoes,'') || ' [Auto-cancelada: duplicata de Vistoria Base]',
+       updated_at = now()
+ WHERE i.local_vistoria = 'base'
+   AND i.status IN ('agendada','em_analise')
+   AND EXISTS (
+     SELECT 1 FROM agendamentos_base ab
+      WHERE ab.cotacao_id = i.cotacao_id
+        AND ab.status IN ('agendado','confirmado','pendente')
+        AND ab.atendido_por IS NULL
+   );
 
-### 4. Verificação
+-- Remove os servicos órfãos correspondentes (não atribuídos)
+DELETE FROM servicos s
+ WHERE s.tipo = 'instalacao'
+   AND s.profissional_id IS NULL
+   AND s.status IN ('pendente','agendada')
+   AND EXISTS (
+     SELECT 1 FROM instalacoes i
+      WHERE i.id = s.instalacao_origem_id
+        AND i.status = 'cancelada'
+        AND i.observacoes LIKE '%Auto-cancelada: duplicata de Vistoria Base%'
+   );
+```
 
-- Rodar query confirmando que, para a placa `KOU6D37`, todos os `servicos` ativos passam a apontar para `3f936bd7` (Marcus Vinicius Faustinoni).
-- Disparar manualmente `enviar-link-reagendamento` para o serviço `7bc4f730` em ambiente de teste e validar que o destino é o telefone do novo titular.
+### 3. (Opcional, defesa em profundidade — recomendo aplicar)
 
-## Detalhes técnicos
+Atualizar o trigger `sync_instalacao_to_servicos` para *não* criar `servicos` tipo `instalacao` quando a `instalacoes.local_vistoria='base'` E houver `agendamentos_base` ativo na mesma cotação. Garante que mesmo regressões futuras não voltem a duplicar a fila.
 
-- Migration nova com:
-  - função `fn_normalizar_associado_servico_troca()` + trigger BEFORE INSERT OR UPDATE em `servicos`.
-  - UPDATE de backfill restrito a `solicitacoes_troca_titularidade` com `novo_associado_id IS NOT NULL` e `efetivada_em IS NULL`.
-- Helper TS `resolveDestinatarioServico(servico)` em arquivo compartilhado de cada função (cada edge function tem seu próprio bundle, então duplicamos o helper inline — sem import cruzado entre funções).
-- Nenhuma alteração em RLS, esquema de cotações ou no fluxo de pagamento.
+## Validação pós-deploy
+
+1. Após o backfill, abrir Monitoramento › Atribuição Manual: os 3 casos atuais (RJH6G17, LLV7A09, SIO3C68) devem mostrar **apenas** o card "Vistoria Base".
+2. Subir nova cotação Base de teste → aprovar cadastro → confirmar que apenas 1 card "Vistoria Base" aparece (sem "Instalação" paralela).
+3. Concluir a vistoria base no técnico → confirmar que a instalação é materializada normalmente e o fluxo segue até cobertura ativa.
 
 ## Arquivos afetados
 
-- Migration nova (Supabase) — trigger + backfill.
-- `supabase/functions/contrato-gerar/index.ts` — fallback `associado_id` por solicitação.
-- `supabase/functions/enviar-link-reagendamento/index.ts`
-- `supabase/functions/cron-reagendamento-automatico/index.ts`
-- `supabase/functions/cron-followup-reagendamento/index.ts`
-- `supabase/functions/enviar-confirmacao-manual/index.ts`
-- `supabase/functions/confirmar-vistorias-manha-cron/index.ts`
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — expansão do guard agendada_base.
+- Nova migração SQL — backfill + (opcional) hardening do trigger `sync_instalacao_to_servicos`.
+
+Nenhuma alteração de UI necessária — o hook `useServicosParaAtribuir` continua mesclando as duas fontes; a duplicata desaparece porque a fonte espúria deixa de ser populada.
