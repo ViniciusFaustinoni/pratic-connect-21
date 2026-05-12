@@ -1,41 +1,43 @@
 ## Problema
 
-O dialog **Solicitar Documentos** (`src/components/cadastro/SolicitarDocumentosDialog.tsx`), usado na análise do Cadastro para pendenciar uma autovistoria, ainda lista apenas:
+O badge do item **Monitoramento › Aprovações** no sidebar (`useAprovacoesMonitoramentoCount`) hoje conta **apenas 2** das 6 abas existentes na tela `Aprovações do Monitoramento`:
 
-- Foto do Chassi
-- Foto do Motor
-- **Vídeo 360°** ← removido no novo fluxo
+- ✅ Ressalvas Pendentes
+- ✅ Imprevistos
+- ❌ Aprovação de Associados
+- ❌ Troca de Titularidade
+- ❌ Liberação de Suspensão
+- ❌ Recusas do Instalador
 
-Isso é incoerente com o novo fluxo de autovistoria (9 fotos, sem vídeo).
+Por isso o número exibido não corresponde ao volume real de itens aguardando ação.
 
 ## Correção proposta
 
-Atualizar a categoria `autovistoria` em `buildCategorias()` para refletir o novo fluxo:
+Reescrever `src/hooks/useAprovacoesMonitoramentoCount.ts` para somar as 6 fontes, replicando os mesmos filtros usados pelos hooks de cada aba:
 
-```text
-Autovistoria — Roubo e Furto
-├─ Frente — Placa + Centro
-├─ Frente — Placa + Lateral Esquerda
-├─ Frente — Placa + Lateral Direita
-├─ Traseira — Placa + Centro
-├─ Traseira — Placa + Lateral Esquerda
-├─ Traseira — Placa + Lateral Direita
-├─ Foto do Chassi
-├─ Foto do Motor
-└─ Painel com veículo ligado
-```
+| Aba | Fonte | Filtro de "aguardando" |
+|---|---|---|
+| Aprovação de Associados | `servicos` | `tipo='instalacao'` + `status='concluida'` + (via join) `veiculos.cobertura_total != true` + `associados.status != 'ativo'` |
+| Troca de Titularidade | `solicitacoes_troca_titularidade` | `status = 'aguardando_monitoramento'` |
+| Liberação de Suspensão | `veiculos` | `cobertura_suspensa = true` ∩ contrato ativo/assinado com `liberado_reagendamento_em IS NULL` |
+| Recusas do Instalador | `servicos` | `decisao_instalador='negado'` + `status='em_analise'` |
+| Ressalvas Pendentes | `servicos` | `decisao_instalador='pendente_monitoramento'` + `status='em_analise'` (já existe) |
+| Imprevistos | `servicos` | `status IN ('nao_compareceu','imprevisto_pendente')` + `reagendamento_followup_count >= 3` (já existe) |
 
-IDs alinhados aos do `autovistoriaConfig.ts`: `frente_centro`, `frente_lateral_esquerda`, `frente_lateral_direita`, `traseira_centro`, `traseira_lateral_esquerda`, `traseira_lateral_direita`, `chassi`, `motor`, `painel_ligado`.
+Implementação:
 
-Remover a opção `video_360` e a importação `Video` do lucide se não for mais usada (substituir ícone da categoria por `Camera` ou `Car`).
+1. Executar as 6 queries em `Promise.all`. As 4 que admitem `count: 'exact', head: true` pegam só o número; as 2 que precisam de join pós-filtro (Aprovação de Associados e Liberação de Suspensão) selecionam apenas as colunas mínimas necessárias e contam após o filtro em memória — replicando o que o hook da aba já faz.
+2. Retornar a soma dos 6 contadores.
+3. Manter `refetchInterval: 60_000` e `staleTime: 30_000`. Atualizar o `queryKey` para `['aprovacoes-monitoramento-count','v2']` para invalidar cache antigo.
+4. Sem mudanças em `AppSidebar.tsx` — ele já injeta o badge a partir do hook (`linha 630-632`).
 
 ## Detalhes técnicos
 
-- Arquivo único: `src/components/cadastro/SolicitarDocumentosDialog.tsx` (linhas 69–85).
-- Ajustar default de `selecionados` se necessário — o set inicial é vazio para autovistoria, então sem impacto.
-- Garantir que o consumidor (handler de `onConfirm`) apenas repassa os IDs para a notificação/registro de pendência — não há mapeamento hardcoded para `chassi/motor/video_360` em outros pontos críticos (a confirmar com `rg "video_360"` antes de aplicar).
+- Arquivo único alterado: `src/hooks/useAprovacoesMonitoramentoCount.ts`.
+- Tipos `any` quando necessário em joins (alinhado ao padrão dos hooks existentes).
+- Erros silenciosos por fonte: se uma das queries falhar, contar 0 daquela fonte e logar `console.warn`, para não esconder o badge inteiro.
 
 ## Fora de escopo
 
-- Não alterar lógica de OCR, status, edge functions, ou UI de upload.
-- Não tocar no fluxo de instalação presencial (já coerente).
+- Não criar badges por aba.
+- Não alterar páginas/abas, lógica de aprovação, edge functions ou permissões.
