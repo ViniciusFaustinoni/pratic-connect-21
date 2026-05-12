@@ -11,6 +11,7 @@ import { useBuscaPlaca } from '@/hooks/useBuscaPlaca';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
+import { ModalDetalhesSubstituicao } from '@/components/substituicao/ModalDetalhesSubstituicao';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
