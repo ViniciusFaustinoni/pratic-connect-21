@@ -28,6 +28,29 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
 import { formatPeriodoLabel } from '@/lib/periodo-utils';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+
+// Categoria de "situação especial" (taxi/leilão/aplicativo/etc.) — não confundir
+// com tipo de veículo (moto vs automóvel). Ver
+// mem://logic/operations/cotacao-categoria-vs-tipo-veiculo
+const SITUACAO_ESPECIAL_VALUES = new Set([
+  'chassi_remarcado', 'placa_vermelha', 'aplicativo', 'leilao',
+  'ressarcimento_integral', 'ex_taxi', 'taxi',
+]);
+
+function rotuloCategoriaVeiculo(
+  categoriaRaw: string | null | undefined,
+  marca: string | null | undefined,
+  modelo: string | null | undefined,
+): string {
+  const cat = (categoriaRaw || '').trim();
+  if (cat && SITUACAO_ESPECIAL_VALUES.has(cat.toLowerCase())) {
+    // Situação especial real → mostra como veio
+    return cat;
+  }
+  const tipo = detectarTipoVeiculo(undefined, modelo, marca);
+  return tipo === 'moto' ? 'Motocicleta' : 'Automóvel';
+}
 import { normalizeChassi, chassiHelperText, isValidChassi } from '@/lib/chassi';
 
 interface PropostaDetalhesTabsProps {
