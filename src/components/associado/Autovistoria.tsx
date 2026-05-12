@@ -208,13 +208,14 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         [fotoAtual.id]: result.url,
       }));
 
-      // Se for odômetro e KM foi extraído, mostrar
-      if (fotoAtual.id === 'odometro' && result.kmExtraido) {
+      // Se for odômetro/painel e KM foi extraído, mostrar
+      const isFotoOdometro = fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado';
+      if (isFotoOdometro && result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
         setKmOcrFalhou(false);
         toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
       } 
-      else if (fotoAtual.id === 'odometro' && (result as any).ocrFalhou) {
+      else if (isFotoOdometro && (result as any).ocrFalhou) {
         setKmOcrFalhou(true);
         setKmIdentificado(null);
         toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', {
@@ -246,7 +247,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       }
 
       // Avançar automaticamente para a próxima foto após sucesso
-      if (!isUltimaFoto && !(fotoAtual.id === 'odometro' && (result as any).ocrFalhou) && !bloqueadoPorPlaca) {
+      if (!isUltimaFoto && !(isFotoOdometro && (result as any).ocrFalhou) && !bloqueadoPorPlaca) {
         setTimeout(() => avancarFoto(), 500);
       }
     } catch (error: any) {
