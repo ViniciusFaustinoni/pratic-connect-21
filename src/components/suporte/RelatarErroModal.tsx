@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Bug, Upload, X, Image as ImageIcon, FileText, Lightbulb, AlertCircle } from 'lucide-react';
+import { Bug, Upload, X, Image as ImageIcon, FileText, Lightbulb, AlertCircle, ClipboardPaste } from 'lucide-react';
 import { useCreateErrorReport } from '@/hooks/useErrorReports';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
