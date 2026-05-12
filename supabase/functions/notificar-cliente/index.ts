@@ -609,7 +609,7 @@ serve(async (req) => {
           sendBody.template_params = await Promise.resolve(mapping.getParams());
           console.log('[notificar-cliente] Payload documentos/link:', {
             tipo,
-            associado_id: associadoId,
+            associado_id,
             link_acompanhamento: dados?.link_acompanhamento || null,
             template_params: sendBody.template_params,
           });

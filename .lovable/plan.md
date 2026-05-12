@@ -1,37 +1,44 @@
-# Plano para corrigir o badge de Propostas Pendentes
+# Plano — WhatsApp na solicitação de documentos
 
-## Objetivo
-Fazer o número exibido no menu lateral de **Propostas Pendentes** refletir exatamente a mesma fila mostrada em **Cadastro > Propostas Pendentes**.
+## Causa raiz
+Ao solicitar documentos no Cadastro, a edge function `notificar-cliente` é invocada e quebra com:
+
+```
+ReferenceError: associadoId is not defined
+   notificar-cliente/index.ts:609 (linha do log: 612)
+```
+
+O código usa `associadoId` num `console.log`, mas a variável correta vinda do payload é `associado_id`. Como o erro acontece **antes** da chamada a `whatsapp-send-text`, nenhum WhatsApp é enviado para o associado. (Status final do log: `whatsapp: false`.)
+
+Além disso, hoje o fluxo `useSolicitarDocumentos` notifica **apenas o associado**. O vendedor responsável pelo contrato **não é avisado**.
 
 ## O que vou fazer
-1. **Mapear a origem da divergência**
-   - O badge atual usa `usePropostasPendentesCount()` e conta todos os contratos com `status = 'assinado'`.
-   - A tela `/cadastro/propostas` usa `usePropostasPendentes()` e remove itens já concluídos, já aprovados na autovistoria, com instalação concluída ou já fora da fila operacional.
 
-2. **Unificar a lógica de contagem com a lógica da lista**
-   - Ajustar o badge para usar a mesma fonte da lista, evitando contagem simplificada por status bruto.
-   - Preferência: reutilizar `usePropostasPendentes()` e derivar `length` para o sidebar, ou extrair uma base compartilhada para que lista e badge dependam da mesma regra.
+1. **Corrigir o bug que impede o envio ao associado**
+   - Substituir `associadoId` por `associado_id` no log da edge `notificar-cliente`.
+   - Validar via logs que a chamada chega em `whatsapp-send-text` e dispara a mensagem com o template Meta `documentos_solicitados`.
 
-3. **Preservar performance e consistência**
-   - Garantir que a solução use React Query de forma reaproveitável, sem duplicar consultas pesadas desnecessariamente.
-   - Manter invalidação/refetch coerentes para que badge e tela atualizem juntos.
+2. **Notificar também o vendedor**
+   - No hook `useSolicitarDocumentos` (após criar `documentos_solicitados`), buscar `vendedor_id` do contrato e o telefone do `profile`.
+   - Disparar uma mensagem de WhatsApp para o vendedor avisando que o Cadastro solicitou documentos ao cliente, com:
+     - nome do associado, placa/numero do contrato
+     - lista resumida das pendências
+     - link de acompanhamento (`/acompanhar/{link_token}`)
+   - Usar o caminho padrão de envio (Meta/Evolution) seguindo as regras de safety/idempotência já adotadas no projeto.
+   - Falha no envio ao vendedor não pode quebrar o fluxo de solicitação (try/catch + log).
 
-4. **Validar o resultado**
-   - Conferir que o badge do menu passa a bater com a quantidade real da tela.
-   - Verificar especialmente o caso reportado: sidebar mostrando 80 enquanto a lista mostra 27.
+3. **Validar**
+   - Refazer uma solicitação de teste no contrato `CTR-20260512100945-NQE90C`.
+   - Conferir nos logs de `notificar-cliente` e `whatsapp-send-text` que ambas mensagens (associado + vendedor) saíram com sucesso.
 
 ## Resultado esperado
-- O badge do sidebar exibirá o número real da fila de Cadastro.
-- Não haverá mais diferença entre o total do menu e o total exibido na página.
+- Cadastro solicita documentos → associado recebe WhatsApp imediatamente.
+- O vendedor responsável pelo contrato recebe um WhatsApp avisando da pendência criada.
+- Logs limpos, sem `ReferenceError`.
 
 ## Detalhes técnicos
-- Arquivos já identificados:
-  - `src/hooks/usePropostasPendentesCount.ts`
-  - `src/hooks/usePropostasPendentes.ts`
-  - `src/components/layout/AppSidebar.tsx`
-- Causa encontrada:
-  - `usePropostasPendentesCount()` faz apenas `.eq('status', 'assinado')` em `contratos`.
-  - `usePropostasPendentes()` aplica a regra completa de negócio da fila antes de montar a lista.
-- Direção da correção:
-  - Eliminar a contagem “bruta” por status para esse badge.
-  - Fazer o badge depender da mesma regra de filtragem já usada pela tela.
+- Arquivos afetados:
+  - `supabase/functions/notificar-cliente/index.ts` (fix do log).
+  - `src/hooks/usePropostasPendentes.ts` (`useSolicitarDocumentos`, adicionar notificação ao vendedor).
+- Telefone do vendedor sai de `profiles.telefone` (confirmado: `[TESTE] Vendedor CLT` tem telefone `12493649737`).
+- Template do associado já existe (`documentos_solicitados` no `META_TEMPLATE_MAP`); para o vendedor usaremos o template genérico já em uso para alertas internos.
