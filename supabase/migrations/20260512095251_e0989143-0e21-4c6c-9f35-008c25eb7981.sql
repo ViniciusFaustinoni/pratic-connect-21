@@ -1,0 +1,1 @@
+DELETE FROM cotacoes WHERE id IN ('a98e8669-5188-4b1d-ac9d-d25f7a33377a','85215de3-df34-4bf9-983d-b4132b816f9c');
