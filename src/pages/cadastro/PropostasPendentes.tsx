@@ -216,7 +216,25 @@ export default function PropostasPendentes() {
         proposta.cliente_cpf?.includes(search) ||
         proposta.veiculo_placa?.toLowerCase().includes(searchLower) ||
         proposta.veiculo_chassi?.toLowerCase().includes(searchLower);
-      const matchStatus = statusFilter === 'todos' || proposta.status === statusFilter;
+      // "Pend. Vistoria" é um status derivado (mesmo predicado do badge "Pendente Vistoria Inicial"):
+      // contrato assinado + cadastro aprovado + cenário NÃO autovistoria + instalação não concluída.
+      const isPendenteVistoria =
+        proposta.status === 'assinado' &&
+        proposta.cadastro_aprovado === true &&
+        proposta.tipo_vistoria !== 'autovistoria' &&
+        (!proposta.instalacao_info || proposta.instalacao_info.status !== 'concluida');
+
+      let matchStatus = true;
+      if (statusFilter === 'todos') {
+        matchStatus = true;
+      } else if (statusFilter === 'pendente_vistoria') {
+        matchStatus = isPendenteVistoria;
+      } else if (statusFilter === 'assinado') {
+        // "Aguardando" exclui as que já caíram no bucket Pend. Vistoria, evitando contagem duplicada visual.
+        matchStatus = proposta.status === 'assinado' && !isPendenteVistoria;
+      } else {
+        matchStatus = proposta.status === statusFilter;
+      }
       return matchSearch && matchStatus;
     })
     ?.sort((a, b) => {
