@@ -225,7 +225,7 @@ export function PropostaDetalhesTabs({
               <FichaField icon={Calendar} label="Ano Fabricação" value={proposta.veiculo_ano_fabricacao?.toString()} iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Cor" value={proposta.veiculo_cor} iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Combustível" value={proposta.veiculo_combustivel} iconColor="text-purple-500" />
-              <FichaField icon={FileText} label="Categoria" value={proposta.veiculo_categoria} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Categoria" value={rotuloCategoriaVeiculo(proposta.veiculo_categoria, proposta.veiculo_marca, proposta.veiculo_modelo)} iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Tipo de Uso" value={proposta.veiculo_tipo_uso} iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Procedência" value={proposta.veiculo_procedencia} iconColor="text-purple-500" />
             </div>
