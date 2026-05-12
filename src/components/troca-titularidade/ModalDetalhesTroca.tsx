@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,7 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle, FileText } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
