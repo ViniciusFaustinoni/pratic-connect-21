@@ -120,8 +120,10 @@ export function FotoCapture({
         ) : hasPhoto ? (
           <>
             <img
-              src={displayUrl}
+              src={transformedUrl(displayUrl, PREVIEW)}
               alt={label}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full rounded-lg object-cover"
             />
             {/* Overlay de sucesso */}
