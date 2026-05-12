@@ -29,6 +29,9 @@ import {
   ClipboardCheck,
   Copy,
   FileText,
+  FileCheck,
+  ArrowRightCircle,
+  Info,
 } from 'lucide-react';
 import {
   useProposta,
