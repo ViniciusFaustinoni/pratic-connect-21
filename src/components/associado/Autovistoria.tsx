@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { 
-  Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge, 
-  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, RefreshCw, AlertTriangle,
-  Video
+import {
+  Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge,
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, AlertCircle, ScanLine
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
