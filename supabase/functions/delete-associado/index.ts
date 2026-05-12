@@ -548,6 +548,22 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from("solicitacoes_troca_titularidade").delete().eq("associado_antigo_id", associadoId);
     await supabaseAdmin.from("solicitacoes_troca_titularidade").delete().eq("novo_associado_id", associadoId);
 
+    // 14c. Desvincular QUALQUER rastreador ainda apontando para o associado (FK rastreadores_associado_id_fkey)
+    await supabaseAdmin.rpc('set_audit_origem', { origem: 'edge:delete-associado' });
+    const rastFinalResult = await supabaseAdmin
+      .from("rastreadores")
+      .update({
+        veiculo_id: null,
+        associado_id: null,
+        associado_email: null,
+        status: 'estoque',
+        plataforma_veiculo_id: null,
+        plataforma_user_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("associado_id", associadoId);
+    logIfError("desvincular rastreadores por associado_id", rastFinalResult, { associadoId });
+
     // 15. Finally, delete the associate
     console.log(`[delete-associado] Todas as dependências limpas. Excluindo associado...`);
     
