@@ -756,7 +756,7 @@ export function usePropostasPendentes() {
           plano_nome: planoNome,
           endereco_completo: enderecoCompleto,
           vendedor,
-          documentos,
+          documentos: mergeDocsReenviadosNaLista(documentos, documentosSolicitadosEnviados),
           tem_documento_pendente: temDocumentoPendente,
           associado_status: associado?.status || null,
           vistoria,
