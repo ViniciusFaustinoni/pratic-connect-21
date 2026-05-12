@@ -183,7 +183,8 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       const { data: cotacoes, error } = await q;
       if (error) throw error;
       const cotList = (cotacoes || []) as any[];
-      if (cotList.length === 0) return [];
+      // Não fazer early return se cotList vazio: trocas/substituições SEM cotação
+      // ainda precisam aparecer na lista (são carregadas adiante).
 
       // 2) Trocas vinculadas
       const cotacaoIds = cotList.map((c) => c.id);
