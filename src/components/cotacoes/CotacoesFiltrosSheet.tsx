@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { CalendarIcon, CalendarDays, ListChecks, User, AlertTriangle, SlidersHorizontal, X } from 'lucide-react';
+import { etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
