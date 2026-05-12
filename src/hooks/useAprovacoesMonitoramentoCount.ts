@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
  */
 export function useAprovacoesMonitoramentoCount() {
   return useQuery<number>({
-    queryKey: ['aprovacoes-monitoramento-count', 'v2'],
+    queryKey: ['aprovacoes-monitoramento-count', 'v3'],
     queryFn: async () => {
       const safe = async (p: Promise<number>): Promise<number> => {
         try { return await p; } catch (e) { console.warn('[aprovacoes-count] fonte falhou', e); return 0; }
@@ -27,12 +27,12 @@ export function useAprovacoesMonitoramentoCount() {
         ressalvas,
         imprevistos,
       ] = await Promise.all([
-        // 1. Aprovação de Associados — instalações concluídas com veículo ainda sem cobertura total e associado não ativo
+        // 1. Aprovação de Associados — instalações/vistorias concluídas com veículo ainda sem cobertura total e associado não ativo
         safe((async () => {
           const { data } = await (supabase as any)
             .from('servicos')
             .select('id, veiculo:veiculo_id(cobertura_total), associado:associado_id(status)')
-            .eq('tipo', 'instalacao')
+            .in('tipo', ['instalacao', 'vistoria_entrada'])
             .eq('status', 'concluida');
           return (data || []).filter((s: any) =>
             s?.veiculo && s.veiculo.cobertura_total !== true && s?.associado?.status !== 'ativo'
