@@ -1609,7 +1609,7 @@ export function useSolicitarDocumentos() {
 
       const { data: contratoComLink } = await supabase
         .from('contratos')
-        .select('link_token, cotacao_token_publico')
+        .select('link_token, cotacao_token_publico, vendedor_id, numero, veiculo_placa, cliente_nome')
         .eq('id', contratoId)
         .single();
 
