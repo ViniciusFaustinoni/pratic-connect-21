@@ -94,6 +94,7 @@ function formatDateTime(dateString: string): string {
 
 export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar }: DocumentoAnexadoCardProps) {
   const isContrato = documento.tipo === 'contrato_assinado';
+  const isReenviado = typeof documento.id === 'string' && documento.id.startsWith('solicitado-');
   const status = statusConfig[documento.status] || statusConfig.pendente;
   const podeAnalisar = (documento.status === 'pendente' || documento.status === 'em_analise') && (onAprovar || onReprovar);
 
