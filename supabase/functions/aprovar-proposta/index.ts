@@ -497,6 +497,27 @@ serve(async (req) => {
     }
 
     const deveAguardarInstalacao = algumPrecisouRastreador && !jaTemInstalacaoConcluida;
+
+    // Detectar se autovistoria/vistoria já foi aprovada antes da aprovação do Cadastro.
+    // Isso muda apenas a mensagem exibida — a ativação real de R/F é feita por
+    // processar-vistoria/ativar-associado.
+    let autovistoriaAprovada = false;
+    try {
+      let vistQuery = supabase
+        .from('vistorias')
+        .select('id, status')
+        .in('status', ['aprovada', 'aprovada_ressalvas'])
+        .limit(1);
+      if (contrato.cotacao_id) {
+        vistQuery = vistQuery.eq('cotacao_id', contrato.cotacao_id);
+      } else if (veiculoIdDoContrato) {
+        vistQuery = vistQuery.eq('veiculo_id', veiculoIdDoContrato);
+      }
+      const { data: vistAprov } = await vistQuery.maybeSingle();
+      autovistoriaAprovada = !!vistAprov;
+    } catch (e) {
+      console.warn('[aprovar-proposta] Falha ao checar vistoria aprovada:', e);
+    }
     // POLÍTICA: o primeiro envio ao SGA é SEMPRE 'pendente', independente de R/F,
     // auto-vistoria ou instalação já concluída. A promoção para 'ativo' acontece
     // exclusivamente após a ativação completa (segundo disparo abaixo).
@@ -540,7 +561,9 @@ serve(async (req) => {
       : !planoTemRouboFurto
         ? 'Proposta aprovada pelo analista de cadastro. Plano de assistência ativado (sem cobertura de Roubo/Furto).'
         : algumPrecisouRastreador
-          ? 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+          ? (autovistoriaAprovada
+              ? 'Análise documental aprovada pelo analista de cadastro. Cobertura Roubo/Furto liberada. Aguardando agendamento da instalação para Proteção 360º.'
+              : 'Análise documental aprovada pelo analista de cadastro. Aguardando o cliente concluir a autovistoria para liberar a Cobertura Roubo/Furto.')
           : 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).';
 
     const docPromises: Promise<any>[] = [
@@ -627,7 +650,9 @@ serve(async (req) => {
       : !planoTemRouboFurto
         ? 'Proposta aprovada! Plano de assistência ativado (sem cobertura de Roubo/Furto).'
         : algumPrecisouRastreador
-          ? 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+          ? (autovistoriaAprovada
+              ? 'Análise documental aprovada! Cobertura Roubo/Furto liberada. Aguardando agendamento da instalação para Proteção 360º.'
+              : 'Análise documental aprovada! Aguardando o cliente concluir a autovistoria para liberar a Cobertura Roubo/Furto.')
           : 'Proposta aprovada! Proteção 360° ativada (sem necessidade de rastreador).';
 
     console.log('[aprovar-proposta] Concluído:', mensagemRetorno);
