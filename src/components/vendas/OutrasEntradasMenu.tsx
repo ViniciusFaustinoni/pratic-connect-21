@@ -86,6 +86,8 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   // Dialogs
   const [showTrocaTitularidade, setShowTrocaTitularidade] = useState(false);
   const [showMigracao, setShowMigracao] = useState(false);
+  const [showDetalhesSubstituicao, setShowDetalhesSubstituicao] = useState(false);
+  const [solicitacaoSubstituicaoId, setSolicitacaoSubstituicaoId] = useState<string | null>(null);
   const [migracaoCpfParaDialog, setMigracaoCpfParaDialog] = useState('');
 
   // Search hooks (only for non-migracao types)
