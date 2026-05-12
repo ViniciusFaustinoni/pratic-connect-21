@@ -561,7 +561,9 @@ serve(async (req) => {
       : !planoTemRouboFurto
         ? 'Proposta aprovada pelo analista de cadastro. Plano de assistência ativado (sem cobertura de Roubo/Furto).'
         : algumPrecisouRastreador
-          ? 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+          ? (autovistoriaAprovada
+              ? 'Análise documental aprovada pelo analista de cadastro. Cobertura Roubo/Furto liberada. Aguardando agendamento da instalação para Proteção 360º.'
+              : 'Análise documental aprovada pelo analista de cadastro. Aguardando o cliente concluir a autovistoria para liberar a Cobertura Roubo/Furto.')
           : 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).';
 
     const docPromises: Promise<any>[] = [
