@@ -284,8 +284,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         solicitacao_id: solicitacao.id,
-        cotacao_id: cotacao.id,
-        cotacao_token: cotacao.token_publico,
+        cotacao_id: null,
+        cotacao_token: null,
         solicitacao_token: solicitacao.token_publico,
         termo_enviado_automaticamente,
         termo_envio_erro,
