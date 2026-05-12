@@ -29,7 +29,7 @@ export function useInstalacoesAguardandoAprovacao() {
           veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(nome, telefone, email, cpf, status)
         `)
-        .eq('tipo', 'instalacao')
+        .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida')
         .order('concluida_em', { ascending: true });
 
