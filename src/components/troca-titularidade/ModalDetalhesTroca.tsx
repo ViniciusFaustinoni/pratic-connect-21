@@ -40,15 +40,41 @@ const STATUS_LABELS: Record<StatusTroca, { label: string; variant: 'default'|'se
 };
 
 export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: Props) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: solicitacao, isLoading } = useSolicitacaoTroca(solicitacaoId || undefined);
   const [observacao, setObservacao] = useState('');
   const [motivoReprovar, setMotivoReprovar] = useState('');
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
+  const [criandoCotacao, setCriandoCotacao] = useState(false);
 
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
+
+  const handleRealizarCotacao = async () => {
+    if (!solicitacao) return;
+    setCriandoCotacao(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('criar-cotacao-troca-titularidade', {
+        body: { solicitacao_id: solicitacao.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const cotacaoId = (data as any)?.cotacao_id as string | undefined;
+      if (!cotacaoId) throw new Error('Cotação não retornada pelo servidor');
+      qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+      toast.success('Cotação criada com sucesso');
+      onOpenChange(false);
+      navigate(`/vendas/cotacoes?abrir=${cotacaoId}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao criar cotação');
+    } finally {
+      setCriandoCotacao(false);
+    }
+  };
 
   // (Removido) Checagem de débito do antigo titular: a troca não exige mais
   // adimplência. A aprovação do Cadastro depende apenas do termo assinado.
