@@ -263,7 +263,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
                 Autovistoria Concluída!
               </h2>
               <p className="text-muted-foreground mt-1">
-                Todas as {totalFotos} fotos e o vídeo 360° foram enviados com sucesso.
+                Todas as {totalFotos} fotos foram enviadas com sucesso.
               </p>
             </div>
           </div>
