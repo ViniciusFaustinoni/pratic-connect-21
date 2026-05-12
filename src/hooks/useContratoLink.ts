@@ -4,6 +4,9 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { uploadVideoWithRetry, VideoUploadError } from '@/lib/videoUpload';
+import { isFotoComValidacaoPlaca } from '@/data/autovistoriaConfig';
+import { isPlacaPlaceholder } from '@/lib/placa-utils';
+import type { PlacaOcrResultado } from './useCotacaoVistoria';
 
 // Hook para buscar contrato por token (público) com polling inteligente e timeout
 export function useContratoByToken(token: string | undefined) {
