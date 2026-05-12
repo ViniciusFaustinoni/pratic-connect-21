@@ -314,10 +314,11 @@ export function VideoCapture({
 
       <div
         className={cn(
-          'relative flex aspect-video flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all overflow-hidden',
-          hasVideo
-            ? 'border-transparent'
-            : 'border-slate-600 bg-slate-800'
+          'relative flex flex-col items-center justify-center border-2 border-dashed transition-all overflow-hidden',
+          isRecording
+            ? 'fixed inset-0 z-50 rounded-none bg-black border-transparent pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
+            : 'rounded-lg aspect-[3/4] min-h-[60vh] sm:aspect-video sm:min-h-0',
+          !isRecording && (hasVideo ? 'border-transparent' : 'border-slate-600 bg-slate-800')
         )}
       >
         {/* <video> de preview ao vivo SEMPRE montado — só fica visível durante a gravação.
