@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { VistoriaFotoConfig } from '@/data/vistoriaConfigCompleta';
+import { transformedUrl, THUMB, PREVIEW } from '@/lib/storage/imageTransform';
 
 interface FotoEnviada {
   tipo: string;
