@@ -233,7 +233,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   };
 
   const handleSelectAssociado = async (associado: AssociadoSearchResult) => {
-    if (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') {
+    if (selectedTipo === 'substituicao') {
       setSelectedAssociadoId(associado.id);
       setSelectedAssociadoNome(associado.nome);
       setSelectedAssociadoCpf(associado.cpf);
