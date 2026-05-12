@@ -1,0 +1,1 @@
+DELETE FROM public.cotacoes_vistoria_fotos WHERE cotacao_id = '9f29b76e-bbca-4938-9a23-834d9010647f';

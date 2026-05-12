@@ -143,12 +143,11 @@ export function useUploadFotoCotacaoVistoria() {
         try {
           const { data: cot } = await publicSupabase
             .from('cotacoes')
-            .select('placa, aguardando_placa_definitiva')
+            .select('veiculo_placa')
             .eq('id', cotacaoId)
             .maybeSingle();
-          const placaEsperada = (cot as any)?.placa || '';
-          const aguardando = !!(cot as any)?.aguardando_placa_definitiva;
-          if (!placaEsperada || aguardando || isPlacaPlaceholder(placaEsperada)) {
+          const placaEsperada = (cot as any)?.veiculo_placa || '';
+          if (!placaEsperada || isPlacaPlaceholder(placaEsperada)) {
             // 0KM ou sem placa real — não valida.
             placaOcr = { placa: null, match: true, legivel: true, confianca: 1, skipped: true };
           } else {

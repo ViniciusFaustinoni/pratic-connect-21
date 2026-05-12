@@ -187,8 +187,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       revokePreview(localUrl);
       setPreviewLocal(null);
       
-      // Se extraiu KM do odômetro
-      const odometroOcrFalhou = fotoAtual.id === 'odometro' && !result.kmExtraido && (result as any).ocrFalhou;
+      // Se extraiu KM do odômetro/painel
+      const isFotoOdometro = fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado';
+      const odometroOcrFalhou = isFotoOdometro && !result.kmExtraido && (result as any).ocrFalhou;
       if (result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
         setKmOcrFalhou(false);
@@ -227,8 +228,10 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
 
       // Avançar para próxima foto automaticamente
       // Não avança se OCR do odômetro falhou ou se placa não confere/ilegível
-      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou && !bloqueadoPorPlaca) {
-        setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 300);
+      if (!odometroOcrFalhou && !bloqueadoPorPlaca) {
+        setTimeout(() => {
+          setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
+        }, 300);
       }
     } catch (error: any) {
       console.error('[AutovistoriaCotacao] Erro no upload:', error);
@@ -437,7 +440,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             )}
 
             {/* Confirmação pós-envio */}
-            {fotoJaEnviada && !isUploading && fotoAtual.id !== 'odometro' && (
+            {fotoJaEnviada && !isUploading && fotoAtual.id !== 'odometro' && fotoAtual.id !== 'painel_ligado' && (
               <div className="bg-success/5 border border-success/20 rounded-lg p-3 flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
                 <p className="text-xs text-foreground/80 leading-relaxed">
@@ -446,8 +449,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 </p>
               </div>
             )}
-            {/* KM identificado (odômetro) */}
-            {fotoAtual.id === 'odometro' && kmIdentificado && (
+            {/* KM identificado (odômetro/painel) */}
+            {(fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado') && kmIdentificado && (
               <div className="bg-primary/5 p-3 rounded-lg flex items-center gap-3 border border-primary/20">
                 <Gauge className="h-5 w-5 text-primary" />
                 <div>
@@ -459,8 +462,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
               </div>
             )}
 
-            {/* Fallback manual: OCR do odômetro falhou */}
-            {fotoAtual.id === 'odometro' && kmOcrFalhou && !kmIdentificado && (
+            {/* Fallback manual: OCR do odômetro/painel falhou */}
+            {(fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado') && kmOcrFalhou && !kmIdentificado && (
               <div className="space-y-2">
                 <OcrFallbackBanner
                   documento="a quilometragem do odômetro"
@@ -499,9 +502,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                           setKmIdentificado(n);
                           setKmOcrFalhou(false);
                           toast.success(`Quilometragem registrada: ${n.toLocaleString('pt-BR')} km`);
-                          if (fotoAtualIndex < totalFotos - 1) {
-                            setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 400);
-                          }
+                          setTimeout(() => {
+                            setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
+                          }, 400);
                         } catch (e: any) {
                           console.error('[AutovistoriaCotacao] erro ao salvar KM manual:', e);
                           toast.error('Não foi possível salvar a quilometragem. Tente novamente.');
