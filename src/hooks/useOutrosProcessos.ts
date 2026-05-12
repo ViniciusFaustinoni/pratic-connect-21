@@ -253,8 +253,8 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
         (vs || []).forEach((v: any) => vendedoresMap.set(v.user_id, v));
       }
 
-      // 5) Compor
-      return cotList.map<OutroProcessoItem>((c) => {
+      // 5) Compor cotações
+      const cotacaoItems: OutroProcessoItem[] = cotList.map<OutroProcessoItem>((c) => {
         const tipo = c.tipo_entrada as TipoOutroProcesso;
         const troca = trocasMap.get(c.id) || null;
         const associadoAntigo = troca ? associadosMap.get(troca.associado_antigo_id) : null;
@@ -342,6 +342,100 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           })(),
         };
       });
+
+      // 6) Solicitações de substituição SEM cotação ainda (cotacao_id IS NULL)
+      let substItems: OutroProcessoItem[] = [];
+      if (tipos.includes('substituicao_placa')) {
+        let sq = (supabase as any)
+          .from('solicitacoes_substituicao_placa')
+          .select('id, associado_id, veiculo_antigo_placa, veiculo_antigo_snapshot, associado_snapshot, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, consultor_id, criado_por, created_at, updated_at')
+          .is('cotacao_id', null)
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (effectiveScope === 'own' && effectiveVendedorId) {
+          sq = sq.or(`consultor_id.eq.${effectiveVendedorId},criado_por.eq.${effectiveVendedorId}`);
+        } else if (consultorId) {
+          sq = sq.or(`consultor_id.eq.${consultorId},criado_por.eq.${consultorId}`);
+        }
+        const { data: substs } = await sq;
+        const consultorIds = Array.from(new Set((substs || []).map((s: any) => s.consultor_id || s.criado_por).filter(Boolean)));
+        const profilesMap = new Map<string, any>();
+        if (consultorIds.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('user_id, nome, full_name')
+            .in('user_id', consultorIds as string[]);
+          (profs || []).forEach((p: any) => profilesMap.set(p.user_id, p));
+        }
+        substItems = (substs || []).map<OutroProcessoItem>((s: any) => {
+          const snapV = s.veiculo_antigo_snapshot || {};
+          const snapA = s.associado_snapshot || {};
+          const consultorKey = s.consultor_id || s.criado_por;
+          const prof = consultorKey ? profilesMap.get(consultorKey) : null;
+          const termoStatus: OutroProcessoItem['termo_status'] = s.status === 'cancelada'
+            ? 'recusado'
+            : s.termo_cancelamento_assinado_em ? 'assinado'
+            : s.termo_cancelamento_enviado_em ? 'enviado'
+            : 'pendente';
+          const etapaMap: Record<string, { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' }> = {
+            aguardando_termo: { label: 'Aguardando termo', tone: 'warn' },
+            termo_enviado: { label: 'Termo enviado', tone: 'info' },
+            termo_assinado: { label: 'Pronto para nova cotação', tone: 'ok' },
+            cotacao_criada: { label: 'Cotação criada', tone: 'info' },
+            efetivada: { label: 'Efetivada', tone: 'ok' },
+            cancelada: { label: 'Cancelada', tone: 'danger' },
+          };
+          const etapa = etapaMap[s.status] || { label: s.status, tone: 'info' };
+          return {
+            id: `subst-${s.id}`,
+            tipo: 'substituicao_placa',
+            cotacao_id: null,
+            cotacao_numero: null,
+            cotacao_token: null,
+            cotacao_status: s.status,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+            vendedor_id: consultorKey ?? null,
+            vendedor_nome: prof?.full_name || prof?.nome || null,
+            titular_origem_nome: snapA.nome ?? null,
+            titular_origem_cpf: snapA.cpf ?? null,
+            titular_destino_nome: null,
+            titular_destino_cpf: null,
+            veiculo_placa: s.veiculo_antigo_placa,
+            veiculo_marca: snapV.marca ?? null,
+            veiculo_modelo: snapV.modelo ?? null,
+            veiculo_ano: snapV.ano ? Number(snapV.ano) : null,
+            solicitacao_troca_id: null,
+            troca_status: null,
+            solicitacao_substituicao_id: s.id,
+            substituicao_status: s.status,
+            termo_status: termoStatus,
+            termo_filiacao_status: 'nao_aplicavel',
+            termo_url: s.termo_cancelamento_url ?? null,
+            termo_enviado_em: s.termo_cancelamento_enviado_em ?? null,
+            termo_assinado_em: s.termo_cancelamento_assinado_em ?? null,
+            termo_whatsapp_status: s.termo_whatsapp_status ?? null,
+            termo_reenvios_count: s.termo_reenvios_count ?? 0,
+            termo_ultimo_reenvio_em: s.termo_ultimo_reenvio_em ?? null,
+            associado_antigo_email: snapA.email ?? null,
+            associado_antigo_telefone: snapA.telefone_celular ?? snapA.telefone ?? null,
+            aprovado_cadastro_em: null,
+            aprovado_monitoramento_em: null,
+            efetivada_em: null,
+            reprovado_em: null,
+            motivo_reprovacao: null,
+            pendencia_qtd: 0,
+            pendencia_total: 0,
+            etapa_label: etapa.label,
+            etapa_tone: etapa.tone,
+            pode_editar: false,
+          };
+        });
+      }
+
+      return [...substItems, ...cotacaoItems].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
     },
     staleTime: 30_000,
     refetchInterval: 30_000,
