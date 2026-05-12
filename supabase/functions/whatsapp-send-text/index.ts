@@ -243,17 +243,67 @@ async function enviarViaMeta(
 
     console.log(`[whatsapp-send-text] Enviando texto livre via Meta para ${telefoneFormatado} (allow_text=true, preview_url=${contemLink(mensagem)})`);
   } else {
-    // BLOQUEAR texto livre proativo sem template — NÃO é entregue fora da janela 24h
-    console.error(`[whatsapp-send-text] ❌ BLOQUEADO: Tentativa de envio sem template via Meta para ${telefoneFormatado}. Mensagem: "${mensagem.substring(0, 80)}..."`);
-    
+    // ⚠️ Caller esqueceu o template. Em vez de perder a mensagem (que pode ser
+    // crítica — contrato, troca, notificação ao vendedor/associado), aplicamos
+    // fallback automático para o template genérico aprovado `sinistro_atualizado`
+    // (3 vars: nome, assunto, detalhes). Logamos como WARN com hint para QA.
+    console.warn(`[whatsapp-send-text] ⚠️ AUTO-FALLBACK: chamada sem template_name para ${telefoneFormatado}. Aplicando template 'sinistro_atualizado'. Mensagem: "${mensagem.substring(0, 120)}..."`);
+
+    const fallbackName = 'sinistro_atualizado';
+    const { data: fbTmpl } = await supabase
+      .from("whatsapp_meta_templates")
+      .select("nome, idioma, status, corpo, botoes")
+      .eq("nome", fallbackName)
+      .eq("status", "APPROVED")
+      .single();
+
+    if (!fbTmpl) {
+      // Nenhum fallback aprovado — aí sim bloqueia e registra
+      await supabase.from("whatsapp_mensagens").insert({
+        telefone: telefoneFormatado, tipo: "text", mensagem,
+        direcao: "saida", status: "erro",
+        erro_mensagem: `Bloqueado: Meta API ativa requer template_name e fallback '${fallbackName}' não está APPROVED.`,
+        provedor: "meta_oficial",
+      });
+      throw new Error(`Meta API ativa: template_name obrigatório e fallback '${fallbackName}' indisponível.`);
+    }
+
+    // Extrair primeiro nome a partir da própria mensagem (procura "Olá, NOME" / "Olá NOME")
+    const nomeMatch = mensagem.match(/Ol[áa],?\s+\*?([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÀ-ÿ]+)/i);
+    const primeiroNome = (nomeMatch?.[1] || 'Cliente').replace(/[*_~`]/g, '').trim();
+    const assunto = 'Atualização PRATIC';
+    const detalhes = mensagem
+      .replace(/[*_~`]/g, '')
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 280);
+
+    const fallbackParams = [primeiroNome, assunto, detalhes];
+
+    metaBody = {
+      messaging_product: "whatsapp",
+      to: telefoneFormatado,
+      type: "template",
+      template: {
+        name: fbTmpl.nome,
+        language: { code: fbTmpl.idioma || "pt_BR" },
+        components: [{
+          type: "body",
+          parameters: fallbackParams.map(p => ({ type: "text", text: p })),
+        }],
+      },
+    };
+
+    // Registra warn no log para que QA detecte callers a corrigir
     await supabase.from("whatsapp_mensagens").insert({
       telefone: telefoneFormatado, tipo: "text", mensagem,
-      direcao: "saida", status: "erro",
-      erro_mensagem: "Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h. Use allow_text=true para respostas na janela 24h.",
+      direcao: "saida", status: "enviada",
+      erro_mensagem: `auto_fallback_template: caller esqueceu template_name; usado '${fallbackName}'`,
+      template_id: fallbackName,
+      template_variaveis: { params: fallbackParams } as any,
       provedor: "meta_oficial",
     });
-
-    throw new Error("Meta API ativa: template_name obrigatório. Texto livre não será entregue fora da janela de 24h. Adicione template_name/template_params ou allow_text=true.");
   }
 
   const response = await fetch(
