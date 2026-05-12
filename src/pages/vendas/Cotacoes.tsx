@@ -42,6 +42,7 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
 // gerarPdfCotacao* importados dinamicamente no handler (evita 54KB no bundle inicial)
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
+import { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacoesFiltrosSheet } from '@/components/cotacoes/CotacoesFiltrosSheet';
 import { CotacoesActiveFiltersChips } from '@/components/cotacoes/CotacoesActiveFiltersChips';
