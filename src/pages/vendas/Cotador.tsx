@@ -251,6 +251,7 @@ export default function CotadorPage() {
   const veiculoAntigoId = searchParams.get('veiculo_antigo_id');
   const veiculoAntigoPlaca = searchParams.get('veiculo_antigo_placa') || '';
   const veiculoAntigoModelo = searchParams.get('veiculo_antigo_modelo') || '';
+  const solicitacaoSubstituicaoId = searchParams.get('solicitacao_substituicao_id');
 
   // Edição de cotação de TROCA DE TITULARIDADE (consultor edita antes do termo de filiação)
   const edicaoTrocaCotacaoId = searchParams.get('cotacao_id');
@@ -974,6 +975,7 @@ export default function CotadorPage() {
         veiculo_antigo_id: isSubstituicao ? veiculoAntigoId : undefined,
         veiculo_antigo_placa: isSubstituicao ? veiculoAntigoPlaca : undefined,
         veiculo_antigo_modelo: isSubstituicao ? veiculoAntigoModelo : undefined,
+        solicitacao_substituicao_id: isSubstituicao ? solicitacaoSubstituicaoId : undefined,
       });
 
       setCotacaoSalva(cotacaoData);
