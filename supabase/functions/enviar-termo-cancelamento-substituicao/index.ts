@@ -90,22 +90,31 @@ Deno.serve(async (req) => {
     if (!associadoAntigo) throw new Error('Associado antigo não encontrado');
     if (!associadoAntigo.email) throw new Error('Associado antigo sem email cadastrado');
 
-    const { data: veiculo } = await admin
-      .from('veiculos')
-      .select('id, marca, modelo, placa, ano_modelo, cor, chassi, renavam')
-      .eq('id', solicitacao.veiculo_id)
-      .maybeSingle();
+    let veiculo: any = null;
+    if (solicitacao.veiculo_antigo_id) {
+      const { data } = await admin
+        .from('veiculos')
+        .select('id, marca, modelo, placa, ano_modelo, cor, chassi, renavam')
+        .eq('id', solicitacao.veiculo_antigo_id)
+        .maybeSingle();
+      veiculo = data;
+    }
+    if (!veiculo) {
+      const snap = (solicitacao.veiculo_antigo_snapshot || {}) as any;
+      veiculo = {
+        marca: snap.marca, modelo: snap.modelo, placa: solicitacao.veiculo_antigo_placa,
+        ano_modelo: snap.ano, cor: null, chassi: snap.chassi || null, renavam: null,
+      };
+    }
 
     // Contrato ativo do veículo (para variáveis)
     const { data: contrato } = await admin
       .from('contratos')
       .select('id, numero, valor_mensal, data_inicio, created_at')
-      .eq('associado_id', solicitacao.associado_antigo_id)
+      .eq('associado_id', solicitacao.associado_id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-
-    const novoTitular = (solicitacao.novo_titular_dados || {}) as { nome?: string; cpf?: string };
 
     // Buscar template
     const { data: template } = await admin
