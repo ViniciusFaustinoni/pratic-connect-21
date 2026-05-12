@@ -975,17 +975,38 @@ export default function Cotacoes() {
           )}
 
           <Select value={etapaFunilFilter} onValueChange={setEtapaFunilFilter}>
-            <SelectTrigger className="w-[200px] h-9 border-0 bg-background/80 shadow-sm">
+            <SelectTrigger className="w-[220px] h-9 border-0 bg-background/80 shadow-sm">
               <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Etapa do funil" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as etapas</SelectItem>
               <SelectItem value="rascunho">Rascunho</SelectItem>
-              <SelectItem value="enviada">Enviada — aguardando cliente</SelectItem>
-              <SelectItem value="escolhendo_plano">Escolhendo plano</SelectItem>
-              <SelectItem value="enviando_documentos">Enviando documentos</SelectItem>
-              <SelectItem value="em_analise">Documentos em análise</SelectItem>
+              {([
+                'cotacao_realizada',
+                'escolhendo_plano',
+                'enviando_documentos',
+                'escolha_vistoria',
+                'realizando_autovistoria',
+                'assinando_contrato',
+                'realizando_pagamento',
+                'aguardando_vistoria',
+                'vistoria_agendada',
+                'instalacao_agendada',
+                'realizando_vistoria',
+                'vistoria_realizada',
+                'em_analise',
+                'associado_ativo',
+                'veiculo_recusado',
+                'cancelado',
+              ] as EtapaVenda[]).map((etapa) => (
+                <SelectItem key={etapa} value={etapa}>
+                  {etapaVendaConfig[etapa].label}
+                </SelectItem>
+              ))}
+              <SelectItem value="expirada">Expirada</SelectItem>
+            </SelectContent>
+          </Select>
               <SelectItem value="assinando_contrato">Aguardando assinatura</SelectItem>
               <SelectItem value="pagando_taxa">Pagando taxa</SelectItem>
               <SelectItem value="agendando_vistoria">Agendando vistoria</SelectItem>
