@@ -192,6 +192,87 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         enderecoInstalacao = inst || null;
       }
 
+      // Detectar atendimento na Base (vistoria_entrada ou sem instalacao vinculada)
+      const isAtendimentoBase =
+        servico.tipo === 'vistoria_entrada' || !servico.instalacao_origem_id;
+
+      let enderecoBase: any = null;
+      if (isAtendimentoBase) {
+        const { data: cfgRows } = await supabase
+          .from('configuracoes')
+          .select('chave, valor')
+          .in('chave', [
+            'base_logradouro',
+            'base_numero',
+            'base_complemento',
+            'base_bairro',
+            'base_cidade',
+            'base_uf',
+            'base_cep',
+          ]);
+        const cfg: Record<string, string> = {};
+        (cfgRows || []).forEach((r: any) => { cfg[r.chave] = r.valor; });
+
+        // Data/horário: tentar vistoria, depois agendamento_base, depois servico
+        let dataAg: string | null = null;
+        let horarioAg: string | null = null;
+        let periodoAg: string | null = null;
+
+        if (servico.vistoria_origem_id) {
+          const { data: v } = await supabase
+            .from('vistorias')
+            .select('data_agendada, horario_agendado')
+            .eq('id', servico.vistoria_origem_id)
+            .maybeSingle();
+          dataAg = v?.data_agendada || null;
+          horarioAg = (v as any)?.horario_agendado || null;
+        }
+
+        if (!dataAg && servico.contrato_id) {
+          const { data: contrato } = await supabase
+            .from('contratos')
+            .select('cotacao_id')
+            .eq('id', servico.contrato_id)
+            .maybeSingle();
+          if (contrato?.cotacao_id) {
+            const { data: ag } = await supabase
+              .from('agendamentos_base')
+              .select('data_agendada, horario')
+              .eq('cotacao_id', contrato.cotacao_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            dataAg = ag?.data_agendada || null;
+            horarioAg = ag?.horario || null;
+          }
+        }
+
+        if (!dataAg) {
+          dataAg = (servico as any).data_agendada || null;
+          horarioAg = (servico as any).horario_agendado || horarioAg;
+        }
+
+        // Marcador interno 08:00 = manhã, 13:00 = tarde
+        if (horarioAg) {
+          const h = String(horarioAg).slice(0, 5);
+          if (h === '08:00') periodoAg = 'Manhã';
+          else if (h === '13:00') periodoAg = 'Tarde';
+        }
+
+        enderecoBase = {
+          logradouro: cfg.base_logradouro,
+          numero: cfg.base_numero,
+          complemento: cfg.base_complemento,
+          bairro: cfg.base_bairro,
+          cidade: cfg.base_cidade,
+          uf: cfg.base_uf,
+          cep: cfg.base_cep,
+          data_agendada: dataAg,
+          periodo: periodoAg,
+          hora_agendada: !periodoAg ? horarioAg : null,
+        };
+      }
+
       // Endereço CADASTRAL (do associado)
       let enderecoCadastral: any = null;
       if (servico.associado_id) {
@@ -213,6 +294,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         videoAssociado,
         enderecoInstalacao,
         enderecoCadastral,
+        enderecoBase,
+        isAtendimentoBase,
       };
     },
     enabled: !!servicoId,
@@ -267,7 +350,7 @@ export default function AprovacaoInstalacaoDetalhe() {
     );
   }
 
-  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado, enderecoInstalacao, enderecoCadastral } = data as any;
+  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado, enderecoInstalacao, enderecoCadastral, enderecoBase, isAtendimentoBase } = data as any;
   const associado = servico.associado as any;
   const veiculo = servico.veiculo as any;
   const profissional = servico.profissional as any;
@@ -415,34 +498,50 @@ export default function AprovacaoInstalacaoDetalhe() {
               <p className="text-muted-foreground italic">Não informado</p>
             )}
           </div>
-          <div className="rounded-lg border border-primary/30 p-3 bg-primary/5">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
-              Endereço de instalação
-            </p>
-            {enderecoInstalacao?.logradouro ? (
-              <>
-                <p className="font-medium text-foreground">
-                  {enderecoInstalacao.logradouro}
-                  {enderecoInstalacao.numero && `, ${enderecoInstalacao.numero}`}
-                  {enderecoInstalacao.complemento && ` — ${enderecoInstalacao.complemento}`}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {enderecoInstalacao.bairro}
-                  {enderecoInstalacao.cidade && ` · ${enderecoInstalacao.cidade}`}
-                  {enderecoInstalacao.uf && `/${enderecoInstalacao.uf}`}
-                  {enderecoInstalacao.cep && ` · CEP ${enderecoInstalacao.cep}`}
-                </p>
-                {(enderecoInstalacao.data_agendada || enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada) && (
-                  <p className="text-xs text-foreground/80 mt-1">
-                    {enderecoInstalacao.data_agendada && enderecoInstalacao.data_agendada.split('-').reverse().join('/')}
-                    {(enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada) && ` · ${enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada}`}
+          {(() => {
+            const endereco = isAtendimentoBase ? enderecoBase : enderecoInstalacao;
+            const titulo = isAtendimentoBase ? 'Local da Vistoria/Instalação' : 'Endereço de instalação';
+            return (
+              <div className="rounded-lg border border-primary/30 p-3 bg-primary/5">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">
+                    {titulo}
                   </p>
+                  {isAtendimentoBase && (
+                    <Badge variant="secondary" className="text-[10px] uppercase">
+                      Atendimento na Base
+                    </Badge>
+                  )}
+                </div>
+                {endereco?.logradouro ? (
+                  <>
+                    <p className="font-medium text-foreground">
+                      {isAtendimentoBase && 'Pratic Sede — '}
+                      {endereco.logradouro}
+                      {endereco.numero && `, ${endereco.numero}`}
+                      {endereco.complemento && !isAtendimentoBase && ` — ${endereco.complemento}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {endereco.bairro}
+                      {endereco.cidade && ` · ${endereco.cidade}`}
+                      {endereco.uf && `/${endereco.uf}`}
+                      {endereco.cep && ` · CEP ${endereco.cep}`}
+                    </p>
+                    {(endereco.data_agendada || endereco.periodo || endereco.hora_agendada) && (
+                      <p className="text-xs text-foreground/80 mt-1">
+                        {endereco.data_agendada && endereco.data_agendada.split('-').reverse().join('/')}
+                        {(endereco.periodo || endereco.hora_agendada) && ` · ${endereco.periodo || endereco.hora_agendada}`}
+                      </p>
+                    )}
+                  </>
+                ) : isAtendimentoBase ? (
+                  <p className="font-medium text-foreground">Pratic Sede — atendimento na Base</p>
+                ) : (
+                  <p className="text-muted-foreground italic">Sem instalação vinculada</p>
                 )}
-              </>
-            ) : (
-              <p className="text-muted-foreground italic">Sem instalação vinculada</p>
-            )}
-          </div>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
