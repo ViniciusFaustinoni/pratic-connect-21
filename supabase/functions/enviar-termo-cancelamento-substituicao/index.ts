@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
     const { data: solicitacao, error: solErr } = await admin
       .from('solicitacoes_substituicao_placa')
-      .select('id, novo_titular_dados, associado_antigo_id, veiculo_id, termo_cancelamento_autentique_id, termo_cancelamento_assinado_em, termo_reenvios_count')
+      .select('id, associado_id, veiculo_antigo_id, veiculo_antigo_placa, veiculo_antigo_snapshot, termo_cancelamento_autentique_id, termo_cancelamento_assinado_em, termo_reenvios_count')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (solErr || !solicitacao) throw new Error('Solicitação não encontrada');
