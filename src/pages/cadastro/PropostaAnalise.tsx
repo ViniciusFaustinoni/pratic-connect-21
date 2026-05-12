@@ -29,6 +29,9 @@ import {
   ClipboardCheck,
   Copy,
   FileText,
+  FileCheck,
+  ArrowRightCircle,
+  Info,
 } from 'lucide-react';
 import {
   useProposta,
@@ -673,64 +676,37 @@ export default function PropostaAnalise() {
               ) : (
                 <CheckCircle className="h-5 w-5 text-success" />
               )}
-              {isAutovistoria 
-                ? 'Confirmar Liberação de Cobertura'
-                : 'Confirmar Aprovação'
-              }
+              Confirmar Aprovação
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              {isAutovistoria ? (
-                <div className="space-y-3">
-                  <p>Ao aprovar, o sistema irá <strong>liberar apenas a cobertura de roubo e furto</strong>:</p>
-                  
-                  <div className="bg-success/10 border border-success/30 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
-                        <ShieldCheck className="h-3 w-3 text-success" />
-                      </div>
-                      <span>Ativar cobertura de <strong>Roubo e Furto</strong></span>
+              <div className="space-y-3">
+                <p>
+                  Esta etapa é <strong>apenas a análise documental</strong>. Ao confirmar, o sistema irá:
+                </p>
+
+                <div className="bg-muted rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
+                      <FileCheck className="h-3 w-3 text-success" />
                     </div>
+                    <span>Marcar a documentação como aprovada pelo Cadastro</span>
                   </div>
-                  
-                  <div className="bg-muted rounded-lg p-3 space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Pendente (após instalação do rastreador):
-                    </p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <ShieldOff className="h-3 w-3" />
-                      <span>Proteção 360º</span>
+
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-info/20 flex items-center justify-center">
+                      <ArrowRightCircle className="h-3 w-3 text-info" />
                     </div>
+                    <span>Encaminhar a proposta para a fila de <strong>Monitoramento › Aprovação de Associados</strong></span>
                   </div>
-                  
-                  <p className="text-sm text-muted-foreground">
-                    A Proteção 360º será ativada automaticamente após a instalação e ativação do rastreador.
-                  </p>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <p>Ao aprovar esta proposta, o sistema irá:</p>
-                  
-                  <div className="bg-muted rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
-                        <User className="h-3 w-3 text-success" />
-                      </div>
-                      <span>Ativar o associado no sistema</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 text-sm">
-                      <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
-                        <Smartphone className="h-3 w-3 text-purple-500" />
-                      </div>
-                      <span>Liberar acesso ao App do Associado</span>
-                    </div>
-                  </div>
-                  
-                  <p className="text-sm text-muted-foreground">
-                    O cliente receberá uma notificação sobre a aprovação.
-                  </p>
+
+                <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    A <strong>ativação do associado</strong>, o envio como pendente para o <strong>SGA</strong> e a <strong>liberação do acesso ao App</strong> ocorrem somente após a aprovação do Monitoramento, depois da instalação/vistoria concluída.
+                  </span>
                 </div>
-              )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -740,17 +716,8 @@ export default function PropostaAnalise() {
               className="bg-success hover:bg-success/90 text-white"
               disabled={aprovarMutation.isPending}
             >
-              {isAutovistoria ? (
-                <ShieldCheck className="h-4 w-4 mr-2" />
-              ) : (
-                <CheckCircle className="h-4 w-4 mr-2" />
-              )}
-              {aprovarMutation.isPending 
-                ? 'Aprovando...' 
-                : isAutovistoria
-                  ? 'Liberar Cobertura de Roubo e Furto'
-                  : 'Confirmar Aprovação'
-              }
+              <FileCheck className="h-4 w-4 mr-2" />
+              {aprovarMutation.isPending ? 'Aprovando...' : 'Aprovar Documentação'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
