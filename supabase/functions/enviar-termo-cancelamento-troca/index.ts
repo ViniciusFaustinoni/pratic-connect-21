@@ -168,6 +168,7 @@ Deno.serve(async (req) => {
       'associado.endereco_completo': enderecoCompleto,
       'associado.cidade': associadoAntigo.cidade || '___',
       'associado.estado': associadoAntigo.uf || '___',
+      'associado.uf': associadoAntigo.uf || '___',
       'associado.data_adesao': associadoAntigo.data_adesao
         ? new Date(associadoAntigo.data_adesao).toLocaleDateString('pt-BR')
         : (associadoAntigo.created_at ? new Date(associadoAntigo.created_at).toLocaleDateString('pt-BR') : '—'),
@@ -179,7 +180,20 @@ Deno.serve(async (req) => {
       'veiculo.chassi': veiculo?.chassi || '___',
       'veiculo.renavam': veiculo?.renavam || '___',
       'contrato.numero': contrato?.numero || '—',
-      'contrato.plano': '—',
+      'contrato.plano': planoNome,
+      'plano.nome': planoNome,
+      'contrato.data_inicio': contrato?.data_inicio
+        ? new Date(contrato.data_inicio).toLocaleDateString('pt-BR')
+        : (contrato?.created_at ? new Date(contrato.created_at).toLocaleDateString('pt-BR') : '—'),
+      'contrato.valor_mensal': contrato?.valor_mensal ? `R$ ${Number(contrato.valor_mensal).toFixed(2).replace('.', ',')}` : '—',
+      'cancelamento.motivo': motivoTxt,
+      'os.observacoes': motivoTxt,
+      'cancelamento.data': dataAtualBr,
+      'sistema.data_atual': dataAtualBr,
+      'sistema.data_extenso': dataExtenso,
+      'empresa.nome': 'PRATICCAR',
+      'regras.multa_rastreador': multaRastreadorTxt,
+    };
       'contrato.valor_mensal': contrato?.valor_mensal ? `R$ ${Number(contrato.valor_mensal).toFixed(2).replace('.', ',')}` : '—',
       'cancelamento.motivo': motivoTxt,
       'cancelamento.data': dataAtualBr,
