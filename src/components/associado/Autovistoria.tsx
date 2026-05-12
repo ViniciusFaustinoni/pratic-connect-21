@@ -9,12 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, TipoVeiculo } from '@/data/autovistoriaConfig';
+import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
 import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente, useFinalizarAutovistoria } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { LocationCapture, Coordenadas } from './LocationCapture';
-import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,9 +44,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
   
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
+  const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, any>>({});
+  const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
@@ -86,8 +84,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
   const progresso = (fotosCompletadas / totalFotos) * 100;
   const todasFotosEnviadas = fotosCompletadas === totalFotos;
-  const videoObrigatorio = true; // Vídeo obrigatório para TODOS os tipos
-  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
+  const todasEnviadas = todasFotosEnviadas;
   
   const fotoAtual = fotos[indiceAtual];
   const isUltimaFoto = indiceAtual === totalFotos - 1;
