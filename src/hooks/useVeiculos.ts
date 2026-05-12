@@ -77,11 +77,17 @@ export function useVeiculosPaginados(opts: UseVeiculosPaginadosOptions = {}) {
       let q = supabase
         .from('veiculos')
         .select(
-          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, associado:associados(id, nome, cpf), instalacoes:instalacoes(id, status)',
+          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, cobertura_suspensa, cobertura_suspensa_em, cobertura_suspensa_motivo, associado:associados(id, nome, cpf), instalacoes:instalacoes(id, status)',
           { count: 'exact' }
         )
         .order('created_at', { ascending: false });
-      if (status) q = q.eq('status', status as Veiculo['status']);
+      // Filtro especial: "suspenso" mapeia para o flag de cobertura (não para veiculos.status,
+      // que continua refletindo o ciclo de vida — instalacao_pendente, ativo, etc.)
+      if (status === 'suspenso') {
+        q = q.eq('cobertura_suspensa', true);
+      } else if (status) {
+        q = q.eq('status', status as Veiculo['status']);
+      }
       if (search) {
         const s = search.replace(/[,()]/g, '');
         const like = `%${s}%`;
