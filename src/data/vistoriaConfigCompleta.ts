@@ -847,38 +847,63 @@ export function getTotalFotosObrigatorias(tipo: TipoVeiculo): number {
   return fotos.filter(f => f.categoria !== 'instalacao' && f.categoria !== 'rastreador').length;
 }
 
-// Keywords que indicam motocicleta no modelo
+// Marcas exclusivamente automotivas — se a marca bater aqui, é carro independente do modelo.
+const CARRO_BRANDS = new Set([
+  'CHEVROLET', 'GM', 'GENERAL MOTORS',
+  'VOLKSWAGEN', 'VW',
+  'FIAT', 'FORD', 'TOYOTA', 'HYUNDAI', 'RENAULT', 'PEUGEOT',
+  'CITROEN', 'CITROËN', 'JEEP', 'NISSAN', 'MITSUBISHI', 'KIA',
+  'AUDI', 'MERCEDES-BENZ', 'MERCEDES', 'VOLVO', 'LAND ROVER', 'PORSCHE',
+  'SUBARU', 'MAZDA', 'CHERY', 'CAOA', 'CAOA CHERY', 'RAM', 'DODGE',
+  'JAGUAR', 'MINI', 'LEXUS', 'JAC', 'GWM', 'BYD', 'SMART', 'TROLLER', 'IVECO',
+]);
+
+// Keywords que indicam motocicleta no modelo. Match feito por word boundary
+// (regex \b) para evitar falsos positivos como "10mt" casando com "mt".
 const MOTO_KEYWORDS = [
   'moto', 'motocicleta', 'ciclomotor', 'triciclo', 'scooter',
-  'nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop',
+  'nxr', 'bros', 'cg', 'cb', 'cbr', 'pcx', 'biz', 'pop',
   'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr',
   'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'factor',
-  'dl ', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
-  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', ' riva',
+  'dl', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
+  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', 'riva',
   'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
-  'elite', 'adv', 'sh ', 'sh-', 'lead', 'xadv', 'x-adv', 'transalp',
-  'nmax', 'xtz', 'xj6', 'mt-', 'mt ', 'crypton',
+  'elite', 'adv', 'sh', 'lead', 'xadv', 'x-adv', 'transalp',
+  'nmax', 'xtz', 'xj6', 'mt', 'crypton',
   'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
 ];
 
-// Detectar tipo de veículo — FALLBACK síncrono apenas por keywords de modelo.
+const MOTO_REGEX = new RegExp(
+  '\\b(' + MOTO_KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
+  'i'
+);
+
+// Detectar tipo de veículo — FALLBACK síncrono.
 export function detectarTipoVeiculo(
   tipoVeiculoStr?: string | null,
   modelo?: string | null,
-  _marca?: string | null
+  marca?: string | null
 ): TipoVeiculo {
   if (tipoVeiculoStr) {
     const normalized = tipoVeiculoStr.toLowerCase();
     if (normalized.includes('moto') || normalized.includes('motocicleta') || normalized.includes('ciclomotor') || normalized.includes('triciclo')) {
       return 'moto';
     }
+    if (normalized.includes('auto') || normalized.includes('camion') || normalized.includes('utilitario') || normalized.includes('utilitário')) {
+      return 'automovel';
+    }
   }
 
-  if (modelo) {
-    const modeloLower = ` ${modelo.toLowerCase()} `;
-    if (MOTO_KEYWORDS.some(kw => modeloLower.includes(kw))) {
-      return 'moto';
+  // Marca exclusivamente de carro encerra a decisão.
+  if (marca) {
+    const marcaNorm = marca.trim().toUpperCase();
+    if (CARRO_BRANDS.has(marcaNorm)) {
+      return 'automovel';
     }
+  }
+
+  if (modelo && MOTO_REGEX.test(modelo)) {
+    return 'moto';
   }
 
   return 'automovel';
