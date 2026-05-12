@@ -79,6 +79,37 @@ export function VistoriaFotoSequencial({
     }
   }, [fotoAtualIndex]);
 
+  // Pré-carrega APENAS as próximas 2 fotos (PREVIEW) — usa cache HTTP do
+  // navegador via <link rel="prefetch"> para não inflar o heap JS.
+  // Limitado a 2 para manter consumo previsível em low-end (Moto G 15).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const proximas: string[] = [];
+    for (let offset = 1; offset <= 2; offset++) {
+      const next = fotos[fotoAtualIndex + offset];
+      if (!next) break;
+      const url = getFotoUrl(next.id);
+      if (url) proximas.push(transformedUrl(url, PREVIEW));
+    }
+    if (!proximas.length) return;
+
+    const links: HTMLLinkElement[] = proximas.map((href) => {
+      const link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.as = 'image';
+      link.href = href;
+      // fetchPriority baixo: não compete com upload em curso.
+      (link as unknown as { fetchPriority?: string }).fetchPriority = 'low';
+      document.head.appendChild(link);
+      return link;
+    });
+    return () => {
+      links.forEach((l) => {
+        try { l.remove(); } catch { /* ignore */ }
+      });
+    };
+  }, [fotoAtualIndex, fotos, getFotoUrl]);
+
   // Inicializar na primeira foto pendente
   useEffect(() => {
     const firstPending = fotos.findIndex(f => !isFotoEnviada(f.id));
