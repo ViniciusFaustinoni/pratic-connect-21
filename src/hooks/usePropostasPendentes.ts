@@ -62,6 +62,38 @@ export interface DocumentoSolicitadoPendente {
   created_at: string | null;
 }
 
+/**
+ * Mescla documentos reenviados (via "Solicitar documentos") na lista de
+ * "Documentações Anexadas" do Step 1 do Cadastro, marcando-os como pendentes
+ * de análise quando ainda não decididos. O id usa o prefixo `solicitado-`
+ * para que o handler de aprovação saiba rotear para `documentos_solicitados`.
+ */
+export function mergeDocsReenviadosNaLista(
+  documentos: DocumentoAnexado[],
+  reenviados: DocumentoSolicitadoEnviado[]
+): DocumentoAnexado[] {
+  if (!reenviados || reenviados.length === 0) return documentos;
+  const extras: DocumentoAnexado[] = [];
+  for (const r of reenviados) {
+    if (!r.documento?.arquivo_url) continue;
+    const docStatus = (r.documento.status || '').toLowerCase();
+    let status: string;
+    if (docStatus === 'aprovado') status = 'aprovado';
+    else if (docStatus === 'reprovado') status = 'reprovado';
+    else status = 'em_analise';
+    extras.push({
+      id: `solicitado-${r.id}`,
+      tipo: r.tipo_documento,
+      arquivo_nome: r.documento.nome_arquivo || `${r.tipo_documento} (reenviado)`,
+      arquivo_url: r.documento.arquivo_url,
+      status,
+      created_at: r.enviado_em || new Date().toISOString(),
+    });
+  }
+  // Reenviados aparecem no topo (analista vê primeiro)
+  return [...extras, ...documentos];
+}
+
 // Informações da instalação e rastreador
 export interface InstalacaoInfo {
   id: string;
