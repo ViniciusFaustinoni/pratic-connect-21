@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     const { data: associadoAntigo, error: assocErr } = await admin
       .from('associados')
       .select('id, nome, cpf, rg, email, telefone, logradouro, numero, complemento, bairro, cidade, uf, cep, data_adesao, created_at')
-      .eq('id', solicitacao.associado_antigo_id)
+      .eq('id', solicitacao.associado_id)
       .maybeSingle();
     if (assocErr) {
       console.error('[enviar-termo-cancelamento-substituicao] erro ao buscar associado:', assocErr);
