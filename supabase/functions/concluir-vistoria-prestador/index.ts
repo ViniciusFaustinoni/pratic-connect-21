@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
         tipo: 'vistoria_prestador_concluida',
         destino: 'role',
         destino_role: 'coordenador_monitoramento',
-        link: `/monitoramento/instalacoes/${link.instalacao_id}`,
+        link: link.instalacao_id ? `/monitoramento/instalacoes/${link.instalacao_id}` : `/monitoramento/vistorias/${link.vistoria_id}`,
       })
     } catch (notifErr) {
       console.error('Erro notificação (não bloqueante):', notifErr)
