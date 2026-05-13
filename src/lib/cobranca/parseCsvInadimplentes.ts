@@ -117,7 +117,9 @@ function parseCsvLinha(linha: string): string[] {
 export function classificarTelefone(raw: string): { valido: boolean; formatado: string | null } {
   if (!raw) return { valido: false, formatado: null };
   const num = raw.replace(/\D/g, '');
-  if (!num || /^0+$/.test(num)) return { valido: false, formatado: null };
+  if (!num) return { valido: false, formatado: null };
+  // Bloqueia placeholders: todos zeros, todos 1, todos 9, ou um único dígito repetido
+  if (/^(\d)\1+$/.test(num)) return { valido: false, formatado: null };
 
   // Remove código país se vier
   let local = num;
@@ -130,6 +132,9 @@ export function classificarTelefone(raw: string): { valido: boolean; formatado: 
   if (parseInt(ddd, 10) < 11 || parseInt(ddd, 10) > 99) return { valido: false, formatado: null };
 
   const restante = local.slice(2);
+
+  // Bloqueia placeholders adicionais: número repetido (ex: 999999999, 111111111)
+  if (/^(\d)\1+$/.test(restante)) return { valido: false, formatado: null };
 
   // Celular (WhatsApp) tem 9 dígitos começando com 9
   if (restante.length === 9 && restante.startsWith('9')) {
