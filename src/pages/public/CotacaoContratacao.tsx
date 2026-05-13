@@ -321,6 +321,10 @@ export default function CotacaoContratacao() {
         if (etapa === 2 && !cotacao.tipo_vistoria) {
           etapa = 3;
         }
+        // contrato_assinado (determinarEtapa retorna 3) em troca → ir para Pagamento (4)
+        if (etapa === 3 && cotacao.status_contratacao === 'contrato_assinado') {
+          etapa = 4;
+        }
       } else {
         // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
         // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
