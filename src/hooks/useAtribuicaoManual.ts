@@ -640,25 +640,46 @@ export function useAtribuirServicoPrestador() {
           throw new Error('Nem instalação nem vistoria de origem encontradas para este serviço');
         }
 
-        // Bloquear nova atribuição se já existe link ativo (por instalação OU por vistoria)
+        // Auto-substituição: se houver link em 'aguardando' (nunca aceito), cancela e segue.
+        // Só bloqueia quando link já está em execução / aceito (substituir seria destrutivo).
         if (instalacaoId) {
           const { data: linksAtivos } = await supabase
             .from('instalacao_prestador_links')
-            .select('id')
+            .select('id, status')
             .eq('instalacao_id', instalacaoId)
             .not('status', 'in', '(cancelada,expirado,concluida)');
-          if ((linksAtivos || []).length > 0) {
-            throw new Error('Já existe um prestador atribuído a este serviço. Cancele/devolva o link atual antes de reatribuir.');
+          const ativos = linksAtivos || [];
+          const emExecucao = ativos.filter((l: any) => l.status !== 'aguardando');
+          if (emExecucao.length > 0) {
+            throw new Error('Já existe um prestador atribuído a este serviço (link em execução). Cancele/devolva o link atual antes de reatribuir.');
+          }
+          const aguardando = ativos.filter((l: any) => l.status === 'aguardando');
+          if (aguardando.length > 0) {
+            const { error: cancelErr } = await supabase
+              .from('instalacao_prestador_links')
+              .update({ status: 'cancelada', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any)
+              .in('id', aguardando.map((l: any) => l.id));
+            if (cancelErr) throw new Error('Falha ao cancelar link anterior: ' + cancelErr.message);
           }
         }
         if (vistoriaIdParaLink) {
           const { data: linksVistAtivos } = await supabase
             .from('vistoria_prestador_links' as any)
-            .select('id')
+            .select('id, status')
             .eq('vistoria_id', vistoriaIdParaLink)
             .in('status', ['aguardando', 'em_execucao']);
-          if ((linksVistAtivos || []).length > 0) {
-            throw new Error('Já existe um prestador atribuído a esta vistoria. Cancele/devolva o link atual antes de reatribuir.');
+          const ativos = (linksVistAtivos || []) as any[];
+          const emExecucao = ativos.filter(l => l.status === 'em_execucao');
+          if (emExecucao.length > 0) {
+            throw new Error('Já existe um prestador atribuído a esta vistoria (link em execução). Cancele/devolva o link atual antes de reatribuir.');
+          }
+          const aguardando = ativos.filter(l => l.status === 'aguardando');
+          if (aguardando.length > 0) {
+            const { error: cancelErr } = await supabase
+              .from('vistoria_prestador_links' as any)
+              .update({ status: 'cancelada', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any)
+              .in('id', aguardando.map(l => l.id));
+            if (cancelErr) throw new Error('Falha ao cancelar link de vistoria anterior: ' + cancelErr.message);
           }
         }
 
