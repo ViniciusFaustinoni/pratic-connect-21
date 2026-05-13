@@ -138,9 +138,19 @@ export interface CotacaoFormDialogProps {
   ignorarPlacaDuplicadaIds?: string[];
   /** Callback após salvar com sucesso */
   onSuccess?: () => void;
+  /**
+   * Quando presente, marca a cotação como originada de uma troca de titularidade.
+   * Após criar a cotação, vincula automaticamente à `solicitacoes_troca_titularidade`
+   * via edge function `vincular-cotacao-troca` e injeta os metadados em `dados_extras`.
+   */
+  origemTroca?: {
+    solicitacaoId: string;
+    associadoAntigoId: string;
+    veiculoOrigemId: string;
+  } | null;
 }
 
-export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess }: CotacaoFormDialogProps) {
+export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess, origemTroca }: CotacaoFormDialogProps) {
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const updateCotacao = useUpdateCotacao();
@@ -1548,6 +1558,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
           cenario_adesao: cenarioExterno,
         } : {}),
+        // Marcação na coluna `tipo_entrada` quando originada de Troca de Titularidade
+        ...(origemTroca ? { tipo_entrada: 'troca_titularidade' as const } : {}),
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
@@ -1568,7 +1580,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             anoMinimo: p.anoMinimo,
             alertaDesagio: p.alertaDesagio,
             coberturasRemovidas: p.coberturasRemovidas || [],
-          }))
+          })),
+          // Marcação de origem para Troca de Titularidade (quando aplicável)
+          ...(origemTroca ? {
+            tipo_entrada: 'troca_titularidade' as const,
+            solicitacao_troca_id: origemTroca.solicitacaoId,
+            associado_antigo_id: origemTroca.associadoAntigoId,
+            veiculo_origem_id: origemTroca.veiculoOrigemId,
+          } : {}),
         },
       };
 
@@ -1672,9 +1691,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             }
           }
         }
-        
-        toast.success('Cotação criada com sucesso!');
-        navigate('/vendas/cotacoes');
+
+        // Se a cotação foi originada de uma Troca de Titularidade, vincular agora
+        if (origemTroca && novaCotacao?.id) {
+          try {
+            const { error: vincErr } = await supabase.functions.invoke('vincular-cotacao-troca', {
+              body: { solicitacao_id: origemTroca.solicitacaoId, cotacao_id: novaCotacao.id },
+            });
+            if (vincErr) throw vincErr;
+            toast.success('Cotação vinculada à troca de titularidade.');
+          } catch (e: any) {
+            console.error('[vincular-cotacao-troca]', e);
+            toast.error('Cotação criada, mas a vinculação à troca falhou. Tente reabrir a solicitação.');
+          }
+          // Quando vier de troca, ir para o detalhe da cotação (mesma navegação do fluxo antigo)
+          navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
+        } else {
+          toast.success('Cotação criada com sucesso!');
+          navigate('/vendas/cotacoes');
+        }
       }
       // Cotação criada/atualizada com sucesso → descartar rascunho local
       draft.clearOnSubmit();
