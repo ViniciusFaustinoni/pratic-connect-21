@@ -478,14 +478,16 @@ serve(async (req) => {
         await supabase.from('contratos')
           .update({ cadastro_aprovado: false, aprovado_por: null, aprovado_em: null })
           .eq('id', contrato_id);
-        await supabase.from('logs_auditoria').insert({
-          acao: 'aprovar_proposta_bloqueado_sem_agendamento',
-          modulo: 'contratos',
-          tabela: 'contratos',
-          registro_id: contrato_id,
-          descricao: `Aprovação bloqueada: cotação ${contrato.cotacao_id} sem agendamento real (vendedor externo / fluxo público sem etapa Vistoria).`,
-          usuario_id: aprovado_por || null,
-        }).catch(() => {});
+        try {
+          await supabase.from('logs_auditoria').insert({
+            acao: 'aprovar_proposta_bloqueado_sem_agendamento',
+            modulo: 'contratos',
+            tabela: 'contratos',
+            registro_id: contrato_id,
+            descricao: `Aprovação bloqueada: cotação ${contrato.cotacao_id} sem agendamento real (vendedor externo / fluxo público sem etapa Vistoria).`,
+            usuario_id: aprovado_por || null,
+          });
+        } catch (_) { /* log opcional */ }
         return jsonResponse({
           success: false,
           codigo: 'sem_agendamento',
