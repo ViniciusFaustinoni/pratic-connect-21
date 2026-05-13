@@ -34,10 +34,14 @@ interface AutovistoriaCotacaoProps {
   cotacaoId: string;
   tipoVeiculo: TipoVeiculo;
   onComplete: () => void;
+  /** Override do conjunto de fotos (ex.: vistoria completa 31/15 sub-FIPE). */
+  fotosOverride?: FotoAutovistoria[];
+  /** Título customizado (default: "Autovistoria"). */
+  titulo?: string;
 }
 
-export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: AutovistoriaCotacaoProps) {
-  const fotos = getFotosAutovistoria(tipoVeiculo);
+export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosOverride, titulo }: AutovistoriaCotacaoProps) {
+  const fotos = fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo);
   const totalFotos = fotos.length;
   
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
