@@ -1,0 +1,2 @@
+ALTER TABLE public.vistoria_prestador_links DROP CONSTRAINT IF EXISTS vistoria_prestador_links_status_check;
+ALTER TABLE public.vistoria_prestador_links ADD CONSTRAINT vistoria_prestador_links_status_check CHECK (status = ANY (ARRAY['aguardando'::text, 'aceito'::text, 'em_rota'::text, 'em_execucao'::text, 'concluida'::text, 'cancelada'::text]));
