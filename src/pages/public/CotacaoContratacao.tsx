@@ -187,7 +187,7 @@ export default function CotacaoContratacao() {
         });
         if (error || (data as any)?.error) throw error || new Error((data as any).error);
         // sucesso → invalidar para refetch
-        await refetchCotacao?.();
+        await refetch?.();
       } catch (e) {
         console.error('[auto-vincular-troca] falhou:', e);
         setAutoVinculoFalhou(true);
