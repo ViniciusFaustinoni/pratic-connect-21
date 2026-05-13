@@ -160,15 +160,32 @@ Deno.serve(async (req) => {
         }
       }
     } else if (vistoria_id) {
-      const { data: vist } = await supabase
+      const { data: vistRaw, error: vistErr } = await supabase
         .from('vistorias')
-        .select(`
-          id, data_agendada, local_vistoria, endereco_logradouro, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado,
-          associados:associado_id(id, nome, telefone),
-          veiculos:veiculo_id(id, marca, modelo, ano, placa)
-        `)
+        .select('id, associado_id, veiculo_id, data_agendada, local_vistoria, endereco_logradouro, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado')
         .eq('id', vistoria_id)
-        .single()
+        .maybeSingle()
+      if (vistErr) console.error('Erro ao buscar vistoria:', vistErr)
+
+      let assocData: any = null
+      let veicData: any = null
+      if (vistRaw?.associado_id) {
+        const { data: a } = await supabase
+          .from('associados')
+          .select('id, nome, telefone')
+          .eq('id', vistRaw.associado_id)
+          .maybeSingle()
+        assocData = a
+      }
+      if (vistRaw?.veiculo_id) {
+        const { data: v } = await supabase
+          .from('veiculos')
+          .select('id, marca, modelo, ano, placa')
+          .eq('id', vistRaw.veiculo_id)
+          .maybeSingle()
+        veicData = v
+      }
+      const vist: any = vistRaw ? { ...vistRaw, associados: assocData, veiculos: veicData } : null
 
       // Se vistoria base, pega endereço da oficina via agendamento_base
       let oficinaEnd: any = null
