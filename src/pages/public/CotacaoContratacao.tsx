@@ -384,11 +384,13 @@ export default function CotacaoContratacao() {
 
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
-    if (step <= etapaDoStatus) {
+    const idxStep = navOrder.indexOf(step);
+    const idxStatus = navOrder.indexOf(etapaDoStatus);
+    if (idxStep >= 0 && idxStep <= idxStatus) {
       setNavegacaoManual(true);
       setEtapaAtual(step);
     }
-  }, [etapaDoStatus, setEtapaAtual]);
+  }, [etapaDoStatus, setEtapaAtual, navOrder]);
 
   // Handler para avançar para próxima etapa (segue navOrder)
   const handleAvancar = useCallback(() => {
