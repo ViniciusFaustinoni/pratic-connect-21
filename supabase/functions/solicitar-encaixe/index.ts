@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Enviar WhatsApp de confirmação
+    // 4. Montar mensagem (envio é DIFERIDO em 5 min via cron-disparar-encaixes)
     const mensagem = `Olá, *${primeiroNome}*! 👋
 
 Aqui é a *PRATIC Proteção Veicular*.
@@ -128,35 +128,26 @@ Podemos ${isAdiantamento ? 'antecipar' : 'realizar'} sua *${tipoServicoLabel}* p
 
 Aguardamos sua confirmação! ⚡`;
 
-    await supabase.functions.invoke('whatsapp-send-text', {
-      body: {
-        telefone: telefoneFormatado,
-        mensagem,
-        template_name: 'confirmacao_agendamento_v1',
-        template_params: [
-          primeiroNome,
-          tipoServicoLabel,
-          'Encaixe HOJE - profissional disponível na região',
-        ],
-      }
-    });
+    const templateParams = [
+      primeiroNome,
+      tipoServicoLabel,
+      'Encaixe HOJE - profissional disponível na região',
+    ];
 
-    console.log(`[solicitar-encaixe] WhatsApp enviado para ${telefoneFormatado}`);
-
-    // 5. LOCK ATÔMICO: Marcar serviço ANTES de enviar para evitar duplicatas
+    // 5. LOCK ATÔMICO no serviço (impede duplicatas durante a janela de 5 min)
     if (servicoDbId) {
       const { data: lockResult } = await supabase
         .from('servicos')
-        .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
+        .update({ confirmacao_whatsapp: 'aguardando_disparo_encaixe' })
         .eq('id', servicoDbId)
         .is('confirmacao_whatsapp', null)
         .select('id');
 
       if (!lockResult || lockResult.length === 0) {
         console.log(`[solicitar-encaixe] 🔒 Serviço ${servicoDbId} já processado por outra execução`);
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: 'Este serviço já está em processo de confirmação.' 
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Este serviço já está em processo de confirmação.'
         }), {
           status: 409,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -164,13 +155,18 @@ Aguardamos sua confirmação! ⚡`;
       }
     }
 
-    // 6. Criar registro em confirmacoes_agendamento
+    // 6. Enfileirar confirmação para envio em 5 min (status = aguardando_disparo)
+    const enviarApos = new Date(Date.now() + 5 * 60 * 1000).toISOString();
     if (servicoDbId) {
       await supabase.from('confirmacoes_agendamento').insert({
         servico_id: servicoDbId,
         telefone: telefoneFormatado,
-        status: 'enviada',
-        mensagem_enviada_em: new Date().toISOString(),
+        status: 'aguardando_disparo',
+        enviar_apos: enviarApos,
+        payload_disparo: {
+          mensagem,
+          template_params: templateParams,
+        },
         contexto_ia: {
           nome_cliente: nomeCliente,
           tipo_servico: tipo,
@@ -183,12 +179,13 @@ Aguardamos sua confirmação! ⚡`;
       });
     }
 
-    console.log(`[solicitar-encaixe] ✓ Confirmação de encaixe registrada para serviço ${servicoDbId || servico_id}`);
+    console.log(`[solicitar-encaixe] ✓ Confirmação ENFILEIRADA para ${telefoneFormatado}, envio em 5 min (${enviarApos})`);
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      status: 'aguardando_confirmacao',
-      message: 'Confirmação enviada ao cliente via WhatsApp'
+    return new Response(JSON.stringify({
+      success: true,
+      status: 'aguardando_disparo',
+      enviar_apos: enviarApos,
+      message: 'Confirmação enfileirada (envio em 5 minutos)'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
