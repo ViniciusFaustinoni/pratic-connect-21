@@ -215,7 +215,7 @@ export default function CotacaoContratacao() {
   // O passo de Pagamento sempre aparece — quando a adesão é isenta, o próprio
   // EtapaPagamentoCotacao detecta valor zero e dispara skipPaymentCheck automaticamente
   // (mesma regra usada na nova adesão). Não fazemos atalho aqui.
-  const [ativandoTroca, setAtivandoTroca] = useState(false);
+  
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
