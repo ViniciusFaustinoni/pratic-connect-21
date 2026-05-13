@@ -603,8 +603,9 @@ export function useAtribuirServicoPrestador() {
         if (!data?.success) throw new Error(data?.error || 'Erro ao gerar link');
         result = data;
       } else {
-        // Vistoria type - find instalacao_id via vistoria
+        // Vistoria type - find instalacao_id via vistoria; if none, fallback to vistoria_id direto
         let instalacaoId: string | null = null;
+        let vistoriaIdParaLink: string | null = null;
 
         if (servico.vistoria_origem_id) {
           const { data: vist } = await supabase
@@ -613,6 +614,7 @@ export function useAtribuirServicoPrestador() {
             .eq('id', servico.vistoria_origem_id)
             .maybeSingle();
           instalacaoId = vist?.instalacao_id || null;
+          vistoriaIdParaLink = servico.vistoria_origem_id;
         }
 
         if (!instalacaoId) {
@@ -626,25 +628,39 @@ export function useAtribuirServicoPrestador() {
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
-          instalacaoId = inst?.id;
+          instalacaoId = inst?.id || null;
         }
 
-        if (!instalacaoId) throw new Error('Instalação de origem não encontrada para vistoria');
+        if (!instalacaoId && !vistoriaIdParaLink) {
+          throw new Error('Nem instalação nem vistoria de origem encontradas para este serviço');
+        }
 
-        // Bloquear nova atribuição se já existe link ativo
-        const { data: linksAtivos } = await supabase
-          .from('instalacao_prestador_links')
-          .select('id, status, prestador_id')
-          .eq('instalacao_id', instalacaoId)
-          .not('status', 'in', '(cancelada,expirado,concluida)');
-
-        if ((linksAtivos || []).length > 0) {
-          throw new Error('Já existe um prestador atribuído a este serviço. Cancele/devolva o link atual antes de reatribuir.');
+        // Bloquear nova atribuição se já existe link ativo (por instalação OU por vistoria)
+        if (instalacaoId) {
+          const { data: linksAtivos } = await supabase
+            .from('instalacao_prestador_links')
+            .select('id')
+            .eq('instalacao_id', instalacaoId)
+            .not('status', 'in', '(cancelada,expirado,concluida)');
+          if ((linksAtivos || []).length > 0) {
+            throw new Error('Já existe um prestador atribuído a este serviço. Cancele/devolva o link atual antes de reatribuir.');
+          }
+        }
+        if (vistoriaIdParaLink) {
+          const { data: linksVistAtivos } = await supabase
+            .from('vistoria_prestador_links' as any)
+            .select('id')
+            .eq('vistoria_id', vistoriaIdParaLink)
+            .in('status', ['aguardando', 'em_execucao']);
+          if ((linksVistAtivos || []).length > 0) {
+            throw new Error('Já existe um prestador atribuído a esta vistoria. Cancele/devolva o link atual antes de reatribuir.');
+          }
         }
 
         const { data, error } = await supabase.functions.invoke('gerar-link-vistoriador-prestador', {
           body: {
             instalacao_id: instalacaoId,
+            vistoria_id: instalacaoId ? null : vistoriaIdParaLink,
             vistoriador_prestador_id: prestadorId,
             valor,
             atribuido_por: profileId,

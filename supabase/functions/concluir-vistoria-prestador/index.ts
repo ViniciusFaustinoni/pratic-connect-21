@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     // ── Buscar link pelo token ──
     const { data: link, error: linkErr } = await supabase
       .from('vistoria_prestador_links')
-      .select('id, instalacao_id, vistoriador_prestador_id, valor, atribuido_por, status')
+      .select('id, instalacao_id, vistoria_id, vistoriador_prestador_id, valor, atribuido_por, status')
       .eq('token', token)
       .in('status', ['aguardando', 'em_execucao'])
       .maybeSingle()
@@ -42,14 +42,20 @@ Deno.serve(async (req) => {
 
     const agora = new Date().toISOString()
 
-    // ── AÇÃO 1: Atualizar status da instalação para concluida ──
-    const { error: instErr } = await supabase
-      .from('instalacoes')
-      .update({ status: 'concluida', updated_at: agora })
-      .eq('id', link.instalacao_id)
-
-    if (instErr) {
-      console.error('Erro ao atualizar instalação:', instErr)
+    // ── AÇÃO 1: Atualizar status da origem ──
+    if (link.instalacao_id) {
+      const { error: instErr } = await supabase
+        .from('instalacoes')
+        .update({ status: 'concluida', updated_at: agora })
+        .eq('id', link.instalacao_id)
+      if (instErr) console.error('Erro ao atualizar instalação:', instErr)
+    } else if (link.vistoria_id) {
+      // Vistoria-only (vistoria base sem instalação) — marca como concluída para análise
+      const { error: vErr } = await supabase
+        .from('vistorias')
+        .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
+        .eq('id', link.vistoria_id)
+      if (vErr) console.error('Erro ao atualizar vistoria:', vErr)
     }
 
     // ── AÇÃO 2: Invalidar o token + salvar evidências ──
@@ -73,15 +79,39 @@ Deno.serve(async (req) => {
     }
 
     // ── Buscar dados completos para ações seguintes ──
-    const { data: instalacao } = await supabase
-      .from('instalacoes')
-      .select(`
-        id, data_agendada, cidade, uf,
-        veiculos:veiculo_id(marca, modelo, ano, placa),
-        associados:associado_id(nome, email)
-      `)
-      .eq('id', link.instalacao_id)
-      .single()
+    let instalacao: any = null
+    if (link.instalacao_id) {
+      const { data } = await supabase
+        .from('instalacoes')
+        .select(`
+          id, data_agendada, cidade, uf,
+          veiculos:veiculo_id(marca, modelo, ano, placa),
+          associados:associado_id(nome, email)
+        `)
+        .eq('id', link.instalacao_id)
+        .single()
+      instalacao = data
+    } else if (link.vistoria_id) {
+      const { data } = await supabase
+        .from('vistorias')
+        .select(`
+          id, data_agendada, endereco_cidade, endereco_estado,
+          veiculos:veiculo_id(marca, modelo, ano, placa),
+          associados:associado_id(nome, email)
+        `)
+        .eq('id', link.vistoria_id)
+        .single()
+      if (data) {
+        instalacao = {
+          id: (data as any).id,
+          data_agendada: (data as any).data_agendada,
+          cidade: (data as any).endereco_cidade,
+          uf: (data as any).endereco_estado,
+          veiculos: (data as any).veiculos,
+          associados: (data as any).associados,
+        }
+      }
+    }
 
     const { data: prestador } = await supabase
       .from('vistoriadores_prestadores')
@@ -163,50 +193,52 @@ Deno.serve(async (req) => {
         tipo: 'vistoria_prestador_concluida',
         destino: 'role',
         destino_role: 'coordenador_monitoramento',
-        link: `/monitoramento/instalacoes/${link.instalacao_id}`,
+        link: link.instalacao_id ? `/monitoramento/instalacoes/${link.instalacao_id}` : `/monitoramento/vistorias/${link.vistoria_id}`,
       })
     } catch (notifErr) {
       console.error('Erro notificação (não bloqueante):', notifErr)
     }
 
-    // ── AÇÃO 7: Gerar Laudo PDF e enviar por email ao associado ──
-    try {
-      console.log('[concluir-vistoria-prestador] Gerando laudo PDF...')
-      const { data: laudoResp, error: laudoErr2 } = await supabase.functions.invoke('gerar-laudo-vistoria', {
-        body: {
-          instalacaoId: link.instalacao_id,
-        },
-      })
-      if (laudoErr2) {
-        console.error('Erro ao gerar laudo (não bloqueante):', laudoErr2)
-      } else {
-        console.log('[concluir-vistoria-prestador] ✓ Laudo gerado:', laudoResp?.url || 'sem url')
-        
-        // Enviar email ao associado com link do laudo
-        if (associado?.email && laudoResp?.url) {
-          try {
-            await supabase.functions.invoke('send-email', {
-              body: {
-                template: 'generico',
-                to: associado.email,
-                data: {
-                  nome: associado.nome || 'Associado',
-                  assunto: 'Laudo de Vistoria - PraticCar',
-                  titulo: 'Seu laudo de vistoria está disponível',
-                  mensagem: `Olá ${associado.nome || ''}!\n\nA vistoria do seu veículo ${veiculoDesc} (${placa}) foi concluída com sucesso.\n\nO laudo de vistoria foi gerado e está anexado aos seus documentos. Você pode acessá-lo pelo link abaixo:`,
-                  link_url: laudoResp.url,
-                  link_texto: 'Visualizar Laudo de Vistoria',
+    // ── AÇÃO 7: Gerar Laudo PDF e enviar por email ao associado (apenas quando há instalação) ──
+    if (link.instalacao_id) {
+      try {
+        console.log('[concluir-vistoria-prestador] Gerando laudo PDF...')
+        const { data: laudoResp, error: laudoErr2 } = await supabase.functions.invoke('gerar-laudo-vistoria', {
+          body: {
+            instalacaoId: link.instalacao_id,
+          },
+        })
+        if (laudoErr2) {
+          console.error('Erro ao gerar laudo (não bloqueante):', laudoErr2)
+        } else {
+          console.log('[concluir-vistoria-prestador] ✓ Laudo gerado:', laudoResp?.url || 'sem url')
+
+          // Enviar email ao associado com link do laudo
+          if (associado?.email && laudoResp?.url) {
+            try {
+              await supabase.functions.invoke('send-email', {
+                body: {
+                  template: 'generico',
+                  to: associado.email,
+                  data: {
+                    nome: associado.nome || 'Associado',
+                    assunto: 'Laudo de Vistoria - PraticCar',
+                    titulo: 'Seu laudo de vistoria está disponível',
+                    mensagem: `Olá ${associado.nome || ''}!\n\nA vistoria do seu veículo ${veiculoDesc} (${placa}) foi concluída com sucesso.\n\nO laudo de vistoria foi gerado e está anexado aos seus documentos. Você pode acessá-lo pelo link abaixo:`,
+                    link_url: laudoResp.url,
+                    link_texto: 'Visualizar Laudo de Vistoria',
+                  },
                 },
-              },
-            })
-            console.log('[concluir-vistoria-prestador] ✓ Email do laudo enviado para:', associado.email)
-          } catch (emailErr) {
-            console.error('Erro ao enviar email do laudo (não bloqueante):', emailErr)
+              })
+              console.log('[concluir-vistoria-prestador] ✓ Email do laudo enviado para:', associado.email)
+            } catch (emailErr) {
+              console.error('Erro ao enviar email do laudo (não bloqueante):', emailErr)
+            }
           }
         }
+      } catch (laudoGenErr) {
+        console.error('Erro ao gerar laudo (não bloqueante):', laudoGenErr)
       }
-    } catch (laudoGenErr) {
-      console.error('Erro ao gerar laudo (não bloqueante):', laudoGenErr)
     }
 
     // ── Auditoria ──
@@ -217,7 +249,7 @@ Deno.serve(async (req) => {
         acao: 'aprovar',
         modulo: 'instalacoes',
         descricao: `Vistoria prestador concluída: ${prestador?.nome || '---'} — ${veiculoDesc} (${placa}) — ${cidadeInst}`,
-        registro_id: link.instalacao_id,
+        registro_id: link.instalacao_id || link.vistoria_id,
         dados_novos: {
           link_id: link.id,
           prestador_nome: prestador?.nome,
