@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
         .from('veiculos')
         .update({
           cobertura_suspensa: true,
-          cobertura_suspensa_motivo: `Instalação não realizada no prazo de ${prazoHoras}h após assinatura`,
+          cobertura_suspensa_motivo: `Instalação não realizada no prazo de ${prazoHoras}h após ${baseLabel}`,
           cobertura_suspensa_em: new Date().toISOString(),
           cobertura_total: false,
           cobertura_roubo_furto: false,
