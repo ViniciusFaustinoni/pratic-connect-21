@@ -184,7 +184,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     return Array.from(mapa.values()).sort(
       (a, b) => new Date(b.ultima_mensagem).getTime() - new Date(a.ultima_mensagem).getTime()
     );
-  }, [mensagens, associados]);
+  }, [mensagens, associados, escopo, telefonesMonitoramento]);
 
   const handleSelectConversa = (conversa: ConversaAgrupada) => {
     setTelefoneSelecionado(conversa.telefone);
