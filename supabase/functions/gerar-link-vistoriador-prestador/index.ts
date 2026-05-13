@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
     // Validate required fields
     const camposFaltantes: string[] = []
     if (!prestador.telefone) camposFaltantes.push('telefone do prestador')
-    if (!instalacao.cidade) camposFaltantes.push('cidade da instalação')
+    if (!dadosCtx.cidade) camposFaltantes.push('cidade da vistoria/instalação')
 
     let whatsappEnviado = false
     let whatsappErro: string | null = null
