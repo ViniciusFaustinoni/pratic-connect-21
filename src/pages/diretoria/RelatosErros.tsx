@@ -208,7 +208,7 @@ export default function RelatosErros() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos os status</SelectItem>
-            {(Object.keys(STATUS_LABELS) as ErrorReportStatus[]).map((s) => (
+            {(Object.keys(STATUS_LABELS) as ErrorReportStatus[]).filter((s) => s !== 'concluido').map((s) => (
               <SelectItem key={s} value={s}>
                 {STATUS_LABELS[s].label}
               </SelectItem>
