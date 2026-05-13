@@ -1558,6 +1558,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
           cenario_adesao: cenarioExterno,
         } : {}),
+        // Marcação na coluna `tipo_entrada` quando originada de Troca de Titularidade
+        ...(origemTroca ? { tipo_entrada: 'troca_titularidade' as const } : {}),
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
