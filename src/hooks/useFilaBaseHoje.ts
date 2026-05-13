@@ -107,6 +107,9 @@ export function usePegarVistoriaBase() {
         throw new Error('Esta vistoria já foi pega por outro técnico.');
       }
 
+      // Espelhar atribuição na servicos vinculada (mantém fila do técnico)
+      await vincularProfissionalAoServicoDoAgendamentoBase(data.id, profile.id);
+
       return data.id as string;
     },
     onSuccess: () => {
