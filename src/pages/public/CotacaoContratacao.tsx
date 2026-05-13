@@ -166,9 +166,13 @@ export default function CotacaoContratacao() {
   const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
   const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
   const isTrocaTitularidade = dadosExtras?.tipo_entrada === 'troca_titularidade';
-  const { data: solicitacaoTroca } = useSolicitacaoTrocaPublicaPorCotacao(
+  const { data: solicitacaoTroca, isLoading: loadingSolicitacaoTroca, isFetched: solicitacaoTrocaFetched } = useSolicitacaoTrocaPublicaPorCotacao(
     isTrocaTitularidade ? cotacao?.id : null
   );
+  // Cotação marcada como troca de titularidade mas sem solicitação vinculada =
+  // estado órfão (vincular-cotacao-troca falhou). Sem isso o link público não tem
+  // como gerar contrato e o cliente trava na Pagamento. Mostrar erro explícito.
+  const trocaOrfa = isTrocaTitularidade && solicitacaoTrocaFetched && !loadingSolicitacaoTroca && !solicitacaoTroca;
   const trocaLiberada = solicitacaoTroca?.status === 'liberada_para_assinatura' || solicitacaoTroca?.status === 'efetivada';
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
   // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
@@ -607,6 +611,33 @@ export default function CotacaoContratacao() {
     cidade: cotacao.cliente_cidade || '',
     uf: cotacao.cliente_uf || '',
   };
+
+  // Cotação de troca órfã (sem solicitação vinculada): bloquear o fluxo com erro claro
+  // em vez de deixar o cliente avançar até a etapa de Pagamento e ver "Contrato não encontrado".
+  if (trocaOrfa) {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <Card className="max-w-md w-full border-destructive/30 bg-card/80 backdrop-blur-xl">
+          <CardContent className="pt-8 pb-8 text-center space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="h-8 w-8 text-destructive" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">Cotação não vinculada à troca</h1>
+            <p className="text-sm text-muted-foreground">
+              Esta cotação foi criada para uma troca de titularidade, mas não está
+              vinculada à solicitação correspondente. Entre em contato com o seu
+              consultor ou o suporte para refazer a vinculação.
+            </p>
+            {cotacao?.numero && (
+              <Badge variant="outline" className="text-sm px-4 py-1 border-destructive/30 text-destructive">
+                {cotacao.numero}
+              </Badge>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="dark min-h-screen public-premium-bg relative">

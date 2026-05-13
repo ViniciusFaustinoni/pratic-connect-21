@@ -1,81 +1,52 @@
-## Problema confirmado
-Hoje, no link público da troca de titularidade (`/public/CotacaoContratacao.tsx`), assim que o cliente envia os documentos, a navegação avança para a Etapa 2 (Contrato) e essa etapa renderiza imediatamente o card `TelaAnaliseTrocaTitularidade` ("Em análise pelo Cadastro") enquanto `solicitacaoTroca.status !== 'liberada_para_assinatura'`.
+## Diagnóstico — KOU6D37
 
-Com isso o cliente nunca consegue abrir as etapas seguintes (Vistoria, escolha entre Autovistoria/Presencial, agendamento da vistoria de campo) — fica preso esperando o Cadastro liberar para só depois ver Vistoria/Pagamento.
+Rastreando a placa no banco:
 
-A intenção do produto é que, na troca, o link público siga o mesmo padrão da cotação comum: **Plano → Documentos → Vistoria + Agendamento**, e só então caia em "Em análise pelo Cadastro" (que continua sendo o gate para Contrato/Pagamento, pois assinatura/pagamento dependem da aprovação do Cadastro + Monitoramento).
+- **Cotação nova de troca:** `3f0408b9-939d-47c9-890a-0dc1d98bd43c`
+  - `tipo_entrada = 'troca_titularidade'`
+  - `status_contratacao = 'vistoria_agendada'`
+  - `contrato_gerado_id = NULL` ← causa direta do erro "Contrato não encontrado"
+- **Solicitação de troca:** `52cc74c1-910d-4ac7-b854-84cd28db7a0d`
+  - `status = 'liberada_para_assinatura'`
+  - `termo_cancelamento_assinado_em` ✅
+  - `aprovado_cadastro_em` ✅
+  - **`cotacao_id = NULL`** ← raiz do problema
 
-## Plano final de etapas para troca de titularidade (link público)
+A edge function `vincular-cotacao-troca` **nunca foi invocada** (sem logs). Resultado: a cotação nova ficou órfã da solicitação. Como `useSolicitacaoTrocaPublicaPorCotacao` filtra por `cotacao_id`, ela retorna `null`, `trocaLiberada` fica `false`, **a etapa Contrato nunca dispara `contrato-gerar`**, e ao chegar em Pagamento o `EtapaPagamentoCotacao.buscarContrato()` lança `"Contrato não encontrado…"`.
 
-```text
-1. Escolha do Plano        (livre)
-2. Documentos do novo titular (livre)
-3. Vistoria                (livre — escolher autovistoria/presencial e agendar)
-4. Em análise pelo Cadastro / Contrato
-   - se troca NÃO liberada => mostra TelaAnaliseTrocaTitularidade
-   - se troca liberada     => mostra EtapaAssinaturaContrato (Autentique)
-5. Pagamento               (igual hoje, com regra de isenta_*)
+A toast em `CotacaoFormDialog` (linha 1729) já avisa quando a vinculação falha, mas o fluxo **continua salvando a cotação e navegando**, deixando o cliente avançar pelo link público até travar no fim.
+
+## Correção em 3 frentes
+
+### 1. Data fix imediato (KOU6D37)
+Vincular a solicitação à cotação existente:
+```sql
+UPDATE solicitacoes_troca_titularidade
+   SET cotacao_id = '3f0408b9-939d-47c9-890a-0dc1d98bd43c'
+ WHERE id = '52cc74c1-910d-4ac7-b854-84cd28db7a0d'
+   AND cotacao_id IS NULL;
 ```
+Após isso, o link público volta a enxergar `liberada_para_assinatura`, mostra a etapa Contrato corretamente, e o `contrato-gerar` é chamado normalmente — destravando a Pagamento.
 
-Para cotação comum, nada muda. Para substituição, nada muda.
+### 2. Hardening na criação da cotação (`src/components/cotacoes/CotacaoFormDialog.tsx`)
+Quando `origemTroca` truthy:
+- Mover `vincular-cotacao-troca` para **antes** de `toast.success` e `navigate`.
+- Se a edge falhar, **fazer rollback** da cotação criada (`DELETE FROM cotacoes WHERE id = novaCotacao.id`) ou marcar `status='falha_vinculacao'`, exibir toast de erro **bloqueante** e impedir navegação.
+- Garante que nunca exista cotação `tipo_entrada=troca_titularidade` órfã.
 
-## O que vou ajustar em `src/pages/public/CotacaoContratacao.tsx`
+### 3. Guard defensivo no link público (`src/pages/public/CotacaoContratacao.tsx`)
+Após `useSolicitacaoTrocaPublicaPorCotacao` carregar:
+- Se `isTrocaTitularidade && !solicitacaoTroca && !isLoadingTroca` → renderizar tela de erro clara ("Solicitação de troca não vinculada — contate o suporte"), em vez de deixar o usuário navegar até Pagamento e ver erro técnico de contrato.
 
-1. **Reordenar as etapas internamente para troca de titularidade**
-   - Hoje a ordem interna fixa é `['plano','documentos','contrato','vistoria','pagamento','instalacao']`.
-   - Em troca, vou tratar Vistoria como a 3ª etapa visível e Contrato como a 4ª, sem mexer na ordem de cotação comum.
-   - Implementação: o array `STEPS_BASE` continua igual; quando `isTrocaTitularidade` for true, vou montar um STEPS específico que troca a ordem para `Plano → Documentos → Vistoria → Contrato → Pagamento` (mantendo a etapa "Instalação" extra para autovistoria).
-   - O mapeamento `internalToVisible` / `visibleToInternal` que já existe vai cuidar da diferença entre o índice interno (mantido) e o índice visível do Stepper.
+### 4. Reconciliação retroativa (opcional, baixa prioridade)
+Script único para varrer cotações com `tipo_entrada='troca_titularidade'` + `dados_extras->>'solicitacao_troca_id'` preenchido + solicitação correspondente sem `cotacao_id`, e vincular as remanescentes. Evita que outros casos como KOU6D37 estejam silenciosamente quebrados.
 
-2. **Liberar a navegação de Vistoria antes da aprovação do Cadastro**
-   - Hoje `etapaDoStatus` trava o avanço pelo `status_contratacao`. Em troca, após `dados_preenchidos` o cliente fica parado em 2 (Contrato bloqueado por análise).
-   - Vou ajustar `etapaDoStatus` (e os efeitos de sincronização) para que em troca, depois de `dados_preenchidos`, a etapa máxima alcançável seja a Vistoria (índice interno 3), não o Contrato (índice 2).
-   - Em outras palavras: para troca, a sequência permitida é Plano → Documentos → Vistoria, independente do status da `solicitacao_troca`. Contrato só fica acessível quando `trocaLiberada === true`.
+## Fora de escopo
+- Mudar fluxo de aprovação de cadastro/monitoramento.
+- Tocar em `contrato-gerar`, geração Autentique ou cobrança Asaas.
+- Alterar a regra de carências/cenários isentos.
 
-3. **Não bloquear a Etapa 2 com a tela de análise**
-   - Removo a renderização da `TelaAnaliseTrocaTitularidade` da Etapa 2 e a movo para a Etapa 2/Contrato somente quando o cliente já passou pela Vistoria.
-   - Regra: a tela "Em análise pelo Cadastro" só aparece se:
-     - `isTrocaTitularidade && !trocaLiberada`, **e**
-     - o cliente já está na etapa de Contrato (índice interno 2) **e** já marcou a Vistoria (`tipo_vistoria` preenchido ou agendamento criado).
-   - Antes disso, a Etapa de Contrato simplesmente não é alcançável manualmente em troca — o `NavegacaoEtapas` para de avançar na Vistoria.
-
-4. **Vistoria na troca (Etapa 3)**
-   - Reaproveita o componente `EtapaVistoria` + `AgendamentoVistoriaCompleta` já usado na cotação comum.
-   - Atenção a duas regras já existentes que precisam continuar valendo:
-     - `pularEtapaVistoria` (troca liberada SEM solicitação de vistoria): se cair nesse cenário só depois da Vistoria já ter sido feita, mantém comportamento atual.
-     - `vistoria_concluida_em` / `tipo_vistoria` preenchidos: já marcam a etapa como concluída.
-   - Observação importante: para troca, mesmo antes do Cadastro aprovar, o cliente já pode escolher Autovistoria ou Presencial e agendar. Isso só registra `tipo_vistoria` / agendamento na cotação — não promove veículo a ativo (a ativação continua passando pelo `ativar-associado` após pagamento/Monitoramento, sem mudança no fluxo de backend).
-
-5. **Handlers de avançar/voltar**
-   - Atualizo `handleAvancar` / `handleVoltar` / efeito de "etapa pulada" para considerar que, em troca, a transição padrão passa por Vistoria antes do Contrato.
-   - Nada disso muda a navegação da cotação comum.
-
-6. **Stepper visual**
-   - Em troca, o Stepper passa a mostrar:
-     `Escolha do Plano · Documentos · Vistoria · Contrato · Pagamento` (+ Instalação se autovistoria).
-   - Para refletir o estado, o passo "Contrato" recebe um badge tipo "Aguardando análise" enquanto `!trocaLiberada` (visual no Stepper), e a `TelaAnaliseTrocaTitularidade` aparece somente quando o cliente entra nesse passo.
-
-## O que NÃO muda
-
-- Backend, edge functions (`vincular-cotacao-troca`, `ativar-associado`, `aprovar-proposta`, etc.), tabelas e triggers continuam iguais.
-- Fluxo de cotação comum, substituição e cotação avulsa: sem alteração visual nem de regra.
-- Bypass de travas de placa em `CotacaoFormDialog` (já implementado): inalterado.
-- A regra de troca liberada + isenta (pular Pagamento) e troca sem vistoria solicitada (pular Vistoria) continuam vivas, agora aplicadas sobre a nova ordem.
-
-## Validação manual
-
-Usar a placa `KOU6D37` (troca em `aguardando_cadastro`):
-1. Abrir o link público da cotação dessa troca.
-2. Verificar que o cliente consegue:
-   - escolher o plano
-   - enviar documentos
-   - **avançar para Vistoria** e escolher Autovistoria ou Presencial
-   - **agendar a vistoria** normalmente
-3. Ao tentar avançar para Contrato, ver `TelaAnaliseTrocaTitularidade` ("Em análise pelo Cadastro").
-4. Após Cadastro + Monitoramento aprovarem (`solicitacao.status = liberada_para_assinatura`), o passo Contrato libera Autentique e segue para Pagamento normalmente.
-5. Conferir que cotação comum (sem troca) continua passando direto: Plano → Docs → Contrato → Vistoria → Pagamento.
-
-## Arquivos previstos
-
-- `src/pages/public/CotacaoContratacao.tsx` (única alteração de código)
-- Nenhuma edge function, nenhuma tabela, nenhum hook precisa mudar.
+## Validação
+1. Rodar o data fix → recarregar o link público da cotação `3f0408b9` → confirmar que a etapa Contrato aparece com `TelaAnaliseTrocaTitularidade` (caso ainda não liberada) ou aciona `contrato-gerar` (já liberada) → seguir para Pagamento sem erro.
+2. Criar nova troca de teste, simular falha em `vincular-cotacao-troca` (revogar permissão temporariamente) → confirmar que a cotação **não é persistida** e a UI mostra erro bloqueante.
+3. Tentar abrir link público de cotação órfã → confirmar tela de erro nova em vez do erro técnico de "Contrato não encontrado".
