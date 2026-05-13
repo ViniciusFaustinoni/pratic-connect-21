@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { formatLocalizacaoComZona, getZonaAtendimento } from '@/lib/localizacao-zonas';
 import { useRealocarInstalacao } from './useRealocarInstalacao';
 import { useConfiguracoesAll } from './useConfiguracoesAll';
+import { vincularProfissionalAoServicoDoAgendamentoBase } from '@/lib/agendamentos-base/vincular-profissional-servico';
 
 const PRODUCTION_BASE_URL = 'https://app.praticcar.org';
 
