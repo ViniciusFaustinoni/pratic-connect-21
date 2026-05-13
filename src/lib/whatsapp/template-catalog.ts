@@ -32,10 +32,16 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     gatilho: 'create-user',
     variaveis: ['nome_agencia'],
   },
-  documentacao_pendente: {
+  documentacao_pendente_v2: {
     momento: 'Quando faltam documentos do associado para liberar a aprovação',
     gatilho: 'notificar-cliente',
     variaveis: ['nome', 'lista_documentos'],
+  },
+  documentacao_pendente: {
+    momento: 'Substituído por documentacao_pendente_v2 (com botão URL)',
+    gatilho: '(legado)',
+    variaveis: [],
+    deprecated: 'Use documentacao_pendente_v2',
   },
 
   // ── Agendamento de instalação / vistoria ────────────────────────────
