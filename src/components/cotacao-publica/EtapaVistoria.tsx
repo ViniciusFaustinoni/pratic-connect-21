@@ -57,11 +57,13 @@ export function EtapaVistoria({
   onComplete, 
   onAgendar, 
   readOnly = false, 
-  tipoVistoriaRealizada 
+  tipoVistoriaRealizada,
+  subFipe = false,
 }: EtapaVistoriaProps) {
-  const [modo, setModo] = useState<ModoVistoria>('escolha');
+  const [modo, setModo] = useState<ModoVistoria>(subFipe ? 'autovistoria' : 'escolha');
   const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
   const { data: configBase } = useConfiguracaoBase();
+  const fotosSubFipe = useMemo(() => (subFipe ? getFotosVistoriaSubFipe(tipoVeiculo) : undefined), [subFipe, tipoVeiculo]);
 
   const enderecoBase = configBase?.base_logradouro
     ? `${configBase.base_logradouro}${configBase.base_numero ? `, ${configBase.base_numero}` : ''} - ${configBase.base_bairro || ''} - ${configBase.base_cidade || ''}/${configBase.base_uf || ''}`
