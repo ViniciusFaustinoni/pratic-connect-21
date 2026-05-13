@@ -1716,7 +1716,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           }
         }
 
-        // Se a cotação foi originada de uma Troca de Titularidade, vincular agora
+        // Se a cotação foi originada de uma Troca de Titularidade, vincular agora.
+        // CRÍTICO: a vinculação NÃO pode falhar silenciosamente — sem ela a cotação
+        // fica órfã da solicitação, o link público não enxerga `liberada_para_assinatura`,
+        // o contrato nunca é gerado e o cliente trava na etapa de Pagamento.
         if (origemTroca && novaCotacao?.id) {
           try {
             const { error: vincErr } = await supabase.functions.invoke('vincular-cotacao-troca', {
@@ -1724,12 +1727,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             });
             if (vincErr) throw vincErr;
             toast.success('Cotação vinculada à troca de titularidade.');
+            navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
           } catch (e: any) {
-            console.error('[vincular-cotacao-troca]', e);
-            toast.error('Cotação criada, mas a vinculação à troca falhou. Tente reabrir a solicitação.');
+            console.error('[vincular-cotacao-troca] FALHA — fazendo rollback da cotação', e);
+            // Rollback: remover a cotação órfã para o usuário poder tentar de novo
+            try {
+              await supabase.from('cotacoes').delete().eq('id', novaCotacao.id);
+            } catch (delErr) {
+              console.error('[vincular-cotacao-troca] rollback também falhou', delErr);
+            }
+            toast.error(
+              'Não foi possível vincular a cotação à troca de titularidade. ' +
+              'A cotação foi descartada — tente novamente em instantes ou contate o suporte.'
+            );
+            // Bloquear navegação: usuário fica no dialog para tentar de novo
+            return;
           }
-          // Quando vier de troca, ir para o detalhe da cotação (mesma navegação do fluxo antigo)
-          navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
         } else {
           toast.success('Cotação criada com sucesso!');
           navigate('/vendas/cotacoes');
