@@ -333,6 +333,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [videoExpandido, setVideoExpandido] = useState<string | null>(null);
   const [corrigirOpen, setCorrigirOpen] = useState(false);
   const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
+  const [solicitarVistoriaOpen, setSolicitarVistoriaOpen] = useState(false);
 
   if (isLoading) {
     return (
