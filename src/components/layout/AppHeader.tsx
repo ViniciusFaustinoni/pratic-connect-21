@@ -22,6 +22,7 @@ import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
 import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
 import { TestarCorrecoesButton } from '@/components/suporte/TestarCorrecoesButton';
 import { PendenciasDocumentosBell } from '@/components/notificacoes/PendenciasDocumentosBell';
+import { BuildVersionIndicator } from '@/components/layout/BuildVersionIndicator';
 
 export function AppHeader() {
   const navigate = useNavigate();
@@ -120,6 +121,8 @@ export function AppHeader() {
               <LogOut className="mr-2 h-4 w-4" />
               Sair
             </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-border" />
+            <BuildVersionIndicator />
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
