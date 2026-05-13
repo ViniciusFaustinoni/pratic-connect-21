@@ -328,10 +328,37 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     <XCircle className="h-4 w-4 mr-2" /> Reprovar
                   </Button>
                   {modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento' && (
-                    <Button variant="outline" onClick={handleSolicitarVistoria} disabled={aprovarMonitoramento.isPending}>
-                      {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
-                      Solicitar Vistoria
-                    </Button>
+                    <>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" disabled={aprovarMonitoramento.isPending}>
+                            {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
+                            Solicitar Vistoria <ChevronDown className="h-3 w-3 ml-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-64">
+                          <DropdownMenuLabel>Tipo de vistoria</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('somente_fotos')}>
+                            <Camera className="h-4 w-4 mr-2" />
+                            <div>
+                              <p className="text-sm font-medium">Somente fotos</p>
+                              <p className="text-xs text-muted-foreground">Veículo sem rastreador novo</p>
+                            </div>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('fotos_com_rastreador')}>
+                            <ShieldCheck className="h-4 w-4 mr-2" />
+                            <div>
+                              <p className="text-sm font-medium">Fotos + instalação de rastreador</p>
+                              <p className="text-xs text-muted-foreground">Veículo precisa de rastreador novo</p>
+                            </div>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button variant="outline" onClick={() => setManutencaoOpen(true)} disabled={aprovarMonitoramento.isPending}>
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Agendar manutenção
+                      </Button>
+                    </>
                   )}
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
