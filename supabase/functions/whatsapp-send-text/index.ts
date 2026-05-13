@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { espelharEmailDoTemplate } from "../_shared/espelhar-email-template.ts";
+
+// referencia_tipo/id e telefone usados pelo espelho de e-mail também precisam estar acessíveis
+let __mirror_referencia_tipo: string | undefined;
+let __mirror_referencia_id: string | undefined;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
