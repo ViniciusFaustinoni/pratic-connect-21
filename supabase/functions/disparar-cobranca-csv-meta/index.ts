@@ -369,7 +369,7 @@ serve(async (req) => {
           erros++;
         }
 
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 150));
       }
 
       // Se ao menos um telefone deu ok, marca todos os boletos deste assoc deste chunk como enviado
