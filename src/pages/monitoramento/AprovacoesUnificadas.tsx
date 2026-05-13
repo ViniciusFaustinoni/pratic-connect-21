@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { ShieldCheck, ArrowRightLeft, ShieldAlert, AlertTriangle, ClipboardList } from 'lucide-react';
 import AprovacaoAssociados from './AcionamentosRouboFurto';
 import AprovacoesTroca from './AprovacoesTroca';
@@ -8,10 +9,20 @@ import LiberacoesAutoVistoria from './LiberacoesAutoVistoria';
 import RecusasInstalador from '../cadastro/RecusasInstalador';
 import RessalvasPendentes from './RessalvasPendentes';
 import ImprevistosPainel from './ImprevistosPainel';
+import { useAprovacoesMonitoramentoBreakdown } from '@/hooks/useAprovacoesMonitoramentoCount';
 
 type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas' | 'ressalvas' | 'imprevistos';
 
 const ABAS: Aba[] = ['associados', 'troca', 'liberacao-suspensao', 'recusas', 'ressalvas', 'imprevistos'];
+
+function CountBadge({ n }: { n: number }) {
+  if (!n) return null;
+  return (
+    <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1.5 text-[10px] font-bold bg-primary/15 text-primary border-primary/30">
+      {n}
+    </Badge>
+  );
+}
 
 export default function AprovacoesUnificadas() {
   const location = useLocation();
