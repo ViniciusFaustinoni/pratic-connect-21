@@ -10,7 +10,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getSoftruckAuthToken } from '../_shared/softruck-id-resolver.ts';
-import { extractVinculo } from '../softruck-buscar-dispositivo/index.ts';
+import { extractVinculoSoftruck } from '../_shared/softruck-vinculo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
