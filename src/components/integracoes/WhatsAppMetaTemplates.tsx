@@ -251,9 +251,46 @@ export function WhatsAppMetaTemplates() {
             <TableBody>
               {templates.map((t) => {
                 const badge = STATUS_BADGE[t.status] || STATUS_BADGE.DRAFT;
+                const catalog = getCatalogEntry(t.nome);
                 return (
                   <TableRow key={t.id}>
-                    <TableCell className="font-mono text-xs">{t.nome}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span>{t.nome}</span>
+                        <TooltipProvider delayDuration={150}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="text-muted-foreground hover:text-primary transition-colors" aria-label="Quando este template é enviado">
+                                {catalog ? (
+                                  <HelpCircle className="h-3.5 w-3.5" />
+                                ) : (
+                                  <AlertTriangle className="h-3.5 w-3.5 text-yellow-600" />
+                                )}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-xs space-y-1.5 text-xs">
+                              {catalog ? (
+                                <>
+                                  <div><strong>Quando é enviado:</strong> {catalog.momento}</div>
+                                  <div><strong>Gatilho:</strong> <span className="font-mono">{catalog.gatilho}</span></div>
+                                  {catalog.variaveis.length > 0 && (
+                                    <div><strong>Variáveis:</strong> {catalog.variaveis.join(', ')}</div>
+                                  )}
+                                  {catalog.deprecated && (
+                                    <div className="text-destructive font-medium">⛔ Legado — {catalog.deprecated}</div>
+                                  )}
+                                </>
+                              ) : (
+                                <div>Template não mapeado no catálogo. Pode ser órfão (sem uso) ou recém criado.</div>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {catalog?.deprecated && (
+                          <Badge className="text-[9px] bg-orange-500/15 text-orange-700 px-1 py-0">legado</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-xs">{t.categoria}</TableCell>
                     <TableCell>
                       <div className="space-y-1">
