@@ -16,6 +16,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { parseCsvInadimplentes, type ParseResultado, type DestinatarioParsed } from '@/lib/cobranca/parseCsvInadimplentes';
 
 const TEMPLATE_NOME = 'cobranca_inadimplencia_pratic';
+const MAX_CSV_MB = 50;
+const MAX_CSV_BYTES = MAX_CSV_MB * 1024 * 1024;
 
 type Etapa = 'upload' | 'preview' | 'enviando' | 'concluido';
 
@@ -119,8 +121,8 @@ export function ImportarCobrancaCsv() {
   const onDrop = useCallback(async (files: File[]) => {
     const f = files[0];
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error('Arquivo maior que 5 MB.');
+    if (f.size > MAX_CSV_BYTES) {
+      toast.error(`Arquivo maior que ${MAX_CSV_MB} MB.`);
       return;
     }
     setArquivo(f);
@@ -268,7 +270,7 @@ export function ImportarCobrancaCsv() {
             <p className="text-lg font-medium mb-1">
               {isDragActive ? 'Solte o arquivo aqui' : 'Arraste o CSV ou clique para selecionar'}
             </p>
-            <p className="text-sm text-muted-foreground">Apenas .csv — máx 5 MB</p>
+            <p className="text-sm text-muted-foreground">Apenas .csv — máx {MAX_CSV_MB} MB</p>
           </div>
         </CardContent>
       </Card>
