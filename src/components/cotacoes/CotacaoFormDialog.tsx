@@ -951,7 +951,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       // Em fluxo de Troca de Titularidade, a placa pertence ao associado antigo
       // e existe cotação anterior + veículo no SGA + vínculo na base local — todos
       // ESPERADOS. Pular as travas globais nesse caminho específico.
-      const isTroca = !!origemTroca;
+      const isTroca = shouldBypassPlateGuards(origemTroca);
 
       if (!isTroca) {
         // Primeiro, verificar se a placa já está em cotação de outro vendedor
