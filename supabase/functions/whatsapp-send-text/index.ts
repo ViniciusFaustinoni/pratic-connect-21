@@ -480,8 +480,26 @@ serve(async (req) => {
 
     console.log(`[whatsapp-send-text] Provedor ativo: ${provedorAtivo}${force_provider ? ' (forçado)' : ''}`);
 
+    const referencia_tipo = body.referencia_tipo;
+    const referencia_id = body.referencia_id;
+
+    const fireMirror = (ok: boolean) => {
+      if (!ok || !template_name) return;
+      const promise = espelharEmailDoTemplate({
+        supabase,
+        telefone: telefoneFormatado,
+        template_name,
+        template_params: template_params || [],
+        template_button_params,
+        referencia_tipo,
+        referencia_id,
+      }).catch((e) => console.error('[whatsapp-send-text] espelho-email erro:', e));
+      try { (globalThis as any).EdgeRuntime?.waitUntil?.(promise); } catch (_) {}
+    };
+
     if (provedorAtivo === 'meta_oficial') {
       const result = await enviarViaMeta(supabase, telefoneFormatado, mensagem, template_name, template_params, allow_text, template_button_params);
+      fireMirror(!!(result as any)?.success);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -515,6 +533,7 @@ serve(async (req) => {
     const delayFinal = delay_ms || delayGlobal;
 
     const result = await enviarViaEvolution(supabase, telefoneFormatado, mensagem, instancia, EVOLUTION_API_KEY, delayFinal);
+    fireMirror(!!(result as any)?.success);
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
