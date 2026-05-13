@@ -21,6 +21,7 @@ import { GlobalSearch } from '@/components/layout/GlobalSearch';
 import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
 import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
 import { TestarCorrecoesButton } from '@/components/suporte/TestarCorrecoesButton';
+import { PendenciasDocumentosBell } from '@/components/notificacoes/PendenciasDocumentosBell';
 
 export function AppHeader() {
   const navigate = useNavigate();
