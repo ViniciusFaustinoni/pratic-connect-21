@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
       return json({ success: true, found: false });
     }
 
-    return json({ success: true, found: true, vinculo: extractVinculo(vehicle, device) });
+    return json({ success: true, found: true, vinculo: extractVinculoSoftruck(vehicle, device) });
   } catch (err: any) {
     console.error('[softruck-detalhes-vinculo]', err);
     return json({ success: false, error: err?.message || 'Erro interno' }, 500);
