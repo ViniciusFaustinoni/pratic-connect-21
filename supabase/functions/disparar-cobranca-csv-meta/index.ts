@@ -333,6 +333,19 @@ serve(async (req) => {
       });
     }
 
+    // Buscar (ou criar) a instância lógica do provedor Meta para taggear as mensagens
+    let metaInstanciaId: string | null = null;
+    {
+      const { data: inst } = await supabase
+        .from("whatsapp_instancias")
+        .select("id")
+        .eq("provedor", "meta")
+        .eq("ativa", true)
+        .limit(1)
+        .maybeSingle();
+      metaInstanciaId = inst?.id ?? null;
+    }
+
     const detalhes: Array<{
       matricula: string;
       nome: string;
@@ -459,6 +472,7 @@ serve(async (req) => {
           const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             telefone: tel,
+            nome_contato: dest.nome,
             mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s) em ${blocos.length} envio(s)`,
             status: "enviada",
             template_id: templateNome,
@@ -466,6 +480,7 @@ serve(async (req) => {
             referencia_id: dest.matricula,
             message_id: ultimoMessageId,
             provedor: "meta",
+            instancia_id: metaInstanciaId,
           });
           if (insErr) console.error("[whatsapp_mensagens insert ok]", insErr.message);
         } else {
@@ -481,6 +496,7 @@ serve(async (req) => {
           const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             telefone: tel,
+            nome_contato: dest.nome,
             mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
             status: "erro",
             template_id: templateNome,
@@ -489,6 +505,7 @@ serve(async (req) => {
             erro_codigo: ultimoErroCodigo ? String(ultimoErroCodigo) : null,
             erro_mensagem: ultimoErroMsg,
             provedor: "meta",
+            instancia_id: metaInstanciaId,
           });
           if (insErr) console.error("[whatsapp_mensagens insert erro]", insErr.message);
         }

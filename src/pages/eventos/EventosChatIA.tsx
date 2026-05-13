@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ConversasList, type ConversaAgrupada } from '@/components/eventos/chat-ia/ConversasList';
 import { ChatPanel } from '@/components/eventos/chat-ia/ChatPanel';
@@ -28,6 +28,8 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento' }: Even
     staleTime: 60_000,
   });
 
+  const queryClient = useQueryClient();
+
   const { data: mensagens, isLoading } = useQuery({
     queryKey: ['chat-ia-conversas', instanciasAtivas],
     enabled: !!instanciasAtivas,
@@ -44,10 +46,31 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento' }: Even
       if (error) throw error;
       return data;
     },
-    staleTime: 30000,
-    refetchInterval: 60000,
+    staleTime: 5_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
+
+  // Realtime: atualiza a lista de conversas assim que uma nova mensagem é gravada
+  useEffect(() => {
+    if (!instanciasAtivas?.length) return;
+    const channel = supabase
+      .channel('chat-ia-mensagens-rt')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
+        (payload) => {
+          const inst = (payload.new as any)?.instancia_id;
+          if (inst && instanciasAtivas.includes(inst)) {
+            queryClient.invalidateQueries({ queryKey: ['chat-ia-conversas', instanciasAtivas] });
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [instanciasAtivas, queryClient]);
 
   // Fetch associados for avatar matching
   const { data: associados } = useQuery({
