@@ -227,76 +227,42 @@ export default function CotacaoContratacao() {
   // IMPORTANTE: Se tipo_vistoria já está preenchido, considera vistoria como concluída (etapa 4+)
   const etapaDoStatus = useMemo(() => {
     if (!cotacao?.status_contratacao) return 0;
-    
+
     const etapaBase = determinarEtapa(cotacao.status_contratacao);
-    
-    if (isTrocaTitularidade && !pularEtapaVistoria) {
-      // Em troca: ordem é docs → vistoria(3) → contrato(2) → pagamento(4)
-      // Status documentos_ok / dados_preenchidos => liberar Vistoria (3) primeiro
-      if (etapaBase === 2) {
-        // Se a vistoria JÁ foi feita/agendada, libera o Contrato (2) — onde aparece a tela
-        // de "Em análise pelo Cadastro" enquanto a troca não foi liberada.
-        if (cotacao.tipo_vistoria) return 2;
-        return 3;
-      }
-      // contrato_assinado => libera pagamento
-      if (etapaBase === 3) {
-        return pularEtapaPagamento ? 5 : 4;
-      }
-      if (etapaBase === 4 && pularEtapaPagamento) return 5;
-      return etapaBase;
-    }
-    
+
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
-    if (etapaBase === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
+    if (etapaBase === 3 && cotacao.tipo_vistoria) {
       // Se também pulamos pagamento (troca isenta), saltar direto para conclusão
       return pularEtapaPagamento ? 5 : 4;
     }
     if (etapaBase === 4 && pularEtapaPagamento) {
       return 5;
     }
-    
+
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaPagamento]);
 
   // STEPS dinâmico:
   //  - autovistoria => adiciona "Instalação" como 6ª etapa
-  //  - troca de titularidade sem vistoria solicitada => oculta "Vistoria"
   //  - troca de titularidade isenta => oculta "Pagamento"
-  //  - troca de titularidade => Vistoria vem ANTES de Contrato (Plano → Docs → Vistoria → Contrato → Pagamento)
+  // (Troca de titularidade segue a MESMA ordem da nova adesão)
   const STEPS = useMemo<Step[]>(() => {
     let base = STEPS_BASE;
-    if (pularEtapaVistoria) base = base.filter((s) => s.id !== 'vistoria');
     if (pularEtapaPagamento) base = base.filter((s) => s.id !== 'pagamento');
-    // Em troca de titularidade (com vistoria): reordenar Vistoria antes de Contrato
-    if (isTrocaTitularidade && !pularEtapaVistoria) {
-      const idxContrato = base.findIndex((s) => s.id === 'contrato');
-      const idxVistoria = base.findIndex((s) => s.id === 'vistoria');
-      if (idxContrato >= 0 && idxVistoria > idxContrato) {
-        const reordered = [...base];
-        const [vist] = reordered.splice(idxVistoria, 1);
-        reordered.splice(idxContrato, 0, vist);
-        base = reordered;
-      }
-    }
     if (cotacao?.tipo_vistoria === 'autovistoria') {
       return [...base, STEP_INSTALACAO];
     }
     return base;
-  }, [cotacao?.tipo_vistoria, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
+  }, [cotacao?.tipo_vistoria, pularEtapaPagamento]);
 
   // Ordem de navegação por índices INTERNOS (mesmos do determinarEtapa):
   // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
-  // Para troca de titularidade (com vistoria): docs → vistoria → contrato → pagamento
   const navOrder = useMemo<number[]>(() => {
-    let order = isTrocaTitularidade && !pularEtapaVistoria
-      ? [0, 1, 3, 2, 4, 5]
-      : [0, 1, 2, 3, 4, 5];
-    if (pularEtapaVistoria) order = order.filter((i) => i !== 3);
+    let order = [0, 1, 2, 3, 4, 5];
     if (pularEtapaPagamento) order = order.filter((i) => i !== 4);
     return order;
-  }, [isTrocaTitularidade, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [pularEtapaPagamento]);
 
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
