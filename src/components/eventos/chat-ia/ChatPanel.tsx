@@ -21,7 +21,7 @@ interface ChatPanelProps {
   telefone: string | null;
   nomeContato: string | null;
   avatarUrl: string | null;
-  drawerVariant?: 'relacionamento' | 'eventos';
+  drawerVariant?: 'relacionamento' | 'eventos' | 'monitoramento';
 }
 
 export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'relacionamento' }: ChatPanelProps) {

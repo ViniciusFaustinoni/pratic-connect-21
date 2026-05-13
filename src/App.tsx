@@ -557,6 +557,7 @@ const App = () => (
               <Route path="/eventos/chat-ia" element={<EventosChatIA />} />
               <Route path="/eventos/chat" element={<EventosChat />} />
               <Route path="/cobranca/chat" element={<EventosChatIA />} />
+              <Route path="/monitoramento/chat" element={<EventosChatIA drawerVariant="monitoramento" escopo="monitoramento" />} />
               
               {/* Sindicante */}
               <Route path="/sindicante" element={<SindicanteDashboard />} />

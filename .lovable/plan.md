@@ -1,68 +1,54 @@
-# Resposta direta
+## Objetivo
+Disponibilizar um item **Chat** no módulo Monitoramento (sidebar laranja), reusando o chat unificado já existente em `/eventos/chat-ia` (`EventosChatIA`), porém filtrando a lista de conversas para mostrar somente associados/contatos relevantes à operação de Monitoramento.
 
-**Não.** Hoje a IA (`agente-consultor-ia`) **não consegue entender o contexto do template de cobrança CSV** quando o associado responde. Confirmado por leitura do código + banco.
+## Mudanças
 
-## Por que falha
+### 1. Nova variante do chat
+Arquivo: `src/pages/eventos/EventosChatIA.tsx`
+- Estender o tipo `drawerVariant` para `'relacionamento' | 'eventos' | 'monitoramento'`.
+- Adicionar prop opcional `escopo?: 'todos' | 'monitoramento'` (default `'todos'`).
+- Quando `escopo === 'monitoramento'`, filtrar a lista de telefones exibidos para conversas cujo telefone pertence a um associado com pelo menos uma das condições:
+  - veículo com `status` em `('ativo','instalacao_pendente','suspenso_nao_instalacao','manutencao')`, OU
+  - serviço aberto em `servicos` (instalação, vistoria, retirada, manutenção, base, rota), OU
+  - rastreador vinculado em `rastreadores.veiculo_id`.
+- Filtro feito client-side após carregar `mensagens` + cruzando com nova query `useQuery(['monitoramento-telefones-elegiveis'])` que busca uma vez (cache 60s) os telefones a partir de `associados` join com `veiculos` e `servicos` abertos.
 
-1. `agente-consultor-ia` monta o histórico assim (linhas 225–238):
-   ```ts
-   .from("whatsapp_mensagens")
-   .select("mensagem, direcao, created_at")
-   ```
-   Ele lê **apenas a coluna `mensagem`** — não lê `template_variaveis`, não lê o corpo do template, não cruza com `cobrancas`.
+### 2. Página wrapper de Monitoramento
+Novo: `src/pages/monitoramento/MonitoramentoChat.tsx`
+```tsx
+import EventosChatIA from '../eventos/EventosChatIA';
+export default function MonitoramentoChat() {
+  return <EventosChatIA drawerVariant="monitoramento" escopo="monitoramento" />;
+}
+```
 
-2. A função `disparar-cobranca-csv-meta` grava em `whatsapp_mensagens.mensagem` apenas um marcador:
-   ```
-   [template cobranca_inadimplencia_pratic] EUZIRENE — 4 boleto(s) em 2 envio(s)
-   ```
-   O conteúdo real (nome, placa, vencimentos, linhas digitáveis) fica só na Meta e nunca entra na coluna `mensagem`.
+### 3. Rota
+Arquivo: `src/App.tsx`
+- Adicionar lazy import e `<Route path="/monitoramento/chat" element={<MonitoramentoChat />} />` (dentro do mesmo wrapper protegido das demais rotas de monitoramento).
 
-3. O template `cobranca_inadimplencia_pratic` (`whatsapp_meta_templates.corpo`) é:
-   ```
-   Olá, {{1}}! 👋
-   Identificamos pendência(s) financeira(s) ...
-   📋 Boletos em aberto:
-   {{2}}
-   💳 Para regularizar, copie a linha digitável ...
-   ```
-   Os valores reais de `{{1}}` (nome) e `{{2}}` (blocos com placa/vencimento/linha digitável) são montados em runtime e descartados após enviar.
-
-**Resultado prático**: quando EUZIRENE responde "qual o valor?" ou "já paguei o de setembro", o LLM vê no histórico só `[template cobranca_inadimplencia_pratic] EUZIRENE — 4 boleto(s) em 2 envio(s)` seguido da pergunta dela. Não tem placa, valor, vencimento nem código — vai responder genérico ou alucinar.
-
-# Plano de correção
-
-## 1. Renderizar e persistir o corpo real do template no envio CSV
-Arquivo: `supabase/functions/disparar-cobranca-csv-meta/index.ts` (no insert das linhas 472 e 496).
-
-- Buscar `corpo` do template uma vez por execução (`whatsapp_meta_templates` por `nome`).
-- Para cada bloco enviado, substituir `{{1}}` pelo `nome` e `{{2}}` pelo texto do bloco que já é montado para o envio à Meta.
-- Salvar esse texto final em `whatsapp_mensagens.mensagem` (uma linha por bloco enviado), mantendo `template_variaveis` com `{ template, matricula, bloco_index, total_blocos }`.
-- Para o registro de erro, gravar o corpo renderizado do bloco que tentou enviar (mesmo padrão).
-
-Assim o histórico passa a conter literalmente o que o associado recebeu.
-
-## 2. Reforçar o contexto da IA quando há cobrança recente
-Arquivo: `supabase/functions/agente-consultor-ia/index.ts`.
-
-- Após carregar `historicoFormatado`, detectar se nas últimas 48h existe `whatsapp_mensagens` com `referencia_tipo = 'cobranca_csv'` para o telefone.
-- Se existir, buscar a `matricula` em `template_variaveis` e carregar de `cobrancas` os boletos em aberto desse associado (placa, vencimento, valor, linha digitável, status).
-- Injetar um bloco no `systemPrompt` tipo:
+### 4. Item de menu
+Arquivo: `src/components/layout/AppSidebar.tsx`
+- Inserir no array `items` do bloco `id: 'monitoramento'`:
+  ```ts
+  { title: 'Chat', url: '/monitoramento/chat', icon: MessageCircle },
   ```
-  ## CONTEXTO DE COBRANÇA RECENTE
-  Você enviou ao associado {nome} (matrícula {matricula}) um template de cobrança em {data}.
-  Boletos em aberto enviados:
-  - Placa X, venc dd/mm, R$ Y, linha digitável ...
-  Use estes dados como verdade ao responder dúvidas sobre valores, datas e pagamento.
-  ```
-- Garantir que o histórico real do template (passo 1) também esteja presente, dando dupla cobertura: texto literal + dados estruturados.
+  posicionado logo após "Equipe" (ou antes de "Aprovações", à definir visualmente).
 
-## 3. Validação ponta a ponta
-- Como diretor (`admin@teste.com`), rodar novamente o fluxo Régua → Importar CSV (SGA) com 2 associados, disparar.
-- Conferir em `whatsapp_mensagens` que `mensagem` agora contém o corpo renderizado completo (nome + bloco de boletos).
-- Em `Eventos → Conversas IA`, abrir o atendimento do associado de teste, simular uma resposta ("qual valor do mais antigo?") e verificar nos logs do `agente-consultor-ia` que: (a) o histórico inclui o texto do template, (b) o bloco "CONTEXTO DE COBRANÇA RECENTE" foi injetado, (c) a resposta da IA cita placa/valor/vencimento corretos.
+### 5. Breadcrumb
+Arquivo: `src/components/layout/GlobalBreadcrumb.tsx`
+- Adicionar `'/monitoramento/chat': { label: 'Chat' }`.
 
-## Detalhes técnicos
-- Não alterar schema: `whatsapp_mensagens.mensagem` já é `text`, `template_variaveis` já é `jsonb`.
-- Manter idempotência do disparo (não regravar mensagem se `message_id` já existe).
-- Sem alteração no webhook Meta de entrada — ele já grava `direcao = 'entrada'` corretamente; o gap era só no lado de saída + no prompt.
-- Sem mudança de UI obrigatória; opcionalmente o badge "Cobrança" no chat continua valendo.
+### 6. Drawer de contato
+O `ChatPanel` já recebe `drawerVariant`. Garantir que `'monitoramento'` recaia em um drawer focado em dados operacionais (rastreador, último serviço, veículo). Se o componente atual não diferenciar, manter fallback igual ao `'eventos'`/`'relacionamento'` para esta primeira entrega e iterar depois conforme feedback.
+
+## Pontos não incluídos (escopo deliberado)
+- Não duplicar tabelas nem fluxos de mensagem; é mesmo backend (Evolution/Meta + `whatsapp_mensagens`) com filtro de visualização.
+- Não alterar permissões: respeita `canManageInstalacoes` do módulo.
+- Não tocar no edge function `agente-consultor-ia`.
+
+## Validação
+1. Login como diretor (`admin@teste.com`).
+2. Conferir item "Chat" na sidebar Monitoramento.
+3. Acessar `/monitoramento/chat`: ver apenas conversas de associados com veículo/serviço/rastreador ativos.
+4. Comparar com `/eventos/chat-ia` — este continua exibindo todas.
+5. Enviar/receber mensagem em uma conversa filtrada para confirmar realtime e persistência idênticos ao Relacionamento.
