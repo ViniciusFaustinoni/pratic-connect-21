@@ -1,5 +1,6 @@
 // Reprovação (cadastro ou monitoramento) — registra motivo
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { sendMetaTemplate } from '../_shared/send-meta-template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +43,41 @@ Deno.serve(async (req) => {
       })
       .eq('id', solicitacao_id);
     if (error) throw error;
+
+    // ── WhatsApp: avisar associado antigo da reprovação ──
+    try {
+      const { data: sol } = await admin
+        .from('solicitacoes_troca_titularidade')
+        .select('associado_antigo_id, veiculo_id')
+        .eq('id', solicitacao_id)
+        .maybeSingle();
+      if (sol?.associado_antigo_id) {
+        const [{ data: assoc }, { data: veic }] = await Promise.all([
+          admin.from('associados').select('nome, telefone').eq('id', sol.associado_antigo_id).maybeSingle(),
+          sol.veiculo_id
+            ? admin.from('veiculos').select('marca, modelo, placa').eq('id', sol.veiculo_id).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        if (assoc?.telefone) {
+          const veicLabel = veic ? `${veic.marca || ''} ${veic.modelo || ''} (${veic.placa || ''})`.trim() : 'veículo';
+          await sendMetaTemplate({
+            supabase: admin,
+            telefone: assoc.telefone,
+            templateName: 'troca_titularidade_reprovada',
+            templateParams: [
+              String(assoc.nome || 'Associado').split(' ')[0],
+              veicLabel,
+              String(motivo).substring(0, 200),
+            ],
+            referenciaTipo: 'troca_titularidade',
+            referenciaId: solicitacao_id,
+            tag: '[reprovar-troca]',
+          });
+        }
+      }
+    } catch (waErr) {
+      console.warn('[reprovar-troca] envio whatsapp falhou (não bloqueante):', waErr);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
