@@ -1,90 +1,47 @@
-## Fluxo unificado para veículos sub-FIPE (sem rastreador)
+## Problema
+Na Troca de Titularidade, a solicitação do novo titular pula a fila do Cadastro e cai direto em Monitoramento. Acontece porque a edge `vincular-cotacao-troca` auto-aprova o Cadastro quando o termo de cancelamento do antigo titular está assinado.
 
-Regras de elegibilidade (já existentes — não mexer):
-- Carro FIPE < R$ 30.000 não-Diesel → sem rastreador
-- Moto FIPE < R$ 9.000 não-Diesel → sem rastreador
-- Função canônica: `exigeRastreador()` em `src/types/termo-filiacao.ts` e `supabase/functions/_shared/template-utils.ts`
+## Objetivo
+Após o novo titular concluir o link público (plano + documentos + termo + pagamento + vistoria/agendamento), a solicitação **sempre** entra em `aguardando_cadastro`. Só após aprovação manual do Cadastro segue para `aguardando_monitoramento`. Após aprovação manual do Monitoramento, ativa o associado. Mesmo fluxo de uma cotação nova.
 
-### Fluxo alvo
+## Mudanças
 
-```text
-Link público (sub-FIPE)
-  └─ Plano → Documentos → Contrato → VISTORIA (31 carro / 15 moto, mesmo set do instalador)
-                                          │
-                                          ▼ (sem agendamento, sem escolha de modalidade)
-                                       Pagamento
-                                          │
-                                          ▼
-                                       Cadastro
-                                          │
-                                          ▼
-                            Monitoramento › Aprovação de Associados
-                                          │
-                ┌─────────────────────────┼─────────────────────────┐
-                ▼                         ▼                         ▼
-           Aprovar               Solicitar Vistoria             Reprovar
-        (ativa proteção)       (técnico presencial)          (já existente)
-                                          │
-                                          ▼
-                       servicos.tipo = 'vistoria_entrada'
-                       (sem instalação, mesmas 31/15 fotos)
-                       cenário Rota/Base + repasse mínimo
-                       Base = gratuita; Rota = R$25
-                                          │
-                                          ▼ Técnico executa
-                              Volta para Aprovação Monitoramento
-```
+### 1. `supabase/functions/vincular-cotacao-troca/index.ts`
+- Remover o bloco que seta `status='liberada_para_assinatura'` + `aprovado_cadastro_em`.
+- Apenas vincular `cotacao_id` à solicitação e manter `status='aguardando_cadastro'` (ou avançar de `cotacao_em_andamento` para `aguardando_cadastro` somente após o link público concluir — ver passo 2).
+- Manter `runPosCadastroBackgroundFireAndForget` (snapshot SGA + atribuição de vendedor) — roda no momento da vinculação, não depende mais de aprovação.
+- Resposta passa a indicar `cadastro_auto_aprovado: false`.
 
-### Mudanças
+### 2. Finalização do link público (novo titular)
+Identificar o ponto onde o novo titular conclui a última etapa do link público (assinatura do termo de filiação + pagamento + vistoria agendada). Nesse momento (provavelmente em `aprovar-proposta` ou edge equivalente para troca), garantir transição: 
+- `solicitacoes_troca_titularidade.status` → `aguardando_cadastro`
+- A solicitação aparece em `/cadastro/aprovacoes-troca` (fila já existente).
 
-**1. Link público (`src/components/cotacao-publica/EtapaVistoria.tsx` + `CotacaoContratacao.tsx` + `useCotacaoContratacao.ts`)**
-- Quando `exigeRastreador(veiculo).exige === false`, a etapa Vistoria NÃO mostra mais os 3 cards (autovistoria/técnico/base). Renderiza diretamente um novo componente `VistoriaSubFipeCotacao` que reaproveita `vistoriaConfigCompleta.ts` (31 carro / 15 moto) — mesmo set que o instalador usa.
-- `tipo_vistoria` da cotação passa a aceitar valor `'autovistoria_completa_sub_fipe'` (cotação só nasce nesse formato quando elegível). Para fluxo ≥FIPE nada muda.
-- Reusa hooks `useFotosCotacaoVistoria`/`useUploadFotoCotacaoVistoria` existentes; só troca a fonte de fotos (config completa ao invés do array de 9).
-- Após upload da última foto, finalizar vistoria igual hoje (`useFinalizarVistoriaCotacao`) e seguir para Pagamento.
+### 3. `supabase/functions/aprovar-troca-cadastro/index.ts`
+- Já existe e está correto: aceita `aguardando_cadastro` → avança para `liberada_para_assinatura`. Vai virar o caminho normal (não mais "fallback legado").
+- Garantir que o background job `runPosCadastroBackgroundFireAndForget` rode aqui também (idempotente — sem efeito se já rodou na vinculação).
 
-**2. Pós-pagamento (`supabase/functions/criar-instalacao-pos-pagamento/index.ts` + `aprovar-proposta`)**
-- Sub-FIPE com vistoria já enviada → NÃO cria `servicos.tipo = 'instalacao'` nem `agendamentos_base`. Cria diretamente registro de `vistorias` (a partir das fotos da cotação) + envia para fila Monitoramento › Aprovação de Associados, igual ao caminho atual de "vistoria sem rastreador" mas sem etapa de campo prévia.
-- Reaproveita o trigger/edge `aplicar-conclusao-vistoria` que materializa fotos.
+### 4. Trigger `tg_troca_vistoria_concluida`
+- Mantém comportamento: ao concluir vistoria, promove `aguardando_vistoria` → `liberada_para_assinatura` (ou `aguardando_monitoramento` conforme memória atual). Sem mudança.
 
-**3. Tela de aprovação Monitoramento (`src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` + `useAprovacaoMonitoramento.ts`)**
-- Adicionar terceiro botão `Solicitar Vistoria de Técnico` ao lado de Reprovar/Aprovar, visível SOMENTE quando o serviço/veículo é sub-FIPE (`exigeRastreador === false`).
-- Botão abre dialog "Solicitar Vistoria Presencial" com: motivo (textarea obrigatória) + escolha Rota/Base (default conforme cenário da cotação original) + data/período se Rota.
-- Dispara nova edge function `solicitar-vistoria-tecnico-sub-fipe`:
-  - Cria `servicos.tipo = 'vistoria_entrada'` com flag `dados_extras.escopo = 'vistoria_sem_instalacao'` e `dados_extras.fotos_obrigatorias = 31|15`.
-  - Cria `agendamentos_base` ou agendamento Rota conforme escolha (respeitando dedupe — fechar antigos primeiro).
-  - Marca o registro de aprovação atual como `pendente_revistoria` (não ativa proteção, não reprova).
-  - Reverte `veiculos.status` para `instalacao_pendente` (mantém suspensão de cobertura existente).
-  - Aplica repasse: Base = 0; Rota = R$25 (mesma constante de `mem://logic/commissions/repasse-volante-isenta-adesao`).
+### 5. UI — `TelaAnaliseTrocaTitularidade.tsx`
+- Já cobre `aguardando_cadastro` ("Em análise pelo Cadastro"). Sem mudança visual.
 
-**4. Execução do técnico (`src/pages/instalador/...` + edges de conclusão)**
-- Quando o serviço aberto é `vistoria_entrada` com `dados_extras.escopo = 'vistoria_sem_instalacao'`, o app do técnico exibe APENAS o roteiro de fotos da `vistoriaConfigCompleta.ts` (31/15) — esconde checklist de instalação, IMEI, vídeo de instalador.
-- Conclusão do serviço materializa fotos em `vistorias`/`vistoria_fotos` e envia novamente para Monitoramento › Aprovação (mesmo fluxo já existente).
+### 6. Solicitação atual do Marcus Vinicius
+- Migração `UPDATE solicitacoes_troca_titularidade SET status='aguardando_cadastro', aprovado_cadastro_em=NULL, aprovado_cadastro_por=NULL, observacao_cadastro=NULL WHERE associado_antigo_id = (select id from associados where nome ilike 'MARCUS VINICIUS FAUSTINONI%') AND status IN ('liberada_para_assinatura','aguardando_monitoramento') AND efetivada_em IS NULL` — para devolvê-la à fila do Cadastro.
+- Fechar serviço de monitoramento criado indevidamente (se houver) — verificar antes de aplicar.
 
-**5. Memória**
-- Atualizar `mem://logic/operations/vistoria-sem-rastreador-flow` com o novo fluxo (substituir "autovistoria OU presencial" por "autovistoria completa 31/15 obrigatória; presencial só sob demanda do monitoramento").
+### 7. Memória
+- Atualizar `mem://logic/operations/troca-titularidade-cadastro-auto` invertendo a regra: "Cadastro da Troca SEMPRE passa por aprovação manual após o novo titular concluir o link público; `vincular-cotacao-troca` apenas vincula a cotação, não aprova".
+- Atualizar Core do `mem://index.md` se necessário.
 
-### Detalhes técnicos
+## Fora de escopo
+- Mudanças na fila do Monitoramento, no `aprovar-troca-monitoramento` e no `efetivar-troca-titularidade` (continuam como estão).
+- Mudanças no fluxo do antigo titular (assinatura do termo de cancelamento).
 
-- Banco:
-  - Adicionar valor `'vistoria_sem_instalacao'` ao enum `escopo_servico` se existir, ou usar campo `servicos.dados_extras` (jsonb) para sinalizar (preferido — não exige migração de enum).
-  - Não criar novo `tipo_servico`; reusar `vistoria_entrada`.
-  - Migração apenas para criar índice em `servicos((dados_extras->>'escopo'))` se necessário para filtros.
-
-- Edge functions novas:
-  - `solicitar-vistoria-tecnico-sub-fipe` (POST): valida monitoramento, cria serviço + agendamento, atualiza fila.
-  
-- Edge functions modificadas:
-  - `criar-instalacao-pos-pagamento`: branch sub-FIPE → não cria instalação; envia direto pra fila monitoramento.
-  - `aprovar-proposta`: idem para idempotência.
-  - `aplicar-conclusao-vistoria`: aceitar serviços com escopo `vistoria_sem_instalacao` (encerrar serviço + retornar à fila monitoramento).
-
-- Frontend novo:
-  - `src/components/cotacao-publica/VistoriaSubFipeCotacao.tsx` — wrapper sobre `vistoriaConfigCompleta` que reutiliza fluxo de upload da Autovistoria.
-  - Dialog `SolicitarVistoriaTecnicoDialog.tsx` em `src/components/monitoramento/`.
-  - Hook `useSolicitarVistoriaTecnico.ts`.
-
-### Fora de escopo
-- Mudanças em ≥FIPE (rastreador obrigatório) — fluxo continua idêntico.
-- Sinistro / vistoria periódica — não tocar.
-- Substituição/inclusão/troca: tratamos depois (esta entrega cobre nova adesão).
+## Verificação
+1. Criar solicitação de teste; assinar termo do antigo titular.
+2. Novo titular completa link público até vistoria/agendamento.
+3. Confirmar status = `aguardando_cadastro` e aparece em `/cadastro/aprovacoes-troca` (não em `/monitoramento/aprovacoes-troca`).
+4. Cadastro aprova → status = `liberada_para_assinatura`/`aguardando_monitoramento` conforme trigger.
+5. Monitoramento aprova → ativa.

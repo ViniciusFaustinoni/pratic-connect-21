@@ -92,16 +92,14 @@ Deno.serve(async (req) => {
       }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // AUTO-APROVA o Cadastro: termo já está assinado, então não há motivo
-    // para um operador clicar "Aprovar". Avança direto para liberada_para_assinatura.
+    // Política: Cadastro SEMPRE passa por aprovação manual (igual cotação nova).
+    // Aqui apenas vinculamos a cotação. O status permanece `aguardando_cadastro`
+    // (setado em autentique-webhook quando o termo de cancelamento é assinado).
+    // O operador do Cadastro aprova manualmente em /cadastro/aprovacoes-troca.
     const { error: updErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         cotacao_id,
-        status: 'liberada_para_assinatura',
-        aprovado_cadastro_em: new Date().toISOString(),
-        aprovado_cadastro_por: null, // auto
-        observacao_cadastro: 'Auto-aprovado: termo de cancelamento assinado',
         updated_at: new Date().toISOString(),
       })
       .eq('id', solicitacao_id);
@@ -119,8 +117,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       cotacao_id,
-      status: 'liberada_para_assinatura',
-      cadastro_auto_aprovado: true,
+      status: 'aguardando_cadastro',
+      cadastro_auto_aprovado: false,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
