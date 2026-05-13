@@ -72,11 +72,38 @@ Deno.serve(async (req) => {
       const uf = (assocUf?.uf || '').toUpperCase() || null;
       const prazoHoras = prazoPorUf(uf);
 
-      // Validar se realmente expirou para a UF deste contrato (a query inicial usa o menor prazo)
-      const assinadoEm = new Date(contrato.data_assinatura).getTime();
-      const expirouEm = assinadoEm + prazoHoras * 60 * 60 * 1000;
+      // Buscar a instalação ATIVA mais recente (não concluída/cancelada/dispensada)
+      // para usar a data agendada como base do prazo.
+      const { data: instalacaoAtiva } = await supabase
+        .from('instalacoes')
+        .select('id, data_agendada, hora_agendada, status, concluida_em, dispensa_rastreador')
+        .eq('contrato_id', contrato.id)
+        .order('data_agendada', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+
+      // Determinar inicio do prazo:
+      //   - Se há instalação com data_agendada → usar essa data+hora (regra do diretor)
+      //   - Caso contrário → fallback legado: data_assinatura
+      let inicioMs: number | null = null;
+      let baseLabel = '';
+      if (instalacaoAtiva?.data_agendada) {
+        const hora = instalacaoAtiva.hora_agendada || '00:00:00';
+        const iso = `${instalacaoAtiva.data_agendada}T${hora}-03:00`; // BRT
+        const t = new Date(iso).getTime();
+        if (!isNaN(t)) { inicioMs = t; baseLabel = 'agendamento'; }
+      }
+      if (inicioMs === null && contrato.data_assinatura) {
+        inicioMs = new Date(contrato.data_assinatura).getTime();
+        baseLabel = 'assinatura';
+      }
+      if (inicioMs === null) {
+        ignorados.push({ contrato_id: contrato.id, motivo: 'sem data base (agendamento nem assinatura)' });
+        continue;
+      }
+      const expirouEm = inicioMs + prazoHoras * 60 * 60 * 1000;
       if (expirouEm > Date.now()) {
-        ignorados.push({ contrato_id: contrato.id, motivo: `prazo regional ${uf ?? 'default'} (${prazoHoras}h) ainda não venceu` });
+        ignorados.push({ contrato_id: contrato.id, motivo: `prazo regional ${uf ?? 'default'} (${prazoHoras}h, base=${baseLabel}) ainda não venceu` });
         continue;
       }
 
