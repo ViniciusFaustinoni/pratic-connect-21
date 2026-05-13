@@ -22,9 +22,10 @@ export interface TemplateCatalogEntry {
 export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
   // ── Cadastro / Vendas ───────────────────────────────────────────────
   cadastro_aprovado_botao: {
-    momento: 'Após aprovação do cadastro do associado, antes de iniciar instalação/vistoria',
-    gatilho: 'notificar-cliente · efetivar-troca-titularidade',
+    momento: 'DESCONTINUADO — substituído por cobertura_360_ativada_v3 (cobertura ativa) e sinistro_atualizado (avisos)',
+    gatilho: '(legado — não disparar)',
     variaveis: ['nome', 'placa', 'modelo', 'cidade', 'link'],
+    deprecated: 'Não usar. Use cobertura_360_ativada_v3 ou sinistro_atualizado.',
   },
   boas_vindas_agencia_v1: {
     momento: 'Quando uma nova agência é cadastrada como vendedor',
