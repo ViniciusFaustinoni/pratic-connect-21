@@ -212,13 +212,9 @@ export default function CotacaoContratacao() {
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
   // FLUXO UNIFICADO: troca de titularidade segue o MESMO stepper da nova adesão
   // após o termo de cancelamento estar assinado: Plano → Docs → Contrato → Vistoria → Pagamento.
-  // A única diferença mantida é o cenário isento (sem cobrança), que pula Pagamento.
-  const isCenarioIsento = (() => {
-    const cen = (cotacao as any)?.cenario_adesao as string | null | undefined;
-    if (cen?.startsWith('isenta_')) return true;
-    return Number((cotacao as any)?.valor_adesao ?? 0) === 0;
-  })();
-  const pularEtapaPagamento = isTrocaTitularidade && trocaLiberada && isCenarioIsento;
+  // O passo de Pagamento sempre aparece — quando a adesão é isenta, o próprio
+  // EtapaPagamentoCotacao detecta valor zero e dispara skipPaymentCheck automaticamente
+  // (mesma regra usada na nova adesão). Não fazemos atalho aqui.
   const [ativandoTroca, setAtivandoTroca] = useState(false);
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
