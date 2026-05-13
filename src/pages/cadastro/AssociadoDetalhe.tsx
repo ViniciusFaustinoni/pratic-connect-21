@@ -620,12 +620,70 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
             </Card>
 
             <Card className="border-border/60">
-              <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Endereço</CardTitle></CardHeader>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-semibold">Endereço</CardTitle>
+                {canEditEndereco && !editingEndereco && (
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={handleStartEditEndereco}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {editingEndereco && (
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-600" onClick={handleSaveEndereco} disabled={isSavingEndereco}>
+                      {isSavingEndereco ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => setEditingEndereco(false)} disabled={isSavingEndereco}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <DataField label="CEP" value={associado.cep || '—'} />
-                <DataField label="Logradouro" value={`${associado.logradouro || '—'}${associado.numero ? `, ${associado.numero}` : ''}${associado.complemento ? ` - ${associado.complemento}` : ''}`} />
-                <DataField label="Bairro" value={associado.bairro || '—'} />
-                <DataFieldWithMunicipioBadge cidade={associado.cidade} uf={associado.uf} />
+                {editingEndereco ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-1">
+                        <p className="text-[11px] text-muted-foreground mb-1">CEP</p>
+                        <Input value={editCep} onChange={(e) => setEditCep(e.target.value)} placeholder="00000-000" className="h-8 text-sm" />
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[11px] text-muted-foreground mb-1">Logradouro</p>
+                        <Input value={editLogradouro} onChange={(e) => setEditLogradouro(e.target.value)} className="h-8 text-sm" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground mb-1">Número</p>
+                        <Input value={editNumero} onChange={(e) => setEditNumero(e.target.value)} className="h-8 text-sm" />
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[11px] text-muted-foreground mb-1">Complemento</p>
+                        <Input value={editComplemento} onChange={(e) => setEditComplemento(e.target.value)} className="h-8 text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">Bairro</p>
+                      <Input value={editBairro} onChange={(e) => setEditBairro(e.target.value)} className="h-8 text-sm" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <p className="text-[11px] text-muted-foreground mb-1">Cidade</p>
+                        <Input value={editCidade} onChange={(e) => setEditCidade(e.target.value)} className="h-8 text-sm" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground mb-1">UF</p>
+                        <Input value={editUf} onChange={(e) => setEditUf(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} className="h-8 text-sm uppercase" />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <DataField label="CEP" value={associado.cep || '—'} />
+                    <DataField label="Logradouro" value={`${associado.logradouro || '—'}${associado.numero ? `, ${associado.numero}` : ''}${associado.complemento ? ` - ${associado.complemento}` : ''}`} />
+                    <DataField label="Bairro" value={associado.bairro || '—'} />
+                    <DataFieldWithMunicipioBadge cidade={associado.cidade} uf={associado.uf} />
+                  </>
+                )}
               </CardContent>
             </Card>
 
