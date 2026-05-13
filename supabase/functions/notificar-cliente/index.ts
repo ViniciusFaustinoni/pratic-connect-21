@@ -491,7 +491,7 @@ serve(async (req) => {
           },
           // Documentação → documentacao_pendente ({{1}} nome, {{2}} documentos)
           documentos_solicitados: {
-            template_name: 'documentacao_pendente',
+            template_name: 'documentacao_pendente_v2',
             getParams: () => {
               const documentos = (dados?.documentos as string) || 'documentos pendentes';
               const link = dados?.link_acompanhamento as string | undefined;
@@ -503,7 +503,7 @@ serve(async (req) => {
             },
           },
           lembrete_documentos: {
-            template_name: 'documentacao_pendente',
+            template_name: 'documentacao_pendente_v2',
             getParams: () => [
               primeiroNome,
               (dados?.documentos as string) || 'documentos pendentes',
@@ -536,7 +536,7 @@ serve(async (req) => {
             ],
           },
           documento_reprovado: {
-            template_name: 'documentacao_pendente',
+            template_name: 'documentacao_pendente_v2',
             getParams: () => [
               primeiroNome,
               (dados?.tipo_documento as string) || 'documento pendente',

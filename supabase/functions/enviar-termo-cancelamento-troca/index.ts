@@ -366,10 +366,10 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           const { data: tmplStatus } = await admin
             .from('whatsapp_meta_templates')
             .select('nome, status')
-            .in('nome', ['troca_titularidade_termo_pendente', 'assinatura_documento_v2']);
+            .in('nome', ['troca_titularidade_termo_pendente_v2', 'assinatura_documento_v2']);
           const aprovados = new Set((tmplStatus || []).filter((t: any) => t.status === 'APPROVED').map((t: any) => t.nome));
-          const templateName = aprovados.has('troca_titularidade_termo_pendente')
-            ? 'troca_titularidade_termo_pendente'
+          const templateName = aprovados.has('troca_titularidade_termo_pendente_v2')
+            ? 'troca_titularidade_termo_pendente_v2'
             : 'assinatura_documento_v2';
           // Ambos esperam 2 vars: nome + descrição/veiculo
           const veicLabel = `${(veiculo?.marca || '')} ${(veiculo?.modelo || '')}`.trim() + (veiculo?.placa ? ` (${veiculo.placa})` : '');
@@ -391,7 +391,7 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
                     type: 'body',
                     parameters: [
                       { type: 'text', text: primeiroNome },
-                      { type: 'text', text: templateName === 'troca_titularidade_termo_pendente' ? (veicLabel || descricaoDoc) : descricaoDoc },
+                      { type: 'text', text: templateName === 'troca_titularidade_termo_pendente_v2' ? (veicLabel || descricaoDoc) : descricaoDoc },
                     ],
                   },
                   {

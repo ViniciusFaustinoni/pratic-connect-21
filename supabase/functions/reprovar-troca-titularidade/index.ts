@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
           await sendMetaTemplate({
             supabase: admin,
             telefone: assoc.telefone,
-            templateName: 'troca_titularidade_reprovada',
+            templateName: 'troca_titularidade_reprovada_v2',
             templateParams: [
               String(assoc.nome || 'Associado').split(' ')[0],
               veicLabel,

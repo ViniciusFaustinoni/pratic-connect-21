@@ -332,7 +332,7 @@ Deno.serve(async (req) => {
           body: {
             telefone: telAssoc,
             mensagem: `Olá ${primeiroNomeAssoc}! A instalação do rastreador no seu veículo ${modeloPlaca} foi concluída. Por favor, assine digitalmente.`,
-            template_name: 'assinatura_instalacao_v1',
+            template_name: 'assinatura_instalacao_v2',
             template_params: [primeiroNomeAssoc, modeloPlaca],
             template_button_params: [String(buttonParam)],
             referencia_tipo: 'contrato',
