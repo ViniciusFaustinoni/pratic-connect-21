@@ -535,14 +535,18 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Validar autenticação
+    // Validar autenticação — aceita JWT de usuário OU service role (chamada server-to-server interna)
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'Não autorizado' }), 
+        JSON.stringify({ error: 'Não autorizado' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const token = authHeader.replace('Bearer ', '');
+    const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const isServiceRole = !!SERVICE_KEY && token === SERVICE_KEY;
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -550,14 +554,15 @@ const handler = async (req: Request): Promise<Response> => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      console.error('Erro de autenticação:', claimsError?.message);
-      return new Response(
-        JSON.stringify({ error: 'Token inválido' }), 
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!isServiceRole) {
+      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        console.error('Erro de autenticação:', claimsError?.message);
+        return new Response(
+          JSON.stringify({ error: 'Token inválido' }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const { template, to, data }: EmailRequest = await req.json();
