@@ -314,8 +314,8 @@ serve(async (req) => {
                 {
                   type: "body",
                   parameters: [
-                    { type: "text", text: nome },
-                    { type: "text", text: bloco },
+                    { type: "text", text: sanitizeMetaParam(nome) },
+                    { type: "text", text: sanitizeMetaParam(bloco) },
                   ],
                 },
               ],
