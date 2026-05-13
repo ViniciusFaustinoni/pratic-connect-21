@@ -135,6 +135,18 @@ export function ImportarCobrancaCsv() {
     }
   }, []);
 
+  const processarTexto = useCallback((texto: string, nomeFonte: string) => {
+    const r = parseCsvInadimplentes(texto);
+    if (r.erros.length && r.destinatarios.length === 0) {
+      toast.error(r.erros.join(' '));
+      return false;
+    }
+    setResultado(r);
+    setEtapa('preview');
+    void carregarPreviewReconciliacao(r);
+    return true;
+  }, [carregarPreviewReconciliacao]);
+
   const onDrop = useCallback(async (files: File[]) => {
     const f = files[0];
     if (!f) return;
@@ -144,25 +156,33 @@ export function ImportarCobrancaCsv() {
     }
     setArquivo(f);
     try {
-      const texto = await f.text();
-      const r = parseCsvInadimplentes(texto);
-      if (r.erros.length && r.destinatarios.length === 0) {
-        toast.error(r.erros.join(' '));
-        setArquivo(null);
-        return;
-      }
-      setResultado(r);
-      setEtapa('preview');
-      void carregarPreviewReconciliacao(r);
+      const texto = await lerArquivoComoCsv(f);
+      const ok = processarTexto(texto, f.name);
+      if (!ok) setArquivo(null);
     } catch (e: any) {
-      toast.error(`Erro ao ler CSV: ${e.message}`);
+      toast.error(`Erro ao ler arquivo: ${e.message}`);
       setArquivo(null);
     }
-  }, [carregarPreviewReconciliacao]);
+  }, [processarTexto]);
+
+  const processarColado = useCallback(() => {
+    const t = textoColado.trim();
+    if (!t) {
+      toast.error('Cole o conteúdo do CSV antes de processar.');
+      return;
+    }
+    setArquivo(new File([t], 'colado.csv', { type: 'text/csv' }));
+    const ok = processarTexto(t, 'colado.csv');
+    if (!ok) setArquivo(null);
+  }, [textoColado, processarTexto]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'text/csv': ['.csv'], 'application/vnd.ms-excel': ['.csv'] },
+    accept: {
+      'text/csv': ['.csv'],
+      'application/vnd.ms-excel': ['.csv', '.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    },
     maxFiles: 1,
   });
   const dispararEnvio = useCallback(async () => {
