@@ -5,10 +5,11 @@ import { ConversasList, type ConversaAgrupada } from '@/components/eventos/chat-
 import { ChatPanel } from '@/components/eventos/chat-ia/ChatPanel';
 
 interface EventosChatIAProps {
-  drawerVariant?: 'relacionamento' | 'eventos';
+  drawerVariant?: 'relacionamento' | 'eventos' | 'monitoramento';
+  escopo?: 'todos' | 'monitoramento';
 }
 
-export default function EventosChatIA({ drawerVariant = 'relacionamento' }: EventosChatIAProps = {}) {
+export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo = 'todos' }: EventosChatIAProps = {}) {
   const [telefoneSelecionado, setTelefoneSelecionado] = useState<string | null>(null);
   const [nomeContato, setNomeContato] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
