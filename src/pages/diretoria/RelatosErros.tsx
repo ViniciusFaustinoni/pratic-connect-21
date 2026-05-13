@@ -106,8 +106,11 @@ export default function RelatosErros() {
     [statusFilter, search, reporterId, dateRange]
   );
 
-  const { data: reports = [], isLoading } = useErrorReportsList(filtros);
+  const { data: reportsRaw = [], isLoading } = useErrorReportsList(filtros);
   const { data: reporters = [] } = useReportersList();
+
+  // Concluídos saem das visualizações Fila e Tabela — vivem apenas no Histórico.
+  const reports = useMemo(() => reportsRaw.filter((r) => r.status !== 'concluido'), [reportsRaw]);
 
   const counts = useMemo(() => {
     return reports.reduce(
