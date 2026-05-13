@@ -243,7 +243,35 @@ Deno.serve(async (req) => {
       console.log(`[agente-consultor-ia] Contato resetado detectado (resetado_em: ${resetTimestamp}), limpando histórico`);
     }
 
-    // ---- 6B. CARREGAR ESTADO DO FLUXO (dados_cotacao) ----
+    // ---- 6C. CONTEXTO DE COBRANÇA RECENTE (últimas 48h via template CSV Meta) ----
+    let cobrancaContextoTxt = "";
+    try {
+      const limite48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data: cobrMsgs } = await supabase
+        .from("whatsapp_mensagens")
+        .select("created_at, template_variaveis, mensagem")
+        .or(telefonesBusca.map((t) => `telefone.eq.${t}`).join(","))
+        .eq("referencia_tipo", "cobranca_csv")
+        .gte("created_at", limite48h)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const ultima = (cobrMsgs || [])[0];
+      if (ultima) {
+        const tv: any = ultima.template_variaveis || {};
+        const matricula = tv.matricula || null;
+        const boletosTV: any[] = Array.isArray(tv.boletos) ? tv.boletos : [];
+        let linhasBoletos = boletosTV
+          .map((b: any) => `- Placa ${b.placa || "?"} | venc ${b.vencimento || "?"} | R$ ${b.valor ?? "?"} | linha digitável ${String(b.linha_digitavel || "").replace(/\D/g, "")}`)
+          .join("\n");
+        const dataEnvio = new Date(ultima.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+        cobrancaContextoTxt = `\n\n## CONTEXTO DE COBRANÇA RECENTE\nUm template de cobrança foi enviado a este contato em ${dataEnvio} (matrícula ${matricula || "?"}). O conteúdo enviado já consta no histórico.\n${linhasBoletos ? `Boletos referenciados:\n${linhasBoletos}\n` : ""}Use estes dados como verdade ao responder dúvidas sobre valores, datas, placas e linhas digitáveis. Não invente boletos. Se o associado disser que pagou, peça comprovante e oriente o atendimento humano.`;
+        console.log(`[agente-consultor-ia] Contexto de cobrança recente injetado (matrícula ${matricula})`);
+      }
+    } catch (e) {
+      console.error("[agente-consultor-ia] Falha ao montar contexto de cobrança:", (e as any)?.message);
+    }
+
+
     let dadosCotacao = contato?.dados_cotacao || null;
 
     // ---- 7. MONTAR SYSTEM PROMPT + TOOLS (condicional) ----
@@ -603,6 +631,11 @@ ${contato?.nome || "Não informado ainda"}`;
           },
         },
       ];
+    }
+
+    // Anexa contexto de cobrança recente (se houver) ao final do system prompt
+    if (cobrancaContextoTxt) {
+      systemPrompt += cobrancaContextoTxt;
     }
 
     // ---- 8. CHAMAR LOVABLE AI COM TOOL CALLING ----

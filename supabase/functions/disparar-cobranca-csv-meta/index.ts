@@ -36,6 +36,11 @@ function montarBlocoBoletos(boletos: BoletoIn[]): string {
   return boletos.map(formatarBoletoCompacto).join(" ⏐ ");
 }
 
+function renderTemplateBody(corpo: string, vars: Record<string, string>): string {
+  if (!corpo) return "";
+  return corpo.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, k) => vars[String(k)] ?? `{{${k}}}`);
+}
+
 function sanitizeMetaParam(s: string): string {
   // Remove caracteres bloqueados pela Meta em parâmetros de template (#132000/#132018).
   return (s || "")
@@ -346,6 +351,18 @@ serve(async (req) => {
       metaInstanciaId = inst?.id ?? null;
     }
 
+    // Corpo do template — usado para gravar o conteúdo real renderizado em whatsapp_mensagens.
+    // Sem isso, o agente-consultor-ia não entende o contexto da cobrança ao responder.
+    let templateCorpo = "";
+    {
+      const { data: tpl } = await supabase
+        .from("whatsapp_meta_templates")
+        .select("corpo")
+        .eq("nome", templateNome)
+        .maybeSingle();
+      templateCorpo = tpl?.corpo || "";
+    }
+
     const detalhes: Array<{
       matricula: string;
       nome: string;
@@ -469,14 +486,24 @@ serve(async (req) => {
               ? { erro: `${blocosCortados} bloco(s) adiados p/ próximo lote` }
               : {}),
           });
+          // Renderiza o corpo real enviado (concatenando blocos) para alimentar o histórico do agente IA
+          const corpoBlocos = blocos.join("\n");
+          const mensagemRenderizada = templateCorpo
+            ? renderTemplateBody(templateCorpo, { "1": nome, "2": corpoBlocos })
+            : `Olá, ${nome}! Boletos em aberto:\n${corpoBlocos}`;
           const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             tipo: "template",
             telefone: tel,
             nome_contato: dest.nome,
-            mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s) em ${blocos.length} envio(s)`,
+            mensagem: mensagemRenderizada,
             status: "enviada",
-            template_variaveis: { template: templateNome, matricula: dest.matricula, blocos: blocos.length },
+            template_variaveis: {
+              template: templateNome,
+              matricula: dest.matricula,
+              blocos: blocos.length,
+              boletos: dest.boletos,
+            },
             referencia_tipo: "cobranca_csv",
             message_id: ultimoMessageId,
             provedor: "meta",
@@ -493,14 +520,22 @@ serve(async (req) => {
             erro: ultimoErroMsg || "falha desconhecida",
             erro_codigo: ultimoErroCodigo,
           });
+          const corpoBlocosErr = blocos.join("\n");
+          const mensagemRenderizadaErr = templateCorpo
+            ? renderTemplateBody(templateCorpo, { "1": nome, "2": corpoBlocosErr })
+            : `Olá, ${nome}! Boletos em aberto:\n${corpoBlocosErr}`;
           const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             tipo: "template",
             telefone: tel,
             nome_contato: dest.nome,
-            mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
+            mensagem: mensagemRenderizadaErr,
             status: "erro",
-            template_variaveis: { template: templateNome, matricula: dest.matricula },
+            template_variaveis: {
+              template: templateNome,
+              matricula: dest.matricula,
+              boletos: dest.boletos,
+            },
             referencia_tipo: "cobranca_csv",
             erro_codigo: ultimoErroCodigo ? String(ultimoErroCodigo) : null,
             erro_mensagem: ultimoErroMsg,
