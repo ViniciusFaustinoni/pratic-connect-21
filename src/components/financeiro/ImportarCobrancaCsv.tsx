@@ -70,6 +70,7 @@ export function ImportarCobrancaCsv() {
   const [resultadoEnvio, setResultadoEnvio] = useState<ResultadoEnvio | null>(null);
   const [confirmAberto, setConfirmAberto] = useState(false);
   const [reconciliacao, setReconciliacao] = useState<PreviewReconciliacao | null>(null);
+  const [textoColado, setTextoColado] = useState('');
   const cancelarRef = useRef(false);
 
   const reiniciar = useCallback(() => {
