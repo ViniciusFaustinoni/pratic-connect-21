@@ -380,6 +380,29 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           </>
         )}
       </DialogContent>
+
+      {/* Modal padrão de cotação, pré-preenchido com dados da troca.
+          A cotação só é persistida ao salvar (escolha de plano) e é vinculada
+          automaticamente à solicitação pela edge `vincular-cotacao-troca`. */}
+      {solicitacao && cotacaoBaseTroca && (
+        <CotacaoFormDialog
+          open={formCotacaoOpen}
+          onOpenChange={(o) => {
+            setFormCotacaoOpen(o);
+            if (!o) {
+              // Refrescar a solicitação caso a cotação tenha sido vinculada
+              qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+              qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+            }
+          }}
+          cotacaoBase={cotacaoBaseTroca}
+          origemTroca={{
+            solicitacaoId: solicitacao.id,
+            associadoAntigoId: solicitacao.associado_antigo_id,
+            veiculoOrigemId: solicitacao.veiculo_id,
+          }}
+        />
+      )}
     </Dialog>
   );
 }
