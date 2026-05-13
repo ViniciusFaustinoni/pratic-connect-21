@@ -1,11 +1,14 @@
 import { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, Send, Check, X, Loader2, MessageCircle, AlertCircle, Phone, ArrowLeft } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Upload, FileText, Send, Check, X, Loader2, MessageCircle, AlertCircle, Phone, ArrowLeft, ClipboardPaste } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -14,6 +17,18 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { parseCsvInadimplentes, type ParseResultado, type DestinatarioParsed } from '@/lib/cobranca/parseCsvInadimplentes';
+
+async function lerArquivoComoCsv(file: File): Promise<string> {
+  const nome = file.name.toLowerCase();
+  if (nome.endsWith('.xlsx') || nome.endsWith('.xls')) {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if (!ws) throw new Error('Planilha vazia.');
+    return XLSX.utils.sheet_to_csv(ws, { FS: ',' });
+  }
+  return await file.text();
+}
 
 const TEMPLATE_NOME = 'cobranca_inadimplencia_pratic';
 const MAX_CSV_MB = 50;
@@ -55,6 +70,7 @@ export function ImportarCobrancaCsv() {
   const [resultadoEnvio, setResultadoEnvio] = useState<ResultadoEnvio | null>(null);
   const [confirmAberto, setConfirmAberto] = useState(false);
   const [reconciliacao, setReconciliacao] = useState<PreviewReconciliacao | null>(null);
+  const [textoColado, setTextoColado] = useState('');
   const cancelarRef = useRef(false);
 
   const reiniciar = useCallback(() => {
@@ -64,6 +80,7 @@ export function ImportarCobrancaCsv() {
     setResultadoEnvio(null);
     setReconciliacao(null);
     setProgresso({ atual: 0, total: 0 });
+    setTextoColado('');
     cancelarRef.current = false;
   }, []);
 
@@ -118,6 +135,18 @@ export function ImportarCobrancaCsv() {
     }
   }, []);
 
+  const processarTexto = useCallback((texto: string, nomeFonte: string) => {
+    const r = parseCsvInadimplentes(texto);
+    if (r.erros.length && r.destinatarios.length === 0) {
+      toast.error(r.erros.join(' '));
+      return false;
+    }
+    setResultado(r);
+    setEtapa('preview');
+    void carregarPreviewReconciliacao(r);
+    return true;
+  }, [carregarPreviewReconciliacao]);
+
   const onDrop = useCallback(async (files: File[]) => {
     const f = files[0];
     if (!f) return;
@@ -127,25 +156,33 @@ export function ImportarCobrancaCsv() {
     }
     setArquivo(f);
     try {
-      const texto = await f.text();
-      const r = parseCsvInadimplentes(texto);
-      if (r.erros.length && r.destinatarios.length === 0) {
-        toast.error(r.erros.join(' '));
-        setArquivo(null);
-        return;
-      }
-      setResultado(r);
-      setEtapa('preview');
-      void carregarPreviewReconciliacao(r);
+      const texto = await lerArquivoComoCsv(f);
+      const ok = processarTexto(texto, f.name);
+      if (!ok) setArquivo(null);
     } catch (e: any) {
-      toast.error(`Erro ao ler CSV: ${e.message}`);
+      toast.error(`Erro ao ler arquivo: ${e.message}`);
       setArquivo(null);
     }
-  }, [carregarPreviewReconciliacao]);
+  }, [processarTexto]);
+
+  const processarColado = useCallback(() => {
+    const t = textoColado.trim();
+    if (!t) {
+      toast.error('Cole o conteúdo do CSV antes de processar.');
+      return;
+    }
+    setArquivo(new File([t], 'colado.csv', { type: 'text/csv' }));
+    const ok = processarTexto(t, 'colado.csv');
+    if (!ok) setArquivo(null);
+  }, [textoColado, processarTexto]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'text/csv': ['.csv'], 'application/vnd.ms-excel': ['.csv'] },
+    accept: {
+      'text/csv': ['.csv'],
+      'application/vnd.ms-excel': ['.csv', '.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    },
     maxFiles: 1,
   });
   const dispararEnvio = useCallback(async () => {
@@ -253,25 +290,48 @@ export function ImportarCobrancaCsv() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Envie o CSV exportado do SGA com as colunas: <strong>Nome, Matrícula, Placas,
-              Telefone Celular, Telefone, Data Vencimento, Data Vencimento Original, Codigo de Barras</strong>.
-              O sistema vai agrupar boletos por associado e disparar via template Meta WhatsApp.
+              Aceita <strong>CSV, XLSX</strong> ou <strong>colar</strong> o conteúdo direto.
+              Colunas esperadas: <strong>Nome, Matrícula, Placas, Telefone Celular, Telefone, Data Vencimento, Codigo de Barras</strong>.
+              O sistema agrupa boletos por associado e dispara via template Meta WhatsApp.
             </AlertDescription>
           </Alert>
 
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
-              isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/30 hover:border-primary/50'
-            }`}
-          >
-            <input {...getInputProps()} />
-            <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-lg font-medium mb-1">
-              {isDragActive ? 'Solte o arquivo aqui' : 'Arraste o CSV ou clique para selecionar'}
-            </p>
-            <p className="text-sm text-muted-foreground">Apenas .csv — máx {MAX_CSV_MB} MB</p>
-          </div>
+          <Tabs defaultValue="arquivo">
+            <TabsList>
+              <TabsTrigger value="arquivo" className="gap-2"><Upload className="h-4 w-4" /> Arquivo</TabsTrigger>
+              <TabsTrigger value="colar" className="gap-2"><ClipboardPaste className="h-4 w-4" /> Colar CSV</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="arquivo" className="mt-4">
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+                  isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/30 hover:border-primary/50'
+                }`}
+              >
+                <input {...getInputProps()} />
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg font-medium mb-1">
+                  {isDragActive ? 'Solte o arquivo aqui' : 'Arraste o CSV/XLSX ou clique para selecionar'}
+                </p>
+                <p className="text-sm text-muted-foreground">.csv, .xlsx ou .xls — máx {MAX_CSV_MB} MB</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="colar" className="mt-4 space-y-3">
+              <Textarea
+                value={textoColado}
+                onChange={(e) => setTextoColado(e.target.value)}
+                placeholder={'Nome,matricula,placas,telefone celular,telefone,Data Vencimento,Codigo de Barras\nFULANO,12345,ABC1D23,(21)99999-9999,(00)0000-00000,10/04/2025,34191.09123 ...'}
+                className="min-h-[260px] font-mono text-xs"
+              />
+              <div className="flex justify-end">
+                <Button onClick={processarColado} disabled={!textoColado.trim()} className="gap-2">
+                  <FileText className="h-4 w-4" /> Processar conteúdo colado
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     );
