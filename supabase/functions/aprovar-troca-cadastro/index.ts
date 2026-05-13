@@ -1,10 +1,14 @@
-// Aprovação da etapa de Cadastro: avança status para aguardando_monitoramento
+// Aprovação MANUAL da etapa de Cadastro — fallback legado.
+// FLUXO PADRÃO: o cadastro é AUTO-APROVADO em `vincular-cotacao-troca`
+// no momento em que a cotação é vinculada (porque o termo de cancelamento
+// já foi assinado). Esta função existe apenas para itens legados que
+// ficaram presos em `aguardando_cadastro` antes da mudança.
+//
 // Antes de aprovar:
 //   1) trava se termo de cancelamento não foi assinado
 //   2) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
-// Obs: a checagem financeira do antigo titular foi removida — não é mais
-// requisito que o antigo esteja adimplente para aprovar a troca.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { runPosCadastroBackgroundFireAndForget } from '../_shared/troca-pos-cadastro-bg.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
