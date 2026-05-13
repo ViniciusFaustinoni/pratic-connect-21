@@ -34495,6 +34495,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_associado_endereco: {
+        Args: {
+          _associado_id: string
+          _bairro?: string
+          _cep?: string
+          _cidade?: string
+          _complemento?: string
+          _logradouro?: string
+          _numero?: string
+          _uf?: string
+        }
+        Returns: undefined
+      }
       veiculos_base_antiga_sem_rastreador: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: Json
