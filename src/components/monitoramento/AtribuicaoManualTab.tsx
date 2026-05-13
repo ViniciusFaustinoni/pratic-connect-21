@@ -319,6 +319,8 @@ export default function AtribuicaoManualTab() {
   const { data: travados } = useServicosTravados();
   const atribuirMutation = useAtribuirServicoManual();
   const atribuirPrestadorMutation = useAtribuirServicoPrestador();
+  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+  const podeForcarDevolucao = !!(isDiretor || isCoordenadorMonitoramento);
 
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [busca, setBusca] = useState('');
