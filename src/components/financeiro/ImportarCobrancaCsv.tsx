@@ -290,25 +290,48 @@ export function ImportarCobrancaCsv() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Envie o CSV exportado do SGA com as colunas: <strong>Nome, Matrícula, Placas,
-              Telefone Celular, Telefone, Data Vencimento, Data Vencimento Original, Codigo de Barras</strong>.
-              O sistema vai agrupar boletos por associado e disparar via template Meta WhatsApp.
+              Aceita <strong>CSV, XLSX</strong> ou <strong>colar</strong> o conteúdo direto.
+              Colunas esperadas: <strong>Nome, Matrícula, Placas, Telefone Celular, Telefone, Data Vencimento, Codigo de Barras</strong>.
+              O sistema agrupa boletos por associado e dispara via template Meta WhatsApp.
             </AlertDescription>
           </Alert>
 
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
-              isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/30 hover:border-primary/50'
-            }`}
-          >
-            <input {...getInputProps()} />
-            <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-lg font-medium mb-1">
-              {isDragActive ? 'Solte o arquivo aqui' : 'Arraste o CSV ou clique para selecionar'}
-            </p>
-            <p className="text-sm text-muted-foreground">Apenas .csv — máx {MAX_CSV_MB} MB</p>
-          </div>
+          <Tabs defaultValue="arquivo">
+            <TabsList>
+              <TabsTrigger value="arquivo" className="gap-2"><Upload className="h-4 w-4" /> Arquivo</TabsTrigger>
+              <TabsTrigger value="colar" className="gap-2"><ClipboardPaste className="h-4 w-4" /> Colar CSV</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="arquivo" className="mt-4">
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+                  isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/30 hover:border-primary/50'
+                }`}
+              >
+                <input {...getInputProps()} />
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg font-medium mb-1">
+                  {isDragActive ? 'Solte o arquivo aqui' : 'Arraste o CSV/XLSX ou clique para selecionar'}
+                </p>
+                <p className="text-sm text-muted-foreground">.csv, .xlsx ou .xls — máx {MAX_CSV_MB} MB</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="colar" className="mt-4 space-y-3">
+              <Textarea
+                value={textoColado}
+                onChange={(e) => setTextoColado(e.target.value)}
+                placeholder={'Nome,matricula,placas,telefone celular,telefone,Data Vencimento,Codigo de Barras\nFULANO,12345,ABC1D23,(21)99999-9999,(00)0000-00000,10/04/2025,34191.09123 ...'}
+                className="min-h-[260px] font-mono text-xs"
+              />
+              <div className="flex justify-end">
+                <Button onClick={processarColado} disabled={!textoColado.trim()} className="gap-2">
+                  <FileText className="h-4 w-4" /> Processar conteúdo colado
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     );
