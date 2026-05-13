@@ -20,6 +20,9 @@ import { AnalisePreviaNovoTitularCard } from './AnalisePreviaNovoTitularCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
+import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Wrench, Camera, ChevronDown } from 'lucide-react';
 
 interface Props {
   open: boolean;
