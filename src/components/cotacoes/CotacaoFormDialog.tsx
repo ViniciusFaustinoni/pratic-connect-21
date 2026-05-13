@@ -587,8 +587,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return null;
     }
 
-    // Bloquear FIPE menor para veículos com valor FIPE <= limite mínimo
-    if (valorFipe <= fipeMenorLimiteMinimo) {
+    // Bloquear FIPE menor para veículos com FIPE <= mínimo do tipo (carro/moto)
+    const minimoTipo = tipoVeiculoDetectado === 'moto' ? fipeMenorLimites.minimoMoto : fipeMenorLimites.minimoCarro;
+    if (valorFipe <= minimoTipo) {
       return null;
     }
 
