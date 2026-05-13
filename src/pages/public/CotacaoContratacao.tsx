@@ -392,12 +392,14 @@ export default function CotacaoContratacao() {
 
   // Handler para avançar para próxima etapa (segue navOrder)
   const handleAvancar = useCallback(() => {
-    const idx = navOrder.indexOf(etapaAtual);
-    const proximo = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : etapaAtual;
-    if (etapaAtual < etapaDoStatus) {
+    const idxAtual = navOrder.indexOf(etapaAtual);
+    const idxStatus = navOrder.indexOf(etapaDoStatus);
+    const proximo = idxAtual >= 0 && idxAtual < navOrder.length - 1 ? navOrder[idxAtual + 1] : etapaAtual;
+    const proxIdx = navOrder.indexOf(proximo);
+    if (idxAtual >= 0 && idxAtual < idxStatus) {
       setEtapaAtual(proximo);
     }
-    if (proximo >= etapaDoStatus) {
+    if (proxIdx >= idxStatus) {
       setNavegacaoManual(false);
     }
   }, [etapaAtual, etapaDoStatus, setEtapaAtual, navOrder]);
