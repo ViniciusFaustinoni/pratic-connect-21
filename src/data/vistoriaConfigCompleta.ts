@@ -51,12 +51,8 @@ export interface VistoriaCategoriaConfig {
 // =============================================
 
 export const CATEGORIAS_VISTORIA_COMPLETA: VistoriaCategoriaConfig[] = [
-  { id: 'identificacao_motor', nome: 'Identificação e Motor', ordem: 1, descricao: '6 fotos' },
-  { id: 'exterior_360', nome: 'Exterior 360°', ordem: 2, descricao: '9 fotos - Giro completo' },
-  { id: 'pneus', nome: 'Pneus', ordem: 3, descricao: '4 fotos - Sola dos pneus' },
-  { id: 'interior', nome: 'Interior e Acessórios', ordem: 4, descricao: '5 fotos' },
-  { id: 'bancos_forracoes', nome: 'Bancos e Forrações', ordem: 5, descricao: '7 fotos' },
-  { id: 'instalacao', nome: 'Instalação', ordem: 6, descricao: 'Local do rastreador (oculto do cliente)' },
+  { id: 'roteiro', nome: 'Roteiro de Fotos', ordem: 1, descricao: '31 fotos - Sequência horária contínua' },
+  { id: 'instalacao', nome: 'Instalação', ordem: 2, descricao: 'Local do rastreador (oculto do cliente)' },
 ];
 
 export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
@@ -65,7 +61,7 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'vistoriador_selfie', 
     nome: 'Selfie do Vistoriador (veículo ao fundo)', 
     icone: User, 
-    categoria: 'identificacao_motor', 
+    categoria: 'roteiro', 
     ordem: 1,
     descricao: 'Foto do vistoriador com o veículo visível atrás',
     instrucoes: [
@@ -84,7 +80,7 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'chave', 
     nome: 'Foto da Chave', 
     icone: Key, 
-    categoria: 'identificacao_motor', 
+    categoria: 'roteiro', 
     ordem: 2,
     descricao: 'Chave do veículo em destaque',
     instrucoes: [
@@ -101,8 +97,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'chassi', 
     nome: 'Chassi (Legível)', 
     icone: Hash, 
-    categoria: 'identificacao_motor', 
-    ordem: 3,
+    categoria: 'roteiro', 
+    ordem: 22,
     descricao: 'Numeração do chassi gravada no veículo',
     instrucoes: [
       'Localize a plaqueta do chassi (geralmente embaixo do para-brisa ou na coluna da porta)',
@@ -120,8 +116,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'capo_aberto_placa', 
     nome: 'Capô Aberto com Placa', 
     icone: Wrench, 
-    categoria: 'identificacao_motor', 
-    ordem: 4,
+    categoria: 'roteiro', 
+    ordem: 3,
     descricao: 'Capô totalmente aberto com a placa do veículo visível',
     instrucoes: [
       'Abra o capô completamente',
@@ -139,8 +135,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'motor', 
     nome: 'Motor', 
     icone: Settings, 
-    categoria: 'identificacao_motor', 
-    ordem: 5,
+    categoria: 'roteiro', 
+    ordem: 4,
     descricao: 'Foto do motor do veículo',
     instrucoes: [
       'Com o capô aberto, fotografe o motor de cima',
@@ -156,8 +152,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'bateria', 
     nome: 'Foto da Bateria', 
     icone: Battery, 
-    categoria: 'identificacao_motor', 
-    ordem: 6,
+    categoria: 'roteiro', 
+    ordem: 5,
     descricao: 'Bateria do veículo com etiqueta visível',
     instrucoes: [
       'Localize a bateria no compartimento do motor',
@@ -337,8 +333,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'pneu_dianteiro_direito', 
     nome: 'Sola do Pneu dianteiro direito', 
     icone: Circle, 
-    categoria: 'pneus', 
-    ordem: 16,
+    categoria: 'roteiro', 
+    ordem: 21,
     descricao: 'Banda de rodagem do pneu dianteiro direito',
     instrucoes: [
       'Aproxime a câmera da banda de rodagem (parte que encosta no chão)',
@@ -356,8 +352,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'pneu_traseiro_direito', 
     nome: 'Sola do Pneu traseiro direito', 
     icone: Circle, 
-    categoria: 'pneus', 
-    ordem: 17,
+    categoria: 'roteiro', 
+    ordem: 11,
     descricao: 'Banda de rodagem do pneu traseiro direito',
     instrucoes: [
       'Aproxime a câmera da banda de rodagem',
@@ -372,7 +368,7 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'pneu_traseiro_esquerdo', 
     nome: 'Sola do Pneu traseiro esquerdo', 
     icone: Circle, 
-    categoria: 'pneus', 
+    categoria: 'roteiro', 
     ordem: 18,
     descricao: 'Banda de rodagem do pneu traseiro esquerdo',
     instrucoes: [
@@ -388,8 +384,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'pneu_dianteiro_esquerdo', 
     nome: 'Sola do Pneu dianteiro esquerdo', 
     icone: Circle, 
-    categoria: 'pneus', 
-    ordem: 19,
+    categoria: 'roteiro', 
+    ordem: 20,
     descricao: 'Banda de rodagem do pneu dianteiro esquerdo',
     instrucoes: [
       'Aproxime a câmera da banda de rodagem',
@@ -406,8 +402,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'mala_aberta', 
     nome: 'Foto com a Mala aberta', 
     icone: Briefcase, 
-    categoria: 'interior', 
-    ordem: 20,
+    categoria: 'roteiro', 
+    ordem: 14,
     descricao: 'Porta-malas aberto mostrando interior completo',
     instrucoes: [
       'Abra o porta-malas completamente',
@@ -423,8 +419,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'estepe', 
     nome: 'Estepe', 
     icone: Circle, 
-    categoria: 'interior', 
-    ordem: 21,
+    categoria: 'roteiro', 
+    ordem: 15,
     descricao: 'Pneu estepe do veículo',
     instrucoes: [
       'Localize o estepe (geralmente no porta-malas ou embaixo do veículo)',
@@ -440,8 +436,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'chave_roda_macaco', 
     nome: 'Chave de Roda e Macaco', 
     icone: Wrench, 
-    categoria: 'interior', 
-    ordem: 22,
+    categoria: 'roteiro', 
+    ordem: 16,
     descricao: 'Kit de ferramentas: chave de roda e macaco',
     instrucoes: [
       'Localize a chave de roda e o macaco',
@@ -456,8 +452,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'odometro', 
     nome: 'Odômetro (Painel ligado)', 
     icone: Gauge, 
-    categoria: 'interior', 
-    ordem: 23,
+    categoria: 'roteiro', 
+    ordem: 24,
     descricao: 'Painel do veículo ligado mostrando quilometragem',
     instrucoes: [
       'LIGUE o veículo antes de tirar a foto',
@@ -477,8 +473,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'painel_completo', 
     nome: 'Painel Completo Frontal', 
     icone: LayoutDashboard, 
-    categoria: 'interior', 
-    ordem: 24,
+    categoria: 'roteiro', 
+    ordem: 25,
     descricao: 'Visão geral do painel/interior frontal',
     instrucoes: [
       'Fotografe de dentro do banco traseiro ou da porta do motorista',
@@ -496,8 +492,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'banco_motorista', 
     nome: 'Banco dianteiro do motorista', 
     icone: Armchair, 
-    categoria: 'bancos_forracoes', 
-    ordem: 25,
+    categoria: 'roteiro', 
+    ordem: 23,
     descricao: 'Banco do motorista em detalhe',
     instrucoes: [
       'Abra a porta do motorista',
@@ -513,8 +509,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'banco_passageiro', 
     nome: 'Banco dianteiro do passageiro', 
     icone: Armchair, 
-    categoria: 'bancos_forracoes', 
-    ordem: 26,
+    categoria: 'roteiro', 
+    ordem: 31,
     descricao: 'Banco do passageiro em detalhe',
     instrucoes: [
       'Abra a porta do passageiro',
@@ -530,8 +526,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'banco_traseiro', 
     nome: 'Banco traseiro', 
     icone: Armchair, 
-    categoria: 'bancos_forracoes', 
-    ordem: 27,
+    categoria: 'roteiro', 
+    ordem: 28,
     descricao: 'Banco traseiro completo',
     instrucoes: [
       'Abra a porta traseira',
@@ -547,8 +543,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'forracao_porta_dianteira_esquerda', 
     nome: 'Forração de porta dianteira esquerda', 
     icone: DoorOpen, 
-    categoria: 'bancos_forracoes', 
-    ordem: 28,
+    categoria: 'roteiro', 
+    ordem: 26,
     descricao: 'Interior da porta dianteira esquerda (motorista)',
     instrucoes: [
       'Abra a porta do motorista',
@@ -564,8 +560,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'forracao_porta_traseira_esquerda', 
     nome: 'Forração de porta traseira esquerda', 
     icone: DoorOpen, 
-    categoria: 'bancos_forracoes', 
-    ordem: 29,
+    categoria: 'roteiro', 
+    ordem: 27,
     descricao: 'Interior da porta traseira esquerda',
     instrucoes: [
       'Abra a porta traseira esquerda',
@@ -579,8 +575,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'forracao_porta_traseira_direita', 
     nome: 'Forração de porta traseira direita', 
     icone: DoorOpen, 
-    categoria: 'bancos_forracoes', 
-    ordem: 30,
+    categoria: 'roteiro', 
+    ordem: 29,
     descricao: 'Interior da porta traseira direita',
     instrucoes: [
       'Abra a porta traseira direita',
@@ -594,8 +590,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     id: 'forracao_porta_dianteira_direita', 
     nome: 'Forração de porta dianteira direita', 
     icone: DoorOpen, 
-    categoria: 'bancos_forracoes', 
-    ordem: 31,
+    categoria: 'roteiro', 
+    ordem: 30,
     descricao: 'Interior da porta dianteira direita (passageiro)',
     instrucoes: [
       'Abra a porta do passageiro',
