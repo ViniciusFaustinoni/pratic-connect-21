@@ -575,11 +575,19 @@ export function ImportarCobrancaCsv() {
                       <TableCell className="font-mono text-xs">{formatarFone(d.telefone)}</TableCell>
                       <TableCell>
                         {d.status === 'ok' ? (
-                          <Badge className="bg-green-600 gap-1"><Check className="h-3 w-3" /> Enviada</Badge>
+                          <div className="space-y-1">
+                            <Badge className="bg-green-600 gap-1"><Check className="h-3 w-3" /> Enviada</Badge>
+                            {d.erro && <p className="text-xs text-amber-600 max-w-[320px] truncate" title={d.erro}>{d.erro}</p>}
+                          </div>
+                        ) : d.status === 'skip' ? (
+                          <div className="space-y-1">
+                            <Badge variant="secondary" className="gap-1">Ignorado</Badge>
+                            {d.erro && <p className="text-xs text-muted-foreground max-w-[320px] truncate" title={d.erro}>{d.erro}</p>}
+                          </div>
                         ) : (
                           <div className="space-y-1">
-                            <Badge variant="destructive" className="gap-1"><X className="h-3 w-3" /> Erro</Badge>
-                            {d.erro && <p className="text-xs text-destructive max-w-[300px] truncate" title={d.erro}>{d.erro}</p>}
+                            <Badge variant="destructive" className="gap-1"><X className="h-3 w-3" /> Erro {d.erro_codigo ? `#${d.erro_codigo}` : ''}</Badge>
+                            {d.erro && <p className="text-xs text-destructive max-w-[320px] truncate" title={d.erro}>{d.erro}</p>}
                           </div>
                         )}
                       </TableCell>
