@@ -284,7 +284,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
     <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
       <CardHeader className="pb-3 space-y-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Autovistoria</CardTitle>
+          <CardTitle className="text-lg">{titulo ?? 'Autovistoria'}</CardTitle>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
             {fotosCompletadas}/{totalFotos} fotos
           </Badge>
