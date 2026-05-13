@@ -71,6 +71,7 @@ import { useEnviarComando } from '@/hooks/useComandosRastreador';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
 import { UsuariosVeiculoSoftruck } from './UsuariosVeiculoSoftruck';
 import { GestaoRedeVeiculos } from './GestaoRedeVeiculos';
+import { VinculoSoftruckExterno } from './VinculoSoftruckExterno';
 import { AlertTriangle } from 'lucide-react';
 
 interface RastreadorDetailDrawerProps {
@@ -514,6 +515,18 @@ export function RastreadorDetailDrawer({
                         </div>
                       )}
                     </div>
+                    <Separator />
+                  </>
+                )}
+
+                {/* Vínculo Softruck (rastreador sem veículo local mas com vínculo na plataforma) */}
+                {!rastreador.veiculos && rastreador.plataforma === 'softruck' && (rastreador.plataforma_veiculo_id || rastreador.imei) && (
+                  <>
+                    <VinculoSoftruckExterno
+                      rastreadorId={rastreador.id}
+                      vehicleId={rastreador.plataforma_veiculo_id}
+                      imei={rastreador.imei}
+                    />
                     <Separator />
                   </>
                 )}
