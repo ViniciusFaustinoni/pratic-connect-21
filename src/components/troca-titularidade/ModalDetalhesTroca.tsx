@@ -452,6 +452,20 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           }}
         />
       )}
+
+      {solicitacao && (
+        <AgendarManutencaoTrocaDialog
+          open={manutencaoOpen}
+          onOpenChange={setManutencaoOpen}
+          solicitacaoId={solicitacao.id}
+          veiculoId={solicitacao.veiculo_id}
+          onAgendado={() => {
+            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+            onOpenChange(false);
+          }}
+        />
+      )}
     </Dialog>
   );
 }
