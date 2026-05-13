@@ -80,6 +80,7 @@ export function ImportarCobrancaCsv() {
     setResultadoEnvio(null);
     setReconciliacao(null);
     setProgresso({ atual: 0, total: 0 });
+    setTextoColado('');
     cancelarRef.current = false;
   }, []);
 
