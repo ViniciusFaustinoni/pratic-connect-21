@@ -45,7 +45,7 @@ interface ResultadoEnvio {
   reemitidos_count: number;
   reemitidos_valor: number;
   lote_id: string | null;
-  detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro'; erro?: string }>;
+  detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro' | 'skip'; erro?: string; erro_codigo?: number | string }>;
 }
 
 interface PreviewReconciliacao {
