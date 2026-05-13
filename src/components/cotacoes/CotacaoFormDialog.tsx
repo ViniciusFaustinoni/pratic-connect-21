@@ -227,6 +227,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [placa, setPlaca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<PlateResult | null>(null);
+  // Guard de auto-busca (evita loop e re-disparo na mesma abertura)
+  const autoBuscaPlacaRef = useRef<string | null>(null);
 
   // Estados para confirmação de valor de adesão
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
