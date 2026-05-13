@@ -612,6 +612,33 @@ export default function CotacaoContratacao() {
     uf: cotacao.cliente_uf || '',
   };
 
+  // Cotação de troca órfã (sem solicitação vinculada): bloquear o fluxo com erro claro
+  // em vez de deixar o cliente avançar até a etapa de Pagamento e ver "Contrato não encontrado".
+  if (trocaOrfa) {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <Card className="max-w-md w-full border-destructive/30 bg-card/80 backdrop-blur-xl">
+          <CardContent className="pt-8 pb-8 text-center space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">Cotação não vinculada à troca</h1>
+            <p className="text-sm text-muted-foreground">
+              Esta cotação foi criada para uma troca de titularidade, mas não está
+              vinculada à solicitação correspondente. Entre em contato com o seu
+              consultor ou o suporte para refazer a vinculação.
+            </p>
+            {cotacao?.numero && (
+              <Badge variant="outline" className="text-sm px-4 py-1 border-destructive/30 text-destructive">
+                {cotacao.numero}
+              </Badge>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="dark min-h-screen public-premium-bg relative">
       {/* Ambient glow - simplified */}
