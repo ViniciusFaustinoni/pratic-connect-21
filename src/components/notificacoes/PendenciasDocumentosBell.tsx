@@ -156,7 +156,8 @@ export function PendenciasDocumentosBell() {
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-[380px] sm:w-[420px] p-0 z-[1100]"
+        collisionPadding={8}
+        className="w-[calc(100vw-1rem)] max-w-[420px] sm:w-[420px] p-0 z-[1100]"
       >
         <div className="px-4 pt-4 pb-2 border-b border-border">
           <div className="font-semibold text-sm">Documentos Pendentes</div>
