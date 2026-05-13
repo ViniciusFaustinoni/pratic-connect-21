@@ -53,6 +53,9 @@ export function useServicosParaAtribuir() {
       const instalacaoIds = (servicos || [])
         .map((s: any) => s.instalacao_origem_id)
         .filter(Boolean);
+      const vistoriaIds = (servicos || [])
+        .map((s: any) => s.vistoria_origem_id)
+        .filter(Boolean);
 
       let instalacoesComLinkAtivo = new Set<string>();
       if (instalacaoIds.length > 0) {
@@ -67,11 +70,27 @@ export function useServicosParaAtribuir() {
         );
       }
 
+      let vistoriasComLinkAtivo = new Set<string>();
+      if (vistoriaIds.length > 0) {
+        const { data: linksVistAtivos } = await supabase
+          .from('vistoria_prestador_links' as any)
+          .select('vistoria_id, status')
+          .in('vistoria_id', vistoriaIds)
+          .not('status', 'in', '(cancelada,concluida)');
+
+        vistoriasComLinkAtivo = new Set(
+          (linksVistAtivos || []).map((l: any) => l.vistoria_id).filter(Boolean)
+        );
+      }
+
       // Filtra serviços sem contrato aprovado (defesa em profundidade contra
       // regressões no trigger). Serviços sem contrato vinculado são tolerados
       // (ex.: vistorias avulsas criadas manualmente).
       const servicosFiltrados = (servicos || []).filter((s: any) => {
         if (s.instalacao_origem_id && instalacoesComLinkAtivo.has(s.instalacao_origem_id)) {
+          return false;
+        }
+        if (s.vistoria_origem_id && vistoriasComLinkAtivo.has(s.vistoria_origem_id)) {
           return false;
         }
         if (!s.contrato_id) return true;
