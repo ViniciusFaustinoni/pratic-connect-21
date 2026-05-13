@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ListChecks, Send } from 'lucide-react';
 import ReguaCobranca from '@/pages/cobranca/ReguaCobranca';
