@@ -227,6 +227,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [placa, setPlaca] = useState('');
   const [buscandoPlaca, setBuscandoPlaca] = useState(false);
   const [veiculoEncontrado, setVeiculoEncontrado] = useState<PlateResult | null>(null);
+  // Guard de auto-busca (evita loop e re-disparo na mesma abertura)
+  const autoBuscaPlacaRef = useRef<string | null>(null);
 
   // Estados para confirmação de valor de adesão
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -1068,6 +1070,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setBuscandoPlaca(false);
     }
   };
+
+  // Auto-busca a placa quando o cotador é aberto via fluxo de Troca de Titularidade
+  // (a placa já vem pré-preenchida e o usuário não precisa clicar na lupa).
+  useEffect(() => {
+    if (!open) {
+      autoBuscaPlacaRef.current = null;
+      return;
+    }
+    if (!origemTroca) return;
+    const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (placaLimpa.length !== 7) return;
+    if (veiculoEncontrado || buscandoPlaca) return;
+    if (autoBuscaPlacaRef.current === placaLimpa) return;
+    autoBuscaPlacaRef.current = placaLimpa;
+    buscarPorPlaca();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, origemTroca, placa, veiculoEncontrado, buscandoPlaca]);
 
   // Pre-fill from lead
   useEffect(() => {
