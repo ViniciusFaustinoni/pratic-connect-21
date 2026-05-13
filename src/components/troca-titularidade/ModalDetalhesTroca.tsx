@@ -54,6 +54,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
   const [criandoCotacao, setCriandoCotacao] = useState(false);
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
+  const [manutencaoOpen, setManutencaoOpen] = useState(false);
 
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
@@ -111,9 +112,14 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     onOpenChange(false);
   };
 
-  const handleSolicitarVistoria = async () => {
+  const handleSolicitarVistoria = async (tipo: 'somente_fotos' | 'fotos_com_rastreador') => {
     if (!solicitacao) return;
-    await aprovarMonitoramento.mutateAsync({ solicitacao_id: solicitacao.id, acao: 'solicitar_vistoria', observacao });
+    await aprovarMonitoramento.mutateAsync({
+      solicitacao_id: solicitacao.id,
+      acao: 'solicitar_vistoria',
+      observacao,
+      tipo_vistoria_troca: tipo,
+    });
     onOpenChange(false);
   };
 
