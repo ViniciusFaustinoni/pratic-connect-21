@@ -20,17 +20,20 @@ interface DestinatarioIn {
   boletos: BoletoIn[];
 }
 
-const MAX_META_BLOCK_LENGTH = 240;
+const MAX_META_BLOCK_LENGTH = 180;
+const MAX_BLOCOS_POR_DESTINATARIO = 3;
+const SLEEP_ENTRE_BLOCOS_MS = 1500;
+const SLEEP_ENTRE_DESTINATARIOS_MS = 250;
+
+function formatarBoletoCompacto(b: BoletoIn): string {
+  const placa = b.placa ? `Placa ${b.placa}` : "Boleto";
+  // Linha digitável só dígitos é mais curta e ainda funciona pra cópia.
+  const linha = (b.linha_digitavel || "").replace(/\D/g, "");
+  return `• ${placa} venc. ${b.vencimento} | ${linha}`;
+}
 
 function montarBlocoBoletos(boletos: BoletoIn[]): string {
-  // Meta WhatsApp body params NÃO aceitam \n, \t ou 4+ espaços (erro #132018).
-  // Usamos separadores inline para manter legibilidade sem quebra de linha.
-  return boletos
-    .map((b) => {
-      const placa = b.placa ? `Placa ${b.placa}` : "Boleto";
-      return `• ${placa} venc. ${b.vencimento} | ${b.linha_digitavel}`;
-    })
-    .join(" ⏐ ");
+  return boletos.map(formatarBoletoCompacto).join(" ⏐ ");
 }
 
 function sanitizeMetaParam(s: string): string {
@@ -42,23 +45,25 @@ function sanitizeMetaParam(s: string): string {
 }
 
 function montarBlocosBoletosSegmentados(boletos: BoletoIn[]): string[] {
-  const partes = (boletos || []).map((b) => sanitizeMetaParam(montarBlocoBoletos([b]))).filter(Boolean);
-  if (partes.length === 0) return [""];
+  const partes = (boletos || [])
+    .map((b) => sanitizeMetaParam(formatarBoletoCompacto(b)))
+    .filter((p) => p && p.length > 4);
+  if (partes.length === 0) return [];
 
   const blocos: string[] = [];
   let atual = "";
 
   for (const parte of partes) {
-    const proximo = atual ? `${atual} ⏐ ${parte}` : parte;
-    if (proximo.length <= MAX_META_BLOCK_LENGTH) {
-      atual = proximo;
-      continue;
-    }
-
-    if (atual) blocos.push(atual);
-    atual = parte.length <= MAX_META_BLOCK_LENGTH
+    const fragmento = parte.length <= MAX_META_BLOCK_LENGTH
       ? parte
       : `${parte.slice(0, MAX_META_BLOCK_LENGTH - 1).trimEnd()}…`;
+    const proximo = atual ? `${atual} ⏐ ${fragmento}` : fragmento;
+    if (proximo.length <= MAX_META_BLOCK_LENGTH) {
+      atual = proximo;
+    } else {
+      if (atual) blocos.push(atual);
+      atual = fragmento;
+    }
   }
 
   if (atual) blocos.push(atual);
@@ -70,10 +75,28 @@ function primeiroNome(s: string): string {
   return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : "Associado";
 }
 
+// DDDs válidos no Brasil (faixas oficiais)
+const DDDS_VALIDOS = new Set([
+  11,12,13,14,15,16,17,18,19,21,22,24,27,28,31,32,33,34,35,37,38,41,42,43,44,45,46,47,48,49,
+  51,53,54,55,61,62,63,64,65,66,67,68,69,71,73,74,75,77,79,81,82,83,84,85,86,87,88,89,
+  91,92,93,94,95,96,97,98,99,
+]);
+
 function validarTelefone(t: string): string | null {
-  const num = (t || "").replace(/\D/g, "");
-  if (num.length < 12 || num.length > 13) return null;
+  let num = (t || "").replace(/\D/g, "");
+  // Aceita formato com ou sem 55 inicial
+  if (num.length === 10 || num.length === 11) num = "55" + num;
+  if (num.length !== 13) return null;          // exige celular com 9º dígito + DDI 55
   if (!num.startsWith("55")) return null;
+  // Rejeita sequências repetidas tipo 5500000000000 / (00)0000-00000
+  if (/^(\d)\1+$/.test(num.slice(2))) return null;
+  // Rejeita DDD inválido
+  const ddd = parseInt(num.slice(2, 4), 10);
+  if (!DDDS_VALIDOS.has(ddd)) return null;
+  // 9º dígito obrigatório (celular)
+  if (num[4] !== "9") return null;
+  // Rejeita números com mais de 7 zeros consecutivos
+  if (/0{7,}/.test(num)) return null;
   return num;
 }
 
@@ -310,47 +333,83 @@ serve(async (req) => {
       });
     }
 
-    const detalhes: Array<{ matricula: string; nome: string; telefone: string; status: "ok" | "erro"; erro?: string }> = [];
+    const detalhes: Array<{
+      matricula: string;
+      nome: string;
+      telefone: string;
+      status: "ok" | "erro" | "skip";
+      erro?: string;
+      erro_codigo?: number | string;
+    }> = [];
     let sucesso = 0;
     let erros = 0;
     const associadosAtingidos = new Set<string>();
 
     for (const dest of destinatarios) {
-      const blocos = montarBlocosBoletosSegmentados(dest.boletos || []);
+      const blocosOriginais = montarBlocosBoletosSegmentados(dest.boletos || []);
+      // Limita pra não disparar 131056 (pair rate limit) com listas enormes.
+      const blocos = blocosOriginais.slice(0, MAX_BLOCOS_POR_DESTINATARIO);
+      const blocosCortados = blocosOriginais.length - blocos.length;
       const nome = dest.primeiro_nome || primeiroNome(dest.nome);
+
+      if (blocos.length === 0) {
+        detalhes.push({
+          matricula: dest.matricula,
+          nome: dest.nome,
+          telefone: "",
+          status: "skip",
+          erro: "sem boletos válidos",
+        });
+        continue;
+      }
+
       let envioOkParaEsteAssoc = false;
 
       for (const telRaw of dest.telefones_validos || []) {
+        // Já enviou OK pra este associado em outro telefone? Não duplicar (evita 131056 e custo).
+        if (envioOkParaEsteAssoc) break;
+
         const tel = validarTelefone(telRaw);
         if (!tel) {
-          detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: telRaw, status: "erro", erro: "telefone inválido" });
+          detalhes.push({
+            matricula: dest.matricula,
+            nome: dest.nome,
+            telefone: telRaw,
+            status: "erro",
+            erro: "telefone inválido (precisa ser celular BR com 9º dígito)",
+            erro_codigo: "LOCAL_INVALID_PHONE",
+          });
           erros++;
           continue;
         }
 
-        try {
-          let ultimoMessageId: string | null = null;
+        let ultimoMessageId: string | null = null;
+        let ultimoErroCodigo: number | string | undefined;
+        let ultimoErroMsg = "";
+        let blocoOk = false;
 
-          for (const bloco of blocos) {
-            const payload = {
-              messaging_product: "whatsapp",
-              to: tel,
-              type: "template",
-              template: {
-                name: templateNome,
-                language: { code: "pt_BR" },
-                components: [
-                  {
-                    type: "body",
-                    parameters: [
-                      { type: "text", text: sanitizeMetaParam(nome) },
-                      { type: "text", text: sanitizeMetaParam(bloco) },
-                    ],
-                  },
-                ],
-              },
-            };
+        for (let i = 0; i < blocos.length; i++) {
+          const bloco = blocos[i];
+          const payload = {
+            messaging_product: "whatsapp",
+            to: tel,
+            type: "template",
+            template: {
+              name: templateNome,
+              language: { code: "pt_BR" },
+              components: [
+                {
+                  type: "body",
+                  parameters: [
+                    { type: "text", text: sanitizeMetaParam(nome) },
+                    { type: "text", text: sanitizeMetaParam(bloco) },
+                  ],
+                },
+              ],
+            },
+          };
 
+          try {
             const resp = await fetch(
               `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`,
               {
@@ -362,21 +421,42 @@ serve(async (req) => {
                 body: JSON.stringify(payload),
               },
             );
-
             const json = await resp.json();
             if (!resp.ok) {
-              const errMsg = json?.error?.message || `HTTP ${resp.status}`;
-              throw new Error(errMsg);
+              ultimoErroCodigo = json?.error?.code ?? `HTTP_${resp.status}`;
+              ultimoErroMsg = json?.error?.error_data?.details
+                || json?.error?.message
+                || `HTTP ${resp.status}`;
+              // 131056 (pair rate limit) ou 131026 (não é WhatsApp): aborta o resto dos blocos
+              break;
             }
-
             ultimoMessageId = json?.messages?.[0]?.id || ultimoMessageId;
-            await new Promise((r) => setTimeout(r, 150));
+            blocoOk = true;
+          } catch (e: any) {
+            ultimoErroMsg = e?.message || "fetch error";
+            ultimoErroCodigo = "FETCH_ERROR";
+            break;
           }
 
+          // Espaço entre blocos do MESMO destinatário pra não acionar pair rate limit
+          if (i < blocos.length - 1) {
+            await new Promise((r) => setTimeout(r, SLEEP_ENTRE_BLOCOS_MS));
+          }
+        }
+
+        if (blocoOk && !ultimoErroMsg) {
           sucesso++;
           envioOkParaEsteAssoc = true;
-          detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "ok" });
-          await supabase.from("whatsapp_mensagens").insert({
+          detalhes.push({
+            matricula: dest.matricula,
+            nome: dest.nome,
+            telefone: tel,
+            status: "ok",
+            ...(blocosCortados > 0
+              ? { erro: `${blocosCortados} bloco(s) adiados p/ próximo lote` }
+              : {}),
+          });
+          const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             telefone: tel,
             mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s) em ${blocos.length} envio(s)`,
@@ -384,12 +464,21 @@ serve(async (req) => {
             template_id: templateNome,
             referencia_tipo: "cobranca_csv",
             referencia_id: dest.matricula,
-            mensagem_id_externo: ultimoMessageId,
-          }).then(() => {}).catch(() => {});
-        } catch (e: any) {
-          detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "erro", erro: e.message });
+            message_id: ultimoMessageId,
+            provedor: "meta",
+          });
+          if (insErr) console.error("[whatsapp_mensagens insert ok]", insErr.message);
+        } else {
           erros++;
-          await supabase.from("whatsapp_mensagens").insert({
+          detalhes.push({
+            matricula: dest.matricula,
+            nome: dest.nome,
+            telefone: tel,
+            status: "erro",
+            erro: ultimoErroMsg || "falha desconhecida",
+            erro_codigo: ultimoErroCodigo,
+          });
+          const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             telefone: tel,
             mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
@@ -397,11 +486,14 @@ serve(async (req) => {
             template_id: templateNome,
             referencia_tipo: "cobranca_csv",
             referencia_id: dest.matricula,
-            erro_mensagem: e.message,
-          }).then(() => {}).catch(() => {});
+            erro_codigo: ultimoErroCodigo ? String(ultimoErroCodigo) : null,
+            erro_mensagem: ultimoErroMsg,
+            provedor: "meta",
+          });
+          if (insErr) console.error("[whatsapp_mensagens insert erro]", insErr.message);
         }
 
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, SLEEP_ENTRE_DESTINATARIOS_MS));
       }
 
       // Se ao menos um telefone deu ok, marca todos os boletos deste assoc deste chunk como enviado
