@@ -38,6 +38,8 @@ const STATUS_LABELS: Record<StatusTroca, { label: string; variant: 'default'|'se
   reprovada_cadastro: { label: 'Reprovada (Cadastro)', variant: 'destructive' },
   reprovada_monitoramento: { label: 'Reprovada (Monitoramento)', variant: 'destructive' },
   cancelada: { label: 'Cancelada', variant: 'destructive' },
+  aguardando_manutencao: { label: 'Aguardando Manutenção', variant: 'secondary' },
+  expirada: { label: 'Expirada', variant: 'destructive' },
 };
 
 export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: Props) {
