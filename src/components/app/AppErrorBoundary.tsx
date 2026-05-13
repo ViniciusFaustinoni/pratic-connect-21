@@ -37,10 +37,32 @@ export class AppErrorBoundary extends React.Component<Props, State> {
       console.warn("[AppErrorBoundary] Ignored DOM manipulation error (likely external script):", msg);
       return;
     }
+    // Log detalhado para diagnóstico
+    const stack = error instanceof Error ? error.stack : undefined;
     // eslint-disable-next-line no-console
-    console.error("[AppErrorBoundary] error:", error);
-    // eslint-disable-next-line no-console
+    console.error("[AppErrorBoundary] error:", msg);
+    if (stack) console.error("[AppErrorBoundary] stack:", stack);
     console.error("[AppErrorBoundary] componentStack:", errorInfo.componentStack);
+    const invariantMatch = msg.match(/Minified React error #(\d+)/);
+    if (invariantMatch) {
+      console.error(`[AppErrorBoundary] React error decoder: https://react.dev/errors/${invariantMatch[1]}`);
+    }
+
+    // Auto-retry único: erros transitórios de primeira render (ex.: race de hidratação,
+    // chunk lazy stale após deploy) costumam se resolver com um reload. Só tentamos uma
+    // vez por janela de 60s para evitar loop.
+    try {
+      const RETRY_KEY = 'app-eb-retried-at';
+      const last = Number(sessionStorage.getItem(RETRY_KEY) || '0');
+      const now = Date.now();
+      if (!last || now - last > 60_000) {
+        sessionStorage.setItem(RETRY_KEY, String(now));
+        // Pequeno delay para garantir que o log seja flushado antes do reload.
+        setTimeout(() => window.location.reload(), 150);
+      }
+    } catch {
+      // sessionStorage indisponível — segue sem auto-retry.
+    }
   }
 
   handleReload = () => {

@@ -9,7 +9,7 @@ interface InstaladorGuardProps {
 }
 
 export function InstaladorGuard({ children }: InstaladorGuardProps) {
-  const { user, loading, hasRole } = useAuth();
+  const { user, profile, loading, hasRole } = useAuth();
   const location = useLocation();
   const queryClient = useQueryClient();
   const lastUserIdRef = useRef<string | null>(null);
@@ -29,18 +29,21 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
 
   // Timeout de loading: se passar de 15s, mostra tela de "backend indisponível"
   // em vez de loop infinito tentando refresh (o cliente Supabase já faz autoRefresh).
+  // Aguarda também o profile hidratar para evitar render parcial (race que dispara React #300).
+  const isHydrating = loading || (!!user && !profile);
+
   const [loadingTooLong, setLoadingTooLong] = useState(false);
 
   useEffect(() => {
-    if (!loading) {
+    if (!isHydrating) {
       setLoadingTooLong(false);
       return;
     }
     const timer = setTimeout(() => setLoadingTooLong(true), 15000);
     return () => clearTimeout(timer);
-  }, [loading]);
+  }, [isHydrating]);
 
-  if (loading && loadingTooLong) {
+  if (isHydrating && loadingTooLong) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
         <div className="text-center max-w-md">
@@ -59,7 +62,7 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
     );
   }
 
-  if (loading) {
+  if (isHydrating) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
         <div className="flex flex-col items-center gap-4">
