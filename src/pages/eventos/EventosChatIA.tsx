@@ -87,6 +87,47 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     staleTime: 300000,
   });
 
+  // Telefones elegíveis para escopo Monitoramento (associados com veículo/serviço/rastreador operacional)
+  const { data: telefonesMonitoramento } = useQuery({
+    queryKey: ['monitoramento-telefones-elegiveis'],
+    enabled: escopo === 'monitoramento',
+    staleTime: 60_000,
+    queryFn: async () => {
+      const STATUS_VEIC = ['ativo', 'instalacao_pendente', 'suspenso_nao_instalacao', 'manutencao'];
+      const SERV_STATUS_ABERTOS = ['pendente', 'agendada', 'em_andamento', 'aguardando_aprovacao'];
+
+      const [{ data: veics }, { data: servs }, { data: rastr }] = await Promise.all([
+        supabase.from('veiculos').select('associado_id').in('status', STATUS_VEIC).not('associado_id', 'is', null),
+        supabase.from('servicos').select('veiculos!inner(associado_id)').in('status', SERV_STATUS_ABERTOS),
+        supabase.from('rastreadores').select('veiculos!inner(associado_id)').not('veiculo_id', 'is', null),
+      ]);
+
+      const associadoIds = new Set<string>();
+      (veics ?? []).forEach((v: any) => v.associado_id && associadoIds.add(v.associado_id));
+      (servs ?? []).forEach((s: any) => s.veiculos?.associado_id && associadoIds.add(s.veiculos.associado_id));
+      (rastr ?? []).forEach((r: any) => r.veiculos?.associado_id && associadoIds.add(r.veiculos.associado_id));
+
+      if (associadoIds.size === 0) return new Set<string>();
+
+      const ids = Array.from(associadoIds);
+      const tels = new Set<string>();
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500);
+        const { data: ass } = await supabase.from('associados').select('telefone, whatsapp').in('id', chunk);
+        (ass ?? []).forEach((a: any) => {
+          [a.telefone, a.whatsapp].forEach((p: string | null) => {
+            if (!p) return;
+            const d = p.replace(/\D/g, '');
+            if (!d) return;
+            tels.add(d);
+            tels.add(d.startsWith('55') ? d.slice(2) : `55${d}`);
+          });
+        });
+      }
+      return tels;
+    },
+  });
+
   const conversas = useMemo<ConversaAgrupada[]>(() => {
     if (!mensagens?.length) return [];
 
