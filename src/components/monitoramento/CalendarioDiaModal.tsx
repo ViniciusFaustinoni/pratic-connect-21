@@ -278,6 +278,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         })
         .eq('id', id);
       if (error) throw error;
+      await vincularProfissionalAoServicoDoAgendamentoBase(id, tecnicoId);
 
       // Send WhatsApp notification
       const { data: baseData } = await supabase
