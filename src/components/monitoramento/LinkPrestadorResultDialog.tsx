@@ -58,18 +58,18 @@ export function LinkPrestadorResultDialog({ open, onClose, url, prestadorNome, p
           </div>
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={handleCopy} className="gap-2">
-            {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+        <DialogFooter className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:justify-end sm:space-x-0">
+          <Button variant="outline" onClick={handleCopy} className="gap-2 w-full sm:w-auto">
+            {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
             {copied ? 'Copiado!' : 'Copiar Link'}
           </Button>
           {prestadorTelefone && (
-            <Button variant="outline" onClick={handleWhatsApp} className="gap-2 text-green-700 border-green-300 hover:bg-green-50">
+            <Button variant="outline" onClick={handleWhatsApp} className="gap-2 w-full sm:w-auto">
               <MessageSquare className="h-4 w-4" />
               Abrir no WhatsApp
             </Button>
           )}
-          <Button onClick={onClose}>Fechar</Button>
+          <Button onClick={onClose} className="w-full sm:w-auto">Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
