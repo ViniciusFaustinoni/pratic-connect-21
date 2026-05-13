@@ -19,6 +19,7 @@ import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 import { AlterarEnderecoTipoDialog } from '@/components/mapa/AlterarEnderecoTipoDialog';
 import { normalizePeriodo, PERIODO_LABEL } from '@/lib/periodo-utils';
+import { vincularProfissionalAoServicoDoAgendamentoBase } from '@/lib/agendamentos-base/vincular-profissional-servico';
 
 interface CalendarioDiaModalProps {
   open: boolean;
