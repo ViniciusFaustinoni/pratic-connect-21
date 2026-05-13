@@ -250,9 +250,9 @@ Deno.serve(async (req) => {
     const { data: instalacao } = await supabase
       .from('instalacoes')
       .select(`
-        id, data_agendada, cidade, uf,
+        id, data_agendada, cidade, uf, contrato_id,
         veiculos:veiculo_id(marca, modelo, ano, placa),
-        associados:associado_id(nome, email)
+        associados:associado_id(nome, email, telefone, whatsapp)
       `)
       .eq('id', link.instalacao_id)
       .single()
@@ -313,6 +313,35 @@ Deno.serve(async (req) => {
       }
     } catch (whatsErr) {
       console.error('Erro WhatsApp (não bloqueante):', whatsErr)
+    }
+
+    // ── Notificar associado: assinatura_instalacao_v1 ──
+    // Vars: [primeiroNome, "MODELO - PLACA"]; button URL param: token de acompanhamento (contrato_id como fallback)
+    try {
+      const telAssoc = (associado?.whatsapp || associado?.telefone || '').toString();
+      if (telAssoc && instalacao?.contrato_id) {
+        const { data: contratoTok } = await supabase
+          .from('contratos')
+          .select('token_acompanhamento, numero, id')
+          .eq('id', instalacao.contrato_id)
+          .maybeSingle();
+        const buttonParam = (contratoTok?.token_acompanhamento as string | null) || (contratoTok?.numero as string | null) || instalacao.contrato_id;
+        const primeiroNomeAssoc = (associado?.nome || 'Associado').split(' ')[0];
+        const modeloPlaca = `${[veiculo?.marca, veiculo?.modelo].filter(Boolean).join(' ')} - ${placa}`.trim();
+        await supabase.functions.invoke('whatsapp-send-text', {
+          body: {
+            telefone: telAssoc,
+            mensagem: `Olá ${primeiroNomeAssoc}! A instalação do rastreador no seu veículo ${modeloPlaca} foi concluída. Por favor, assine digitalmente.`,
+            template_name: 'assinatura_instalacao_v1',
+            template_params: [primeiroNomeAssoc, modeloPlaca],
+            template_button_params: [String(buttonParam)],
+            referencia_tipo: 'contrato',
+            referencia_id: instalacao.contrato_id,
+          },
+        });
+      }
+    } catch (assinErr) {
+      console.error('[concluir-instalacao] Falha assinatura_instalacao_v1 (não bloqueante):', assinErr)
     }
 
     // ── Notificação interna ──

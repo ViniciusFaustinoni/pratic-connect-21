@@ -620,6 +620,10 @@ serve(async (req) => {
 
         const mensagemBoasVindas = `Olá, ${dadosNovoTitular.nome}! 🎉\n\nSeja bem-vindo(a) à *Praticcar*!\n\nSeu veículo *${veiculoDescricao}* (placa *${placaVeiculo}*) foi registrado em seu nome com sucesso.\n\n📋 *Contrato:* ${novoContrato.numero}\n\nBaixe nosso app para acompanhar tudo sobre sua proteção veicular. Em caso de dúvidas, estamos à disposição!\n\nEquipe Praticcar 🚗`;
 
+        // Template aprovado: troca_titularidade_aprovada
+        // Vars: [primeiroNome, "MARCA MODELO PLACA"]
+        const primeiroNomeNovo = (dadosNovoTitular.nome || '').split(' ')[0] || dadosNovoTitular.nome;
+        const veiculoLabel = `${marcaVeiculo} ${modeloVeiculo} ${placaVeiculo}`.replace(/\s+/g, ' ').trim();
         const sendResp = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
           method: "POST",
           headers: {
@@ -629,8 +633,8 @@ serve(async (req) => {
           body: JSON.stringify({
             telefone: telFmt,
             mensagem: mensagemBoasVindas,
-            template_name: "cadastro_aprovado_botao",
-            template_params: [dadosNovoTitular.nome, `${veiculoDescricao} (${placaVeiculo})`, novoContrato.numero],
+            template_name: "troca_titularidade_aprovada",
+            template_params: [primeiroNomeNovo, veiculoLabel],
             referencia_tipo: "troca_titularidade",
             referencia_id: solicitacao_id,
           }),

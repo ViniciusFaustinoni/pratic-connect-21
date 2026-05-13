@@ -184,18 +184,23 @@ Deno.serve(async (req) => {
       const telefoneFormatado = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`
 
       try {
+        // Template aprovado: prestador_nova_instalacao_v2
+        // Vars: [prestadorNome, associadoNome, municipio, enderecoCompleto, dataPrevista, urlAcesso]
         const { data: whatsResp } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneFormatado,
-            template_nome: 'prestador_nova_tarefa_v1',
-            variaveis: {
-              '1': prestadorData.nome,
-              '2': `Instalação — ${nomeAssociado}`,
-              '3': instalacao.cidade || 'município',
-              '4': url,
-            },
-            mensagem_fallback: `Olá ${prestadorData.nome}! ${reenviar ? '(Reenvio) ' : ''}Nova instalação em ${instalacao.cidade || 'município'}.\n\nAssociado: ${nomeAssociado}\nEndereço: ${endereco}\nData: ${dataAgendada}\n\nAcesse os detalhes e confirme pelo link:\n${url}`,
-            allow_text: true,
+            template_name: 'prestador_nova_instalacao_v2',
+            template_params: [
+              prestadorData.nome,
+              nomeAssociado,
+              instalacao.cidade || 'A definir',
+              endereco || 'Endereço a definir',
+              dataAgendada,
+              url,
+            ],
+            mensagem: `Olá ${prestadorData.nome}! ${reenviar ? '(Reenvio) ' : ''}Nova instalação em ${instalacao.cidade || 'município'}.\n\nAssociado: ${nomeAssociado}\nEndereço: ${endereco}\nData: ${dataAgendada}\n\nAcesse os detalhes e confirme pelo link:\n${url}`,
+            referencia_tipo: 'instalacao_prestador_link',
+            referencia_id: linkId,
           },
         })
         whatsappEnviado = whatsResp?.success === true

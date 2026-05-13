@@ -145,13 +145,21 @@ Acesse pelo app ou clique no link acima para pagar! 😊`;
           try {
             const telFmt = formatarTelefone(telefone);
             const nomeAbrev = associado.nome?.split(' ')[0] || 'Associado';
+            // Template oficial para boleto recém-gerado (com linha digitável):
+            // emissao_boleto_gerado_v2 — vars: [nome, modelo, placa, vencimento, valor, linha_digitavel]
+            const veic: any = (cobranca as any).veiculos || {};
+            const modeloVeic = [veic.marca, veic.modelo].filter(Boolean).join(' ') || 'Veículo';
+            const placaVeic = veic.placa || '---';
+            const linhaDig = (cobranca as any).linha_digitavel || (cobranca as any).boleto_url || '---';
             const { data: sendResult, error: sendErr } = await supabase.functions.invoke('whatsapp-send-text', {
               body: {
                 telefone: telFmt,
                 mensagem: mensagemWhatsApp,
                 delay_ms: 300,
-                template_name: 'cobranca_mensalidade',
-                template_params: [nomeAbrev, valorFmt, dataFmt],
+                template_name: 'emissao_boleto_gerado_v2',
+                template_params: [nomeAbrev, modeloVeic, placaVeic, dataFmt, valorFmt, linhaDig],
+                referencia_tipo: 'cobranca',
+                referencia_id: cobranca.id,
               },
             });
 
