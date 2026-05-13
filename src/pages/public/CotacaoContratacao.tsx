@@ -210,16 +210,10 @@ export default function CotacaoContratacao() {
     !!solicitacaoTroca.termo_cancelamento_assinado_em
   );
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
-  // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
-  // em "Solicitar Vistoria" (status aguardando_vistoria) OU se o cliente já
-  // escolheu/concluiu uma vistoria (tipo_vistoria preenchido).
-  const vistoriaTrocaSolicitada = isTrocaTitularidade && (
-    solicitacaoTroca?.status === 'aguardando_vistoria' || !!cotacao?.tipo_vistoria
-  );
-  // Quando é troca, foi liberada e o monitoramento NÃO pediu vistoria,
-  // pulamos completamente a etapa "Vistoria" no fluxo público.
-  const pularEtapaVistoria = isTrocaTitularidade && trocaLiberada && !vistoriaTrocaSolicitada;
-  // Troca de titularidade isenta (cenário sem cobrança de adesão) → pular etapa de Pagamento
+  // FLUXO UNIFICADO: troca de titularidade segue o MESMO stepper da nova adesão
+  // após o termo de cancelamento estar assinado: Plano → Docs → Contrato → Vistoria → Pagamento.
+  // A única diferença mantida é o cenário isento (sem cobrança), que pula Pagamento.
+  const pularEtapaVistoria = false;
   const isCenarioIsento = (() => {
     const cen = (cotacao as any)?.cenario_adesao as string | null | undefined;
     if (cen?.startsWith('isenta_')) return true;
