@@ -1,49 +1,32 @@
-## Diagnóstico dos 4 erros
+## Diagnóstico
 
-Sem persistência de log (bug abaixo) só dá pra inferir, mas as causas prováveis dos 4 telefones que falharam, considerando o CSV enviado, são:
+A lista "Conversas IA" do chat de relacionamento (`EventosChatIA.tsx`) não mostra as mensagens disparadas pelo CSV de cobrança via Meta por dois motivos somados:
 
-1. **`(131026) Receiver not a valid WhatsApp user`** — telefones fixos como `(24)99320-1885` válidos no formato mas sem WhatsApp ativo, ou números do tipo `(00)0000-00000` que escapam do validador atual (ele só checa tamanho 12–13 e prefixo `55`).
-2. **`(131056) Pair rate limit hit`** — destinatários com muitos boletos disparam vários blocos sequenciais para o mesmo número com apenas 150 ms entre eles (ex.: ADEILSON com 9+ boletos).
-3. **`(132005) Translated text too long`** — quando um único boleto isolado ainda ultrapassa 240 chars e é truncado com `…`, o template `cobranca_inadimplencia_pratic` continua rejeitando porque o limite real do parâmetro varia conforme a tradução cadastrada.
-4. **`(100) Param missing / bloco vazio`** — destinatários cujos boletos foram todos deduplicados como já enviados em lote anterior caem no caminho `["" ]` (bloco vazio).
+1. **Filtro por instância**: a query agrupadora restringe `whatsapp_mensagens.instancia_id IN (<instâncias ativas dos provedores 'meta'/'evolution'>)`. Hoje só existe **uma** instância ativa, do provedor `evolution` (`Principal`). Não há linha em `whatsapp_instancias` para o provedor `meta`.
+2. **Insert do disparador**: a edge `disparar-cobranca-csv-meta` grava em `whatsapp_mensagens` sem nenhum `instancia_id` (ele acabou de ser corrigido pra incluir `provedor='meta'`, mas não vincula instância). Resultado: as linhas têm `instancia_id = null` e são excluídas pelo filtro `.in('instancia_id', ...)`.
+3. **Atualização preguiçosa**: a tela depende só de `staleTime: 30s` + `refetchInterval: 60s`. Não há subscription realtime, então mesmo quando a mensagem é gravada com a instância correta, ela só aparece até 1 minuto depois.
 
-## Bug crítico de log (origem da cegueira)
+## Correções (2 arquivos + 1 migration)
 
-`whatsapp_mensagens.insert(...)` usa `mensagem_id_externo`, mas a coluna é `message_id`. Resultado: **nenhum** envio é gravado (sucesso ou erro). Precisamos corrigir o nome do campo e remover o `.catch(()=>{})` mudo, trocando por `console.error` para que o log do edge fique disponível.
+### 1. Garantir uma instância ativa do provedor Meta
+Migration mínima: inserir em `whatsapp_instancias` uma linha lógica `('Meta WhatsApp', provedor='meta', ativa=true)` se não existir. Esse `id` será usado pelo edge para taggear as mensagens de cobrança.
 
-## Mudanças propostas (apenas no edge `disparar-cobranca-csv-meta`)
+### 2. Edge `disparar-cobranca-csv-meta`
+- No início, ler/cachear `instancia_id` da `whatsapp_instancias` onde `provedor='meta' AND ativa=true` (ou cair na config Meta como fallback).
+- Passar esse `instancia_id` em **ambos** os inserts em `whatsapp_mensagens` (sucesso e erro).
+- Normalizar o `telefone` gravado ao mesmo formato exibido pelo chat (apenas dígitos com DDI 55) — já é o caso, manter.
+- Garantir `nome_contato` ao gravar (usar `dest.nome` quando existir) pra a lista mostrar o nome ao invés de só o número.
 
-### 1. Persistência correta de logs
-- Renomear `mensagem_id_externo` → `message_id`.
-- Capturar `json.error.code`, `json.error.error_data?.details` e gravar em `erro_codigo` / `erro_mensagem`.
-- Trocar `.then().catch(()=>{})` por `await ... ; if (error) console.error(...)` para diagnóstico futuro.
+### 3. Tela `EventosChatIA.tsx` (UI: realtime + atualização instantânea)
+- Adicionar uma subscription Supabase Realtime em `whatsapp_mensagens` filtrando por `instancia_id IN (instanciasAtivas)` que dispara `queryClient.invalidateQueries(['chat-ia-conversas', ...])` em cada `INSERT`.
+- Reduzir `staleTime` para `5s` e `refetchInterval` para `15s` como rede de segurança.
+- Habilitar realtime na tabela (publication) caso ainda não esteja: `ALTER PUBLICATION supabase_realtime ADD TABLE whatsapp_mensagens` (skip-if-exists).
+- Cleanup do canal no unmount (`supabase.removeChannel`).
 
-### 2. Validador de telefone mais rígido
-- Rejeitar números com mais de 6 dígitos repetidos (`0000000`, `1111111`) → elimina `(00)0000-00000`.
-- Exigir 13 dígitos começando com `55` + DDD válido + 9º dígito quando celular (DDD com mobile).
-- Descartar telefones fixos (8 dígitos após DDD) — Meta sempre devolve 131026.
-
-### 3. Anti rate-limit por número
-- Aumentar o sleep **entre blocos do mesmo destinatário** de 150 ms → 1500 ms.
-- Manter 150 ms entre destinatários distintos.
-- Limitar a no máximo 3 blocos por destinatário; o restante entra em "boletos_pendentes_proximo_lote" (já temos a tabela `cobranca_csv_boletos`).
-
-### 4. Segmentação de bloco mais segura
-- Reduzir `MAX_META_BLOCK_LENGTH` de 240 → 180 (margem para encoding UTF-8 que a Meta conta como bytes em algumas locales).
-- Nunca enviar bloco vazio: se `partes.length === 0`, marcar destinatário como `sem_boletos` e pular o envio (evita erro 100).
-- Truncar linha digitável mantendo só dígitos quando o boleto isolado estourar 180 chars (a linha digitável formatada com pontos/espaço passa de 54 chars; sem formatação cai pra 47).
-
-### 5. Reaproveitar `wa_id` por destinatário
-- Quando o primeiro telefone responder OK, gravar `wa_id` retornado e **não** tentar o segundo telefone do mesmo associado (evita gastar quota e disparar 131056). Hoje o código tenta todos os telefones válidos sempre.
-
-### 6. Relatório do front mostrando código Meta
-- A resposta já traz `detalhes[]`. Adicionar `erro_codigo` para que o componente `ImportarCobrancaCsv.tsx` exiba o motivo (#131026, #132005, etc.) na tabela de resultado — facilita o operador entender o que rodar de novo.
+### 4. (Opcional, baixo risco) Painel de cobrança
+Manter o componente `ChatPanel` como está; ele já usa `useWhatsAppHistorico`. Verificar que a query desse hook também não filtra por instância — se filtrar, aplicar a mesma extensão.
 
 ## Resultado esperado
-- Logs reais de cada envio passam a existir em `whatsapp_mensagens` (auditoria + reenvio).
-- Eliminação dos 131026 causados por telefones inválidos do CSV.
-- Eliminação dos 131056 com throttle por número.
-- Eliminação dos 132005 com bloco menor + linha digitável só dígitos quando necessário.
-- Eliminação do erro 100 com guarda de bloco vazio.
-
-Nenhuma mudança de UI funcional além da coluna "código Meta" no relatório de resultado.
+- Toda mensagem disparada pela importação CSV (Meta) entra com a instância "Meta WhatsApp" e aparece imediatamente em **Conversas IA**, com nome do associado quando conhecido e badge "Cobrança".
+- Atualização em tempo real (sem reload) graças à subscription realtime.
+- Nada muda no fluxo já existente do Evolution.
