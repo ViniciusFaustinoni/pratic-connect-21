@@ -210,16 +210,9 @@ export default function CotacaoContratacao() {
     !!solicitacaoTroca.termo_cancelamento_assinado_em
   );
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
-  // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
-  // em "Solicitar Vistoria" (status aguardando_vistoria) OU se o cliente já
-  // escolheu/concluiu uma vistoria (tipo_vistoria preenchido).
-  const vistoriaTrocaSolicitada = isTrocaTitularidade && (
-    solicitacaoTroca?.status === 'aguardando_vistoria' || !!cotacao?.tipo_vistoria
-  );
-  // Quando é troca, foi liberada e o monitoramento NÃO pediu vistoria,
-  // pulamos completamente a etapa "Vistoria" no fluxo público.
-  const pularEtapaVistoria = isTrocaTitularidade && trocaLiberada && !vistoriaTrocaSolicitada;
-  // Troca de titularidade isenta (cenário sem cobrança de adesão) → pular etapa de Pagamento
+  // FLUXO UNIFICADO: troca de titularidade segue o MESMO stepper da nova adesão
+  // após o termo de cancelamento estar assinado: Plano → Docs → Contrato → Vistoria → Pagamento.
+  // A única diferença mantida é o cenário isento (sem cobrança), que pula Pagamento.
   const isCenarioIsento = (() => {
     const cen = (cotacao as any)?.cenario_adesao as string | null | undefined;
     if (cen?.startsWith('isenta_')) return true;
@@ -233,76 +226,42 @@ export default function CotacaoContratacao() {
   // IMPORTANTE: Se tipo_vistoria já está preenchido, considera vistoria como concluída (etapa 4+)
   const etapaDoStatus = useMemo(() => {
     if (!cotacao?.status_contratacao) return 0;
-    
+
     const etapaBase = determinarEtapa(cotacao.status_contratacao);
-    
-    if (isTrocaTitularidade && !pularEtapaVistoria) {
-      // Em troca: ordem é docs → vistoria(3) → contrato(2) → pagamento(4)
-      // Status documentos_ok / dados_preenchidos => liberar Vistoria (3) primeiro
-      if (etapaBase === 2) {
-        // Se a vistoria JÁ foi feita/agendada, libera o Contrato (2) — onde aparece a tela
-        // de "Em análise pelo Cadastro" enquanto a troca não foi liberada.
-        if (cotacao.tipo_vistoria) return 2;
-        return 3;
-      }
-      // contrato_assinado => libera pagamento
-      if (etapaBase === 3) {
-        return pularEtapaPagamento ? 5 : 4;
-      }
-      if (etapaBase === 4 && pularEtapaPagamento) return 5;
-      return etapaBase;
-    }
-    
+
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
-    if (etapaBase === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
+    if (etapaBase === 3 && cotacao.tipo_vistoria) {
       // Se também pulamos pagamento (troca isenta), saltar direto para conclusão
       return pularEtapaPagamento ? 5 : 4;
     }
     if (etapaBase === 4 && pularEtapaPagamento) {
       return 5;
     }
-    
+
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaPagamento]);
 
   // STEPS dinâmico:
   //  - autovistoria => adiciona "Instalação" como 6ª etapa
-  //  - troca de titularidade sem vistoria solicitada => oculta "Vistoria"
   //  - troca de titularidade isenta => oculta "Pagamento"
-  //  - troca de titularidade => Vistoria vem ANTES de Contrato (Plano → Docs → Vistoria → Contrato → Pagamento)
+  // (Troca de titularidade segue a MESMA ordem da nova adesão)
   const STEPS = useMemo<Step[]>(() => {
     let base = STEPS_BASE;
-    if (pularEtapaVistoria) base = base.filter((s) => s.id !== 'vistoria');
     if (pularEtapaPagamento) base = base.filter((s) => s.id !== 'pagamento');
-    // Em troca de titularidade (com vistoria): reordenar Vistoria antes de Contrato
-    if (isTrocaTitularidade && !pularEtapaVistoria) {
-      const idxContrato = base.findIndex((s) => s.id === 'contrato');
-      const idxVistoria = base.findIndex((s) => s.id === 'vistoria');
-      if (idxContrato >= 0 && idxVistoria > idxContrato) {
-        const reordered = [...base];
-        const [vist] = reordered.splice(idxVistoria, 1);
-        reordered.splice(idxContrato, 0, vist);
-        base = reordered;
-      }
-    }
     if (cotacao?.tipo_vistoria === 'autovistoria') {
       return [...base, STEP_INSTALACAO];
     }
     return base;
-  }, [cotacao?.tipo_vistoria, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
+  }, [cotacao?.tipo_vistoria, pularEtapaPagamento]);
 
   // Ordem de navegação por índices INTERNOS (mesmos do determinarEtapa):
   // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
-  // Para troca de titularidade (com vistoria): docs → vistoria → contrato → pagamento
   const navOrder = useMemo<number[]>(() => {
-    let order = isTrocaTitularidade && !pularEtapaVistoria
-      ? [0, 1, 3, 2, 4, 5]
-      : [0, 1, 2, 3, 4, 5];
-    if (pularEtapaVistoria) order = order.filter((i) => i !== 3);
+    let order = [0, 1, 2, 3, 4, 5];
     if (pularEtapaPagamento) order = order.filter((i) => i !== 4);
     return order;
-  }, [isTrocaTitularidade, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [pularEtapaPagamento]);
 
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
@@ -325,8 +284,6 @@ export default function CotacaoContratacao() {
       case 2: // Contrato - concluído se status >= contrato_assinado
         return statusConcluidos.contrato.includes(cotacao.status_contratacao);
       case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
-        // Em troca de titularidade sem vistoria solicitada, marcamos como concluída (etapa pulada)
-        if (pularEtapaVistoria) return true;
         return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
         if (pularEtapaPagamento) return true;
@@ -342,7 +299,7 @@ export default function CotacaoContratacao() {
       default:
         return false;
     }
-  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido, pularEtapaPagamento]);
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
@@ -351,43 +308,29 @@ export default function CotacaoContratacao() {
   useEffect(() => {
     // Não sincronizar se usuário está navegando manualmente (revisando etapas anteriores)
     if (navegacaoManual) return;
-    
+
     if (cotacao?.status_contratacao) {
       let etapa = determinarEtapa(cotacao.status_contratacao);
-      
-      if (isTrocaTitularidade && !pularEtapaVistoria) {
-        // Em troca: após docs vai para Vistoria (3) primeiro; só depois Contrato (2).
-        if (etapa === 2 && !cotacao.tipo_vistoria) {
-          etapa = 3;
-        }
-        // contrato_assinado (determinarEtapa retorna 3) em troca → ir para Pagamento (4)
-        if (etapa === 3 && cotacao.status_contratacao === 'contrato_assinado') {
-          etapa = 4;
-        }
-      } else {
-        // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
-        // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
-        if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
-          etapa = 4;
-        }
+
+      // Se vistoria já foi escolhida/agendada, avança para pagamento
+      if (etapa === 3 && cotacao.tipo_vistoria) {
+        etapa = 4;
       }
       // Se etapa de pagamento está pulada (troca isenta), salta para conclusão
       if (etapa === 4 && pularEtapaPagamento) {
         etapa = 5;
       }
-      
+
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaPagamento]);
 
   // Em navegação manual, se o usuário cair em uma etapa pulada, salta automaticamente.
   useEffect(() => {
-    if (pularEtapaVistoria && etapaAtual === 3) {
-      setEtapaAtual(pularEtapaPagamento ? 5 : 4);
-    } else if (pularEtapaPagamento && etapaAtual === 4) {
+    if (pularEtapaPagamento && etapaAtual === 4) {
       setEtapaAtual(5);
     }
-  }, [pularEtapaVistoria, pularEtapaPagamento, etapaAtual, setEtapaAtual]);
+  }, [pularEtapaPagamento, etapaAtual, setEtapaAtual]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade isenta, dispara ativação imediata para que o card
