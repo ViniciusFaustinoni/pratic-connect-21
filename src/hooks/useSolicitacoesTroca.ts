@@ -8,11 +8,32 @@ export type StatusTroca =
   | 'aguardando_cadastro'
   | 'aguardando_monitoramento'
   | 'aguardando_vistoria'
+  | 'aguardando_manutencao'
   | 'liberada_para_assinatura'
   | 'efetivada'
   | 'reprovada_cadastro'
   | 'reprovada_monitoramento'
-  | 'cancelada';
+  | 'cancelada'
+  | 'expirada';
+
+export type TipoVistoriaTroca = 'somente_fotos' | 'fotos_com_rastreador' | 'manutencao';
+
+export interface ManutencaoTrocaPayload {
+  rastreador_id: string;
+  data_agendada: string;
+  periodo: 'manha' | 'tarde';
+  motivo?: string;
+  endereco: {
+    logradouro: string;
+    numero?: string | null;
+    bairro: string;
+    cidade: string;
+    uf: string;
+    cep: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  };
+}
 
 export interface SolicitacaoTroca {
   id: string;
