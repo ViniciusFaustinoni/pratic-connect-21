@@ -29,6 +29,7 @@ export default function AprovacoesUnificadas() {
   const navigate = useNavigate();
   const initial = location.hash.replace('#', '') as Aba;
   const [aba, setAba] = useState<Aba>(ABAS.includes(initial) ? initial : 'associados');
+  const { data: counts } = useAprovacoesMonitoramentoBreakdown();
 
   const handleChange = (v: string) => {
     setAba(v as Aba);
