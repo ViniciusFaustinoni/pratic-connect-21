@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { getFotosVistoriaSubFipe } from '@/data/vistoriaSubFipeAdapter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Camera, Calendar, Home, Building2, MapPin, Clock, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-react';
