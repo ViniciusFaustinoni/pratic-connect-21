@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getHinovaCreds, autenticarHinova } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,30 +22,28 @@ serve(async (req) => {
     let tempoMs = 0;
     let erroMensagem: string | null = null;
 
-    const hinovaUser = Deno.env.get('HINOVA_USUARIO');
-    const hinovaSenha = Deno.env.get('HINOVA_SENHA');
+    // Usa o helper compartilhado: lê credenciais de env vars OU
+    // de `integracoes_credenciais` (criptografadas) e autentica via
+    // /usuario/autenticar (mesmo endpoint do restante da integração).
+    let creds;
+    try {
+      creds = await getHinovaCreds(supabase);
+    } catch (e: any) {
+      erroMensagem = e?.message || 'Falha ao obter credenciais Hinova';
+    }
 
-    if (!hinovaUser || !hinovaSenha) {
+    if (!creds && !erroMensagem) {
       erroMensagem = 'Credenciais Hinova não configuradas';
-    } else {
+    } else if (creds) {
       const start = Date.now();
       try {
-        const authResp = await fetch('https://api.hinova.com.br/api/sga/v2/usuario/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ usuario: hinovaUser, senha: hinovaSenha }),
-        });
+        const session = await autenticarHinova(creds);
         tempoMs = Date.now() - start;
-        if (authResp.ok) {
-          const authData = await authResp.json();
-          conexaoOk = !!authData?.token_usuario;
-          if (!conexaoOk) erroMensagem = 'Token não retornado pela API';
-        } else {
-          erroMensagem = `API retornou status ${authResp.status}`;
-        }
+        conexaoOk = !!session?.token;
+        if (!conexaoOk) erroMensagem = 'Token não retornado pela API';
       } catch (e: any) {
         tempoMs = Date.now() - start;
-        erroMensagem = `Erro de rede: ${e?.message || 'erro desconhecido'}`;
+        erroMensagem = e?.message || 'Erro de rede ao autenticar Hinova';
       }
     }
 
