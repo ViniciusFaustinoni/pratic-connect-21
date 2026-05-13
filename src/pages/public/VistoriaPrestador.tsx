@@ -260,8 +260,13 @@ export default function VistoriaPrestador() {
     const { error } = await publicSupabase
       .from('vistoria_prestador_links' as any)
       .update(payload)
-      .eq('token', token);
-    if (error) { toast.error('Erro ao atualizar status'); return; }
+      .eq('token', token)
+      .in('status', ['aguardando', 'aceito', 'em_rota']);
+    if (error) {
+      console.error('[VistoriaPrestador] update status error', error);
+      toast.error(`Erro ao atualizar status: ${error.message || 'tente novamente'}`);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
   }, [token, queryClient]);
 
