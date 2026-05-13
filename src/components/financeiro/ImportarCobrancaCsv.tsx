@@ -121,8 +121,8 @@ export function ImportarCobrancaCsv() {
   const onDrop = useCallback(async (files: File[]) => {
     const f = files[0];
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error('Arquivo maior que 5 MB.');
+    if (f.size > MAX_CSV_BYTES) {
+      toast.error(`Arquivo maior que ${MAX_CSV_MB} MB.`);
       return;
     }
     setArquivo(f);
