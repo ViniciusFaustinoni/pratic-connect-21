@@ -270,7 +270,7 @@ export function ImportarCobrancaCsv() {
             <p className="text-lg font-medium mb-1">
               {isDragActive ? 'Solte o arquivo aqui' : 'Arraste o CSV ou clique para selecionar'}
             </p>
-            <p className="text-sm text-muted-foreground">Apenas .csv — máx 5 MB</p>
+            <p className="text-sm text-muted-foreground">Apenas .csv — máx {MAX_CSV_MB} MB</p>
           </div>
         </CardContent>
       </Card>
