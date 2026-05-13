@@ -117,7 +117,9 @@ function parseCsvLinha(linha: string): string[] {
 export function classificarTelefone(raw: string): { valido: boolean; formatado: string | null } {
   if (!raw) return { valido: false, formatado: null };
   const num = raw.replace(/\D/g, '');
-  if (!num || /^0+$/.test(num)) return { valido: false, formatado: null };
+  if (!num) return { valido: false, formatado: null };
+  // Bloqueia placeholders: todos zeros, todos 1, todos 9, ou um único dígito repetido
+  if (/^(\d)\1+$/.test(num)) return { valido: false, formatado: null };
 
   // Remove código país se vier
   let local = num;
@@ -130,6 +132,9 @@ export function classificarTelefone(raw: string): { valido: boolean; formatado: 
   if (parseInt(ddd, 10) < 11 || parseInt(ddd, 10) > 99) return { valido: false, formatado: null };
 
   const restante = local.slice(2);
+
+  // Bloqueia placeholders adicionais: número repetido (ex: 999999999, 111111111)
+  if (/^(\d)\1+$/.test(restante)) return { valido: false, formatado: null };
 
   // Celular (WhatsApp) tem 9 dígitos começando com 9
   if (restante.length === 9 && restante.startsWith('9')) {
@@ -146,13 +151,16 @@ function parseDataVencimento(raw: string): string {
 
 function extrairPlaca(raw: string): string {
   if (!raw) return '';
-  // formato "PLACA|MATRICULA" ou só "PLACA"
-  const partes = raw.split('|').map((p) => p.trim()).filter(Boolean);
+  // formato "PLACA|MATRICULA" ou só "PLACA". Pode vir multilinha (várias placas separadas por \n).
+  const partes = raw
+    .split(/[|\n\r]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   for (const p of partes) {
-    // Placa real tem letra; matrícula é só número
+    // Placa real tem letra; matrícula é só número → ignora puramente numéricos
     if (/[A-Za-z]/.test(p)) return p.toUpperCase();
   }
-  return partes[0] || '';
+  return '';
 }
 
 function primeiroNome(nomeCompleto: string): string {
@@ -165,10 +173,29 @@ function primeiroNome(nomeCompleto: string): string {
 
 export function parseCsvInadimplentes(conteudo: string): ParseResultado {
   const erros: string[] = [];
-  const linhas = conteudo
+  const linhasRaw = conteudo
     .replace(/^\ufeff/, '')
-    .split(/\r?\n/)
-    .filter((l) => l.trim().length > 0);
+    .split(/\r?\n/);
+
+  // Mescla linhas de continuação: quando o CSV tem campo (ex: Placas) com quebra
+  // de linha SEM aspas, o split acima quebra um registro em dois. A linha de
+  // continuação não tem o número esperado de vírgulas e não começa com um nome
+  // típico (texto antes da primeira vírgula sem dígito puro). Reanexamos.
+  const linhas: string[] = [];
+  for (const l of linhasRaw) {
+    if (!l.trim()) continue;
+    if (linhas.length === 0) { linhas.push(l); continue; }
+    const virgulas = (l.match(/,/g) || []).length;
+    // Linha de continuação típica: poucas vírgulas (placa quebrada tem 0–1) e
+    // não começa com algo que pareça "Nome,Matrícula" (nome é texto+espaços
+    // antes de vírgula seguida de dígitos).
+    const pareceNovaLinha = /^[^,]+,\d+,/.test(l);
+    if (!pareceNovaLinha && virgulas <= 5) {
+      linhas[linhas.length - 1] = linhas[linhas.length - 1] + '\n' + l;
+    } else {
+      linhas.push(l);
+    }
+  }
 
   if (linhas.length < 2) {
     return {
@@ -205,10 +232,11 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
 
   const mapa = new Map<string, DestinatarioParsed>();
   let totalBoletos = 0;
+  let descartadasColunas = 0;
 
   for (let i = 1; i < linhas.length; i++) {
     const cols = parseCsvLinha(linhas[i]);
-    if (cols.length < header.length) continue;
+    if (cols.length < header.length) { descartadasColunas++; continue; }
 
     const nome = (cols[idx['nome']] || '').trim();
     const matricula = (cols[idx['matricula']] || '').trim();
@@ -258,6 +286,10 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     (s, d) => s + d.boletos.reduce((bs, b) => bs + (b.valor || 0), 0),
     0,
   );
+
+  if (descartadasColunas > 0) {
+    erros.push(`${descartadasColunas} linha(s) descartada(s) por colunas insuficientes.`);
+  }
 
   return {
     destinatarios,
