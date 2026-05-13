@@ -138,9 +138,19 @@ export interface CotacaoFormDialogProps {
   ignorarPlacaDuplicadaIds?: string[];
   /** Callback após salvar com sucesso */
   onSuccess?: () => void;
+  /**
+   * Quando presente, marca a cotação como originada de uma troca de titularidade.
+   * Após criar a cotação, vincula automaticamente à `solicitacoes_troca_titularidade`
+   * via edge function `vincular-cotacao-troca` e injeta os metadados em `dados_extras`.
+   */
+  origemTroca?: {
+    solicitacaoId: string;
+    associadoAntigoId: string;
+    veiculoOrigemId: string;
+  } | null;
 }
 
-export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess }: CotacaoFormDialogProps) {
+export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess, origemTroca }: CotacaoFormDialogProps) {
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const updateCotacao = useUpdateCotacao();
