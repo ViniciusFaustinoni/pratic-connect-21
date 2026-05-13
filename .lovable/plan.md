@@ -1,80 +1,69 @@
-# Sino de Pendências de Documentos/Fotos
+## Objetivo
 
-Adicionar no `AppHeader` um ícone de sino (parecido com o botão de Relatar Erro) que mostra, em tempo real, todas as propostas com `documentos_solicitados.status = 'pendente'` que pertencem ao usuário logado (consultor responsável) ou a qualquer proposta — para perfis de cadastro/gestores. Ao abrir, o consultor vê a lista de pendências por associado e, em cada item, pode copiar/abrir/enviar via WhatsApp o **link público** para o associado cumprir as pendências.
+Adicionar uma forma **discreta** no dropdown do avatar (header) para sabermos se todos os usuários estão rodando a mesma versão do app — sem expor um número de versão visível como destaque.
 
-## Comportamento
+## Como vai funcionar
 
-- Sino fixo no header, à esquerda do `TestarCorrecoesButton`.
-- Badge numérico vermelho com a contagem de propostas distintas com pendências.
-- Popover (largura ~ 420px) com:
-  - Título "Documentos Pendentes" + subtítulo "Cobre o associado para concluir o envio".
-  - Lista de cards (1 por proposta/associado pendente):
-    - Nome do associado, código da cotação/proposta, placa.
-    - Chips com os tipos pendentes (Foto do Motor, CNH, CRLV…) — usando os labels já existentes.
-    - Botão **Copiar link**, **Abrir link** (nova aba) e **Enviar WhatsApp** (`wa.me/<telefone>?text=<msg>` com mensagem padrão contendo o link público).
-    - Link "Abrir proposta" → navega para o detalhe interno.
-  - Estado vazio: "Nenhuma pendência no momento ✅".
+No rodapé do `DropdownMenuContent` em `src/components/layout/AppHeader.tsx` (e mesma coisa no app do associado em `src/components/app/AppUserDropdown.tsx`), adicionar uma linha pequena com:
 
-## Quem vê
+- Um **hash curto de build** (6 caracteres, ex.: `b3a91f`) em texto `text-[10px] text-muted-foreground` alinhado ao centro/direita.
+- Um pequeno ponto colorido ao lado:
+  - **verde** = versão do usuário coincide com a versão atualmente publicada
+  - **âmbar** = usuário está em versão antiga (precisa dar reload)
+- Tooltip ao passar o mouse: "Versão do app: b3a91f · atualizada" (ou "desatualizada — recarregue a página").
+- Clique no hash copia para o clipboard (utilidade para suporte comparar entre usuários).
 
-- **Consultor responsável**: filtra pelas propostas onde `cotacoes.vendedor_id = profile.id`.
-- **Cadastro/Gestores** (roles `admin`, `diretor`, `gestor_comercial`, `cadastro` — alinhado a quem já enxerga propostas pendentes hoje): vê todas as pendências, sem filtro de vendedor.
-- Outros perfis: sino não renderiza.
+Assim, qualquer pessoa pode comparar rapidamente o hash entre dois usuários, ou olhar a cor do ponto para confirmar que todos estão na mesma build.
 
 ## Detalhes técnicos
 
-### Hook novo `usePendenciasDocumentos`
-- Localização: `src/hooks/usePendenciasDocumentos.ts`.
-- Query React Query (`staleTime` ~30s + realtime opcional via `supabase.channel` em `documentos_solicitados`).
-- SQL (via supabase-js):
-  ```
-  documentos_solicitados
-    .select('id, tipo_documento, descricao, status, associado_id, contrato_id,
-             associados(nome, telefone),
-             contratos(id, codigo, vendedor_id, cotacao_id,
-                       cotacoes(id, codigo, placa, vendedor_id))')
-    .eq('status', 'pendente')
-  ```
-- Filtro condicional por `vendedor_id` quando o usuário logado não é gestor/cadastro (mesmo padrão de `useFunilCotacao` — ver memória "Funil por vendedor").
-- Agrupa por `associado_id` (uma linha por associado), retornando `{ associado, telefone, cotacaoCodigo, contratoId, link, pendencias[] }`.
+1. **Hash de build (injetado no Vite)**
+   - Em `vite.config.ts`, expor via `define`:
+     ```ts
+     define: {
+       __BUILD_ID__: JSON.stringify(
+         process.env.BUILD_ID ||
+         new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,12)
+       ),
+     }
+     ```
+   - Tipar em `src/vite-env.d.ts`: `declare const __BUILD_ID__: string;`
+   - Cada build gera um id único; em dev usa timestamp do start.
 
-### Construção do link público
-- Reutilizar a mesma rota pública usada hoje no fluxo "Acompanhamento da Proposta" / `cotacao-publica`. Vou identificar o builder existente (`AcompanhamentoProposta` recebe um id/token na URL) e usar a função utilitária correspondente — já existe geração desse link nos pontos onde o consultor envia a proposta. Se houver um `gerarLinkPublicoProposta(contratoId|cotacaoId)`, reutilizar; caso contrário criar helper em `src/lib/links/propostaPublica.ts` montando `https://app.praticcar.org/<rota>/<id>` (Production URL conforme regra de Core).
+2. **Endpoint estático para "versão atual publicada"**
+   - Gerar `public/version.json` no build com o mesmo `__BUILD_ID__`.
+   - Pode ser via um pequeno plugin Vite ou um script `prebuild`. Conteúdo: `{ "buildId": "..." }`.
+   - Servido em `/version.json` (sem cache via `<meta>` fetch com `cache: 'no-store'`).
 
-### Componentes novos
-- `src/components/notificacoes/PendenciasDocumentosBell.tsx`
-  - Botão `<Button variant="ghost" size="icon">` com `Bell` + `Badge` absoluto.
-  - `Popover` (shadcn) com `ScrollArea` para a lista.
-  - Itens reutilizam `Badge`/`Card` do design system.
-- Integrado em `src/components/layout/AppHeader.tsx` antes do `TestarCorrecoesButton`.
+3. **Hook `useBuildVersion`**
+   - Retorna `{ current: __BUILD_ID__, latest, isStale }`.
+   - Faz `fetch('/version.json', { cache: 'no-store' })` ao montar e a cada 5 min (e no `visibilitychange`).
+   - `isStale = latest && latest !== current`.
 
-### Permissão
-- Usar `useAppRoles`/`usePermissions` para detectar gestor/cadastro.
-- Render condicional: se não é gestor/cadastro e não é vendedor (sem `vendedor_id` próprio), não mostra sino.
+4. **UI no dropdown** (`AppHeader.tsx` e `AppUserDropdown.tsx`)
+   - Após o último `DropdownMenuSeparator`, adicionar:
+     ```tsx
+     <div className="px-2 py-1 flex items-center justify-center gap-1.5">
+       <span className={cn("h-1.5 w-1.5 rounded-full",
+         isStale ? "bg-amber-500" : "bg-emerald-500")} />
+       <button onClick={copy} title={isStale ? "Versão antiga — recarregue" : "Atualizada"}
+         className="text-[10px] text-muted-foreground font-mono hover:text-foreground">
+         {current.slice(0,6)}
+       </button>
+     </div>
+     ```
+   - Tooltip via `title=` (sem peso visual extra).
 
-### Mensagem padrão WhatsApp
-```
-Olá, {nome}! Sua proposta na Praticcar está com pendências:
-- {tipo 1}
-- {tipo 2}
-Para concluir, acesse: {link_publico}
-Qualquer dúvida, estou à disposição.
-```
+## Arquivos a alterar/criar
 
-### Realtime (opcional, mas recomendado)
-- Subscribe em `documentos_solicitados` (`INSERT`/`UPDATE`) para invalidar a query e atualizar o badge em tempo real, igual a outros listeners do projeto (`VendasNotificationListener`).
-
-## Arquivos a criar/editar
-
-```text
-src/hooks/usePendenciasDocumentos.ts             (novo)
-src/lib/links/propostaPublica.ts                  (novo, se não existir helper)
-src/components/notificacoes/PendenciasDocumentosBell.tsx  (novo)
-src/components/layout/AppHeader.tsx               (editar: render do sino)
-```
+- `vite.config.ts` — definir `__BUILD_ID__` e plugin que escreve `public/version.json` no build.
+- `src/vite-env.d.ts` — declarar `__BUILD_ID__`.
+- `src/hooks/useBuildVersion.ts` — novo hook.
+- `src/components/layout/AppHeader.tsx` — rodapé do dropdown.
+- `src/components/app/AppUserDropdown.tsx` — mesmo rodapé no app do associado.
 
 ## Não-objetivos
 
-- Não dispara WhatsApp automático via Evolution/Meta (apenas abre `wa.me`).
-- Não altera o fluxo de criação/aprovação de pendências.
-- Não toca no link público em si — só consome o existente.
+- Não exibir número/semver completo no header.
+- Não forçar reload automático (apenas indicar via cor).
+- Não impactar telas mobile/responsividade já existentes.
