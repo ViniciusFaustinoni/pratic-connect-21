@@ -238,7 +238,7 @@ Deno.serve(async (req) => {
       placa: placaSoftruck,
       vehicle_id: vehicleId,
       device_id: deviceId,
-      softruck_vinculo: extractVinculo(vehicle, device),
+      softruck_vinculo: extractVinculoSoftruck(vehicle, device),
       message: acao === 'criado'
         ? 'Dispositivo encontrado na Softruck e cadastrado localmente.'
         : acao === 'atualizado'
