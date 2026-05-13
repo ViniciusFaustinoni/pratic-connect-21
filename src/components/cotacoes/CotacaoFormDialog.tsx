@@ -273,24 +273,35 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
 
-  // Limites de FIPE para Regra do 1% (mínimo geral + máximos por tipo)
-  const { data: fipeMenorLimites = { minimo: 30000, carro: 120000, moto: 27000 } } = useQuery({
+  // Limites de FIPE para Regra do 1% (mínimo + máximo POR TIPO carro/moto)
+  const { data: fipeMenorLimites = { minimoCarro: 30000, minimoMoto: 9000, carro: 120000, moto: 27000 } } = useQuery({
     queryKey: ['config-fipe-menor-limites'],
     queryFn: async () => {
       const { data } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['fipe_menor_limite_minimo', 'fipe_menor_limite_carro', 'fipe_menor_limite_moto']);
+        .in('chave', [
+          'fipe_menor_limite_minimo',
+          'fipe_menor_limite_minimo_carro',
+          'fipe_menor_limite_minimo_moto',
+          'fipe_menor_limite_carro',
+          'fipe_menor_limite_moto',
+        ]);
       const map = new Map((data || []).map(r => [r.chave, Number(r.valor)] as const));
+      const minimoCarro =
+        map.get('fipe_menor_limite_minimo_carro') ||
+        map.get('fipe_menor_limite_minimo') ||
+        30000;
+      const minimoMoto = map.get('fipe_menor_limite_minimo_moto') || 9000;
       return {
-        minimo: map.get('fipe_menor_limite_minimo') || 30000,
+        minimoCarro,
+        minimoMoto,
         carro: map.get('fipe_menor_limite_carro') || 120000,
         moto: map.get('fipe_menor_limite_moto') || 27000,
       };
     },
     staleTime: 5 * 60 * 1000,
   });
-  const fipeMenorLimiteMinimo = fipeMenorLimites.minimo;
 
   // Hook para FIPE limite (alto valor)
   const { data: configLimites } = useConfigLimitesVeiculo();
@@ -576,8 +587,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return null;
     }
 
-    // Bloquear FIPE menor para veículos com valor FIPE <= limite mínimo
-    if (valorFipe <= fipeMenorLimiteMinimo) {
+    // Bloquear FIPE menor para veículos com FIPE <= mínimo do tipo (carro/moto)
+    const minimoTipo = tipoVeiculoDetectado === 'moto' ? fipeMenorLimites.minimoMoto : fipeMenorLimites.minimoCarro;
+    if (valorFipe <= minimoTipo) {
       return null;
     }
 
@@ -688,7 +700,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
-  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
+  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
 
   // Faixa de preço atual onde o FIPE se enquadra
   // FONTE: entity_eligibility_rules (motor moderno). Fallback: tabelas_preco_mensalidade (legado)

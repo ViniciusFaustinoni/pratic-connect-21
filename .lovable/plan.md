@@ -1,38 +1,34 @@
-## Contexto
+## Diagnóstico
 
-Hoje os limites que decidem se um veículo dispensa rastreador estão na tabela `configuracoes`, nas chaves:
+A funcionalidade existe em `CotacaoFormDialog.tsx`, mas o **mínimo por tipo não é respeitado**. O hook que lê os limites (linhas 277–293) ainda usa a chave antiga `fipe_menor_limite_minimo` (única, sem distinção carro/moto). A tela `Redução de Cota` grava esse valor sincronizado com o **mínimo de Carros**, então:
 
-- `operacional_fipe_minimo_rastreador` — limite para **carros** (default R$ 30.000)
-- `operacional_fipe_minimo_rastreador_moto` — limite para **motos** (default R$ 9.000)
+- **Motos com FIPE entre R$ 9k e R$ 30k** ficam bloqueadas pelo guard `valorFipe <= fipeMenorLimiteMinimo` (linha 580) e o card nunca aparece.
+- Carros funcionam por coincidência (a chave legada = carro).
 
-Eles são lidos por `useConfigFipeRastreador`, `useConfigFipeRastreadorMoto` e `useAvaliarAditivos`. **Não existe UI** para editar; só dá pra mudar via SQL. A página `/configuracoes/sistema` (`src/pages/configuracoes/Sistema.tsx`) hoje é mock estático (não persiste nada).
+## Correção
 
-## O que será feito
+Em `src/components/cotacoes/CotacaoFormDialog.tsx`:
 
-Adicionar um novo card **"Rastreador — FIPE mínima para dispensa"** dentro de `src/pages/configuracoes/Sistema.tsx`, com dois campos numéricos (R$):
+1. **Hook `config-fipe-menor-limites`** (linhas 277–293): incluir as novas chaves `fipe_menor_limite_minimo_carro` e `fipe_menor_limite_minimo_moto` no `select` e devolver `minimoCarro` / `minimoMoto` separados, com fallback para `fipe_menor_limite_minimo` (carro) e default 9000 (moto).
 
-- **Carros** — atualiza `operacional_fipe_minimo_rastreador`
-- **Motos** — atualiza `operacional_fipe_minimo_rastreador_moto`
+2. **`fipeMenorInfo`** (linha 580): substituir o guard único pelo mínimo do tipo:
+   ```
+   const minimoTipo = tipoVeiculoDetectado === 'moto' ? fipeMenorLimites.minimoMoto : fipeMenorLimites.minimoCarro;
+   if (valorFipe <= minimoTipo) return null;
+   ```
+   Adicionar `fipeMenorLimites.minimoCarro/minimoMoto` às deps do `useMemo`.
 
-Comportamento:
-- Carrega valores atuais via `useConfiguracoesAll` (cache global já existente).
-- Botão **Salvar** independente do card mock superior, usando `useAtualizarConfiguracao` (hook genérico já existente em `src/hooks/useDistribuicao.ts`) para `upsert` na tabela `configuracoes`.
-- Toast de sucesso/erro e invalidação do cache de configurações para refletir imediatamente nos fluxos (cotação pública, monitoramento, etc).
-- Visível apenas para perfis com permissão de configurações (já restringido pelo `ConfiguracoesLayout`).
-- Texto explicativo curto: "Veículos com FIPE abaixo destes valores dispensam a instalação do rastreador (Diesel sempre exige)."
+3. **Mensagem de bloqueio por máximo** (linha 591): já está correta, mantém.
 
-## Onde encontrar depois de pronto
+## Fora do escopo
 
-**Configurações › Sistema** → card "Rastreador — FIPE mínima para dispensa".
+- Zona obrigatória de rastreador (R$ 30k–R$ 35k) continua bloqueando a redução — é regra comercial preservada na memória `regra-1-porcento-bloqueios`.
+- Não tocar na tela `/diretoria/reducao-cota` nem na edge de aprovação — já estão corretas.
+- Não criar UI extra de "por que não apareceu"; o card permanece silencioso quando inelegível, como hoje.
 
-## Detalhes técnicos
+## Verificação
 
-- Arquivo único alterado: `src/pages/configuracoes/Sistema.tsx`.
-- Hooks reutilizados: `useConfiguracoesAll`, `useAtualizarConfiguracao`.
-- Sem migração de banco (chaves já existem na tabela `configuracoes`).
-- Sem mudanças em edge functions ou em qualquer lógica de negócio — só superfície de edição.
-
-## Fora de escopo
-
-- Não mexer no card "Preferências" mock (itens por página, formato data, etc).
-- Não tocar nas regras de negócio que consomem esses valores.
+Após aplicar, abrir cotação:
+- Moto FIPE R$ 12k (entre 9k e 27k) → card "Elegível à Regra do 1%" aparece.
+- Moto FIPE R$ 28k → card não aparece (acima do máximo moto).
+- Carro FIPE R$ 50k → card aparece como hoje.
