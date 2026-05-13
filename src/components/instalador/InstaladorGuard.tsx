@@ -9,7 +9,7 @@ interface InstaladorGuardProps {
 }
 
 export function InstaladorGuard({ children }: InstaladorGuardProps) {
-  const { user, loading, hasRole } = useAuth();
+  const { user, profile, loading, hasRole } = useAuth();
   const location = useLocation();
   const queryClient = useQueryClient();
   const lastUserIdRef = useRef<string | null>(null);

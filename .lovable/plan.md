@@ -1,61 +1,49 @@
-## Diagnóstico
+## Causa raiz
 
-**Causa raiz**: Existe um link em `vistoria_prestador_links` para a vistoria do MARCUS (LTB4J74) com `status='aguardando'`, criado mais cedo hoje (durante teste anterior via curl, sem envio de WhatsApp e nunca aceito pelo prestador). O guard em `useAtribuicaoManual.ts` (linhas 654–662) bloqueia corretamente nova atribuição enquanto houver link ativo — mas a UI **não oferece nenhum caminho** para cancelar esse link "fantasma" de vistoria, então o serviço fica preso.
+A tela "Ocorreu um erro ao carregar a página — Minified React error #300" é o `AppErrorBoundary` (`src/components/app/AppErrorBoundary.tsx`) capturando um erro de render disparado **logo após o login do instalador/vistoriador**, antes de a hidratação do `profile`/`roles` terminar.
 
-```text
-servicos 66b21dc1 (vistoria_entrada, status=agendada, profissional_id=NULL)
-   └─ vistoria 2101860d (status=agendada)
-        └─ vistoria_prestador_links 5eda6b02 (status=aguardando, criado 15:21) ← BLOQUEIA
-```
+Sequência atual do bug:
 
-A UI atual só sabe cancelar `instalacao_prestador_links` (botão "Cancelar/Devolver" no drawer do serviço); para `vistoria_prestador_links` não há nada equivalente, porque toda essa via foi adicionada agora junto com o suporte a Vistoria Base via prestador.
+1. Usuário envia credenciais em `/instalador/login`. `signIn()` resolve, `user` entra no `AuthContext` e o `useEffect` redireciona para `/instalador`.
+2. No `AuthContext`, `loading` é desligado quando `loadUserData()` termina, mas existe uma **janela** em que `user` já está setado e `profile`/`perfis` ainda não chegaram (ou chegaram via cache parcial). `InstaladorGuard` só checa `loading` + `user` + `hasRole(...)` — nessa janela `hasRole` retorna `false` e/ou `profile` é `null`.
+3. Com `profile=null`, `InstaladorLayout` monta e dispara `useTarefaAtual`, `useAlocacaoDiaria`, `useIniciarServico`, `useGarantirTurno(emServico)`, `useServicosRealtime`, etc. Alguns desses hooks calculam `emServico` / dependências derivadas que mudam **na próxima render** quando o `profile` chega — alterando a forma como subcomponentes (ex.: `JornadaStatusBar`, `BotaoIniciarServico`, `TarefaAtualCard`) retornam markup. Nessa transição, um componente devolve `undefined` (ou um array) em vez de elemento React → React lança **#300** ("A valid React element (or null) must be returned"), o `AppErrorBoundary` captura e mostra a tela mostrada no print.
+4. No F5, `loading=true` desde o início; o Guard segura o render até `user`+`profile` chegarem juntos do cache local, então a primeira render já é consistente e nada quebra.
 
----
+Ou seja: a raiz é o **Guard liberar o render do app do instalador antes do `profile` estar disponível**, somado à ausência de auto-recuperação do boundary contra erros transitórios de primeira render pós-login.
 
-## Plano de correção
+## Correção (raiz)
 
-### 1. Correção pontual de dados (ANA isolada)
-- Cancelar o link `5eda6b02` (`status='cancelada'`, `cancelled_at=now()`, observação "[CORREÇÃO] link de teste sem envio — liberado para reatribuição") via migration de DML.
-- Após isso, o KLEYTONN consegue atribuir o serviço ao prestador escolhido normalmente.
+### 1. `InstaladorGuard` espera o `profile` (não só `user`)
 
-### 2. Correção de raiz — auto-substituição de link "aguardando"
-Editar `useAtribuicaoManual.ts` no bloco de prestador externo (linhas 643–663) para:
+Em `src/components/instalador/InstaladorGuard.tsx`:
 
-- Se o link existente está em `'aguardando'` (nunca aceito):
-  - Cancelar automaticamente o(s) link(s) antigo(s) (`status='cancelada'`, `cancelled_at=now()`, observação "Substituído por nova atribuição a {prestador}").
-  - Continuar o fluxo e gerar o novo link normalmente.
-- Se está em `'em_execucao'` / `'aceito'` (prestador já interagiu): **manter** o bloqueio com a mensagem atual, porque substituir nesse caso é destrutivo.
+- Trocar a condição `if (loading)` por `if (loading || (user && !profile))` — ou seja, enquanto houver sessão mas o profile ainda não carregou, manter o spinner "Carregando…".
+- Manter o timeout de 15s já existente (passa a cobrir também `profile` ausente).
+- Só avaliar `hasRole(...)` depois que `profile` existir, evitando o falso "Acesso Negado" e o flash de render parcial.
 
-Aplicar a mesma regra para os dois ramos:
-- `instalacao_prestador_links` (linhas 644–653).
-- `vistoria_prestador_links` (linhas 654–663).
+Resultado: `InstaladorLayout`/`InstaladorHome` nunca montam com `profile=null`, eliminando a race que dispara o #300.
 
-### 3. UI explícita de cancelamento de link de vistoria
-No drawer/painel do serviço (componentes que hoje listam o link de prestador da instalação), adicionar suporte simétrico para `vistoria_prestador_links`:
-- Mostrar badge "Link aguardando aceite — prestador X" quando houver link ativo.
-- Botão "Cancelar link" que faz `update vistoria_prestador_links set status='cancelada'`.
-- Reaproveitar o componente já usado para `instalacao_prestador_links` (mesma UX), apenas selecionando a tabela conforme o tipo de origem (instalação vs vistoria pura).
+### 2. `InstaladorLogin` aguarda profile antes de navegar
 
-Arquivos prováveis: `src/components/monitoramento/ServicoDetalheDrawer.tsx` (e/ou irmãos que renderizam "Prestador atribuído"). Confirmo no momento da implementação.
+Em `src/pages/instalador/InstaladorLogin.tsx`, o `useEffect` que faz `navigate('/instalador')` passa a depender também de `profile?.id` (não só `user` + `hasRole`). Isso impede que o redirect dispare antes do `loadUserData` terminar.
 
-### 4. Validação como admin
-- Logar como admin (`admin@teste.com`).
-- Confirmar que o serviço do MARCUS aparece como "Não atribuído" e pode ser atribuído ao KLEYTONN sem erro.
-- Testar o caminho 2: criar um link, depois atribuir novamente ao mesmo serviço (deve substituir silenciosamente quando status='aguardando').
-- Testar o caminho 3: simular link `em_execucao` (insert manual via SQL) e confirmar que o bloqueio persiste com mensagem.
+### 3. `AppErrorBoundary` com auto-retry único + log de stack
 
----
+Em `src/components/app/AppErrorBoundary.tsx`:
 
-## Detalhes técnicos
+- No `componentDidCatch`, logar `error.stack` + `componentStack` + URL de decode do React (`https://react.dev/errors/300`) para que erros futuros fiquem rastreáveis no console do preview.
+- Adicionar **auto-retry uma única vez** (via `sessionStorage` flag `app-eb-retried-at`) quando o erro for de primeira render pós-navegação: ao capturar, se ainda não tentou, força `window.location.reload()` automaticamente (mesma ação do botão), de forma que mesmo que a race ressurja em cenário futuro, o usuário não vê a tela quebrada. Bloqueia o auto-retry se já houve retry há menos de 60s para não entrar em loop.
 
-- Tabela `vistoria_prestador_links` não tem coluna `cancelled_at` nem `expires_at` — usar `updated_at` + log via `observacoes` ou criar coluna `cancelled_at` na migration (preferência: criar coluna para paridade com `instalacao_prestador_links`).
-- Manter `servicos.status` inalterado no cancelamento do link (já é 'agendada' antes do link e deve voltar a 'agendada' / aguardando atribuição — confirmar no fluxo existente).
-- Não tocar em `gerar-link-vistoriador-prestador` — o guard precisa permanecer no client para evitar race; o bloqueio só muda o que fazer com link `'aguardando'`.
+### 4. Validação
 
-## Resumo das mudanças
+- Login como vistoriador/instalador (admin de teste promovido a `instalador_vistoriador` num ambiente de QA, ou testar manualmente após deploy).
+- Confirmar que após o submit aparece o spinner do Guard (não o `InstaladorHome` parcial) e em seguida o `InstaladorHome` completo, **sem** passar pela tela de erro.
+- Forçar erro artificial em `InstaladorHome` para garantir que o auto-retry só dispara uma vez e que o boundary continua funcional.
 
-- 1 migration: cancela link 5eda6b02 + adiciona `cancelled_at TIMESTAMPTZ` em `vistoria_prestador_links`.
-- `src/hooks/useAtribuicaoManual.ts`: lógica de auto-cancelamento de links em `'aguardando'`.
-- 1 componente de drawer: botão "Cancelar link" para vistoria_prestador_links.
+## Arquivos a editar
 
-Confirma para eu implementar?
+- `src/components/instalador/InstaladorGuard.tsx` — espera `profile` antes de liberar children.
+- `src/pages/instalador/InstaladorLogin.tsx` — redirect só após `profile` carregado.
+- `src/components/app/AppErrorBoundary.tsx` — log detalhado + auto-retry idempotente.
+
+Sem migrations. Sem mudança de regras de negócio.
