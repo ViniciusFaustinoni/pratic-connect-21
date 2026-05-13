@@ -66,16 +66,18 @@ Deno.serve(async (req) => {
     let linkToken: string
     let linkId: string
 
-    // Check for existing active link
-    const { data: existingLink } = await supabase
+    // Check for existing active link (by instalacao_id OR vistoria_id)
+    const baseQuery = supabase
       .from('vistoria_prestador_links')
       .select('id, token')
-      .eq('instalacao_id', instalacao_id)
       .eq('vistoriador_prestador_id', vistoriador_prestador_id)
       .in('status', ['aguardando', 'em_execucao'])
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
+
+    const { data: existingLink } = instalacao_id
+      ? await baseQuery.eq('instalacao_id', instalacao_id).maybeSingle()
+      : await baseQuery.eq('vistoria_id', vistoria_id).maybeSingle()
 
     if (existingLink) {
       linkToken = existingLink.token
@@ -84,7 +86,8 @@ Deno.serve(async (req) => {
       const { data: newLink, error: linkErr } = await supabase
         .from('vistoria_prestador_links')
         .insert({
-          instalacao_id,
+          instalacao_id: instalacao_id || null,
+          vistoria_id: vistoria_id || null,
           vistoriador_prestador_id,
           valor, // pode ser null — será definido pela operação posteriormente
           atribuido_por,
@@ -103,8 +106,8 @@ Deno.serve(async (req) => {
       linkId = newLink.id
     }
 
-    // Update instalacoes table if not reenviar
-    if (!reenviar) {
+    // Update instalacoes table if not reenviar (apenas quando há instalacao)
+    if (!reenviar && instalacao_id) {
       await supabase
         .from('instalacoes')
         .update({
@@ -119,22 +122,97 @@ Deno.serve(async (req) => {
     const url = `${baseUrl}/vistoria-prestador/${linkToken}`
 
     // ── AÇÃO 2: WhatsApp ──
-    // Buscar dados completos
-    const { data: instalacao, error: instErr } = await supabase
-      .from('instalacoes')
-      .select(`
-        id, data_agendada, periodo, logradouro, numero, complemento, bairro, cidade, uf, cep,
-        associados:associado_id(id, nome, telefone),
-        veiculos:veiculo_id(id, marca, modelo, ano, placa)
-      `)
-      .eq('id', instalacao_id)
-      .single()
+    // Buscar dados completos — pode vir de instalacoes (pós-instalação) ou vistorias+agendamento_base+oficina (vistoria base)
+    let dadosCtx: {
+      data_agendada: string | null
+      periodo: string | null
+      logradouro: string | null
+      numero: string | null
+      bairro: string | null
+      cidade: string | null
+      uf: string | null
+      associado: { nome?: string | null; telefone?: string | null } | null
+      veiculo: { marca?: string | null; modelo?: string | null; ano?: number | null; placa?: string | null } | null
+    } | null = null
 
-    if (instErr || !instalacao) {
-      console.error('Erro ao buscar instalação:', instErr)
-      // Don't fail - link was created, just can't send WhatsApp
+    if (instalacao_id) {
+      const { data: instalacao } = await supabase
+        .from('instalacoes')
+        .select(`
+          data_agendada, periodo, logradouro, numero, complemento, bairro, cidade, uf, cep,
+          associados:associado_id(id, nome, telefone),
+          veiculos:veiculo_id(id, marca, modelo, ano, placa)
+        `)
+        .eq('id', instalacao_id)
+        .single()
+
+      if (instalacao) {
+        dadosCtx = {
+          data_agendada: instalacao.data_agendada as any,
+          periodo: instalacao.periodo as any,
+          logradouro: instalacao.logradouro as any,
+          numero: instalacao.numero as any,
+          bairro: instalacao.bairro as any,
+          cidade: instalacao.cidade as any,
+          uf: instalacao.uf as any,
+          associado: (instalacao as any).associados,
+          veiculo: (instalacao as any).veiculos,
+        }
+      }
+    } else if (vistoria_id) {
+      const { data: vist } = await supabase
+        .from('vistorias')
+        .select(`
+          id, data_agendada, local_vistoria, endereco_logradouro, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado,
+          associados:associado_id(id, nome, telefone),
+          veiculos:veiculo_id(id, marca, modelo, ano, placa)
+        `)
+        .eq('id', vistoria_id)
+        .single()
+
+      // Se vistoria base, pega endereço da oficina via agendamento_base
+      let oficinaEnd: any = null
+      let periodoFromAg: string | null = null
+      if (vist) {
+        const { data: ag } = await supabase
+          .from('agendamentos_base')
+          .select('horario, oficina_id')
+          .eq('vistoria_id', vistoria_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (ag?.oficina_id) {
+          const { data: of } = await supabase
+            .from('oficinas')
+            .select('logradouro, numero, bairro, cidade, estado')
+            .eq('id', ag.oficina_id)
+            .maybeSingle()
+          oficinaEnd = of
+        }
+        if (ag?.horario) {
+          const h = String(ag.horario).slice(0, 5)
+          periodoFromAg = h < '12:00' ? 'manha' : 'tarde'
+        }
+      }
+
+      if (vist) {
+        dadosCtx = {
+          data_agendada: vist.data_agendada ? String(vist.data_agendada).slice(0, 10) : null,
+          periodo: periodoFromAg,
+          logradouro: oficinaEnd?.logradouro || vist.endereco_logradouro || null,
+          numero: oficinaEnd?.numero || vist.endereco_numero || null,
+          bairro: oficinaEnd?.bairro || vist.endereco_bairro || null,
+          cidade: oficinaEnd?.cidade || vist.endereco_cidade || null,
+          uf: oficinaEnd?.estado || vist.endereco_estado || null,
+          associado: (vist as any).associados,
+          veiculo: (vist as any).veiculos,
+        }
+      }
+    }
+
+    if (!dadosCtx) {
       return new Response(
-        JSON.stringify({ success: true, token: linkToken, url, whatsapp_enviado: false, erro_whatsapp: 'Instalação não encontrada' }),
+        JSON.stringify({ success: true, token: linkToken, url, whatsapp_enviado: false, erro_whatsapp: 'Dados de origem não encontrados' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -153,25 +231,25 @@ Deno.serve(async (req) => {
     }
 
     // Build message fields
-    const associado = (instalacao as any).associados
-    const veiculo = (instalacao as any).veiculos
+    const associado = dadosCtx.associado
+    const veiculo = dadosCtx.veiculo
     const nomeAssociado = associado?.nome || 'Associado'
     const veiculoDesc = veiculo ? `${veiculo.marca || ''} ${veiculo.modelo || ''} ${veiculo.ano || ''}`.trim() : 'Não informado'
     const placaVeiculo = veiculo?.placa || 'Não informada'
 
     const endereco = [
-      instalacao.logradouro,
-      instalacao.numero ? `${instalacao.numero}` : null,
-      instalacao.bairro ? `— ${instalacao.bairro}` : null,
-      instalacao.cidade ? `— ${instalacao.cidade}/${instalacao.uf}` : null,
+      dadosCtx.logradouro,
+      dadosCtx.numero ? `${dadosCtx.numero}` : null,
+      dadosCtx.bairro ? `— ${dadosCtx.bairro}` : null,
+      dadosCtx.cidade ? `— ${dadosCtx.cidade}/${dadosCtx.uf}` : null,
     ].filter(Boolean).join(' ')
 
-    const dataAgendada = instalacao.data_agendada
-      ? new Date(instalacao.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR')
+    const dataAgendada = dadosCtx.data_agendada
+      ? new Date(dadosCtx.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR')
       : 'A definir'
 
     const periodoLabels: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde', integral: 'Integral' }
-    const periodoStr = instalacao.periodo ? periodoLabels[instalacao.periodo] || instalacao.periodo : ''
+    const periodoStr = dadosCtx.periodo ? periodoLabels[dadosCtx.periodo] || dadosCtx.periodo : ''
     const dataHora = periodoStr ? `${dataAgendada} — ${periodoStr}` : dataAgendada
 
     // Validate required fields
