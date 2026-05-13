@@ -36,7 +36,8 @@ const STATUS_LABELS: Record<ErrorReportStatus, { label: string; cls: string }> =
   descartado: { label: 'Descartado', cls: 'bg-muted text-muted-foreground border-border' },
 };
 
-const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'em_tratamento', 'concluido', 'critico'];
+// 'concluido' fica visível apenas em Histórico (a pedido). Não aparece em Fila/Tabela/contadores/filtro.
+const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'em_tratamento', 'critico'];
 
 function CardRelatoFila({ report, onOpen }: { report: ErrorReport; onOpen: (r: ErrorReport) => void }) {
   const { data: files = [] } = useErrorReportFiles(report.id);
@@ -105,8 +106,11 @@ export default function RelatosErros() {
     [statusFilter, search, reporterId, dateRange]
   );
 
-  const { data: reports = [], isLoading } = useErrorReportsList(filtros);
+  const { data: reportsRaw = [], isLoading } = useErrorReportsList(filtros);
   const { data: reporters = [] } = useReportersList();
+
+  // Concluídos saem das visualizações Fila e Tabela — vivem apenas no Histórico.
+  const reports = useMemo(() => reportsRaw.filter((r) => r.status !== 'concluido'), [reportsRaw]);
 
   const counts = useMemo(() => {
     return reports.reduce(
@@ -158,7 +162,7 @@ export default function RelatosErros() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {(['aberto', 'critico', 'em_tratamento', 'concluido', 'validado', 'descartado'] as ErrorReportStatus[]).map((s) => (
+        {(['aberto', 'critico', 'em_tratamento', 'validado', 'descartado'] as ErrorReportStatus[]).map((s) => (
           <Card
             key={s}
             className={`p-3 cursor-pointer hover:bg-muted/30 transition ${statusFilter === s ? 'ring-2 ring-primary' : ''}`}
@@ -204,7 +208,7 @@ export default function RelatosErros() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos os status</SelectItem>
-            {(Object.keys(STATUS_LABELS) as ErrorReportStatus[]).map((s) => (
+            {(Object.keys(STATUS_LABELS) as ErrorReportStatus[]).filter((s) => s !== 'concluido').map((s) => (
               <SelectItem key={s} value={s}>
                 {STATUS_LABELS[s].label}
               </SelectItem>
