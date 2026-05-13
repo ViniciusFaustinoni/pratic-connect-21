@@ -351,6 +351,18 @@ serve(async (req) => {
       metaInstanciaId = inst?.id ?? null;
     }
 
+    // Corpo do template — usado para gravar o conteúdo real renderizado em whatsapp_mensagens.
+    // Sem isso, o agente-consultor-ia não entende o contexto da cobrança ao responder.
+    let templateCorpo = "";
+    {
+      const { data: tpl } = await supabase
+        .from("whatsapp_meta_templates")
+        .select("corpo")
+        .eq("nome", templateNome)
+        .maybeSingle();
+      templateCorpo = tpl?.corpo || "";
+    }
+
     const detalhes: Array<{
       matricula: string;
       nome: string;
