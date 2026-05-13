@@ -1,5 +1,6 @@
 // Cria uma nova solicitação de Troca de Titularidade + cotação base vinculada
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { sendMetaTemplate } from '../_shared/send-meta-template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -259,6 +260,30 @@ Deno.serve(async (req) => {
       .select('id, token_publico')
       .single();
     if (solErr) throw solErr;
+
+    // ── WhatsApp: notificar associado antigo da solicitação criada ──
+    // Template: troca_titularidade_solicitada (2 vars: nome, veiculo)
+    try {
+      const { data: assocAntigo } = await admin
+        .from('associados')
+        .select('nome, telefone')
+        .eq('id', associado_antigo_id)
+        .maybeSingle();
+      if (assocAntigo?.telefone) {
+        const veicLabel = `${veiculo.marca || ''} ${veiculo.modelo || ''} (${veiculo.placa || ''})`.trim();
+        await sendMetaTemplate({
+          supabase: admin,
+          telefone: assocAntigo.telefone,
+          templateName: 'troca_titularidade_solicitada',
+          templateParams: [String(assocAntigo.nome || 'Associado').split(' ')[0], veicLabel],
+          referenciaTipo: 'troca_titularidade',
+          referenciaId: solicitacao.id,
+          tag: '[criar-solicitacao-troca]',
+        });
+      }
+    } catch (waErr) {
+      console.warn('[criar-solicitacao-troca] envio troca_titularidade_solicitada falhou (não bloqueante):', waErr);
+    }
 
     // Disparo automático do termo de cancelamento (best-effort, NÃO bloqueia criação).
     // Reaproveita 100% a edge `enviar-termo-cancelamento-troca`. Timeout de 12s
