@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { useAlocacaoDiaria } from './useAlocacaoDiaria';
+import { vincularProfissionalAoServicoDoAgendamentoBase } from '@/lib/agendamentos-base/vincular-profissional-servico';
 
 export interface VistoriaBaseFila {
   id: string;
