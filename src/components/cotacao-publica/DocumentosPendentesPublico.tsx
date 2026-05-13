@@ -486,30 +486,49 @@ export function DocumentosPendentesPublico({
 
                     {!isEnviado && (
                       <div className="space-y-3 mt-3">
-                        {/* Input de arquivo */}
+                        {/* Input de arquivo — fotos forçam câmera ao vivo (capture environment) */}
                         <div>
-                          <input
-                            ref={el => fileInputRefs.current[doc.id] = el}
-                            type="file"
-                            accept="image/*,.pdf"
-                            className="hidden"
-                            onChange={(e) => handleFileSelect(doc.id, e.target.files?.[0] || null)}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className={`w-full justify-start text-left ${state.file ? 'border-primary/30 text-primary' : ''}`}
-                            onClick={() => fileInputRefs.current[doc.id]?.click()}
-                            disabled={state.uploading}
-                          >
-                            {state.uploading ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Upload className="h-4 w-4 mr-2" />
-                            )}
-                            {state.file ? state.file.name : 'Selecionar arquivo'}
-                          </Button>
+                          {(() => {
+                            const ehFoto = isTipoFoto(doc.tipo_documento);
+                            return (
+                              <>
+                                <input
+                                  ref={el => fileInputRefs.current[doc.id] = el}
+                                  type="file"
+                                  accept={ehFoto ? 'image/*' : 'image/*,.pdf'}
+                                  {...(ehFoto ? { capture: 'environment' as const } : {})}
+                                  className="hidden"
+                                  onChange={(e) => handleFileSelect(doc.id, e.target.files?.[0] || null)}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className={`w-full justify-start text-left ${state.file ? 'border-primary/30 text-primary' : ''}`}
+                                  onClick={() => fileInputRefs.current[doc.id]?.click()}
+                                  disabled={state.uploading}
+                                >
+                                  {state.uploading ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : ehFoto ? (
+                                    <Camera className="h-4 w-4 mr-2" />
+                                  ) : (
+                                    <Upload className="h-4 w-4 mr-2" />
+                                  )}
+                                  {state.file
+                                    ? state.file.name
+                                    : ehFoto
+                                      ? 'Tirar foto agora'
+                                      : 'Selecionar arquivo'}
+                                </Button>
+                                {ehFoto && !state.file && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    A foto deve ser feita ao vivo pela câmera. Não é permitido anexar imagens da galeria.
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
 
                         {/* Observação opcional */}
