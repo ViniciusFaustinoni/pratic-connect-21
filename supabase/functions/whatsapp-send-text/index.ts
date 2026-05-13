@@ -147,7 +147,7 @@ async function enviarViaMeta(
       }
       
       // Para templates genéricos, tentar fallback apenas com notificacao_geral_v1
-      const fallbackOrder = ['notificacao_geral_v1'];
+      const fallbackOrder = ['sinistro_atualizado'];
       let fallbackFound = false;
       
       for (const fbName of fallbackOrder) {
