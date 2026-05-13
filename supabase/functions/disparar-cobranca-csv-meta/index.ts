@@ -333,6 +333,19 @@ serve(async (req) => {
       });
     }
 
+    // Buscar (ou criar) a instância lógica do provedor Meta para taggear as mensagens
+    let metaInstanciaId: string | null = null;
+    {
+      const { data: inst } = await supabase
+        .from("whatsapp_instancias")
+        .select("id")
+        .eq("provedor", "meta")
+        .eq("ativa", true)
+        .limit(1)
+        .maybeSingle();
+      metaInstanciaId = inst?.id ?? null;
+    }
+
     const detalhes: Array<{
       matricula: string;
       nome: string;
