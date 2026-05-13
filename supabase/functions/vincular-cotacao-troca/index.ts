@@ -1,6 +1,11 @@
 // Vincula uma cotação recém-criada (pelo CotacaoFormDialog padrão) a uma
 // solicitação de Troca de Titularidade. Substitui o caminho antigo
 // `criar-cotacao-troca-titularidade` que pré-criava rascunho.
+//
+// AUTH: Pública (verify_jwt=false). A segurança vem da validação cruzada:
+// `cotacao.dados_extras.solicitacao_troca_id` precisa bater com `solicitacao_id`.
+// Isso permite o self-heal do link público (anon) quando a vinculação
+// inicial falha por qualquer motivo (rede, timeout, etc).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -19,23 +24,6 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Não autenticado' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'Não autenticado' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const body: Body = await req.json();
     const { solicitacao_id, cotacao_id } = body || ({} as Body);
@@ -80,10 +68,10 @@ Deno.serve(async (req) => {
       }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Validar cotação
+    // Validar cotação + cross-check via dados_extras (segurança da chamada anon)
     const { data: cot, error: cotErr } = await admin
       .from('cotacoes')
-      .select('id, status, veiculo_placa')
+      .select('id, status, veiculo_placa, tipo_entrada, dados_extras')
       .eq('id', cotacao_id)
       .maybeSingle();
     if (cotErr) throw cotErr;
@@ -91,6 +79,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Cotação não encontrada' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    const dadosExtras = (cot as any).dados_extras || {};
+    const solicIdNoExtras = dadosExtras.solicitacao_troca_id as string | undefined;
+    if (cot.tipo_entrada !== 'troca_titularidade' || solicIdNoExtras !== solicitacao_id) {
+      return new Response(JSON.stringify({
+        error: 'Cotação não corresponde a esta solicitação de troca.',
+        code: 'COTACAO_NAO_PERTENCE',
+      }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Atualiza vínculo + status para "cotacao_em_andamento"

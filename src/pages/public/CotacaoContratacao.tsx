@@ -170,9 +170,34 @@ export default function CotacaoContratacao() {
     isTrocaTitularidade ? cotacao?.id : null
   );
   // Cotação marcada como troca de titularidade mas sem solicitação vinculada =
-  // estado órfão (vincular-cotacao-troca falhou). Sem isso o link público não tem
-  // como gerar contrato e o cliente trava na Pagamento. Mostrar erro explícito.
-  const trocaOrfa = isTrocaTitularidade && solicitacaoTrocaFetched && !loadingSolicitacaoTroca && !solicitacaoTroca;
+  // estado órfão (vincular-cotacao-troca falhou na criação). Tentamos auto-curar
+  // chamando a edge — `dados_extras.solicitacao_troca_id` carrega a referência.
+  const trocaOrfaBruta = isTrocaTitularidade && solicitacaoTrocaFetched && !loadingSolicitacaoTroca && !solicitacaoTroca;
+  const [autoVinculandoTroca, setAutoVinculandoTroca] = useState(false);
+  const [autoVinculoFalhou, setAutoVinculoFalhou] = useState(false);
+  useEffect(() => {
+    if (!trocaOrfaBruta || autoVinculandoTroca || autoVinculoFalhou) return;
+    const solicId = dadosExtras?.solicitacao_troca_id as string | undefined;
+    if (!solicId || !cotacao?.id) { setAutoVinculoFalhou(true); return; }
+    setAutoVinculandoTroca(true);
+    (async () => {
+      try {
+        const { data, error } = await publicSupabase.functions.invoke('vincular-cotacao-troca', {
+          body: { solicitacao_id: solicId, cotacao_id: cotacao.id },
+        });
+        if (error || (data as any)?.error) throw error || new Error((data as any).error);
+        // sucesso → invalidar para refetch
+        await refetch?.();
+      } catch (e) {
+        console.error('[auto-vincular-troca] falhou:', e);
+        setAutoVinculoFalhou(true);
+      } finally {
+        setAutoVinculandoTroca(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trocaOrfaBruta, dadosExtras, cotacao?.id]);
+  const trocaOrfa = trocaOrfaBruta && autoVinculoFalhou && !autoVinculandoTroca;
   const trocaLiberada = solicitacaoTroca?.status === 'liberada_para_assinatura' || solicitacaoTroca?.status === 'efetivada';
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
   // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
