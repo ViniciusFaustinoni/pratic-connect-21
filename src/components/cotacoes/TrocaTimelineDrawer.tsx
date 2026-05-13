@@ -251,6 +251,27 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
           )}
         </div>
       </DialogContent>
+
+      {/* Modal padrão de cotação para Troca de Titularidade — só persiste cotação ao salvar plano */}
+      {item && solicitacao && cotacaoBaseTroca && (
+        <CotacaoFormDialog
+          open={formCotacaoOpen}
+          onOpenChange={(o) => {
+            setFormCotacaoOpen(o);
+            if (!o) {
+              qc.invalidateQueries({ queryKey: ['outros-processos'] });
+              qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+              qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+            }
+          }}
+          cotacaoBase={cotacaoBaseTroca}
+          origemTroca={{
+            solicitacaoId: solicitacao.id,
+            associadoAntigoId: solicitacao.associado_antigo_id,
+            veiculoOrigemId: solicitacao.veiculo_id,
+          }}
+        />
+      )}
     </Dialog>
   );
 }
