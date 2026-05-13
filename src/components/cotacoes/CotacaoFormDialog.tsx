@@ -2301,8 +2301,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           </div>
                         )}
                       </CardContent>
-                    </Card>
-                  )}
+                  </Card>
                 </div>
               )}
 
