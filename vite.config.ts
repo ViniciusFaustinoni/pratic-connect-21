@@ -3,15 +3,43 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
+import fs from "fs";
+
+const BUILD_ID =
+  process.env.BUILD_ID ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.COMMIT_REF ||
+  new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 12);
+
+// Plugin que escreve public/version.json com o BUILD_ID atual
+const writeVersionJson = () => ({
+  name: "write-version-json",
+  buildStart() {
+    try {
+      const dir = path.resolve(__dirname, "public");
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "version.json"),
+        JSON.stringify({ buildId: BUILD_ID, builtAt: new Date().toISOString() })
+      );
+    } catch (e) {
+      console.warn("[write-version-json] falhou:", e);
+    }
+  },
+});
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   server: {
     host: "::",
     port: 8080,
   },
   plugins: [
     react(),
+    writeVersionJson(),
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',

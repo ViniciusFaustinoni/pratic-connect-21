@@ -18,6 +18,7 @@ import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
 import { useMyPendingValidations } from '@/hooks/useErrorReports';
 import { TestarCorrecoesSheet } from '@/components/suporte/TestarCorrecoesSheet';
 import { Badge } from '@/components/ui/badge';
+import { BuildVersionIndicator } from '@/components/layout/BuildVersionIndicator';
 
 export function AppUserDropdown() {
   const navigate = useNavigate();
@@ -109,6 +110,8 @@ export function AppUserDropdown() {
           <LogOut className="mr-2 h-4 w-4" />
           Sair
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <BuildVersionIndicator />
       </DropdownMenuContent>
     </DropdownMenu>
 
