@@ -31,6 +31,7 @@ import { EtapaCriacaoSenhaCotacao } from '@/components/cotacao-publica/EtapaCria
 
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { exigeRastreador } from '@/types/termo-filiacao';
 
 function detectarTipoVeiculoDaCotacao(cotacao: any): 'carro' | 'moto' {
   // 1. Verificar categoria explícita
