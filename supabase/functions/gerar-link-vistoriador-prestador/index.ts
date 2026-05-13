@@ -327,13 +327,13 @@ _Dúvidas? Entre em contato com o coordenador._`
     // ── AÇÃO 3: Lançamento financeiro (apenas se nova atribuição) ──
     if (!reenviar && (valor ?? 0) > 0) {
       try {
-        const historico = `Vistoria Prestador — ${prestador.nome} — ${instalacao.cidade || 'Cidade'} — ${dataAgendada}`
+        const historico = `Vistoria Prestador — ${prestador.nome} — ${dadosCtx.cidade || 'Cidade'} — ${dataAgendada}`
         
         const { data: lancamento, error: lancErr } = await supabase
           .from('lancamentos_contabeis')
           .insert({
             data_lancamento: new Date().toISOString().split('T')[0],
-            data_competencia: instalacao.data_agendada || new Date().toISOString().split('T')[0],
+            data_competencia: dadosCtx.data_agendada || new Date().toISOString().split('T')[0],
             origem: 'vistoria_prestador',
             origem_id: linkId,
             historico,
