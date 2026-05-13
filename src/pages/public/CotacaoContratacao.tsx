@@ -886,7 +886,7 @@ export default function CotacaoContratacao() {
                       tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
                       subFipe={!exigeRastreador({
                         tipo: detectarTipoVeiculoDaCotacao(cotacao),
-                        valorFipe: Number(cotacao.veiculo_valor_fipe ?? cotacao.valor_fipe ?? 0),
+                        valorFipe: Number((cotacao as any).veiculo_valor_fipe ?? (cotacao as any).valor_fipe ?? 0),
                         combustivel: (cotacao as any).veiculo_combustivel || undefined,
                       } as any).exige}
                     />
