@@ -21,12 +21,22 @@ interface DestinatarioIn {
 }
 
 function montarBlocoBoletos(boletos: BoletoIn[]): string {
+  // Meta WhatsApp body params NÃO aceitam \n, \t ou 4+ espaços (erro #132018).
+  // Usamos separadores inline para manter legibilidade sem quebra de linha.
   return boletos
     .map((b) => {
       const placa = b.placa ? `Placa ${b.placa}` : "Boleto";
-      return `• ${placa} — venc. ${b.vencimento}\n  ${b.linha_digitavel}`;
+      return `• ${placa} venc. ${b.vencimento} | ${b.linha_digitavel}`;
     })
-    .join("\n\n");
+    .join(" ⏐ ");
+}
+
+function sanitizeMetaParam(s: string): string {
+  // Remove caracteres bloqueados pela Meta em parâmetros de template (#132000/#132018).
+  return (s || "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/ {4,}/g, "   ")
+    .trim();
 }
 
 function primeiroNome(s: string): string {
@@ -304,8 +314,8 @@ serve(async (req) => {
                 {
                   type: "body",
                   parameters: [
-                    { type: "text", text: nome },
-                    { type: "text", text: bloco },
+                    { type: "text", text: sanitizeMetaParam(nome) },
+                    { type: "text", text: sanitizeMetaParam(bloco) },
                   ],
                 },
               ],
