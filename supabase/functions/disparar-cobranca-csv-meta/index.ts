@@ -507,6 +507,8 @@ serve(async (req) => {
             .in("id", ids);
         }
       }
+    }
+
     // ===== 4. Atualiza contadores do lote (incremental) =====
     if (sucesso > 0 || associadosAtingidos.size > 0) {
       const { data: cur } = await supabase
