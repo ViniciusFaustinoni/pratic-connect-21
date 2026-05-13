@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { ShieldCheck, ArrowRightLeft, ShieldAlert, AlertTriangle, ClipboardList } from 'lucide-react';
 import AprovacaoAssociados from './AcionamentosRouboFurto';
 import AprovacoesTroca from './AprovacoesTroca';
@@ -8,16 +9,27 @@ import LiberacoesAutoVistoria from './LiberacoesAutoVistoria';
 import RecusasInstalador from '../cadastro/RecusasInstalador';
 import RessalvasPendentes from './RessalvasPendentes';
 import ImprevistosPainel from './ImprevistosPainel';
+import { useAprovacoesMonitoramentoBreakdown } from '@/hooks/useAprovacoesMonitoramentoCount';
 
 type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas' | 'ressalvas' | 'imprevistos';
 
 const ABAS: Aba[] = ['associados', 'troca', 'liberacao-suspensao', 'recusas', 'ressalvas', 'imprevistos'];
+
+function CountBadge({ n }: { n: number }) {
+  if (!n) return null;
+  return (
+    <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1.5 text-[10px] font-bold bg-primary/15 text-primary border-primary/30">
+      {n}
+    </Badge>
+  );
+}
 
 export default function AprovacoesUnificadas() {
   const location = useLocation();
   const navigate = useNavigate();
   const initial = location.hash.replace('#', '') as Aba;
   const [aba, setAba] = useState<Aba>(ABAS.includes(initial) ? initial : 'associados');
+  const { data: counts } = useAprovacoesMonitoramentoBreakdown();
 
   const handleChange = (v: string) => {
     setAba(v as Aba);
@@ -42,31 +54,37 @@ export default function AprovacoesUnificadas() {
             <ShieldCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Aprovação de Associados</span>
             <span className="sm:hidden">Associados</span>
+            <CountBadge n={counts?.associados ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="troca" className="gap-2">
             <ArrowRightLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Troca de Titularidade</span>
             <span className="sm:hidden">Troca</span>
+            <CountBadge n={counts?.troca ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="liberacao-suspensao" className="gap-2">
             <AlertTriangle className="h-4 w-4" />
             <span className="hidden sm:inline">Liberação de Suspensão</span>
             <span className="sm:hidden">Liberação</span>
+            <CountBadge n={counts?.liberacaoSuspensao ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="recusas" className="gap-2">
             <ShieldAlert className="h-4 w-4" />
             <span className="hidden sm:inline">Recusas do Instalador</span>
             <span className="sm:hidden">Recusas</span>
+            <CountBadge n={counts?.recusas ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="ressalvas" className="gap-2">
             <ClipboardList className="h-4 w-4" />
             <span className="hidden sm:inline">Ressalvas Pendentes</span>
             <span className="sm:hidden">Ressalvas</span>
+            <CountBadge n={counts?.ressalvas ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="imprevistos" className="gap-2">
             <AlertTriangle className="h-4 w-4" />
             <span className="hidden sm:inline">Imprevistos</span>
             <span className="sm:hidden">Imprev.</span>
+            <CountBadge n={counts?.imprevistos ?? 0} />
           </TabsTrigger>
         </TabsList>
 

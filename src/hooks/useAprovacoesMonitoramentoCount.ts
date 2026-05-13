@@ -1,19 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+export interface AprovacoesMonitoramentoBreakdown {
+  associados: number;
+  troca: number;
+  liberacaoSuspensao: number;
+  recusas: number;
+  ressalvas: number;
+  imprevistos: number;
+  total: number;
+}
+
 /**
- * Contagem combinada para o badge do item "Aprovações" do Monitoramento no sidebar.
- * Soma os itens "aguardando" das 6 abas:
- *  1. Aprovação de Associados
- *  2. Troca de Titularidade
- *  3. Liberação de Suspensão (autovistoria)
- *  4. Recusas do Instalador
- *  5. Ressalvas Pendentes
- *  6. Imprevistos sem resposta (>=3 followups)
+ * Contagem por aba (mesmas queries que cada aba usa) + total para o badge do sidebar.
+ * IMPORTANTE: cada source aqui DEVE bater com a query da aba correspondente,
+ * caso contrário o badge mostra um número que não aparece em nenhuma aba.
  */
-export function useAprovacoesMonitoramentoCount() {
-  return useQuery<number>({
-    queryKey: ['aprovacoes-monitoramento-count', 'v3'],
+export function useAprovacoesMonitoramentoBreakdown() {
+  return useQuery<AprovacoesMonitoramentoBreakdown>({
+    queryKey: ['aprovacoes-monitoramento-breakdown', 'v4'],
     queryFn: async () => {
       const safe = async (p: Promise<number>): Promise<number> => {
         try { return await p; } catch (e) { console.warn('[aprovacoes-count] fonte falhou', e); return 0; }
@@ -27,7 +32,7 @@ export function useAprovacoesMonitoramentoCount() {
         ressalvas,
         imprevistos,
       ] = await Promise.all([
-        // 1. Aprovação de Associados — instalações/vistorias concluídas com veículo ainda sem cobertura total e associado não ativo
+        // 1. Aprovação de Associados — espelha useInstalacoesAguardandoAprovacao
         safe((async () => {
           const { data } = await (supabase as any)
             .from('servicos')
@@ -39,7 +44,7 @@ export function useAprovacoesMonitoramentoCount() {
           ).length;
         })()),
 
-        // 2. Troca de Titularidade — aguardando ação do monitoramento
+        // 2. Troca de Titularidade
         safe((async () => {
           const { count } = await supabase
             .from('solicitacoes_troca_titularidade')
@@ -48,12 +53,13 @@ export function useAprovacoesMonitoramentoCount() {
           return count || 0;
         })()),
 
-        // 3. Liberação de Suspensão — veículos suspensos com contrato ativo/assinado e sem liberação registrada
+        // 3. Liberação de Suspensão — espelha useLiberacoesAutoVistoria (filtra por motivo)
         safe((async () => {
           const { data: veics } = await supabase
             .from('veiculos')
             .select('id')
-            .eq('cobertura_suspensa', true);
+            .eq('cobertura_suspensa', true)
+            .or('cobertura_suspensa_motivo.eq.Auto-vistoria sem instalação no prazo,cobertura_suspensa_motivo.ilike.Instalação não realizada%');
           const veiculoIds = (veics || []).map((v: any) => v.id);
           if (!veiculoIds.length) return 0;
           const { data: contratos } = await supabase
@@ -65,7 +71,7 @@ export function useAprovacoesMonitoramentoCount() {
           return (contratos || []).length;
         })()),
 
-        // 4. Recusas do Instalador — pendentes de análise
+        // 4. Recusas do Instalador
         safe((async () => {
           const { count } = await supabase
             .from('servicos')
@@ -96,9 +102,16 @@ export function useAprovacoesMonitoramentoCount() {
         })()),
       ]);
 
-      return associados + troca + liberacaoSuspensao + recusas + ressalvas + imprevistos;
+      const total = associados + troca + liberacaoSuspensao + recusas + ressalvas + imprevistos;
+      return { associados, troca, liberacaoSuspensao, recusas, ressalvas, imprevistos, total };
     },
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
+}
+
+/** Backward-compat: total apenas (usado pelo sidebar). */
+export function useAprovacoesMonitoramentoCount() {
+  const q = useAprovacoesMonitoramentoBreakdown();
+  return { ...q, data: q.data?.total ?? 0 };
 }
