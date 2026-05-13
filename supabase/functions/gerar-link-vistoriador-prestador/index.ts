@@ -296,7 +296,7 @@ _Dúvidas? Entre em contato com o coordenador._`
             template_params: [
               prestador.nome,
               `${nomeAssociado} - ${veiculoDesc} (${placaVeiculo})`.substring(0, 280),
-              (instalacao.cidade || endereco || 'município').substring(0, 200),
+              (dadosCtx.cidade || endereco || 'município').substring(0, 200),
               dataHora,
             ],
           },
