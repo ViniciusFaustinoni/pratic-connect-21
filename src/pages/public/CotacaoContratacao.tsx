@@ -166,9 +166,13 @@ export default function CotacaoContratacao() {
   const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
   const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
   const isTrocaTitularidade = dadosExtras?.tipo_entrada === 'troca_titularidade';
-  const { data: solicitacaoTroca } = useSolicitacaoTrocaPublicaPorCotacao(
+  const { data: solicitacaoTroca, isLoading: loadingSolicitacaoTroca, isFetched: solicitacaoTrocaFetched } = useSolicitacaoTrocaPublicaPorCotacao(
     isTrocaTitularidade ? cotacao?.id : null
   );
+  // Cotação marcada como troca de titularidade mas sem solicitação vinculada =
+  // estado órfão (vincular-cotacao-troca falhou). Sem isso o link público não tem
+  // como gerar contrato e o cliente trava na Pagamento. Mostrar erro explícito.
+  const trocaOrfa = isTrocaTitularidade && solicitacaoTrocaFetched && !loadingSolicitacaoTroca && !solicitacaoTroca;
   const trocaLiberada = solicitacaoTroca?.status === 'liberada_para_assinatura' || solicitacaoTroca?.status === 'efetivada';
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
   // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
