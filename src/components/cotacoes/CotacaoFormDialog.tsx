@@ -700,7 +700,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
-  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
+  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
 
   // Faixa de preço atual onde o FIPE se enquadra
   // FONTE: entity_eligibility_rules (motor moderno). Fallback: tabelas_preco_mensalidade (legado)
