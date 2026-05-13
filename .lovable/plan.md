@@ -1,52 +1,49 @@
-## Diagnóstico — KOU6D37
+## Reset KOU6D37 — voltar para "termo de cancelamento assinado"
 
-Rastreando a placa no banco:
+Estado atual:
+- `solicitacoes_troca_titularidade 52cc74c1` → `liberada_para_assinatura`, cadastro aprovado, vinculada à cotação `3f0408b9`.
+- `cotacoes 3f0408b9` → criada (vistoria_agendada) com 1 `agendamentos_base` vinculado.
+- `veiculos.em_troca_titularidade = true` (correto para essa fase — manter).
+- Sem contratos/vistorias/serviços/instalações/cobranças associados.
 
-- **Cotação nova de troca:** `3f0408b9-939d-47c9-890a-0dc1d98bd43c`
-  - `tipo_entrada = 'troca_titularidade'`
-  - `status_contratacao = 'vistoria_agendada'`
-  - `contrato_gerado_id = NULL` ← causa direta do erro "Contrato não encontrado"
-- **Solicitação de troca:** `52cc74c1-910d-4ac7-b854-84cd28db7a0d`
-  - `status = 'liberada_para_assinatura'`
-  - `termo_cancelamento_assinado_em` ✅
-  - `aprovado_cadastro_em` ✅
-  - **`cotacao_id = NULL`** ← raiz do problema
+## Migration única (data fix)
 
-A edge function `vincular-cotacao-troca` **nunca foi invocada** (sem logs). Resultado: a cotação nova ficou órfã da solicitação. Como `useSolicitacaoTrocaPublicaPorCotacao` filtra por `cotacao_id`, ela retorna `null`, `trocaLiberada` fica `false`, **a etapa Contrato nunca dispara `contrato-gerar`**, e ao chegar em Pagamento o `EtapaPagamentoCotacao.buscarContrato()` lança `"Contrato não encontrado…"`.
-
-A toast em `CotacaoFormDialog` (linha 1729) já avisa quando a vinculação falha, mas o fluxo **continua salvando a cotação e navegando**, deixando o cliente avançar pelo link público até travar no fim.
-
-## Correção em 3 frentes
-
-### 1. Data fix imediato (KOU6D37)
-Vincular a solicitação à cotação existente:
 ```sql
-UPDATE solicitacoes_troca_titularidade
-   SET cotacao_id = '3f0408b9-939d-47c9-890a-0dc1d98bd43c'
- WHERE id = '52cc74c1-910d-4ac7-b854-84cd28db7a0d'
-   AND cotacao_id IS NULL;
+-- 1) Limpar artefatos da cotação criada após a aprovação do cadastro
+DELETE FROM public.agendamentos_base
+ WHERE cotacao_id = '3f0408b9-939d-47c9-890a-0dc1d98bd43c';
+
+DELETE FROM public.cotacoes
+ WHERE id = '3f0408b9-939d-47c9-890a-0dc1d98bd43c';
+
+-- 2) Voltar a solicitação para o estado pós-assinatura do termo
+UPDATE public.solicitacoes_troca_titularidade
+   SET status                       = 'aguardando_cadastro',
+       cotacao_id                   = NULL,
+       aprovado_cadastro_em         = NULL,
+       aprovado_cadastro_por        = NULL,
+       observacao_cadastro          = NULL,
+       aprovado_monitoramento_em    = NULL,
+       aprovado_monitoramento_por   = NULL,
+       observacao_monitoramento     = NULL,
+       servico_vistoria_id          = NULL,
+       analise_previa_resultado     = NULL,
+       analise_previa_em            = NULL,
+       efetivada_em                 = NULL,
+       motivo_reprovacao            = NULL,
+       reprovado_por                = NULL,
+       reprovado_em                 = NULL,
+       updated_at                   = now()
+ WHERE id = '52cc74c1-910d-4ac7-b854-84cd28db7a0d';
 ```
-Após isso, o link público volta a enxergar `liberada_para_assinatura`, mostra a etapa Contrato corretamente, e o `contrato-gerar` é chamado normalmente — destravando a Pagamento.
 
-### 2. Hardening na criação da cotação (`src/components/cotacoes/CotacaoFormDialog.tsx`)
-Quando `origemTroca` truthy:
-- Mover `vincular-cotacao-troca` para **antes** de `toast.success` e `navigate`.
-- Se a edge falhar, **fazer rollback** da cotação criada (`DELETE FROM cotacoes WHERE id = novaCotacao.id`) ou marcar `status='falha_vinculacao'`, exibir toast de erro **bloqueante** e impedir navegação.
-- Garante que nunca exista cotação `tipo_entrada=troca_titularidade` órfã.
-
-### 3. Guard defensivo no link público (`src/pages/public/CotacaoContratacao.tsx`)
-Após `useSolicitacaoTrocaPublicaPorCotacao` carregar:
-- Se `isTrocaTitularidade && !solicitacaoTroca && !isLoadingTroca` → renderizar tela de erro clara ("Solicitação de troca não vinculada — contate o suporte"), em vez de deixar o usuário navegar até Pagamento e ver erro técnico de contrato.
-
-### 4. Reconciliação retroativa (opcional, baixa prioridade)
-Script único para varrer cotações com `tipo_entrada='troca_titularidade'` + `dados_extras->>'solicitacao_troca_id'` preenchido + solicitação correspondente sem `cotacao_id`, e vincular as remanescentes. Evita que outros casos como KOU6D37 estejam silenciosamente quebrados.
-
-## Fora de escopo
-- Mudar fluxo de aprovação de cadastro/monitoramento.
-- Tocar em `contrato-gerar`, geração Autentique ou cobrança Asaas.
-- Alterar a regra de carências/cenários isentos.
+Mantido intencionalmente:
+- `termo_cancelamento_assinado_em`, `termo_cancelamento_autentique_id`, `termo_cancelamento_url`, `termo_cancelamento_enviado_em`, `novo_titular_dados`, `associado_antigo_id`, `veiculo_id`.
+- `veiculos.em_troca_titularidade = true` (sinaliza que o termo já foi assinado).
 
 ## Validação
-1. Rodar o data fix → recarregar o link público da cotação `3f0408b9` → confirmar que a etapa Contrato aparece com `TelaAnaliseTrocaTitularidade` (caso ainda não liberada) ou aciona `contrato-gerar` (já liberada) → seguir para Pagamento sem erro.
-2. Criar nova troca de teste, simular falha em `vincular-cotacao-troca` (revogar permissão temporariamente) → confirmar que a cotação **não é persistida** e a UI mostra erro bloqueante.
-3. Tentar abrir link público de cotação órfã → confirmar tela de erro nova em vez do erro técnico de "Contrato não encontrado".
+1. Abrir Troca de Titularidade → solicitação aparece na fila do **Cadastro** novamente, status "Aguardando aprovação do cadastro", com termo assinado ✓ e sem cotação vinculada.
+2. A partir daí, fluir: aprovar cadastro → criar cotação (testando a vinculação corrigida) → link público → vistoria → contrato → pagamento.
+
+## Fora de escopo
+Nenhuma alteração de código. Apenas SQL de reset.
