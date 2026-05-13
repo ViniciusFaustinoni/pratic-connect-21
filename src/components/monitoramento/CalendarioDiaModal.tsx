@@ -247,6 +247,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         })
         .eq('id', id);
       if (error) throw error;
+      await vincularProfissionalAoServicoDoAgendamentoBase(id, tecnicoId);
     },
     onSuccess: () => {
       toast.success('Tarefa antecipada para hoje com sucesso!');
