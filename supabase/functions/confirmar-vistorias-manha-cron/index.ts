@@ -88,7 +88,9 @@ serve(async (req) => {
       return jsonResp({ success: true, message: "Nenhum serviço", tipo_disparo: tipoDisparo, count: 0 });
     }
 
-    const templateName = 'confirmacao_agendamento_v1';
+    // confirmacao_manha_v1 dedicado para o disparo da manhã (HOJE);
+    // tarde reaproveita o template genérico confirmacao_agendamento_v1.
+    const templateName = tipoDisparo === 'manha' ? 'confirmacao_manha_v1' : 'confirmacao_agendamento_v1';
     const statusConfirmacao = `aguardando_confirmacao_${tipoDisparo}`;
 
     const resultados: { servicoId: string; tipo: string; sucesso: boolean; erro?: string }[] = [];
