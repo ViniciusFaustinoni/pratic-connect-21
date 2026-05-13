@@ -214,15 +214,39 @@ export default function CotacaoContratacao() {
   //  - autovistoria => adiciona "Instalação" como 6ª etapa
   //  - troca de titularidade sem vistoria solicitada => oculta "Vistoria"
   //  - troca de titularidade isenta => oculta "Pagamento"
+  //  - troca de titularidade => Vistoria vem ANTES de Contrato (Plano → Docs → Vistoria → Contrato → Pagamento)
   const STEPS = useMemo<Step[]>(() => {
     let base = STEPS_BASE;
     if (pularEtapaVistoria) base = base.filter((s) => s.id !== 'vistoria');
     if (pularEtapaPagamento) base = base.filter((s) => s.id !== 'pagamento');
+    // Em troca de titularidade (com vistoria): reordenar Vistoria antes de Contrato
+    if (isTrocaTitularidade && !pularEtapaVistoria) {
+      const idxContrato = base.findIndex((s) => s.id === 'contrato');
+      const idxVistoria = base.findIndex((s) => s.id === 'vistoria');
+      if (idxContrato >= 0 && idxVistoria > idxContrato) {
+        const reordered = [...base];
+        const [vist] = reordered.splice(idxVistoria, 1);
+        reordered.splice(idxContrato, 0, vist);
+        base = reordered;
+      }
+    }
     if (cotacao?.tipo_vistoria === 'autovistoria') {
       return [...base, STEP_INSTALACAO];
     }
     return base;
-  }, [cotacao?.tipo_vistoria, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [cotacao?.tipo_vistoria, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
+
+  // Ordem de navegação por índices INTERNOS (mesmos do determinarEtapa):
+  // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
+  // Para troca de titularidade (com vistoria): docs → vistoria → contrato → pagamento
+  const navOrder = useMemo<number[]>(() => {
+    let order = isTrocaTitularidade && !pularEtapaVistoria
+      ? [0, 1, 3, 2, 4, 5]
+      : [0, 1, 2, 3, 4, 5];
+    if (pularEtapaVistoria) order = order.filter((i) => i !== 3);
+    if (pularEtapaPagamento) order = order.filter((i) => i !== 4);
+    return order;
+  }, [isTrocaTitularidade, pularEtapaVistoria, pularEtapaPagamento]);
 
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
