@@ -86,8 +86,8 @@ export default function VistoriaPrestador() {
     enabled: !!token,
   });
 
-  // ── Installation data query ──
-  const { data: instalacao } = useQuery({
+  // ── Installation data query (link via instalacao_id) ──
+  const { data: instalacaoFromInst } = useQuery({
     queryKey: ['vistoria-prestador-instalacao', link?.instalacao_id],
     queryFn: async () => {
       const { data, error } = await publicSupabase
@@ -105,6 +105,68 @@ export default function VistoriaPrestador() {
     },
     enabled: !!link?.instalacao_id,
   });
+
+  // ── Vistoria-only fallback (vistoria base sem instalação) ──
+  const { data: instalacaoFromVist } = useQuery({
+    queryKey: ['vistoria-prestador-vistoria', link?.vistoria_id],
+    queryFn: async () => {
+      const { data: vist, error } = await publicSupabase
+        .from('vistorias' as any)
+        .select(`
+          id, data_agendada, local_vistoria,
+          endereco_logradouro, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
+          associados:associado_id(nome, telefone),
+          veiculos:veiculo_id(marca, modelo, ano, placa, tipo_veiculo)
+        `)
+        .eq('id', link.vistoria_id)
+        .single();
+      if (error) throw error;
+
+      // Endereço da oficina/base via agendamento_base
+      let oficina: any = null;
+      let periodo: string | null = null;
+      const { data: ag } = await publicSupabase
+        .from('agendamentos_base' as any)
+        .select('horario, oficina_id')
+        .eq('vistoria_id', link.vistoria_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (ag?.oficina_id) {
+        const { data: of } = await publicSupabase
+          .from('oficinas' as any)
+          .select('logradouro, numero, bairro, cidade, estado, cep')
+          .eq('id', ag.oficina_id)
+          .maybeSingle();
+        oficina = of;
+      }
+      if (ag?.horario) {
+        const h = String(ag.horario).slice(0, 5);
+        periodo = h < '12:00' ? 'manha' : 'tarde';
+      }
+
+      return {
+        id: (vist as any).id,
+        data_agendada: (vist as any).data_agendada
+          ? String((vist as any).data_agendada).slice(0, 10)
+          : null,
+        periodo,
+        logradouro: oficina?.logradouro || (vist as any).endereco_logradouro || null,
+        numero: oficina?.numero || (vist as any).endereco_numero || null,
+        complemento: null,
+        bairro: oficina?.bairro || (vist as any).endereco_bairro || null,
+        cidade: oficina?.cidade || (vist as any).endereco_cidade || null,
+        uf: oficina?.estado || (vist as any).endereco_estado || null,
+        cep: oficina?.cep || (vist as any).endereco_cep || null,
+        rastreador_id: null,
+        associados: (vist as any).associados,
+        veiculos: (vist as any).veiculos,
+      } as any;
+    },
+    enabled: !!link?.vistoria_id && !link?.instalacao_id,
+  });
+
+  const instalacao = instalacaoFromInst || instalacaoFromVist;
 
   // ── Rastreador data ──
   const { data: rastreador } = useQuery({
