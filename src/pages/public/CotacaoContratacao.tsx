@@ -884,6 +884,11 @@ export default function CotacaoContratacao() {
                       }}
                       readOnly={isEtapaConcluida(3)}
                       tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
+                      subFipe={!exigeRastreador({
+                        tipo: detectarTipoVeiculoDaCotacao(cotacao),
+                        valorFipe: Number(cotacao.veiculo_valor_fipe ?? cotacao.valor_fipe ?? 0),
+                        combustivel: (cotacao as any).veiculo_combustivel || undefined,
+                      } as any).exige}
                     />
                   )}
                   <NavegacaoEtapas
