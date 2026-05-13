@@ -166,14 +166,16 @@ Deno.serve(async (req) => {
     // WhatsApp (mesma mensagem do cron)
     try {
       if (assoc?.telefone) {
-        const msg =
-          `Olá ${assoc.nome?.split(' ')[0] ?? ''}! ⚠️ A cobertura ( Roubo e Furto )  do seu veículo ${veiculo.placa ?? veiculo.modelo ?? ''} foi suspensa temporariamente porque a instalação do rastreador não foi realizada dentro do prazo de ${prazoHoras}h após a assinatura do contrato. 🚫 Você está sem cobertura de roubo e furto enquanto a instalação não for concluída.  Assim que a instalação for finalizada, a cobertura volta automaticamente.`;
-        await supabase.functions.invoke('enviar-whatsapp', {
+        const nomePrimeiro = assoc.nome?.split(' ')[0] ?? 'Associado';
+        const placaRef = veiculo.placa ?? veiculo.modelo ?? '---';
+        await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: assoc.telefone,
-            mensagem: msg,
-            associado_id: assoc.id,
-            tipo: 'suspensao_instalacao_prazo',
+            mensagem: `Olá ${nomePrimeiro}! ⚠️ Cobertura (Roubo e Furto) suspensa - instalação não realizada em ${prazoHoras}h.`,
+            template_name: 'suspensao_cobertura_nao_instalacao_v1',
+            template_params: [nomePrimeiro, String(placaRef), String(prazoHoras)],
+            referencia_tipo: 'contrato',
+            referencia_id: contrato.id,
           },
         });
       }
