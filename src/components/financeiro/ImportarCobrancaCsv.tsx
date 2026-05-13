@@ -16,6 +16,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { parseCsvInadimplentes, type ParseResultado, type DestinatarioParsed } from '@/lib/cobranca/parseCsvInadimplentes';
 
 const TEMPLATE_NOME = 'cobranca_inadimplencia_pratic';
+const MAX_CSV_MB = 50;
+const MAX_CSV_BYTES = MAX_CSV_MB * 1024 * 1024;
 
 type Etapa = 'upload' | 'preview' | 'enviando' | 'concluido';
 

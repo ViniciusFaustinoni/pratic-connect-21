@@ -1,44 +1,22 @@
-## Diagnóstico — KOU6D37
+# Aumentar limite do CSV de Inadimplentes
 
-**Fato técnico:**
-- Veículo `KOU6D37` (Ford Fiesta, FIPE R$ 30.835) tem **1 único serviço concluído** na tabela `servicos`:
-  - `tipo = 'vistoria_entrada'`
-  - `status = 'concluida'`
-  - `decisao_instalador = 'aprovado'`
-  - `concluida_em = 2026-05-12 21:53`
-- Estado atual: `veiculos.status = instalacao_pendente`, `contratos.cadastro_aprovado = true`, `associados.status = aguardando_instalacao`.
+## Contexto
 
-**Por que foi para "Propostas Pendentes" (Cadastro) e não para "Aprovação de Associados" (Monitoramento):**
+Em `src/components/financeiro/ImportarCobrancaCsv.tsx` (Régua › Emissão de Cobranças › Importar CSV) há um bloqueio fixo de **5 MB** no `onDrop` (linha 122) e o texto da dropzone diz "Apenas .csv — máx 5 MB" (linha 271). Arquivos maiores são rejeitados com toast "Arquivo maior que 5 MB."
 
-A fila **Aprovação de Associados** (`useInstalacoesAguardandoAprovacao` + `useInstalacoesAguardandoAtivacao` + `useAprovacoesMonitoramentoCount`) filtra **estritamente por `tipo = 'instalacao'`**. Como o serviço executado em campo foi `vistoria_entrada` (Vistoria Base), ele **nunca aparece** nessa fila.
+O parsing é client-side (`f.text()` → `parseCsvInadimplentes`), tudo em memória do browser. CSVs de inadimplência do SGA com muitos boletos podem facilmente passar de 5 MB.
 
-Com isso o card permanece em **Cadastro › Propostas Pendentes** com o badge "Pendente Vistoria Inicial" (regra `propostas-pendentes-saida-por-vistoria`: cadastro só sai quando há **instalação concluída**), embora a vistoria já tenha sido aprovada pelo instalador.
+## Mudanças (escopo cirúrgico, só presentation)
 
-Isso é exatamente o gap entre duas regras documentadas:
-1. `base-nao-duplica-instalacao` — quando há Vistoria Base, **não** se cria `tipo='instalacao'` paralelo.
-2. `vistoria-sem-rastreador-flow` / `propostas-pendentes-saida-por-vistoria` — vistoria concluída **deve** cair em fila de aprovação manual do Monitoramento.
+Arquivo único: `src/components/financeiro/ImportarCobrancaCsv.tsx`
 
-Resultado: nenhum registro `tipo='instalacao'` existe → as filas de Monitoramento não enxergam o caso → o associado fica preso em "Propostas Pendentes".
+1. Substituir o limite hard-coded `5 * 1024 * 1024` por uma constante `MAX_CSV_BYTES = 50 * 1024 * 1024` (50 MB) no topo do arquivo.
+2. Atualizar a mensagem do toast para usar a constante: `Arquivo maior que ${MAX_CSV_MB} MB.`
+3. Atualizar o texto auxiliar da dropzone (linha 271) para `Apenas .csv — máx 50 MB`.
+4. Adicionar feedback visual durante o parse (já existe `setEtapa('preview')` após o parse; opcional: setar um estado `parsing` para mostrar `Loader2` na dropzone enquanto `f.text()`/`parseCsvInadimplentes` rodam, já que arquivos grandes podem demorar 1-3s).
 
-## Plano de correção
+Sem alterações em hooks, edge functions, parser ou backend — o parser e o disparo (chunks de 50 destinatários para `disparar-cobranca-csv-meta`) já lidam com volumes grandes.
 
-**Escopo:** ajustar somente o filtro das filas/contadores do Monitoramento. Não mexer em triggers, não criar serviço fantasma, não alterar regra de "Propostas Pendentes".
+## Pergunta
 
-### 1. `src/hooks/useAprovacaoMonitoramento.ts`
-Trocar `.eq('tipo', 'instalacao')` por `.in('tipo', ['instalacao', 'vistoria_entrada'])` nas duas queries (lista de pendentes e contagem do header).
-
-### 2. `src/hooks/useVistoriaCompletaAnalise.ts` (linha 308)
-Mesma substituição na query que monta os itens "ativacao" da fila.
-
-### 3. `src/hooks/useAprovacoesMonitoramentoCount.ts`
-Atualizar o bloco "Aprovação de Associados" para considerar também `tipo='vistoria_entrada'` concluída com veículo ainda sem `cobertura_total` e associado não ativo.
-
-### 4. Reconciliação imediata do KOU6D37
-Após o ajuste, o card aparecerá automaticamente na aba **Monitoramento › Aprovações › Aprovação de Associados**. O Coordenador aprova → trigger `fn_reativar_cobertura_pos_instalacao` + `ativar-associado` promovem associado/veículo para `ativo` (ver memória `single-source-activation`).
-
-### 5. Validação
-- `psql`/`read_query`: confirmar que o item passa a aparecer no resultado da query da fila.
-- UI: abrir `/monitoramento/aprovacoes#associados` logado como diretor e verificar o card.
-
-### Observação
-Não criar registro `tipo='instalacao'` retroativo — violaria `base-nao-duplica-instalacao` e poderia disparar triggers indevidos. A fila precisa enxergar o tipo correto.
+Qual limite você quer? Sugestão padrão **50 MB** (cobre lotes do SGA com ~100k linhas). Se preferir outro valor (20 MB, 100 MB, sem limite), me diga antes de implementar.
