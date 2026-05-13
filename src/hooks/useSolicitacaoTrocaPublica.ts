@@ -17,7 +17,7 @@ export function useSolicitacaoTrocaPublicaPorCotacao(
 
       const baseQuery = () => (publicSupabase as any)
         .from('solicitacoes_troca_titularidade')
-        .select('id, cotacao_id, status, motivo_reprovacao, termo_cancelamento_assinado_em, aprovado_cadastro_em, aprovado_monitoramento_em, servico_vistoria_id');
+        .select('id, cotacao_id, status, motivo_reprovacao, termo_cancelamento_assinado_em, aprovado_cadastro_em, aprovado_monitoramento_em, servico_vistoria_id, tipo_vistoria_troca, expirada_em, servico_manutencao_id');
 
       if (cotacaoId) {
         const { data, error } = await baseQuery()

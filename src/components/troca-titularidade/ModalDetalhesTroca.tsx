@@ -20,6 +20,9 @@ import { AnalisePreviaNovoTitularCard } from './AnalisePreviaNovoTitularCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
+import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Wrench, Camera, ChevronDown } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -51,6 +54,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
   const [criandoCotacao, setCriandoCotacao] = useState(false);
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
+  const [manutencaoOpen, setManutencaoOpen] = useState(false);
 
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
@@ -108,9 +112,14 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     onOpenChange(false);
   };
 
-  const handleSolicitarVistoria = async () => {
+  const handleSolicitarVistoria = async (tipo: 'somente_fotos' | 'fotos_com_rastreador') => {
     if (!solicitacao) return;
-    await aprovarMonitoramento.mutateAsync({ solicitacao_id: solicitacao.id, acao: 'solicitar_vistoria', observacao });
+    await aprovarMonitoramento.mutateAsync({
+      solicitacao_id: solicitacao.id,
+      acao: 'solicitar_vistoria',
+      observacao,
+      tipo_vistoria_troca: tipo,
+    });
     onOpenChange(false);
   };
 
@@ -319,10 +328,37 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     <XCircle className="h-4 w-4 mr-2" /> Reprovar
                   </Button>
                   {modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento' && (
-                    <Button variant="outline" onClick={handleSolicitarVistoria} disabled={aprovarMonitoramento.isPending}>
-                      {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
-                      Solicitar Vistoria
-                    </Button>
+                    <>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" disabled={aprovarMonitoramento.isPending}>
+                            {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
+                            Solicitar Vistoria <ChevronDown className="h-3 w-3 ml-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-64">
+                          <DropdownMenuLabel>Tipo de vistoria</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('somente_fotos')}>
+                            <Camera className="h-4 w-4 mr-2" />
+                            <div>
+                              <p className="text-sm font-medium">Somente fotos</p>
+                              <p className="text-xs text-muted-foreground">Veículo sem rastreador novo</p>
+                            </div>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('fotos_com_rastreador')}>
+                            <ShieldCheck className="h-4 w-4 mr-2" />
+                            <div>
+                              <p className="text-sm font-medium">Fotos + instalação de rastreador</p>
+                              <p className="text-xs text-muted-foreground">Veículo precisa de rastreador novo</p>
+                            </div>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button variant="outline" onClick={() => setManutencaoOpen(true)} disabled={aprovarMonitoramento.isPending}>
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Agendar manutenção
+                      </Button>
+                    </>
                   )}
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
@@ -413,6 +449,20 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
             solicitacaoId: solicitacao.id,
             associadoAntigoId: solicitacao.associado_antigo_id,
             veiculoOrigemId: solicitacao.veiculo_id,
+          }}
+        />
+      )}
+
+      {solicitacao && (
+        <AgendarManutencaoTrocaDialog
+          open={manutencaoOpen}
+          onOpenChange={setManutencaoOpen}
+          solicitacaoId={solicitacao.id}
+          veiculoId={solicitacao.veiculo_id}
+          onAgendado={() => {
+            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+            onOpenChange(false);
           }}
         />
       )}

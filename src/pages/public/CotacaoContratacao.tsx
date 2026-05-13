@@ -742,6 +742,8 @@ export default function CotacaoContratacao() {
                     termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
                     aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
                     aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+                    tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
+                    expiradaEm={(solicitacaoTroca as any)?.expirada_em}
                   />
                 ) : isSubstituicao ? (
                   <EtapaAssinaturaSubstituicao

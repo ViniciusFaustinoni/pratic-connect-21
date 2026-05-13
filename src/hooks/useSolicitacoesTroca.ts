@@ -55,6 +55,10 @@ export interface SolicitacaoTroca {
   aprovado_monitoramento_em: string | null;
   observacao_monitoramento: string | null;
   servico_vistoria_id: string | null;
+  servico_manutencao_id?: string | null;
+  tipo_vistoria_troca?: TipoVistoriaTroca | null;
+  instalar_rastreador?: boolean | null;
+  expirada_em?: string | null;
   motivo_reprovacao: string | null;
   reprovado_por: string | null;
   reprovado_em: string | null;
