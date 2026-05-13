@@ -316,10 +316,17 @@ export default function CotacaoContratacao() {
     if (cotacao?.status_contratacao) {
       let etapa = determinarEtapa(cotacao.status_contratacao);
       
-      // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
-      // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
-      if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
-        etapa = 4;
+      if (isTrocaTitularidade && !pularEtapaVistoria) {
+        // Em troca: após docs vai para Vistoria (3) primeiro; só depois Contrato (2).
+        if (etapa === 2 && !cotacao.tipo_vistoria) {
+          etapa = 3;
+        }
+      } else {
+        // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
+        // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
+        if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
+          etapa = 4;
+        }
       }
       // Se etapa de pagamento está pulada (troca isenta), salta para conclusão
       if (etapa === 4 && pularEtapaPagamento) {
@@ -328,7 +335,7 @@ export default function CotacaoContratacao() {
       
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
 
   // Em navegação manual, se o usuário cair em uma etapa pulada, salta automaticamente.
   useEffect(() => {
