@@ -29180,7 +29180,9 @@ export type Database = {
           created_at: string
           criado_por: string | null
           efetivada_em: string | null
+          expirada_em: string | null
           id: string
+          instalar_rastreador: boolean
           motivo_reprovacao: string | null
           novo_associado_id: string | null
           novo_titular_dados: Json
@@ -29188,6 +29190,7 @@ export type Database = {
           observacao_monitoramento: string | null
           reprovado_em: string | null
           reprovado_por: string | null
+          servico_manutencao_id: string | null
           servico_vistoria_id: string | null
           sga_codigo_associado_novo: number | null
           sga_codigo_veiculo_novo: number | null
@@ -29202,6 +29205,7 @@ export type Database = {
           termo_reenvios_count: number
           termo_ultimo_reenvio_em: string | null
           termo_whatsapp_status: string | null
+          tipo_vistoria_troca: string | null
           token_publico: string
           updated_at: string
           veiculo_id: string
@@ -29218,7 +29222,9 @@ export type Database = {
           created_at?: string
           criado_por?: string | null
           efetivada_em?: string | null
+          expirada_em?: string | null
           id?: string
+          instalar_rastreador?: boolean
           motivo_reprovacao?: string | null
           novo_associado_id?: string | null
           novo_titular_dados?: Json
@@ -29226,6 +29232,7 @@ export type Database = {
           observacao_monitoramento?: string | null
           reprovado_em?: string | null
           reprovado_por?: string | null
+          servico_manutencao_id?: string | null
           servico_vistoria_id?: string | null
           sga_codigo_associado_novo?: number | null
           sga_codigo_veiculo_novo?: number | null
@@ -29240,6 +29247,7 @@ export type Database = {
           termo_reenvios_count?: number
           termo_ultimo_reenvio_em?: string | null
           termo_whatsapp_status?: string | null
+          tipo_vistoria_troca?: string | null
           token_publico?: string
           updated_at?: string
           veiculo_id: string
@@ -29256,7 +29264,9 @@ export type Database = {
           created_at?: string
           criado_por?: string | null
           efetivada_em?: string | null
+          expirada_em?: string | null
           id?: string
+          instalar_rastreador?: boolean
           motivo_reprovacao?: string | null
           novo_associado_id?: string | null
           novo_titular_dados?: Json
@@ -29264,6 +29274,7 @@ export type Database = {
           observacao_monitoramento?: string | null
           reprovado_em?: string | null
           reprovado_por?: string | null
+          servico_manutencao_id?: string | null
           servico_vistoria_id?: string | null
           sga_codigo_associado_novo?: number | null
           sga_codigo_veiculo_novo?: number | null
@@ -29278,6 +29289,7 @@ export type Database = {
           termo_reenvios_count?: number
           termo_ultimo_reenvio_em?: string | null
           termo_whatsapp_status?: string | null
+          tipo_vistoria_troca?: string | null
           token_publico?: string
           updated_at?: string
           veiculo_id?: string
@@ -29478,6 +29490,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_manutencao_id_fkey"
+            columns: ["servico_manutencao_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_manutencao_id_fkey"
+            columns: ["servico_manutencao_id"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_manutencao_id_fkey"
+            columns: ["servico_manutencao_id"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_instalacao_relacionado"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_manutencao_id_fkey"
+            columns: ["servico_manutencao_id"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_vistoria_id"]
           },
           {
             foreignKeyName: "solicitacoes_troca_titularidade_servico_vistoria_id_fkey"
@@ -34759,6 +34799,8 @@ export type Database = {
         | "reprovada_cadastro"
         | "reprovada_monitoramento"
         | "cancelada"
+        | "expirada"
+        | "aguardando_manutencao"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -35213,6 +35255,8 @@ export const Constants = {
         "reprovada_cadastro",
         "reprovada_monitoramento",
         "cancelada",
+        "expirada",
+        "aguardando_manutencao",
       ],
       status_veiculo: [
         "em_analise",
