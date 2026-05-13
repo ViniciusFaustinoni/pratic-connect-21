@@ -645,6 +645,11 @@ ${contato?.nome || "Não informado ainda"}`;
       ];
     }
 
+    // Anexa contexto de cobrança recente (se houver) ao final do system prompt
+    if (cobrancaContextoTxt) {
+      systemPrompt += cobrancaContextoTxt;
+    }
+
     // ---- 8. CHAMAR LOVABLE AI COM TOOL CALLING ----
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
