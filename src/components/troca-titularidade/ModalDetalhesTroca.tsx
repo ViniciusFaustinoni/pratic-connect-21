@@ -297,6 +297,17 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
             {podeAgir && !confirmandoReprovar && (
               <div className="border-t pt-4 space-y-3">
+                {modo === 'cadastro' && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Aprovação manual = fallback legado</AlertTitle>
+                    <AlertDescription>
+                      A aprovação do Cadastro agora é <strong>automática</strong> assim que a cotação é
+                      vinculada (com o termo de cancelamento já assinado). Use este botão apenas para
+                      itens antigos que ficaram presos antes da mudança.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div>
                   <Label htmlFor="obs">Observação (opcional)</Label>
                   <Textarea id="obs" value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} />

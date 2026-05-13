@@ -1,12 +1,14 @@
 // Vincula uma cotação recém-criada (pelo CotacaoFormDialog padrão) a uma
-// solicitação de Troca de Titularidade. Substitui o caminho antigo
-// `criar-cotacao-troca-titularidade` que pré-criava rascunho.
+// solicitação de Troca de Titularidade E AUTO-APROVA o Cadastro quando o
+// termo de cancelamento já está assinado pelo titular antigo.
+//
+// Substitui o caminho antigo `criar-cotacao-troca-titularidade` que pré-criava rascunho.
 //
 // AUTH: Pública (verify_jwt=false). A segurança vem da validação cruzada:
 // `cotacao.dados_extras.solicitacao_troca_id` precisa bater com `solicitacao_id`.
-// Isso permite o self-heal do link público (anon) quando a vinculação
-// inicial falha por qualquer motivo (rede, timeout, etc).
+// Isso permite o self-heal do link público (anon) quando a vinculação inicial falha.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { runPosCadastroBackgroundFireAndForget } from '../_shared/troca-pos-cadastro-bg.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,7 +39,7 @@ Deno.serve(async (req) => {
 
     const { data: sol, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, status, cotacao_id, veiculo_id, termo_cancelamento_assinado_em')
+      .select('id, status, cotacao_id, veiculo_id, criado_por, novo_titular_dados, termo_cancelamento_assinado_em')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (solErr) throw solErr;
@@ -90,18 +92,36 @@ Deno.serve(async (req) => {
       }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Atualiza vínculo + status para "cotacao_em_andamento"
+    // AUTO-APROVA o Cadastro: termo já está assinado, então não há motivo
+    // para um operador clicar "Aprovar". Avança direto para liberada_para_assinatura.
     const { error: updErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         cotacao_id,
-        status: 'cotacao_em_andamento',
+        status: 'liberada_para_assinatura',
+        aprovado_cadastro_em: new Date().toISOString(),
+        aprovado_cadastro_por: null, // auto
+        observacao_cadastro: 'Auto-aprovado: termo de cancelamento assinado',
         updated_at: new Date().toISOString(),
       })
       .eq('id', solicitacao_id);
     if (updErr) throw updErr;
 
-    return new Response(JSON.stringify({ success: true, cotacao_id }), {
+    // Trabalho pesado em background (snapshot SGA + atribuição vendedor + WhatsApp)
+    runPosCadastroBackgroundFireAndForget(admin, {
+      id: sol.id,
+      cotacao_id,
+      veiculo_id: sol.veiculo_id,
+      criado_por: sol.criado_por,
+      novo_titular_dados: (sol.novo_titular_dados as any) || null,
+    });
+
+    return new Response(JSON.stringify({
+      success: true,
+      cotacao_id,
+      status: 'liberada_para_assinatura',
+      cadastro_auto_aprovado: true,
+    }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {

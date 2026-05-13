@@ -198,7 +198,15 @@ export default function CotacaoContratacao() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trocaOrfaBruta, dadosExtras, cotacao?.id]);
   const trocaOrfa = trocaOrfaBruta && autoVinculoFalhou && !autoVinculandoTroca;
-  const trocaLiberada = solicitacaoTroca?.status === 'liberada_para_assinatura' || solicitacaoTroca?.status === 'efetivada';
+  // Troca liberada para o público seguir: status já liberado/efetivado OU
+  // termo assinado (cadastro é auto-aprovado pela edge `vincular-cotacao-troca`;
+  // qualquer item ainda preso em `cotacao_em_andamento`/`aguardando_cadastro`
+  // com termo assinado é tratado como liberado para não travar o cliente).
+  const trocaLiberada = !!solicitacaoTroca && (
+    solicitacaoTroca.status === 'liberada_para_assinatura' ||
+    solicitacaoTroca.status === 'efetivada' ||
+    !!solicitacaoTroca.termo_cancelamento_assinado_em
+  );
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
   // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
   // em "Solicitar Vistoria" (status aguardando_vistoria) OU se o cliente já

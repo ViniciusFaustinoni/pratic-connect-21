@@ -1,10 +1,14 @@
-// Aprovação da etapa de Cadastro: avança status para aguardando_monitoramento
+// Aprovação MANUAL da etapa de Cadastro — fallback legado.
+// FLUXO PADRÃO: o cadastro é AUTO-APROVADO em `vincular-cotacao-troca`
+// no momento em que a cotação é vinculada (porque o termo de cancelamento
+// já foi assinado). Esta função existe apenas para itens legados que
+// ficaram presos em `aguardando_cadastro` antes da mudança.
+//
 // Antes de aprovar:
 //   1) trava se termo de cancelamento não foi assinado
 //   2) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
-// Obs: a checagem financeira do antigo titular foi removida — não é mais
-// requisito que o antigo esteja adimplente para aprovar a troca.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { runPosCadastroBackgroundFireAndForget } from '../_shared/troca-pos-cadastro-bg.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -95,142 +99,13 @@ Deno.serve(async (req) => {
     }
 
     // 6) Trabalho pesado em background (snapshot SGA + atribuição vendedor + WhatsApp)
-    const novoTitular = (sol.novo_titular_dados || {}) as { nome?: string; cpf?: string };
-    const cpfNovoLimpo = (novoTitular.cpf || '').replace(/\D/g, '');
-
-    const backgroundWork = async () => {
-      const analisePrevia: Record<string, unknown> = { gerado_em: new Date().toISOString() };
-      try {
-        if (cpfNovoLimpo.length === 11) {
-          const { data: assocLocal } = await admin
-            .from('associados')
-            .select('id, nome, cpf, email, telefone, status, created_at')
-            .eq('cpf', cpfNovoLimpo)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          analisePrevia.base_local = assocLocal
-            ? { encontrado: true, associado: assocLocal }
-            : { encontrado: false };
-
-          try {
-            const { data: sgaResp, error: sgaErr } = await admin.functions.invoke(
-              'sga-buscar-associado-completo',
-              { body: { cpf: cpfNovoLimpo } },
-            );
-            if (sgaErr) throw sgaErr;
-            analisePrevia.sga = sgaResp ?? { encontrado: false };
-          } catch (sgaCatch) {
-            analisePrevia.sga = { erro: sgaCatch instanceof Error ? sgaCatch.message : 'falha SGA' };
-          }
-        } else {
-          analisePrevia.base_local = { erro: 'CPF do novo titular inválido/ausente' };
-          analisePrevia.sga = { erro: 'CPF do novo titular inválido/ausente' };
-        }
-
-        await admin
-          .from('solicitacoes_troca_titularidade')
-          .update({
-            analise_previa_resultado: analisePrevia,
-            analise_previa_em: new Date().toISOString(),
-          })
-          .eq('id', solicitacao_id);
-      } catch (anaErr) {
-        console.warn('[aprovar-troca-cadastro/bg] análise prévia falhou:', anaErr);
-      }
-
-      try {
-        if (!sol.cotacao_id) return;
-        let vendedorAuthUserId: string | null = null;
-        let vendedorAtribuido: { profile_id: string; nome: string; telefone: string | null } | null = null;
-
-        if (sol.criado_por) {
-          const { data: profCriador } = await admin
-            .from('profiles')
-            .select('id, user_id, tipo, nome, telefone')
-            .eq('user_id', sol.criado_por)
-            .maybeSingle();
-          if (profCriador && ['vendedor', 'agencia', 'consultor_externo'].includes(profCriador.tipo || '')) {
-            vendedorAuthUserId = profCriador.user_id;
-            vendedorAtribuido = { profile_id: profCriador.id, nome: profCriador.nome, telefone: profCriador.telefone };
-          }
-        }
-
-        if (!vendedorAuthUserId && sol.veiculo_id) {
-          const { data: contratoAntigo } = await admin
-            .from('contratos')
-            .select('vendedor_id')
-            .eq('veiculo_id', sol.veiculo_id)
-            .not('vendedor_id', 'is', null)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (contratoAntigo?.vendedor_id) {
-            const { data: profVend } = await admin
-              .from('profiles')
-              .select('id, user_id, nome, telefone')
-              .eq('id', contratoAntigo.vendedor_id)
-              .maybeSingle();
-            if (profVend?.user_id) {
-              vendedorAuthUserId = profVend.user_id;
-              vendedorAtribuido = { profile_id: profVend.id, nome: profVend.nome, telefone: profVend.telefone };
-            }
-          }
-        }
-
-        const { data: cotAtual } = await admin
-          .from('cotacoes')
-          .select('id, numero, vendedor_id')
-          .eq('id', sol.cotacao_id)
-          .maybeSingle();
-
-        const updateCot: Record<string, unknown> = {
-          prioridade: 'alta',
-          origem_troca_titularidade: true,
-        };
-        if (vendedorAuthUserId && !cotAtual?.vendedor_id) {
-          updateCot.vendedor_id = vendedorAuthUserId;
-        }
-        await admin.from('cotacoes').update(updateCot).eq('id', sol.cotacao_id);
-
-        if (vendedorAtribuido?.telefone) {
-          const numero = (cotAtual?.numero || sol.cotacao_id.slice(0, 8)).toString();
-          const novoNome = ((sol.novo_titular_dados || {}) as { nome?: string }).nome || 'novo titular';
-          const primeiroNomeVendedor = (vendedorAtribuido.nome || 'Consultor').trim().split(/\s+/)[0];
-          const mensagem =
-            `🔁 *Troca de titularidade — cadastro aprovado*\n\n` +
-            `Cotação *${numero}* foi liberada e marcada como *PRIORIDADE ALTA*.\n` +
-            `Novo titular: ${novoNome}\n\n` +
-            `A placa já está liberada para fechamento. Acesse o sistema para dar continuidade.`;
-          try {
-            await admin.functions.invoke('whatsapp-send-text', {
-              body: {
-                telefone: vendedorAtribuido.telefone,
-                mensagem,
-                template_name: 'sinistro_atualizado',
-                template_params: [
-                  primeiroNomeVendedor,
-                  `Cotação ${numero} liberada`,
-                  `Troca de titularidade aprovada (PRIORIDADE ALTA). Novo titular: ${novoNome}. Acesse o sistema para fechamento.`,
-                ],
-              },
-            });
-          } catch (waCatch) {
-            console.warn('[aprovar-troca-cadastro/bg] whatsapp falhou:', waCatch);
-          }
-        }
-      } catch (notifErr) {
-        console.warn('[aprovar-troca-cadastro/bg] notificação vendedor falhou:', notifErr);
-      }
-    };
-
-    // @ts-ignore - EdgeRuntime global é disponibilizado pelo Supabase Edge
-    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
-      // @ts-ignore
-      EdgeRuntime.waitUntil(backgroundWork());
-    } else {
-      backgroundWork().catch((e) => console.warn('[aprovar-troca-cadastro/bg] erro:', e));
-    }
+    runPosCadastroBackgroundFireAndForget(admin, {
+      id: sol.id,
+      cotacao_id: sol.cotacao_id,
+      veiculo_id: sol.veiculo_id,
+      criado_por: sol.criado_por,
+      novo_titular_dados: (sol.novo_titular_dados as any) || null,
+    });
 
     return new Response(
       JSON.stringify({ success: true, status: 'liberada_para_assinatura' }),
