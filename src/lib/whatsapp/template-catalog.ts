@@ -250,10 +250,16 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     gatilho: 'enviar-termo-cancelamento-substituicao · autentique-create',
     variaveis: ['nome', 'documento'],
   },
-  assinatura_instalacao_v1: {
-    momento: 'Termo de instalação pronto para assinatura',
-    gatilho: 'autentique-create (instalação)',
+  assinatura_instalacao_v2: {
+    momento: 'Termo de instalação pronto para assinatura (URL praticcar.org)',
+    gatilho: 'concluir-instalacao-prestador · autentique-create',
     variaveis: ['nome', 'veiculo'],
+  },
+  assinatura_instalacao_v1: {
+    momento: 'Substituído por assinatura_instalacao_v2',
+    gatilho: '(legado)',
+    variaveis: [],
+    deprecated: 'Use assinatura_instalacao_v2',
   },
   termo_filiacao_assinatura_v2: {
     momento: 'Termo de filiação pronto para assinatura',
