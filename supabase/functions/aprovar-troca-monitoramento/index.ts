@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
 
     const { data: solicitacao, error: getErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, veiculo_id, associado_antigo_id, status')
+      .select('id, veiculo_id, associado_antigo_id, novo_associado_id, cotacao_id, status')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (getErr || !solicitacao) throw new Error('Solicitação não encontrada');
@@ -66,6 +66,74 @@ Deno.serve(async (req) => {
         .update({ ...baseUpdate, status: 'liberada_para_assinatura' })
         .eq('id', solicitacao_id);
       if (error) throw error;
+
+      // Após a aprovação do Monitoramento, dispara a ativação do novo associado
+      // e a efetivação da troca (transferência do veículo + criação do contrato final).
+      // Esta é a ÚNICA porta para a efetivação — vistoria e pagamento não efetivam mais.
+      if (solicitacao.novo_associado_id) {
+        try {
+          // Buscar contrato do novo titular gerado pelo fluxo público (associado ao cotacao_id)
+          let contratoNovoId: string | null = null;
+          if (solicitacao.cotacao_id) {
+            const { data: contratoNovo } = await admin
+              .from('contratos')
+              .select('id')
+              .eq('cotacao_id', solicitacao.cotacao_id)
+              .eq('associado_id', solicitacao.novo_associado_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            contratoNovoId = contratoNovo?.id || null;
+          }
+
+          const ativResp = await fetch(`${SUPABASE_URL}/functions/v1/ativar-associado`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+              associado_id: solicitacao.novo_associado_id,
+              contrato_id: contratoNovoId,
+              cotacao_id: solicitacao.cotacao_id,
+              source: 'edge:aprovar-troca-monitoramento',
+              actor_id: profileId,
+              allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+              metadata: { solicitacao_troca_id: solicitacao_id },
+            }),
+          });
+          const ativData = await ativResp.json().catch(() => ({}));
+          if (!ativData?.success) {
+            console.warn('[aprovar-troca-monitoramento] ativar-associado falhou (não bloqueante):', ativData);
+          } else {
+            console.log('[aprovar-troca-monitoramento] novo associado ativado:', solicitacao.novo_associado_id);
+          }
+        } catch (ativErr) {
+          console.error('[aprovar-troca-monitoramento] erro ao ativar novo associado (não bloqueante):', ativErr);
+        }
+      } else {
+        console.warn(`[aprovar-troca-monitoramento] Solicitação ${solicitacao_id} sem novo_associado_id — pulando ativação`);
+      }
+
+      // Efetivar a troca (transferência veículo + novo contrato final)
+      try {
+        const efetResp = await fetch(`${SUPABASE_URL}/functions/v1/efetivar-troca-titularidade`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({ solicitacao_id, cenario_override: 'B' }),
+        });
+        const efetData = await efetResp.json().catch(() => ({}));
+        if (!efetData?.success) {
+          console.error('[aprovar-troca-monitoramento] efetivar-troca-titularidade falhou:', efetData);
+        } else {
+          console.log('[aprovar-troca-monitoramento] troca efetivada:', efetData.novo_contrato_numero);
+        }
+      } catch (efetErr) {
+        console.error('[aprovar-troca-monitoramento] erro ao efetivar troca (não bloqueante):', efetErr);
+      }
     } else {
       // Solicitar vistoria: NÃO criar serviço de campo.
       // A vistoria será executada pelo NOVO titular dentro do link público
