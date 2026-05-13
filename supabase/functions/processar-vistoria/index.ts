@@ -355,7 +355,11 @@ serve(async (req) => {
         }
       }
 
-      // === VERIFICAR SE É VISTORIA DE TROCA DE TITULARIDADE (Cenário B) ===
+      // === TROCA DE TITULARIDADE ===
+      // A vistoria APENAS marca o serviço como concluído. A efetivação da troca
+      // (transferência do veículo + criação do contrato final) acontece somente
+      // após a aprovação manual do Monitoramento (edge `aprovar-troca-monitoramento`),
+      // que por sua vez aciona `ativar-associado` → `efetivar-troca-titularidade`.
       try {
         const { data: servicoTroca } = await supabase
           .from("servicos")
@@ -369,36 +373,14 @@ serve(async (req) => {
           .maybeSingle();
 
         if (servicoTroca?.solicitacao_id) {
-          console.log(`[processar-vistoria] Troca de titularidade detectada! Serviço: ${servicoTroca.id}, Solicitação: ${servicoTroca.solicitacao_id}`);
-
-          // Marcar serviço como concluído
+          console.log(`[processar-vistoria] Troca de titularidade: marcando serviço ${servicoTroca.id} como concluído. Efetivação aguardará aprovação do Monitoramento.`);
           await supabase
             .from("servicos")
             .update({ status: "concluido", concluida_em: new Date().toISOString() })
             .eq("id", servicoTroca.id);
-
-          // Chamar efetivação da troca (Cenário B — pós-vistoria)
-          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-          const efetResp = await fetch(`${supabaseUrl}/functions/v1/efetivar-troca-titularidade`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${serviceKey}`,
-            },
-            body: JSON.stringify({ solicitacao_id: servicoTroca.solicitacao_id, cenario_override: "B" }),
-          });
-          const efetData = await efetResp.json();
-
-          if (efetData.success) {
-            console.log(`[processar-vistoria] Efetivação Cenário B concluída: contrato ${efetData.novo_contrato_numero}`);
-          } else {
-            console.error("[processar-vistoria] Erro na efetivação Cenário B:", efetData.error);
-          }
         }
       } catch (trocaErr) {
-        console.error("[processar-vistoria] Erro ao verificar troca de titularidade (não bloqueante):", trocaErr);
+        console.error("[processar-vistoria] Erro ao fechar serviço de troca (não bloqueante):", trocaErr);
       }
 
     } else {
