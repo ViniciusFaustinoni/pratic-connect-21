@@ -519,6 +519,18 @@ export function RastreadorDetailDrawer({
                   </>
                 )}
 
+                {/* Vínculo Softruck (rastreador sem veículo local mas com vínculo na plataforma) */}
+                {!rastreador.veiculos && rastreador.plataforma === 'softruck' && (rastreador.plataforma_veiculo_id || rastreador.imei) && (
+                  <>
+                    <VinculoSoftruckExterno
+                      rastreadorId={rastreador.id}
+                      vehicleId={rastreador.plataforma_veiculo_id}
+                      imei={rastreador.imei}
+                    />
+                    <Separator />
+                  </>
+                )}
+
                 {/* Vincular a Veículo (somente diretor, rastreador não instalado) */}
                 {isDiretor && !rastreador.veiculos && rastreador.status !== 'instalado' && (
                   <>
