@@ -897,8 +897,16 @@ export default function CotacaoContratacao() {
                         cidade: cotacao.cliente_cidade || '',
                         estado: cotacao.cliente_uf || '',
                       }}
-                      onComplete={() => setEtapaAtual(4)}
-                      onAgendar={() => setEtapaAtual(4)}
+                      onComplete={() => {
+                        const idx = navOrder.indexOf(3);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        setEtapaAtual(next);
+                      }}
+                      onAgendar={() => {
+                        const idx = navOrder.indexOf(3);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        setEtapaAtual(next);
+                      }}
                       readOnly={isEtapaConcluida(3)}
                       tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
                     />
