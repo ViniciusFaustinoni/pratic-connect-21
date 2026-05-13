@@ -71,6 +71,7 @@ import { useEnviarComando } from '@/hooks/useComandosRastreador';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
 import { UsuariosVeiculoSoftruck } from './UsuariosVeiculoSoftruck';
 import { GestaoRedeVeiculos } from './GestaoRedeVeiculos';
+import { VinculoSoftruckExterno } from './VinculoSoftruckExterno';
 import { AlertTriangle } from 'lucide-react';
 
 interface RastreadorDetailDrawerProps {
