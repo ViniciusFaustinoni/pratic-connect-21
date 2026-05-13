@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock, Send, AlertCircle } from 'lucide-react';
+import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock, Send, AlertCircle, Camera } from 'lucide-react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { motion } from 'framer-motion';
 import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
