@@ -125,13 +125,14 @@ export default function VistoriaPrestador() {
       // Endereço da oficina/base via agendamento_base
       let oficina: any = null;
       let periodo: string | null = null;
-      const { data: ag } = await publicSupabase
+      const { data: agRaw } = await publicSupabase
         .from('agendamentos_base' as any)
         .select('horario, oficina_id')
         .eq('vistoria_id', link.vistoria_id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      const ag = agRaw as any;
       if (ag?.oficina_id) {
         const { data: of } = await publicSupabase
           .from('oficinas' as any)
