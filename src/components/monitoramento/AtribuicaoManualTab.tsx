@@ -222,7 +222,7 @@ function DroppableVistoriador({
                 ) : (
                   <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
                 )}
-                {!emAndamento && (
+                {(!emAndamento || podeForcarDevolucao) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -230,14 +230,21 @@ function DroppableVistoriador({
                         size="icon"
                         className="h-6 w-6 shrink-0"
                         onPointerDown={(e) => e.stopPropagation()}
+                        title={emAndamento ? 'Ações administrativas (erro na execução)' : undefined}
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuContent align="end" className="w-64">
+                      {emAndamento && (
+                        <div className="px-2 py-1.5 text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 border-b mb-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          Tarefa em andamento — uso administrativo
+                        </div>
+                      )}
                       <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'devolver')}>
                         <RotateCcw className="h-3.5 w-3.5 mr-2" />
-                        Devolver à fila / não compareceu
+                        {emAndamento ? 'Voltar para a fila (erro na instalação)' : 'Devolver à fila / não compareceu'}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'reatribuir')}>
                         <UserCog className="h-3.5 w-3.5 mr-2" />
