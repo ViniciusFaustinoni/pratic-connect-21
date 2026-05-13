@@ -381,7 +381,7 @@ _Dúvidas? Entre em contato com o coordenador._`
           acao: 'atribuir',
           modulo: 'instalacoes',
           descricao: `Atribuição de vistoriador prestador: ${prestador.nome} — Valor: ${valor != null ? `R$ ${valor.toFixed(2)}` : 'a definir'} — WhatsApp: ${whatsappEnviado ? 'enviado' : 'falha'}`,
-          registro_id: instalacao_id,
+          registro_id: instalacao_id || vistoria_id,
           dados_novos: {
             prestador_id: vistoriador_prestador_id,
             prestador_nome: prestador.nome,
