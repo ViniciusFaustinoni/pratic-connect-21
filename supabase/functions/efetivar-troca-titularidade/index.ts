@@ -633,7 +633,7 @@ serve(async (req) => {
           body: JSON.stringify({
             telefone: telFmt,
             mensagem: mensagemBoasVindas,
-            template_name: "troca_titularidade_aprovada",
+            template_name: "troca_titularidade_aprovada_v2",
             template_params: [primeiroNomeNovo, veiculoLabel],
             referencia_tipo: "troca_titularidade",
             referencia_id: solicitacao_id,

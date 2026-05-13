@@ -32,10 +32,16 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     gatilho: 'create-user',
     variaveis: ['nome_agencia'],
   },
-  documentacao_pendente: {
+  documentacao_pendente_v2: {
     momento: 'Quando faltam documentos do associado para liberar a aprovação',
     gatilho: 'notificar-cliente',
     variaveis: ['nome', 'lista_documentos'],
+  },
+  documentacao_pendente: {
+    momento: 'Substituído por documentacao_pendente_v2 (com botão URL)',
+    gatilho: '(legado)',
+    variaveis: [],
+    deprecated: 'Use documentacao_pendente_v2',
   },
 
   // ── Agendamento de instalação / vistoria ────────────────────────────
@@ -244,10 +250,16 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     gatilho: 'enviar-termo-cancelamento-substituicao · autentique-create',
     variaveis: ['nome', 'documento'],
   },
-  assinatura_instalacao_v1: {
-    momento: 'Termo de instalação pronto para assinatura',
-    gatilho: 'autentique-create (instalação)',
+  assinatura_instalacao_v2: {
+    momento: 'Termo de instalação pronto para assinatura (URL praticcar.org)',
+    gatilho: 'concluir-instalacao-prestador · autentique-create',
     variaveis: ['nome', 'veiculo'],
+  },
+  assinatura_instalacao_v1: {
+    momento: 'Substituído por assinatura_instalacao_v2',
+    gatilho: '(legado)',
+    variaveis: [],
+    deprecated: 'Use assinatura_instalacao_v2',
   },
   termo_filiacao_assinatura_v2: {
     momento: 'Termo de filiação pronto para assinatura',
@@ -288,21 +300,24 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     gatilho: 'fluxo-troca-titularidade',
     variaveis: ['nome', 'veiculo'],
   },
-  troca_titularidade_aprovada: {
+  troca_titularidade_aprovada_v2: {
     momento: 'Quando a troca de titularidade é aprovada',
-    gatilho: 'aprovar-troca-cadastro',
-    variaveis: ['nome', 'veiculo'],
-  },
-  troca_titularidade_reprovada: {
-    momento: 'Quando a troca de titularidade é reprovada',
-    gatilho: 'fluxo-troca-titularidade',
-    variaveis: ['nome', 'veiculo', 'motivo'],
-  },
-  troca_titularidade_termo_pendente: {
-    momento: 'Quando termo de troca aguarda assinatura',
     gatilho: 'efetivar-troca-titularidade',
     variaveis: ['nome', 'veiculo'],
   },
+  troca_titularidade_reprovada_v2: {
+    momento: 'Quando a troca de titularidade é reprovada',
+    gatilho: 'reprovar-troca-titularidade',
+    variaveis: ['nome', 'veiculo', 'motivo'],
+  },
+  troca_titularidade_termo_pendente_v2: {
+    momento: 'Quando termo de troca aguarda assinatura',
+    gatilho: 'enviar-termo-cancelamento-troca',
+    variaveis: ['nome', 'veiculo'],
+  },
+  troca_titularidade_aprovada: { momento: 'Substituído por troca_titularidade_aprovada_v2', gatilho: '(legado)', variaveis: [], deprecated: 'Use _v2' },
+  troca_titularidade_reprovada: { momento: 'Substituído por troca_titularidade_reprovada_v2', gatilho: '(legado)', variaveis: [], deprecated: 'Use _v2' },
+  troca_titularidade_termo_pendente: { momento: 'Substituído por troca_titularidade_termo_pendente_v2', gatilho: '(legado)', variaveis: [], deprecated: 'Use _v2' },
 };
 
 export function getCatalogEntry(nome: string): TemplateCatalogEntry | null {
