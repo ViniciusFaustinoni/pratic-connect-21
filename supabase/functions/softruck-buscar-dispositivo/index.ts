@@ -76,6 +76,14 @@ Deno.serve(async (req) => {
     let device: any = null;
     let vehicle: any = null;
 
+    // Includes ricos para já trazer motorista/cliente/grupo/marca/modelo/cor
+    const VEHICLE_INCLUDES =
+      '&includes[device][]=imei' +
+      '&includes[driver][]=name&includes[driver][]=document&includes[driver][]=phone' +
+      '&includes[client][]=name&includes[client][]=document&includes[client][]=email&includes[client][]=phone' +
+      '&includes[group][]=name' +
+      '&includes[brand][]=name&includes[model][]=name&includes[color][]=name';
+
     if (isImei) {
       const resp = await softFetch(
         `${BASE_URL}/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(buscaRaw)}&includes[vehicle][]=plate`,
@@ -88,11 +96,11 @@ Deno.serve(async (req) => {
       device = j?.data?.[0] ?? null;
       const relVehicleId = device?.relationships?.vehicle?.id || device?.relationships?.vehicle?.data?.id;
       if (relVehicleId) {
-        vehicle = await fetchVehicle(token, publicKey, relVehicleId);
+        vehicle = await fetchVehicle(token, publicKey, relVehicleId, VEHICLE_INCLUDES);
       }
     } else if (placa) {
       const resp = await softFetch(
-        `${BASE_URL}/v2/vehicles?filters[vehicles.plate][eq]=${encodeURIComponent(placa)}&includes[device][]=imei`,
+        `${BASE_URL}/v2/vehicles?filters[vehicles.plate][eq]=${encodeURIComponent(placa)}${VEHICLE_INCLUDES}`,
       );
       if (!resp.ok) {
         const t = await resp.text();
