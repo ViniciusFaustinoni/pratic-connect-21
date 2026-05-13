@@ -474,7 +474,7 @@ serve(async (req) => {
             },
           },
           instalacao_agendada: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => {
               // Formatar data de ISO (2026-03-12) para dd/MM/yyyy
               let dataFormatada = 'em breve';
@@ -530,7 +530,7 @@ serve(async (req) => {
           },
           // Vistoria → notificacao_geral_v1
           vistoria_reprovada: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
               'vistoria',
@@ -538,7 +538,7 @@ serve(async (req) => {
             ],
           },
           vistoria_nova_tentativa: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
               'vistoria',
@@ -547,7 +547,7 @@ serve(async (req) => {
           },
           // Documento → notificacao_geral_v1
           documento_aprovado: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
               'documento',
@@ -563,7 +563,7 @@ serve(async (req) => {
           },
           // Status → notificacao_geral_v1
           status_atualizado: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
               'cadastro',
@@ -572,7 +572,7 @@ serve(async (req) => {
           },
           // Veículo negado / followups → notificacao_geral_v1
           veiculo_negado_orientacoes: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
               'avaliação',
@@ -580,7 +580,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia3: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
               'avaliação',
@@ -588,7 +588,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia7: {
-            template_name: 'notificacao_geral_v1',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
               'proteção',

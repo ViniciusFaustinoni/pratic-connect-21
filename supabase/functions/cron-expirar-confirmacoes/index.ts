@@ -123,7 +123,7 @@ Estamos à disposição! 🚗`;
             body: {
               telefone: conf.telefone,
               mensagem,
-              template_name: 'notificacao_geral_v1',
+              template_name: 'sinistro_atualizado',
               template_params: [
                 nomeCliente.split(' ')[0],
                 `Seu agendamento de ${tipoServico} para ${dataFormatada} não foi confirmado no prazo e foi cancelado. Entre em contato para reagendar.`

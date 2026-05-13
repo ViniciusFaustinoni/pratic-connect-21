@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
             body: {
               telefone: telefoneCompleto,
               mensagem,
-              template_name: 'notificacao_geral_v1',
+              template_name: 'sinistro_atualizado',
               template_params: [
                 coordenador.nome?.split(' ')[0] || 'Coordenador',
                 'Vistoria Prestador concluída',

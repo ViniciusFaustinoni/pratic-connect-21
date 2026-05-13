@@ -361,24 +361,37 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           const accessToken = metaConfig?.access_token || Deno.env.get('META_WHATSAPP_ACCESS_TOKEN');
           const phoneId = metaConfig?.phone_number_id;
 
+          // Preferir template específico de troca se já aprovado pela Meta;
+          // senão, fallback para o genérico assinatura_documento_v2.
+          const { data: tmplStatus } = await admin
+            .from('whatsapp_meta_templates')
+            .select('nome, status')
+            .in('nome', ['troca_titularidade_termo_pendente', 'assinatura_documento_v2']);
+          const aprovados = new Set((tmplStatus || []).filter((t: any) => t.status === 'APPROVED').map((t: any) => t.nome));
+          const templateName = aprovados.has('troca_titularidade_termo_pendente')
+            ? 'troca_titularidade_termo_pendente'
+            : 'assinatura_documento_v2';
+          // Ambos esperam 2 vars: nome + descrição/veiculo
+          const veicLabel = `${(veiculo?.marca || '')} ${(veiculo?.modelo || '')}`.trim() + (veiculo?.placa ? ` (${veiculo.placa})` : '');
+
           if (!accessToken || !phoneId) {
             waStatus = 'falhou';
             console.warn('[enviar-termo-cancelamento-troca] meta_config_ausente');
-            await logMsg('erro', 'assinatura_documento_v2', `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`, { erro: 'meta_config_ausente' });
+            await logMsg('erro', templateName, `[template ${templateName}] ${primeiroNome} — ${descricaoDoc}`, { erro: 'meta_config_ausente' });
           } else {
             const payload = {
               messaging_product: 'whatsapp',
               to: telTo,
               type: 'template',
               template: {
-                name: 'assinatura_documento_v2',
+                name: templateName,
                 language: { code: 'pt_BR' },
                 components: [
                   {
                     type: 'body',
                     parameters: [
                       { type: 'text', text: primeiroNome },
-                      { type: 'text', text: descricaoDoc },
+                      { type: 'text', text: templateName === 'troca_titularidade_termo_pendente' ? (veicLabel || descricaoDoc) : descricaoDoc },
                     ],
                   },
                   {
@@ -402,15 +415,15 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
             const metaJson = await metaResp.json();
             if (metaResp.ok) {
               waStatus = 'enviado';
-              await logMsg('enviada', 'assinatura_documento_v2',
-                `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc} — https://assina.ae/${slugAutentique}`,
+              await logMsg('enviada', templateName,
+                `[template ${templateName}] ${primeiroNome} — ${descricaoDoc} — https://assina.ae/${slugAutentique}`,
                 { messageId: metaJson?.messages?.[0]?.id || null });
             } else {
               const errMsg = metaJson?.error?.message || `HTTP ${metaResp.status}`;
               waStatus = 'falhou';
               console.warn('[enviar-termo-cancelamento-troca] Meta template falhou:', errMsg);
-              await logMsg('erro', 'assinatura_documento_v2',
-                `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`,
+              await logMsg('erro', templateName,
+                `[template ${templateName}] ${primeiroNome} — ${descricaoDoc}`,
                 { erro: `meta_api_erro: ${errMsg}` });
             }
           }
