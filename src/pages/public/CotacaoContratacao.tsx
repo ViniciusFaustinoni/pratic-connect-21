@@ -166,8 +166,10 @@ export default function CotacaoContratacao() {
   const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
   const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
   const isTrocaTitularidade = dadosExtras?.tipo_entrada === 'troca_titularidade';
+  const solicitacaoTrocaId = (dadosExtras?.solicitacao_troca_id as string | undefined) || null;
   const { data: solicitacaoTroca, isLoading: loadingSolicitacaoTroca, isFetched: solicitacaoTrocaFetched } = useSolicitacaoTrocaPublicaPorCotacao(
-    isTrocaTitularidade ? cotacao?.id : null
+    isTrocaTitularidade ? cotacao?.id : null,
+    isTrocaTitularidade ? solicitacaoTrocaId : null,
   );
   // Cotação marcada como troca de titularidade mas sem solicitação vinculada =
   // estado órfão (vincular-cotacao-troca falhou na criação). Tentamos auto-curar
@@ -177,7 +179,7 @@ export default function CotacaoContratacao() {
   const [autoVinculoFalhou, setAutoVinculoFalhou] = useState(false);
   useEffect(() => {
     if (!trocaOrfaBruta || autoVinculandoTroca || autoVinculoFalhou) return;
-    const solicId = dadosExtras?.solicitacao_troca_id as string | undefined;
+    const solicId = solicitacaoTrocaId || undefined;
     if (!solicId || !cotacao?.id) { setAutoVinculoFalhou(true); return; }
     setAutoVinculandoTroca(true);
     (async () => {
@@ -196,7 +198,7 @@ export default function CotacaoContratacao() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trocaOrfaBruta, dadosExtras, cotacao?.id]);
+  }, [trocaOrfaBruta, solicitacaoTrocaId, cotacao?.id]);
   const trocaOrfa = trocaOrfaBruta && autoVinculoFalhou && !autoVinculandoTroca;
   // Troca liberada para o público seguir: status já liberado/efetivado OU
   // termo assinado (cadastro é auto-aprovado pela edge `vincular-cotacao-troca`;
