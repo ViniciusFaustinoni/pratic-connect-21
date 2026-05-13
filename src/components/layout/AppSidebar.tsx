@@ -219,6 +219,7 @@ const menuConfig: {
       color: MENU_COLORS.monitoramento,
       items: [
         { title: 'Equipe', url: '/monitoramento/equipe', icon: Users, permission: 'canManageEquipeEstoque' },
+        { title: 'Chat', url: '/monitoramento/chat', icon: MessageCircle },
         { title: 'Serviços de Campo', url: '/monitoramento/vistorias-instalacoes-mon', icon: ClipboardCheck },
         { title: 'Calendário', url: '/monitoramento/calendario', icon: Calendar },
         
