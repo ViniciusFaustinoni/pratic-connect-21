@@ -2233,8 +2233,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               {/* ===== Painel Regra do 1% (FIPE Menor) — só aparece quando habilitado pelo diretor E veículo elegível ===== */}
               {fipeMenorAtivo && fipeMenorInfo && !fipeMenorInfo.bloqueado && fipeMenorInfo.elegivel && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior && (
                 <div className="mt-3">
-                  {(
-                    <Card className="border-green-500/40 bg-green-500/5">
+                  <Card className="border-green-500/40 bg-green-500/5">
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
