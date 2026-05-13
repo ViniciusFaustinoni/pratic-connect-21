@@ -203,13 +203,26 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [editEmail, setEditEmail] = useState('');
   const [isSavingContatos, setIsSavingContatos] = useState(false);
   const [showContratoPdf, setShowContratoPdf] = useState(false);
+
+  // Edição de endereço
+  const [editingEndereco, setEditingEndereco] = useState(false);
+  const [editCep, setEditCep] = useState('');
+  const [editLogradouro, setEditLogradouro] = useState('');
+  const [editNumero, setEditNumero] = useState('');
+  const [editComplemento, setEditComplemento] = useState('');
+  const [editBairro, setEditBairro] = useState('');
+  const [editCidade, setEditCidade] = useState('');
+  const [editUf, setEditUf] = useState('');
+  const [isSavingEndereco, setIsSavingEndereco] = useState(false);
   // Hooks que antes estavam após early returns (corrige "Rendered more hooks than during the previous render")
   const queryClient = useQueryClient();
   const [reenvioDialogOpen, setReenvioDialogOpen] = useState(false);
   const solicitarDocsMutation = useSolicitarDocumentos();
   const { data: docsJaSolicitados } = useDocumentosSolicitadosPendentes(id);
 
-  const canEditContatos = isDiretor || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster;
+  const isMonitoramento = isAnalistaMonitoramento || isCoordenadorMonitoramento;
+  const canEditContatos = isDiretor || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster || isMonitoramento;
+  const canEditEndereco = isDiretor || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster || isMonitoramento;
 
   const handleStartEditContatos = () => {
     if (!associado) return;
@@ -238,6 +251,44 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
       toast.error('Erro ao salvar contatos');
     } finally {
       setIsSavingContatos(false);
+    }
+  };
+
+  const handleStartEditEndereco = () => {
+    if (!associado) return;
+    setEditCep(associado.cep || '');
+    setEditLogradouro(associado.logradouro || '');
+    setEditNumero(associado.numero || '');
+    setEditComplemento(associado.complemento || '');
+    setEditBairro(associado.bairro || '');
+    setEditCidade(associado.cidade || '');
+    setEditUf(associado.uf || '');
+    setEditingEndereco(true);
+  };
+
+  const handleSaveEndereco = async () => {
+    if (!id) return;
+    setIsSavingEndereco(true);
+    try {
+      const { error } = await supabase.rpc('update_associado_endereco' as any, {
+        _associado_id: id,
+        _cep: editCep || null,
+        _logradouro: editLogradouro || null,
+        _numero: editNumero || null,
+        _complemento: editComplemento ?? '',
+        _bairro: editBairro || null,
+        _cidade: editCidade || null,
+        _uf: editUf || null,
+      });
+      if (error) throw error;
+      toast.success('Endereço atualizado com sucesso');
+      setEditingEndereco(false);
+      refetch();
+    } catch (error: any) {
+      console.error('Erro ao salvar endereço:', error);
+      toast.error(error?.message || 'Erro ao salvar endereço');
+    } finally {
+      setIsSavingEndereco(false);
     }
   };
 
