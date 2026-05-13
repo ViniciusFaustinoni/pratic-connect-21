@@ -28,81 +28,28 @@ export function useSolicitarVistoriaTecnico() {
 
   return useMutation({
     mutationFn: async (data: SolicitarVistoriaTecnicoParams) => {
-      const agora = new Date().toISOString();
-
-      // 1) Tira o serviço atual da fila do monitoramento sem ativar Proteção 360.
-      //    `aprovada` (text) basta — fila filtra por status='concluida'.
-      const ressalva = `Monitoramento solicitou nova vistoria presencial (sem instalação). Motivo: ${data.motivo}`;
-      const { error: updErr } = await supabase
-        .from('servicos')
-        .update({
-          status: 'aprovada' as any,
-          analisado_em: agora,
-          analisado_por: profile?.id ?? null,
-          observacoes_analise: ressalva,
-          ressalvas: 'vistoria_sem_instalacao_solicitada',
-          updated_at: agora,
-        } as any)
-        .eq('id', data.servicoId);
-      if (updErr) throw updErr;
-
-      // 2) Buscar contrato/cotação para herdar contexto.
-      const { data: srvAtual } = await (supabase as any)
-        .from('servicos')
-        .select('contrato_id, cotacao_id, cep, logradouro, numero, complemento, bairro, cidade, uf')
-        .eq('id', data.servicoId)
-        .maybeSingle();
-
-      // 3) Cria novo serviço de vistoria sem instalação.
-      const tag = `[VISTORIA_SEM_INSTALACAO]${JSON.stringify({
-        motivo: data.motivo,
-        fotos_obrigatorias: data.fotosObrigatorias,
-        cenario: data.cenario,
-        origem_servico_id: data.servicoId,
-      })}`;
-      const novo: any = {
-        tipo: 'vistoria_entrada',
-        status: 'agendada',
-        veiculo_id: data.veiculoId,
-        associado_id: data.associadoId,
-        contrato_id: srvAtual?.contrato_id ?? null,
-        cotacao_id: srvAtual?.cotacao_id ?? null,
-        data_agendada: data.dataAgendada ?? null,
-        periodo: data.periodo ?? null,
-        modalidade: data.cenario,
-        cep: data.cenario === 'rota' ? srvAtual?.cep ?? null : null,
-        logradouro: data.cenario === 'rota' ? srvAtual?.logradouro ?? null : null,
-        numero: data.cenario === 'rota' ? srvAtual?.numero ?? null : null,
-        complemento: data.cenario === 'rota' ? srvAtual?.complemento ?? null : null,
-        bairro: data.cenario === 'rota' ? srvAtual?.bairro ?? null : null,
-        cidade: data.cenario === 'rota' ? srvAtual?.cidade ?? null : null,
-        uf: data.cenario === 'rota' ? srvAtual?.uf ?? null : null,
-        observacoes: `${tag}\n${ressalva}`,
-        origem: 'monitoramento_sub_fipe',
-      };
-      const { data: srvNovo, error: insErr } = await (supabase as any)
-        .from('servicos')
-        .insert(novo)
-        .select('id')
-        .single();
-      if (insErr) throw insErr;
-
-      // 4) Histórico no associado.
-      await (supabase as any).from('associados_historico').insert({
-        associado_id: data.associadoId,
-        tipo: 'vistoria_tecnico_solicitada_monitoramento',
-        descricao: `Monitoramento solicitou vistoria presencial (sem instalação) — ${data.motivo}`,
-        dados_novos: {
-          servico_origem_id: data.servicoId,
-          servico_novo_id: srvNovo?.id,
-          veiculo_id: data.veiculoId,
-          cenario: data.cenario,
-          fotos_obrigatorias: data.fotosObrigatorias,
+      const { data: resp, error } = await supabase.functions.invoke(
+        'solicitar-vistoria-tecnico-sub-fipe',
+        {
+          body: {
+            servicoId: data.servicoId,
+            veiculoId: data.veiculoId,
+            associadoId: data.associadoId,
+            motivo: data.motivo,
+            cenario: data.cenario,
+            dataAgendada: data.dataAgendada ?? null,
+            periodo: data.periodo ?? null,
+            fotosObrigatorias: data.fotosObrigatorias,
+            solicitadoPor: profile?.id ?? null,
+          },
         },
-        usuario_id: profile?.id ?? null,
-      });
-
-      return { servicoId: srvNovo?.id as string };
+      );
+      if (error) throw error;
+      if (!(resp as any)?.success) throw new Error((resp as any)?.error || 'Falha ao solicitar vistoria');
+      return {
+        servicoId: (resp as any).servicoId as string,
+        linkUrl: (resp as any).linkUrl as string | null,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instalacoes-aguardando-aprovacao-monitoramento'] });
