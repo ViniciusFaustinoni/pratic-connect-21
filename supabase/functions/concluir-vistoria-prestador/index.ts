@@ -249,7 +249,7 @@ Deno.serve(async (req) => {
         acao: 'aprovar',
         modulo: 'instalacoes',
         descricao: `Vistoria prestador concluída: ${prestador?.nome || '---'} — ${veiculoDesc} (${placa}) — ${cidadeInst}`,
-        registro_id: link.instalacao_id,
+        registro_id: link.instalacao_id || link.vistoria_id,
         dados_novos: {
           link_id: link.id,
           prestador_nome: prestador?.nome,
