@@ -34,6 +34,12 @@ interface EtapaVistoriaProps {
   onAgendar?: (data: string, horario: string) => void;
   readOnly?: boolean;
   tipoVistoriaRealizada?: 'autovistoria' | 'agendada' | 'agendada_base';
+  /**
+   * Veículo sub-FIPE (carro <30k / moto <9k não-Diesel) — dispensa rastreador.
+   * Quando true, NÃO mostra chooser de modalidade: renderiza direto a vistoria
+   * completa (31 carro / 15 moto) para o associado executar pelo celular.
+   */
+  subFipe?: boolean;
 }
 
 type ModoVistoria = 'escolha' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
