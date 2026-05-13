@@ -17851,6 +17851,45 @@ export type Database = {
         }
         Relationships: []
       }
+      notificacoes_email_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          params: Json | null
+          recipient_email: string
+          referencia_id: string | null
+          referencia_tipo: string | null
+          resend_id: string | null
+          status: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          params?: Json | null
+          recipient_email: string
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          resend_id?: string | null
+          status?: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          params?: Json | null
+          recipient_email?: string
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          resend_id?: string | null
+          status?: string
+          template_name?: string
+        }
+        Relationships: []
+      }
       notificacoes_lidas: {
         Row: {
           id: string
@@ -32429,7 +32468,10 @@ export type Database = {
           categoria: string
           corpo: string
           created_at: string | null
+          email_assunto: string | null
+          email_template_alias: string | null
           enviado_em: string | null
+          enviar_por_email: boolean
           header_texto: string | null
           header_tipo: string | null
           id: string
@@ -32448,7 +32490,10 @@ export type Database = {
           categoria?: string
           corpo: string
           created_at?: string | null
+          email_assunto?: string | null
+          email_template_alias?: string | null
           enviado_em?: string | null
+          enviar_por_email?: boolean
           header_texto?: string | null
           header_tipo?: string | null
           id?: string
@@ -32467,7 +32512,10 @@ export type Database = {
           categoria?: string
           corpo?: string
           created_at?: string | null
+          email_assunto?: string | null
+          email_template_alias?: string | null
           enviado_em?: string | null
+          enviar_por_email?: boolean
           header_texto?: string | null
           header_tipo?: string | null
           id?: string
