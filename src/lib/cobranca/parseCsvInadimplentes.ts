@@ -287,6 +287,10 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     0,
   );
 
+  if (descartadasColunas > 0) {
+    erros.push(`${descartadasColunas} linha(s) descartada(s) por colunas insuficientes.`);
+  }
+
   return {
     destinatarios,
     total_linhas: linhas.length - 1,
