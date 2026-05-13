@@ -20,6 +20,8 @@ interface DestinatarioIn {
   boletos: BoletoIn[];
 }
 
+const MAX_META_BLOCK_LENGTH = 240;
+
 function montarBlocoBoletos(boletos: BoletoIn[]): string {
   // Meta WhatsApp body params NÃO aceitam \n, \t ou 4+ espaços (erro #132018).
   // Usamos separadores inline para manter legibilidade sem quebra de linha.
@@ -37,6 +39,30 @@ function sanitizeMetaParam(s: string): string {
     .replace(/[\r\n\t]+/g, " ")
     .replace(/ {4,}/g, "   ")
     .trim();
+}
+
+function montarBlocosBoletosSegmentados(boletos: BoletoIn[]): string[] {
+  const partes = (boletos || []).map((b) => sanitizeMetaParam(montarBlocoBoletos([b]))).filter(Boolean);
+  if (partes.length === 0) return [""];
+
+  const blocos: string[] = [];
+  let atual = "";
+
+  for (const parte of partes) {
+    const proximo = atual ? `${atual} ⏐ ${parte}` : parte;
+    if (proximo.length <= MAX_META_BLOCK_LENGTH) {
+      atual = proximo;
+      continue;
+    }
+
+    if (atual) blocos.push(atual);
+    atual = parte.length <= MAX_META_BLOCK_LENGTH
+      ? parte
+      : `${parte.slice(0, MAX_META_BLOCK_LENGTH - 1).trimEnd()}…`;
+  }
+
+  if (atual) blocos.push(atual);
+  return blocos;
 }
 
 function primeiroNome(s: string): string {
@@ -290,7 +316,7 @@ serve(async (req) => {
     const associadosAtingidos = new Set<string>();
 
     for (const dest of destinatarios) {
-      const bloco = montarBlocoBoletos(dest.boletos || []);
+      const blocos = montarBlocosBoletosSegmentados(dest.boletos || []);
       const nome = dest.primeiro_nome || primeiroNome(dest.nome);
       let envioOkParaEsteAssoc = false;
 
@@ -303,70 +329,76 @@ serve(async (req) => {
         }
 
         try {
-          const payload = {
-            messaging_product: "whatsapp",
-            to: tel,
-            type: "template",
-            template: {
-              name: templateNome,
-              language: { code: "pt_BR" },
-              components: [
-                {
-                  type: "body",
-                  parameters: [
-                    { type: "text", text: sanitizeMetaParam(nome) },
-                    { type: "text", text: sanitizeMetaParam(bloco) },
-                  ],
-                },
-              ],
-            },
-          };
+          let ultimoMessageId: string | null = null;
 
-          const resp = await fetch(
-            `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
+          for (const bloco of blocos) {
+            const payload = {
+              messaging_product: "whatsapp",
+              to: tel,
+              type: "template",
+              template: {
+                name: templateNome,
+                language: { code: "pt_BR" },
+                components: [
+                  {
+                    type: "body",
+                    parameters: [
+                      { type: "text", text: sanitizeMetaParam(nome) },
+                      { type: "text", text: sanitizeMetaParam(bloco) },
+                    ],
+                  },
+                ],
               },
-              body: JSON.stringify(payload),
-            },
-          );
+            };
 
-          const json = await resp.json();
-          if (!resp.ok) {
-            const errMsg = json?.error?.message || `HTTP ${resp.status}`;
-            detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "erro", erro: errMsg });
-            erros++;
-            await supabase.from("whatsapp_mensagens").insert({
-              direcao: "saida",
-              telefone: tel,
-              mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
-              status: "erro",
-              template_id: templateNome,
-              referencia_tipo: "cobranca_csv",
-              referencia_id: dest.matricula,
-              erro_mensagem: errMsg,
-            }).then(() => {}).catch(() => {});
-          } else {
-            sucesso++;
-            envioOkParaEsteAssoc = true;
-            detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "ok" });
-            await supabase.from("whatsapp_mensagens").insert({
-              direcao: "saida",
-              telefone: tel,
-              mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
-              status: "enviada",
-              template_id: templateNome,
-              referencia_tipo: "cobranca_csv",
-              referencia_id: dest.matricula,
-              mensagem_id_externo: json?.messages?.[0]?.id || null,
-            }).then(() => {}).catch(() => {});
+            const resp = await fetch(
+              `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+              },
+            );
+
+            const json = await resp.json();
+            if (!resp.ok) {
+              const errMsg = json?.error?.message || `HTTP ${resp.status}`;
+              throw new Error(errMsg);
+            }
+
+            ultimoMessageId = json?.messages?.[0]?.id || ultimoMessageId;
+            await new Promise((r) => setTimeout(r, 150));
           }
+
+          sucesso++;
+          envioOkParaEsteAssoc = true;
+          detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "ok" });
+          await supabase.from("whatsapp_mensagens").insert({
+            direcao: "saida",
+            telefone: tel,
+            mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s) em ${blocos.length} envio(s)`,
+            status: "enviada",
+            template_id: templateNome,
+            referencia_tipo: "cobranca_csv",
+            referencia_id: dest.matricula,
+            mensagem_id_externo: ultimoMessageId,
+          }).then(() => {}).catch(() => {});
         } catch (e: any) {
           detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "erro", erro: e.message });
           erros++;
+          await supabase.from("whatsapp_mensagens").insert({
+            direcao: "saida",
+            telefone: tel,
+            mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
+            status: "erro",
+            template_id: templateNome,
+            referencia_tipo: "cobranca_csv",
+            referencia_id: dest.matricula,
+            erro_mensagem: e.message,
+          }).then(() => {}).catch(() => {});
         }
 
         await new Promise((r) => setTimeout(r, 150));
