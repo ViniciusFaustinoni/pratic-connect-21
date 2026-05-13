@@ -117,8 +117,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       cotacao_id,
-      status: 'liberada_para_assinatura',
-      cadastro_auto_aprovado: true,
+      status: 'aguardando_cadastro',
+      cadastro_auto_aprovado: false,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
