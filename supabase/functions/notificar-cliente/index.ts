@@ -360,102 +360,83 @@ serve(async (req) => {
         const linkToken = contratoLink?.link_token || null;
         console.log(`[notificar-cliente] linkToken para botão: ${linkToken} (contrato encontrado: ${!!contratoLink})`);
 
-        // Mapear tipos de notificação para templates aprovados da Meta
-        // REGRA: cadastro_aprovado_botao usa 5 body params + 1 button param (link_token)
-        // O botão URL é /acompanhar/{{1}} → {{1}} DEVE ser contratos.link_token
+        // Mapear tipos de notificação para templates aprovados da Meta.
+        // ⚠️ `cadastro_aprovado_botao` foi DESCONTINUADO (substituído por:
+        //    - `cobertura_360_ativada_v3` quando cobertura já está ativa
+        //    - `sinistro_atualizado` (genérico) para avisos de aprovação intermediária)
+        const buildLista360 = async (): Promise<string> => {
+          let listaItens = '';
+          try {
+            const { data: assoc } = await supabase
+              .from('associados').select('plano_id').eq('id', associadoId).single();
+            if (assoc?.plano_id) {
+              const { data: cobs } = await supabase
+                .from('planos_coberturas').select('coberturas(nome)').eq('plano_id', assoc.plano_id);
+              const { data: bens } = await supabase
+                .from('planos_beneficios').select('benefits(name)').eq('plano_id', assoc.plano_id);
+              const linhas: string[] = [];
+              for (const c of (cobs || []) as any[]) if (c.coberturas) linhas.push(`✓ ${c.coberturas.nome}`);
+              for (const b of (bens || []) as any[]) if (b.benefits) linhas.push(`✓ ${b.benefits.name}`);
+              listaItens = linhas.join('\n');
+            }
+          } catch (e) {
+            console.warn('[notificar-cliente] erro ao buscar coberturas/benefícios:', e);
+          }
+          return listaItens || '✓ Proteção completa conforme seu plano';
+        };
+
         const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] | Promise<string[]>; getButtonParams?: () => string[] | null }> = {
           cadastro_aprovado: {
-            template_name: 'cadastro_aprovado_botao',
+            template_name: 'sinistro_atualizado',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador'];
+              return [
+                primeiroNome,
+                'cadastro',
+                `Seu cadastro foi APROVADO! 🎉 Veículo ${marcaModelo} (${placa}). Próximo passo: instalação do rastreador.`,
+              ];
             },
-            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           proposta_aprovada_roubo_furto: {
-            template_name: 'cadastro_aprovado_botao',
+            template_name: 'sinistro_atualizado',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Roubo e Furto', 'Instalação do rastreador'];
+              return [primeiroNome, 'proposta', `Sua proposta foi APROVADA! Veículo ${marcaModelo} (${placa}) — cobertura Roubo e Furto. Próximo passo: instalação.`];
             },
-            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           proposta_aprovada_cobertura_total: {
-            template_name: 'cadastro_aprovado_botao',
+            template_name: 'sinistro_atualizado',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Instalação do rastreador'];
+              return [primeiroNome, 'proposta', `Sua proposta foi APROVADA! Veículo ${marcaModelo} (${placa}) — Proteção 360º. Próximo passo: instalação.`];
             },
-            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           cobertura_total_ativada: {
             template_name: 'cobertura_360_ativada_v3',
             getParams: async () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              
-              // Buscar plano do associado para montar lista dinâmica
-              let listaItens = '';
-              try {
-                const { data: assoc } = await supabase
-                  .from('associados')
-                  .select('plano_id')
-                  .eq('id', associadoId)
-                  .single();
-                
-                if (assoc?.plano_id) {
-                  const { data: cobs } = await supabase
-                    .from('planos_coberturas')
-                    .select('coberturas(nome)')
-                    .eq('plano_id', assoc.plano_id);
-                  
-                  const { data: bens } = await supabase
-                    .from('planos_beneficios')
-                    .select('benefits(name)')
-                    .eq('plano_id', assoc.plano_id);
-                  
-                  const linhas: string[] = [];
-                  for (const c of (cobs || []) as any[]) {
-                    if (c.coberturas) linhas.push(`✓ ${c.coberturas.nome}`);
-                  }
-                  for (const b of (bens || []) as any[]) {
-                    if (b.benefits) linhas.push(`✓ ${b.benefits.name}`);
-                  }
-                  listaItens = linhas.join('\n');
-                }
-              } catch (e) {
-                console.warn('[cobertura_total_ativada] Erro ao buscar coberturas/benefícios:', e);
-              }
-              
-              if (!listaItens) {
-                listaItens = '✓ Proteção completa conforme seu plano';
-              }
-              
-              return [primeiroNome, placa, marcaModelo, listaItens];
+              return [primeiroNome, placa, marcaModelo, await buildLista360()];
             },
           },
           vistoria_aprovada: {
-            template_name: 'cadastro_aprovado_botao',
+            template_name: 'sinistro_atualizado',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, placa, marcaModelo, cobertura, 'Aguardando instalação'];
+              return [primeiroNome, 'vistoria', `Sua vistoria do veículo ${marcaModelo} (${placa}) foi APROVADA! Aguardando instalação.`];
             },
-            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           instalacao_concluida: {
-            template_name: 'cadastro_aprovado_botao',
-            getParams: () => {
+            template_name: 'cobertura_360_ativada_v3',
+            getParams: async () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!'];
+              return [primeiroNome, placa, marcaModelo, await buildLista360()];
             },
-            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           // Técnico a caminho → tecnico_a_caminho_1 (6 body params)
           // {{1}} nome, {{2}} técnico, {{3}} telefone, {{4}} telefone formatado, {{5}} endereço, {{6}} período
