@@ -241,7 +241,7 @@ export function WhatsAppMetaTemplates() {
         <div className="flex justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : templates.length === 0 ? (
+      ) : visibleTemplates.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground text-sm">
           Nenhum template cadastrado
         </div>
@@ -259,7 +259,7 @@ export function WhatsAppMetaTemplates() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {templates.map((t) => {
+              {visibleTemplates.map((t) => {
                 const badge = STATUS_BADGE[t.status] || STATUS_BADGE.DRAFT;
                 const catalog = getCatalogEntry(t.nome);
                 return (
