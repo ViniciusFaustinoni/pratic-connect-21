@@ -2304,16 +2304,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                       </CardContent>
                     </Card>
                   )}
-
-                  {/* Estado B: Não elegível pelo cálculo */}
-                  {!fipeMenorInfo.bloqueado && !fipeMenorInfo.elegivel && (
-                    <Alert>
-                      <Info className="h-4 w-4" />
-                      <AlertDescription className="text-xs">
-                        <strong>Regra do 1% não se aplica:</strong> com a redução de 1%, o veículo continua na mesma faixa de preço.
-                      </AlertDescription>
-                    </Alert>
-                  )}
                 </div>
               )}
 
