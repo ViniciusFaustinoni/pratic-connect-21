@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock, Send, AlertCircle } from 'lucide-react';
+import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock, Send, AlertCircle, Camera } from 'lucide-react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { motion } from 'framer-motion';
 import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
@@ -63,6 +63,20 @@ interface DocUploadState {
 
 // Tipos equivalentes ao CRLV (substituem o documento do veículo)
 const TIPOS_EQUIVALENTES_CRLV = new Set(['nota_fiscal_veiculo', 'atpv_e']);
+
+// Tipos que são FOTOS (devem ser capturadas ao vivo pela câmera, nunca anexadas da galeria)
+const TIPOS_FOTO = new Set([
+  'foto_frontal_veiculo', 'foto_traseira_veiculo', 'foto_lateral_esquerda', 'foto_lateral_direita',
+  'foto_painel', 'foto_hodometro', 'selfie_veiculo',
+  'frente', 'traseira', 'lateral_direita', 'lateral_esquerda',
+  'odometro', 'chassi', 'motor', 'banco_dianteiro', 'banco_traseiro',
+  'pneu_dianteiro_direito', 'pneu_dianteiro_esquerdo',
+  'pneu_traseiro_direito', 'pneu_traseiro_esquerdo',
+]);
+
+function isTipoFoto(tipo: string): boolean {
+  return TIPOS_FOTO.has(tipo) || tipo.startsWith('foto_');
+}
 
 function isOcrTipoCompativel(tipoEsperado: string, tipoDetectado: string | null | undefined): boolean {
   if (!tipoDetectado) return false;
@@ -472,30 +486,49 @@ export function DocumentosPendentesPublico({
 
                     {!isEnviado && (
                       <div className="space-y-3 mt-3">
-                        {/* Input de arquivo */}
+                        {/* Input de arquivo — fotos forçam câmera ao vivo (capture environment) */}
                         <div>
-                          <input
-                            ref={el => fileInputRefs.current[doc.id] = el}
-                            type="file"
-                            accept="image/*,.pdf"
-                            className="hidden"
-                            onChange={(e) => handleFileSelect(doc.id, e.target.files?.[0] || null)}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className={`w-full justify-start text-left ${state.file ? 'border-primary/30 text-primary' : ''}`}
-                            onClick={() => fileInputRefs.current[doc.id]?.click()}
-                            disabled={state.uploading}
-                          >
-                            {state.uploading ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Upload className="h-4 w-4 mr-2" />
-                            )}
-                            {state.file ? state.file.name : 'Selecionar arquivo'}
-                          </Button>
+                          {(() => {
+                            const ehFoto = isTipoFoto(doc.tipo_documento);
+                            return (
+                              <>
+                                <input
+                                  ref={el => fileInputRefs.current[doc.id] = el}
+                                  type="file"
+                                  accept={ehFoto ? 'image/*' : 'image/*,.pdf'}
+                                  {...(ehFoto ? { capture: 'environment' as const } : {})}
+                                  className="hidden"
+                                  onChange={(e) => handleFileSelect(doc.id, e.target.files?.[0] || null)}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className={`w-full justify-start text-left ${state.file ? 'border-primary/30 text-primary' : ''}`}
+                                  onClick={() => fileInputRefs.current[doc.id]?.click()}
+                                  disabled={state.uploading}
+                                >
+                                  {state.uploading ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : ehFoto ? (
+                                    <Camera className="h-4 w-4 mr-2" />
+                                  ) : (
+                                    <Upload className="h-4 w-4 mr-2" />
+                                  )}
+                                  {state.file
+                                    ? state.file.name
+                                    : ehFoto
+                                      ? 'Tirar foto agora'
+                                      : 'Selecionar arquivo'}
+                                </Button>
+                                {ehFoto && !state.file && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    A foto deve ser feita ao vivo pela câmera. Não é permitido anexar imagens da galeria.
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
 
                         {/* Observação opcional */}
