@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ConversasList, type ConversaAgrupada } from '@/components/eventos/chat-ia/ConversasList';
 import { ChatPanel } from '@/components/eventos/chat-ia/ChatPanel';
