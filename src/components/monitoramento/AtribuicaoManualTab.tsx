@@ -127,9 +127,11 @@ function DragOverlayCard({ servico }: { servico: any }) {
 function DroppableVistoriador({
   vistoriador,
   onAcaoTarefa,
+  podeForcarDevolucao,
 }: {
   vistoriador: any;
   onAcaoTarefa: (tarefa: any, modo: 'devolver' | 'reatribuir') => void;
+  podeForcarDevolucao: boolean;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `vist-${vistoriador.id}` });
 
