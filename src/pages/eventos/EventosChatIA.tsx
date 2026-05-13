@@ -93,12 +93,12 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     enabled: escopo === 'monitoramento',
     staleTime: 60_000,
     queryFn: async () => {
-      const STATUS_VEIC = ['ativo', 'instalacao_pendente', 'suspenso_nao_instalacao', 'manutencao'];
-      const SERV_STATUS_ABERTOS = ['pendente', 'agendada', 'em_andamento', 'aguardando_aprovacao'];
+      const STATUS_VEIC = ['ativo', 'instalacao_pendente', 'suspenso'] as const;
+      const SERV_STATUS_ABERTOS = ['pendente', 'agendada', 'em_andamento', 'em_rota', 'em_analise', 'reagendada', 'imprevisto_pendente'] as const;
 
       const [{ data: veics }, { data: servs }, { data: rastr }] = await Promise.all([
-        supabase.from('veiculos').select('associado_id').in('status', STATUS_VEIC).not('associado_id', 'is', null),
-        supabase.from('servicos').select('veiculos!inner(associado_id)').in('status', SERV_STATUS_ABERTOS),
+        supabase.from('veiculos').select('associado_id').in('status', STATUS_VEIC as unknown as any).not('associado_id', 'is', null),
+        supabase.from('servicos').select('veiculos!inner(associado_id)').in('status', SERV_STATUS_ABERTOS as unknown as any),
         supabase.from('rastreadores').select('veiculos!inner(associado_id)').not('veiculo_id', 'is', null),
       ]);
 
