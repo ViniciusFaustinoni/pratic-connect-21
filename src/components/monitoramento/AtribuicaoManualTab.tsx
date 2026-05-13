@@ -18,6 +18,7 @@ import { TIPO_SERVICO_LABELS } from '@/hooks/useServicos';
 import { LinkPrestadorResultDialog } from './LinkPrestadorResultDialog';
 import { DevolverFilaDialog } from './DevolverFilaDialog';
 import { formatPlacaOuChassi, isPlacaPlaceholder } from '@/lib/placa-utils';
+import { usePermissions } from '@/hooks/usePermissions';
 
 function getTipoLabel(tipo: string) {
   if (tipo === 'vistoria_base') return 'Vistoria Base';
