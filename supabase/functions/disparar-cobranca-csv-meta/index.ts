@@ -333,47 +333,83 @@ serve(async (req) => {
       });
     }
 
-    const detalhes: Array<{ matricula: string; nome: string; telefone: string; status: "ok" | "erro"; erro?: string }> = [];
+    const detalhes: Array<{
+      matricula: string;
+      nome: string;
+      telefone: string;
+      status: "ok" | "erro" | "skip";
+      erro?: string;
+      erro_codigo?: number | string;
+    }> = [];
     let sucesso = 0;
     let erros = 0;
     const associadosAtingidos = new Set<string>();
 
     for (const dest of destinatarios) {
-      const blocos = montarBlocosBoletosSegmentados(dest.boletos || []);
+      const blocosOriginais = montarBlocosBoletosSegmentados(dest.boletos || []);
+      // Limita pra não disparar 131056 (pair rate limit) com listas enormes.
+      const blocos = blocosOriginais.slice(0, MAX_BLOCOS_POR_DESTINATARIO);
+      const blocosCortados = blocosOriginais.length - blocos.length;
       const nome = dest.primeiro_nome || primeiroNome(dest.nome);
+
+      if (blocos.length === 0) {
+        detalhes.push({
+          matricula: dest.matricula,
+          nome: dest.nome,
+          telefone: "",
+          status: "skip",
+          erro: "sem boletos válidos",
+        });
+        continue;
+      }
+
       let envioOkParaEsteAssoc = false;
 
       for (const telRaw of dest.telefones_validos || []) {
+        // Já enviou OK pra este associado em outro telefone? Não duplicar (evita 131056 e custo).
+        if (envioOkParaEsteAssoc) break;
+
         const tel = validarTelefone(telRaw);
         if (!tel) {
-          detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: telRaw, status: "erro", erro: "telefone inválido" });
+          detalhes.push({
+            matricula: dest.matricula,
+            nome: dest.nome,
+            telefone: telRaw,
+            status: "erro",
+            erro: "telefone inválido (precisa ser celular BR com 9º dígito)",
+            erro_codigo: "LOCAL_INVALID_PHONE",
+          });
           erros++;
           continue;
         }
 
-        try {
-          let ultimoMessageId: string | null = null;
+        let ultimoMessageId: string | null = null;
+        let ultimoErroCodigo: number | string | undefined;
+        let ultimoErroMsg = "";
+        let blocoOk = false;
 
-          for (const bloco of blocos) {
-            const payload = {
-              messaging_product: "whatsapp",
-              to: tel,
-              type: "template",
-              template: {
-                name: templateNome,
-                language: { code: "pt_BR" },
-                components: [
-                  {
-                    type: "body",
-                    parameters: [
-                      { type: "text", text: sanitizeMetaParam(nome) },
-                      { type: "text", text: sanitizeMetaParam(bloco) },
-                    ],
-                  },
-                ],
-              },
-            };
+        for (let i = 0; i < blocos.length; i++) {
+          const bloco = blocos[i];
+          const payload = {
+            messaging_product: "whatsapp",
+            to: tel,
+            type: "template",
+            template: {
+              name: templateNome,
+              language: { code: "pt_BR" },
+              components: [
+                {
+                  type: "body",
+                  parameters: [
+                    { type: "text", text: sanitizeMetaParam(nome) },
+                    { type: "text", text: sanitizeMetaParam(bloco) },
+                  ],
+                },
+              ],
+            },
+          };
 
+          try {
             const resp = await fetch(
               `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`,
               {
@@ -385,21 +421,42 @@ serve(async (req) => {
                 body: JSON.stringify(payload),
               },
             );
-
             const json = await resp.json();
             if (!resp.ok) {
-              const errMsg = json?.error?.message || `HTTP ${resp.status}`;
-              throw new Error(errMsg);
+              ultimoErroCodigo = json?.error?.code ?? `HTTP_${resp.status}`;
+              ultimoErroMsg = json?.error?.error_data?.details
+                || json?.error?.message
+                || `HTTP ${resp.status}`;
+              // 131056 (pair rate limit) ou 131026 (não é WhatsApp): aborta o resto dos blocos
+              break;
             }
-
             ultimoMessageId = json?.messages?.[0]?.id || ultimoMessageId;
-            await new Promise((r) => setTimeout(r, 150));
+            blocoOk = true;
+          } catch (e: any) {
+            ultimoErroMsg = e?.message || "fetch error";
+            ultimoErroCodigo = "FETCH_ERROR";
+            break;
           }
 
+          // Espaço entre blocos do MESMO destinatário pra não acionar pair rate limit
+          if (i < blocos.length - 1) {
+            await new Promise((r) => setTimeout(r, SLEEP_ENTRE_BLOCOS_MS));
+          }
+        }
+
+        if (blocoOk && !ultimoErroMsg) {
           sucesso++;
           envioOkParaEsteAssoc = true;
-          detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "ok" });
-          await supabase.from("whatsapp_mensagens").insert({
+          detalhes.push({
+            matricula: dest.matricula,
+            nome: dest.nome,
+            telefone: tel,
+            status: "ok",
+            ...(blocosCortados > 0
+              ? { erro: `${blocosCortados} bloco(s) adiados p/ próximo lote` }
+              : {}),
+          });
+          const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             telefone: tel,
             mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s) em ${blocos.length} envio(s)`,
@@ -407,12 +464,21 @@ serve(async (req) => {
             template_id: templateNome,
             referencia_tipo: "cobranca_csv",
             referencia_id: dest.matricula,
-            mensagem_id_externo: ultimoMessageId,
-          }).then(() => {}).catch(() => {});
-        } catch (e: any) {
-          detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "erro", erro: e.message });
+            message_id: ultimoMessageId,
+            provedor: "meta",
+          });
+          if (insErr) console.error("[whatsapp_mensagens insert ok]", insErr.message);
+        } else {
           erros++;
-          await supabase.from("whatsapp_mensagens").insert({
+          detalhes.push({
+            matricula: dest.matricula,
+            nome: dest.nome,
+            telefone: tel,
+            status: "erro",
+            erro: ultimoErroMsg || "falha desconhecida",
+            erro_codigo: ultimoErroCodigo,
+          });
+          const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             telefone: tel,
             mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
@@ -420,11 +486,14 @@ serve(async (req) => {
             template_id: templateNome,
             referencia_tipo: "cobranca_csv",
             referencia_id: dest.matricula,
-            erro_mensagem: e.message,
-          }).then(() => {}).catch(() => {});
+            erro_codigo: ultimoErroCodigo ? String(ultimoErroCodigo) : null,
+            erro_mensagem: ultimoErroMsg,
+            provedor: "meta",
+          });
+          if (insErr) console.error("[whatsapp_mensagens insert erro]", insErr.message);
         }
 
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, SLEEP_ENTRE_DESTINATARIOS_MS));
       }
 
       // Se ao menos um telefone deu ok, marca todos os boletos deste assoc deste chunk como enviado
@@ -438,8 +507,6 @@ serve(async (req) => {
             .in("id", ids);
         }
       }
-    }
-
     // ===== 4. Atualiza contadores do lote (incremental) =====
     if (sucesso > 0 || associadosAtingidos.size > 0) {
       const { data: cur } = await supabase
