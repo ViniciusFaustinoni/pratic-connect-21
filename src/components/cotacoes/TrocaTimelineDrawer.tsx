@@ -69,7 +69,35 @@ interface Props {
 export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isResending }: Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [criandoCotacao, setCriandoCotacao] = useState(false);
+  const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
+
+  // Carrega a solicitação completa para montar o cotacaoBase do formulário padrão
+  const { data: solicitacao } = useSolicitacaoTroca(item?.solicitacao_troca_id || undefined);
+
+  const cotacaoBaseTroca: CotacaoBaseParaFormulario | null = useMemo(() => {
+    if (!solicitacao) return null;
+    const v = solicitacao.veiculo;
+    const novo = solicitacao.novo_titular_dados || ({} as any);
+    return {
+      valor_fipe: (v?.valor_fipe as number | null) ?? null,
+      valor_adicional: null,
+      valor_adesao: null,
+      validade_dias: 15,
+      veiculo_marca: v?.marca ?? null,
+      veiculo_modelo: v?.modelo ?? null,
+      veiculo_ano: (v?.ano_modelo ?? v?.ano_fabricacao) ?? null,
+      veiculo_placa: v?.placa ?? null,
+      codigo_fipe: (v?.codigo_fipe as string | null) ?? null,
+      categoria: null,
+      regiao: null,
+      nome_solicitante: novo?.nome ?? null,
+      telefone1_solicitante: novo?.telefone ?? null,
+      email_solicitante: novo?.email ?? null,
+      lead_id: null,
+      plano_id: null,
+    };
+  }, [solicitacao]);
+
   if (!item) return null;
   const steps = buildSteps(item);
   const semEmail = !item.associado_antigo_email;
@@ -81,28 +109,17 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
     && !item.cotacao_id
     && !!item.termo_assinado_em;
 
-  const handleRealizarCotacao = async () => {
+  const handleRealizarCotacao = () => {
     if (!item.solicitacao_troca_id) return;
-    setCriandoCotacao(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('criar-cotacao-troca-titularidade', {
-        body: { solicitacao_id: item.solicitacao_troca_id },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      const cotacaoId = (data as any)?.cotacao_id as string | undefined;
-      if (!cotacaoId) throw new Error('Cotação não retornada pelo servidor');
-      qc.invalidateQueries({ queryKey: ['outros-processos'] });
-      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
-      toast.success('Cotação criada com sucesso');
-      onOpenChange(false);
-      navigate(`/vendas/cotacoes?abrir=${cotacaoId}`);
-    } catch (e: any) {
-      toast.error(e?.message || 'Falha ao criar cotação');
-    } finally {
-      setCriandoCotacao(false);
+    if (!solicitacao || !cotacaoBaseTroca) {
+      toast.error('Carregando dados da solicitação. Tente novamente em instantes.');
+      return;
     }
+    // Abre o modal padrão de cotação. A cotação só será criada (e vinculada
+    // via `vincular-cotacao-troca`) ao salvar com plano selecionado.
+    setFormCotacaoOpen(true);
   };
+  const criandoCotacao = false;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
