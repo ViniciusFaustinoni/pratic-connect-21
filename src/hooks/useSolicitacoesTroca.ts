@@ -8,11 +8,32 @@ export type StatusTroca =
   | 'aguardando_cadastro'
   | 'aguardando_monitoramento'
   | 'aguardando_vistoria'
+  | 'aguardando_manutencao'
   | 'liberada_para_assinatura'
   | 'efetivada'
   | 'reprovada_cadastro'
   | 'reprovada_monitoramento'
-  | 'cancelada';
+  | 'cancelada'
+  | 'expirada';
+
+export type TipoVistoriaTroca = 'somente_fotos' | 'fotos_com_rastreador' | 'manutencao';
+
+export interface ManutencaoTrocaPayload {
+  rastreador_id: string;
+  data_agendada: string;
+  periodo: 'manha' | 'tarde';
+  motivo?: string;
+  endereco: {
+    logradouro: string;
+    numero?: string | null;
+    bairro: string;
+    cidade: string;
+    uf: string;
+    cep: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  };
+}
 
 export interface SolicitacaoTroca {
   id: string;
@@ -178,12 +199,20 @@ export function useAprovarTrocaCadastro() {
 export function useAprovarTrocaMonitoramento() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { solicitacao_id: string; acao: 'aprovar' | 'solicitar_vistoria'; observacao?: string }) => {
+    mutationFn: async (params: {
+      solicitacao_id: string;
+      acao: 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao';
+      observacao?: string;
+      tipo_vistoria_troca?: TipoVistoriaTroca;
+      manutencao?: ManutencaoTrocaPayload;
+    }) => {
       const { data, error } = await supabase.functions.invoke('aprovar-troca-monitoramento', { body: params });
       if (error) {
         const esperados: StatusTroca[] = params.acao === 'aprovar'
           ? ['liberada_para_assinatura', 'efetivada']
-          : ['aguardando_vistoria', 'liberada_para_assinatura', 'efetivada'];
+          : params.acao === 'agendar_manutencao'
+            ? ['aguardando_manutencao']
+            : ['aguardando_vistoria', 'liberada_para_assinatura', 'efetivada'];
         const ok = await statusAvancou(params.solicitacao_id, esperados);
         if (ok) return { success: true, silent: true };
         throw error;
@@ -194,9 +223,12 @@ export function useAprovarTrocaMonitoramento() {
     onSuccess: (data: any, vars) => {
       qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
       qc.invalidateQueries({ queryKey: ['solicitacao-troca'] });
-      toast.success(data?.silent
-        ? 'Aprovada — processamento em segundo plano'
-        : (vars.acao === 'aprovar' ? 'Liberado para assinatura' : 'Vistoria solicitada'));
+      const msg = vars.acao === 'aprovar'
+        ? 'Liberado para assinatura'
+        : vars.acao === 'agendar_manutencao'
+          ? 'Manutenção agendada'
+          : 'Vistoria solicitada';
+      toast.success(data?.silent ? 'Processado em segundo plano' : msg);
     },
     onError: (e: Error) => toast.error(e.message),
   });

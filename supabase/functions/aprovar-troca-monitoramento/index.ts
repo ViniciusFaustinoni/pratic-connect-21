@@ -1,19 +1,60 @@
-// Aprovação do Monitoramento: aprova direto OU solicita vistoria de entrada
+// Aprovação do Monitoramento: aprova direto, solicita vistoria (com modalidade)
+// ou agenda manutenção de rastreador antes da aprovação final.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { sendMetaTemplate } from '../_shared/send-meta-template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+type Acao = 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao';
+type TipoVistoriaTroca = 'somente_fotos' | 'fotos_com_rastreador';
+
+interface Body {
+  solicitacao_id: string;
+  acao: Acao;
+  observacao?: string | null;
+  // solicitar_vistoria
+  tipo_vistoria_troca?: TipoVistoriaTroca;
+  // agendar_manutencao
+  manutencao?: {
+    rastreador_id: string;
+    data_agendada: string;        // YYYY-MM-DD
+    periodo: 'manha' | 'tarde';
+    motivo?: string;
+    endereco: {
+      logradouro: string;
+      numero?: string | null;
+      bairro: string;
+      cidade: string;
+      uf: string;
+      cep: string;
+      latitude?: number | null;
+      longitude?: number | null;
+    };
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { solicitacao_id, acao, observacao } = await req.json();
-    // acao: 'aprovar' | 'solicitar_vistoria'
-    if (!solicitacao_id || !['aprovar', 'solicitar_vistoria'].includes(acao)) {
+    const body = (await req.json()) as Body;
+    const { solicitacao_id, acao, observacao } = body;
+    if (!solicitacao_id || !['aprovar', 'solicitar_vistoria', 'agendar_manutencao'].includes(acao)) {
       return new Response(JSON.stringify({ error: 'parâmetros inválidos' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (acao === 'solicitar_vistoria' && !['somente_fotos', 'fotos_com_rastreador'].includes(String(body.tipo_vistoria_troca))) {
+      return new Response(JSON.stringify({ error: 'tipo_vistoria_troca inválido' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (acao === 'agendar_manutencao' && (!body.manutencao?.rastreador_id || !body.manutencao?.data_agendada || !body.manutencao?.periodo)) {
+      return new Response(JSON.stringify({ error: 'dados de manutenção incompletos' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -30,7 +71,6 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // FK aprovado_monitoramento_por aponta para profiles.id (não auth.users.id)
     const { data: profile } = await admin
       .from('profiles')
       .select('id')
@@ -40,17 +80,20 @@ Deno.serve(async (req) => {
 
     const { data: solicitacao, error: getErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, veiculo_id, associado_antigo_id, novo_associado_id, cotacao_id, status')
+      .select('id, veiculo_id, associado_antigo_id, novo_associado_id, novo_titular_dados, cotacao_id, status')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (getErr || !solicitacao) throw new Error('Solicitação não encontrada');
-    // 'aprovar' aceita tanto a fila inicial (aguardando_monitoramento) quanto
-    // a aprovação final pós-vistoria (aguardando_vistoria, após o novo titular
-    // concluir a vistoria pelo link público). 'solicitar_vistoria' só na fila inicial.
+    if (solicitacao.status === 'expirada') {
+      throw new Error('Solicitação expirada — não é mais possível agir.');
+    }
     if (acao === 'solicitar_vistoria' && solicitacao.status !== 'aguardando_monitoramento') {
       throw new Error('Solicitação não está aguardando monitoramento');
     }
-    if (acao === 'aprovar' && !['aguardando_monitoramento', 'aguardando_vistoria'].includes(solicitacao.status as string)) {
+    if (acao === 'agendar_manutencao' && solicitacao.status !== 'aguardando_monitoramento') {
+      throw new Error('Manutenção só pode ser agendada com a solicitação em aguardando monitoramento');
+    }
+    if (acao === 'aprovar' && !['aguardando_monitoramento', 'aguardando_vistoria', 'aguardando_manutencao'].includes(solicitacao.status as string)) {
       throw new Error(`Solicitação no status "${solicitacao.status}" não pode ser aprovada`);
     }
 
@@ -60,6 +103,42 @@ Deno.serve(async (req) => {
       observacao_monitoramento: observacao || null,
     };
 
+    // ── helper de notificação ─────────────────────────────────────────────
+    const notificarTroca = async (templateName: string, params: string[]) => {
+      try {
+        const novoTit = (solicitacao.novo_titular_dados || {}) as any;
+        const [{ data: assoc }] = await Promise.all([
+          solicitacao.associado_antigo_id
+            ? admin.from('associados').select('nome, telefone').eq('id', solicitacao.associado_antigo_id).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        if (assoc?.telefone) {
+          await sendMetaTemplate({
+            supabase: admin,
+            telefone: assoc.telefone,
+            templateName,
+            templateParams: params,
+            referenciaTipo: 'troca_titularidade',
+            referenciaId: solicitacao_id,
+            tag: '[aprovar-troca-monitoramento:antigo]',
+          });
+        }
+        if (novoTit?.telefone) {
+          await sendMetaTemplate({
+            supabase: admin,
+            telefone: novoTit.telefone,
+            templateName,
+            templateParams: params,
+            referenciaTipo: 'troca_titularidade',
+            referenciaId: solicitacao_id,
+            tag: '[aprovar-troca-monitoramento:novo]',
+          });
+        }
+      } catch (waErr) {
+        console.warn('[aprovar-troca-monitoramento] whatsapp falhou (não bloqueante):', waErr);
+      }
+    };
+
     if (acao === 'aprovar') {
       const { error } = await admin
         .from('solicitacoes_troca_titularidade')
@@ -67,12 +146,9 @@ Deno.serve(async (req) => {
         .eq('id', solicitacao_id);
       if (error) throw error;
 
-      // Após a aprovação do Monitoramento, dispara a ativação do novo associado
-      // e a efetivação da troca (transferência do veículo + criação do contrato final).
-      // Esta é a ÚNICA porta para a efetivação — vistoria e pagamento não efetivam mais.
+      // Ativação + efetivação (mesmo fluxo já existente)
       if (solicitacao.novo_associado_id) {
         try {
-          // Buscar contrato do novo titular gerado pelo fluxo público (associado ao cotacao_id)
           let contratoNovoId: string | null = null;
           if (solicitacao.cotacao_id) {
             const { data: contratoNovo } = await admin
@@ -85,8 +161,7 @@ Deno.serve(async (req) => {
               .maybeSingle();
             contratoNovoId = contratoNovo?.id || null;
           }
-
-          const ativResp = await fetch(`${SUPABASE_URL}/functions/v1/ativar-associado`, {
+          await fetch(`${SUPABASE_URL}/functions/v1/ativar-associado`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -102,22 +177,13 @@ Deno.serve(async (req) => {
               metadata: { solicitacao_troca_id: solicitacao_id },
             }),
           });
-          const ativData = await ativResp.json().catch(() => ({}));
-          if (!ativData?.success) {
-            console.warn('[aprovar-troca-monitoramento] ativar-associado falhou (não bloqueante):', ativData);
-          } else {
-            console.log('[aprovar-troca-monitoramento] novo associado ativado:', solicitacao.novo_associado_id);
-          }
         } catch (ativErr) {
-          console.error('[aprovar-troca-monitoramento] erro ao ativar novo associado (não bloqueante):', ativErr);
+          console.error('[aprovar-troca-monitoramento] erro ao ativar novo associado:', ativErr);
         }
-      } else {
-        console.warn(`[aprovar-troca-monitoramento] Solicitação ${solicitacao_id} sem novo_associado_id — pulando ativação`);
       }
 
-      // Efetivar a troca (transferência veículo + novo contrato final)
       try {
-        const efetResp = await fetch(`${SUPABASE_URL}/functions/v1/efetivar-troca-titularidade`, {
+        await fetch(`${SUPABASE_URL}/functions/v1/efetivar-troca-titularidade`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -125,29 +191,93 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({ solicitacao_id, cenario_override: 'B' }),
         });
-        const efetData = await efetResp.json().catch(() => ({}));
-        if (!efetData?.success) {
-          console.error('[aprovar-troca-monitoramento] efetivar-troca-titularidade falhou:', efetData);
-        } else {
-          console.log('[aprovar-troca-monitoramento] troca efetivada:', efetData.novo_contrato_numero);
-        }
       } catch (efetErr) {
-        console.error('[aprovar-troca-monitoramento] erro ao efetivar troca (não bloqueante):', efetErr);
+        console.error('[aprovar-troca-monitoramento] erro ao efetivar troca:', efetErr);
       }
-    } else {
-      // Solicitar vistoria: NÃO criar serviço de campo.
-      // A vistoria será executada pelo NOVO titular dentro do link público
-      // (etapa "Vistoria" do fluxo de contratação). O sinal de "vistoria pedida"
-      // é o próprio status `aguardando_vistoria`. O monitoramento aprova depois,
-      // assim que a vistoria for concluída no link público.
+    } else if (acao === 'solicitar_vistoria') {
+      // Persiste a modalidade da vistoria escolhida pelo monitoramento e
+      // muda a solicitação para aguardando_vistoria. A vistoria em si é
+      // executada pelo NOVO titular pelo link público (autovistoria).
+      const tipo = body.tipo_vistoria_troca!;
       const { error } = await admin
         .from('solicitacoes_troca_titularidade')
         .update({
           ...baseUpdate,
           status: 'aguardando_vistoria',
+          tipo_vistoria_troca: tipo,
+          instalar_rastreador: tipo === 'fotos_com_rastreador',
         })
         .eq('id', solicitacao_id);
       if (error) throw error;
+
+      const tipoLabel = tipo === 'fotos_com_rastreador' ? 'Fotos + instalação de rastreador' : 'Somente fotos';
+      await notificarTroca('troca_vistoria_agendada', [tipoLabel]);
+    } else if (acao === 'agendar_manutencao') {
+      // Cria serviço de campo (vistoria_manutencao) com endereço informado.
+      const m = body.manutencao!;
+      const { data: rast, error: rErr } = await admin
+        .from('rastreadores')
+        .select('id, codigo, veiculo_id')
+        .eq('id', m.rastreador_id)
+        .maybeSingle();
+      if (rErr || !rast) throw new Error('Rastreador não encontrado');
+
+      // Atualiza status do rastreador para manutenção (alinhado com useCriarManutencao)
+      await admin
+        .from('rastreadores')
+        .update({ status: 'manutencao', updated_at: new Date().toISOString() })
+        .eq('id', m.rastreador_id);
+
+      await admin.from('estoque_movimentacoes').insert({
+        tipo: 'alteracao_status',
+        quantidade: 1,
+        status_anterior: 'instalado',
+        status_novo: 'manutencao',
+        rastreador_id: m.rastreador_id,
+        observacoes: m.motivo || 'Manutenção agendada na troca de titularidade',
+      });
+
+      const { data: servico, error: sErr } = await admin
+        .from('servicos')
+        .insert({
+          tipo: 'vistoria_manutencao',
+          status: 'pendente',
+          data_agendada: m.data_agendada,
+          periodo: m.periodo,
+          rastreador_id: m.rastreador_id,
+          veiculo_id: rast.veiculo_id || solicitacao.veiculo_id,
+          associado_id: solicitacao.associado_antigo_id,
+          local_vistoria: 'cliente',
+          observacoes: m.motivo || `Manutenção solicitada pelo monitoramento (troca ${solicitacao_id})`,
+          permite_encaixe: true,
+          logradouro: m.endereco.logradouro,
+          numero: m.endereco.numero || null,
+          bairro: m.endereco.bairro,
+          cidade: m.endereco.cidade,
+          uf: m.endereco.uf,
+          cep: m.endereco.cep,
+          latitude: m.endereco.latitude || null,
+          longitude: m.endereco.longitude || null,
+        })
+        .select('id')
+        .single();
+      if (sErr) throw sErr;
+
+      const { error } = await admin
+        .from('solicitacoes_troca_titularidade')
+        .update({
+          ...baseUpdate,
+          status: 'aguardando_manutencao',
+          tipo_vistoria_troca: 'manutencao',
+          servico_manutencao_id: servico.id,
+        })
+        .eq('id', solicitacao_id);
+      if (error) throw error;
+
+      await notificarTroca('troca_manutencao_agendada', [
+        new Date(m.data_agendada).toLocaleDateString('pt-BR'),
+        m.periodo === 'manha' ? 'manhã' : 'tarde',
+      ]);
     }
 
     return new Response(JSON.stringify({ success: true }), {

@@ -47,6 +47,21 @@ serve(async (req) => {
       });
     }
 
+    // Guard: troca expirada não pode ser efetivada
+    {
+      const { data: trocaGuard } = await supabase
+        .from("solicitacoes_troca_titularidade")
+        .select("status")
+        .eq("id", solicitacao_id)
+        .maybeSingle();
+      if (trocaGuard?.status === "expirada") {
+        return new Response(JSON.stringify({ success: false, error: "Solicitação expirada — abrir nova cotação." }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // ============================================
     // RETRY SGA — reexecuta só a etapa Hinova quando a troca já está efetivada/liberada
     // ============================================

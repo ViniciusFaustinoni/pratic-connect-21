@@ -44,6 +44,8 @@ const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
   reprovada_cadastro: 'Reprovada (Cadastro)',
   reprovada_monitoramento: 'Reprovada (Monitoramento)',
   cancelada: 'Cancelada',
+  aguardando_manutencao: 'Aguardando manutenção',
+  expirada: 'Expirada',
 };
 
 const TROCA_FILTROS: Record<string, StatusTroca[]> = {
