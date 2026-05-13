@@ -588,7 +588,7 @@ export default function AtribuicaoManualTab() {
             <p className="text-sm text-muted-foreground text-center py-6">Nenhum vistoriador em serviço</p>
           )}
           {(vistoriadores || []).map(v => (
-            <DroppableVistoriador key={v.id} vistoriador={v} onAcaoTarefa={handleAcaoTarefa} />
+            <DroppableVistoriador key={v.id} vistoriador={v} onAcaoTarefa={handleAcaoTarefa} podeForcarDevolucao={podeForcarDevolucao} />
           ))}
 
           {/* Prestadores Externos */}
