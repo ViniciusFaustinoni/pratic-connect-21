@@ -371,8 +371,16 @@ export default function CotacaoContratacao() {
       }
       return;
     }
+    // Em troca, depois de assinar o Contrato (etapa interna 2) seguimos a navOrder
+    // (que coloca Pagamento na sequência). Para cotação comum mantemos compat com proximaEtapaPadrao.
+    if (isTrocaTitularidade) {
+      const idx = navOrder.indexOf(2);
+      const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : proximaEtapaPadrao;
+      setEtapaAtual(next);
+      return;
+    }
     setEtapaAtual(proximaEtapaPadrao);
-  }, [pularEtapaPagamento, isTrocaTitularidade, associadoId, cotacao?.id, contratoFallback?.id, refetch, setEtapaAtual]);
+  }, [pularEtapaPagamento, isTrocaTitularidade, associadoId, cotacao?.id, contratoFallback?.id, refetch, setEtapaAtual, navOrder]);
 
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
