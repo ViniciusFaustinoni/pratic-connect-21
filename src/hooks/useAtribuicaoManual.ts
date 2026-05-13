@@ -390,6 +390,10 @@ export function useAtribuirServicoManual() {
 
         if (error) throw error;
 
+        // Espelhar atribuição na servicos vinculada (mantém fila do técnico).
+        // Ver mem://logic/operations/realocacao-base-preserva-servico
+        await vincularProfissionalAoServicoDoAgendamentoBase(servicoId, profissionalId);
+
         // Log with agendamento_base_id instead of servico_id
         const profileId = await getProfileId();
         const { error: logError } = await supabase.from('servicos_atribuicoes_log').insert({
