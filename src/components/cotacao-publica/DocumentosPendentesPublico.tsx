@@ -64,6 +64,20 @@ interface DocUploadState {
 // Tipos equivalentes ao CRLV (substituem o documento do veículo)
 const TIPOS_EQUIVALENTES_CRLV = new Set(['nota_fiscal_veiculo', 'atpv_e']);
 
+// Tipos que são FOTOS (devem ser capturadas ao vivo pela câmera, nunca anexadas da galeria)
+const TIPOS_FOTO = new Set([
+  'foto_frontal_veiculo', 'foto_traseira_veiculo', 'foto_lateral_esquerda', 'foto_lateral_direita',
+  'foto_painel', 'foto_hodometro', 'selfie_veiculo',
+  'frente', 'traseira', 'lateral_direita', 'lateral_esquerda',
+  'odometro', 'chassi', 'motor', 'banco_dianteiro', 'banco_traseiro',
+  'pneu_dianteiro_direito', 'pneu_dianteiro_esquerdo',
+  'pneu_traseiro_direito', 'pneu_traseiro_esquerdo',
+]);
+
+function isTipoFoto(tipo: string): boolean {
+  return TIPOS_FOTO.has(tipo) || tipo.startsWith('foto_');
+}
+
 function isOcrTipoCompativel(tipoEsperado: string, tipoDetectado: string | null | undefined): boolean {
   if (!tipoDetectado) return false;
   if (tipoEsperado === tipoDetectado) return true;
