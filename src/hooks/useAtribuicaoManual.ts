@@ -34,7 +34,7 @@ export function useServicosParaAtribuir() {
         .from('servicos')
         .select(`
           id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf, logradouro, numero,
-          permite_encaixe, status, contrato_id, instalacao_origem_id, origem,
+          permite_encaixe, status, contrato_id, instalacao_origem_id, vistoria_origem_id, origem,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi, marca, modelo),
           contrato:contratos!servicos_contrato_id_fkey(aprovado_em)
