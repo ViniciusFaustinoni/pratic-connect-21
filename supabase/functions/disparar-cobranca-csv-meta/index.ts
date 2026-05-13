@@ -36,6 +36,11 @@ function montarBlocoBoletos(boletos: BoletoIn[]): string {
   return boletos.map(formatarBoletoCompacto).join(" ⏐ ");
 }
 
+function renderTemplateBody(corpo: string, vars: Record<string, string>): string {
+  if (!corpo) return "";
+  return corpo.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, k) => vars[String(k)] ?? `{{${k}}}`);
+}
+
 function sanitizeMetaParam(s: string): string {
   // Remove caracteres bloqueados pela Meta em parâmetros de template (#132000/#132018).
   return (s || "")
