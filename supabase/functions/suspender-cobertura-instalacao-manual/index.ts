@@ -132,6 +132,28 @@ Deno.serve(async (req) => {
     const uf = (assoc?.uf || '').toUpperCase() || null;
     const prazoHoras = uf === 'RJ' ? prazoRJ : uf === 'SP' ? prazoSP : prazoDefault;
 
+    // Determinar base do prazo: agendamento da instalação (preferencial) ou assinatura
+    const { data: instalacaoAtiva } = await supabase
+      .from('instalacoes')
+      .select('id, data_agendada, hora_agendada')
+      .eq('contrato_id', contrato.id)
+      .order('data_agendada', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    let baseLabel = 'assinatura';
+    let inicioMs: number | null = contrato.data_assinatura ? new Date(contrato.data_assinatura).getTime() : null;
+    if (instalacaoAtiva?.data_agendada) {
+      const hora = instalacaoAtiva.hora_agendada || '00:00:00';
+      const t = new Date(`${instalacaoAtiva.data_agendada}T${hora}-03:00`).getTime();
+      if (!isNaN(t)) { inicioMs = t; baseLabel = 'agendamento'; }
+    }
+    if (inicioMs && (inicioMs + prazoHoras * 60 * 60 * 1000) > Date.now()) {
+      return new Response(JSON.stringify({ error: `Prazo de ${prazoHoras}h ainda não venceu (base=${baseLabel})` }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { data: veiculo } = await supabase
       .from('veiculos')
       .select('id, placa, modelo, cobertura_suspensa')
