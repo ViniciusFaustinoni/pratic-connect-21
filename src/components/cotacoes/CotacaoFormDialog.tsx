@@ -2230,21 +2230,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </p>
               )}
 
-              {/* ===== Painel Regra do 1% (FIPE Menor) ===== */}
-              {fipeMenorAtivo && fipeMenorInfo && (
+              {/* ===== Painel Regra do 1% (FIPE Menor) — só aparece quando habilitado pelo diretor E veículo elegível ===== */}
+              {fipeMenorAtivo && fipeMenorInfo && !fipeMenorInfo.bloqueado && fipeMenorInfo.elegivel && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior && (
                 <div className="mt-3">
-                  {/* Estado C: Bloqueado por restrição comercial */}
-                  {fipeMenorInfo.bloqueado && (
-                    <Alert className="border-amber-500/50 bg-amber-500/10">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
-                        <strong>Regra do 1% indisponível:</strong> {fipeMenorInfo.bloqueado.motivo}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Estado A: Elegível */}
-                  {!fipeMenorInfo.bloqueado && fipeMenorInfo.elegivel && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior && (
+                  {(
                     <Card className="border-green-500/40 bg-green-500/5">
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
