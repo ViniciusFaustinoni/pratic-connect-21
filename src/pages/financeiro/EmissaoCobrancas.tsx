@@ -525,7 +525,14 @@ function EmissaoCobrancasFechamento() {
 }
 
 export default function EmissaoCobrancas() {
-  const [tab, setTab] = useState<'fechamento' | 'csv'>('fechamento');
+  const [searchParams] = useSearchParams();
+  const initialSub = searchParams.get('sub') === 'csv' ? 'csv' : 'fechamento';
+  const [tab, setTab] = useState<'fechamento' | 'csv'>(initialSub);
+  useEffect(() => {
+    const s = searchParams.get('sub');
+    if (s === 'csv' || s === 'fechamento') setTab(s);
+  }, [searchParams]);
+
   return (
     <div className="p-6">
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
