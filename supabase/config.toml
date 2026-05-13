@@ -213,3 +213,6 @@ verify_jwt = true
 
 [functions.cotacao-criar-senha]
 verify_jwt = false
+
+[functions.vincular-cotacao-troca]
+verify_jwt = false
