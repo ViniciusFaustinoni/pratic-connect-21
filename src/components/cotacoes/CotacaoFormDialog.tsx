@@ -1691,9 +1691,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             }
           }
         }
-        
-        toast.success('Cotação criada com sucesso!');
-        navigate('/vendas/cotacoes');
+
+        // Se a cotação foi originada de uma Troca de Titularidade, vincular agora
+        if (origemTroca && novaCotacao?.id) {
+          try {
+            const { error: vincErr } = await supabase.functions.invoke('vincular-cotacao-troca', {
+              body: { solicitacao_id: origemTroca.solicitacaoId, cotacao_id: novaCotacao.id },
+            });
+            if (vincErr) throw vincErr;
+            toast.success('Cotação vinculada à troca de titularidade.');
+          } catch (e: any) {
+            console.error('[vincular-cotacao-troca]', e);
+            toast.error('Cotação criada, mas a vinculação à troca falhou. Tente reabrir a solicitação.');
+          }
+          // Quando vier de troca, ir para o detalhe da cotação (mesma navegação do fluxo antigo)
+          navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
+        } else {
+          toast.success('Cotação criada com sucesso!');
+          navigate('/vendas/cotacoes');
+        }
       }
       // Cotação criada/atualizada com sucesso → descartar rascunho local
       draft.clearOnSubmit();
