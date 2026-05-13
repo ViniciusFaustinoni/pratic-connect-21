@@ -31356,6 +31356,7 @@ export type Database = {
           aceito_em: string | null
           assinatura_url: string | null
           atribuido_por: string | null
+          cancelled_at: string | null
           checklist_data: Json | null
           chegada_em: string | null
           concluida_em: string | null
@@ -31385,6 +31386,7 @@ export type Database = {
           aceito_em?: string | null
           assinatura_url?: string | null
           atribuido_por?: string | null
+          cancelled_at?: string | null
           checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
@@ -31414,6 +31416,7 @@ export type Database = {
           aceito_em?: string | null
           assinatura_url?: string | null
           atribuido_por?: string | null
+          cancelled_at?: string | null
           checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
