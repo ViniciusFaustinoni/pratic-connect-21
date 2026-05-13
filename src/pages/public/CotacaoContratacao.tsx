@@ -197,6 +197,23 @@ export default function CotacaoContratacao() {
     
     const etapaBase = determinarEtapa(cotacao.status_contratacao);
     
+    if (isTrocaTitularidade && !pularEtapaVistoria) {
+      // Em troca: ordem é docs → vistoria(3) → contrato(2) → pagamento(4)
+      // Status documentos_ok / dados_preenchidos => liberar Vistoria (3) primeiro
+      if (etapaBase === 2) {
+        // Se a vistoria JÁ foi feita/agendada, libera o Contrato (2) — onde aparece a tela
+        // de "Em análise pelo Cadastro" enquanto a troca não foi liberada.
+        if (cotacao.tipo_vistoria) return 2;
+        return 3;
+      }
+      // contrato_assinado => libera pagamento
+      if (etapaBase === 3) {
+        return pularEtapaPagamento ? 5 : 4;
+      }
+      if (etapaBase === 4 && pularEtapaPagamento) return 5;
+      return etapaBase;
+    }
+    
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
     if (etapaBase === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
@@ -208,7 +225,7 @@ export default function CotacaoContratacao() {
     }
     
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
 
   // STEPS dinâmico:
   //  - autovistoria => adiciona "Instalação" como 6ª etapa
