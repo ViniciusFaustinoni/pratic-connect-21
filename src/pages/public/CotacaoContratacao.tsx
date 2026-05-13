@@ -382,29 +382,26 @@ export default function CotacaoContratacao() {
     }
   }, [etapaDoStatus, setEtapaAtual]);
 
-  // Handler para avançar para próxima etapa
+  // Handler para avançar para próxima etapa (segue navOrder)
   const handleAvancar = useCallback(() => {
-    let proximo = etapaAtual + 1;
-    if (pularEtapaVistoria && etapaAtual === 2) proximo = pularEtapaPagamento ? 5 : 4;
-    else if (pularEtapaPagamento && etapaAtual === 3) proximo = 5;
+    const idx = navOrder.indexOf(etapaAtual);
+    const proximo = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : etapaAtual;
     if (etapaAtual < etapaDoStatus) {
       setEtapaAtual(proximo);
     }
     if (proximo >= etapaDoStatus) {
       setNavegacaoManual(false);
     }
-  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [etapaAtual, etapaDoStatus, setEtapaAtual, navOrder]);
 
-  // Handler para voltar para etapa anterior
+  // Handler para voltar para etapa anterior (segue navOrder)
   const handleVoltar = useCallback(() => {
-    if (etapaAtual > 0) {
+    const idx = navOrder.indexOf(etapaAtual);
+    if (idx > 0) {
       setNavegacaoManual(true);
-      let anterior = etapaAtual - 1;
-      if (pularEtapaPagamento && etapaAtual === 5) anterior = pularEtapaVistoria ? 2 : 3;
-      else if (pularEtapaVistoria && etapaAtual === 4) anterior = 2;
-      setEtapaAtual(anterior);
+      setEtapaAtual(navOrder[idx - 1]);
     }
-  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [etapaAtual, setEtapaAtual, navOrder]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
