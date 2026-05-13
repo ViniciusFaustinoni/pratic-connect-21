@@ -154,6 +154,10 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
 
     for (const msg of mensagens) {
       const tel = msg.telefone;
+      if (escopo === 'monitoramento') {
+        const d = (tel || '').replace(/\D/g, '');
+        if (!telefonesMonitoramento || !telefonesMonitoramento.has(d)) continue;
+      }
       const isCobranca = msg.referencia_tipo && COBRANCA_TIPOS.has(msg.referencia_tipo);
       if (!mapa.has(tel)) {
         const assoc = avatarMap.get(tel.replace(/\D/g, ''));
