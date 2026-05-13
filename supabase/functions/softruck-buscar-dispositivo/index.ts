@@ -257,9 +257,9 @@ function authHeaders(token: string, publicKey: string): Record<string, string> {
   };
 }
 
-async function fetchVehicle(token: string, publicKey: string, vehicleId: string): Promise<any | null> {
+async function fetchVehicle(token: string, publicKey: string, vehicleId: string, includes = ''): Promise<any | null> {
   try {
-    const r = await fetch(`${BASE_URL}/v2/vehicles/${vehicleId}`, {
+    const r = await fetch(`${BASE_URL}/v2/vehicles/${vehicleId}${includes ? `?${includes.replace(/^&/, '')}` : ''}`, {
       headers: authHeaders(token, publicKey),
     });
     if (!r.ok) return null;
