@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { VeiculoCompletoCard } from './VeiculoCompletoCard';
 import { AnalisePreviaNovoTitularCard } from './AnalisePreviaNovoTitularCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
+import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 
 interface Props {
   open: boolean;
@@ -47,33 +48,49 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [motivoReprovar, setMotivoReprovar] = useState('');
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
   const [criandoCotacao, setCriandoCotacao] = useState(false);
+  const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
 
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
 
-  const handleRealizarCotacao = async () => {
+  // Monta cotacaoBase para o formulário padrão a partir da solicitação +
+  // dados do veículo. NÃO cria cotação avulsa antes — a cotação só nasce
+  // quando o usuário escolher um plano e salvar.
+  const cotacaoBaseTroca: CotacaoBaseParaFormulario | null = useMemo(() => {
+    if (!solicitacao) return null;
+    const v = solicitacao.veiculo;
+    const novo = solicitacao.novo_titular_dados || ({} as any);
+    return {
+      valor_fipe: (v?.valor_fipe as number | null) ?? null,
+      valor_adicional: null,
+      valor_adesao: null,
+      validade_dias: 15,
+      veiculo_marca: v?.marca ?? null,
+      veiculo_modelo: v?.modelo ?? null,
+      veiculo_ano: (v?.ano_modelo ?? v?.ano_fabricacao) ?? null,
+      veiculo_placa: v?.placa ?? null,
+      codigo_fipe: (v?.codigo_fipe as string | null) ?? null,
+      categoria: null,
+      regiao: null,
+      nome_solicitante: novo?.nome ?? null,
+      telefone1_solicitante: novo?.telefone ?? null,
+      email_solicitante: novo?.email ?? null,
+      lead_id: null,
+      plano_id: null,
+    };
+  }, [solicitacao]);
+
+  const handleRealizarCotacao = () => {
     if (!solicitacao) return;
-    setCriandoCotacao(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('criar-cotacao-troca-titularidade', {
-        body: { solicitacao_id: solicitacao.id },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      const cotacaoId = (data as any)?.cotacao_id as string | undefined;
-      if (!cotacaoId) throw new Error('Cotação não retornada pelo servidor');
-      qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
-      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
-      toast.success('Cotação criada com sucesso');
-      onOpenChange(false);
-      navigate(`/vendas/cotacoes?abrir=${cotacaoId}`);
-    } catch (e: any) {
-      toast.error(e?.message || 'Falha ao criar cotação');
-    } finally {
-      setCriandoCotacao(false);
+    if (!solicitacao.termo_cancelamento_assinado_em) {
+      toast.error('Aguardando assinatura do termo de cancelamento pelo titular antigo.');
+      return;
     }
+    // Abre o modal padrão de cotação pré-preenchido. A cotação só será criada
+    // (e vinculada à solicitação via `vincular-cotacao-troca`) ao salvar.
+    setFormCotacaoOpen(true);
   };
 
   // (Removido) Checagem de débito do antigo titular: a troca não exige mais
