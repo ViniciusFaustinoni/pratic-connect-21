@@ -49,10 +49,13 @@ export function WhatsAppMetaTemplates() {
   const [envioProgresso, setEnvioProgresso] = useState<{ atual: number; total: number; nome: string } | null>(null);
   const cancelarFilaRef = useRef(false);
 
-  const drafts = templates.filter((t) => t.status === 'DRAFT');
-  const approved = templates.filter((t) => t.status === 'APPROVED').length;
-  const pending = templates.filter((t) => t.status === 'PENDING').length;
-  const rejected = templates.filter((t) => t.status === 'REJECTED').length;
+  const [showLegacy, setShowLegacy] = useState(false);
+  const visibleTemplates = templates.filter((t) => showLegacy || !getCatalogEntry(t.nome)?.deprecated);
+  const drafts = visibleTemplates.filter((t) => t.status === 'DRAFT');
+  const approved = visibleTemplates.filter((t) => t.status === 'APPROVED').length;
+  const pending = visibleTemplates.filter((t) => t.status === 'PENDING').length;
+  const rejected = visibleTemplates.filter((t) => t.status === 'REJECTED').length;
+  const legacyCount = templates.filter((t) => getCatalogEntry(t.nome)?.deprecated).length;
 
   const enviarEmMassa = useCallback(async () => {
     if (drafts.length === 0) {
@@ -209,21 +212,28 @@ export function WhatsAppMetaTemplates() {
         </Alert>
       )}
 
-      {/* Resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: 'Total', value: templates.length, className: 'bg-muted' },
-          { label: 'Aprovados', value: approved, className: 'bg-green-500/10' },
-          { label: 'Pendentes', value: pending, className: 'bg-yellow-500/10' },
-          { label: 'Rejeitados', value: rejected, className: 'bg-red-500/10' },
-        ].map((item) => (
-          <Card key={item.label} className="border-0 shadow-none">
-            <CardContent className={`p-3 rounded-lg ${item.className} text-center`}>
-              <p className="text-xl font-bold">{item.value}</p>
-              <p className="text-xs text-muted-foreground">{item.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Resumo + toggle legados */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1">
+          {[
+            { label: 'Total', value: visibleTemplates.length, className: 'bg-muted' },
+            { label: 'Aprovados', value: approved, className: 'bg-green-500/10' },
+            { label: 'Pendentes', value: pending, className: 'bg-yellow-500/10' },
+            { label: 'Rejeitados', value: rejected, className: 'bg-red-500/10' },
+          ].map((item) => (
+            <Card key={item.label} className="border-0 shadow-none">
+              <CardContent className={`p-3 rounded-lg ${item.className} text-center`}>
+                <p className="text-xl font-bold">{item.value}</p>
+                <p className="text-xs text-muted-foreground">{item.label}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {legacyCount > 0 && (
+          <Button variant="outline" size="sm" onClick={() => setShowLegacy((v) => !v)} className="shrink-0">
+            {showLegacy ? `Ocultar legados (${legacyCount})` : `Mostrar legados (${legacyCount})`}
+          </Button>
+        )}
       </div>
 
       {/* Tabela */}
