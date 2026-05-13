@@ -1071,6 +1071,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     }
   };
 
+  // Auto-busca a placa quando o cotador é aberto via fluxo de Troca de Titularidade
+  // (a placa já vem pré-preenchida e o usuário não precisa clicar na lupa).
+  useEffect(() => {
+    if (!open) {
+      autoBuscaPlacaRef.current = null;
+      return;
+    }
+    if (!origemTroca) return;
+    const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (placaLimpa.length !== 7) return;
+    if (veiculoEncontrado || buscandoPlaca) return;
+    if (autoBuscaPlacaRef.current === placaLimpa) return;
+    autoBuscaPlacaRef.current = placaLimpa;
+    buscarPorPlaca();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, origemTroca, placa, veiculoEncontrado, buscandoPlaca]);
+
   // Pre-fill from lead
   useEffect(() => {
     if (lead) {
