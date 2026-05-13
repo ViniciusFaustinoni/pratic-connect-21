@@ -12,7 +12,7 @@ const emailSchema = z.string().email('Email inválido');
 
 export default function InstaladorLogin() {
   const navigate = useNavigate();
-  const { user, hasRole, signIn, loading: authLoading } = useAuth();
+  const { user, profile, hasRole, signIn, loading: authLoading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,15 +20,17 @@ export default function InstaladorLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect if already logged in
+  // Redirect só depois que profile + roles estiverem carregados (evita race que dispara React #300).
   useEffect(() => {
-    if (user && (hasRole('instalador_vistoriador') || hasRole('vistoriador_base'))) {
+    if (!user || !profile?.id) return;
+    if (hasRole('instalador_vistoriador') || hasRole('vistoriador_base')) {
       navigate('/instalador', { replace: true });
+      return;
     }
-    if (user && hasRole('analista_eventos' as any)) {
+    if (hasRole('analista_eventos' as any)) {
       navigate('/dashboard', { replace: true });
     }
-  }, [user, hasRole, navigate]);
+  }, [user, profile?.id, hasRole, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
