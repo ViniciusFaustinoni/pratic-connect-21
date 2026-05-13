@@ -112,6 +112,6 @@ export function useAprovacoesMonitoramentoBreakdown() {
 
 /** Backward-compat: total apenas (usado pelo sidebar). */
 export function useAprovacoesMonitoramentoCount() {
-  const { data, ...rest } = useAprovacoesMonitoramentoBreakdown();
-  return { ...rest, data: data?.total ?? 0 } as ReturnType<typeof useQuery<number>>;
+  const q = useAprovacoesMonitoramentoBreakdown();
+  return { ...q, data: q.data?.total ?? 0 };
 }
