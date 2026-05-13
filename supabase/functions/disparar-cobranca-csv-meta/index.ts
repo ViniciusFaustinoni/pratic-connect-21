@@ -495,13 +495,13 @@ serve(async (req) => {
           });
           const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
+            tipo: "template",
             telefone: tel,
             nome_contato: dest.nome,
             mensagem: `[template ${templateNome}] ${nome} — ${dest.boletos.length} boleto(s)`,
             status: "erro",
-            template_id: templateNome,
+            template_variaveis: { template: templateNome, matricula: dest.matricula },
             referencia_tipo: "cobranca_csv",
-            referencia_id: dest.matricula,
             erro_codigo: ultimoErroCodigo ? String(ultimoErroCodigo) : null,
             erro_mensagem: ultimoErroMsg,
             provedor: "meta",
