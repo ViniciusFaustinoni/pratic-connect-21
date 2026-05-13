@@ -213,7 +213,6 @@ export default function CotacaoContratacao() {
   // FLUXO UNIFICADO: troca de titularidade segue o MESMO stepper da nova adesão
   // após o termo de cancelamento estar assinado: Plano → Docs → Contrato → Vistoria → Pagamento.
   // A única diferença mantida é o cenário isento (sem cobrança), que pula Pagamento.
-  const pularEtapaVistoria = false;
   const isCenarioIsento = (() => {
     const cen = (cotacao as any)?.cenario_adesao as string | null | undefined;
     if (cen?.startsWith('isenta_')) return true;
