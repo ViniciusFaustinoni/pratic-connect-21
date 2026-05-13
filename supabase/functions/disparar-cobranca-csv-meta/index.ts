@@ -20,17 +20,20 @@ interface DestinatarioIn {
   boletos: BoletoIn[];
 }
 
-const MAX_META_BLOCK_LENGTH = 240;
+const MAX_META_BLOCK_LENGTH = 180;
+const MAX_BLOCOS_POR_DESTINATARIO = 3;
+const SLEEP_ENTRE_BLOCOS_MS = 1500;
+const SLEEP_ENTRE_DESTINATARIOS_MS = 250;
+
+function formatarBoletoCompacto(b: BoletoIn): string {
+  const placa = b.placa ? `Placa ${b.placa}` : "Boleto";
+  // Linha digitável só dígitos é mais curta e ainda funciona pra cópia.
+  const linha = (b.linha_digitavel || "").replace(/\D/g, "");
+  return `• ${placa} venc. ${b.vencimento} | ${linha}`;
+}
 
 function montarBlocoBoletos(boletos: BoletoIn[]): string {
-  // Meta WhatsApp body params NÃO aceitam \n, \t ou 4+ espaços (erro #132018).
-  // Usamos separadores inline para manter legibilidade sem quebra de linha.
-  return boletos
-    .map((b) => {
-      const placa = b.placa ? `Placa ${b.placa}` : "Boleto";
-      return `• ${placa} venc. ${b.vencimento} | ${b.linha_digitavel}`;
-    })
-    .join(" ⏐ ");
+  return boletos.map(formatarBoletoCompacto).join(" ⏐ ");
 }
 
 function sanitizeMetaParam(s: string): string {
@@ -42,23 +45,25 @@ function sanitizeMetaParam(s: string): string {
 }
 
 function montarBlocosBoletosSegmentados(boletos: BoletoIn[]): string[] {
-  const partes = (boletos || []).map((b) => sanitizeMetaParam(montarBlocoBoletos([b]))).filter(Boolean);
-  if (partes.length === 0) return [""];
+  const partes = (boletos || [])
+    .map((b) => sanitizeMetaParam(formatarBoletoCompacto(b)))
+    .filter((p) => p && p.length > 4);
+  if (partes.length === 0) return [];
 
   const blocos: string[] = [];
   let atual = "";
 
   for (const parte of partes) {
-    const proximo = atual ? `${atual} ⏐ ${parte}` : parte;
-    if (proximo.length <= MAX_META_BLOCK_LENGTH) {
-      atual = proximo;
-      continue;
-    }
-
-    if (atual) blocos.push(atual);
-    atual = parte.length <= MAX_META_BLOCK_LENGTH
+    const fragmento = parte.length <= MAX_META_BLOCK_LENGTH
       ? parte
       : `${parte.slice(0, MAX_META_BLOCK_LENGTH - 1).trimEnd()}…`;
+    const proximo = atual ? `${atual} ⏐ ${fragmento}` : fragmento;
+    if (proximo.length <= MAX_META_BLOCK_LENGTH) {
+      atual = proximo;
+    } else {
+      if (atual) blocos.push(atual);
+      atual = fragmento;
+    }
   }
 
   if (atual) blocos.push(atual);
@@ -70,10 +75,28 @@ function primeiroNome(s: string): string {
   return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : "Associado";
 }
 
+// DDDs válidos no Brasil (faixas oficiais)
+const DDDS_VALIDOS = new Set([
+  11,12,13,14,15,16,17,18,19,21,22,24,27,28,31,32,33,34,35,37,38,41,42,43,44,45,46,47,48,49,
+  51,53,54,55,61,62,63,64,65,66,67,68,69,71,73,74,75,77,79,81,82,83,84,85,86,87,88,89,
+  91,92,93,94,95,96,97,98,99,
+]);
+
 function validarTelefone(t: string): string | null {
-  const num = (t || "").replace(/\D/g, "");
-  if (num.length < 12 || num.length > 13) return null;
+  let num = (t || "").replace(/\D/g, "");
+  // Aceita formato com ou sem 55 inicial
+  if (num.length === 10 || num.length === 11) num = "55" + num;
+  if (num.length !== 13) return null;          // exige celular com 9º dígito + DDI 55
   if (!num.startsWith("55")) return null;
+  // Rejeita sequências repetidas tipo 5500000000000 / (00)0000-00000
+  if (/^(\d)\1+$/.test(num.slice(2))) return null;
+  // Rejeita DDD inválido
+  const ddd = parseInt(num.slice(2, 4), 10);
+  if (!DDDS_VALIDOS.has(ddd)) return null;
+  // 9º dígito obrigatório (celular)
+  if (num[4] !== "9") return null;
+  // Rejeita números com mais de 7 zeros consecutivos
+  if (/0{7,}/.test(num)) return null;
   return num;
 }
 
