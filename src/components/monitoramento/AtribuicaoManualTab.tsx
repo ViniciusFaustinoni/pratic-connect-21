@@ -18,6 +18,7 @@ import { TIPO_SERVICO_LABELS } from '@/hooks/useServicos';
 import { LinkPrestadorResultDialog } from './LinkPrestadorResultDialog';
 import { DevolverFilaDialog } from './DevolverFilaDialog';
 import { formatPlacaOuChassi, isPlacaPlaceholder } from '@/lib/placa-utils';
+import { usePermissions } from '@/hooks/usePermissions';
 
 function getTipoLabel(tipo: string) {
   if (tipo === 'vistoria_base') return 'Vistoria Base';
@@ -126,9 +127,11 @@ function DragOverlayCard({ servico }: { servico: any }) {
 function DroppableVistoriador({
   vistoriador,
   onAcaoTarefa,
+  podeForcarDevolucao,
 }: {
   vistoriador: any;
   onAcaoTarefa: (tarefa: any, modo: 'devolver' | 'reatribuir') => void;
+  podeForcarDevolucao: boolean;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `vist-${vistoriador.id}` });
 
@@ -219,7 +222,7 @@ function DroppableVistoriador({
                 ) : (
                   <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
                 )}
-                {!emAndamento && (
+                {(!emAndamento || podeForcarDevolucao) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -227,14 +230,21 @@ function DroppableVistoriador({
                         size="icon"
                         className="h-6 w-6 shrink-0"
                         onPointerDown={(e) => e.stopPropagation()}
+                        title={emAndamento ? 'Ações administrativas (erro na execução)' : undefined}
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuContent align="end" className="w-64">
+                      {emAndamento && (
+                        <div className="px-2 py-1.5 text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 border-b mb-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          Tarefa em andamento — uso administrativo
+                        </div>
+                      )}
                       <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'devolver')}>
                         <RotateCcw className="h-3.5 w-3.5 mr-2" />
-                        Devolver à fila / não compareceu
+                        {emAndamento ? 'Voltar para a fila (erro na instalação)' : 'Devolver à fila / não compareceu'}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'reatribuir')}>
                         <UserCog className="h-3.5 w-3.5 mr-2" />
@@ -309,6 +319,8 @@ export default function AtribuicaoManualTab() {
   const { data: travados } = useServicosTravados();
   const atribuirMutation = useAtribuirServicoManual();
   const atribuirPrestadorMutation = useAtribuirServicoPrestador();
+  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+  const podeForcarDevolucao = !!(isDiretor || isCoordenadorMonitoramento);
 
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [busca, setBusca] = useState('');
@@ -576,7 +588,7 @@ export default function AtribuicaoManualTab() {
             <p className="text-sm text-muted-foreground text-center py-6">Nenhum vistoriador em serviço</p>
           )}
           {(vistoriadores || []).map(v => (
-            <DroppableVistoriador key={v.id} vistoriador={v} onAcaoTarefa={handleAcaoTarefa} />
+            <DroppableVistoriador key={v.id} vistoriador={v} onAcaoTarefa={handleAcaoTarefa} podeForcarDevolucao={podeForcarDevolucao} />
           ))}
 
           {/* Prestadores Externos */}
