@@ -620,7 +620,7 @@ export default function CotacaoContratacao() {
         <Card className="max-w-md w-full border-destructive/30 bg-card/80 backdrop-blur-xl">
           <CardContent className="pt-8 pb-8 text-center space-y-4">
             <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
-              <AlertCircle className="h-8 w-8 text-destructive" />
+              <AlertTriangle className="h-8 w-8 text-destructive" />
             </div>
             <h1 className="text-xl font-bold text-foreground">Cotação não vinculada à troca</h1>
             <p className="text-sm text-muted-foreground">
