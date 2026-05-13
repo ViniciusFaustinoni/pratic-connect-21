@@ -172,7 +172,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const params = useParams<{ id: string }>();
   const id = propId || params.id;
   const navigate = useNavigate();
-  const { isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const { isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster, isAnalistaMonitoramento, isCoordenadorMonitoramento } = usePermissions();
 
   const [activeTab, setActiveTab] = useState('resumo');
   const [reativacaoWizardOpen, setReativacaoWizardOpen] = useState(false);
