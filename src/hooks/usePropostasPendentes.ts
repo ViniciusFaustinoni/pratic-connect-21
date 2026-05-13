@@ -1582,8 +1582,23 @@ export function useAprovarProposta() {
         },
       });
 
-      if (error) throw new Error(error.message || 'Erro ao aprovar proposta');
-      if (!data?.success) throw new Error(data?.error || 'Erro ao aprovar proposta');
+      // Status não-2xx: o supabase-js engole o body. Lemos do context para mostrar a mensagem real do edge.
+      if (error) {
+        let parsed: any = null;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') parsed = await ctx.json();
+          else if (ctx && typeof ctx.text === 'function') {
+            const txt = await ctx.text();
+            try { parsed = JSON.parse(txt); } catch { parsed = { error: txt }; }
+          }
+        } catch { /* noop */ }
+        const friendly = parsed?.mensagem || parsed?.error || error.message || 'Erro ao aprovar proposta';
+        const e: any = new Error(friendly);
+        e.codigo = parsed?.codigo;
+        throw e;
+      }
+      if (!data?.success) throw new Error(data?.mensagem || data?.error || 'Erro ao aprovar proposta');
 
       return {
         contratoId: params.contratoId,
