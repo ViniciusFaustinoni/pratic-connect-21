@@ -263,18 +263,6 @@ Deno.serve(async (req) => {
         let linhasBoletos = boletosTV
           .map((b: any) => `- Placa ${b.placa || "?"} | venc ${b.vencimento || "?"} | R$ ${b.valor ?? "?"} | linha digitável ${String(b.linha_digitavel || "").replace(/\D/g, "")}`)
           .join("\n");
-        // Fallback: buscar boletos abertos por matrícula em cobrancas
-        if (!linhasBoletos && matricula) {
-          const { data: cobAbertas } = await supabase
-            .from("cobrancas")
-            .select("placa, vencimento, valor, linha_digitavel, status")
-            .eq("matricula", matricula)
-            .in("status", ["em_aberto", "vencido", "pendente"])
-            .limit(20);
-          linhasBoletos = (cobAbertas || [])
-            .map((b: any) => `- Placa ${b.placa || "?"} | venc ${b.vencimento || "?"} | R$ ${b.valor ?? "?"} | linha digitável ${String(b.linha_digitavel || "").replace(/\D/g, "")}`)
-            .join("\n");
-        }
         const dataEnvio = new Date(ultima.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
         cobrancaContextoTxt = `\n\n## CONTEXTO DE COBRANÇA RECENTE\nUm template de cobrança foi enviado a este contato em ${dataEnvio} (matrícula ${matricula || "?"}). O conteúdo enviado já consta no histórico.\n${linhasBoletos ? `Boletos referenciados:\n${linhasBoletos}\n` : ""}Use estes dados como verdade ao responder dúvidas sobre valores, datas, placas e linhas digitáveis. Não invente boletos. Se o associado disser que pagou, peça comprovante e oriente o atendimento humano.`;
         console.log(`[agente-consultor-ia] Contexto de cobrança recente injetado (matrícula ${matricula})`);
