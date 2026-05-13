@@ -96,14 +96,15 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
       const STATUS_VEIC = ['ativo', 'instalacao_pendente', 'suspenso'] as const;
       const SERV_STATUS_ABERTOS = ['pendente', 'agendada', 'em_andamento', 'em_rota', 'em_analise', 'reagendada', 'imprevisto_pendente'] as const;
 
+      const sb: any = supabase;
       const [veicsRes, servsRes, rastrRes] = await Promise.all([
-        supabase.from('veiculos').select('associado_id').in('status', STATUS_VEIC as unknown as any).not('associado_id', 'is', null),
-        supabase.from('servicos').select('veiculos!inner(associado_id)').in('status', SERV_STATUS_ABERTOS as unknown as any),
-        supabase.from('rastreadores').select('veiculos!inner(associado_id)').not('veiculo_id', 'is', null),
+        sb.from('veiculos').select('associado_id').in('status', STATUS_VEIC).not('associado_id', 'is', null),
+        sb.from('servicos').select('veiculos!inner(associado_id)').in('status', SERV_STATUS_ABERTOS),
+        sb.from('rastreadores').select('veiculos!inner(associado_id)').not('veiculo_id', 'is', null),
       ]);
-      const veics: any[] = (veicsRes as any).data ?? [];
-      const servs: any[] = (servsRes as any).data ?? [];
-      const rastr: any[] = (rastrRes as any).data ?? [];
+      const veics: any[] = veicsRes.data ?? [];
+      const servs: any[] = servsRes.data ?? [];
+      const rastr: any[] = rastrRes.data ?? [];
 
       const associadoIds = new Set<string>();
       (veics ?? []).forEach((v: any) => v.associado_id && associadoIds.add(v.associado_id));
