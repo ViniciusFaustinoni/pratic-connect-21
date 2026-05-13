@@ -1578,7 +1578,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             anoMinimo: p.anoMinimo,
             alertaDesagio: p.alertaDesagio,
             coberturasRemovidas: p.coberturasRemovidas || [],
-          }))
+          })),
+          // Marcação de origem para Troca de Titularidade (quando aplicável)
+          ...(origemTroca ? {
+            tipo_entrada: 'troca_titularidade' as const,
+            solicitacao_troca_id: origemTroca.solicitacaoId,
+            associado_antigo_id: origemTroca.associadoAntigoId,
+            veiculo_origem_id: origemTroca.veiculoOrigemId,
+          } : {}),
         },
       };
 
