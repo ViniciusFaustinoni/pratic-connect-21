@@ -1,49 +1,80 @@
-## Causa raiz
+# Sino de Pendências de Documentos/Fotos
 
-A tela "Ocorreu um erro ao carregar a página — Minified React error #300" é o `AppErrorBoundary` (`src/components/app/AppErrorBoundary.tsx`) capturando um erro de render disparado **logo após o login do instalador/vistoriador**, antes de a hidratação do `profile`/`roles` terminar.
+Adicionar no `AppHeader` um ícone de sino (parecido com o botão de Relatar Erro) que mostra, em tempo real, todas as propostas com `documentos_solicitados.status = 'pendente'` que pertencem ao usuário logado (consultor responsável) ou a qualquer proposta — para perfis de cadastro/gestores. Ao abrir, o consultor vê a lista de pendências por associado e, em cada item, pode copiar/abrir/enviar via WhatsApp o **link público** para o associado cumprir as pendências.
 
-Sequência atual do bug:
+## Comportamento
 
-1. Usuário envia credenciais em `/instalador/login`. `signIn()` resolve, `user` entra no `AuthContext` e o `useEffect` redireciona para `/instalador`.
-2. No `AuthContext`, `loading` é desligado quando `loadUserData()` termina, mas existe uma **janela** em que `user` já está setado e `profile`/`perfis` ainda não chegaram (ou chegaram via cache parcial). `InstaladorGuard` só checa `loading` + `user` + `hasRole(...)` — nessa janela `hasRole` retorna `false` e/ou `profile` é `null`.
-3. Com `profile=null`, `InstaladorLayout` monta e dispara `useTarefaAtual`, `useAlocacaoDiaria`, `useIniciarServico`, `useGarantirTurno(emServico)`, `useServicosRealtime`, etc. Alguns desses hooks calculam `emServico` / dependências derivadas que mudam **na próxima render** quando o `profile` chega — alterando a forma como subcomponentes (ex.: `JornadaStatusBar`, `BotaoIniciarServico`, `TarefaAtualCard`) retornam markup. Nessa transição, um componente devolve `undefined` (ou um array) em vez de elemento React → React lança **#300** ("A valid React element (or null) must be returned"), o `AppErrorBoundary` captura e mostra a tela mostrada no print.
-4. No F5, `loading=true` desde o início; o Guard segura o render até `user`+`profile` chegarem juntos do cache local, então a primeira render já é consistente e nada quebra.
+- Sino fixo no header, à esquerda do `TestarCorrecoesButton`.
+- Badge numérico vermelho com a contagem de propostas distintas com pendências.
+- Popover (largura ~ 420px) com:
+  - Título "Documentos Pendentes" + subtítulo "Cobre o associado para concluir o envio".
+  - Lista de cards (1 por proposta/associado pendente):
+    - Nome do associado, código da cotação/proposta, placa.
+    - Chips com os tipos pendentes (Foto do Motor, CNH, CRLV…) — usando os labels já existentes.
+    - Botão **Copiar link**, **Abrir link** (nova aba) e **Enviar WhatsApp** (`wa.me/<telefone>?text=<msg>` com mensagem padrão contendo o link público).
+    - Link "Abrir proposta" → navega para o detalhe interno.
+  - Estado vazio: "Nenhuma pendência no momento ✅".
 
-Ou seja: a raiz é o **Guard liberar o render do app do instalador antes do `profile` estar disponível**, somado à ausência de auto-recuperação do boundary contra erros transitórios de primeira render pós-login.
+## Quem vê
 
-## Correção (raiz)
+- **Consultor responsável**: filtra pelas propostas onde `cotacoes.vendedor_id = profile.id`.
+- **Cadastro/Gestores** (roles `admin`, `diretor`, `gestor_comercial`, `cadastro` — alinhado a quem já enxerga propostas pendentes hoje): vê todas as pendências, sem filtro de vendedor.
+- Outros perfis: sino não renderiza.
 
-### 1. `InstaladorGuard` espera o `profile` (não só `user`)
+## Detalhes técnicos
 
-Em `src/components/instalador/InstaladorGuard.tsx`:
+### Hook novo `usePendenciasDocumentos`
+- Localização: `src/hooks/usePendenciasDocumentos.ts`.
+- Query React Query (`staleTime` ~30s + realtime opcional via `supabase.channel` em `documentos_solicitados`).
+- SQL (via supabase-js):
+  ```
+  documentos_solicitados
+    .select('id, tipo_documento, descricao, status, associado_id, contrato_id,
+             associados(nome, telefone),
+             contratos(id, codigo, vendedor_id, cotacao_id,
+                       cotacoes(id, codigo, placa, vendedor_id))')
+    .eq('status', 'pendente')
+  ```
+- Filtro condicional por `vendedor_id` quando o usuário logado não é gestor/cadastro (mesmo padrão de `useFunilCotacao` — ver memória "Funil por vendedor").
+- Agrupa por `associado_id` (uma linha por associado), retornando `{ associado, telefone, cotacaoCodigo, contratoId, link, pendencias[] }`.
 
-- Trocar a condição `if (loading)` por `if (loading || (user && !profile))` — ou seja, enquanto houver sessão mas o profile ainda não carregou, manter o spinner "Carregando…".
-- Manter o timeout de 15s já existente (passa a cobrir também `profile` ausente).
-- Só avaliar `hasRole(...)` depois que `profile` existir, evitando o falso "Acesso Negado" e o flash de render parcial.
+### Construção do link público
+- Reutilizar a mesma rota pública usada hoje no fluxo "Acompanhamento da Proposta" / `cotacao-publica`. Vou identificar o builder existente (`AcompanhamentoProposta` recebe um id/token na URL) e usar a função utilitária correspondente — já existe geração desse link nos pontos onde o consultor envia a proposta. Se houver um `gerarLinkPublicoProposta(contratoId|cotacaoId)`, reutilizar; caso contrário criar helper em `src/lib/links/propostaPublica.ts` montando `https://app.praticcar.org/<rota>/<id>` (Production URL conforme regra de Core).
 
-Resultado: `InstaladorLayout`/`InstaladorHome` nunca montam com `profile=null`, eliminando a race que dispara o #300.
+### Componentes novos
+- `src/components/notificacoes/PendenciasDocumentosBell.tsx`
+  - Botão `<Button variant="ghost" size="icon">` com `Bell` + `Badge` absoluto.
+  - `Popover` (shadcn) com `ScrollArea` para a lista.
+  - Itens reutilizam `Badge`/`Card` do design system.
+- Integrado em `src/components/layout/AppHeader.tsx` antes do `TestarCorrecoesButton`.
 
-### 2. `InstaladorLogin` aguarda profile antes de navegar
+### Permissão
+- Usar `useAppRoles`/`usePermissions` para detectar gestor/cadastro.
+- Render condicional: se não é gestor/cadastro e não é vendedor (sem `vendedor_id` próprio), não mostra sino.
 
-Em `src/pages/instalador/InstaladorLogin.tsx`, o `useEffect` que faz `navigate('/instalador')` passa a depender também de `profile?.id` (não só `user` + `hasRole`). Isso impede que o redirect dispare antes do `loadUserData` terminar.
+### Mensagem padrão WhatsApp
+```
+Olá, {nome}! Sua proposta na Praticcar está com pendências:
+- {tipo 1}
+- {tipo 2}
+Para concluir, acesse: {link_publico}
+Qualquer dúvida, estou à disposição.
+```
 
-### 3. `AppErrorBoundary` com auto-retry único + log de stack
+### Realtime (opcional, mas recomendado)
+- Subscribe em `documentos_solicitados` (`INSERT`/`UPDATE`) para invalidar a query e atualizar o badge em tempo real, igual a outros listeners do projeto (`VendasNotificationListener`).
 
-Em `src/components/app/AppErrorBoundary.tsx`:
+## Arquivos a criar/editar
 
-- No `componentDidCatch`, logar `error.stack` + `componentStack` + URL de decode do React (`https://react.dev/errors/300`) para que erros futuros fiquem rastreáveis no console do preview.
-- Adicionar **auto-retry uma única vez** (via `sessionStorage` flag `app-eb-retried-at`) quando o erro for de primeira render pós-navegação: ao capturar, se ainda não tentou, força `window.location.reload()` automaticamente (mesma ação do botão), de forma que mesmo que a race ressurja em cenário futuro, o usuário não vê a tela quebrada. Bloqueia o auto-retry se já houve retry há menos de 60s para não entrar em loop.
+```text
+src/hooks/usePendenciasDocumentos.ts             (novo)
+src/lib/links/propostaPublica.ts                  (novo, se não existir helper)
+src/components/notificacoes/PendenciasDocumentosBell.tsx  (novo)
+src/components/layout/AppHeader.tsx               (editar: render do sino)
+```
 
-### 4. Validação
+## Não-objetivos
 
-- Login como vistoriador/instalador (admin de teste promovido a `instalador_vistoriador` num ambiente de QA, ou testar manualmente após deploy).
-- Confirmar que após o submit aparece o spinner do Guard (não o `InstaladorHome` parcial) e em seguida o `InstaladorHome` completo, **sem** passar pela tela de erro.
-- Forçar erro artificial em `InstaladorHome` para garantir que o auto-retry só dispara uma vez e que o boundary continua funcional.
-
-## Arquivos a editar
-
-- `src/components/instalador/InstaladorGuard.tsx` — espera `profile` antes de liberar children.
-- `src/pages/instalador/InstaladorLogin.tsx` — redirect só após `profile` carregado.
-- `src/components/app/AppErrorBoundary.tsx` — log detalhado + auto-retry idempotente.
-
-Sem migrations. Sem mudança de regras de negócio.
+- Não dispara WhatsApp automático via Evolution/Meta (apenas abre `wa.me`).
+- Não altera o fluxo de criação/aprovação de pendências.
+- Não toca no link público em si — só consome o existente.
