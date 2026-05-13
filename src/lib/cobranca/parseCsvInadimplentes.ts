@@ -151,13 +151,16 @@ function parseDataVencimento(raw: string): string {
 
 function extrairPlaca(raw: string): string {
   if (!raw) return '';
-  // formato "PLACA|MATRICULA" ou só "PLACA"
-  const partes = raw.split('|').map((p) => p.trim()).filter(Boolean);
+  // formato "PLACA|MATRICULA" ou só "PLACA". Pode vir multilinha (várias placas separadas por \n).
+  const partes = raw
+    .split(/[|\n\r]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   for (const p of partes) {
-    // Placa real tem letra; matrícula é só número
+    // Placa real tem letra; matrícula é só número → ignora puramente numéricos
     if (/[A-Za-z]/.test(p)) return p.toUpperCase();
   }
-  return partes[0] || '';
+  return '';
 }
 
 function primeiroNome(nomeCompleto: string): string {
