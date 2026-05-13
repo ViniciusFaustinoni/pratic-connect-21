@@ -197,6 +197,23 @@ export default function CotacaoContratacao() {
     
     const etapaBase = determinarEtapa(cotacao.status_contratacao);
     
+    if (isTrocaTitularidade && !pularEtapaVistoria) {
+      // Em troca: ordem é docs → vistoria(3) → contrato(2) → pagamento(4)
+      // Status documentos_ok / dados_preenchidos => liberar Vistoria (3) primeiro
+      if (etapaBase === 2) {
+        // Se a vistoria JÁ foi feita/agendada, libera o Contrato (2) — onde aparece a tela
+        // de "Em análise pelo Cadastro" enquanto a troca não foi liberada.
+        if (cotacao.tipo_vistoria) return 2;
+        return 3;
+      }
+      // contrato_assinado => libera pagamento
+      if (etapaBase === 3) {
+        return pularEtapaPagamento ? 5 : 4;
+      }
+      if (etapaBase === 4 && pularEtapaPagamento) return 5;
+      return etapaBase;
+    }
+    
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
     if (etapaBase === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
@@ -208,21 +225,45 @@ export default function CotacaoContratacao() {
     }
     
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
 
   // STEPS dinâmico:
   //  - autovistoria => adiciona "Instalação" como 6ª etapa
   //  - troca de titularidade sem vistoria solicitada => oculta "Vistoria"
   //  - troca de titularidade isenta => oculta "Pagamento"
+  //  - troca de titularidade => Vistoria vem ANTES de Contrato (Plano → Docs → Vistoria → Contrato → Pagamento)
   const STEPS = useMemo<Step[]>(() => {
     let base = STEPS_BASE;
     if (pularEtapaVistoria) base = base.filter((s) => s.id !== 'vistoria');
     if (pularEtapaPagamento) base = base.filter((s) => s.id !== 'pagamento');
+    // Em troca de titularidade (com vistoria): reordenar Vistoria antes de Contrato
+    if (isTrocaTitularidade && !pularEtapaVistoria) {
+      const idxContrato = base.findIndex((s) => s.id === 'contrato');
+      const idxVistoria = base.findIndex((s) => s.id === 'vistoria');
+      if (idxContrato >= 0 && idxVistoria > idxContrato) {
+        const reordered = [...base];
+        const [vist] = reordered.splice(idxVistoria, 1);
+        reordered.splice(idxContrato, 0, vist);
+        base = reordered;
+      }
+    }
     if (cotacao?.tipo_vistoria === 'autovistoria') {
       return [...base, STEP_INSTALACAO];
     }
     return base;
-  }, [cotacao?.tipo_vistoria, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [cotacao?.tipo_vistoria, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
+
+  // Ordem de navegação por índices INTERNOS (mesmos do determinarEtapa):
+  // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
+  // Para troca de titularidade (com vistoria): docs → vistoria → contrato → pagamento
+  const navOrder = useMemo<number[]>(() => {
+    let order = isTrocaTitularidade && !pularEtapaVistoria
+      ? [0, 1, 3, 2, 4, 5]
+      : [0, 1, 2, 3, 4, 5];
+    if (pularEtapaVistoria) order = order.filter((i) => i !== 3);
+    if (pularEtapaPagamento) order = order.filter((i) => i !== 4);
+    return order;
+  }, [isTrocaTitularidade, pularEtapaVistoria, pularEtapaPagamento]);
 
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
@@ -275,10 +316,21 @@ export default function CotacaoContratacao() {
     if (cotacao?.status_contratacao) {
       let etapa = determinarEtapa(cotacao.status_contratacao);
       
-      // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
-      // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
-      if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
-        etapa = 4;
+      if (isTrocaTitularidade && !pularEtapaVistoria) {
+        // Em troca: após docs vai para Vistoria (3) primeiro; só depois Contrato (2).
+        if (etapa === 2 && !cotacao.tipo_vistoria) {
+          etapa = 3;
+        }
+        // contrato_assinado (determinarEtapa retorna 3) em troca → ir para Pagamento (4)
+        if (etapa === 3 && cotacao.status_contratacao === 'contrato_assinado') {
+          etapa = 4;
+        }
+      } else {
+        // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
+        // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
+        if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
+          etapa = 4;
+        }
       }
       // Se etapa de pagamento está pulada (troca isenta), salta para conclusão
       if (etapa === 4 && pularEtapaPagamento) {
@@ -287,7 +339,7 @@ export default function CotacaoContratacao() {
       
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria, pularEtapaPagamento, isTrocaTitularidade]);
 
   // Em navegação manual, se o usuário cair em uma etapa pulada, salta automaticamente.
   useEffect(() => {
@@ -323,40 +375,49 @@ export default function CotacaoContratacao() {
       }
       return;
     }
+    // Em troca, depois de assinar o Contrato (etapa interna 2) seguimos a navOrder
+    // (que coloca Pagamento na sequência). Para cotação comum mantemos compat com proximaEtapaPadrao.
+    if (isTrocaTitularidade) {
+      const idx = navOrder.indexOf(2);
+      const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : proximaEtapaPadrao;
+      setEtapaAtual(next);
+      return;
+    }
     setEtapaAtual(proximaEtapaPadrao);
-  }, [pularEtapaPagamento, isTrocaTitularidade, associadoId, cotacao?.id, contratoFallback?.id, refetch, setEtapaAtual]);
+  }, [pularEtapaPagamento, isTrocaTitularidade, associadoId, cotacao?.id, contratoFallback?.id, refetch, setEtapaAtual, navOrder]);
 
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
-    if (step <= etapaDoStatus) {
+    const idxStep = navOrder.indexOf(step);
+    const idxStatus = navOrder.indexOf(etapaDoStatus);
+    if (idxStep >= 0 && idxStep <= idxStatus) {
       setNavegacaoManual(true);
       setEtapaAtual(step);
     }
-  }, [etapaDoStatus, setEtapaAtual]);
+  }, [etapaDoStatus, setEtapaAtual, navOrder]);
 
-  // Handler para avançar para próxima etapa
+  // Handler para avançar para próxima etapa (segue navOrder)
   const handleAvancar = useCallback(() => {
-    let proximo = etapaAtual + 1;
-    if (pularEtapaVistoria && etapaAtual === 2) proximo = pularEtapaPagamento ? 5 : 4;
-    else if (pularEtapaPagamento && etapaAtual === 3) proximo = 5;
-    if (etapaAtual < etapaDoStatus) {
+    const idxAtual = navOrder.indexOf(etapaAtual);
+    const idxStatus = navOrder.indexOf(etapaDoStatus);
+    const proximo = idxAtual >= 0 && idxAtual < navOrder.length - 1 ? navOrder[idxAtual + 1] : etapaAtual;
+    const proxIdx = navOrder.indexOf(proximo);
+    if (idxAtual >= 0 && idxAtual < idxStatus) {
       setEtapaAtual(proximo);
     }
-    if (proximo >= etapaDoStatus) {
+    if (proxIdx >= idxStatus) {
       setNavegacaoManual(false);
     }
-  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [etapaAtual, etapaDoStatus, setEtapaAtual, navOrder]);
 
-  // Handler para voltar para etapa anterior
+  // Handler para voltar para etapa anterior (segue navOrder)
   const handleVoltar = useCallback(() => {
-    if (etapaAtual > 0) {
+    const idx = navOrder.indexOf(etapaAtual);
+    if (idx > 0) {
       setNavegacaoManual(true);
-      let anterior = etapaAtual - 1;
-      if (pularEtapaPagamento && etapaAtual === 5) anterior = pularEtapaVistoria ? 2 : 3;
-      else if (pularEtapaVistoria && etapaAtual === 4) anterior = 2;
-      setEtapaAtual(anterior);
+      setEtapaAtual(navOrder[idx - 1]);
     }
-  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
+  }, [etapaAtual, setEtapaAtual, navOrder]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
@@ -852,8 +913,16 @@ export default function CotacaoContratacao() {
                         cidade: cotacao.cliente_cidade || '',
                         estado: cotacao.cliente_uf || '',
                       }}
-                      onComplete={() => setEtapaAtual(4)}
-                      onAgendar={() => setEtapaAtual(4)}
+                      onComplete={() => {
+                        const idx = navOrder.indexOf(3);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        setEtapaAtual(next);
+                      }}
+                      onAgendar={() => {
+                        const idx = navOrder.indexOf(3);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        setEtapaAtual(next);
+                      }}
                       readOnly={isEtapaConcluida(3)}
                       tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
                     />
