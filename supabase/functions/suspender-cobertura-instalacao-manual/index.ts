@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
     }
 
     // Suspender — mesmo formato canônico do cron
-    const motivoBase = `Instalação não realizada no prazo de ${prazoHoras}h após assinatura`;
+    const motivoBase = `Instalação não realizada no prazo de ${prazoHoras}h após ${baseLabel}`;
     const motivoCompleto = `${motivoBase} (marcado manualmente por ${profile.nome})`;
 
     await supabase
