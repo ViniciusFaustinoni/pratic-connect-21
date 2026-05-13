@@ -948,49 +948,53 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     
     setBuscandoPlaca(true);
     try {
-      // Primeiro, verificar se a placa já está em cotação de outro vendedor
-      const placaDuplicada = await verificarPlacaDuplicada.mutateAsync({ placa, ignorarIds: ignorarPlacaDuplicadaIds });
-      
-      if (placaDuplicada) {
-        // Verifica se é do mesmo vendedor ou de outro
-        if (placaDuplicada.vendedorId !== profile?.id) {
-          // Placa é de OUTRO vendedor - BLOQUEAR
-          setPlacaDuplicadaInfo(placaDuplicada);
-          setShowPlacaDuplicadaModal(true);
-          setBuscandoPlaca(false);
-          return; // Interrompe o fluxo
-        } else {
-          // Placa é do MESMO vendedor - Apenas informa
-          toast.info(`Você já possui uma cotação ativa para esta placa: ${placaDuplicada.numero}`);
-        }
-      }
-      
-      // Verificar se veículo existe no SGA (Hinova)
-      try {
-        const sgaResult = await verificarVeiculoSGA.mutateAsync(placa);
-        if (sgaResult.existe) {
-          setShowSGAModal(true);
-          setBuscandoPlaca(false);
-          return;
-        }
-      } catch (sgaError) {
-        console.warn('[SGA] Erro na verificação, continuando:', sgaError);
-      }
+      // Em fluxo de Troca de Titularidade, a placa pertence ao associado antigo
+      // e existe cotação anterior + veículo no SGA + vínculo na base local — todos
+      // ESPERADOS. Pular as travas globais nesse caminho específico.
+      const isTroca = !!origemTroca;
 
-      // Verificar se a placa já está vinculada a OUTRO associado na base local
-      try {
-        const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa });
-        if (localResult?.conflito) {
-          setPlacaOutroAssocInfo(localResult);
-          setShowPlacaOutroAssocModal(true);
-          setBuscandoPlaca(false);
-          return;
+      if (!isTroca) {
+        // Primeiro, verificar se a placa já está em cotação de outro vendedor
+        const placaDuplicada = await verificarPlacaDuplicada.mutateAsync({ placa, ignorarIds: ignorarPlacaDuplicadaIds });
+
+        if (placaDuplicada) {
+          if (placaDuplicada.vendedorId !== profile?.id) {
+            setPlacaDuplicadaInfo(placaDuplicada);
+            setShowPlacaDuplicadaModal(true);
+            setBuscandoPlaca(false);
+            return;
+          } else {
+            toast.info(`Você já possui uma cotação ativa para esta placa: ${placaDuplicada.numero}`);
+          }
         }
-        if (localResult?.mesmoTitular) {
-          toast.info('Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado.');
+
+        // Verificar se veículo existe no SGA (Hinova)
+        try {
+          const sgaResult = await verificarVeiculoSGA.mutateAsync(placa);
+          if (sgaResult.existe) {
+            setShowSGAModal(true);
+            setBuscandoPlaca(false);
+            return;
+          }
+        } catch (sgaError) {
+          console.warn('[SGA] Erro na verificação, continuando:', sgaError);
         }
-      } catch (localErr) {
-        console.warn('[Local] Erro ao verificar veículo na base local:', localErr);
+
+        // Verificar se a placa já está vinculada a OUTRO associado na base local
+        try {
+          const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa });
+          if (localResult?.conflito) {
+            setPlacaOutroAssocInfo(localResult);
+            setShowPlacaOutroAssocModal(true);
+            setBuscandoPlaca(false);
+            return;
+          }
+          if (localResult?.mesmoTitular) {
+            toast.info('Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado.');
+          }
+        } catch (localErr) {
+          console.warn('[Local] Erro ao verificar veículo na base local:', localErr);
+        }
       }
 
       const resultado = await getByPlaca(placa);
