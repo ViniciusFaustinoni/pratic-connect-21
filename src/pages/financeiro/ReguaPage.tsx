@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ListChecks, Send } from 'lucide-react';
 import ReguaCobranca from '@/pages/cobranca/ReguaCobranca';
@@ -11,7 +12,15 @@ import EmissaoCobrancas from '@/pages/financeiro/EmissaoCobrancas';
  *  - Emissão  → emissão manual/lote de cobranças (EmissaoCobrancas)
  */
 export default function ReguaPage() {
-  const [tab, setTab] = useState<'regua' | 'emissao'>('regua');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'emissao' ? 'emissao' : 'regua';
+  const [tab, setTab] = useState<'regua' | 'emissao'>(initialTab);
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t === 'emissao' || t === 'regua') setTab(t);
+  }, [searchParams]);
+
 
   return (
     <div className="space-y-4">

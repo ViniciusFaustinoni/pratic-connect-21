@@ -1,54 +1,30 @@
 ## Objetivo
-Disponibilizar um item **Chat** no módulo Monitoramento (sidebar laranja), reusando o chat unificado já existente em `/eventos/chat-ia` (`EventosChatIA`), porém filtrando a lista de conversas para mostrar somente associados/contatos relevantes à operação de Monitoramento.
+Adicionar item **Cobranças** na sidebar do módulo **Relacionamento** que abre direto a tela do print: `Financeiro › Cobranças › Régua` com a sub-aba **Emissão de Cobranças** ativa (e dentro dela a aba **Importar CSV (SGA)**).
 
 ## Mudanças
 
-### 1. Nova variante do chat
-Arquivo: `src/pages/eventos/EventosChatIA.tsx`
-- Estender o tipo `drawerVariant` para `'relacionamento' | 'eventos' | 'monitoramento'`.
-- Adicionar prop opcional `escopo?: 'todos' | 'monitoramento'` (default `'todos'`).
-- Quando `escopo === 'monitoramento'`, filtrar a lista de telefones exibidos para conversas cujo telefone pertence a um associado com pelo menos uma das condições:
-  - veículo com `status` em `('ativo','instalacao_pendente','suspenso_nao_instalacao','manutencao')`, OU
-  - serviço aberto em `servicos` (instalação, vistoria, retirada, manutenção, base, rota), OU
-  - rastreador vinculado em `rastreadores.veiculo_id`.
-- Filtro feito client-side após carregar `mensagens` + cruzando com nova query `useQuery(['monitoramento-telefones-elegiveis'])` que busca uma vez (cache 60s) os telefones a partir de `associados` join com `veiculos` e `servicos` abertos.
-
-### 2. Página wrapper de Monitoramento
-Novo: `src/pages/monitoramento/MonitoramentoChat.tsx`
-```tsx
-import EventosChatIA from '../eventos/EventosChatIA';
-export default function MonitoramentoChat() {
-  return <EventosChatIA drawerVariant="monitoramento" escopo="monitoramento" />;
-}
+### 1. `src/components/layout/AppSidebar.tsx` (bloco `id: 'relacionamento'`, ~linha 249)
+Adicionar item após "Chat":
+```ts
+{ title: 'Cobranças', url: '/financeiro/cobrancas/regua?tab=emissao&sub=csv', icon: Receipt },
 ```
+(import de `Receipt` do lucide-react já é usado em outros pontos; reaproveitar.)
 
-### 3. Rota
-Arquivo: `src/App.tsx`
-- Adicionar lazy import e `<Route path="/monitoramento/chat" element={<MonitoramentoChat />} />` (dentro do mesmo wrapper protegido das demais rotas de monitoramento).
+### 2. `src/pages/financeiro/ReguaPage.tsx`
+Ler `?tab=emissao|regua` via `useSearchParams` para definir o estado inicial da sub-aba. Mantém default `regua` quando ausente, garantindo que o link da sidebar do Relacionamento caia direto em **Emissão de Cobranças**.
 
-### 4. Item de menu
-Arquivo: `src/components/layout/AppSidebar.tsx`
-- Inserir no array `items` do bloco `id: 'monitoramento'`:
-  ```ts
-  { title: 'Chat', url: '/monitoramento/chat', icon: MessageCircle },
-  ```
-  posicionado logo após "Equipe" (ou antes de "Aprovações", à definir visualmente).
+### 3. `src/pages/financeiro/EmissaoCobrancas.tsx`
+Ler `?sub=csv|fechamento` para inicializar `tab` (default `fechamento` quando ausente). Assim a sidebar leva o usuário direto à aba "Importar CSV (SGA)" mostrada no print.
 
-### 5. Breadcrumb
-Arquivo: `src/components/layout/GlobalBreadcrumb.tsx`
-- Adicionar `'/monitoramento/chat': { label: 'Chat' }`.
+### 4. `src/components/layout/GlobalBreadcrumb.tsx`
+Sem alterações — a rota `/financeiro/cobrancas/regua` já existe e tem breadcrumb. Os query params não interferem.
 
-### 6. Drawer de contato
-O `ChatPanel` já recebe `drawerVariant`. Garantir que `'monitoramento'` recaia em um drawer focado em dados operacionais (rastreador, último serviço, veículo). Se o componente atual não diferenciar, manter fallback igual ao `'eventos'`/`'relacionamento'` para esta primeira entrega e iterar depois conforme feedback.
-
-## Pontos não incluídos (escopo deliberado)
-- Não duplicar tabelas nem fluxos de mensagem; é mesmo backend (Evolution/Meta + `whatsapp_mensagens`) com filtro de visualização.
-- Não alterar permissões: respeita `canManageInstalacoes` do módulo.
-- Não tocar no edge function `agente-consultor-ia`.
+## Não incluído
+- Não duplicar a página de Emissão. É o mesmo destino, apenas atalho contextual no Relacionamento.
+- Não alterar permissões: o item só aparece para quem já tem acesso ao módulo Relacionamento; quem não tiver permissão financeira verá a página com guard padrão da rota existente.
 
 ## Validação
-1. Login como diretor (`admin@teste.com`).
-2. Conferir item "Chat" na sidebar Monitoramento.
-3. Acessar `/monitoramento/chat`: ver apenas conversas de associados com veículo/serviço/rastreador ativos.
-4. Comparar com `/eventos/chat-ia` — este continua exibindo todas.
-5. Enviar/receber mensagem em uma conversa filtrada para confirmar realtime e persistência idênticos ao Relacionamento.
+1. Login como diretor.
+2. Sidebar Relacionamento → clicar em **Cobranças**.
+3. Conferir que abre em `/financeiro/cobrancas/regua?tab=emissao&sub=csv` com as abas **Régua → Emissão de Cobranças → Importar CSV (SGA)** já selecionadas (idêntico ao print).
+4. Acessar `/financeiro/cobrancas/regua` direto continua abrindo na sub-aba **Régua** (default preservado).

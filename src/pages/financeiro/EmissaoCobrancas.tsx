@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -524,7 +525,14 @@ function EmissaoCobrancasFechamento() {
 }
 
 export default function EmissaoCobrancas() {
-  const [tab, setTab] = useState<'fechamento' | 'csv'>('fechamento');
+  const [searchParams] = useSearchParams();
+  const initialSub = searchParams.get('sub') === 'csv' ? 'csv' : 'fechamento';
+  const [tab, setTab] = useState<'fechamento' | 'csv'>(initialSub);
+  useEffect(() => {
+    const s = searchParams.get('sub');
+    if (s === 'csv' || s === 'fechamento') setTab(s);
+  }, [searchParams]);
+
   return (
     <div className="p-6">
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
