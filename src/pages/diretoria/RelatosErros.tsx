@@ -36,7 +36,8 @@ const STATUS_LABELS: Record<ErrorReportStatus, { label: string; cls: string }> =
   descartado: { label: 'Descartado', cls: 'bg-muted text-muted-foreground border-border' },
 };
 
-const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'em_tratamento', 'concluido', 'critico'];
+// 'concluido' fica visível apenas em Histórico (a pedido). Não aparece em Fila/Tabela/contadores/filtro.
+const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'em_tratamento', 'critico'];
 
 function CardRelatoFila({ report, onOpen }: { report: ErrorReport; onOpen: (r: ErrorReport) => void }) {
   const { data: files = [] } = useErrorReportFiles(report.id);
