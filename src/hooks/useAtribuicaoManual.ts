@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { formatLocalizacaoComZona, getZonaAtendimento } from '@/lib/localizacao-zonas';
 import { useRealocarInstalacao } from './useRealocarInstalacao';
 import { useConfiguracoesAll } from './useConfiguracoesAll';
+import { vincularProfissionalAoServicoDoAgendamentoBase } from '@/lib/agendamentos-base/vincular-profissional-servico';
 
 const PRODUCTION_BASE_URL = 'https://app.praticcar.org';
 
@@ -388,6 +389,10 @@ export function useAtribuirServicoManual() {
           .eq('id', servicoId);
 
         if (error) throw error;
+
+        // Espelhar atribuição na servicos vinculada (mantém fila do técnico).
+        // Ver mem://logic/operations/realocacao-base-preserva-servico
+        await vincularProfissionalAoServicoDoAgendamentoBase(servicoId, profissionalId);
 
         // Log with agendamento_base_id instead of servico_id
         const profileId = await getProfileId();

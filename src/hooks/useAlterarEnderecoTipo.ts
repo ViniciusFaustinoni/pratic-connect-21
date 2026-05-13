@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { periodoToTime } from '@/lib/periodo-utils';
+import { vincularProfissionalAoServicoDoAgendamentoBase } from '@/lib/agendamentos-base/vincular-profissional-servico';
 
 export interface AlterarEnderecoTipoInput {
   // Identificação da origem
@@ -140,7 +141,10 @@ export function useAlterarEnderecoTipo() {
             })
             .eq('id', input.agendamentoBaseId);
           if (error) throw error;
-          if (input.profissionalId) await logAtribuicao(null, input.agendamentoBaseId, input.profissionalId);
+          if (input.profissionalId) {
+            await logAtribuicao(null, input.agendamentoBaseId, input.profissionalId);
+            await vincularProfissionalAoServicoDoAgendamentoBase(input.agendamentoBaseId, input.profissionalId);
+          }
           return { id: input.agendamentoBaseId, kind: 'base' as const };
         }
       }

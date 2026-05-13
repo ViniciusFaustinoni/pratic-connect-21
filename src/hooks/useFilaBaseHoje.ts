@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { useAlocacaoDiaria } from './useAlocacaoDiaria';
+import { vincularProfissionalAoServicoDoAgendamentoBase } from '@/lib/agendamentos-base/vincular-profissional-servico';
 
 export interface VistoriaBaseFila {
   id: string;
@@ -106,6 +107,9 @@ export function usePegarVistoriaBase() {
       if (!data) {
         throw new Error('Esta vistoria já foi pega por outro técnico.');
       }
+
+      // Espelhar atribuição na servicos vinculada (mantém fila do técnico)
+      await vincularProfissionalAoServicoDoAgendamentoBase(data.id, profile.id);
 
       return data.id as string;
     },
