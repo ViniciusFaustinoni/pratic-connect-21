@@ -34,10 +34,14 @@ interface AutovistoriaCotacaoProps {
   cotacaoId: string;
   tipoVeiculo: TipoVeiculo;
   onComplete: () => void;
+  /** Override do conjunto de fotos (ex.: vistoria completa 31/15 sub-FIPE). */
+  fotosOverride?: FotoAutovistoria[];
+  /** Título customizado (default: "Autovistoria"). */
+  titulo?: string;
 }
 
-export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: AutovistoriaCotacaoProps) {
-  const fotos = getFotosAutovistoria(tipoVeiculo);
+export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosOverride, titulo }: AutovistoriaCotacaoProps) {
+  const fotos = fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo);
   const totalFotos = fotos.length;
   
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
@@ -280,7 +284,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
       <CardHeader className="pb-3 space-y-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Autovistoria</CardTitle>
+          <CardTitle className="text-lg">{titulo ?? 'Autovistoria'}</CardTitle>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
             {fotosCompletadas}/{totalFotos} fotos
           </Badge>

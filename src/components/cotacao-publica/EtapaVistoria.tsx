@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { getFotosVistoriaSubFipe } from '@/data/vistoriaSubFipeAdapter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Camera, Calendar, Home, Building2, MapPin, Clock, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-react';
@@ -34,6 +35,12 @@ interface EtapaVistoriaProps {
   onAgendar?: (data: string, horario: string) => void;
   readOnly?: boolean;
   tipoVistoriaRealizada?: 'autovistoria' | 'agendada' | 'agendada_base';
+  /**
+   * Veículo sub-FIPE (carro <30k / moto <9k não-Diesel) — dispensa rastreador.
+   * Quando true, NÃO mostra chooser de modalidade: renderiza direto a vistoria
+   * completa (31 carro / 15 moto) para o associado executar pelo celular.
+   */
+  subFipe?: boolean;
 }
 
 type ModoVistoria = 'escolha' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
@@ -51,11 +58,13 @@ export function EtapaVistoria({
   onComplete, 
   onAgendar, 
   readOnly = false, 
-  tipoVistoriaRealizada 
+  tipoVistoriaRealizada,
+  subFipe = false,
 }: EtapaVistoriaProps) {
-  const [modo, setModo] = useState<ModoVistoria>('escolha');
+  const [modo, setModo] = useState<ModoVistoria>(subFipe ? 'autovistoria' : 'escolha');
   const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
   const { data: configBase } = useConfiguracaoBase();
+  const fotosSubFipe = useMemo(() => (subFipe ? getFotosVistoriaSubFipe(tipoVeiculo) : undefined), [subFipe, tipoVeiculo]);
 
   const enderecoBase = configBase?.base_logradouro
     ? `${configBase.base_logradouro}${configBase.base_numero ? `, ${configBase.base_numero}` : ''} - ${configBase.base_bairro || ''} - ${configBase.base_cidade || ''}/${configBase.base_uf || ''}`
@@ -289,21 +298,38 @@ export function EtapaVistoria({
           exit={{ opacity: 0, x: -50 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setModo('escolha')}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-          </div>
+          {!subFipe && (
+            <div className="mb-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setModo('escolha')}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Button>
+            </div>
+          )}
+          {subFipe && (
+            <Card className="mb-4 border-primary/30 bg-primary/5">
+              <CardContent className="py-4 flex items-start gap-3">
+                <Camera className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-semibold text-foreground">Vistoria pelo celular</p>
+                  <p className="text-muted-foreground mt-1">
+                    Seu veículo dispensa instalação de rastreador. Você mesmo realiza a vistoria completa pelo celular — siga o roteiro de fotos abaixo.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <AutovistoriaCotacao
             cotacaoId={cotacaoId}
             tipoVeiculo={tipoVeiculo}
             onComplete={onComplete}
+            fotosOverride={fotosSubFipe}
+            titulo={subFipe ? 'Vistoria do Veículo' : undefined}
           />
         </motion.div>
       )}

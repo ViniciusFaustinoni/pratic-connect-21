@@ -31,11 +31,14 @@ import {
   AlertTriangle,
   ExternalLink,
   Expand,
+  UserSearch,
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
   useReprovarInstalacaoMonitoramento,
 } from '@/hooks/useAprovacaoMonitoramento';
+import { veiculoSubFipe } from '@/hooks/useSolicitarVistoriaTecnico';
+import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 
 // Hook para buscar detalhes completos do serviço
@@ -51,7 +54,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         .select(`
           *,
           profissional:profissional_id(id, nome),
-          veiculo:veiculo_id(id, placa, marca, modelo, ano_modelo, cor, cobertura_roubo_furto, cobertura_total),
+          veiculo:veiculo_id(id, placa, marca, modelo, ano_modelo, cor, valor_fipe, combustivel, categoria, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(id, nome, cpf, telefone, email, whatsapp, status)
         `)
         .eq('id', servicoId)
@@ -330,6 +333,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [videoExpandido, setVideoExpandido] = useState<string | null>(null);
   const [corrigirOpen, setCorrigirOpen] = useState(false);
   const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
+  const [solicitarVistoriaOpen, setSolicitarVistoriaOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -821,29 +825,65 @@ export default function AprovacaoInstalacaoDetalhe() {
       </Card>
 
       {/* Ações */}
-      <div className="flex gap-3 pb-8">
-        <Button
-          variant="destructive"
-          className="flex-1"
-          onClick={() => setShowReprovar(true)}
-          disabled={aprovar.isPending || reprovar.isPending}
-        >
-          <XCircle className="h-4 w-4 mr-2" />
-          Reprovar
-        </Button>
-        <Button
-          className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
-          onClick={handleAprovar}
-          disabled={aprovar.isPending || reprovar.isPending}
-        >
-          {aprovar.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <CheckCircle className="h-4 w-4 mr-2" />
-          )}
-          Aprovar — Ativar Proteção 360
-        </Button>
-      </div>
+      {(() => {
+        const subFipe = veiculoSubFipe(veiculo || {});
+        const isMoto = ((veiculo?.categoria || '') as string).toLowerCase().includes('moto');
+        return (
+          <>
+            <div className="flex flex-wrap gap-3 pb-2">
+              <Button
+                variant="destructive"
+                className="flex-1 min-w-[140px]"
+                onClick={() => setShowReprovar(true)}
+                disabled={aprovar.isPending || reprovar.isPending}
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Reprovar
+              </Button>
+              {subFipe && (
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-[200px] border-amber-500/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                  onClick={() => setSolicitarVistoriaOpen(true)}
+                  disabled={aprovar.isPending || reprovar.isPending}
+                >
+                  <UserSearch className="h-4 w-4 mr-2" />
+                  Solicitar Vistoria de Técnico
+                </Button>
+              )}
+              <Button
+                className="flex-1 min-w-[200px] bg-success hover:bg-success/90 text-success-foreground"
+                onClick={handleAprovar}
+                disabled={aprovar.isPending || reprovar.isPending}
+              >
+                {aprovar.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                )}
+                Aprovar — Ativar Proteção 360
+              </Button>
+            </div>
+            {subFipe && (
+              <p className="text-xs text-muted-foreground pb-6">
+                Veículo abaixo do limite FIPE — dispensa rastreador. Você pode aprovar direto, reprovar
+                ou solicitar uma nova vistoria presencial pelo técnico (sem instalação,
+                apenas {isMoto ? 15 : 31} fotos).
+              </p>
+            )}
+            <SolicitarVistoriaTecnicoDialog
+              open={solicitarVistoriaOpen}
+              onOpenChange={setSolicitarVistoriaOpen}
+              servicoId={servico.id}
+              veiculoId={veiculo.id}
+              associadoId={associado.id}
+              isMoto={isMoto}
+              cenarioPadrao={isAtendimentoBase ? 'base' : 'rota'}
+              onSuccess={() => navigate('/monitoramento/aprovacao-associados')}
+            />
+          </>
+        );
+      })()}
 
       {/* Dialog Reprovar */}
       <Dialog open={showReprovar} onOpenChange={setShowReprovar}>

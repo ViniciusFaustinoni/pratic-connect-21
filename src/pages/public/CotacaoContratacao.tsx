@@ -31,6 +31,7 @@ import { EtapaCriacaoSenhaCotacao } from '@/components/cotacao-publica/EtapaCria
 
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { exigeRastreador } from '@/types/termo-filiacao';
 
 function detectarTipoVeiculoDaCotacao(cotacao: any): 'carro' | 'moto' {
   // 1. Verificar categoria explícita
@@ -883,6 +884,11 @@ export default function CotacaoContratacao() {
                       }}
                       readOnly={isEtapaConcluida(3)}
                       tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
+                      subFipe={!exigeRastreador({
+                        tipo: detectarTipoVeiculoDaCotacao(cotacao),
+                        valorFipe: Number((cotacao as any).veiculo_valor_fipe ?? (cotacao as any).valor_fipe ?? 0),
+                        combustivel: (cotacao as any).veiculo_combustivel || undefined,
+                      } as any).exige}
                     />
                   )}
                   <NavegacaoEtapas
