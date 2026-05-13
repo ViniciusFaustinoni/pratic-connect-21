@@ -53,6 +53,8 @@ export function AppHeader() {
       {/* Lado Direito - Ações */}
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
 
+        <PendenciasDocumentosBell />
+
         <TestarCorrecoesButton />
 
         {/* Theme Toggle - esconde em mobile */}
