@@ -8288,10 +8288,12 @@ export type Database = {
         Row: {
           contexto_ia: Json | null
           created_at: string
+          enviar_apos: string | null
           id: string
           instalacao_id: string | null
           mensagem_enviada_em: string | null
           novo_servico_id: string | null
+          payload_disparo: Json | null
           resposta_cliente: string | null
           resposta_recebida_em: string | null
           servico_id: string | null
@@ -8301,10 +8303,12 @@ export type Database = {
         Insert: {
           contexto_ia?: Json | null
           created_at?: string
+          enviar_apos?: string | null
           id?: string
           instalacao_id?: string | null
           mensagem_enviada_em?: string | null
           novo_servico_id?: string | null
+          payload_disparo?: Json | null
           resposta_cliente?: string | null
           resposta_recebida_em?: string | null
           servico_id?: string | null
@@ -8314,10 +8318,12 @@ export type Database = {
         Update: {
           contexto_ia?: Json | null
           created_at?: string
+          enviar_apos?: string | null
           id?: string
           instalacao_id?: string | null
           mensagem_enviada_em?: string | null
           novo_servico_id?: string | null
+          payload_disparo?: Json | null
           resposta_cliente?: string | null
           resposta_recebida_em?: string | null
           servico_id?: string | null

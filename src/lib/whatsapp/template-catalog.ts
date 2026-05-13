@@ -22,9 +22,10 @@ export interface TemplateCatalogEntry {
 export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
   // ── Cadastro / Vendas ───────────────────────────────────────────────
   cadastro_aprovado_botao: {
-    momento: 'Após aprovação do cadastro do associado, antes de iniciar instalação/vistoria',
-    gatilho: 'notificar-cliente · efetivar-troca-titularidade',
+    momento: 'DESCONTINUADO — substituído por cobertura_360_ativada_v3 (cobertura ativa) e sinistro_atualizado (avisos)',
+    gatilho: '(legado — não disparar)',
     variaveis: ['nome', 'placa', 'modelo', 'cidade', 'link'],
+    deprecated: 'Não usar. Use cobertura_360_ativada_v3 ou sinistro_atualizado.',
   },
   boas_vindas_agencia_v1: {
     momento: 'Quando uma nova agência é cadastrada como vendedor',
@@ -88,9 +89,10 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     variaveis: ['nome', 'placa', 'modelo', 'plano'],
   },
   cobertura_total_ativada: {
-    momento: 'Após aprovação final da instalação — Plano Total',
-    gatilho: 'notificar-cliente',
+    momento: 'DESCONTINUADO — substituído por cobertura_360_ativada_v3',
+    gatilho: '(legado — não disparar)',
     variaveis: ['nome', 'placa', 'modelo'],
+    deprecated: 'Use cobertura_360_ativada_v3.',
   },
   cobertura_360_ativada: {
     momento: 'Versão antiga — substituída por cobertura_360_ativada_v3',
@@ -101,9 +103,10 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
 
   // ── Cobrança ────────────────────────────────────────────────────────
   cobranca_mensalidade: {
-    momento: 'Geração mensal de boletos (envio padrão SGA)',
-    gatilho: 'gerar-cobrancas-mensais · gerar-faturas-mensais · disparar-boletos-lote · enviar-lembretes-vencimento',
+    momento: 'DESCONTINUADO — todas as gerações migradas para emissao_boleto_gerado_v2',
+    gatilho: '(legado — não disparar)',
     variaveis: ['nome', 'mes_ano', 'vencimento'],
+    deprecated: 'Use emissao_boleto_gerado_v2.',
   },
   emissao_boleto_gerado_v2: {
     momento: 'Quando um boleto avulso é emitido com linha digitável',

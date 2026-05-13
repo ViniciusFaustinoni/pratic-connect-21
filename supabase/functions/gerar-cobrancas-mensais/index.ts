@@ -237,13 +237,29 @@ Sua mensalidade de *${valorFormatado}* está disponível.
 
 ${asaasCobranca.nossoNumero ? `📊 *Linha Digitável:*\n${asaasCobranca.nossoNumero}\n\n` : ''}Pague agora e evite atrasos! 😊`;
 
+            // Buscar veículo principal para template emissao_boleto_gerado_v2
+            const { data: vPrim } = await supabase
+              .from('veiculos')
+              .select('placa, modelo')
+              .eq('associado_id', associado.id)
+              .eq('status', 'ativo')
+              .limit(1)
+              .maybeSingle();
+            const linhaDig = asaasCobranca.nossoNumero || asaasCobranca.pixPayload || '—';
             await supabase.functions.invoke('whatsapp-send-text', {
               body: {
                 telefone: telefone.replace(/\D/g, ''),
                 mensagem,
                 delay_ms: 500,
-                template_name: 'cobranca_mensalidade',
-                template_params: [nomeAbreviado, valorFormatado, dataFormatada],
+                template_name: 'emissao_boleto_gerado_v2',
+                template_params: [
+                  nomeAbreviado,
+                  vPrim?.modelo || 'seu veículo',
+                  vPrim?.placa || '---',
+                  dataFormatada,
+                  valorFormatado,
+                  linhaDig,
+                ],
               },
             });
             

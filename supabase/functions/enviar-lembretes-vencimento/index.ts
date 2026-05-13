@@ -374,13 +374,29 @@ serve(async (req) => {
           
           try {
             const nomeAbrev = associado.nome?.split(' ')[0] || 'Associado';
+            // Buscar veículo principal para template emissao_boleto_gerado_v2
+            const { data: vPrim } = await supabase
+              .from('veiculos')
+              .select('placa, modelo')
+              .eq('associado_id', associado.id)
+              .eq('status', 'ativo')
+              .limit(1)
+              .maybeSingle();
+            const linhaDig = cobranca.linha_digitavel || cobranca.pix_copia_cola || '—';
             const { data: sendResult, error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
               body: {
                 telefone: telefoneFormatado,
                 mensagem,
                 delay_ms: 500,
-                template_name: 'cobranca_mensalidade',
-                template_params: [nomeAbrev, valorFormatado, dataFormatada],
+                template_name: 'emissao_boleto_gerado_v2',
+                template_params: [
+                  nomeAbrev,
+                  vPrim?.modelo || 'seu veículo',
+                  vPrim?.placa || '---',
+                  dataFormatada,
+                  valorFormatado,
+                  linhaDig,
+                ],
               },
             });
             
