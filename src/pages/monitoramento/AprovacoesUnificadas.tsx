@@ -54,31 +54,37 @@ export default function AprovacoesUnificadas() {
             <ShieldCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Aprovação de Associados</span>
             <span className="sm:hidden">Associados</span>
+            <CountBadge n={counts?.associados ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="troca" className="gap-2">
             <ArrowRightLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Troca de Titularidade</span>
             <span className="sm:hidden">Troca</span>
+            <CountBadge n={counts?.troca ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="liberacao-suspensao" className="gap-2">
             <AlertTriangle className="h-4 w-4" />
             <span className="hidden sm:inline">Liberação de Suspensão</span>
             <span className="sm:hidden">Liberação</span>
+            <CountBadge n={counts?.liberacaoSuspensao ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="recusas" className="gap-2">
             <ShieldAlert className="h-4 w-4" />
             <span className="hidden sm:inline">Recusas do Instalador</span>
             <span className="sm:hidden">Recusas</span>
+            <CountBadge n={counts?.recusas ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="ressalvas" className="gap-2">
             <ClipboardList className="h-4 w-4" />
             <span className="hidden sm:inline">Ressalvas Pendentes</span>
             <span className="sm:hidden">Ressalvas</span>
+            <CountBadge n={counts?.ressalvas ?? 0} />
           </TabsTrigger>
           <TabsTrigger value="imprevistos" className="gap-2">
             <AlertTriangle className="h-4 w-4" />
             <span className="hidden sm:inline">Imprevistos</span>
             <span className="sm:hidden">Imprev.</span>
+            <CountBadge n={counts?.imprevistos ?? 0} />
           </TabsTrigger>
         </TabsList>
 
