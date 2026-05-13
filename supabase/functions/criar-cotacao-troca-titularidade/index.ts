@@ -89,6 +89,15 @@ Deno.serve(async (req) => {
       }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // DEPRECATED: criação de cotação avulsa antes da escolha do plano foi removida.
+    // O fluxo correto agora abre o `CotacaoFormDialog` padrão e vincula via
+    // `vincular-cotacao-troca`. Esta edge só responde no modo idempotente
+    // (cotação já existente — tratado no bloco acima).
+    return new Response(JSON.stringify({
+      error: 'Criação de cotação avulsa de troca foi descontinuada. Use o formulário padrão de cotação.',
+      code: 'FLUXO_DESCONTINUADO',
+    }), { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
     // 2) Carregar veículo e enriquecer (FIPE/placa) se faltar dado
     const colunas = 'id, marca, modelo, ano_modelo, ano_fabricacao, placa, combustivel, cor, codigo_fipe, valor_fipe';
     const { data: veiculo, error: vErr } = await admin
