@@ -31365,7 +31365,7 @@ export type Database = {
           fotos_vistoria: Json | null
           id: string
           iniciada_em: string | null
-          instalacao_id: string
+          instalacao_id: string | null
           latitude: number | null
           localizacao_atualizada_em: string | null
           longitude: number | null
@@ -31376,6 +31376,7 @@ export type Database = {
           token: string
           updated_at: string
           valor: number | null
+          vistoria_id: string | null
           vistoriador_prestador_id: string
           whatsapp_enviado: boolean | null
           whatsapp_erro: string | null
@@ -31393,7 +31394,7 @@ export type Database = {
           fotos_vistoria?: Json | null
           id?: string
           iniciada_em?: string | null
-          instalacao_id: string
+          instalacao_id?: string | null
           latitude?: number | null
           localizacao_atualizada_em?: string | null
           longitude?: number | null
@@ -31404,6 +31405,7 @@ export type Database = {
           token?: string
           updated_at?: string
           valor?: number | null
+          vistoria_id?: string | null
           vistoriador_prestador_id: string
           whatsapp_enviado?: boolean | null
           whatsapp_erro?: string | null
@@ -31421,7 +31423,7 @@ export type Database = {
           fotos_vistoria?: Json | null
           id?: string
           iniciada_em?: string | null
-          instalacao_id?: string
+          instalacao_id?: string | null
           latitude?: number | null
           localizacao_atualizada_em?: string | null
           longitude?: number | null
@@ -31432,6 +31434,7 @@ export type Database = {
           token?: string
           updated_at?: string
           valor?: number | null
+          vistoria_id?: string | null
           vistoriador_prestador_id?: string
           whatsapp_enviado?: boolean | null
           whatsapp_erro?: string | null
@@ -31471,6 +31474,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "vistoria_prestador_links_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["vistoria_id"]
+          },
+          {
+            foreignKeyName: "vistoria_prestador_links_vistoria_id_fkey"
+            columns: ["vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "vistoria_prestador_links_vistoriador_prestador_id_fkey"
