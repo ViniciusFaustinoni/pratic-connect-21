@@ -1,13 +1,17 @@
 // ============================================================================
 // Régua de Cobrança — motor Hinova-first
 // ----------------------------------------------------------------------------
-// 1. Busca boletos via /listar/boleto-associado/periodo (janela = etapas D-min..D+max).
-// 2. Classifica status (PAGO/CANCELADO/VENCIDO/A VENCER).
-// 3. Casa cada boleto não-pago com a etapa correspondente.
-// 4. Ordena: inadimplentes mais antigos primeiro, depois por valor, depois lembretes.
-// 5. Dedupe por (nosso_numero + dia_regua + dia_civil_SP).
-// 6. Dispara WhatsApp em BACKGROUND com delay configurável (default 10s).
-// 7. Devolve { run_id, total_planejado } imediatamente; UI faz polling em cobranca_runs.
+// 1. Busca boletos via /listar/boleto-associado/periodo.
+//    Janela = união de [hoje-dMax .. hoje-dMin] com [1º dia (mês-2) .. último
+//    dia mês atual] — garante 2 meses retroativos + mês corrente para
+//    espelhar TODOS os boletos relevantes em `cobrancas`.
+// 2. Espelha boletos na tabela `cobrancas` (insert/update/baixa pagas).
+// 3. Classifica status (PAGO/CANCELADO/VENCIDO/A VENCER).
+// 4. Casa cada boleto não-pago com a etapa correspondente.
+// 5. Ordena: inadimplentes mais antigos primeiro, depois por valor, depois lembretes.
+// 6. Dedupe por (nosso_numero + dia_regua + dia_civil_SP).
+// 7. Dispara WhatsApp em BACKGROUND com delay configurável (default 10s).
+// 8. Devolve { run_id, total_planejado } imediatamente; UI faz polling em cobranca_runs.
 // ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
@@ -17,6 +21,7 @@ import {
   HinovaTransientError,
   calcularProximoRetry,
 } from '../_shared/hinova-client.ts'
+import { mirrorBoletosEmCobrancas } from '../_shared/cobrancas-sga-upsert.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -196,15 +201,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Janela de varredura: hoje + dMin .. hoje + dMax (etapa.dias negativo = pré-vencimento)
+    // 3. Janela de varredura
+    //    Etapas: dias > 0 = vencido há X (venc = hoje-X); dias < 0 = vence em |X| (venc = hoje+|X|)
+    //    + Garantia mínima: 1º dia do (mês atual - 2) até último dia do mês atual
+    //    (espelhar 2 meses retroativos + mês corrente em `cobrancas`).
     const dMin = Math.min(...etapas.map((e) => e.dias))   // ex.: -15
     const dMax = Math.max(...etapas.map((e) => e.dias))   // ex.: +61
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
-    const dataInicial = new Date(hoje); dataInicial.setDate(dataInicial.getDate() - dMax) // venc <= hoje + (-dMax) ... espera
-    // Atenção: etapa.dias > 0 = boleto VENCIDO há X dias → vencimento = hoje - X
-    //          etapa.dias < 0 = boleto VENCE em |X| dias → vencimento = hoje + |X|
-    const inicioVenc = new Date(hoje); inicioVenc.setDate(inicioVenc.getDate() - dMax) // mais antigo
-    const fimVenc = new Date(hoje); fimVenc.setDate(fimVenc.getDate() - dMin)          // mais futuro (-dMin = +15)
+    const etapaInicio = new Date(hoje); etapaInicio.setDate(etapaInicio.getDate() - dMax)
+    const etapaFim = new Date(hoje); etapaFim.setDate(etapaFim.getDate() - dMin)
+    const mesAtualPrimeiro = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)
+    const mesAtualUltimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+    const inicioVenc = etapaInicio < mesAtualPrimeiro ? etapaInicio : mesAtualPrimeiro
+    const fimVenc = etapaFim > mesAtualUltimo ? etapaFim : mesAtualUltimo
 
     // 4. Busca Hinova
     let boletos: any[]
@@ -268,6 +277,23 @@ Deno.serve(async (req) => {
           id: (v as any).id, modelo: (v as any).modelo || null, marca: (v as any).marca || null,
         })
       }
+    }
+
+    // 5.1 Espelha boletos no mirror local `cobrancas` (insere/atualiza/baixa pagas).
+    //     Usa os mapas já carregados; boletos sem associado/veículo local são pulados.
+    let mirrorRes = { inseridas: 0, atualizadas: 0, baixadas: 0, ignoradas: 0, erros: 0 }
+    try {
+      mirrorRes = await mirrorBoletosEmCobrancas(supabase, boletos, {
+        associadosPorCodigoHinova: new Map(
+          Array.from(assocByCodigo.entries()).map(([k, v]) => [k, { id: v.id }]),
+        ),
+        veiculosPorPlaca: new Map(
+          Array.from(veicByPlaca.entries()).map(([k, v]) => [k, { id: v.id }]),
+        ),
+      })
+      console.log(`[regua] mirror cobrancas:`, mirrorRes)
+    } catch (e: any) {
+      console.error('[regua] mirror cobrancas falhou (não-bloqueante):', e?.message || e)
     }
 
     for (const b of boletos) {
@@ -379,6 +405,10 @@ Deno.serve(async (req) => {
           boletos_retornados: boletos.length,
           fila_bruta: fila.length,
           duplicados_pulados: fila.length - filaFinal.length,
+          cobrancas_inseridas: mirrorRes.inseridas,
+          cobrancas_baixadas: mirrorRes.baixadas,
+          cobrancas_ignoradas: mirrorRes.ignoradas,
+          cobrancas_erros: mirrorRes.erros,
           regua_id: regua.id,
         },
       }).select('id').single()
