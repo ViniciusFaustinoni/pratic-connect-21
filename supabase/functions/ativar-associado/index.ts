@@ -121,11 +121,18 @@ Deno.serve(async (req) => {
       const agora = new Date().toISOString();
       const targetContratoId = contrato_id ?? assoc.contrato_id;
       const sideEffects: Record<string, unknown> = {};
+      // Quando o novo veículo/contrato exige instalação física, NÃO promover
+      // contrato/veículo/cotação para 'ativo' nesta etapa — eles ficam 'aguardando_instalacao'
+      // até o Monitoramento aprovar a pós-instalação (que rechamará esta edge sem aguardar_instalacao).
+      const contratoTargetStatus = aguardar_instalacao ? 'assinado' : 'ativo';
+      const cotacaoTargetStatus = aguardar_instalacao ? 'contrato_assinado' : 'ativo';
 
       if (targetContratoId) {
+        const contratoUpdate: Record<string, unknown> = { status: contratoTargetStatus };
+        if (!aguardar_instalacao) contratoUpdate.data_ativacao = agora;
         const { error: contratoErr } = await supabase
           .from('contratos')
-          .update({ status: 'ativo', data_ativacao: agora })
+          .update(contratoUpdate)
           .eq('id', targetContratoId)
           .neq('status', 'cancelado')
           .neq('status', 'ativo');
@@ -134,40 +141,46 @@ Deno.serve(async (req) => {
           sideEffects.contrato_erro = contratoErr.message;
         } else {
           sideEffects.contrato_atualizado = targetContratoId;
+          sideEffects.contrato_status = contratoTargetStatus;
         }
       }
 
       if (veiculo_id) {
+        const temCoberturaImediata = ativar_cobertura_total || ativar_cobertura_roubo_furto;
+        const promoverStatus = temCoberturaImediata && !aguardar_instalacao;
         const veiculoUpdate: Record<string, unknown> = {
-          status: 'ativo',
+          status: promoverStatus ? 'ativo' : 'instalacao_pendente',
           updated_at: agora,
         };
         if (ativar_cobertura_total) veiculoUpdate.cobertura_total = true;
         if (ativar_cobertura_roubo_furto) veiculoUpdate.cobertura_roubo_furto = true;
-        const { error: veicErr } = await supabase
+        let veicQuery = supabase
           .from('veiculos')
           .update(veiculoUpdate)
           .eq('id', veiculo_id)
-          .neq('status', 'cancelado')
-          .neq('status', 'ativo');
+          .neq('status', 'cancelado');
+        if (!promoverStatus) veicQuery = veicQuery.neq('status', 'ativo');
+        const { error: veicErr } = await veicQuery;
         if (veicErr) {
           console.warn('[ativar-associado][idem] update veiculo erro:', veicErr.message);
           sideEffects.veiculo_erro = veicErr.message;
         } else {
           sideEffects.veiculo_atualizado = veiculo_id;
+          sideEffects.veiculo_status = veiculoUpdate.status;
         }
       }
 
       if (cotacao_id) {
         const { error: cotErr } = await supabase
           .from('cotacoes')
-          .update({ status_contratacao: 'ativo' })
+          .update({ status_contratacao: cotacaoTargetStatus })
           .eq('id', cotacao_id);
         if (cotErr) {
           console.warn('[ativar-associado][idem] update cotacao erro:', cotErr.message);
           sideEffects.cotacao_erro = cotErr.message;
         } else {
           sideEffects.cotacao_atualizado = cotacao_id;
+          sideEffects.cotacao_status = cotacaoTargetStatus;
         }
       }
 
@@ -244,13 +257,18 @@ Deno.serve(async (req) => {
       allowed_from_assoc.push('aguardando_instalacao', 'aprovado');
     }
 
+    // Quando aguardar_instalacao=true, NÃO promover associado para 'ativo'.
+    // Mantemos/colocamos em 'aguardando_instalacao' até o Monitoramento aprovar a pós-instalação.
+    const assocTargetStatus = aguardar_instalacao ? 'aguardando_instalacao' : 'ativo';
+    const assocUpdatePayload: Record<string, unknown> = {
+      status: assocTargetStatus,
+      updated_at: agora,
+    };
+    if (!aguardar_instalacao) assocUpdatePayload.data_ativacao = agora;
+
     const { data: assocUpd, error: assocUpdErr } = await supabase
       .from('associados')
-      .update({
-        status: 'ativo',
-        data_ativacao: agora,
-        updated_at: agora,
-      })
+      .update(assocUpdatePayload)
       .eq('id', associado_id)
       .in('status', allowed_from_assoc)
       .select('id, status')
@@ -264,7 +282,17 @@ Deno.serve(async (req) => {
       // Alguém mudou o status entre o read e o update — recheca idempotência
       const { data: refetch } = await supabase
         .from('associados').select('status').eq('id', associado_id).maybeSingle();
-      if (refetch?.status === 'ativo') {
+      if (refetch?.status === assocTargetStatus) {
+        return jsonResponse({
+          success: true,
+          idempotente: true,
+          mensagem: `Associado já estava em ${assocTargetStatus} após CAS.`,
+          associado_id,
+          status: assocTargetStatus,
+        });
+      }
+      // Aceita também já-ativo (caso `aguardar_instalacao` tenha vindo true mas associado já estava ativo por outro fluxo)
+      if (refetch?.status === 'ativo' && !aguardar_instalacao) {
         return jsonResponse({
           success: true,
           idempotente: true,
@@ -282,10 +310,13 @@ Deno.serve(async (req) => {
 
     // ----- 7) Atualizar contrato (CAS opcional) -----
     const targetContratoId = contrato_id ?? assoc.contrato_id;
+    const contratoTargetStatusFlow = aguardar_instalacao ? 'assinado' : 'ativo';
     if (targetContratoId) {
+      const contratoUpdate: Record<string, unknown> = { status: contratoTargetStatusFlow };
+      if (!aguardar_instalacao) contratoUpdate.data_ativacao = agora;
       const { error: contratoErr } = await supabase
         .from('contratos')
-        .update({ status: 'ativo', data_ativacao: agora })
+        .update(contratoUpdate)
         .eq('id', targetContratoId)
         .neq('status', 'cancelado');
       if (contratoErr) {
@@ -333,9 +364,10 @@ Deno.serve(async (req) => {
 
     // ----- 9) Atualizar cotação -----
     if (cotacao_id) {
+      const cotacaoTargetStatusFlow = aguardar_instalacao ? 'contrato_assinado' : 'ativo';
       const { error: cotErr } = await supabase
         .from('cotacoes')
-        .update({ status_contratacao: 'ativo' })
+        .update({ status_contratacao: cotacaoTargetStatusFlow })
         .eq('id', cotacao_id);
       if (cotErr) {
         console.warn('[ativar-associado] update cotacao erro (não bloqueante):', cotErr.message);
@@ -347,7 +379,7 @@ Deno.serve(async (req) => {
       associado_id,
       contrato_id: targetContratoId,
       from_status: assoc.status,
-      to_status: 'ativo',
+      to_status: assocTargetStatus,
       source: `edge:ativar-associado<-${source}`,
       actor_id,
       payload: {
@@ -357,6 +389,7 @@ Deno.serve(async (req) => {
         cotacao_id,
         ativar_cobertura_total,
         ativar_cobertura_roubo_furto,
+        aguardar_instalacao,
         ...metadata,
       },
     });
@@ -365,9 +398,10 @@ Deno.serve(async (req) => {
       success: true,
       associado_id,
       contrato_id: targetContratoId,
-      status: 'ativo',
+      status: assocTargetStatus,
+      aguardando_instalacao: aguardar_instalacao,
       from_status: assoc.status,
-      ativado_em: agora,
+      ativado_em: aguardar_instalacao ? null : agora,
     });
   } catch (e) {
     const t = translateDbError(e);
