@@ -123,6 +123,11 @@ export function LoteAtivoCobrancas() {
     setConfirmAberto(false);
     setResultado(null);
 
+    if (!lote?.id) {
+      toast.error('Nenhum lote ativo. Importe um CSV primeiro em "Importar CSV (SGA)".');
+      return;
+    }
+
     // Agrupa por matricula para 1 mensagem por associado
     const map = new Map<string, { nome: string; matricula: string; telefones_validos: string[]; boletos: any[] }>();
     for (const b of filtrados) {
