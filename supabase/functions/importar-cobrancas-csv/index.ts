@@ -164,10 +164,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (rows.length) {
-      const { error } = await supabase.from('cobranca_csv_boletos').insert(rows);
+    // Dedup intra-chunk por linha_digitavel (último vence)
+    const dedupMap = new Map<string, any>();
+    for (const r of rows) dedupMap.set(r.linha_digitavel, r);
+    const uniqueRows = Array.from(dedupMap.values());
+    const duplicadosIntraChunk = rows.length - uniqueRows.length;
+
+    let gravadosReais = 0;
+    let duplicadosBanco = 0;
+    if (uniqueRows.length) {
+      // upsert com ignoreDuplicates: boletos já existentes são silenciosamente ignorados
+      const { data: inserted, error } = await supabase
+        .from('cobranca_csv_boletos')
+        .upsert(uniqueRows, { onConflict: 'linha_digitavel', ignoreDuplicates: true })
+        .select('id');
       if (error) throw error;
+      gravadosReais = inserted?.length || 0;
+      duplicadosBanco = uniqueRows.length - gravadosReais;
     }
+    const duplicadosIgnorados = duplicadosIntraChunk + duplicadosBanco;
 
     if (body.is_last_chunk && loteId) {
       // Consolida totais reais do lote.
