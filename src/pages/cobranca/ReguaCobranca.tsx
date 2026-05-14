@@ -227,6 +227,26 @@ export default function ReguaCobranca() {
     },
   });
 
+  // Reage a término do run (falhou/cancelado/concluido) — toast + reset do runId
+  // para a UI sair de "PREPARANDO…" quando o worker em background morre.
+  useEffect(() => {
+    if (!runStatus) return;
+    const s = (runStatus as any).status;
+    if (s === 'falhou') {
+      const erro = (runStatus as any).payload?.erro || 'Falha desconhecida na régua';
+      toast.error(`Régua falhou: ${erro}`, { duration: 10_000 });
+      setRunId(null);
+    } else if (s === 'concluido') {
+      const env = (runStatus as any).enviados ?? 0;
+      const f = (runStatus as any).falhas ?? 0;
+      toast.success(`Régua concluída — ${env} enviado(s), ${f} falha(s)`);
+    } else if (s === 'cancelado') {
+      toast.info('Régua cancelada');
+      setRunId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(runStatus as any)?.status]);
+
   const cancelarRun = async () => {
     if (!runId) return;
     await (supabase as any).from('cobranca_runs')
