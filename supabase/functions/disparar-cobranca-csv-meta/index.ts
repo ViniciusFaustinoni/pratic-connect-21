@@ -842,6 +842,7 @@ serve(async (req) => {
         sucesso,
         erros,
         pulados_idempotencia: puladosIdempotencia,
+        pulados_duplicidade_dia: puladosDuplicidadeDia,
         detalhes,
         lote_id: loteId,
         recuperados_count: recuperadosCount,
