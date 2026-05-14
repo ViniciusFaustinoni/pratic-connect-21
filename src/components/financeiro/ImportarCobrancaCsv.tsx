@@ -213,48 +213,80 @@ export function ImportarCobrancaCsv() {
     );
     const todasMatriculas = resultado.destinatarios.map((d) => d.matricula);
 
-    const CHUNK = 50;
+    // ===== FASE A: init do lote (rápido, sem disparo) — garante lote_id antes de qualquer envio =====
+    try {
+      const { data: initData, error: initErr } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
+        body: {
+          template_nome: TEMPLATE_NOME,
+          init_only: true,
+          is_first_chunk: true,
+          nome_arquivo: arquivo?.name || 'cobranca.csv',
+          // destinatarios é obrigatório no schema legado; passamos lista vazia mas init_only ignora a validação
+          destinatarios: [],
+          todas_linhas_digitaveis: todasLinhasDigitaveis,
+          todas_matriculas: todasMatriculas,
+          total_remessa: resultado.valor_total,
+          total_associados_remessa: resultado.total_associados,
+        },
+      });
+      if (initErr) throw new Error(initErr.message);
+      if (!initData?.success || !initData?.lote_id) {
+        throw new Error(initData?.error || 'Falha ao iniciar lote');
+      }
+      loteId = initData.lote_id;
+      if (typeof initData.recuperados_count === 'number') recuperadosCount = initData.recuperados_count;
+      if (typeof initData.recuperados_valor === 'number') recuperadosValor = initData.recuperados_valor;
+      if (typeof initData.reemitidos_count === 'number') reemitidosCount = initData.reemitidos_count;
+      if (typeof initData.reemitidos_valor === 'number') reemitidosValor = initData.reemitidos_valor;
+    } catch (e: any) {
+      toast.error(`Falha ao iniciar lote: ${e.message}`);
+      setEtapa('preview');
+      return;
+    }
+
+    // ===== FASE B: chunks de envio (idempotentes, sempre com lote_id) =====
+    const CHUNK = 10; // chunks pequenos para evitar timeout do edge runtime
     const total = destinatariosValidos.length;
     setProgresso({ atual: 0, total });
 
     for (let i = 0; i < total; i += CHUNK) {
       if (cancelarRef.current) break;
       const slice = destinatariosValidos.slice(i, i + CHUNK);
-      const isFirst = i === 0;
       const isLast = i + CHUNK >= total;
-      try {
-        const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
-          body: {
-            template_nome: TEMPLATE_NOME,
-            destinatarios: slice,
-            is_first_chunk: isFirst,
-            is_last_chunk: isLast,
-            lote_id: loteId,
-            nome_arquivo: arquivo?.name || 'cobranca.csv',
-            ...(isFirst
-              ? {
-                  todas_linhas_digitaveis: todasLinhasDigitaveis,
-                  todas_matriculas: todasMatriculas,
-                  total_remessa: resultado.valor_total,
-                  total_associados_remessa: resultado.total_associados,
-                }
-              : {}),
-          },
-        });
-        if (error) throw new Error(error.message);
-        if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
-        sucesso += data.sucesso || 0;
-        erros += data.erros || 0;
-        if (data.lote_id) loteId = data.lote_id;
-        if (typeof data.recuperados_count === 'number') recuperadosCount += data.recuperados_count;
-        if (typeof data.recuperados_valor === 'number') recuperadosValor += data.recuperados_valor;
-        if (typeof data.reemitidos_count === 'number') reemitidosCount += data.reemitidos_count;
-        if (typeof data.reemitidos_valor === 'number') reemitidosValor += data.reemitidos_valor;
-        if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
-      } catch (e: any) {
+      // Retry uma vez em caso de falha de rede / timeout (idempotência protege contra duplicidade)
+      let tentativa = 0;
+      let chunkOk = false;
+      let ultimoErro = '';
+      while (tentativa < 2 && !chunkOk) {
+        tentativa++;
+        try {
+          const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
+            body: {
+              template_nome: TEMPLATE_NOME,
+              destinatarios: slice,
+              is_first_chunk: false,
+              is_last_chunk: isLast,
+              lote_id: loteId,
+              nome_arquivo: arquivo?.name || 'cobranca.csv',
+            },
+          });
+          if (error) throw new Error(error.message);
+          if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
+          sucesso += data.sucesso || 0;
+          erros += data.erros || 0;
+          if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
+          chunkOk = true;
+        } catch (e: any) {
+          ultimoErro = e?.message || 'erro desconhecido';
+          if (tentativa < 2) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+        }
+      }
+      if (!chunkOk) {
         for (const d of slice) {
           for (const t of d.telefones_validos) {
-            detalhes.push({ matricula: d.matricula, nome: d.nome, telefone: t, status: 'erro', erro: e.message });
+            detalhes.push({ matricula: d.matricula, nome: d.nome, telefone: t, status: 'erro', erro: ultimoErro });
             erros++;
           }
         }

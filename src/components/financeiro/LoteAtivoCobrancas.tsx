@@ -48,7 +48,7 @@ export function LoteAtivoCobrancas() {
       const { data, error } = await supabase
         .from('cobranca_csv_lotes')
         .select('id, nome_arquivo, total_boletos, total_associados, valor_total, total_enviados, status, created_at')
-        .eq('status', 'ativo')
+        .in('status', ['ativo', 'parcial'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -150,7 +150,7 @@ export function LoteAtivoCobrancas() {
     }
 
     setEnviando(true);
-    const CHUNK = 50;
+    const CHUNK = 10; // chunks pequenos evitam timeout do edge runtime
     const total = destinatarios.length;
     setProgresso({ atual: 0, total });
     let sucesso = 0;
@@ -158,25 +158,37 @@ export function LoteAtivoCobrancas() {
 
     for (let i = 0; i < total; i += CHUNK) {
       const slice = destinatarios.slice(i, i + CHUNK);
-      try {
-        const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
-          body: {
-            template_nome: TEMPLATE_NOME,
-            destinatarios: slice,
-            is_first_chunk: false,
-            is_last_chunk: false,
-            lote_id: lote?.id ?? null,
-            nome_arquivo: lote?.nome_arquivo ?? 'lote-ativo',
-            skip_reconciliacao: true,
-          },
-        });
-        if (error) throw new Error(error.message);
-        if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
-        sucesso += data.sucesso || 0;
-        erros += data.erros || 0;
-      } catch (e: any) {
+      const isLast = i + CHUNK >= total;
+      let tentativa = 0;
+      let chunkOk = false;
+      let ultimoErro = '';
+      while (tentativa < 2 && !chunkOk) {
+        tentativa++;
+        try {
+          const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
+            body: {
+              template_nome: TEMPLATE_NOME,
+              destinatarios: slice,
+              is_first_chunk: false,
+              is_last_chunk: isLast,
+              lote_id: lote.id,
+              nome_arquivo: lote?.nome_arquivo ?? 'lote-ativo',
+              skip_reconciliacao: true,
+            },
+          });
+          if (error) throw new Error(error.message);
+          if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
+          sucesso += data.sucesso || 0;
+          erros += data.erros || 0;
+          chunkOk = true;
+        } catch (e: any) {
+          ultimoErro = e?.message || 'erro desconhecido';
+          if (tentativa < 2) await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+      if (!chunkOk) {
         erros += slice.reduce((s, d) => s + d.telefones_validos.length, 0);
-        toast.error(`Erro no lote ${i / CHUNK + 1}: ${e.message}`);
+        toast.error(`Erro no lote ${i / CHUNK + 1}: ${ultimoErro}`);
       }
       setProgresso({ atual: Math.min(i + CHUNK, total), total });
     }

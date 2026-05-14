@@ -140,21 +140,26 @@ serve(async (req) => {
     const destinatarios: DestinatarioIn[] = body.destinatarios || [];
     const isFirstChunk: boolean = body.is_first_chunk === true;
     const isLastChunk: boolean = body.is_last_chunk === true;
+    // init_only: cria o lote (e roda reconciliação), retorna lote_id IMEDIATAMENTE,
+    // sem chamar Meta. Resolve o problema do client perder o lote_id por timeout.
+    const initOnly: boolean = body.init_only === true;
     let loteId: string | null = body.lote_id || null;
     const nomeArquivo: string = body.nome_arquivo || "cobranca.csv";
     const totalRemessa: number | undefined = body.total_remessa;
 
-    if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
-      return new Response(JSON.stringify({ success: false, error: "Lista vazia" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (destinatarios.length > 200) {
-      return new Response(JSON.stringify({ success: false, error: "Máximo 200 por chunk" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!initOnly) {
+      if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
+        return new Response(JSON.stringify({ success: false, error: "Lista vazia" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (destinatarios.length > 200) {
+        return new Response(JSON.stringify({ success: false, error: "Máximo 200 por chunk" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // ===== 1. Criar lote no PRIMEIRO chunk e reconciliar com lote ATIVO anterior =====
@@ -163,7 +168,7 @@ serve(async (req) => {
     let reemitidosCount = 0;
     let reemitidosValor = 0;
 
-    if (isFirstChunk) {
+    if (isFirstChunk || initOnly) {
       const todasLinhas = (body.todas_linhas_digitaveis as string[] | undefined) ?? [];
       const todasMatriculas = (body.todas_matriculas as string[] | undefined) ?? [];
       const totalBoletosRemessa = todasLinhas.length;
@@ -286,9 +291,46 @@ serve(async (req) => {
       });
     }
 
-    // ===== 2. Persistir os boletos deste chunk =====
+    // ===== INIT ONLY: devolve lote_id e métricas de reconciliação, sem disparar Meta =====
+    if (initOnly) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          init: true,
+          lote_id: loteId,
+          recuperados_count: recuperadosCount,
+          recuperados_valor: recuperadosValor,
+          reemitidos_count: reemitidosCount,
+          reemitidos_valor: reemitidosValor,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ===== IDEMPOTÊNCIA: pula matrículas já enviadas neste lote (retomada segura) =====
+    const matriculasChunk = Array.from(
+      new Set(destinatarios.map((d) => (d.matricula || "").trim()).filter(Boolean)),
+    );
+    const matriculasJaEnviadas = new Set<string>();
+    if (matriculasChunk.length > 0) {
+      const { data: jaEnv } = await supabase
+        .from("cobranca_csv_boletos")
+        .select("matricula")
+        .eq("lote_id", loteId)
+        .eq("status", "enviado")
+        .in("matricula", matriculasChunk);
+      for (const r of jaEnv || []) {
+        if (r.matricula) matriculasJaEnviadas.add(String(r.matricula).trim());
+      }
+    }
+    const destinatariosProcessar = destinatarios.filter(
+      (d) => !matriculasJaEnviadas.has((d.matricula || "").trim()),
+    );
+    const puladosIdempotencia = destinatarios.length - destinatariosProcessar.length;
+
+    // ===== 2. Persistir os boletos deste chunk (apenas dos não-pulados) =====
     const boletoRows: any[] = [];
-    for (const dest of destinatarios) {
+    for (const dest of destinatariosProcessar) {
       for (const b of dest.boletos || []) {
         boletoRows.push({
           lote_id: loteId,
@@ -378,7 +420,20 @@ serve(async (req) => {
     let mensagensFalhasGravar = 0;
     const associadosAtingidos = new Set<string>();
 
-    for (const dest of destinatarios) {
+    // Inclui no resultado as matrículas puladas por idempotência
+    for (const d of destinatarios) {
+      if (matriculasJaEnviadas.has((d.matricula || "").trim())) {
+        detalhes.push({
+          matricula: d.matricula,
+          nome: d.nome,
+          telefone: "",
+          status: "skip",
+          erro: "já enviado neste lote (idempotência)",
+        });
+      }
+    }
+
+    for (const dest of destinatariosProcessar) {
       const blocosOriginais = montarBlocosBoletosSegmentados(dest.boletos || []);
       // Limita pra não disparar 131056 (pair rate limit) com listas enormes.
       const blocos = blocosOriginais.slice(0, MAX_BLOCOS_POR_DESTINATARIO);
@@ -605,11 +660,20 @@ serve(async (req) => {
         .eq("id", loteId);
     }
 
-    // ===== 5. Promove o lote para 'ativo' no último chunk =====
+    // ===== 5. Promove o lote no último chunk: 'ativo' se sem erros, 'parcial' caso contrário =====
     if (isLastChunk) {
+      // Estado real: olha contadores no banco para decidir
+      const { data: loteAtual } = await supabase
+        .from("cobranca_csv_lotes")
+        .select("total_enviados, total_associados, total_associados_atingidos")
+        .eq("id", loteId)
+        .single();
+      const totalAssoc = loteAtual?.total_associados || 0;
+      const atingidos = loteAtual?.total_associados_atingidos || 0;
+      const novoStatus = totalAssoc > 0 && atingidos < totalAssoc ? "parcial" : "ativo";
       await supabase
         .from("cobranca_csv_lotes")
-        .update({ status: "ativo" })
+        .update({ status: novoStatus })
         .eq("id", loteId);
     }
 
@@ -618,6 +682,7 @@ serve(async (req) => {
         success: true,
         sucesso,
         erros,
+        pulados_idempotencia: puladosIdempotencia,
         detalhes,
         lote_id: loteId,
         recuperados_count: recuperadosCount,
