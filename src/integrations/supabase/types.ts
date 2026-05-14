@@ -29383,6 +29383,7 @@ export type Database = {
           aprovado_monitoramento_em: string | null
           aprovado_monitoramento_por: string | null
           associado_antigo_id: string
+          autovistoria_concluida_em: string | null
           cotacao_id: string | null
           created_at: string
           criado_por: string | null
@@ -29425,6 +29426,7 @@ export type Database = {
           aprovado_monitoramento_em?: string | null
           aprovado_monitoramento_por?: string | null
           associado_antigo_id: string
+          autovistoria_concluida_em?: string | null
           cotacao_id?: string | null
           created_at?: string
           criado_por?: string | null
@@ -29467,6 +29469,7 @@ export type Database = {
           aprovado_monitoramento_em?: string | null
           aprovado_monitoramento_por?: string | null
           associado_antigo_id?: string
+          autovistoria_concluida_em?: string | null
           cotacao_id?: string | null
           created_at?: string
           criado_por?: string | null
