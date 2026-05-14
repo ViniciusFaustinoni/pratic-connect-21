@@ -348,10 +348,113 @@ serve(async (req) => {
         if (r.matricula) matriculasJaEnviadas.add(String(r.matricula).trim());
       }
     }
-    const destinatariosProcessar = destinatarios.filter(
+    const destinatariosAposLote = destinatarios.filter(
       (d) => !matriculasJaEnviadas.has((d.matricula || "").trim()),
     );
-    const puladosIdempotencia = destinatarios.length - destinatariosProcessar.length;
+    const puladosIdempotencia = destinatarios.length - destinatariosAposLote.length;
+
+    // ===== DEDUP CROSS-LOTE NO MESMO DIA: nunca disparar a mesma cobrança 2x no mesmo dia civil (SP) =====
+    // Calcula início do dia civil em America/Sao_Paulo e converte para ISO UTC.
+    function inicioDoDiaSPIso(): string {
+      const partes = new Date().toLocaleString("en-CA", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }); // formato YYYY-MM-DD
+      // SP é UTC-3 (sem DST). 00:00 SP = 03:00 UTC do mesmo dia.
+      return `${partes}T03:00:00.000Z`;
+    }
+    const inicioDiaIso = inicioDoDiaSPIso();
+
+    // Coleta linhas e chaves de fallback (matricula|vencimento|valor) do chunk atual
+    const linhasChunk: string[] = [];
+    const fallbackKeysChunk = new Set<string>();
+    for (const d of destinatariosAposLote) {
+      for (const b of d.boletos || []) {
+        const ln = normLinha(b.linha_digitavel || "");
+        if (ln) linhasChunk.push(ln);
+        if ((d.matricula || "").trim() && b.vencimento) {
+          fallbackKeysChunk.add(
+            `${(d.matricula || "").trim()}|${b.vencimento}|${typeof b.valor === "number" ? b.valor : 0}`,
+          );
+        }
+      }
+    }
+
+    const linhasJaEnviadasHoje = new Map<string, string>(); // linhaNorm -> lote_id origem
+    const fallbackJaEnviadosHoje = new Map<string, string>(); // matricula|venc|valor -> lote_id
+
+    if (linhasChunk.length > 0) {
+      // Pagina em lotes de 500 para evitar URL gigante no .in()
+      const linhasUnique = Array.from(new Set(linhasChunk));
+      for (let i = 0; i < linhasUnique.length; i += 500) {
+        const slice = linhasUnique.slice(i, i + 500);
+        const { data: env } = await supabase
+          .from("cobranca_csv_boletos")
+          .select("matricula, linha_digitavel, lote_id, enviado_em, vencimento, valor")
+          .eq("status", "enviado")
+          .gte("enviado_em", inicioDiaIso)
+          .in("linha_digitavel", slice);
+        for (const r of env || []) {
+          const ln = normLinha(r.linha_digitavel || "");
+          if (ln) linhasJaEnviadasHoje.set(ln, r.lote_id);
+        }
+      }
+    }
+    if (fallbackKeysChunk.size > 0) {
+      // Para o fallback, restringimos por matriculas do chunk para reduzir o varrimento
+      const matriculasParaFallback = Array.from(
+        new Set(destinatariosAposLote.map((d) => (d.matricula || "").trim()).filter(Boolean)),
+      );
+      for (let i = 0; i < matriculasParaFallback.length; i += 500) {
+        const slice = matriculasParaFallback.slice(i, i + 500);
+        const { data: env } = await supabase
+          .from("cobranca_csv_boletos")
+          .select("matricula, vencimento, valor, lote_id, enviado_em, linha_digitavel")
+          .eq("status", "enviado")
+          .gte("enviado_em", inicioDiaIso)
+          .in("matricula", slice);
+        for (const r of env || []) {
+          // Só considera fallback quando linha_digitavel está vazia (caso contrário, a chave principal já cobre)
+          if (r.linha_digitavel && normLinha(r.linha_digitavel)) continue;
+          const k = `${(r.matricula || "").trim()}|${r.vencimento}|${typeof r.valor === "number" ? r.valor : 0}`;
+          if (fallbackKeysChunk.has(k)) fallbackJaEnviadosHoje.set(k, r.lote_id);
+        }
+      }
+    }
+
+    // Filtra boleto-a-boleto: remove os duplicados do dia e empurra detalhes "skip"
+    const destinatariosProcessar: typeof destinatariosAposLote = [];
+    let puladosDuplicidadeDia = 0; // boletos pulados (granular)
+    let assocPuladosTotalmente = 0;
+    for (const d of destinatariosAposLote) {
+      const matricula = (d.matricula || "").trim();
+      const boletosFiltrados: typeof d.boletos = [];
+      for (const b of d.boletos || []) {
+        const ln = normLinha(b.linha_digitavel || "");
+        const fallbackKey = `${matricula}|${b.vencimento}|${typeof b.valor === "number" ? b.valor : 0}`;
+        const loteOrigem = (ln && linhasJaEnviadasHoje.get(ln))
+          || fallbackJaEnviadosHoje.get(fallbackKey);
+        if (loteOrigem) {
+          puladosDuplicidadeDia++;
+          detalhes.push({
+            matricula: d.matricula,
+            nome: d.nome,
+            telefone: "",
+            status: "skip",
+            erro: `boleto já enviado hoje (lote ${String(loteOrigem).slice(0, 8)})`,
+            erro_codigo: "duplicado_dia",
+          });
+        } else {
+          boletosFiltrados.push(b);
+        }
+      }
+      if (boletosFiltrados.length === 0 && (d.boletos || []).length > 0) {
+        assocPuladosTotalmente++;
+        // Já empurramos um skip por boleto acima; não duplicar com skip de associado.
+        continue;
+      }
+      destinatariosProcessar.push({ ...d, boletos: boletosFiltrados });
+    }
 
     // ===== 2. Persistir os boletos deste chunk (apenas dos não-pulados) =====
     const boletoRows: any[] = [];
