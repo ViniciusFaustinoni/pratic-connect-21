@@ -463,17 +463,19 @@ export function ImportarCobrancaCsv() {
           </CardContent>
         </Card>
 
+        {/* Salvar no sistema (vínculo automático) */}
+        <SalvarNoSistemaCard resultado={resultado} arquivo={arquivo} />
+
         {/* Botão disparar */}
         <Card className="bg-primary/5 border-primary/30">
           <CardContent className="p-4 flex items-center justify-between flex-wrap gap-4">
             <div>
               <h3 className="font-semibold flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-primary" />
-                Pronto para disparar
+                Disparar WhatsApp em massa (opcional)
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Será enviada <strong>1 mensagem por associado</strong> agrupando todos os boletos.
-                Associados com 2 celulares válidos receberão em ambos.
+                1 mensagem por associado agrupando todos os boletos.
                 Template Meta: <code className="text-xs bg-muted px-1 py-0.5 rounded">{TEMPLATE_NOME}</code>
               </p>
             </div>
