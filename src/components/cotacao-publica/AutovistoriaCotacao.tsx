@@ -48,6 +48,12 @@ interface AutovistoriaCotacaoProps {
   titulo?: string;
 }
 
+// EXCEÇÃO TEMPORÁRIA — apenas para testes pontuais autorizados.
+// Não replicar este padrão; em produção a validação de placa é obrigatória.
+const COTACOES_TESTE_BYPASS_OCR_PLACA = new Set<string>([
+  '1b0b711f-2fec-42c6-973b-93afb4836d0f', // COT-20260514-182523494-563
+]);
+
 export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosOverride, titulo }: AutovistoriaCotacaoProps) {
   const fotos = fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo);
   const totalFotos = fotos.length;

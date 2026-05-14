@@ -1,50 +1,56 @@
+## Contexto
 
-## Objetivo
+Na autovistoria pública (`AutovistoriaCotacao.tsx`), quando o OCR retorna `legivel=false` ou `match=false`, o fluxo:
+- mostra toast vermelho ("Placa ilegível…" / "Placa não confere…");
+- impede o avanço automático para a próxima foto (`bloqueadoPorPlaca = true`);
+- mantém o badge vermelho "Placa ilegível — refaça a foto.".
 
-Reverter o conjunto de mai/2026 (9 fotos) e voltar à autovistoria enxuta:
-- **2 fotos obrigatórias** (carro e moto): `frente_centro` + `chassi`
-- **1 vídeo 360°** mostrando o veículo em volta + **painel ligado** (motor funcionando, hodômetro visível)
+Resultado: o associado fica preso quando a placa é peça avulsa/fora do carro (caso real desta cotação de teste — chassi gravado em peça mostrando "9BD341ACW SYA23685", sem placa Mercosul visível).
 
-Aplicar tanto na Cotação (fluxo público novo — `EtapaVistoria` → `AutovistoriaCotacao`) quanto na Autovistoria do associado existente (`Autovistoria.tsx`), que hoje compartilham `getFotosAutovistoria`.
+A foto em si **já é enviada e gravada** (o bloqueio é só de avanço/UI).
 
-## Mudanças
+## Cotação alvo
 
-### 1) `src/data/autovistoriaConfig.ts`
-- Substituir `fotosCarro` e `fotosMoto` por **apenas 2 itens** cada:
-  1. `frente_centro` — "Frente — placa centralizada" (validaPlaca: true)
-  2. `chassi` — "Número do Chassi" (validaPlaca: false; carro = base do para-brisa, moto = tubo do garfo)
-- Reduzir `FOTOS_VALIDAR_PLACA` para `['frente_centro']` (única foto com OCR de placa).
-- Reativar `getInstrucoesVideo360` e `getLabelVideo360` (remover stubs `@deprecated`):
-  - Passos: 1) Frente, 2) Lateral esquerda, 3) Traseira, 4) Lateral direita, 5) Voltar à frente, 6) **Pan para o painel com a moto/carro LIGADO mostrando hodômetro**.
-  - Label: "Vídeo 360° + painel ligado".
-- Atualizar comentário do topo do arquivo registrando o novo conjunto.
+- Número: `COT-20260514-182523494-563`
+- ID: `1b0b711f-2fec-42c6-973b-93afb4836d0f`
 
-### 2) `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
-- Importar `VideoCapture`, `getInstrucoesVideo360`, `getLabelVideo360`, `useUploadFotoCotacaoVistoria` (já usado).
-- Estado novo: `videoUrl`, `uploadingVideo`, `videoProgress`.
-- Reidratar `video_360` a partir de `fotosExistentes` (filtro hoje é o oposto: `tipo !== 'video_360'` — adicionar bloco que detecta e popula `videoUrl`).
-- Adicionar bloco "Vídeo 360°" abaixo das 2 fotos:
-  - Lista os passos retornados por `getInstrucoesVideo360(tipoVeiculo)` (último passo destacando "painel ligado").
-  - `<VideoCapture>` chamando `uploadMutation.mutateAsync({ cotacaoId, fotoId: 'video_360', file, ... })` (helper já trata `isVideo`).
-- `handleFinalizar`: bloquear se `!todasFotosEnviadas || !videoUrl`. Mostrar toast claro ("Grave o vídeo 360° com o painel ligado").
-- Atualizar contador no header: `{fotosCompletadas + (videoUrl?1:0)}/{totalFotos+1} itens` ou similar (visual claro de "2 fotos + vídeo").
-- O OCR do hodômetro era acoplado a `painel_ligado` (foto). Como a leitura agora vem do vídeo, **remover** o branch `isFotoOdometro` e o input manual de KM nesse componente — o KM passa a ser informado/aprovado pela equipe na revisão (ou por OCR futuro do frame final do vídeo, fora deste escopo).
+## Mudança proposta (mínima, escopo de exceção)
 
-### 3) `src/components/associado/Autovistoria.tsx`
-- Mesma lógica do passo 2: 2 fotos + vídeo 360° + painel ligado obrigatório. Usar `vistoria_videos`/coluna `video_360_url` já existente para associados (manter o caminho atual de upload de vídeo se houver; senão replicar o `VideoCapture` com `useUploadFotoCotacaoVistoria` quando aplicável). Verificar e seguir o mesmo padrão da cotação.
+Arquivo único: `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
 
-### 4) Sem mudanças em `concluir-etapa-fotos-publica` / banco
-- A coluna `vistorias.video_360_url` já existe (vide `AcompanhamentoProposta` e edge function).
-- `cotacoes_vistoria_fotos` já aceita `tipo='video_360'` (`useUploadFotoCotacaoVistoria` trata).
-- Não criar migration.
+1. Adicionar constante `COTACOES_TESTE_BYPASS_OCR_PLACA` no topo do arquivo:
+   ```ts
+   // EXCEÇÃO TEMPORÁRIA — apenas para testes pontuais autorizados.
+   // Não replicar este padrão; em produção a validação de placa é obrigatória.
+   const COTACOES_TESTE_BYPASS_OCR_PLACA = new Set<string>([
+     '1b0b711f-2fec-42c6-973b-93afb4836d0f', // COT-20260514-182523494-563
+   ]);
+   ```
+
+2. Dentro de `handleCapturarFoto`, no bloco do OCR de placa (linhas ~236–253), envolver o bloqueio:
+   ```ts
+   const bypassOcrPlaca = COTACOES_TESTE_BYPASS_OCR_PLACA.has(cotacaoId);
+   if (result.placaOcr) {
+     setPlacaOcrPorFoto((prev) => ({ ...prev, [fotoAtual.id]: result.placaOcr! }));
+     if (bypassOcrPlaca) {
+       setPlacaMismatch(null);
+       // não bloqueia; segue o fluxo normalmente
+     } else if (result.placaOcr.skipped) {
+       // 0KM ou sem placa real — não valida
+     } else if (!result.placaOcr.legivel) { ... bloqueadoPorPlaca = true; }
+     ...
+   }
+   ```
+
+3. Ajustar o badge visual (linhas ~479–495) para que, quando `bypassOcrPlaca`, mostre apenas a leitura sem cor destrutiva (ou simplesmente não renderizar quando `!match`/`!legivel`).
 
 ## Fora de escopo
-- Vistoria completa 31/15 (sub-FIPE) — segue como está (`vistoriaConfigCompleta`).
-- Vistoria do técnico em campo (instalador) — não altera.
-- OCR automático de hodômetro a partir do vídeo — pode ser feito em fase futura.
 
-## Verificação
-1. Reabrir a cotação `COT-20260514-164930343-286` (TDC0F74) → step Vistoria deve mostrar **2 fotos + bloco de vídeo 360°**.
-2. Tentar finalizar sem vídeo → bloqueado com toast.
-3. Enviar vídeo + 2 fotos → finalizar com sucesso e seguir para Pagamento.
-4. Refresh no meio do fluxo → fotos e vídeo reidratam.
+- Nenhuma mudança em edge function, banco, OCR engine, ou demais cotações.
+- Validação de placa permanece **obrigatória** para todas as outras cotações (memória `mem://logic/operations/autovistoria-2-fotos-video-360` e padrão atual mantidos).
+- Após o teste, basta esvaziar o `Set` (ou removê-lo) para reverter.
+
+## Validação
+
+1. Reabrir COT-20260514-182523494-563, capturar a foto frontal mesmo com placa ilegível → deve avançar para o chassi sem toast de erro.
+2. Abrir outra cotação qualquer → comportamento permanece o atual (bloqueio quando placa não confere).
