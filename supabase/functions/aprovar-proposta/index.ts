@@ -447,6 +447,54 @@ serve(async (req) => {
           }
         }
       } else if (!veiculoPrecisaRastreador) {
+        // SUB-FIPE: Cadastro está aprovando após a autovistoria. Promove o servico
+        // vistoria_entrada (em_analise → concluida) para entrar na fila do Monitoramento,
+        // e libera Roubo/Furto no veículo. A ativação final continua sendo do Monitoramento
+        // (via aprovar-vistoria-monitoramento → ativar-associado).
+        try {
+          const { data: vistAuto } = await supabase
+            .from('vistorias')
+            .select('id, status')
+            .eq('veiculo_id', veiculoId)
+            .eq('modalidade', 'autovistoria')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (vistAuto?.id) {
+            // Promover servico vistoria_entrada da cotação (em_analise → concluida)
+            if (contrato.cotacao_id) {
+              const { error: errPromote } = await supabase
+                .from('servicos')
+                .update({
+                  status: 'concluida',
+                  concluida_em: agora,
+                })
+                .eq('cotacao_id', contrato.cotacao_id)
+                .eq('tipo', 'vistoria_entrada')
+                .eq('status', 'em_analise');
+              if (errPromote) console.warn('[aprovar-proposta] sub-FIPE promote servico falhou:', errPromote);
+              else console.log(`[aprovar-proposta] Sub-FIPE: servico vistoria_entrada promovido a concluida (cotação ${contrato.cotacao_id}).`);
+            }
+
+            // Liberar Roubo/Furto no veículo
+            await supabase
+              .from('veiculos')
+              .update({ cobertura_roubo_furto: true })
+              .eq('id', veiculoId);
+
+            // Atualizar status_contratacao da cotação
+            if (contrato.cotacao_id) {
+              await supabase
+                .from('cotacoes')
+                .update({ status_contratacao: 'aguardando_aprovacao_monitoramento' })
+                .eq('id', contrato.cotacao_id);
+            }
+          }
+        } catch (e) {
+          console.warn('[aprovar-proposta] Erro promoção sub-FIPE pós-autovistoria:', e);
+        }
+
         supabase.functions.invoke('notificar-cliente', {
           body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
         }).catch(() => {});
