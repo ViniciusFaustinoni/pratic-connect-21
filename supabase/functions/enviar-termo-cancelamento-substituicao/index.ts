@@ -4,6 +4,7 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { substituirVariaveisEvento, markdownParaHTML, generateStyles } from '../_shared/template-utils.ts';
+import { gerarPosicoesAssinatura, buscarPosicoesConfig, estimarPaginasHTML } from '../_shared/autentique-positions.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
