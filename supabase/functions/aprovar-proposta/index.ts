@@ -459,8 +459,14 @@ serve(async (req) => {
     // foi marcada como tipo_vistoria='agendada' sem coleta de data/endereço), o
     // associado fica fora de Propostas Pendentes e nunca aparece em Aprovações
     // do Monitoramento. Reverte cadastro_aprovado e devolve erro claro.
-    if (algumPrecisouRastreador && !jaTemInstalacaoConcluida && contrato.cotacao_id) {
-      const [{ count: instCount }, { count: vistCount }, { count: agbCount }] = await Promise.all([
+    // Reforço: no fluxo "vistoria sem rastreador" (FIPE<30k carro / 9k moto não-Diesel),
+    // o veículo NÃO obriga rastreador, mas exige vistoria materializada para entrar na
+    // fila do Monitoramento (servico vistoria_entrada concluida → vistorias pendente).
+    // Aplicamos o mesmo guard sempre que houver cotação vinculada e nenhuma instalação
+    // concluída — independente de algumPrecisouRastreador — para impedir que casos
+    // < 30k fiquem em limbo após a aprovação do Cadastro.
+    if (!jaTemInstalacaoConcluida && contrato.cotacao_id) {
+      const [{ count: instCount }, { count: vistCount }, { count: agbCount }, { count: servCount }] = await Promise.all([
         supabase.from('instalacoes').select('id', { count: 'exact', head: true })
           .eq('cotacao_id', contrato.cotacao_id)
           .in('status', ['agendada', 'em_andamento', 'em_analise', 'em_rota', 'concluida']),
@@ -470,11 +476,15 @@ serve(async (req) => {
         supabase.from('agendamentos_base').select('id', { count: 'exact', head: true })
           .eq('cotacao_id', contrato.cotacao_id)
           .in('status', ['agendado', 'confirmado', 'realizado']),
+        supabase.from('servicos').select('id', { count: 'exact', head: true })
+          .eq('cotacao_id', contrato.cotacao_id)
+          .in('tipo', ['instalacao', 'vistoria_entrada'])
+          .in('status', ['agendada', 'pendente', 'em_andamento', 'em_rota', 'em_analise', 'concluida', 'aprovada', 'aprovada_ressalvas']),
       ]);
 
-      const totalRegistros = (instCount || 0) + (vistCount || 0) + (agbCount || 0);
+      const totalRegistros = (instCount || 0) + (vistCount || 0) + (agbCount || 0) + (servCount || 0);
       if (totalRegistros === 0) {
-        console.warn('[aprovar-proposta] LIMBO detectado — sem instalação/vistoria/agendamento. Revertendo cadastro_aprovado.');
+        console.warn('[aprovar-proposta] LIMBO detectado — sem instalação/vistoria/agendamento/servico. Revertendo cadastro_aprovado.');
         await supabase.from('contratos')
           .update({ cadastro_aprovado: false, aprovado_por: null, aprovado_em: null })
           .eq('id', contrato_id);
@@ -484,14 +494,16 @@ serve(async (req) => {
             modulo: 'contratos',
             tabela: 'contratos',
             registro_id: contrato_id,
-            descricao: `Aprovação bloqueada: cotação ${contrato.cotacao_id} sem agendamento real (vendedor externo / fluxo público sem etapa Vistoria).`,
+            descricao: `Aprovação bloqueada: cotação ${contrato.cotacao_id} sem vistoria/instalação/agendamento materializado. Cliente precisa concluir autovistoria ou agendar vistoria presencial pelo link público.`,
             usuario_id: aprovado_por || null,
           });
         } catch (_) { /* log opcional */ }
         return jsonResponse({
           success: false,
-          codigo: 'sem_agendamento',
-          mensagem: 'Não é possível aprovar: a cotação ainda não possui agendamento de vistoria/instalação. Oriente o cliente a concluir a etapa Vistoria no link público.',
+          codigo: algumPrecisouRastreador ? 'sem_agendamento' : 'sem_vistoria_materializada',
+          mensagem: algumPrecisouRastreador
+            ? 'Não é possível aprovar: a cotação ainda não possui agendamento de vistoria/instalação. Oriente o cliente a concluir a etapa Vistoria no link público.'
+            : 'Não é possível aprovar: a autovistoria/vistoria não foi materializada. Peça ao cliente para refinalizar a vistoria pelo link público.',
           contratoId: contrato_id,
           associadoId,
         }, 409);

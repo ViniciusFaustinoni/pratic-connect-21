@@ -232,17 +232,22 @@ export function useFinalizarVistoriaCotacao() {
         return { vistoriaId: data.vistoriaId, instalacaoId: data.instalacaoId };
       }
       
-      // FLUXO AUTOVISTORIA - apenas atualiza cotação (a instalação será agendada depois)
-      const updateData: Record<string, unknown> = {
-        tipo_vistoria: tipoVistoria,
-        status_contratacao: 'vistoria_ok'
-      };
-      
-      // Atualizar cotação
-      const { error } = await publicSupabase.from('cotacoes').update(updateData).eq('id', cotacaoId);
-      if (error) throw error;
-      
-      return { vistoriaId: null, instalacaoId: null };
+      // FLUXO AUTOVISTORIA — materializa vistoria + servico via edge (RLS-safe + idempotente).
+      // Sem isso, a fila Monitoramento › Aprovação de Associados não enxerga o caso e o
+      // veículo fica em limbo após o pagamento.
+      const { data, error } = await publicSupabase.functions.invoke<{ success: boolean; vistoriaId?: string; servicoId?: string; error?: string }>(
+        'finalizar-autovistoria-cotacao',
+        { body: { cotacaoId } },
+      );
+      if (error) {
+        console.error('[FinalizarVistoria] edge finalizar-autovistoria-cotacao falhou:', error);
+        throw error;
+      }
+      if (!data?.success) {
+        console.error('[FinalizarVistoria] edge retornou erro:', data?.error);
+        throw new Error(data?.error || 'Erro ao finalizar autovistoria');
+      }
+      return { vistoriaId: data.vistoriaId ?? null, instalacaoId: null };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao', variables.cotacaoId] });
