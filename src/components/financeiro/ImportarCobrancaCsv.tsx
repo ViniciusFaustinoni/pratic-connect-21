@@ -650,6 +650,7 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
   const [salvando, setSalvando] = useState(false);
   const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
   const [resumo, setResumo] = useState<{ matched: number; sem_match: number; gravados: number; ignoradosSemLinha: number; duplicados: number; lote_id: string | null } | null>(null);
+  const [reconciliacao, setReconciliacao] = useState<{ pagas: number; pagas_valor: number; atualizadas: number; criadas: number; ignoradas_recente: number; sem_match: number } | null>(null);
 
   const salvar = useCallback(async () => {
     setSalvando(true);
