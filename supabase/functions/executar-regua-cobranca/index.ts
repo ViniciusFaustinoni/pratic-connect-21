@@ -296,6 +296,7 @@ Deno.serve(async (req) => {
       console.error('[regua] mirror cobrancas falhou (não-bloqueante):', e?.message || e)
     }
 
+    for (const b of boletos) {
       const situacao = String(b?.situacao_boleto || '')
       const dataPag = parseDataHinova(b?.data_pagamento)
       if (dataPag) continue
