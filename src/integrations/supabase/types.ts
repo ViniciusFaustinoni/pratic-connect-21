@@ -6257,6 +6257,7 @@ export type Database = {
           enviado_em: string | null
           id: string
           linha_digitavel: string
+          link_fatura: string | null
           lote_id: string
           match_origem: string | null
           matricula: string
@@ -6281,6 +6282,7 @@ export type Database = {
           enviado_em?: string | null
           id?: string
           linha_digitavel: string
+          link_fatura?: string | null
           lote_id: string
           match_origem?: string | null
           matricula: string
@@ -6305,6 +6307,7 @@ export type Database = {
           enviado_em?: string | null
           id?: string
           linha_digitavel?: string
+          link_fatura?: string | null
           lote_id?: string
           match_origem?: string | null
           matricula?: string

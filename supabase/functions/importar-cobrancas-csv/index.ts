@@ -11,6 +11,7 @@ interface BoletoIn {
   valor?: number;
   tipo?: string;
   status_origem?: string;
+  link?: string;
 }
 interface DestinatarioIn {
   nome: string;
@@ -152,6 +153,7 @@ Deno.serve(async (req) => {
           associado_id: assocId,
           veiculo_id: veicId,
           match_origem: rowOrigem,
+          link_fatura: b.link || null,
         });
       }
     }

@@ -10,6 +10,7 @@ export interface BoletoCsv {
   valor: number; // valor (R$); 0 quando não identificável
   tipo?: string; // mensalidade | taxa | adesao | outros (cru do CSV)
   status_origem?: string; // adimplente | inadimplente | pago | pendente | etc.
+  link?: string; // URL da 2ª via Hinova (opcional)
 }
 
 /**
@@ -83,6 +84,7 @@ const ALIASES: Record<string, string[]> = {
   valor: ['valor', 'valor boleto', 'valor cobranca', 'preco'],
   tipo: ['tipo', 'tipo cobranca', 'categoria', 'descricao'],
   status: ['status', 'situacao', 'status pagamento', 'status_pagamento'],
+  link: ['link', 'link fatura', 'link da fatura', 'url fatura', 'url boleto', '2via', 'segunda via', 'link hinova'],
 };
 
 function normalizarHeader(s: string): string {
@@ -279,6 +281,8 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     const valorCsv = parseValorBR(getCol(cols, 'valor'));
     const tipo = getCol(cols, 'tipo').trim() || undefined;
     const statusOrigem = getCol(cols, 'status').trim() || undefined;
+    const linkRaw = getCol(cols, 'link').trim();
+    const link = /^https?:\/\//i.test(linkRaw) ? linkRaw : undefined;
 
     // Aceita linha sem código de barras se houver vencimento OU valor.
     if (!linhaDig && !venc && valorCsv === 0) continue;
@@ -321,6 +325,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       valor: valorFinal,
       tipo,
       status_origem: statusOrigem,
+      link,
     });
     totalBoletos++;
   }

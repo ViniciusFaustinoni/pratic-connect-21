@@ -1,0 +1,1 @@
+ALTER TABLE public.cobranca_csv_boletos ADD COLUMN IF NOT EXISTS link_fatura text;
