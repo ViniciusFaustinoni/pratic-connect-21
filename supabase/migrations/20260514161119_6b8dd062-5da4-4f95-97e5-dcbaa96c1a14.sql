@@ -1,0 +1,2 @@
+ALTER TABLE public.cobranca_csv_boletos ADD COLUMN IF NOT EXISTS link_2via TEXT;
+CREATE INDEX IF NOT EXISTS idx_cobranca_csv_boletos_link_2via ON public.cobranca_csv_boletos(link_2via) WHERE link_2via IS NOT NULL;

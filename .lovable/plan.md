@@ -1,53 +1,92 @@
-## Causa raiz
+## Objetivo
 
-No caso do KOU6D37 (Marcos Vinicius Dativo Machado):
+Aceitar o XLSX no formato exato do export Hinova (incluindo a coluna **2ª Via Boleto** com `<a href="...">LINK</a>`), enviar o link da 2ª via no disparo Meta WhatsApp como **botão dinâmico de URL**, e atualizar o template baixável para refletir esse formato.
 
-1. Associado escolheu **Autovistoria**, enviou 2 fotos (`frente_centro`, `frente_lateral_esquerda`) → ficaram gravadas em `cotacoes_vistoria_fotos`.
-2. Voltou e trocou para **"técnico vai até mim"** → `cotacoes.tipo_vistoria` virou `'agendada'` e `vistoria_data_agendada = 2026-05-14`.
-3. As 2 fotos órfãs **continuaram** na tabela legacy.
+## Contexto descoberto
 
-No Cadastro:
-- `usePropostasPendentes.ts` (linha 1035-1064) faz fallback em `cotacoes_vistoria_fotos` **sem checar o `tipo_vistoria` atual da cotação** → devolve `proposta.vistoria.fotos = [2 fotos]`.
-- `PropostaAnalise.tsx` (linha 139): `cadastroAvaliaFotos = planoTemRouboFurto && temFotosOuVideo` → `true`.
-- Resultado: stepper mostra "Fotos & Vistoria — Concluído" e o botão verde **"Liberar Cobertura Roubo e Furto"**, mesmo sem vistoria completa nem decisão do técnico.
+- `parseCsvInadimplentes.ts` já tem alias `link`, mas:
+  - **não reconhece** o cabeçalho `2ª Via Boleto`
+  - **não extrai** URL de uma célula HTML `<a href="https://short.hinova.com.br/v2/XXXX.pdf">LINK</a>` — exige `^https?://`, então o link vira `undefined`
+  - boletos são desempatados por `linha_digitavel`; o link nunca é propagado adiante
+- `templateCobrancas.ts` (download `.xlsx`) usa colunas próprias (`Link`, `Status`, etc.) — diferente do export real do Hinova que o usuário enviou
+- Edge `disparar-cobranca-csv-meta` envia só `{{1}}=nome` e `{{2}}=bloco de boletos`. Não envia componente `button`
+- Template Meta atual `cobranca_inadimplencia_pratic` está **APPROVED**, **sem botões** — não dá para adicionar botão sem reaprovação Meta (24–48h)
 
-Comportamento esperado (regra do usuário):
-- R&F só pode ser liberado quando **todas** as fotos obrigatórias + vídeo 360° foram entregues numa autovistoria de fato concluída.
-- Se o associado abandonou a autovistoria e migrou para vistoria com técnico, o Cadastro deve avaliar **apenas documentos** e liberar para o Monitoramento atribuir a instalação. As fotos parciais antigas não contam.
+## Decisões
 
-## Correção
+1. **Botão de URL dinâmico** exige um **template novo** (`cobranca_inadimplencia_pratic_v2`) submetido à Meta. Como o usuário escolheu botão, vamos:
+   - Manter `cobranca_inadimplencia_pratic` (atual) como **fallback** enquanto o v2 não for aprovado
+   - Criar `cobranca_inadimplencia_pratic_v2` no Meta Business Manager com:
+     - Body: mesmo texto atual + linha "🔗 Acesse a 2ª via:" 
+     - Componente `BUTTONS` → `URL` dinâmico (1 botão), label "Abrir 2ª via", URL base `https://short.hinova.com.br/v2/{{1}}.pdf`
+   - Edge envia `parameters` do botão com o **sufixo** do link mais antigo (boleto com vencimento mais antigo) por destinatário — botão Meta só aceita 1 URL
+2. **Fallback no body**: até v2 ser aprovado, **também** já incluir os links em texto no `{{2}}` (formato `… | venc dd/mm | linha | 🔗 short.hinova.com.br/v2/XXXX`) para que o operador receba o link mesmo no template antigo
+3. Boletos sem link continuam funcionando normalmente (botão é opcional — quando nenhum boleto tem link, edge cai no template v1)
 
-### 1. Frontend — ignorar fotos parciais quando tipo_vistoria mudou
+## Mudanças
 
-`src/hooks/usePropostasPendentes.ts` (ambas as ocorrências do fallback legacy — linhas ~640-665 e ~1035-1064):
+### 1. Parser (`src/lib/cobranca/parseCsvInadimplentes.ts`)
+- Adicionar aliases para a coluna `2ª Via Boleto`: `'2a via boleto'`, `'2via boleto'`, `'segunda via boleto'`, `'2 via'`, `'link 2 via'`
+- Função `extrairUrlLink(raw)`: aceita URL crua **ou** extrai do primeiro `href="…"` quando o conteúdo tiver tag `<a>` HTML
+- Substituir o teste `^https?://` por `extrairUrlLink`
+- Tipo `BoletoCsv.link` propagado normalmente
+- Adicionar testes em `parseCsvInadimplentes.test.ts` com fixture do XLSX enviado
 
-- Antes de cair no fallback `cotacoes_vistoria_fotos`, checar `mCotacao.get(contrato.cotacao_id)?.tipo_vistoria` (já buscado no hook).
-- Só usar as fotos legacy quando `tipo_vistoria === 'autovistoria'`. Se `'agendada'` ou `'agendada_base'`, devolver `vistoria = null` (técnico ainda vai fazer; partials são lixo).
+### 2. Template `.xlsx` baixável (`src/lib/cobranca/templateCobrancas.ts`)
+- Reescrever `HEADER` e `EXEMPLO` para refletir o **formato Hinova exato**:
+  ```
+  Data Cadastro Associado | Matrícula | Nome | Telefone Celular | Placas |
+  Data Vencimento | Situação Pagamento | Valor | Codigo de Barras | 2ª Via Boleto
+  ```
+- Exemplo real com URL `<a href="https://short.hinova.com.br/v2/EXEMPLO.pdf" target="_blank">LINK</a>` e linha digitável real
+- Atualizar instruções na aba "Instruções" explicando que `2ª Via Boleto` aceita URL crua ou tag `<a href>` HTML
 
-### 2. Frontend — autovistoria incompleta não libera R&F
+### 3. UI hint (`src/components/financeiro/ImportarCobrancaCsv.tsx`)
+- Atualizar texto do banner de cabeçalhos aceitos: trocar `Link` → `2ª Via Boleto`
+- Mostrar contador "X boletos com link da 2ª via" no resumo pré-disparo
 
-`src/pages/cadastro/PropostaAnalise.tsx` (linhas 116-144):
+### 4. Edge function (`supabase/functions/disparar-cobranca-csv-meta/index.ts`)
+- Aceitar nova flag `body.template_v2 = true` para escolher `cobranca_inadimplencia_pratic_v2`
+- Quando `template_v2`:
+  - Escolher o boleto **mais antigo** com link (menor `vencimento`) → extrair sufixo da URL Hinova (ex.: `HGt5C0NF` de `https://short.hinova.com.br/v2/HGt5C0NF.pdf`)
+  - Adicionar componente:
+    ```json
+    {
+      "type": "button",
+      "sub_type": "url",
+      "index": "0",
+      "parameters": [{ "type": "text", "text": "<sufixo>" }]
+    }
+    ```
+  - Se nenhum boleto tem link → cair automaticamente em `cobranca_inadimplencia_pratic` (v1) para esse destinatário
+- Independente do template: incluir o link em texto no `formatarBoletoCompacto` quando presente (`• Placa XXX venc. dd/mm | linha | 🔗 short.hinova.com.br/v2/XXX`) — útil para v1 e como redundância no v2
+- Persistir o link no payload `boletosResumo` salvo em `whatsapp_mensagens.payload`
 
-- Adicionar conceito `autovistoriaCompleta`:
-  - Para autovistoria, exige `proposta.vistoria.video_360_url` presente **e** quantidade de fotos ≥ mínimo do roteiro (31 carro / 15 moto — usar `useDetectarTipoVeiculo` que já está no escopo).
-- `cadastroAvaliaFotos = planoTemRouboFurto && temFotosOuVideo && (não é autovistoria || autovistoriaCompleta)`.
-- Quando autovistoria incompleta: tratar como `isVistoriaAgendadaSemFotos` (mostra banner "vistoria pendente — só aprova documentos, instalação fica para Monitoramento").
+### 5. Tabela DB (migração)
+- `cobranca_csv_boletos.link_2via TEXT` — armazenar o link extraído (auditoria + reconciliação)
+- Edge passa a inserir esse campo
 
-### 3. Backend — limpeza de fotos órfãs ao trocar tipo_vistoria
+### 6. Frontend toggle
+- Em `ImportarCobrancaCsv.tsx`: switch "Usar template com botão (v2)" — quando ativo, envia `template_v2: true`. Default: `false` até o v2 ser aprovado pela Meta
+- Aviso vermelho quando v2 selecionado e template Meta ainda `PENDING`/`REJECTED`
 
-Trigger em `cotacoes`: quando `tipo_vistoria` muda de `'autovistoria'` para outro valor, **apagar** rows correspondentes em `cotacoes_vistoria_fotos` da mesma `cotacao_id` (evita lixo crescente e reforça a regra no banco).
-
-Migração também roda DELETE one-shot para limpar órfãs históricas (todas as cotações onde `tipo_vistoria != 'autovistoria'` e ainda têm linhas em `cotacoes_vistoria_fotos`) — o caso do KOU6D37 fica sanado.
-
-### 4. Verificação no caso reportado
-
-Após aplicar:
-- Cotação `71d97652-ea80-4aac-9172-2e302a1b575a` perde as 2 fotos órfãs.
-- Stepper do contrato `bfa583c8…` passa a mostrar somente Documentos + Aprovação, com o botão "Aprovar para Monitoramento" (sem liberar R&F).
-- Após aprovação, fluxo segue para `aguardando_monitoramento` para atribuição da instalação pelo técnico — exatamente como pedido.
+### 7. Cadastro do template Meta (passo manual fora do código)
+- Criar `cobranca_inadimplencia_pratic_v2` no painel Meta Business Manager com 1 botão URL dinâmico — **o usuário precisa fazer isso e clicar "Sincronizar templates"** para puxar para `whatsapp_meta_templates`
+- Documentar isso no banner da UI quando o switch v2 estiver desligado
 
 ## Arquivos afetados
 
-- `src/hooks/usePropostasPendentes.ts` (2 blocos de fallback)
-- `src/pages/cadastro/PropostaAnalise.tsx` (lógica `cadastroAvaliaFotos`)
-- Nova migration SQL: trigger `tg_cotacoes_limpar_fotos_autovistoria_abandonada` + DELETE one-shot
+```text
+src/lib/cobranca/parseCsvInadimplentes.ts          (parser + extrairUrlLink)
+src/lib/cobranca/parseCsvInadimplentes.test.ts     (fixture Hinova)
+src/lib/cobranca/templateCobrancas.ts              (header + exemplo Hinova)
+src/components/financeiro/ImportarCobrancaCsv.tsx  (texto + switch v2)
+supabase/functions/disparar-cobranca-csv-meta/index.ts  (button URL + v2)
+supabase/migrations/<novo>.sql                     (cobranca_csv_boletos.link_2via)
+```
+
+## Riscos
+
+- O botão URL Meta só aceita **1 link** por mensagem — se o associado tem 5 boletos com 5 links diferentes, o botão aponta para o **mais antigo**. Os demais links continuam visíveis em texto no body
+- Aprovação Meta do template v2 pode demorar 24h–48h. Por isso o fallback v1 + link no body é entregue **junto** e funciona imediatamente
+- Sufixo da URL precisa ser exatamente o que está depois de `/v2/` e antes de `.pdf` — se a Hinova mudar o formato de URL no futuro, o regex falha (validar e fallback para v1 quando regex não bate)
