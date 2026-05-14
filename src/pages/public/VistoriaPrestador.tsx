@@ -246,6 +246,28 @@ export default function VistoriaPrestador() {
     novoStatus: 'aceito' | 'em_rota' | 'em_execucao',
   ) => {
     if (!token) return;
+
+    // Refresh defensivo: detectar reatribuição/cancelamento antes de gravar
+    const { data: fresh, error: freshErr } = await publicSupabase
+      .from('vistoria_prestador_links' as any)
+      .select('status')
+      .eq('token', token)
+      .maybeSingle();
+    if (freshErr) {
+      toast.error(`Erro ao atualizar status: ${freshErr.message || 'tente novamente'}`);
+      return;
+    }
+    if (!fresh) {
+      toast.error('Link não encontrado');
+      return;
+    }
+    const freshStatus = (fresh as any).status as string;
+    if (!['aguardando', 'aceito', 'em_rota'].includes(freshStatus)) {
+      toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+      queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
+      return;
+    }
+
     const stamp = new Date().toISOString();
     const fieldStamp =
       novoStatus === 'aceito' ? 'aceito_em' :
@@ -257,14 +279,20 @@ export default function VistoriaPrestador() {
       updated_at: stamp,
     };
     if (novoStatus === 'em_execucao') payload.chegada_em = stamp;
-    const { error } = await publicSupabase
+    const { data, error } = await publicSupabase
       .from('vistoria_prestador_links' as any)
       .update(payload)
       .eq('token', token)
-      .in('status', ['aguardando', 'aceito', 'em_rota']);
+      .in('status', ['aguardando', 'aceito', 'em_rota'])
+      .select('id, status');
     if (error) {
       console.error('[VistoriaPrestador] update status error', error);
       toast.error(`Erro ao atualizar status: ${error.message || 'tente novamente'}`);
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+      queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
       return;
     }
     queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
@@ -415,16 +443,29 @@ export default function VistoriaPrestador() {
     );
   }
 
-  // ── Estado 2: Inválido ──
+  // ── Estado 2: Inválido / Reatribuído / Concluído ──
   if (error || !link || link.status === 'concluida' || link.status === 'cancelada') {
+    const isReatribuida =
+      link?.status === 'cancelada' && !(link as any)?.recusado_em;
+    const isConcluida = link?.status === 'concluida';
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
         <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-          <Lock className="h-8 w-8 text-slate-400" />
+          {isConcluida ? (
+            <CheckCircle className="h-8 w-8 text-green-600" />
+          ) : (
+            <Lock className="h-8 w-8 text-slate-400" />
+          )}
         </div>
-        <h1 className="text-xl font-bold text-slate-800 mb-2">Link inválido</h1>
+        <h1 className="text-xl font-bold text-slate-800 mb-2">
+          {isConcluida ? 'Vistoria concluída' : isReatribuida ? 'Tarefa reatribuída' : 'Link inválido'}
+        </h1>
         <p className="text-slate-500 text-sm text-center max-w-xs">
-          Este link não é válido ou já foi utilizado. Entre em contato com o coordenador.
+          {isConcluida
+            ? 'Obrigado! A equipe Praticcar foi notificada.'
+            : isReatribuida
+              ? 'Esta tarefa foi reatribuída pela central. Verifique o WhatsApp para o novo link de acesso.'
+              : 'Este link não é válido ou já foi utilizado. Entre em contato com o coordenador.'}
         </p>
       </div>
     );

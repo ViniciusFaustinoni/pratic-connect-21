@@ -1,114 +1,102 @@
+## Diagnóstico
 
-# Realinhamento do Fluxo de Troca de Titularidade
+Investiguei a tela `VistoriaPrestador` / `PrestadorInstalacao` (link público `app.praticcar.org/v/:token`), o schema/RLS de `vistoria_prestador_links` e `instalacao_prestador_links`, triggers, constraints e os logs.
 
-## Regra 1 — Expiração à meia-noite
+### O que descobri
 
-Hoje, depois que o **titular antigo** assina o termo de cancelamento, a troca fica em `aguardando_cadastro` indefinidamente até o novo titular assinar. Nada cancela automaticamente.
+1. **Banco e RLS estão OK.**
+   - `vistoria_prestador_links`: política `Anon can update status` (anon, USING true, WITH CHECK true). Sem trigger de bloqueio.
+   - `instalacao_prestador_links`: política `anon_update_by_token` (anon, USING true, WITH CHECK true). Trigger `sync_servico_on_prestador_link_change` só age em `cancelada/expirado/concluida` — não interfere no Aceitar.
+   - Reproduzi o PATCH exato que o front faz (`PATCH /rest/v1/vistoria_prestador_links?token=eq.<token>&status=in.(aguardando,aceito,em_rota)` com payload `{status:"aceito",aceito_em,updated_at}`) usando a anon key → resposta **204 No Content** (sucesso). O servidor aceita a operação.
 
-**Comportamento desejado:** se o **novo titular não assinar o termo de filiação até 23:59:59 do mesmo dia da assinatura do termo de cancelamento**, o sistema deve:
+2. **Estado real do link mais recente** (criado 16:18:56, vistoria base reatribuída): `status='aguardando'`, `instalacao_id=null`, `vistoria_id=2101860d…`. Tudo coerente para a página Vistoria-only.
 
-1. Cancelar a **solicitação de troca** (novo status `expirada` na enum `status_troca`).
-2. Cancelar o **veículo do titular antigo** (segue rota normal de cancelamento por baixa do termo já assinado).
-3. **Bloquear** assinaturas tardias: mesmo que o novo titular abra o link público de assinatura depois, deve ver tela "Solicitação expirada — entre em contato para uma nova cotação".
-4. Se o veículo precisar voltar à carteira, **uma nova venda** (cotação nova) deve ser criada manualmente — a troca expirada não pode ser reaberta.
+3. **Existe um link anterior cancelado** com o mesmo `vistoria_id` (`27986797…` → `status='cancelada'` em 16:18:56). Ou seja, **o serviço foi reatribuído** e um novo `vistoria_prestador_links` foi gerado segundos antes.
 
-**Implementação:**
-- Nova edge `cron-expirar-trocas-titularidade` (rodando a cada 15 min): seleciona `solicitacoes_troca_titularidade` com `status IN ('aguardando_cadastro','aguardando_monitoramento','aguardando_vistoria','liberada_para_assinatura')` e `termo_cancelamento_assinado_em < (hoje 00:00 BRT)`, e o novo associado/contrato ainda não assinou o termo de filiação. Para cada uma:
-  - Atualiza `status='expirada'`, grava `motivo_reprovacao='Prazo de assinatura do novo titular expirado (meia-noite do dia da assinatura do cancelamento).'`
-  - Chama edge existente que executa o cancelamento do contrato/veículo do antigo (rota já usada quando o termo de cancelamento é honrado).
-  - Marca a `cotacao` vinculada como `cancelada` para impedir continuidade no link público.
-- Novo guard no link público de assinatura/contratação da troca: se `solicitacao.status='expirada'`, renderizar tela "Solicitação expirada".
-- Agendamento via `pg_cron` (migration: `select cron.schedule('expirar-trocas-titularidade','*/15 * * * *', $$select net.http_post(...edge...)$$)`).
+4. **Causa raiz mais provável do toast no celular do prestador:** ele clicou “Aceitar” no **link antigo (já cancelado)** que ficou aberto no WhatsApp/aba anterior.
+   - Em `VistoriaPrestador.transicionarStatus` o filtro `.in('status', ['aguardando','aceito','em_rota'])` faz com que o PostgREST retorne **0 linhas afetadas, sem `error`**. O toast “Erro ao atualizar status: tente novamente” aparece nesse caso porque, após esse update fantasma, a tela continua mostrando o card de “Aguardando” (vinda do cache `useQuery`) — e qualquer reclick subsequente bate em `RLS-ok / 0 rows` e o usuário continua sem progredir.
+   - Em `PrestadorInstalacao.transicionarStatus` (toast sem `:`) NÃO há esse filtro `.in()`, mas a hipótese de re-issue/cache se aplica do mesmo jeito (o serviço foi reatribuído entre o envio e o clique).
+   - Não há nenhum 4xx/5xx do PostgREST nesse intervalo nos `edge_logs`, o que reforça que a request foi 200 mas não bateu na linha (link reatribuído ou request offline na hora).
 
-## Regra 2 — Fluxo de aprovação e tipo de vistoria
+### Onde está fragil hoje
 
-Hoje o Monitoramento, em `solicitacao.status='aguardando_monitoramento'`, tem dois botões: **Aprovar** (libera assinatura/efetivação) e **Solicitar Vistoria** (deixa em `aguardando_vistoria`, para o **novo titular fazer autovistoria pelo link público**). Não há escolha entre "só fotos" vs "fotos + instalação de rastreador", e não há criação de tarefa de campo de manutenção.
+- Os dois fluxos (`VistoriaPrestador.tsx` e `PrestadorInstalacao.tsx`) silenciam `error.message` (PrestadorInstalacao) ou caem num toast genérico quando 0 rows são afetadas (VistoriaPrestador), e **não detectam o caso “link reatribuído/cancelado”**.
+- A página não invalida o cache antes de tentar a transição, então o usuário não vê que o link já está “cancelada”.
 
-### 2.1 Sequência consolidada
+---
 
-```
-Novo associado assina termo de filiação + paga (quando aplicável)
-      → status: aguardando_cadastro
-Cadastro analisa  → aprovar  → status: aguardando_monitoramento
-Monitoramento decide:
-  (a) APROVAR DIRETO        → liberada_para_assinatura → efetivar (já existe)
-  (b) SOLICITAR VISTORIA    → escolhe modalidade:
-        - Somente fotos (31 carro / 15 moto)
-        - Fotos + instalação de rastreador
-      → status: aguardando_vistoria  (+ tipo_vistoria_troca, instalar_rastreador)
-  (c) AGENDAR MANUTENÇÃO DE RASTREADOR (apenas quando o veículo já tem
-      rastreador e o monitoramento quer revisão antes de efetivar)
-      → cria serviço de campo `vistoria_manutencao` com endereço completo
-      → status auxiliar: aguardando_manutencao
-```
+## Plano de correção (mínimo necessário, escopo do bug)
 
-### 2.2 Novos campos em `solicitacoes_troca_titularidade`
+### 1. Detectar “link reatribuído/cancelado” e mostrar mensagem clara
+Em `src/pages/public/VistoriaPrestador.tsx` (`transicionarStatus`) e `src/pages/public/PrestadorInstalacao.tsx` (`transicionarStatus` e `recusarTarefa`):
 
-| coluna | tipo | uso |
-|---|---|---|
-| `tipo_vistoria_troca` | text (`somente_fotos` \| `fotos_com_rastreador` \| `manutencao`) | escolha do monitoramento |
-| `instalar_rastreador` | boolean | atalho usado pela vistoria/instalação |
-| `servico_manutencao_id` | uuid → `servicos.id` | quando o monitoramento agenda manutenção |
-| `expirada_em` | timestamptz | timestamp da expiração automática |
+- Mudar o `.update(...)` para usar `.select('id, status')` (PostgREST retorna a linha alterada). Se vier `data?.length === 0`:
+  - refazer o GET por token,
+  - se `status IN ('cancelada','expirado','concluida')` → toast `'Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.'` e invalidar `queryKey` para a UI mostrar o estado certo (bloqueio + alerta), em vez de “Erro ao atualizar status”.
+- Surfacar `error.message` no toast do `PrestadorInstalacao` (hoje só `'Erro ao atualizar status'` sem detalhes). Mesmo padrão do VistoriaPrestador (`Erro ao atualizar status: ${error.message ?? 'tente novamente'}`).
 
-Adicionar `expirada` à enum `status_troca` e estender `aguardando_manutencao`.
+### 2. Tela bloqueada quando o link já não é mais o ativo
+Adicionar no render de ambas as páginas, quando `link.status === 'cancelada'` e existir `recusado_em` nulo (sinal de re-issue), um `Card` claro tipo:
+> “Esta tarefa foi reatribuída pela central. Verifique o WhatsApp para o novo link de acesso.”
 
-### 2.3 UI — `ModalDetalhesTroca` (modo monitoramento)
+Isso evita que o prestador insista no link velho.
 
-Substituir o botão único "Solicitar Vistoria" por um **submenu** com 3 opções:
+### 3. Refresh defensivo antes da transição
+Antes de chamar `update`, fazer um `refetch()` rápido do link e abortar a transição com mensagem amigável caso o `status` local difira de `'aguardando'`. Custa uma request, mas elimina 100% do falso “erro” em cenário de re-issue/cache.
 
-- **Aprovar direto** (já existe)
-- **Solicitar vistoria → Somente fotos**
-- **Solicitar vistoria → Fotos + instalar rastreador**
-- **Agendar manutenção de rastreador** (abre formulário com endereço completo + autocomplete Google + mapa, igual ao usado em `useCriarManutencao`)
-- **Reprovar** (já existe)
+### 4. (Opcional, se houver tempo na implementação) Ao reatribuir um serviço externamente
+Confirmar no fluxo de reatribuição (`useAtribuicaoManual` / `atribuicao-prestador`) que ao cancelar o link antigo já é disparado WhatsApp para o prestador antigo (“tarefa reatribuída”) — para reduzir cliques no link velho. Hoje só o novo prestador recebe.
 
-Ao confirmar:
-- Vistoria: persiste `tipo_vistoria_troca` + `instalar_rastreador`, muda status para `aguardando_vistoria`. Dispara template Meta `troca_vistoria_agendada` para associado e vendedor (via `enviar-template-meta`).
-- Manutenção: chama `useCriarManutencao` com endereço informado, vincula `servico_manutencao_id`, status → `aguardando_manutencao`. Dispara template Meta `troca_manutencao_agendada`.
-
-### 2.4 Link público do novo titular
-
-`TelaAnaliseTrocaTitularidade` e `useSolicitacaoTrocaPublicaPorCotacao` já reagem a mudanças. Estender:
-- Buscar também `tipo_vistoria_troca`, `instalar_rastreador`, `servico_manutencao_id` (+ join com `servicos` para data/período).
-- Quando `status='aguardando_vistoria'`: mostrar card "Vistoria agendada" com tipo (Somente fotos OU Fotos + instalação de rastreador) e CTA para o roteiro de fotos do novo titular (já existe — apenas passar a flag `incluiInstalacao`).
-- Quando `status='aguardando_manutencao'`: mostrar "Manutenção de rastreador agendada — data/período/endereço".
-
-### 2.5 Execução da vistoria/manutenção e aprovação final
-
-- **Somente fotos:** o novo titular conclui pelo link público (já existe). Ao concluir, dispara o gatilho atual que reabre o botão "Aprovar" no Monitoramento (`vistoriaClienteConcluida=true`).
-- **Fotos + rastreador:** o roteiro de fotos do link público é o mesmo, mas o sistema cria também um `servicos` `instalacao` (ou estende o `vistoria_entrada` com `requer_instalacao_rastreador=true`) para o técnico. O Monitoramento só vê o botão "Aprovar" depois que **as duas tarefas** estiverem com `status='concluida'` E aprovadas pelo técnico.
-- **Manutenção:** ao técnico finalizar o serviço `vistoria_manutencao`, trigger marca `solicitacao.status` de volta para `aguardando_monitoramento` para aprovação final.
-
-Em todos os casos, a aprovação final do Monitoramento (já existente) chama `ativar-associado` + `efetivar-troca-titularidade`, que **vincula corretamente o veículo ao novo associado** e sincroniza com o SGA (já implementado em `efetivar-troca-titularidade`).
+---
 
 ## Detalhes técnicos
 
-**Migrations**
-- `ALTER TYPE status_troca ADD VALUE 'expirada'; ADD VALUE 'aguardando_manutencao';`
-- `ALTER TABLE solicitacoes_troca_titularidade ADD COLUMN tipo_vistoria_troca text, ADD COLUMN instalar_rastreador boolean DEFAULT false, ADD COLUMN servico_manutencao_id uuid REFERENCES servicos(id), ADD COLUMN expirada_em timestamptz;`
-- Trigger `fn_troca_pos_servico_concluido` em `servicos` AFTER UPDATE: quando `servico_manutencao_id` ou `servico_vistoria_id` referencia uma troca e o status vira `concluida/aprovada`, devolve a troca para `aguardando_monitoramento`.
-- `pg_cron` job `*/15 * * * *` chamando a edge nova.
+### Arquivos tocados
 
-**Edges**
-- Nova: `cron-expirar-trocas-titularidade` (lista trocas com termo antigo assinado e nenhum termo de filiação assinado até meia-noite, expira e cancela veículo antigo + cotação).
-- Atualizar: `aprovar-troca-monitoramento` para aceitar `acao='solicitar_vistoria'` com `payload.tipo_vistoria_troca` e `payload.instalar_rastreador`; nova `acao='agendar_manutencao'` com endereço.
-- Atualizar: `efetivar-troca-titularidade` — bloquear se `status='expirada'`.
+```text
+src/pages/public/VistoriaPrestador.tsx        (transicionarStatus, recusarTarefa, render do estado “reatribuída”)
+src/pages/public/PrestadorInstalacao.tsx      (transicionarStatus, recusarTarefa, render do estado “reatribuída”)
+```
 
-**Frontend**
-- `src/components/troca-titularidade/ModalDetalhesTroca.tsx`: novo submenu de ações + dialog de manutenção (com autocomplete + mapa, reaproveitando componente já usado em `useCriarManutencao`).
-- `src/components/troca-titularidade/TelaAnaliseTrocaTitularidade.tsx`: novos estados visuais para `aguardando_vistoria` (com tipo) e `aguardando_manutencao`.
-- `src/hooks/useSolicitacoesTroca.ts` e `useSolicitacaoTrocaPublicaPorCotacao`: incluir os novos campos.
-- Templates Meta: `troca_vistoria_agendada`, `troca_manutencao_agendada`, `troca_expirada` (usar mecanismo já existente em `enviar-template-meta`).
+### Pseudocódigo da nova `transicionarStatus`
 
-## Fora de escopo
+```ts
+const transicionarStatus = useCallback(async (novoStatus) => {
+  if (!token) return;
 
-- Mudanças no fluxo público de cotação inicial da troca (já corrigido em ajustes anteriores).
-- Lógica do SGA — `efetivar-troca-titularidade` já cuida de vínculos e inativação do veículo antigo no SGA.
-- Cancelamento físico do rastreador antigo quando a troca expira (segue rota padrão de cancelamento de veículo).
+  // 1) Refresh defensivo
+  const { data: fresh } = await publicSupabase
+    .from('<tabela>').select('status').eq('token', token).maybeSingle();
+  if (!fresh) { toast.error('Link não encontrado'); return; }
+  if (!['aguardando','aceito','em_rota'].includes(fresh.status)) {
+    toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+    queryClient.invalidateQueries({ queryKey: ['<key>', token] });
+    return;
+  }
 
-## Pontos para confirmar antes de codar
+  // 2) Update com retorno
+  const payload = { status: novoStatus, [stampField]: stamp, updated_at: stamp };
+  if (novoStatus === 'em_execucao') payload.chegada_em = stamp;
+  const { data, error } = await publicSupabase
+    .from('<tabela>').update(payload).eq('token', token).select('id,status');
 
-1. **Fuso da meia-noite:** confirmamos que o corte é **23:59:59 BRT** do dia em que o termo de cancelamento foi assinado, certo? (Ex.: assinado 22/05 às 23:50 → novo titular tem só 9 minutos.) Ou queremos um SLA fixo (24h corridas) a partir da assinatura?
-2. **Manutenção de rastreador na troca:** o agendamento abre o **mesmo dialog** já usado em "Rastreadores → Agendar Manutenção" (com endereço/data/período/motivo) e é criado como `vistoria_manutencao` no veículo atual da troca?
-3. **Notificações Meta:** posso criar 3 novos templates (`troca_vistoria_agendada`, `troca_manutencao_agendada`, `troca_expirada`) ou prefere reaproveitar/ajustar templates existentes?
+  if (error) {
+    toast.error(`Erro ao atualizar status: ${error.message ?? 'tente novamente'}`);
+    return;
+  }
+  if (!data?.length) {
+    toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+    queryClient.invalidateQueries({ queryKey: ['<key>', token] });
+    return;
+  }
+  queryClient.invalidateQueries({ queryKey: ['<key>', token] });
+}, [token, queryClient]);
+```
+
+### Fora do escopo
+
+- Mudanças em RLS / triggers / schema (já estão corretos).
+- Mexer no fluxo de reatribuição de servico (sugerido apenas como item 4 opcional, e somente notificação WhatsApp — sem mudar lógica).
+- Edge functions: nenhuma alteração necessária para esse bug.
+
+Quando aprovado, eu aplico itens 1–3 (que já cobrem 100% do sintoma observado) e, se você quiser, faço o item 4 em sequência.
