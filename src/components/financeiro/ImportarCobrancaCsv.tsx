@@ -628,13 +628,26 @@ export function ImportarCobrancaCsv() {
   if (etapa === 'concluido' && resultadoEnvio) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <KpiCard label="Total" value={resultadoEnvio.total} />
           <KpiCard label="Enviadas" value={resultadoEnvio.sucesso} accent="success" />
           <KpiCard label="Com erro" value={resultadoEnvio.erros} accent="warning" />
+          <KpiCard label="Já enviados hoje" value={resultadoEnvio.pulados_duplicidade_dia} accent="warning" />
           <KpiCard label="Recuperados" value={resultadoEnvio.recuperados_count} accent="primary" />
           <KpiCard label="Valor recuperado" valueText={formatBRL(resultadoEnvio.recuperados_valor)} accent="success" />
         </div>
+
+        {resultadoEnvio.pulados_duplicidade_dia > 0 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>{resultadoEnvio.pulados_duplicidade_dia} boleto(s)</strong> foram automaticamente
+              pulados porque já tinham sido disparados <strong>hoje</strong> em outro lote — para evitar
+              que o mesmo associado receba a mesma cobrança duas vezes no dia. Para reenviar, aguarde o
+              próximo dia.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {resultadoEnvio.recuperados_count > 0 && (
           <Alert>
