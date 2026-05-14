@@ -684,6 +684,163 @@ export async function listarBoletosVeiculo(
   return Array.from(dedup.values());
 }
 
+// ============================================================================
+// /listar/boleto-associado/periodo — Lista boletos de TODOS associados
+// num intervalo de vencimento. Limite oficial Hinova: 31 dias por chamada.
+// Usado pela Régua de Cobrança para varrer toda a base de uma vez.
+// ============================================================================
+
+export interface BoletoPeriodoJanelaResult {
+  boletos: any[];
+  pagina_corrente: number;
+  numero_paginas: number;
+  total_registros: number;
+  raw: any;
+  http_status: number;
+}
+
+export async function listarBoletosPorPeriodoJanela(
+  s: HinovaSession,
+  opts: {
+    dataInicial: Date;
+    dataFinal: Date;
+    inicioPaginacao?: number;
+    quantidadePorPagina?: number;
+    codigoSituacaoBoleto?: number;
+    linkBoleto?: boolean;
+  },
+): Promise<BoletoPeriodoJanelaResult> {
+  const payload: Record<string, any> = {
+    data_vencimento_inicial: fmtDataBR(opts.dataInicial),
+    data_vencimento_final: fmtDataBR(opts.dataFinal),
+    inicio_paginacao: opts.inicioPaginacao ?? 0,
+    quantidade_por_pagina: opts.quantidadePorPagina ?? 200,
+    link_boleto: opts.linkBoleto ?? true,
+  };
+  if (opts.codigoSituacaoBoleto !== undefined) {
+    payload.codigo_situacao_boleto = opts.codigoSituacaoBoleto;
+  }
+
+  let r: Response;
+  try {
+    r = await fetch(`${s.apiUrl}/listar/boleto-associado/periodo`, {
+      method: 'POST',
+      headers: authHeaders(s),
+      body: JSON.stringify(payload),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(
+      `[listar boletos periodo] rede: ${String(e?.message || e)}`,
+      { httpStatus: 0, reason: 'network' },
+    );
+  }
+
+  const txt = await r.text();
+  let raw: any = null;
+  try { raw = JSON.parse(txt); } catch { raw = txt; }
+
+  const empty: BoletoPeriodoJanelaResult = {
+    boletos: [], pagina_corrente: 0, numero_paginas: 0, total_registros: 0, raw, http_status: r.status,
+  };
+
+  if (r.status === 404) return empty;
+
+  // 406 com "Não foram encontrados boletos…" = janela vazia
+  if (r.status === 406) {
+    const errStr = Array.isArray(raw?.error) ? raw.error.join(' ') : String(raw?.error ?? '');
+    const msgStr = String(raw?.mensagem ?? '');
+    const decoded = `${errStr} ${msgStr}`;
+    const reEmpty = /n[aã]o\s+foram\s+encontrados\s+boletos/i;
+    const reEmptyEscaped = /n\\u00e3o\s+foram\s+encontrados\s+boletos/i;
+    if (reEmpty.test(decoded) || reEmpty.test(txt) || reEmptyEscaped.test(txt)) {
+      return empty;
+    }
+  }
+
+  if (!r.ok) throwHttpError(r.status, txt, 'listarBoletosPorPeriodoJanela');
+
+  const boletos: any[] = Array.isArray(raw?.boletos)
+    ? raw.boletos
+    : Array.isArray(raw?.dados)
+      ? raw.dados
+      : Array.isArray(raw)
+        ? raw
+        : [];
+  return {
+    boletos,
+    pagina_corrente: Number(raw?.pagina_corrente ?? 0),
+    numero_paginas: Number(raw?.numero_paginas ?? (boletos.length ? 1 : 0)),
+    total_registros: Number(raw?.total_registros ?? boletos.length),
+    raw,
+    http_status: r.status,
+  };
+}
+
+/**
+ * Lista TODOS os boletos num período, fatiando em janelas de 31 dias
+ * (limite Hinova) e paginando internamente. Deduplica por nosso_numero.
+ */
+export async function listarBoletosPorPeriodo(
+  supabase: any,
+  opts: {
+    dataInicial: Date;
+    dataFinal: Date;
+    codigoSituacaoBoleto?: number;
+    quantidadePorPagina?: number;
+    maxJanelas?: number;
+  },
+): Promise<any[]> {
+  const DIAS_JANELA = 31;
+  const QTD = Math.min(500, Math.max(50, opts.quantidadePorPagina ?? 200));
+
+  // Fatiar em janelas de 31 dias
+  const janelas: Array<{ ini: Date; fim: Date }> = [];
+  let cursor = new Date(opts.dataInicial);
+  cursor.setHours(0, 0, 0, 0);
+  const fimGeral = new Date(opts.dataFinal);
+  fimGeral.setHours(0, 0, 0, 0);
+  while (cursor <= fimGeral) {
+    const fim = new Date(cursor);
+    fim.setDate(fim.getDate() + DIAS_JANELA - 1);
+    if (fim > fimGeral) fim.setTime(fimGeral.getTime());
+    janelas.push({ ini: new Date(cursor), fim });
+    cursor = new Date(fim);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const limJanelas = opts.maxJanelas ?? 12;
+  if (janelas.length > limJanelas) {
+    throw new Error(`[listarBoletosPorPeriodo] Período excede ${limJanelas} janelas de 31 dias`);
+  }
+
+  const dedup = new Map<string, any>();
+  for (const j of janelas) {
+    let pagina = 0;
+    while (true) {
+      const res = await withHinovaAuthRetry(supabase, async (session) =>
+        listarBoletosPorPeriodoJanela(session, {
+          dataInicial: j.ini,
+          dataFinal: j.fim,
+          inicioPaginacao: pagina,
+          quantidadePorPagina: QTD,
+          codigoSituacaoBoleto: opts.codigoSituacaoBoleto,
+          linkBoleto: true,
+        }),
+      );
+      for (const b of res.boletos) {
+        const key = String(b?.nosso_numero ?? b?.nossoNumero ?? '').trim();
+        if (key && !dedup.has(key)) dedup.set(key, b);
+      }
+      if (res.boletos.length === 0) break;
+      if (res.numero_paginas <= 0 || pagina + 1 >= res.numero_paginas) break;
+      pagina += 1;
+      if (pagina > 200) break; // safety
+    }
+  }
+
+  return Array.from(dedup.values());
+}
+
 /** Mapeia situação textual da Hinova para o status interno de cobrancas */
 export function mapStatusBoleto(situacao: string | null | undefined): string {
   const s = (situacao || '').toString().trim().toUpperCase();

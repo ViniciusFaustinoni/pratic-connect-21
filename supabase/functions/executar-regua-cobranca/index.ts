@@ -1,9 +1,30 @@
+// ============================================================================
+// Régua de Cobrança — motor Hinova-first
+// ----------------------------------------------------------------------------
+// 1. Busca boletos via /listar/boleto-associado/periodo (janela = etapas D-min..D+max).
+// 2. Classifica status (PAGO/CANCELADO/VENCIDO/A VENCER).
+// 3. Casa cada boleto não-pago com a etapa correspondente.
+// 4. Ordena: inadimplentes mais antigos primeiro, depois por valor, depois lembretes.
+// 5. Dedupe por (nosso_numero + dia_regua + dia_civil_SP).
+// 6. Dispara WhatsApp em BACKGROUND com delay configurável (default 10s).
+// 7. Devolve { run_id, total_planejado } imediatamente; UI faz polling em cobranca_runs.
+// ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  listarBoletosPorPeriodo,
+  parseDataHinova,
+  toNumber,
+  HinovaTransientError,
+  calcularProximoRetry,
+} from '../_shared/hinova-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// Permite EdgeRuntime.waitUntil em background
+declare const EdgeRuntime: { waitUntil(p: Promise<any>): void } | undefined
 
 interface Etapa {
   id?: string
@@ -13,19 +34,8 @@ interface Etapa {
   ativa?: boolean
 }
 
-// ============================================================
-// MAPA DE TEMPLATES → VARIÁVEIS (sincronizado com
-// src/lib/cobranca/templateParams.ts — duplicado inline porque
-// edge functions não importam de src/).
-// ============================================================
 type CobrancaVar =
-  | 'nome'
-  | 'valor'
-  | 'vencimento'
-  | 'mes_ano'
-  | 'placa'
-  | 'modelo'
-  | 'linha_digitavel'
+  | 'nome' | 'valor' | 'vencimento' | 'mes_ano' | 'placa' | 'modelo' | 'linha_digitavel'
 
 const TEMPLATE_PARAMS_MAP: Record<string, CobrancaVar[]> = {
   cobranca_mensalidade: ['nome', 'mes_ano', 'vencimento'],
@@ -44,60 +54,59 @@ const TEMPLATE_PARAMS_MAP: Record<string, CobrancaVar[]> = {
   d14_d61_reativacao_protecao_v1: ['nome'],
 }
 
-function calcularPrioridade(diasAtraso: number, valor: number): number {
-  let prioridade = 3
-  if (diasAtraso > 30) prioridade = 9
-  else if (diasAtraso > 15) prioridade = 7
-  else if (diasAtraso > 5) prioridade = 5
-  if (valor > 2000) prioridade = Math.min(prioridade + 1, 10)
-  return prioridade
-}
+const SITUACAO_PAGA = /\b(PAGO|BAIXA|LIQUIDA|QUITADO)\b/i
+const SITUACAO_CANCELADA = /\b(CANCEL|ESTORN)\b/i
 
-function formatBRL(v: number): string {
+function fmtBRL(v: number): string {
   return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('T')[0].split('-')
+function fmtData(iso: string): string {
+  const [y, m, d] = iso.split('-')
   return `${d}/${m}/${y}`
 }
 
-function formatMesAno(vencimento: string): string {
-  const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-  const [y, m] = vencimento.split('T')[0].split('-')
+function fmtMesAno(iso: string): string {
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+  const [y, m] = iso.split('-')
   return `${meses[parseInt(m, 10) - 1]}/${y}`
 }
 
-interface ContextoEnvio {
+function diaCivilSP(): string {
+  // YYYY-MM-DD em America/Sao_Paulo
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+}
+
+function sanitizeFone(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const d = String(raw).replace(/\D/g, '')
+  if (d.length < 10) return null
+  if (d.length === 10 || d.length === 11) return '55' + d
+  if (d.length === 12 || d.length === 13) return d
+  return null
+}
+
+interface Ctx {
   nome: string
   valor: number
   vencimento: string
-  placa?: string | null
-  modelo?: string | null
-  linha_digitavel?: string | null
-  boleto_url?: string | null
+  placa: string | null
+  modelo: string | null
+  linha_digitavel: string | null
 }
 
-/**
- * Monta o array de parâmetros conforme o template configurado.
- * Para templates não mapeados explicitamente, devolve um fallback
- * genérico [nome, valor, vencimento, linha_digitavel?, placa?] que
- * será truncado conforme a contagem de slots detectados.
- */
-function buildTemplateParams(
-  templateName: string,
-  ctx: ContextoEnvio,
-  slotsDetectados: number
-): { params: string[]; faltaSGA: boolean } {
-  const mapping = TEMPLATE_PARAMS_MAP[templateName]
+function buildParams(template: string, ctx: Ctx, slots: number): { params: string[]; faltaSGA: boolean } {
+  const mapping = TEMPLATE_PARAMS_MAP[template]
   let faltaSGA = false
-
-  const valorOf = (v: CobrancaVar): string => {
+  const valueOf = (v: CobrancaVar): string => {
     switch (v) {
       case 'nome': return ctx.nome || 'Associado'
-      case 'valor': return formatBRL(Number(ctx.valor || 0))
-      case 'vencimento': return formatDate(ctx.vencimento)
-      case 'mes_ano': return formatMesAno(ctx.vencimento)
+      case 'valor': return fmtBRL(ctx.valor)
+      case 'vencimento': return fmtData(ctx.vencimento)
+      case 'mes_ano': return fmtMesAno(ctx.vencimento)
       case 'placa': return ctx.placa || '—'
       case 'modelo': return ctx.modelo || '—'
       case 'linha_digitavel':
@@ -105,23 +114,33 @@ function buildTemplateParams(
         return ctx.linha_digitavel || '—'
     }
   }
-
-  let params: string[]
-  if (mapping) {
-    params = mapping.map(valorOf)
-  } else {
-    // Fallback genérico
-    const fallbackOrder: CobrancaVar[] = ['nome', 'valor', 'vencimento', 'linha_digitavel', 'placa']
-    params = fallbackOrder.map(valorOf)
+  let params: string[] = mapping
+    ? mapping.map(valueOf)
+    : (['nome','valor','vencimento','linha_digitavel','placa'] as CobrancaVar[]).map(valueOf)
+  if (slots > 0) {
+    if (params.length > slots) params = params.slice(0, slots)
+    while (params.length < slots) params.push('—')
   }
-
-  // Ajustar pelo número real de slots detectados no corpo (defesa contra erro 132000)
-  if (slotsDetectados > 0) {
-    if (params.length > slotsDetectados) params = params.slice(0, slotsDetectados)
-    while (params.length < slotsDetectados) params.push('—')
-  }
-
   return { params, faltaSGA }
+}
+
+interface ItemFila {
+  nosso_numero: string
+  associado_id: string | null         // local mirror se existir
+  codigo_associado: number
+  nome: string
+  telefone: string | null
+  email: string | null
+  valor: number
+  vencimento: string                  // ISO yyyy-mm-dd
+  diasAtraso: number                  // >0 = atrasado, <=0 = a vencer
+  linha_digitavel: string | null
+  boleto_url: string | null
+  placa: string | null
+  modelo: string | null
+  veiculo_id: string | null
+  codigo_veiculo: number | null
+  etapa: Etapa
 }
 
 Deno.serve(async (req) => {
@@ -134,560 +153,389 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    const MAX_DISPAROS = parseInt(Deno.env.get('REGUA_MAX_DISPAROS_POR_RUN') || '500', 10)
-    let disparosWhatsapp = 0
+    let body: any = {}
+    try { body = await req.json() } catch { /* sem body ok */ }
+    const delayMs = Math.max(0, Math.min(60_000, Number(body?.delayMs ?? 10_000)))
+    const MAX = parseInt(Deno.env.get('REGUA_MAX_DISPAROS_POR_RUN') || '1000', 10)
 
-    const hoje = new Date()
-    const hojeISO = hoje.toISOString().split('T')[0]
-    const seteDiasAtras = new Date(Date.now() - 7 * 86400000).toISOString()
+    // Identidade do solicitante (auditoria)
+    let criadoPor: string | null = null
+    try {
+      const auth = req.headers.get('Authorization')?.replace('Bearer ', '')
+      if (auth) {
+        const { data } = await supabase.auth.getUser(auth)
+        criadoPor = data?.user?.id ?? null
+      }
+    } catch { /* opcional */ }
 
-    // 1. Buscar régua ativa
-    const { data: regua, error: errRegua } = await supabase
-      .from('reguas_cobranca')
-      .select('*')
-      .eq('ativa', true)
-      .limit(1)
-      .maybeSingle()
-
-    if (errRegua) {
-      console.error('Erro ao buscar régua:', errRegua)
-      throw errRegua
-    }
+    // 1. Régua ativa
+    const { data: regua } = await supabase
+      .from('reguas_cobranca').select('*').eq('ativa', true).limit(1).maybeSingle()
 
     if (!regua) {
-      console.log('⛔ Régua DESATIVADA — execução abortada (nenhuma régua com ativa=true)')
-      return new Response(JSON.stringify({
-        ativa: false,
-        message: 'Régua desativada — nenhuma ação executada',
-        processados: 0,
-        eventos_criados: 0,
-        whatsapp_enviados: 0,
-        whatsapp_falhas: 0,
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResp({ ativa: false, message: 'Régua desativada — nenhuma ação executada', total_planejado: 0 })
     }
-
     const etapasRaw = (regua.etapas as Etapa[] | null) || []
-    const etapasAtivas = etapasRaw.filter((e) => e.ativa !== false)
-
-    if (etapasAtivas.length === 0) {
-      console.log('Régua ativa, mas sem etapas habilitadas')
-      return new Response(JSON.stringify({
-        ativa: true,
-        message: 'Régua ativa, porém sem etapas habilitadas',
-        processados: 0,
-        eventos_criados: 0,
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    const etapas = etapasRaw.filter((e) => e.ativa !== false).sort((a, b) => a.dias - b.dias)
+    if (etapas.length === 0) {
+      return jsonResp({ ativa: true, message: 'Régua sem etapas habilitadas', total_planejado: 0 })
     }
 
-    const etapas = [...etapasAtivas].sort((a, b) => a.dias - b.dias)
-    console.log(`Régua "${regua.nome}" com ${etapas.length} etapas ativas (${etapasRaw.length} total)`)
-
-    // 2. Pré-carregar contagem de variáveis dos templates Meta usados
-    const templatesUsados = Array.from(new Set(
-      etapas.map((e) => e.template).filter((t): t is string => !!t)
-    ))
+    // 2. Pré-carrega slots dos templates (defesa Meta 132000)
     const slotsPorTemplate = new Map<string, number>()
-    if (templatesUsados.length > 0) {
+    const tmplNomes = Array.from(new Set(etapas.map((e) => e.template).filter((t): t is string => !!t)))
+    if (tmplNomes.length) {
       const { data: tmpls } = await supabase
-        .from('whatsapp_meta_templates')
-        .select('nome, corpo')
-        .in('nome', templatesUsados)
+        .from('whatsapp_meta_templates').select('nome, corpo').in('nome', tmplNomes)
       for (const t of tmpls || []) {
-        const matches = (t.corpo as string || '').match(/\{\{\d+\}\}/g) || []
-        // Quantos slots únicos?
-        const unique = new Set(matches.map((m) => m))
-        slotsPorTemplate.set(t.nome as string, unique.size)
+        const matches = String(t.corpo || '').match(/\{\{\d+\}\}/g) || []
+        slotsPorTemplate.set(String(t.nome), new Set(matches).size)
       }
     }
 
-    // Janela de pré-vencimento
-    const etapasPre = etapas.filter((e) => e.dias < 0)
-    const maxDiasAntes = etapasPre.length > 0 ? Math.abs(Math.min(...etapasPre.map((e) => e.dias))) : 0
+    // 3. Janela de varredura: hoje + dMin .. hoje + dMax (etapa.dias negativo = pré-vencimento)
+    const dMin = Math.min(...etapas.map((e) => e.dias))   // ex.: -15
+    const dMax = Math.max(...etapas.map((e) => e.dias))   // ex.: +61
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+    const dataInicial = new Date(hoje); dataInicial.setDate(dataInicial.getDate() - dMax) // venc <= hoje + (-dMax) ... espera
+    // Atenção: etapa.dias > 0 = boleto VENCIDO há X dias → vencimento = hoje - X
+    //          etapa.dias < 0 = boleto VENCE em |X| dias → vencimento = hoje + |X|
+    const inicioVenc = new Date(hoje); inicioVenc.setDate(inicioVenc.getDate() - dMax) // mais antigo
+    const fimVenc = new Date(hoje); fimVenc.setDate(fimVenc.getDate() - dMin)          // mais futuro (-dMin = +15)
 
-    let totalProcessados = 0
-    let totalEventos = 0
-    let totalTarefas = 0
-    let totalEnviadosWA = 0
-    let totalFalhasWA = 0
-    let limitAtingido = false
+    // 4. Busca Hinova
+    let boletos: any[]
+    try {
+      boletos = await listarBoletosPorPeriodo(supabase, {
+        dataInicial: inicioVenc,
+        dataFinal: fimVenc,
+        quantidadePorPagina: 200,
+      })
+    } catch (e: any) {
+      if (e instanceof HinovaTransientError) {
+        const retry = calcularProximoRetry(e.reason)
+        return jsonResp({
+          erro: 'hinova_transitorio',
+          motivo: e.reason,
+          retry_em: retry.toISOString(),
+          message: 'Hinova indisponível — tente novamente em instantes',
+        }, 503)
+      }
+      throw e
+    }
 
-    // ============================================================
-    // HELPER: enviar WhatsApp via whatsapp-send-text
-    // ============================================================
-    async function enviarTemplateWhatsapp(opts: {
-      telefone: string
-      templateName: string
-      params: string[]
-    }): Promise<{ ok: boolean; erro?: string; message_id?: string }> {
-      try {
-        const resp = await supabase.functions.invoke('whatsapp-send-text', {
-          body: {
-            telefone: opts.telefone,
-            mensagem: '',
-            template_name: opts.templateName,
-            template_params: opts.params,
-          },
-        })
-        if (resp.error) return { ok: false, erro: resp.error.message || String(resp.error) }
-        const data: any = resp.data || {}
-        if (data.success === false) return { ok: false, erro: data.error || 'Falha desconhecida' }
-        return { ok: true, message_id: data.message_id }
-      } catch (err: any) {
-        return { ok: false, erro: err?.message || String(err) }
+    console.log(`[regua] ${boletos.length} boletos retornados (janela ${inicioVenc.toISOString().slice(0,10)} → ${fimVenc.toISOString().slice(0,10)})`)
+
+    // 5. Filtra/normaliza e casa com etapas
+    const hojeMs = hoje.getTime()
+    const fila: ItemFila[] = []
+    const dia = diaCivilSP()
+
+    // Pré-carrega mirror local de associados (codigo_hinova → id, telefone alt) e veículos (placa → id)
+    const codigosAssoc = Array.from(new Set(
+      boletos.map((b) => Number(b?.codigo_associado || 0)).filter((n) => n > 0),
+    ))
+    const placasSet = new Set<string>()
+    for (const b of boletos) {
+      const ps = (b?.veiculos || []) as any[]
+      for (const v of ps) {
+        const p = String(v?.placa || '').toUpperCase().trim()
+        if (p) placasSet.add(p)
       }
     }
 
-    // ============================================================
-    // BUSCA UNIFICADA — Asaas + SGA Hinova
-    // ============================================================
-    type CobrancaUnif = {
-      id: string
-      associado_id: string
-      veiculo_id: string | null
-      valor: number
-      data_vencimento: string
-      linha_digitavel: string | null
-      boleto_url: string | null
-      fonte: 'asaas' | 'sga'
-    }
-
-    /**
-     * Busca cobranças (asaas + sga) num intervalo de vencimento.
-     * `start`/`end` são datas ISO (YYYY-MM-DD), inclusivas.
-     */
-    async function buscarCobrancas(start: string, end: string): Promise<CobrancaUnif[]> {
-      const [asaas, sga] = await Promise.all([
-        supabase
-          .from('asaas_cobrancas')
-          .select('id, associado_id, veiculo_id, valor, data_vencimento, linha_digitavel, boleto_url')
-          .in('status', ['PENDING', 'OVERDUE'])
-          .not('asaas_id', 'like', 'LOCAL-%')
-          .gte('data_vencimento', start)
-          .lte('data_vencimento', end)
-          .order('data_vencimento')
-          .limit(1000),
-        supabase
-          .from('cobrancas')
-          .select('id, associado_id, veiculo_id, valor_final, valor, data_vencimento, linha_digitavel, boleto_url')
-          .eq('origem', 'sga_hinova')
-          .in('status', ['aguardando_pagamento', 'vencido'])
-          .gte('data_vencimento', start)
-          .lte('data_vencimento', end)
-          .order('data_vencimento')
-          .limit(1000),
-      ])
-
-      const out: CobrancaUnif[] = []
-      for (const r of asaas.data || []) {
-        out.push({
-          id: r.id as string,
-          associado_id: r.associado_id as string,
-          veiculo_id: (r.veiculo_id as string | null) ?? null,
-          valor: Number(r.valor || 0),
-          data_vencimento: r.data_vencimento as string,
-          linha_digitavel: (r.linha_digitavel as string | null) ?? null,
-          boleto_url: (r.boleto_url as string | null) ?? null,
-          fonte: 'asaas',
-        })
-      }
-      for (const r of sga.data || []) {
-        out.push({
-          id: r.id as string,
-          associado_id: r.associado_id as string,
-          veiculo_id: (r.veiculo_id as string | null) ?? null,
-          valor: Number((r as any).valor_final || (r as any).valor || 0),
-          data_vencimento: r.data_vencimento as string,
-          linha_digitavel: (r.linha_digitavel as string | null) ?? null,
-          boleto_url: (r.boleto_url as string | null) ?? null,
-          fonte: 'sga',
-        })
-      }
-      return out
-    }
-
-    // Cache de associado e veículo
-    const associadoCache = new Map<string, { nome: string; telefone: string | null }>()
-    const veiculoCache = new Map<string, { placa: string | null; modelo: string | null }>()
-
-    async function getAssociado(id: string) {
-      if (associadoCache.has(id)) return associadoCache.get(id)!
+    const assocByCodigo = new Map<number, { id: string; whatsapp: string | null; telefone: string | null }>()
+    if (codigosAssoc.length) {
       const { data } = await supabase
-        .from('associados')
-        .select('nome, whatsapp, telefone')
-        .eq('id', id)
-        .maybeSingle()
-      const info = {
-        nome: (data?.nome as string) || 'Associado',
-        telefone: (data?.whatsapp as string) || (data?.telefone as string) || null,
+        .from('associados').select('id, codigo_hinova, whatsapp, telefone')
+        .in('codigo_hinova', codigosAssoc)
+      for (const a of data || []) {
+        assocByCodigo.set(Number((a as any).codigo_hinova), {
+          id: (a as any).id, whatsapp: (a as any).whatsapp || null, telefone: (a as any).telefone || null,
+        })
       }
-      associadoCache.set(id, info)
-      return info
     }
-
-    async function getVeiculo(id: string | null) {
-      if (!id) return { placa: null, modelo: null }
-      if (veiculoCache.has(id)) return veiculoCache.get(id)!
+    const veicByPlaca = new Map<string, { id: string; modelo: string | null; marca: string | null }>()
+    if (placasSet.size) {
       const { data } = await supabase
-        .from('veiculos')
-        .select('placa, modelo')
-        .eq('id', id)
-        .maybeSingle()
-      const info = {
-        placa: (data?.placa as string | null) ?? null,
-        modelo: (data?.modelo as string | null) ?? null,
-      }
-      veiculoCache.set(id, info)
-      return info
-    }
-
-    // ============================================================
-    // PASS 1 — Cobranças VENCIDAS (dias >= 0)
-    // ============================================================
-    {
-      // Janela: de 60 dias atrás até hoje
-      const inicio = new Date(hoje.getTime() - 90 * 86400000).toISOString().split('T')[0]
-      const cobrs = await buscarCobrancas(inicio, hojeISO)
-
-      // Agrupar por associado: maior atraso, somando valores; preserva veiculo_id/linha_digitavel da MAIS antiga (= maior atraso)
-      const porAssociado = new Map<string, {
-        diasAtraso: number
-        valorTotal: number
-        vencimento: string
-        veiculo_id: string | null
-        linha_digitavel: string | null
-        boleto_url: string | null
-        fonte: 'asaas' | 'sga'
-      }>()
-
-      for (const c of cobrs) {
-        const dias = Math.floor((Date.now() - new Date(c.data_vencimento).getTime()) / 86400000)
-        const cur = porAssociado.get(c.associado_id)
-        if (!cur) {
-          porAssociado.set(c.associado_id, {
-            diasAtraso: dias,
-            valorTotal: c.valor,
-            vencimento: c.data_vencimento,
-            veiculo_id: c.veiculo_id,
-            linha_digitavel: c.linha_digitavel,
-            boleto_url: c.boleto_url,
-            fonte: c.fonte,
-          })
-        } else {
-          cur.valorTotal += c.valor
-          if (dias > cur.diasAtraso) {
-            cur.diasAtraso = dias
-            cur.vencimento = c.data_vencimento
-            cur.veiculo_id = c.veiculo_id
-            cur.linha_digitavel = c.linha_digitavel
-            cur.boleto_url = c.boleto_url
-            cur.fonte = c.fonte
-          }
-        }
-      }
-
-      for (const [associadoId, info] of porAssociado) {
-        for (const etapa of etapas) {
-          if (etapa.dias < 0) continue
-          if (info.diasAtraso < etapa.dias) continue
-
-          const { data: existe } = await supabase
-            .from('cobranca_eventos')
-            .select('id')
-            .eq('associado_id', associadoId)
-            .eq('subtipo', `regua_d${etapa.dias}`)
-            .gte('created_at', seteDiasAtras)
-            .limit(1)
-          if (existe && existe.length > 0) continue
-
-          const prioridade = calcularPrioridade(info.diasAtraso, info.valorTotal)
-          await processarEtapa({
-            associadoId,
-            etapa,
-            diasAtraso: info.diasAtraso,
-            valorTotal: info.valorTotal,
-            vencimento: info.vencimento,
-            veiculo_id: info.veiculo_id,
-            linha_digitavel: info.linha_digitavel,
-            boleto_url: info.boleto_url,
-            fonte: info.fonte,
-            prioridade,
-          })
-        }
-        totalProcessados++
+        .from('veiculos').select('id, placa, modelo, marca')
+        .in('placa', Array.from(placasSet))
+      for (const v of data || []) {
+        veicByPlaca.set(String((v as any).placa).toUpperCase(), {
+          id: (v as any).id, modelo: (v as any).modelo || null, marca: (v as any).marca || null,
+        })
       }
     }
 
-    // ============================================================
-    // PASS 2 — Cobranças A VENCER (dias < 0)
-    // ============================================================
-    if (maxDiasAntes > 0) {
-      const limiteFuturo = new Date(hoje.getTime() + maxDiasAntes * 86400000).toISOString().split('T')[0]
-      const amanhaISO = new Date(hoje.getTime() + 86400000).toISOString().split('T')[0]
-      const cobrs = await buscarCobrancas(amanhaISO, limiteFuturo)
+    for (const b of boletos) {
+      const situacao = String(b?.situacao_boleto || '')
+      const dataPag = parseDataHinova(b?.data_pagamento)
+      if (dataPag) continue
+      if (SITUACAO_PAGA.test(situacao)) continue
+      if (SITUACAO_CANCELADA.test(situacao)) continue
 
-      for (const c of cobrs) {
-        const diasAteVencer = Math.ceil((new Date(c.data_vencimento).getTime() - hoje.getTime()) / 86400000)
-        const diasRelativos = -diasAteVencer
-        const etapaMatch = etapas.find((e) => e.dias === diasRelativos)
-        if (!etapaMatch) continue
+      const venc = parseDataHinova(b?.data_vencimento)
+      if (!venc) continue
+      const vencMs = new Date(venc + 'T00:00:00').getTime()
+      const diffDias = Math.floor((hojeMs - vencMs) / 86_400_000)
+      // diffDias > 0 → atrasado; diffDias < 0 → a vencer; ==0 vence hoje
 
-        const { data: existe } = await supabase
+      // Acha etapa: dias > 0 (atrasado) ou dias <= 0 (lembrete)
+      let etapaMatch: Etapa | undefined
+      if (diffDias >= 0) {
+        // atrasado/vence hoje: usa etapa exata, ou a maior <=
+        etapaMatch = etapas.filter((e) => e.dias >= 0 && e.dias <= diffDias).pop()
+      } else {
+        // a vencer: precisa etapa exata (D-N)
+        etapaMatch = etapas.find((e) => e.dias === diffDias)
+      }
+      if (!etapaMatch) continue
+
+      const codAssoc = Number(b?.codigo_associado || 0)
+      const local = codAssoc ? assocByCodigo.get(codAssoc) : undefined
+      const fone = sanitizeFone(b?.celular)
+        || sanitizeFone(local?.whatsapp)
+        || sanitizeFone(b?.telefone_fixo)
+        || sanitizeFone(b?.telefone_comercial)
+        || sanitizeFone(local?.telefone)
+
+      const v0 = (b?.veiculos || [])[0] || {}
+      const placaUp = String(v0?.placa || '').toUpperCase().trim() || null
+      const veicLocal = placaUp ? veicByPlaca.get(placaUp) : undefined
+      const modeloMontado = veicLocal
+        ? [veicLocal.marca, veicLocal.modelo].filter(Boolean).join(' ') || null
+        : (v0?.modelo || null)
+
+      fila.push({
+        nosso_numero: String(b?.nosso_numero || ''),
+        associado_id: local?.id || null,
+        codigo_associado: codAssoc,
+        nome: String(b?.nome_associado || '').trim() || 'Associado',
+        telefone: fone,
+        email: b?.email || null,
+        valor: toNumber(b?.valor_boleto),
+        vencimento: venc,
+        diasAtraso: diffDias,
+        linha_digitavel: b?.linha_digitavel || null,
+        boleto_url: b?.link_boleto || b?.url_boleto || null,
+        placa: placaUp,
+        modelo: modeloMontado,
+        veiculo_id: veicLocal?.id || null,
+        codigo_veiculo: Number(v0?.codigo_veiculo || 0) || null,
+        etapa: etapaMatch,
+      })
+    }
+
+    // 6. Ordena: inadimplentes (diasAtraso DESC) → valor DESC; depois "a vencer" do mais próximo ao mais distante
+    fila.sort((a, b) => {
+      const aAtras = a.diasAtraso >= 0
+      const bAtras = b.diasAtraso >= 0
+      if (aAtras !== bAtras) return aAtras ? -1 : 1
+      if (aAtras) {
+        if (b.diasAtraso !== a.diasAtraso) return b.diasAtraso - a.diasAtraso
+        return b.valor - a.valor
+      }
+      // ambos a vencer: menor |dias| primeiro (mais próximo de vencer)
+      return a.diasAtraso - b.diasAtraso // a.diasAtraso é negativo; -1 antes de -10
+    })
+
+    // 7. Dedupe diário consultando cobranca_eventos por (nosso_numero, dia_regua) no dia
+    const inicioDia = `${dia}T00:00:00-03:00`
+    const numeros = Array.from(new Set(fila.map((f) => f.nosso_numero).filter(Boolean)))
+    const jaDisparados = new Set<string>() // chave: nosso_numero|dias
+    if (numeros.length) {
+      const CHUNK = 200
+      for (let i = 0; i < numeros.length; i += CHUNK) {
+        const slice = numeros.slice(i, i + CHUNK)
+        const { data } = await supabase
           .from('cobranca_eventos')
-          .select('id')
-          .eq('associado_id', c.associado_id)
-          .eq('subtipo', `regua_d${etapaMatch.dias}`)
-          .gte('created_at', seteDiasAtras)
-          .limit(1)
-        if (existe && existe.length > 0) continue
-
-        await processarEtapa({
-          associadoId: c.associado_id,
-          etapa: etapaMatch,
-          diasAtraso: diasRelativos,
-          valorTotal: c.valor,
-          vencimento: c.data_vencimento,
-          veiculo_id: c.veiculo_id,
-          linha_digitavel: c.linha_digitavel,
-          boleto_url: c.boleto_url,
-          fonte: c.fonte,
-          prioridade: 3,
-        })
-        totalProcessados++
+          .select('dados')
+          .gte('created_at', inicioDia)
+          .in('dados->>nosso_numero', slice)
+        for (const ev of data || []) {
+          const nn = (ev as any).dados?.nosso_numero
+          const dr = (ev as any).dados?.dia_regua
+          if (nn != null && dr != null) jaDisparados.add(`${nn}|${dr}`)
+        }
       }
     }
 
-    // ============================================================
-    // PROCESSADOR DE ETAPA
-    // ============================================================
-    async function processarEtapa(p: {
-      associadoId: string
-      etapa: Etapa
-      diasAtraso: number
-      valorTotal: number
-      vencimento: string
-      veiculo_id: string | null
-      linha_digitavel: string | null
-      boleto_url: string | null
-      fonte: 'asaas' | 'sga'
-      prioridade: number
-    }) {
-      const { associadoId, etapa, diasAtraso, valorTotal, vencimento, veiculo_id, linha_digitavel, boleto_url, fonte, prioridade } = p
-      const subtipo = `regua_d${etapa.dias}`
+    const filaFinal = fila.filter((f) => f.nosso_numero && !jaDisparados.has(`${f.nosso_numero}|${f.etapa.dias}`))
+    const totalPlanejado = Math.min(filaFinal.length, MAX)
 
-      if (etapa.acao === 'whatsapp') {
-        const assoc = await getAssociado(associadoId)
-        const veic = await getVeiculo(veiculo_id)
-        const telefone = assoc.telefone
+    // 8. Cria cobranca_runs e dispara em background
+    const { data: runRow, error: errRun } = await supabase
+      .from('cobranca_runs').insert({
+        status: 'executando',
+        total_planejado: totalPlanejado,
+        delay_ms: delayMs,
+        criado_por: criadoPor,
+        payload: {
+          janela_inicio: inicioVenc.toISOString().slice(0, 10),
+          janela_fim: fimVenc.toISOString().slice(0, 10),
+          boletos_retornados: boletos.length,
+          fila_bruta: fila.length,
+          duplicados_pulados: fila.length - filaFinal.length,
+          regua_id: regua.id,
+        },
+      }).select('id').single()
+    if (errRun) throw errRun
+    const runId = (runRow as any).id as string
 
+    // Worker em background
+    const worker = (async () => {
+      let enviados = 0, falhas = 0, pulados = 0
+      const itens = filaFinal.slice(0, totalPlanejado)
+
+      for (let i = 0; i < itens.length; i++) {
+        // Verifica cancelamento
+        const { data: rState } = await supabase
+          .from('cobranca_runs').select('status').eq('id', runId).maybeSingle()
+        if ((rState as any)?.status === 'cancelado') {
+          console.log(`[regua run ${runId}] cancelado em ${i}/${itens.length}`)
+          break
+        }
+
+        const it = itens[i]
+        const subtipo = `regua_d${it.etapa.dias}`
         let envioStatus: 'enviado' | 'falhou' | 'agendado' = 'agendado'
         let envioErro: string | null = null
         let messageId: string | null = null
         let templateParams: string[] = []
         let faltaSGA = false
 
-        if (etapa.template && telefone && disparosWhatsapp < MAX_DISPAROS) {
-          const slots = slotsPorTemplate.get(etapa.template) ?? 0
-          const built = buildTemplateParams(etapa.template, {
-            nome: assoc.nome,
-            valor: valorTotal,
-            vencimento,
-            placa: veic.placa,
-            modelo: veic.modelo,
-            linha_digitavel,
-            boleto_url,
+        if (it.etapa.acao !== 'whatsapp') {
+          // ações não-whatsapp só registram evento (comportamento legado)
+          await supabase.from('cobranca_eventos').insert({
+            associado_id: it.associado_id, tipo: it.etapa.acao, subtipo,
+            descricao: `${it.etapa.acao.toUpperCase()} D${it.etapa.dias >= 0 ? '+' : ''}${it.etapa.dias} agendado`,
+            dados: {
+              dia_regua: it.etapa.dias, dias_atraso: it.diasAtraso, valor: it.valor,
+              nosso_numero: it.nosso_numero, codigo_associado: it.codigo_associado,
+              codigo_veiculo: it.codigo_veiculo, fonte: 'hinova_periodo', status: 'agendado',
+            }, automatico: true,
+          })
+          pulados++
+          await supabase.from('cobranca_runs').update({ pulados }).eq('id', runId)
+          continue
+        }
+
+        if (!it.telefone) {
+          envioStatus = 'falhou'; envioErro = 'Sem telefone/celular'
+          falhas++
+        } else if (!it.etapa.template) {
+          envioStatus = 'falhou'; envioErro = 'Etapa sem template'
+          falhas++
+        } else {
+          const slots = slotsPorTemplate.get(it.etapa.template) ?? 0
+          const built = buildParams(it.etapa.template, {
+            nome: it.nome, valor: it.valor, vencimento: it.vencimento,
+            placa: it.placa, modelo: it.modelo, linha_digitavel: it.linha_digitavel,
           }, slots)
           templateParams = built.params
           faltaSGA = built.faltaSGA
 
-          // Bloquear envio se template exige linha_digitavel e não temos
-          const mapping = TEMPLATE_PARAMS_MAP[etapa.template]
-          const exigeSGA = mapping?.includes('linha_digitavel') ?? false
-          if (exigeSGA && !linha_digitavel) {
-            envioStatus = 'falhou'
-            envioErro = 'Sem linha digitável SGA disponível — sincronize o financeiro do veículo'
-            totalFalhasWA++
+          const exigeLD = TEMPLATE_PARAMS_MAP[it.etapa.template]?.includes('linha_digitavel') ?? false
+          if (exigeLD && !it.linha_digitavel) {
+            envioStatus = 'falhou'; envioErro = 'Sem linha digitável (Hinova)'
+            falhas++
           } else {
-            const result = await enviarTemplateWhatsapp({
-              telefone,
-              templateName: etapa.template,
-              params: templateParams,
-            })
-            disparosWhatsapp++
-            if (result.ok) {
-              envioStatus = 'enviado'
-              messageId = result.message_id || null
-              totalEnviadosWA++
-            } else {
-              envioStatus = 'falhou'
-              envioErro = result.erro || 'Erro desconhecido'
-              totalFalhasWA++
+            try {
+              const resp = await supabase.functions.invoke('whatsapp-send-text', {
+                body: {
+                  telefone: it.telefone, mensagem: '',
+                  template_name: it.etapa.template, template_params: templateParams,
+                },
+              })
+              const data: any = resp.data || {}
+              if (resp.error || data?.success === false) {
+                envioStatus = 'falhou'; envioErro = resp.error?.message || data?.error || 'Falha desconhecida'
+                falhas++
+              } else {
+                envioStatus = 'enviado'
+                messageId = data?.message_id || null
+                enviados++
+              }
+            } catch (e: any) {
+              envioStatus = 'falhou'; envioErro = e?.message || String(e)
+              falhas++
             }
           }
-        } else if (disparosWhatsapp >= MAX_DISPAROS) {
-          limitAtingido = true
-          envioErro = `Limite de disparos por execução atingido (${MAX_DISPAROS})`
-        } else if (!etapa.template) {
-          envioErro = 'Etapa sem template definido'
-        } else if (!telefone) {
-          envioErro = 'Associado sem telefone/whatsapp'
         }
 
         await supabase.from('cobranca_eventos').insert({
-          associado_id: associadoId,
-          tipo: 'whatsapp',
-          subtipo,
-          descricao: `WhatsApp ${etapa.dias < 0 ? `D${etapa.dias} (lembrete)` : `D+${etapa.dias}`} — template ${etapa.template || '(nenhum)'}`,
+          associado_id: it.associado_id, tipo: 'whatsapp', subtipo,
+          descricao: `WhatsApp ${it.etapa.dias < 0 ? `D${it.etapa.dias} (lembrete)` : `D+${it.etapa.dias}`} — ${it.etapa.template || '(s/template)'}`,
           dados: {
-            dia_regua: etapa.dias,
-            valor_total: valorTotal,
-            dias_atraso: diasAtraso,
-            template: etapa.template,
-            template_params: templateParams,
-            fonte,
-            veiculo_id: veiculo_id ?? null,
-            linha_digitavel: linha_digitavel || null,
-            boleto_url: boleto_url || null,
-            falta_sga: faltaSGA,
-            status: envioStatus,
-            message_id: messageId,
-            erro: envioErro,
+            dia_regua: it.etapa.dias, dias_atraso: it.diasAtraso,
+            valor: it.valor, vencimento: it.vencimento,
+            nosso_numero: it.nosso_numero, codigo_associado: it.codigo_associado,
+            codigo_veiculo: it.codigo_veiculo, placa: it.placa,
+            template: it.etapa.template, template_params: templateParams,
+            linha_digitavel: it.linha_digitavel || null, boleto_url: it.boleto_url || null,
+            falta_sga: faltaSGA, status: envioStatus, message_id: messageId, erro: envioErro,
+            fonte: 'hinova_periodo', run_id: runId,
           },
           automatico: true,
         })
-        totalEventos++
-      } else if (etapa.acao === 'sms' || etapa.acao === 'email') {
-        await supabase.from('cobranca_eventos').insert({
-          associado_id: associadoId,
-          tipo: etapa.acao,
-          subtipo,
-          descricao: `${etapa.acao.toUpperCase()} ${etapa.dias < 0 ? `D${etapa.dias}` : `D+${etapa.dias}`} agendado (provedor não configurado)`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal, dias_atraso: diasAtraso, fonte, status: 'agendado' },
-          automatico: true,
-        })
-        totalEventos++
-      } else if (etapa.acao === 'ligacao') {
-        const { data: tarefaExiste } = await supabase
-          .from('cobranca_fila')
-          .select('id')
-          .eq('associado_id', associadoId)
-          .eq('motivo', 'regua_ligacao')
-          .in('status', ['pendente', 'em_atendimento'])
-          .limit(1)
 
-        if (!tarefaExiste || tarefaExiste.length === 0) {
-          await supabase.from('cobranca_fila').insert({
-            associado_id: associadoId,
-            motivo: 'regua_ligacao',
-            prioridade,
-            status: 'pendente',
-            observacao: `Régua D${etapa.dias >= 0 ? '+' : ''}${etapa.dias}: ligar para cobrar`,
-            data_agendamento: new Date().toISOString(),
-          })
-          totalTarefas++
+        // Atualiza contadores a cada N envios (reduz writes)
+        if ((i % 5) === 0 || i === itens.length - 1) {
+          await supabase.from('cobranca_runs').update({ enviados, falhas, pulados }).eq('id', runId)
         }
-        await supabase.from('cobranca_eventos').insert({
-          associado_id: associadoId,
-          tipo: 'ligacao',
-          subtipo,
-          descricao: `Tarefa de ligação D+${etapa.dias}`,
-          dados: { dia_regua: etapa.dias, prioridade, fonte },
-          automatico: true,
-        })
-        totalEventos++
-      } else if (etapa.acao === 'suspensao') {
-        await supabase.from('cobranca_eventos').insert({
-          associado_id: associadoId,
-          tipo: 'status',
-          subtipo: 'suspensao',
-          descricao: `Suspensão automática D+${etapa.dias} (${diasAtraso} dias / ${formatBRL(valorTotal)})`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal, dias_atraso: diasAtraso, fonte },
-          automatico: true,
-        })
-        totalEventos++
-      } else if (etapa.acao === 'negativacao') {
-        const { data: tarefaExiste } = await supabase
-          .from('cobranca_fila')
-          .select('id')
-          .eq('associado_id', associadoId)
-          .eq('motivo', 'decisao_negativacao')
-          .in('status', ['pendente', 'em_atendimento'])
-          .limit(1)
-        if (!tarefaExiste || tarefaExiste.length === 0) {
-          await supabase.from('cobranca_fila').insert({
-            associado_id: associadoId,
-            motivo: 'decisao_negativacao',
-            prioridade: 9,
-            status: 'pendente',
-            observacao: `D+${etapa.dias}: decisão de negativação (${formatBRL(valorTotal)})`,
-            data_agendamento: new Date().toISOString(),
-          })
-          totalTarefas++
+
+        // Delay entre envios (não no último)
+        if (i < itens.length - 1 && delayMs > 0) {
+          await new Promise((r) => setTimeout(r, delayMs))
         }
-        await supabase.from('cobranca_eventos').insert({
-          associado_id: associadoId,
-          tipo: 'negativacao',
-          subtipo,
-          descricao: `Candidato a negativação D+${etapa.dias}`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal, fonte },
-          automatico: true,
-        })
-        totalEventos++
-      } else if (etapa.acao === 'cancelamento' || etapa.acao === 'exclusao') {
-        const { data: tarefaExiste } = await supabase
-          .from('cobranca_fila')
-          .select('id')
-          .eq('associado_id', associadoId)
-          .eq('motivo', 'decisao_exclusao')
-          .in('status', ['pendente', 'em_atendimento'])
-          .limit(1)
-        if (!tarefaExiste || tarefaExiste.length === 0) {
-          await supabase.from('cobranca_fila').insert({
-            associado_id: associadoId,
-            motivo: 'decisao_exclusao',
-            prioridade: 9,
-            status: 'pendente',
-            observacao: `D+${etapa.dias}: decisão de exclusão (${formatBRL(valorTotal)})`,
-            data_agendamento: new Date().toISOString(),
-          })
-          totalTarefas++
-        }
-        await supabase.from('cobranca_eventos').insert({
-          associado_id: associadoId,
-          tipo: 'status',
-          subtipo,
-          descricao: `Candidato a exclusão D+${etapa.dias}`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal, fonte },
-          automatico: true,
-        })
-        totalEventos++
       }
+
+      const { data: finalState } = await supabase
+        .from('cobranca_runs').select('status').eq('id', runId).maybeSingle()
+      const wasCancelled = (finalState as any)?.status === 'cancelado'
+
+      await supabase.from('cobranca_runs').update({
+        status: wasCancelled ? 'cancelado' : 'concluido',
+        finished_at: new Date().toISOString(),
+        enviados, falhas, pulados,
+      }).eq('id', runId)
+      console.log(`[regua run ${runId}] finalizado — enviados=${enviados} falhas=${falhas} pulados=${pulados}`)
+    })().catch(async (err) => {
+      console.error(`[regua run ${runId}] erro fatal:`, err)
+      await supabase.from('cobranca_runs').update({
+        status: 'falhou', finished_at: new Date().toISOString(),
+        payload: { erro: String(err?.message || err) },
+      }).eq('id', runId)
+    })
+
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(worker)
     }
 
-    const resultado = {
-      message: 'Régua executada com sucesso',
+    return jsonResp({
+      ativa: true,
+      run_id: runId,
+      total_planejado: totalPlanejado,
+      delay_ms: delayMs,
+      janela: { inicio: inicioVenc.toISOString().slice(0, 10), fim: fimVenc.toISOString().slice(0, 10) },
+      boletos_retornados: boletos.length,
+      duplicados_pulados: fila.length - filaFinal.length,
       started_at: startedAt,
-      finished_at: new Date().toISOString(),
-      processados: totalProcessados,
-      eventos_criados: totalEventos,
-      tarefas_criadas: totalTarefas,
-      whatsapp_enviados: totalEnviadosWA,
-      whatsapp_falhas: totalFalhasWA,
-      limite_atingido: limitAtingido,
-      max_disparos: MAX_DISPAROS,
-    }
-    console.log('Resultado:', JSON.stringify(resultado))
-
-    return new Response(JSON.stringify(resultado), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      message: totalPlanejado > 0
+        ? `Régua iniciada — ${totalPlanejado} envio(s) agendado(s) com ${delayMs}ms entre cada`
+        : 'Nenhum envio pendente para hoje (tudo já disparado ou sem etapa correspondente)',
     })
   } catch (error: any) {
-    console.error('Erro na execução da régua:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    console.error('Erro régua:', error)
+    return jsonResp({ error: error?.message || String(error) }, 500)
   }
 })
+
+function jsonResp(body: any, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}

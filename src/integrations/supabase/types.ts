@@ -6736,6 +6736,48 @@ export type Database = {
           },
         ]
       }
+      cobranca_runs: {
+        Row: {
+          criado_por: string | null
+          delay_ms: number
+          enviados: number
+          falhas: number
+          finished_at: string | null
+          id: string
+          payload: Json
+          pulados: number
+          started_at: string
+          status: string
+          total_planejado: number
+        }
+        Insert: {
+          criado_por?: string | null
+          delay_ms?: number
+          enviados?: number
+          falhas?: number
+          finished_at?: string | null
+          id?: string
+          payload?: Json
+          pulados?: number
+          started_at?: string
+          status?: string
+          total_planejado?: number
+        }
+        Update: {
+          criado_por?: string | null
+          delay_ms?: number
+          enviados?: number
+          falhas?: number
+          finished_at?: string | null
+          id?: string
+          payload?: Json
+          pulados?: number
+          started_at?: string
+          status?: string
+          total_planejado?: number
+        }
+        Relationships: []
+      }
       cobrancas: {
         Row: {
           associado_id: string

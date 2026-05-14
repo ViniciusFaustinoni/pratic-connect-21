@@ -205,36 +205,56 @@ export default function ReguaCobranca() {
     }
   };
 
-  // Estado da última execução manual
-  const [ultimaExecucao, setUltimaExecucao] = useState<null | {
-    quando: string;
-    processados?: number;
-    eventos_criados?: number;
-    whatsapp_enviados?: number;
-    whatsapp_falhas?: number;
-    limite_atingido?: boolean;
-    error?: string;
-  }>(null);
+  // Estado da execução em andamento (Hinova-first com delay 10s)
+  const [delaySeg, setDelaySeg] = useState<number>(10);
+  const [runId, setRunId] = useState<string | null>(null);
+
+  const { data: runStatus } = useQuery({
+    queryKey: ['cobranca-run', runId],
+    enabled: !!runId,
+    refetchInterval: (q) => {
+      const s = (q.state.data as any)?.status;
+      return s === 'executando' ? 2000 : false;
+    },
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cobranca_runs')
+        .select('*')
+        .eq('id', runId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const cancelarRun = async () => {
+    if (!runId) return;
+    await (supabase as any).from('cobranca_runs')
+      .update({ status: 'cancelado' })
+      .eq('id', runId);
+    toast.info('Cancelamento solicitado — a régua para após o envio em curso');
+    queryClient.invalidateQueries({ queryKey: ['cobranca-run', runId] });
+  };
 
   const executarAgora = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('executar-regua-cobranca', { body: {} });
+      const { data, error } = await supabase.functions.invoke('executar-regua-cobranca', {
+        body: { delayMs: Math.max(0, delaySeg) * 1000 },
+      });
       if (error) throw error;
       return data;
     },
     onSuccess: (data: any) => {
-      setUltimaExecucao({
-        quando: new Date().toISOString(),
-        processados: data?.processados,
-        eventos_criados: data?.eventos_criados,
-        whatsapp_enviados: data?.whatsapp_enviados,
-        whatsapp_falhas: data?.whatsapp_falhas,
-        limite_atingido: data?.limite_atingido,
-      });
-      toast.success(`Régua executada — ${data?.eventos_criados ?? 0} eventos, ${data?.whatsapp_enviados ?? 0} WhatsApp enviados`);
+      if (data?.run_id) {
+        setRunId(data.run_id);
+        toast.success(`Régua iniciada — ${data.total_planejado} envio(s) com ${(data.delay_ms ?? 10000) / 1000}s entre cada`);
+      } else if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.info(data?.message || 'Sem envios pendentes');
+      }
     },
     onError: (err: any) => {
-      setUltimaExecucao({ quando: new Date().toISOString(), error: err?.message || 'Erro desconhecido' });
       toast.error('Falha ao executar régua: ' + (err?.message || ''));
     }
   });
@@ -664,46 +684,85 @@ export default function ReguaCobranca() {
         </Alert>
       )}
 
-      {/* Card: Última execução */}
+      {/* Card: Execução em andamento */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Play className="h-4 w-4" />
-            Execução automática
+            Execução da Régua
           </CardTitle>
           <CardDescription>
-            Roda diariamente às 09:00 (BRT). Use "Executar Agora" para disparar manualmente.
+            Busca boletos via Hinova (período = D{Math.min(...etapas.map(e=>e.dias),0)} até D+{Math.max(...etapas.map(e=>e.dias),0)}),
+            ordena inadimplentes primeiro e dispara WhatsApp com intervalo configurável.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {ultimaExecucao ? (
-            ultimaExecucao.error ? (
-              <div className="text-sm text-destructive">
-                Última execução em {new Date(ultimaExecucao.quando).toLocaleString('pt-BR')} — <strong>falhou:</strong> {ultimaExecucao.error}
+        <CardContent className="space-y-3">
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="delay-seg" className="text-xs">Intervalo entre envios (s)</Label>
+              <Input
+                id="delay-seg" type="number" min={0} max={60}
+                value={delaySeg}
+                onChange={(e) => setDelaySeg(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+                className="w-28"
+                disabled={(runStatus as any)?.status === 'executando'}
+              />
+            </div>
+            <Button
+              onClick={() => executarAgora.mutate()}
+              disabled={!reguaAtiva || executarAgora.isPending || (runStatus as any)?.status === 'executando'}
+              className="gap-2"
+            >
+              {executarAgora.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              Executar Agora
+            </Button>
+            {(runStatus as any)?.status === 'executando' && (
+              <Button variant="destructive" onClick={cancelarRun} className="gap-2">
+                <XCircle className="h-4 w-4" /> Cancelar
+              </Button>
+            )}
+          </div>
+
+          {runStatus && (
+            <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <Badge variant={(runStatus as any).status === 'executando' ? 'default'
+                  : (runStatus as any).status === 'concluido' ? 'secondary'
+                  : (runStatus as any).status === 'cancelado' ? 'outline' : 'destructive'}>
+                  {(runStatus as any).status?.toUpperCase()}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  Run {String((runStatus as any).id || '').slice(0, 8)}
+                </span>
               </div>
-            ) : (
-              <div className="text-sm space-y-1">
-                <div className="text-muted-foreground">
-                  Última execução: <strong className="text-foreground">{new Date(ultimaExecucao.quando).toLocaleString('pt-BR')}</strong>
-                </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  <span>Associados processados: <strong>{ultimaExecucao.processados ?? 0}</strong></span>
-                  <span>Eventos: <strong>{ultimaExecucao.eventos_criados ?? 0}</strong></span>
-                  <span className="text-green-700 dark:text-green-400">WhatsApp enviados: <strong>{ultimaExecucao.whatsapp_enviados ?? 0}</strong></span>
-                  {(ultimaExecucao.whatsapp_falhas ?? 0) > 0 && (
-                    <span className="text-destructive">Falhas: <strong>{ultimaExecucao.whatsapp_falhas}</strong></span>
-                  )}
-                </div>
-                {ultimaExecucao.limite_atingido && (
-                  <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                    ⚠️ Limite de disparos por execução atingido — restante será processado na próxima rodada.
-                  </div>
-                )}
-              </div>
-            )
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              Nenhuma execução manual nesta sessão. Clique em "Executar Agora" para testar.
+              {(() => {
+                const r = runStatus as any;
+                const total = r.total_planejado || 0;
+                const feitos = (r.enviados || 0) + (r.falhas || 0) + (r.pulados || 0);
+                const pct = total > 0 ? Math.round((feitos / total) * 100) : 0;
+                const etaSeg = (total - feitos) * ((r.delay_ms || 10000) / 1000);
+                return (
+                  <>
+                    <div className="h-2 w-full bg-muted rounded overflow-hidden">
+                      <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                      <span><strong>{feitos}</strong> / {total} ({pct}%)</span>
+                      <span className="text-green-700 dark:text-green-400">Enviados: <strong>{r.enviados || 0}</strong></span>
+                      {(r.falhas || 0) > 0 && <span className="text-destructive">Falhas: <strong>{r.falhas}</strong></span>}
+                      {(r.pulados || 0) > 0 && <span className="text-muted-foreground">Pulados: <strong>{r.pulados}</strong></span>}
+                      {r.status === 'executando' && etaSeg > 0 && (
+                        <span className="text-muted-foreground">ETA: ~{Math.ceil(etaSeg / 60)}min</span>
+                      )}
+                    </div>
+                    {r.payload?.boletos_retornados !== undefined && (
+                      <div className="text-xs text-muted-foreground">
+                        Hinova retornou {r.payload.boletos_retornados} boleto(s) · {r.payload.duplicados_pulados} já disparado(s) hoje
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </CardContent>
