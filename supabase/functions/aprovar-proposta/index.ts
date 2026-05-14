@@ -545,9 +545,13 @@ serve(async (req) => {
     const motivoDecisaoSga = 'Primeiro envio ao SGA — sempre pendente por política. Promoção para ativo ocorre na ativação completa.';
 
     if (deveAguardarInstalacao) {
+      // Sem rastreador obrigatório → status semanticamente correto: aguardando aprovação do Monitoramento.
+      const statusAssociadoAlvo = algumPrecisouRastreador
+        ? 'aguardando_instalacao'
+        : 'aguardando_aprovacao_monitoramento';
       await Promise.all([
         supabase.from('contratos').update({ status: 'assinado', data_ativacao: null }).eq('id', contrato_id),
-        supabase.from('associados').update({ status: 'aguardando_instalacao' }).eq('id', associadoId),
+        supabase.from('associados').update({ status: statusAssociadoAlvo }).eq('id', associadoId),
       ]);
     } else {
       // Ativação atômica via edge function única (lock + CAS + log)
