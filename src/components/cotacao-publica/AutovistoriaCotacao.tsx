@@ -337,7 +337,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{titulo ?? 'Autovistoria'}</CardTitle>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
-            {fotosCompletadas}/{totalFotos} fotos
+            {itensCompletados}/{totalItens} itens
           </Badge>
         </div>
         <Progress value={progresso} className="h-2" />
