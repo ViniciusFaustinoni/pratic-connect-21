@@ -333,10 +333,10 @@ export function ImportarCobrancaCsv() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Aceita <strong>CSV, XLSX</strong> ou <strong>colar</strong> o conteúdo direto.
-              Colunas: <strong>Nome, Matrícula</strong> (obrigatórias) · <strong>CPF, Placas, Telefone Celular, Telefone, Data Vencimento, Codigo de Barras, Valor, Link</strong> (opcionais).
-              <em className="ml-1">Valor</em> sobrescreve a extração da linha digitável; <em>Link</em> é a URL da 2ª via Hinova.
-              O sistema agrupa boletos por associado e dispara via template Meta WhatsApp.
+              Aceita <strong>CSV, XLSX</strong> (formato Hinova/SGA) ou <strong>colar</strong> o conteúdo direto.
+              Colunas: <strong>Nome, Matrícula</strong> (obrigatórias) · <strong>CPF, Placas, Telefone Celular, Telefone, Data Vencimento, Codigo de Barras, Valor, 2ª Via Boleto</strong> (opcionais).
+              <em className="ml-1">Valor</em> sobrescreve a extração da linha digitável; <em>2ª Via Boleto</em> aceita URL crua ou tag <code className="text-xs">&lt;a href&gt;</code> do Hinova.
+              O sistema agrupa boletos por associado e dispara via template Meta WhatsApp (link da 2ª via vai no botão dinâmico quando o template v2 estiver disponível).
             </AlertDescription>
           </Alert>
 
