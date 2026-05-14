@@ -131,10 +131,15 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
       // Mesclar documentos enviados na cotação pública (contratos_documentos)
       // Esses são CNH/CRLV/comprovante aprovados no fluxo público — não vivem em "documentos".
       if (servico.cotacao_id || servico.contrato_id) {
-        let q = supabase.from('contratos_documentos').select('*');
+        let q = supabase
+          .from('contratos_documentos')
+          .select('id, tipo, status, arquivo_url, created_at, cotacao_id, contrato_id');
         if (servico.cotacao_id) q = q.eq('cotacao_id', servico.cotacao_id);
         else q = q.eq('contrato_id', servico.contrato_id);
-        const { data: cdData } = await q.order('created_at', { ascending: false });
+        const { data: cdData, error: cdErr } = await q.order('created_at', { ascending: false });
+        if (cdErr) {
+          console.warn('[AprovacaoInstalacaoDetalhe] erro ao ler contratos_documentos', cdErr);
+        }
         const extras = (cdData || []).map((d: any) => ({
           id: `cd-${d.id}`,
           tipo: d.tipo,
@@ -143,10 +148,14 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
           created_at: d.created_at,
           origem_tabela: 'contratos_documentos',
         }));
-        // Evitar duplicatas por (tipo + arquivo_url)
         const chave = (d: any) => `${d.tipo}|${d.arquivo_url}`;
         const existentes = new Set(documentos.map(chave));
         documentos = [...documentos, ...extras.filter((d) => !existentes.has(chave(d)))];
+        console.log('[AprovacaoInstalacaoDetalhe] documentos mesclados', {
+          base: documentos.length - extras.length,
+          extras: extras.length,
+          totalFinal: documentos.length,
+        });
       }
 
       // Vídeo 360°: distinguir Instalador (presencial) x Associado (autovistoria)
