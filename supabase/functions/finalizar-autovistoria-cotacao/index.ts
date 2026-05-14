@@ -53,6 +53,48 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'Cotação não encontrada' }, 404);
     }
 
+    // 1.b Detectar sub-FIPE (carro <30k / moto <9k não-Diesel) — exige passagem pelo Cadastro
+    // ANTES de entrar na fila do Monitoramento. O servico vistoria_entrada nasce em
+    // `em_analise` (não `concluida`) — quando o Cadastro aprovar (aprovar-proposta),
+    // o serviço é promovido para `concluida` e libera Roubo/Furto + entra na fila do Monitoramento.
+    const FIPE_MIN_CARRO = 30000;
+    const FIPE_MIN_MOTO = 9000;
+    let veiculoSubFipe = false;
+    try {
+      const { data: cfgRows } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto']);
+      const cfgMap: Record<string, string> = {};
+      (cfgRows || []).forEach((r: any) => { cfgMap[r.chave] = r.valor; });
+      const fipeMinCarro = Number(cfgMap['operacional_fipe_minimo_rastreador']) || FIPE_MIN_CARRO;
+      const fipeMinMoto = Number(cfgMap['operacional_fipe_minimo_rastreador_moto']) || FIPE_MIN_MOTO;
+
+      const { data: veicRow } = await supabase
+        .from('veiculos')
+        .select('id, marca, modelo, valor_fipe, combustivel, categoria')
+        .eq('placa', cotacao.veiculo_placa || '___nope___')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (veicRow) {
+        const combustivel = (veicRow.combustivel || '').toLowerCase();
+        if (combustivel !== 'diesel') {
+          const cat = (veicRow.categoria || '').toLowerCase();
+          const modelo = (veicRow.modelo || '').toLowerCase();
+          const isMoto = cat.includes('moto') || cat.includes('ciclomotor') || /\b(moto|cg|cb|cbr|pcx|biz|nxr|bros|titan|fan|ybr|fazer|hornet|crosser|xre)\b/.test(modelo);
+          const fipe = Number(veicRow.valor_fipe || 0);
+          if (fipe > 0) {
+            veiculoSubFipe = isMoto ? fipe < fipeMinMoto : fipe < fipeMinCarro;
+          }
+        }
+      }
+      console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} subFipe=${veiculoSubFipe}`);
+    } catch (e) {
+      console.warn('[finalizar-autovistoria] Falha detect sub-FIPE (segue como ≥30k):', e);
+    }
+
     // 2. Contrato + veículo + associado (último não-cancelado)
     const { data: contrato } = await supabase
       .from('contratos')
@@ -151,13 +193,18 @@ Deno.serve(async (req) => {
     let createdServico = false;
     const agora = new Date();
 
+    // Sub-FIPE: nasce em `em_analise` para o Cadastro analisar antes de promover.
+    // ≥30k (legado): nasce em `concluida` direto na fila do Monitoramento.
+    const servicoStatusInicial = veiculoSubFipe ? 'em_analise' : 'concluida';
+    const obsTag = veiculoSubFipe ? ' [AUTOVISTORIA_AGUARDA_CADASTRO]' : '';
+
     if (!servicoId) {
       const hojeISO = agora.toISOString().slice(0, 10);
       const { data: novoServico, error: errServ } = await supabase
         .from('servicos')
         .insert({
           tipo: 'vistoria_entrada',
-          status: 'concluida',
+          status: servicoStatusInicial,
           modalidade: 'autovistoria',
           data_agendada: hojeISO,
           periodo: 'manha',
@@ -166,12 +213,12 @@ Deno.serve(async (req) => {
           contrato_id: contratoId,
           cotacao_id: cotacaoId,
           vistoria_origem_id: vistoriaId,
-          concluida_em: agora.toISOString(),
+          concluida_em: veiculoSubFipe ? null : agora.toISOString(),
           iniciada_em: agora.toISOString(),
           km_atual: cotacao.km_atual ?? null,
           video_360_url: videoUrl,
           origem: 'autovistoria_publica',
-          observacoes: `Autovistoria — ${cotacao.nome_solicitante || ''} (${cotacao.numero}).`,
+          observacoes: `Autovistoria — ${cotacao.nome_solicitante || ''} (${cotacao.numero}).${obsTag}`,
         })
         .select('id')
         .single();
@@ -183,15 +230,19 @@ Deno.serve(async (req) => {
         createdServico = true;
       }
     } else {
-      // Garantir que servico fica em 'concluida' e vinculado à vistoria
-      await supabase
-        .from('servicos')
-        .update({
-          status: 'concluida',
-          concluida_em: agora.toISOString(),
-          vistoria_origem_id: vistoriaId,
-        })
-        .eq('id', servicoId);
+      // Garantir status correto e vinculado à vistoria.
+      // Para sub-FIPE, NÃO sobrescrever 'concluida' ou 'aprovada' (caso o Cadastro já tenha promovido).
+      const isTerminal = ['concluida', 'aprovada', 'aprovada_ressalvas'].includes(servicoExistente?.status || '');
+      if (!isTerminal) {
+        await supabase
+          .from('servicos')
+          .update({
+            status: servicoStatusInicial,
+            concluida_em: veiculoSubFipe ? null : agora.toISOString(),
+            vistoria_origem_id: vistoriaId,
+          })
+          .eq('id', servicoId);
+      }
     }
 
     // 7. Atualizar cotação + contrato com referências
@@ -199,10 +250,11 @@ Deno.serve(async (req) => {
       .from('cotacoes')
       .update({
         tipo_vistoria: cotacao.tipo_vistoria || 'autovistoria',
-        status_contratacao: 'vistoria_ok',
+        status_contratacao: veiculoSubFipe ? 'aguardando_aprovacao_cadastro' : 'vistoria_ok',
         vistoria_concluida_em: cotacao.vistoria_concluida_em || agora.toISOString(),
       })
       .eq('id', cotacaoId);
+
 
     if (contratoId && !contrato?.vistoria_id && vistoriaId) {
       await supabase
