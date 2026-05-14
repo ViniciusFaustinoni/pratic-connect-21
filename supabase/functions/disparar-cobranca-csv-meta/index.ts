@@ -420,7 +420,20 @@ serve(async (req) => {
     let mensagensFalhasGravar = 0;
     const associadosAtingidos = new Set<string>();
 
-    for (const dest of destinatarios) {
+    // Inclui no resultado as matrículas puladas por idempotência
+    for (const d of destinatarios) {
+      if (matriculasJaEnviadas.has((d.matricula || "").trim())) {
+        detalhes.push({
+          matricula: d.matricula,
+          nome: d.nome,
+          telefone: "",
+          status: "skip",
+          erro: "já enviado neste lote (idempotência)",
+        });
+      }
+    }
+
+    for (const dest of destinatariosProcessar) {
       const blocosOriginais = montarBlocosBoletosSegmentados(dest.boletos || []);
       // Limita pra não disparar 131056 (pair rate limit) com listas enormes.
       const blocos = blocosOriginais.slice(0, MAX_BLOCOS_POR_DESTINATARIO);
