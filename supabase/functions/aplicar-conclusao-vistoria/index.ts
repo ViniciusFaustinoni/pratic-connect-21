@@ -68,10 +68,11 @@ Deno.serve(async (req) => {
       .eq('id', link.instalacao_id)
 
     // 3) Encerrar serviço materializado (mesma regra do useAprovarVeiculoVistoria)
+    // status='concluida' é o que a fila do monitoramento (useAprovacaoMonitoramento) lê.
     if (link.vistoria_id) {
       await supabase
         .from('servicos')
-        .update({ status: 'aprovada', concluida_em: agora, updated_at: agora })
+        .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
         .eq('vistoria_origem_id', link.vistoria_id)
         .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada'])
     }
