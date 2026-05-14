@@ -219,6 +219,7 @@ export function ImportarCobrancaCsv() {
       const { data: initData, error: initErr } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
         body: {
           template_nome: TEMPLATE_NOME,
+          template_v2: usarTemplateV2,
           init_only: true,
           is_first_chunk: true,
           nome_arquivo: arquivo?.name || 'cobranca.csv',
@@ -264,6 +265,7 @@ export function ImportarCobrancaCsv() {
           const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
             body: {
               template_nome: TEMPLATE_NOME,
+              template_v2: usarTemplateV2,
               destinatarios: slice,
               is_first_chunk: false,
               is_last_chunk: isLast,
@@ -309,7 +311,7 @@ export function ImportarCobrancaCsv() {
     setEtapa('concluido');
     if (erros === 0) toast.success(`Envio concluído: ${sucesso} mensagens enviadas.`);
     else toast.warning(`Envio finalizado: ${sucesso} ok, ${erros} com erro.`);
-  }, [resultado, arquivo]);
+  }, [resultado, arquivo, usarTemplateV2]);
 
   // ====== ETAPA 1: UPLOAD ======
   if (etapa === 'upload') {
