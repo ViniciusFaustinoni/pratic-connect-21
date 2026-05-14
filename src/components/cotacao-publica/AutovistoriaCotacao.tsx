@@ -646,7 +646,46 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             </Button>
           )}
         </div>
-        
+
+        {/* Bloco do vídeo 360° (libera após todas as fotos) */}
+        {todasFotosEnviadas && (
+          <div className="space-y-3 pt-4 border-t border-border/50">
+            <div className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-base text-foreground">{labelVideo}</h3>
+              <Badge variant={videoUrl ? 'default' : 'secondary'} className={cn(videoUrl && 'bg-success text-white')}>
+                {videoUrl ? 'Enviado' : 'Obrigatório'}
+              </Badge>
+            </div>
+
+            <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Info className="h-4 w-4 text-primary" />
+                Como gravar
+              </div>
+              <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-5">
+                {instrucoesVideo.map((p) => (
+                  <li key={p.passo}>
+                    {p.texto}
+                    {p.destaque && (
+                      <span className="block text-primary font-medium mt-1">⚠ {p.destaque}</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <VideoCapture
+              onCapture={handleUploadVideo}
+              onReset={() => setVideoUrl(null)}
+              videoUrl={videoUrl || undefined}
+              uploading={uploadingVideo}
+              uploadProgress={uploadingVideo ? videoProgress : undefined}
+              maxDuration={120}
+              label="Grave o vídeo 360° terminando no painel ligado"
+            />
+          </div>
+        )}
 
         {/* Botão finalizar — sticky e destacado para não ficar travado em mobile */}
         {todasEnviadas && (
