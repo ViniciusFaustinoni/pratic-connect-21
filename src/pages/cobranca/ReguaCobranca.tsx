@@ -214,7 +214,7 @@ export default function ReguaCobranca() {
     enabled: !!runId,
     refetchInterval: (q) => {
       const s = (q.state.data as any)?.status;
-      return s === 'executando' ? 2000 : false;
+      return (s === 'executando' || s === 'preparando') ? 2000 : false;
     },
     queryFn: async () => {
       const { data, error } = await supabase
