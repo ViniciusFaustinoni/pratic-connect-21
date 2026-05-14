@@ -203,6 +203,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [editEmail, setEditEmail] = useState('');
   const [isSavingContatos, setIsSavingContatos] = useState(false);
   const [showContratoPdf, setShowContratoPdf] = useState(false);
+  const [contratoPdfSelectedId, setContratoPdfSelectedId] = useState<string | null>(null);
 
   // Edição de endereço
   const [editingEndereco, setEditingEndereco] = useState(false);
