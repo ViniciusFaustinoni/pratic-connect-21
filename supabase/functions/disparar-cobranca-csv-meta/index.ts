@@ -624,6 +624,9 @@ serve(async (req) => {
         recuperados_valor: recuperadosValor,
         reemitidos_count: reemitidosCount,
         reemitidos_valor: reemitidosValor,
+        mensagens_gravadas: mensagensGravadas,
+        mensagens_falhas_gravar: mensagensFalhasGravar,
+        warnings,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
