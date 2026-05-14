@@ -568,7 +568,7 @@ serve(async (req) => {
           source: 'edge:aprovar-proposta',
           actor_id: aprovado_por,
           // status_associado válidos (enum não inclui 'assinado'/'pendente' — esses são de contratos)
-          allowed_from: ['aguardando_instalacao', 'em_analise', 'documentacao_pendente', 'aprovado'],
+          allowed_from: ['aguardando_instalacao', 'aguardando_aprovacao_monitoramento', 'em_analise', 'documentacao_pendente', 'aprovado'],
           metadata: { motivoDecisaoSga, jaTemInstalacaoConcluida, planoTemRouboFurto },
         }),
       });
