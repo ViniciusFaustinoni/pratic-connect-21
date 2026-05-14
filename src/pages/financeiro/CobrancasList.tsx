@@ -67,6 +67,7 @@ const origemOptions = [
   { value: 'todas', label: 'Todas as origens' },
   { value: 'asaas', label: 'Asaas' },
   { value: 'sga_hinova', label: 'SGA Hinova' },
+  { value: 'csv_sga', label: 'CSV SGA (lote)' },
 ];
 
 const meses = [
