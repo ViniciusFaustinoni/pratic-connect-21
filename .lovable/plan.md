@@ -1,45 +1,70 @@
-# Plano — Auto-atualização de "Documentos Pendentes"
 
-## Diagnóstico
+## Contexto (caso ANA CAROLINA — `a8adb3eb…`)
 
-O sino é alimentado por `usePendenciasDocumentos` (`src/hooks/usePendenciasDocumentos.ts`) que:
+A associada tem 2 veículos (Tracker + CG 160). Ao aprovar o **carro** no Monitoramento › Aprovações › Aprovação de Associados, a moto sumiu da fila apesar de ainda estar `em_analise`. E na aba "Veículos" do detalhe do associado, o termo assinado mostrado é o mesmo para os dois veículos (vem de um único `contrato` global do associado).
 
-1. Faz query em `documentos_solicitados` filtrando `status='pendente'`.
-2. Assina Realtime no canal `pendencias-documentos-rt` para `INSERT/UPDATE/DELETE` em `documentos_solicitados` e invalida o cache no callback.
+---
 
-Verificações no banco:
-- A tabela está na publication `supabase_realtime` ✅
-- Quando o associado envia o doc no fluxo público (`DocumentosPendentesPublico.tsx`), o registro vai de `status='pendente'` → `'enviado'` (UPDATE) — Realtime deve disparar.
+## Problema #1 — Aprovação “contamina” os outros veículos
 
-Pontos frágeis identificados que justificam o relato do usuário ("não atualiza sozinho"):
+### Causa raiz
+`src/hooks/useAprovacaoMonitoramento.ts` → `useInstalacoesAguardandoAprovacao` filtra a fila assim:
 
-1. **Canal Realtime com nome fixo global** (`pendencias-documentos-rt`). Em HMR/StrictMode/duas abas montando o sino, podem ocorrer colisões silenciosas — uma das instâncias fica sem evento. Solução: sufixar com `profile.id` + um id estável por mount.
-2. **Sem fallback de polling.** Se o WS do Realtime cair (rede, sleep do laptop, proxy), o badge fica preso até refresh manual. Solução: `refetchInterval` discreto (60s) + `refetchIntervalInBackground:false`.
-3. **Sem `refetchOnWindowFocus`.** Voltando à aba não recarrega. Ligar.
-4. **Sem visibilidade de falha de subscribe.** Hoje ignoramos o status do `subscribe()`. Logar `SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT / CLOSED` ajuda diagnóstico futuro.
-5. **`staleTime: 30s`** não é problema (invalidate força refetch), mas combinado com a falta de polling vira ponto cego quando o Realtime falha.
-6. **Listener escuta apenas `documentos_solicitados`.** Quando o monitoramento aprova o documento manualmente, o registro muda para `status='aprovado'` na mesma tabela — coberto. Nenhuma mudança fora dessa tabela impacta a lista.
+```ts
+return v && v.cobertura_total !== true && a?.status !== 'ativo';
+```
 
-Não há mudanças de schema/RLS necessárias — a publication já está correta e a RLS atual já permite que gestor/diretor/analista vejam updates dessas linhas (mesma RLS de SELECT).
+Quando aprovamos o 1º veículo, `ativar-associado` muda `associados.status` para `'ativo'`. A partir desse momento, **todo serviço pendente do mesmo associado some da fila** porque o segundo termo do filtro casa para todos eles — mesmo que cada `servicos.status` ainda esteja `'concluida'` e o veículo dele continue sem `cobertura_total`.
 
-## Mudanças (apenas em `src/hooks/usePendenciasDocumentos.ts`)
+Confirmado pelo `useAprovacoesMonitoramentoBreakdown` (badge do sidebar) que usa o **mesmo** filtro — por isso o contador também zera junto.
 
-1. Adicionar ao `useQuery`:
-   - `refetchInterval: 60_000`
-   - `refetchIntervalInBackground: false`
-   - `refetchOnWindowFocus: true`
-2. Trocar o canal para `pendencias-documentos-rt-${profile.id}` (e gerar um sufixo aleatório por mount via `useRef`) para evitar colisão.
-3. Capturar status do `subscribe((status) => console.log(...))` — apenas log, sem UI.
-4. Manter o invalidate por prefixo `['pendencias-documentos']` (já correto).
+### Correção
+Tirar `associado.status` do filtro e manter aprovação 100% por veículo:
 
-## Fora de escopo
+1. `useInstalacoesAguardandoAprovacao` — filtrar apenas por:
+   - `servicos.status = 'concluida'` (já é)
+   - `veiculo.cobertura_total !== true`
+   - **remover** `associado.status !== 'ativo'`
+2. `useAprovacoesMonitoramentoBreakdown` (`src/hooks/useAprovacoesMonitoramentoCount.ts`, fonte “Aprovação de Associados”) — aplicar exatamente o mesmo filtro para o badge bater com a aba.
+3. `useAprovacaoMonitoramentoStats` — idem, para “Aguardando” não diminuir indevidamente.
+4. **Não mexer** em `ativar-associado`: a função já é por `(veiculo_id, servico_id)` e só precisa continuar promovendo o associado para `ativo` no 1º veículo (idempotente nos demais). Memória core diz "ativação SEMPRE via `ativar-associado` (lock + CAS + log)" — preservado.
+5. Validar manualmente: reabrir o caso da Ana — após o fix a moto (`servicos.status='concluida'`, `veiculos.cobertura_total=false`) volta a aparecer na fila mesmo com a associada já `ativo`.
 
-- Não mexer no componente `PendenciasDocumentosBell` (UI permanece igual; ele já reage ao `total` do hook).
-- Não alterar RLS, edge functions, fluxo público de upload, nem aprovação de documentos.
-- Não tocar em `usePropostasPendentes` / sidebar.
+> Observação: como a associada já está `ativo`, na reaprovação do 2º veículo o `ativar-associado` cairá no caminho idempotente — apenas liga `cobertura_total` no veículo, faz `enqueue` SGA com `force_resync_media=true` e dispara o histórico/notificação. Sem efeitos colaterais no 1º veículo.
+
+---
+
+## Problema #2 — Termo (contrato) por veículo no modal
+
+### Estado atual
+- `AssociadoDetalhe.tsx` busca **um único** contrato via `useContratoDoAssociado(id)` e renderiza o botão “Ver Contrato Assinado” no card geral, não no modal por veículo.
+- `VeiculoDetalhesModal` recebe `veiculoId` e usa `useVeiculoDetalhes` que **já busca** `contrato` por `veiculo_id` (`src/hooks/useVeiculoDetalhes.ts` linhas 161-168), mas o `select` traz só `numero, status, plano_nome, valor_mensal, data_inicio, data_fim` — **faltam `pdf_assinado_url` e `pdf_url`**, então o modal não tem como exibir o link.
+- A aba “Documentos” do modal lista apenas anexos de `contratos_documentos` (CRLV, CNH, etc.), não o PDF do termo.
+
+### Correção
+1. `useVeiculoDetalhes.ts` — adicionar `pdf_assinado_url, pdf_url, data_assinatura` ao `.select()` do contrato (linha 164).
+2. `VeiculoDetalhesModal.tsx` — na seção “Contrato” (linhas 237-247), quando `contrato.pdf_assinado_url || contrato.pdf_url`:
+   - mostrar bloco “Termo de Filiação” com botão **Ver Termo Assinado** (abre o PDF em nova aba) e badge de status (Assinado/Pendente).
+   - se houver `data_assinatura`, exibir “Assinado em DD/MM/AAAA”.
+3. (Opcional, mesma tela) na aba “Documentos” do modal, injetar uma linha sintética “Proposta/Termo de Filiação” apontando para o mesmo PDF, igual ao padrão usado em `AssociadoDetalhe` (linhas 444-453). Mantém o documento descobrível por quem só olha a lista.
+4. Não alterar o card geral do associado — termo continua acessível ali também (UX não regride).
+
+---
+
+## Arquivos tocados
+
+```text
+src/hooks/useAprovacaoMonitoramento.ts          (filtro fila + stats)
+src/hooks/useAprovacoesMonitoramentoCount.ts    (filtro do badge)
+src/hooks/useVeiculoDetalhes.ts                 (select contrato)
+src/components/cadastro/VeiculoDetalhesModal.tsx (UI termo por veículo)
+```
+
+Sem migração de banco, sem mudança em edge functions.
 
 ## Validação
 
-- Abrir `/monitoramento/aprovacao-associados` e o sino, observar console: deve aparecer `[pendencias-documentos-rt] SUBSCRIBED`.
-- Em outra aba (associado), enviar um doc pendente → badge deve cair em ≤2s sem refresh.
-- Cortar Wi-Fi por 30s e religar → no máximo em 60s o polling reconcilia o badge.
+1. Caso Ana Carolina: fila “Aprovação de Associados” deve listar a CG 160 isoladamente; aprovar a moto não deve mexer no Tracker já ativo.
+2. Badge do sidebar bate com a aba (mantém memória `mem://hooks/aprovacoes-monitoramento-breakdown`).
+3. Modal do Tracker → mostra termo do Tracker; modal da CG 160 → mostra termo da CG 160 (PDFs distintos quando os contratos forem distintos; se compartilharem o mesmo PDF, o link é o mesmo — comportamento correto).
+4. Smoke nas demais abas de Aprovações Unificadas (Troca, Liberação, Recusas, Ressalvas, Imprevistos) — não tocadas.
