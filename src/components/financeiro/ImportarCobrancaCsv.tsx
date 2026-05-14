@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
-import { Upload, FileText, Send, Check, X, Loader2, MessageCircle, AlertCircle, Phone, ArrowLeft, ClipboardPaste } from 'lucide-react';
+import { Upload, FileText, Send, Check, X, Loader2, MessageCircle, AlertCircle, Phone, ArrowLeft, ClipboardPaste, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { parseCsvInadimplentes, type ParseResultado, type DestinatarioParsed } from '@/lib/cobranca/parseCsvInadimplentes';
+import { baixarTemplateCobrancasXlsx } from '@/lib/cobranca/templateCobrancas';
 
 async function lerArquivoComoCsv(file: File): Promise<string> {
   const nome = file.name.toLowerCase();
@@ -282,16 +283,27 @@ export function ImportarCobrancaCsv() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" /> Importar CSV de Inadimplentes (SGA/Hinova)
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" /> Importar CSV de Inadimplentes (SGA/Hinova)
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => baixarTemplateCobrancasXlsx()}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" /> Baixar template (.xlsx)
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               Aceita <strong>CSV, XLSX</strong> ou <strong>colar</strong> o conteúdo direto.
-              Colunas esperadas: <strong>Nome, Matrícula, Placas, Telefone Celular, Telefone, Data Vencimento, Codigo de Barras</strong>.
+              Colunas: <strong>Nome, Matrícula</strong> (obrigatórias) · <strong>CPF, Placas, Telefone Celular, Telefone, Data Vencimento, Codigo de Barras, Valor, Link</strong> (opcionais).
+              <em className="ml-1">Valor</em> sobrescreve a extração da linha digitável; <em>Link</em> é a URL da 2ª via Hinova.
               O sistema agrupa boletos por associado e dispara via template Meta WhatsApp.
             </AlertDescription>
           </Alert>
