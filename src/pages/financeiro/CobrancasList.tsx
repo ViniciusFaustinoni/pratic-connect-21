@@ -291,9 +291,10 @@ export default function CobrancasList() {
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
       const offset = pageParam as number;
-      const fontes: Array<'asaas' | 'sga_hinova'> = [];
+      const fontes: Array<'asaas' | 'sga_hinova' | 'csv_sga'> = [];
       if (filters.origem === 'todas' || filters.origem === 'asaas') fontes.push('asaas');
       if (filters.origem === 'todas' || filters.origem === 'sga_hinova') fontes.push('sga_hinova');
+      if (filters.origem === 'todas' || filters.origem === 'csv_sga') fontes.push('csv_sga');
 
       // Busca PAGE_SIZE de cada fonte em paralelo (offset igual nas duas), depois merge
       const promises = fontes.map(async (fonte): Promise<CobrancaUnificada[]> => {
