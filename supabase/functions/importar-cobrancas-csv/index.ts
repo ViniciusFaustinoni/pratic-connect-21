@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
           total_boletos: body.total_remessa_boletos ?? 0,
           total_associados: body.total_remessa_destinatarios ?? 0,
           valor_total: body.total_remessa_valor ?? 0,
-          status: 'importando',
+          status: 'processando',
         })
         .select('id')
         .single();
