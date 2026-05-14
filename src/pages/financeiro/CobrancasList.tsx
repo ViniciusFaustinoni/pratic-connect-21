@@ -192,9 +192,10 @@ export default function CobrancasList() {
   const { data: kpis, isLoading: loadingKpis } = useQuery({
     queryKey: ['cobrancas-kpis-unificado', dataInicio, dataFim, filters.origem, filters.tipo],
     queryFn: async () => {
-      const fontes: Array<'asaas' | 'sga_hinova'> = [];
+      const fontes: Array<'asaas' | 'sga_hinova' | 'csv_sga'> = [];
       if (filters.origem === 'todas' || filters.origem === 'asaas') fontes.push('asaas');
       if (filters.origem === 'todas' || filters.origem === 'sga_hinova') fontes.push('sga_hinova');
+      if (filters.origem === 'todas' || filters.origem === 'csv_sga') fontes.push('csv_sga');
 
       const totals = {
         total: 0,
@@ -209,17 +210,24 @@ export default function CobrancasList() {
       const hojeIso = format(new Date(), 'yyyy-MM-dd');
 
       for (const fonte of fontes) {
-        const tabela = fonte === 'asaas' ? 'asaas_cobrancas' : 'cobrancas';
-        const valorPagoCol = fonte === 'asaas' ? 'pagamento_valor' : 'valor_pago';
+        const tabela =
+          fonte === 'asaas' ? 'asaas_cobrancas'
+          : fonte === 'sga_hinova' ? 'cobrancas'
+          : 'cobranca_csv_boletos';
+        const valorPagoCol =
+          fonte === 'asaas' ? 'pagamento_valor'
+          : fonte === 'sga_hinova' ? 'valor_pago'
+          : 'valor';
+        const valorCol = fonte === 'csv_sga' ? 'valor' : 'valor';
+        const statusCol = fonte === 'csv_sga' ? 'status_origem' : 'status';
 
-        // Buscar APENAS colunas leves para agregar em memória (status, valor, data_vencimento)
-        // Usa paginação interna para superar o limite de 1000 do Supabase
+        // Buscar APENAS colunas leves para agregar em memória
         let from = 0;
         const chunk = 1000;
         for (;;) {
           let q = supabase
             .from(tabela as any)
-            .select(`status, valor, data_vencimento, ${valorPagoCol}`)
+            .select(`${statusCol}, ${valorCol}, data_vencimento, ${valorPagoCol}`)
             .gte('data_vencimento', dataInicio)
             .lte('data_vencimento', dataFim)
             .range(from, from + chunk - 1);
@@ -232,8 +240,16 @@ export default function CobrancasList() {
           if (!data || data.length === 0) break;
 
           for (const row of data as any[]) {
-            const canonico = toCanonical(row.status, row.data_vencimento);
-            const valor = Number(row.valor) || 0;
+            // CSV: status_origem ('Pago em dia'/'Não pago'/...) -> canonico
+            let canonico: StatusCanonico;
+            if (fonte === 'csv_sga') {
+              const so = String(row.status_origem || '').toLowerCase();
+              if (so.startsWith('pago')) canonico = 'pago';
+              else canonico = toCanonical('aguardando_pagamento', row.data_vencimento);
+            } else {
+              canonico = toCanonical(row.status, row.data_vencimento);
+            }
+            const valor = Number(row[valorCol]) || 0;
             const valorPago = Number(row[valorPagoCol]) || 0;
             totals.total += 1;
             tabCounts.todas += 1;
