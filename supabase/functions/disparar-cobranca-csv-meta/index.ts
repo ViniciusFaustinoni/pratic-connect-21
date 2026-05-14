@@ -568,6 +568,8 @@ serve(async (req) => {
         });
       }
     }
+    // Inclui também os boletos pulados por dedup cross-lote no mesmo dia
+    if (dedupSkipDetalhes.length > 0) detalhes.push(...dedupSkipDetalhes);
 
     for (const dest of destinatariosProcessar) {
       const blocosOriginais = montarBlocosBoletosSegmentados(dest.boletos || []);
