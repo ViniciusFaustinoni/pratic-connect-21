@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -30,7 +31,7 @@ import {
 } from '@/types/cadastro';
 import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
 import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
-import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado, useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
+import { useContratoDoAssociado, useContratosDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado, useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useFotosVistoriaUnificada, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
@@ -203,6 +204,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [editEmail, setEditEmail] = useState('');
   const [isSavingContatos, setIsSavingContatos] = useState(false);
   const [showContratoPdf, setShowContratoPdf] = useState(false);
+  const [contratoPdfSelectedId, setContratoPdfSelectedId] = useState<string | null>(null);
 
   // Edição de endereço
   const [editingEndereco, setEditingEndereco] = useState(false);
@@ -300,6 +302,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const { data: documentos, isLoading: isLoadingDocs } = useDocumentosPorAssociado(id);
   const { data: stats } = useAssociadoStats(id);
   const { data: contrato } = useContratoDoAssociado(id);
+  const { data: contratosLista = [] } = useContratosDoAssociado(id);
   const cotacaoId = contrato?.cotacao_id;
   const { data: resumoFinanceiro } = useResumoFinanceiroAssociado(id);
   const { data: cobrancasData, isLoading: isLoadingCobrancas } = useCobrancasAssociado(id);
@@ -754,10 +757,19 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                     size="sm"
                     variant="outline"
                     className="w-full mt-2"
-                    onClick={() => setShowContratoPdf(true)}
+                    onClick={() => {
+                      // Pré-seleção: se houver mais de um, escolha o do contrato principal; senão o único
+                      const pre = contratosLista.length > 1
+                        ? (contrato?.id || contratosLista[0]?.id)
+                        : (contratosLista[0]?.id || contrato?.id || null);
+                      setContratoPdfSelectedId(pre as string | null);
+                      setShowContratoPdf(true);
+                    }}
                   >
                     <FileText className="mr-1.5 h-3.5 w-3.5" />
-                    {contrato?.pdf_assinado_url ? 'Ver Contrato Assinado' : 'Ver Contrato'}
+                    {contratosLista.length > 1
+                      ? `Ver Contrato Assinado (${contratosLista.length})`
+                      : (contrato?.pdf_assinado_url ? 'Ver Contrato Assinado' : 'Ver Contrato')}
                   </Button>
                 )}
               </CardContent>
@@ -766,43 +778,65 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
             {/* Modal de visualização do contrato PDF */}
             <Dialog open={showContratoPdf} onOpenChange={setShowContratoPdf}>
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
-                <DialogHeader>
-                  <DialogTitle>Contrato {contrato?.numero || ''}</DialogTitle>
-                </DialogHeader>
-                <div className="flex flex-col items-center py-4">
-                  {(() => {
-                    const pdfUrl = contrato?.pdf_assinado_url || contrato?.pdf_url || '';
-                    return (
-                      <object
-                        data={pdfUrl}
-                        type="application/pdf"
-                        className="w-full h-[60vh] rounded-lg border"
-                      >
-                        <iframe
-                          src={`https://docs.google.com/gview?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
-                          className="w-full h-[60vh] rounded-lg border-0"
-                          title="Contrato PDF"
-                        />
-                      </object>
-                    );
-                  })()}
-                </div>
-                <div className="flex justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    asChild
-                  >
-                    <a
-                      href={contrato?.pdf_assinado_url || contrato?.pdf_url || ''}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download
-                    >
-                      <FileText className="mr-1.5 h-3.5 w-3.5" /> Baixar PDF
-                    </a>
-                  </Button>
-                </div>
+                {(() => {
+                  const lista = contratosLista.length > 0
+                    ? contratosLista
+                    : (contrato ? [{ id: contrato.id, numero: contrato.numero, pdf_url: contrato.pdf_url, pdf_assinado_url: contrato.pdf_assinado_url, veiculo: null } as any] : []);
+                  const selected = lista.find((c: any) => c.id === contratoPdfSelectedId) || lista[0];
+                  const pdfUrl = selected?.pdf_assinado_url || selected?.pdf_url || '';
+                  const veiculoLabel = (c: any) => c?.veiculo
+                    ? `${c.veiculo.placa || '—'} · ${c.veiculo.marca || ''} ${c.veiculo.modelo || ''}`.trim()
+                    : (c?.numero || 'Contrato');
+                  return (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle>Contrato {selected?.numero || ''}</DialogTitle>
+                      </DialogHeader>
+
+                      {lista.length > 1 && (
+                        <div className="px-1">
+                          <p className="text-xs text-muted-foreground mb-1.5">Selecione o veículo</p>
+                          <Select
+                            value={selected?.id || ''}
+                            onValueChange={(v) => setContratoPdfSelectedId(v)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {lista.map((c: any) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {veiculoLabel(c)}{c.pdf_assinado_url ? ' · assinado' : ' · não assinado'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col items-center py-4">
+                        {pdfUrl ? (
+                          <object data={pdfUrl} type="application/pdf" className="w-full h-[60vh] rounded-lg border">
+                            <iframe
+                              src={`https://docs.google.com/gview?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
+                              className="w-full h-[60vh] rounded-lg border-0"
+                              title="Contrato PDF"
+                            />
+                          </object>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">PDF indisponível.</p>
+                        )}
+                      </div>
+                      <div className="flex justify-end">
+                        <Button variant="outline" size="sm" asChild disabled={!pdfUrl}>
+                          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" download>
+                            <FileText className="mr-1.5 h-3.5 w-3.5" /> Baixar PDF
+                          </a>
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
               </DialogContent>
             </Dialog>
           </div>

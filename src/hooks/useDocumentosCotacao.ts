@@ -167,6 +167,27 @@ export function useContratoDoAssociado(associadoId: string | undefined) {
 }
 
 /**
+ * Lista todos os contratos do associado com PDF (assinado ou não), incluindo dados do veículo,
+ * para o seletor "Ver Contrato Assinado" quando o associado tem mais de um veículo.
+ */
+export function useContratosDoAssociado(associadoId: string | undefined) {
+  return useQuery({
+    queryKey: ['contratos-associado-lista', associadoId],
+    queryFn: async () => {
+      if (!associadoId) return [];
+      const { data, error } = await supabase
+        .from('contratos')
+        .select('id, numero, status, pdf_url, pdf_assinado_url, data_assinatura, created_at, veiculo_id, veiculo:veiculo_id(id, placa, marca, modelo)')
+        .eq('associado_id', associadoId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).filter((c: any) => c.pdf_assinado_url || c.pdf_url);
+    },
+    enabled: !!associadoId,
+  });
+}
+
+/**
  * Hook para buscar resumo financeiro do associado (situação, próximo vencimento)
  */
 export function useResumoFinanceiroAssociado(associadoId: string | undefined) {
