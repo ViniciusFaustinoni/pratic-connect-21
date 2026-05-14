@@ -411,7 +411,15 @@ serve(async (req) => {
         valor,
         valor_final: valorFinal,
         valor_pago: status === 'pago'
-          ? toNumber(b.valor_pagamento ?? b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal)
+          ? (() => {
+              // Hinova ocasionalmente devolve valor_pago em centavos (ex: "97285" para R$ 972,85).
+              // Detecção defensiva: se o número parseado bater com valor_final * 100, dividimos por 100.
+              const raw = toNumber(b.valor_pagamento ?? b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal);
+              if (valorFinal > 0 && Math.round(raw) === Math.round(valorFinal * 100)) {
+                return raw / 100;
+              }
+              return raw;
+            })()
           : null,
         forma_pagamento: status === 'pago'
           ? (b.forma_pagamento_boleto ?? b.tipo_pagamento ?? b.forma_pagamento ?? null)

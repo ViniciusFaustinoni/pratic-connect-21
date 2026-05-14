@@ -71,6 +71,7 @@ const origemOptions = [
 ];
 
 const meses = [
+  { value: '0', label: 'Todos os meses' },
   { value: '1', label: 'Janeiro' }, { value: '2', label: 'Fevereiro' }, { value: '3', label: 'Março' },
   { value: '4', label: 'Abril' }, { value: '5', label: 'Maio' }, { value: '6', label: 'Junho' },
   { value: '7', label: 'Julho' }, { value: '8', label: 'Agosto' }, { value: '9', label: 'Setembro' },
@@ -79,7 +80,8 @@ const meses = [
 
 const getAnos = () => {
   const anoAtual = new Date().getFullYear();
-  return Array.from({ length: 5 }, (_, i) => ({ value: String(anoAtual - i), label: String(anoAtual - i) }));
+  const anos = Array.from({ length: 5 }, (_, i) => ({ value: String(anoAtual - i), label: String(anoAtual - i) }));
+  return [{ value: '0', label: 'Todos os anos' }, ...anos];
 };
 
 const formatCurrency = (value: number) =>
@@ -172,13 +174,15 @@ export default function CobrancasList() {
   const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
 
+  // mes=0 OU ano=0 = "Todos" -> dataInicio/dataFim viram null e os filtros de data são omitidos
+  const semFiltroData = filters.mes === 0 || filters.ano === 0;
   const dataInicio = useMemo(
-    () => format(startOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
-    [filters.mes, filters.ano],
+    () => semFiltroData ? null : format(startOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
+    [filters.mes, filters.ano, semFiltroData],
   );
   const dataFim = useMemo(
-    () => format(endOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
-    [filters.mes, filters.ano],
+    () => semFiltroData ? null : format(endOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
+    [filters.mes, filters.ano, semFiltroData],
   );
 
   // Status efetivo (filters.status OU activeTab — tab tem prioridade se diferente de "todas")
@@ -228,10 +232,10 @@ export default function CobrancasList() {
           let q = supabase
             .from(tabela as any)
             .select(`${statusCol}, ${valorCol}, data_vencimento, ${valorPagoCol}`)
-            .gte('data_vencimento', dataInicio)
-            .lte('data_vencimento', dataFim)
             .range(from, from + chunk - 1);
 
+          if (dataInicio) q = q.gte('data_vencimento', dataInicio);
+          if (dataFim) q = q.lte('data_vencimento', dataFim);
           if (fonte === 'sga_hinova') q = q.eq('origem', 'sga_hinova');
           if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
 
@@ -307,12 +311,12 @@ export default function CobrancasList() {
               linha_digitavel,
               associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
-            .gte('data_vencimento', dataInicio)
-            .lte('data_vencimento', dataFim)
             .order('data_vencimento', { ascending: false })
             .order('id', { ascending: false })
             .range(offset, offset + PAGE_SIZE - 1);
 
+          if (dataInicio) q = q.gte('data_vencimento', dataInicio);
+          if (dataFim) q = q.lte('data_vencimento', dataFim);
           if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
           if (statusEfetivo !== 'todos') q = q.in('status', canonicoParaRawAsaas(statusEfetivo));
 
@@ -346,12 +350,12 @@ export default function CobrancasList() {
               associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
             .eq('origem', 'sga_hinova')
-            .gte('data_vencimento', dataInicio)
-            .lte('data_vencimento', dataFim)
             .order('data_vencimento', { ascending: false })
             .order('id', { ascending: false })
             .range(offset, offset + PAGE_SIZE - 1);
 
+          if (dataInicio) q = q.gte('data_vencimento', dataInicio);
+          if (dataFim) q = q.lte('data_vencimento', dataFim);
           if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
           if (statusEfetivo !== 'todos') q = q.in('status', canonicoParaRawSga(statusEfetivo));
 
@@ -386,12 +390,12 @@ export default function CobrancasList() {
               associado_id, veiculo_id, linha_digitavel, matricula,
               associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
-            .gte('data_vencimento', dataInicio)
-            .lte('data_vencimento', dataFim)
             .order('data_vencimento', { ascending: false })
             .order('id', { ascending: false })
             .range(offset, offset + PAGE_SIZE - 1);
 
+          if (dataInicio) q = q.gte('data_vencimento', dataInicio);
+          if (dataFim) q = q.lte('data_vencimento', dataFim);
           if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
           // status: filtramos client-side via status canonico (status_origem é texto livre do SGA)
 
@@ -789,9 +793,9 @@ export default function CobrancasList() {
           let q = supabase
             .from(tabela as any)
             .select('tipo, status, valor, data_vencimento, associado:associados(nome, cpf)')
-            .gte('data_vencimento', dataInicio)
-            .lte('data_vencimento', dataFim)
             .range(from, from + chunk - 1);
+          if (dataInicio) q = q.gte('data_vencimento', dataInicio);
+          if (dataFim) q = q.lte('data_vencimento', dataFim);
           if (fonte === 'sga_hinova') q = q.eq('origem', 'sga_hinova');
           if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
           if (statusEfetivo !== 'todos') {
