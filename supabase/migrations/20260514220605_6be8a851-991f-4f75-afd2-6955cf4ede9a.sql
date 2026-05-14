@@ -1,0 +1,1 @@
+ALTER TYPE status_vistoria ADD VALUE IF NOT EXISTS 'aprovada_ressalvas';

@@ -35051,6 +35051,7 @@ export type Database = {
         | "em_rota"
         | "em_andamento"
         | "concluida"
+        | "aprovada_ressalvas"
       template_status: "draft" | "active" | "archived"
       tipo_documento:
         | "cnh"
@@ -35509,6 +35510,7 @@ export const Constants = {
         "em_rota",
         "em_andamento",
         "concluida",
+        "aprovada_ressalvas",
       ],
       template_status: ["draft", "active", "archived"],
       tipo_documento: [
