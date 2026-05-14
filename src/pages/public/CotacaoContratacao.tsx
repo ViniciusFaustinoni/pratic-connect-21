@@ -201,14 +201,19 @@ export default function CotacaoContratacao() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trocaOrfaBruta, solicitacaoTrocaId, cotacao?.id]);
   const trocaOrfa = trocaOrfaBruta && autoVinculoFalhou && !autoVinculandoTroca;
-  // Troca liberada para o público seguir: status já liberado/efetivado OU
-  // termo assinado (cadastro é auto-aprovado pela edge `vincular-cotacao-troca`;
-  // qualquer item ainda preso em `cotacao_em_andamento`/`aguardando_cadastro`
-  // com termo assinado é tratado como liberado para não travar o cliente).
+  // Troca: liberada para o público AVANÇAR até a autovistoria assim que o termo
+  // de cancelamento estiver assinado. O Pagamento (etapa 4) permanece travado
+  // até que o Monitoramento aprove (status `liberada_para_assinatura`/`efetivada`).
+  // Cadastro precisa analisar manualmente as fotos+docs em /cadastro/processos
+  // antes de promover para o Monitoramento — não há mais auto-aprovação.
   const trocaLiberada = !!solicitacaoTroca && (
     solicitacaoTroca.status === 'liberada_para_assinatura' ||
     solicitacaoTroca.status === 'efetivada' ||
     !!solicitacaoTroca.termo_cancelamento_assinado_em
+  );
+  const trocaPagamentoLiberado = !!solicitacaoTroca && (
+    solicitacaoTroca.status === 'liberada_para_assinatura' ||
+    solicitacaoTroca.status === 'efetivada'
   );
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
   // FLUXO UNIFICADO: troca de titularidade segue o MESMO stepper da nova adesão
@@ -913,6 +918,17 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
+                {isTrocaTitularidade && !trocaPagamentoLiberado ? (
+                  <TelaAnaliseTrocaTitularidade
+                    status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
+                    motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
+                    termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
+                    aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
+                    aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+                    tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
+                    expiradaEm={(solicitacaoTroca as any)?.expirada_em}
+                  />
+                ) : (
                 <EtapaPagamentoCotacao
                     cotacaoId={cotacao.id}
                     valorAdesao={cotacao.valor_adesao || 0}
