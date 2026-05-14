@@ -236,6 +236,25 @@ export default function ReguaCobranca() {
     queryClient.invalidateQueries({ queryKey: ['cobranca-run', runId] });
   };
 
+  const pausarRun = async () => {
+    if (!runId) return;
+    await (supabase as any).from('cobranca_runs')
+      .update({ status: 'pausado' })
+      .eq('id', runId);
+    toast.info('Régua pausada — nenhum novo envio sairá até retomar');
+    queryClient.invalidateQueries({ queryKey: ['cobranca-run', runId] });
+  };
+
+  const retomarRun = async () => {
+    if (!runId) return;
+    await (supabase as any).from('cobranca_runs')
+      .update({ status: 'executando' })
+      .eq('id', runId);
+    toast.success('Régua retomada');
+    queryClient.invalidateQueries({ queryKey: ['cobranca-run', runId] });
+  };
+
+
   const executarAgora = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('executar-regua-cobranca', {
