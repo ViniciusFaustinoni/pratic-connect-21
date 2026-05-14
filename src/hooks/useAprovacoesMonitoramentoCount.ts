@@ -33,14 +33,15 @@ export function useAprovacoesMonitoramentoBreakdown() {
         imprevistos,
       ] = await Promise.all([
         // 1. Aprovação de Associados — espelha useInstalacoesAguardandoAprovacao
+        // (filtrar SÓ por veículo; aprovação é por veículo, não por associado)
         safe((async () => {
           const { data } = await (supabase as any)
             .from('servicos')
-            .select('id, veiculo:veiculo_id(cobertura_total), associado:associado_id(status)')
+            .select('id, veiculo:veiculo_id(cobertura_total)')
             .in('tipo', ['instalacao', 'vistoria_entrada'])
             .eq('status', 'concluida');
           return (data || []).filter((s: any) =>
-            s?.veiculo && s.veiculo.cobertura_total !== true && s?.associado?.status !== 'ativo'
+            s?.veiculo && s.veiculo.cobertura_total !== true
           ).length;
         })()),
 
