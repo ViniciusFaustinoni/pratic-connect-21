@@ -494,6 +494,12 @@ serve(async (req) => {
           const mensagemRenderizada = templateCorpo
             ? renderTemplateBody(templateCorpo, { "1": nome, "2": corpoBlocos })
             : `Olá, ${nome}! Boletos em aberto:\n${corpoBlocos}`;
+          // Payload enxuto: só placa+vencimento, sem linha digitável (evita JSON gigante)
+          const boletosResumo = (dest.boletos || []).map((b) => ({
+            placa: b.placa,
+            vencimento: b.vencimento,
+            valor: b.valor,
+          }));
           const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             tipo: "template",
@@ -505,14 +511,21 @@ serve(async (req) => {
               template: templateNome,
               matricula: dest.matricula,
               blocos: blocos.length,
-              boletos: dest.boletos,
+              boletos: boletosResumo,
             },
             referencia_tipo: "cobranca_csv",
             message_id: ultimoMessageId,
             provedor: "meta",
             instancia_id: metaInstanciaId,
           });
-          if (insErr) console.error("[whatsapp_mensagens insert ok]", insErr.message);
+          if (insErr) {
+            mensagensFalhasGravar++;
+            const detail = `[whatsapp_mensagens insert ok] code=${(insErr as any).code} msg=${insErr.message} details=${(insErr as any).details ?? ""} hint=${(insErr as any).hint ?? ""}`;
+            console.error(detail);
+            if (warnings.length < 5) warnings.push(detail);
+          } else {
+            mensagensGravadas++;
+          }
         } else {
           erros++;
           detalhes.push({
@@ -527,6 +540,11 @@ serve(async (req) => {
           const mensagemRenderizadaErr = templateCorpo
             ? renderTemplateBody(templateCorpo, { "1": nome, "2": corpoBlocosErr })
             : `Olá, ${nome}! Boletos em aberto:\n${corpoBlocosErr}`;
+          const boletosResumoErr = (dest.boletos || []).map((b) => ({
+            placa: b.placa,
+            vencimento: b.vencimento,
+            valor: b.valor,
+          }));
           const { error: insErr } = await supabase.from("whatsapp_mensagens").insert({
             direcao: "saida",
             tipo: "template",
@@ -537,7 +555,7 @@ serve(async (req) => {
             template_variaveis: {
               template: templateNome,
               matricula: dest.matricula,
-              boletos: dest.boletos,
+              boletos: boletosResumoErr,
             },
             referencia_tipo: "cobranca_csv",
             erro_codigo: ultimoErroCodigo ? String(ultimoErroCodigo) : null,
@@ -545,7 +563,14 @@ serve(async (req) => {
             provedor: "meta",
             instancia_id: metaInstanciaId,
           });
-          if (insErr) console.error("[whatsapp_mensagens insert erro]", insErr.message);
+          if (insErr) {
+            mensagensFalhasGravar++;
+            const detail = `[whatsapp_mensagens insert erro] code=${(insErr as any).code} msg=${insErr.message} details=${(insErr as any).details ?? ""} hint=${(insErr as any).hint ?? ""}`;
+            console.error(detail);
+            if (warnings.length < 5) warnings.push(detail);
+          } else {
+            mensagensGravadas++;
+          }
         }
 
         await new Promise((r) => setTimeout(r, SLEEP_ENTRE_DESTINATARIOS_MS));
