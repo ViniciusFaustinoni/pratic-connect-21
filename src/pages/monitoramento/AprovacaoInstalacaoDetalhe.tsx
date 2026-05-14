@@ -149,15 +149,25 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         documentos = [...documentos, ...extras.filter((d) => !existentes.has(chave(d)))];
       }
 
-      // Buscar vídeo 360° do instalador (da vistoria vinculada ao serviço)
+      // Vídeo 360°: distinguir Instalador (presencial) x Associado (autovistoria)
       let videoInstalador: string | null = null;
+      let videoAssociado: string | null = null;
+
+      // Vistoria vinculada ao serviço — categorizar pela modalidade
+      let vistoriaModalidade: string | null = null;
       if (servico.vistoria_origem_id) {
         const { data: vistoriaInst } = await supabase
           .from('vistorias')
-          .select('video_360_url')
+          .select('video_360_url, modalidade')
           .eq('id', servico.vistoria_origem_id)
           .maybeSingle();
-        videoInstalador = vistoriaInst?.video_360_url || null;
+        const url = vistoriaInst?.video_360_url || null;
+        vistoriaModalidade = vistoriaInst?.modalidade || null;
+        if (vistoriaModalidade === 'autovistoria') {
+          videoAssociado = url;
+        } else {
+          videoInstalador = url;
+        }
       } else if (servico.instalacao_origem_id) {
         const { data: vistoriaInst } = await supabase
           .from('vistorias')
@@ -167,9 +177,9 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         videoInstalador = vistoriaInst?.video_360_url || null;
       }
 
-      // Buscar vídeo 360° do associado (autovistoria não presencial do mesmo contrato)
-      let videoAssociado: string | null = null;
-      if (servico.contrato_id) {
+      // Buscar vídeo 360° do associado SOMENTE se ainda não carregado
+      // (autovistoria não presencial do mesmo contrato — fluxo legacy)
+      if (!videoAssociado && servico.contrato_id) {
         let autoVistoriaQuery = supabase
           .from('vistorias')
           .select('video_360_url')
