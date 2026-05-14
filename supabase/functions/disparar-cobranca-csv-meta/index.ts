@@ -660,7 +660,7 @@ serve(async (req) => {
             mensagem: mensagemRenderizadaErr,
             status: "erro",
             template_variaveis: {
-              template: templateNome,
+              template: templateNomeUsado,
               matricula: dest.matricula,
               boletos: boletosResumoErr,
             },
