@@ -45,6 +45,7 @@ interface ResultadoEnvio {
   recuperados_valor: number;
   reemitidos_count: number;
   reemitidos_valor: number;
+  pulados_duplicidade_dia: number;
   lote_id: string | null;
   detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro' | 'skip'; erro?: string; erro_codigo?: number | string }>;
 }
@@ -277,6 +278,7 @@ export function ImportarCobrancaCsv() {
           if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
           sucesso += data.sucesso || 0;
           erros += data.erros || 0;
+          puladosDuplicidadeDia += data.pulados_duplicidade_dia || 0;
           if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
           chunkOk = true;
         } catch (e: any) {
