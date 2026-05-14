@@ -246,6 +246,28 @@ export default function VistoriaPrestador() {
     novoStatus: 'aceito' | 'em_rota' | 'em_execucao',
   ) => {
     if (!token) return;
+
+    // Refresh defensivo: detectar reatribuição/cancelamento antes de gravar
+    const { data: fresh, error: freshErr } = await publicSupabase
+      .from('vistoria_prestador_links' as any)
+      .select('status')
+      .eq('token', token)
+      .maybeSingle();
+    if (freshErr) {
+      toast.error(`Erro ao atualizar status: ${freshErr.message || 'tente novamente'}`);
+      return;
+    }
+    if (!fresh) {
+      toast.error('Link não encontrado');
+      return;
+    }
+    const freshStatus = (fresh as any).status as string;
+    if (!['aguardando', 'aceito', 'em_rota'].includes(freshStatus)) {
+      toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+      queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
+      return;
+    }
+
     const stamp = new Date().toISOString();
     const fieldStamp =
       novoStatus === 'aceito' ? 'aceito_em' :
@@ -257,14 +279,20 @@ export default function VistoriaPrestador() {
       updated_at: stamp,
     };
     if (novoStatus === 'em_execucao') payload.chegada_em = stamp;
-    const { error } = await publicSupabase
+    const { data, error } = await publicSupabase
       .from('vistoria_prestador_links' as any)
       .update(payload)
       .eq('token', token)
-      .in('status', ['aguardando', 'aceito', 'em_rota']);
+      .in('status', ['aguardando', 'aceito', 'em_rota'])
+      .select('id, status');
     if (error) {
       console.error('[VistoriaPrestador] update status error', error);
       toast.error(`Erro ao atualizar status: ${error.message || 'tente novamente'}`);
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+      queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
       return;
     }
     queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
