@@ -279,7 +279,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    for (const b of boletos) {
+    // 5.1 Espelha boletos no mirror local `cobrancas` (insere/atualiza/baixa pagas).
+    //     Usa os mapas já carregados; boletos sem associado/veículo local são pulados.
+    let mirrorRes = { inseridas: 0, atualizadas: 0, baixadas: 0, ignoradas: 0, erros: 0 }
+    try {
+      mirrorRes = await mirrorBoletosEmCobrancas(supabase, boletos, {
+        associadosPorCodigoHinova: new Map(
+          Array.from(assocByCodigo.entries()).map(([k, v]) => [k, { id: v.id }]),
+        ),
+        veiculosPorPlaca: new Map(
+          Array.from(veicByPlaca.entries()).map(([k, v]) => [k, { id: v.id }]),
+        ),
+      })
+      console.log(`[regua] mirror cobrancas:`, mirrorRes)
+    } catch (e: any) {
+      console.error('[regua] mirror cobrancas falhou (não-bloqueante):', e?.message || e)
+    }
+
       const situacao = String(b?.situacao_boleto || '')
       const dataPag = parseDataHinova(b?.data_pagamento)
       if (dataPag) continue
