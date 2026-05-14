@@ -1,0 +1,1 @@
+UPDATE public.cobrancas SET linha_digitavel = NULL WHERE id IN (SELECT id FROM public.cobrancas WHERE linha_digitavel LIKE 'Não foi possível%' LIMIT 50000);
