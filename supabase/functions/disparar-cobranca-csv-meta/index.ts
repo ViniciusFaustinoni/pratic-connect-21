@@ -366,6 +366,7 @@ serve(async (req) => {
           linha_digitavel: b.linha_digitavel,
           valor: typeof b.valor === "number" ? b.valor : 0,
           telefones: dest.telefones_validos || [],
+          link_2via: b.link || null,
           status: "pendente_envio",
         });
       }
