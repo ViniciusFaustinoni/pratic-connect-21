@@ -1,0 +1,1 @@
+UPDATE public.cobrancas SET linha_digitavel = NULL WHERE linha_digitavel LIKE 'Não foi possível%';
