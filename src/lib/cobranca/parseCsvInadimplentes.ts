@@ -361,3 +361,7 @@ export function montarBlocoBoletos(boletos: BoletoCsv[]): string {
     })
     .join('\n\n');
 }
+
+// Alias mantido para compat: o nome novo do parser é parseCsvCobrancas.
+export const parseCsvCobrancas = parseCsvInadimplentes;
+
