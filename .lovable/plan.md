@@ -1,102 +1,121 @@
-## Diagnóstico
+## Contexto
 
-Investiguei a tela `VistoriaPrestador` / `PrestadorInstalacao` (link público `app.praticcar.org/v/:token`), o schema/RLS de `vistoria_prestador_links` e `instalacao_prestador_links`, triggers, constraints e os logs.
+Hoje a área `Financeiro › Cobranças › Régua › Emissão de Cobranças` tem:
+- Sub-aba **Fechamento Mensal** (depende de `fechamentos_mensais` aprovado — fluxo antigo).
+- Sub-aba **Importar CSV (SGA)** que apenas dispara WhatsApp via template Meta (`disparar-cobranca-csv-meta`) e grava em `cobranca_csv_lotes/boletos` — não vincula a `associados`/`veiculos` e não popula `cobrancas` ou `asaas_cobrancas`.
+- Aba **Recuperados** e botão **Sincronizar Financeiro (Hinova)** ainda visíveis em `Faturas`.
 
-### O que descobri
-
-1. **Banco e RLS estão OK.**
-   - `vistoria_prestador_links`: política `Anon can update status` (anon, USING true, WITH CHECK true). Sem trigger de bloqueio.
-   - `instalacao_prestador_links`: política `anon_update_by_token` (anon, USING true, WITH CHECK true). Trigger `sync_servico_on_prestador_link_change` só age em `cancelada/expirado/concluida` — não interfere no Aceitar.
-   - Reproduzi o PATCH exato que o front faz (`PATCH /rest/v1/vistoria_prestador_links?token=eq.<token>&status=in.(aguardando,aceito,em_rota)` com payload `{status:"aceito",aceito_em,updated_at}`) usando a anon key → resposta **204 No Content** (sucesso). O servidor aceita a operação.
-
-2. **Estado real do link mais recente** (criado 16:18:56, vistoria base reatribuída): `status='aguardando'`, `instalacao_id=null`, `vistoria_id=2101860d…`. Tudo coerente para a página Vistoria-only.
-
-3. **Existe um link anterior cancelado** com o mesmo `vistoria_id` (`27986797…` → `status='cancelada'` em 16:18:56). Ou seja, **o serviço foi reatribuído** e um novo `vistoria_prestador_links` foi gerado segundos antes.
-
-4. **Causa raiz mais provável do toast no celular do prestador:** ele clicou “Aceitar” no **link antigo (já cancelado)** que ficou aberto no WhatsApp/aba anterior.
-   - Em `VistoriaPrestador.transicionarStatus` o filtro `.in('status', ['aguardando','aceito','em_rota'])` faz com que o PostgREST retorne **0 linhas afetadas, sem `error`**. O toast “Erro ao atualizar status: tente novamente” aparece nesse caso porque, após esse update fantasma, a tela continua mostrando o card de “Aguardando” (vinda do cache `useQuery`) — e qualquer reclick subsequente bate em `RLS-ok / 0 rows` e o usuário continua sem progredir.
-   - Em `PrestadorInstalacao.transicionarStatus` (toast sem `:`) NÃO há esse filtro `.in()`, mas a hipótese de re-issue/cache se aplica do mesmo jeito (o serviço foi reatribuído entre o envio e o clique).
-   - Não há nenhum 4xx/5xx do PostgREST nesse intervalo nos `edge_logs`, o que reforça que a request foi 200 mas não bateu na linha (link reatribuído ou request offline na hora).
-
-### Onde está fragil hoje
-
-- Os dois fluxos (`VistoriaPrestador.tsx` e `PrestadorInstalacao.tsx`) silenciam `error.message` (PrestadorInstalacao) ou caem num toast genérico quando 0 rows são afetadas (VistoriaPrestador), e **não detectam o caso “link reatribuído/cancelado”**.
-- A página não invalida o cache antes de tentar a transição, então o usuário não vê que o link já está “cancelada”.
+A nova diretriz é: **CSV importado vira a fonte de verdade das cobranças**, com vínculo automático aos associados/veículos das duas bases (nova `associados/veiculos` + bridge legado), e a Régua/Emissão em massa passa a operar sobre essas cobranças importadas.
 
 ---
 
-## Plano de correção (mínimo necessário, escopo do bug)
+## 1. Esconder UI legada
 
-### 1. Detectar “link reatribuído/cancelado” e mostrar mensagem clara
-Em `src/pages/public/VistoriaPrestador.tsx` (`transicionarStatus`) e `src/pages/public/PrestadorInstalacao.tsx` (`transicionarStatus` e `recusarTarefa`):
+| Onde | O que esconder |
+|---|---|
+| `src/pages/financeiro/CobrancasLayout.tsx` | Aba **Recuperados** (manter rota viva, mas sem trigger no menu) |
+| `src/pages/financeiro/CobrancasList.tsx` (linha 772) | Botão **Sincronizar Financeiro** (`SgaBackfillFinanceiroDialog`) |
+| `src/pages/financeiro/EmissaoCobrancas.tsx` (default export) | Sub-aba **Fechamento Mensal**; deixa só "Importar CSV" como conteúdo único, removendo o `Tabs` (ou mantendo o componente único) |
 
-- Mudar o `.update(...)` para usar `.select('id, status')` (PostgREST retorna a linha alterada). Se vier `data?.length === 0`:
-  - refazer o GET por token,
-  - se `status IN ('cancelada','expirado','concluida')` → toast `'Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.'` e invalidar `queryKey` para a UI mostrar o estado certo (bloqueio + alerta), em vez de “Erro ao atualizar status”.
-- Surfacar `error.message` no toast do `PrestadorInstalacao` (hoje só `'Erro ao atualizar status'` sem detalhes). Mesmo padrão do VistoriaPrestador (`Erro ao atualizar status: ${error.message ?? 'tente novamente'}`).
-
-### 2. Tela bloqueada quando o link já não é mais o ativo
-Adicionar no render de ambas as páginas, quando `link.status === 'cancelada'` e existir `recusado_em` nulo (sinal de re-issue), um `Card` claro tipo:
-> “Esta tarefa foi reatribuída pela central. Verifique o WhatsApp para o novo link de acesso.”
-
-Isso evita que o prestador insista no link velho.
-
-### 3. Refresh defensivo antes da transição
-Antes de chamar `update`, fazer um `refetch()` rápido do link e abortar a transição com mensagem amigável caso o `status` local difira de `'aguardando'`. Custa uma request, mas elimina 100% do falso “erro” em cenário de re-issue/cache.
-
-### 4. (Opcional, se houver tempo na implementação) Ao reatribuir um serviço externamente
-Confirmar no fluxo de reatribuição (`useAtribuicaoManual` / `atribuicao-prestador`) que ao cancelar o link antigo já é disparado WhatsApp para o prestador antigo (“tarefa reatribuída”) — para reduzir cliques no link velho. Hoje só o novo prestador recebe.
+Sem mudanças em rota / RLS — só esconder.
 
 ---
 
-## Detalhes técnicos
+## 2–6. Reformular o fluxo "Importar CSV" como pipeline canônico de cobranças
 
-### Arquivos tocados
+### Etapa A — Parser mais permissivo (`src/lib/cobranca/parseCsvInadimplentes.ts`)
+
+- Aceitar **todos os tipos** de boleto/cobrança e **qualquer status** (não bloquear por adimplência ou ausência de telefone).
+- Tornar opcionais: `Telefone Celular`, `Telefone`, `Placas`. Obrigatórios reais ficam só em `Nome` + `Matrícula` + (`Codigo de Barras` **ou** `Valor` **ou** `Data Vencimento`).
+- Adicionar reconhecimento opcional de colunas: `cpf`, `cnpj`, `valor`, `tipo` (mensalidade, taxa, adesão, etc.), `competencia`, `status_pagamento`.
+- Renomear `parseCsvInadimplentes` → `parseCsvCobrancas` (mantendo alias para não quebrar usos).
+
+### Etapa B — Vínculo automático (server-side, edge function nova)
+
+Criar edge `importar-cobrancas-csv` (substitui o disparo direto pelo Meta como "primeiro passo"):
+
+1. Recebe um **chunk** com `linhas[]` parseadas + `lote_id?` + `is_first/is_last`.
+2. Para cada linha, tenta vincular **na ordem**:
+   - `cobrancas.matricula_sga / associados.matricula_sga` (canônico).
+   - `associados.cpf` (quando coluna CPF presente).
+   - `veiculos.placa` (quando placa presente).
+   - **Bridge legado** (base antiga): tabela já existente mapeando matrícula antiga → associado novo (verificar se há `legacy_associado_map` / `sga_associado_id`; se não houver, usar `associados.codigo_legado`/equivalente — confirmar coluna no schema e usar `maybeSingle`).
+3. Grava cada linha em `cobranca_csv_boletos` com novos campos:
+   - `associado_id uuid null` (FK match)
+   - `veiculo_id uuid null` (FK match)
+   - `match_origem text` (`matricula | cpf | placa | legacy | sem_match`)
+   - `tipo text`, `valor numeric`, `data_vencimento date`, `status_origem text`
+4. Retorna contadores agregados do chunk (matched_associado, matched_veiculo, sem_match, valor_total, duplicatas).
+
+> Nada é gravado em `cobrancas`/`asaas_cobrancas` ainda. O `cobranca_csv_boletos` vira a tabela canônica de "cobranças importadas" (já é a estrutura natural disso).
+
+### Etapa C — UI nova de import (`ImportarCobrancaCsv.tsx`)
+
+Substituir as etapas atuais por:
+
+1. **Upload / Colar** (mantém UX atual; tira o título "Inadimplentes/SGA").
+2. **Preview com KPIs de match** (client + chamada server "dry-run"):
+   - Boletos parseados, Associados únicos, **Match associado**, **Match veículo**, **Sem match**, **Duplicatas**, **Valor total**.
+   - Cards com cor: verde (match), amarelo (match parcial — só matrícula), vermelho (sem match).
+   - Tabela de pré-visualização com badge por linha do tipo de match.
+   - Botão **"Salvar X cobranças"** (cor primária) e **"Trocar arquivo"**.
+3. **Gravação em lote** (substitui o `disparar-cobranca-csv-meta` na primeira fase):
+   - Frontend faz chunks de **500 linhas** chamando `importar-cobrancas-csv` em sequência, com barra de progresso (`atual/total`, `matched`, `sem_match`).
+   - `is_first_chunk` cria `cobranca_csv_lotes` com `status='importando'`.
+   - `is_last_chunk` fecha o lote (`status='ativo'`, totais consolidados).
+   - Permite arquivos grandes sem timeout.
+4. **Concluído**: mostra resumo + dois CTAs:
+   - "Ver na Régua de Cobrança" → `/financeiro/cobrancas/regua` filtrado por `lote_id`.
+   - "Disparar WhatsApp em massa" (passo 6 abaixo).
+
+### Etapa D — Régua e disparo em massa consomem o lote
+
+- A Régua existente (`/financeiro/cobrancas/regua`) e o card "Emissão de Cobranças" passam a **listar `cobranca_csv_boletos` do lote ativo**, agrupados por associado, com filtros (com/sem WhatsApp, com/sem match, tipo, vencimento).
+- Botão **"Disparar via WhatsApp (template Meta)"** mantém a edge `disparar-cobranca-csv-meta` (já existe), mas agora opera **apenas sobre boletos já salvos** (`lote_id`), sem reparse no cliente.
+- A reconciliação "recuperados" continua acontecendo automaticamente no servidor ao gravar um novo lote (lógica já existe em `cobranca_csv_boletos.recuperado_em` — preservar).
+
+---
+
+## Migração de schema
+
+```sql
+ALTER TABLE public.cobranca_csv_boletos
+  ADD COLUMN IF NOT EXISTS associado_id uuid REFERENCES public.associados(id),
+  ADD COLUMN IF NOT EXISTS veiculo_id uuid REFERENCES public.veiculos(id),
+  ADD COLUMN IF NOT EXISTS match_origem text,
+  ADD COLUMN IF NOT EXISTS tipo text,
+  ADD COLUMN IF NOT EXISTS data_vencimento date,
+  ADD COLUMN IF NOT EXISTS status_origem text;
+
+CREATE INDEX IF NOT EXISTS idx_csv_boletos_associado ON public.cobranca_csv_boletos(associado_id);
+CREATE INDEX IF NOT EXISTS idx_csv_boletos_veiculo  ON public.cobranca_csv_boletos(veiculo_id);
+CREATE INDEX IF NOT EXISTS idx_csv_boletos_lote     ON public.cobranca_csv_boletos(lote_id);
+```
+
+Triggers de RLS existentes ficam como estão (lote/boletos já têm policies próprias — só conferir se admin/financeiro pode SELECT/INSERT).
+
+---
+
+## Arquivos tocados
 
 ```text
-src/pages/public/VistoriaPrestador.tsx        (transicionarStatus, recusarTarefa, render do estado “reatribuída”)
-src/pages/public/PrestadorInstalacao.tsx      (transicionarStatus, recusarTarefa, render do estado “reatribuída”)
+src/pages/financeiro/CobrancasLayout.tsx          (esconder aba Recuperados)
+src/pages/financeiro/CobrancasList.tsx            (esconder botão Sincronizar Financeiro)
+src/pages/financeiro/EmissaoCobrancas.tsx         (remover sub-aba Fechamento, manter só CSV)
+src/lib/cobranca/parseCsvInadimplentes.ts         (parser permissivo + colunas opcionais)
+src/components/financeiro/ImportarCobrancaCsv.tsx (preview match + gravação em lote)
+src/pages/cobranca/ReguaCobranca.tsx              (consumir lote ativo)
+supabase/functions/importar-cobrancas-csv/        (NOVA edge: vincula + grava em chunks)
+supabase/migrations/<timestamp>_csv_match.sql     (colunas associado_id/veiculo_id/match_origem)
 ```
 
-### Pseudocódigo da nova `transicionarStatus`
+---
 
-```ts
-const transicionarStatus = useCallback(async (novoStatus) => {
-  if (!token) return;
+## Perguntas antes de implementar
 
-  // 1) Refresh defensivo
-  const { data: fresh } = await publicSupabase
-    .from('<tabela>').select('status').eq('token', token).maybeSingle();
-  if (!fresh) { toast.error('Link não encontrado'); return; }
-  if (!['aguardando','aceito','em_rota'].includes(fresh.status)) {
-    toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
-    queryClient.invalidateQueries({ queryKey: ['<key>', token] });
-    return;
-  }
+1. **Bridge legado**: a base antiga vincula via `associados.codigo_legado`, `associados.matricula_sga`, ou outra coluna? Quer que eu detecte automaticamente (qualquer match nas três) ou prefere uma coluna específica?
+2. **Tipos aceitos**: o CSV passa o tipo (mensalidade/taxa/adesão), ou devo classificar tudo como `mensalidade` por padrão quando a coluna não existir?
+3. **Quando "sem match"**: gravar mesmo assim (badge vermelho, fica disponível para vincular manual depois) ou pular?
+4. Confirma esconder **completamente** a sub-aba Fechamento Mensal (e não só ocultar do menu), já que o fluxo CSV vai substituí-la?
 
-  // 2) Update com retorno
-  const payload = { status: novoStatus, [stampField]: stamp, updated_at: stamp };
-  if (novoStatus === 'em_execucao') payload.chegada_em = stamp;
-  const { data, error } = await publicSupabase
-    .from('<tabela>').update(payload).eq('token', token).select('id,status');
-
-  if (error) {
-    toast.error(`Erro ao atualizar status: ${error.message ?? 'tente novamente'}`);
-    return;
-  }
-  if (!data?.length) {
-    toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
-    queryClient.invalidateQueries({ queryKey: ['<key>', token] });
-    return;
-  }
-  queryClient.invalidateQueries({ queryKey: ['<key>', token] });
-}, [token, queryClient]);
-```
-
-### Fora do escopo
-
-- Mudanças em RLS / triggers / schema (já estão corretos).
-- Mexer no fluxo de reatribuição de servico (sugerido apenas como item 4 opcional, e somente notificação WhatsApp — sem mudar lógica).
-- Edge functions: nenhuma alteração necessária para esse bug.
-
-Quando aprovado, eu aplico itens 1–3 (que já cobrem 100% do sintoma observado) e, se você quiser, faço o item 4 em sequência.
+Posso aplicar tudo de uma vez assim que essas 4 estiverem decididas.
