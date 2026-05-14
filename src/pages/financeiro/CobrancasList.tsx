@@ -769,7 +769,7 @@ export default function CobrancasList() {
           <p className="text-muted-foreground">Gerencie cobranças do Asaas e do histórico SGA Hinova</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {(isDiretor || isAdminMaster || isDesenvolvedor) && <SgaBackfillFinanceiroDialog />}
+          {/* Botão "Sincronizar Financeiro (Hinova)" desativado — agora a fonte de cobranças é o import CSV. */}
           <Button variant="outline" onClick={handleExportar}>
             <Download className="mr-2 h-4 w-4" />Exportar
           </Button>

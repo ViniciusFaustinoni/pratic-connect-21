@@ -1,12 +1,15 @@
-// Parser do CSV SGA/Hinova de inadimplentes.
-// Cabeçalho esperado:
-// Nome, Matrícula, Placas, Telefone Celular, Telefone, Data Vencimento, Data Vencimento Original, Codigo de Barras
+// Parser do CSV de cobranças (SGA/Hinova ou export externo).
+// Aceita TODOS os tipos e qualquer status (adimplente/inadimplente/pago/pendente).
+// Cabeçalho mínimo: Nome, Matrícula. Demais colunas são opcionais e o parser
+// reconhece variações comuns (cpf, valor, tipo, status, código de barras, placas, telefones, vencimento).
 
 export interface BoletoCsv {
   placa: string;
   vencimento: string; // dd/mm/aaaa
   linha_digitavel: string;
-  valor: number; // extraído da linha digitável (R$); 0 quando não identificável
+  valor: number; // valor (R$); 0 quando não identificável
+  tipo?: string; // mensalidade | taxa | adesao | outros (cru do CSV)
+  status_origem?: string; // adimplente | inadimplente | pago | pendente | etc.
 }
 
 /**
@@ -48,6 +51,7 @@ export interface DestinatarioParsed {
   nome: string;
   primeiro_nome: string;
   matricula: string;
+  cpf?: string; // opcional, quando coluna CPF está presente no CSV
   telefones_validos: string[]; // formato 55DDDNNNNNNNNN
   telefones_invalidos: string[]; // raw
   boletos: BoletoCsv[];
@@ -65,16 +69,21 @@ export interface ParseResultado {
   erros: string[];
 }
 
-// Cabeçalho canônico (normalizado)
-const COLUNAS_OBRIGATORIAS = [
-  'nome',
-  'matricula',
-  'placas',
-  'telefone celular',
-  'telefone',
-  'data vencimento',
-  'codigo de barras',
-];
+// Cabeçalho mínimo obrigatório.
+const COLUNAS_OBRIGATORIAS = ['nome', 'matricula'];
+
+// Aliases de colunas opcionais (chave canônica → variantes aceitas no header).
+const ALIASES: Record<string, string[]> = {
+  cpf: ['cpf', 'cpf/cnpj', 'cpf cnpj', 'documento'],
+  placas: ['placas', 'placa'],
+  'telefone celular': ['telefone celular', 'celular', 'whatsapp'],
+  telefone: ['telefone', 'telefone fixo', 'fone'],
+  'data vencimento': ['data vencimento', 'vencimento', 'dt vencimento'],
+  'codigo de barras': ['codigo de barras', 'linha digitavel', 'codigo barras', 'boleto'],
+  valor: ['valor', 'valor boleto', 'valor cobranca', 'preco'],
+  tipo: ['tipo', 'tipo cobranca', 'categoria', 'descricao'],
+  status: ['status', 'situacao', 'status pagamento', 'status_pagamento'],
+};
 
 function normalizarHeader(s: string): string {
   return s
@@ -211,9 +220,16 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     };
   }
 
-  const header = parseCsvLinha(linhas[0]).map(normalizarHeader);
+  const headerRaw = parseCsvLinha(linhas[0]).map(normalizarHeader);
+  // Resolve aliases → mapa canônico → índice da coluna no header.
   const idx: Record<string, number> = {};
-  header.forEach((h, i) => (idx[h] = i));
+  headerRaw.forEach((h, i) => {
+    let canonico = h;
+    for (const [canon, vars] of Object.entries(ALIASES)) {
+      if (vars.includes(h)) { canonico = canon; break; }
+    }
+    if (!(canonico in idx)) idx[canonico] = i;
+  });
 
   const faltando = COLUNAS_OBRIGATORIAS.filter((c) => !(c in idx));
   if (faltando.length) {
@@ -226,9 +242,23 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       total_telefones: 0,
       total_boletos: 0,
       valor_total: 0,
-      erros: [`Colunas obrigatórias ausentes: ${faltando.join(', ')}`],
+      erros: [`Colunas obrigatórias ausentes: ${faltando.join(', ')}. Mínimo: nome, matricula.`],
     };
   }
+
+  // Helper para acessar coluna opcional sem dar undefined.
+  const getCol = (cols: string[], canon: string): string => {
+    const i = idx[canon];
+    return i === undefined ? '' : (cols[i] || '');
+  };
+
+  // Parse de valor monetário em pt-BR ("1.234,56" → 1234.56).
+  const parseValorBR = (raw: string): number => {
+    if (!raw) return 0;
+    const limpo = raw.replace(/[^\d,.\-]/g, '').replace(/\./g, '').replace(',', '.');
+    const v = parseFloat(limpo);
+    return Number.isFinite(v) ? v : 0;
+  };
 
   const mapa = new Map<string, DestinatarioParsed>();
   let totalBoletos = 0;
@@ -236,19 +266,25 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
 
   for (let i = 1; i < linhas.length; i++) {
     const cols = parseCsvLinha(linhas[i]);
-    if (cols.length < header.length) { descartadasColunas++; continue; }
+    if (cols.length < 2) { descartadasColunas++; continue; }
 
     const nome = (cols[idx['nome']] || '').trim();
     const matricula = (cols[idx['matricula']] || '').trim();
     if (!nome || !matricula) continue;
 
-    const placa = extrairPlaca(cols[idx['placas']] || '');
-    const venc = parseDataVencimento(cols[idx['data vencimento']] || '');
-    const linhaDig = (cols[idx['codigo de barras']] || '').trim();
-    if (!linhaDig) continue;
+    const cpf = getCol(cols, 'cpf').replace(/\D/g, '') || undefined;
+    const placa = extrairPlaca(getCol(cols, 'placas'));
+    const venc = parseDataVencimento(getCol(cols, 'data vencimento'));
+    const linhaDig = getCol(cols, 'codigo de barras').trim();
+    const valorCsv = parseValorBR(getCol(cols, 'valor'));
+    const tipo = getCol(cols, 'tipo').trim() || undefined;
+    const statusOrigem = getCol(cols, 'status').trim() || undefined;
 
-    const telCel = cols[idx['telefone celular']] || '';
-    const telFix = cols[idx['telefone']] || '';
+    // Aceita linha sem código de barras se houver vencimento OU valor.
+    if (!linhaDig && !venc && valorCsv === 0) continue;
+
+    const telCel = getCol(cols, 'telefone celular');
+    const telFix = getCol(cols, 'telefone');
 
     const t1 = classificarTelefone(telCel);
     const t2 = classificarTelefone(telFix);
@@ -260,11 +296,11 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
         nome,
         primeiro_nome: primeiroNome(nome),
         matricula,
+        cpf,
         telefones_validos: [],
         telefones_invalidos: [],
         boletos: [],
       };
-      // adiciona telefones únicos
       const validos = new Set<string>();
       if (t1.formatado) validos.add(t1.formatado);
       if (t2.formatado) validos.add(t2.formatado);
@@ -274,8 +310,18 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       if (telFix.trim() && !t2.valido) invs.push(telFix.trim());
       dest.telefones_invalidos = invs;
       mapa.set(chave, dest);
+    } else if (!dest.cpf && cpf) {
+      dest.cpf = cpf;
     }
-    dest.boletos.push({ placa, vencimento: venc, linha_digitavel: linhaDig, valor: extrairValorBoleto(linhaDig) });
+    const valorFinal = valorCsv > 0 ? valorCsv : extrairValorBoleto(linhaDig);
+    dest.boletos.push({
+      placa,
+      vencimento: venc,
+      linha_digitavel: linhaDig,
+      valor: valorFinal,
+      tipo,
+      status_origem: statusOrigem,
+    });
     totalBoletos++;
   }
 
@@ -315,3 +361,7 @@ export function montarBlocoBoletos(boletos: BoletoCsv[]): string {
     })
     .join('\n\n');
 }
+
+// Alias mantido para compat: o nome novo do parser é parseCsvCobrancas.
+export const parseCsvCobrancas = parseCsvInadimplentes;
+

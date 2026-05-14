@@ -6250,11 +6250,15 @@ export type Database = {
       }
       cobranca_csv_boletos: {
         Row: {
+          associado_id: string | null
+          cpf: string | null
           created_at: string
+          data_vencimento: string | null
           enviado_em: string | null
           id: string
           linha_digitavel: string
           lote_id: string
+          match_origem: string | null
           matricula: string
           motivo_recuperacao: string | null
           nome: string
@@ -6262,16 +6266,23 @@ export type Database = {
           recuperado_em: string | null
           recuperado_no_lote_id: string | null
           status: string
+          status_origem: string | null
           telefones: Json | null
+          tipo: string | null
           valor: number
+          veiculo_id: string | null
           vencimento: string
         }
         Insert: {
+          associado_id?: string | null
+          cpf?: string | null
           created_at?: string
+          data_vencimento?: string | null
           enviado_em?: string | null
           id?: string
           linha_digitavel: string
           lote_id: string
+          match_origem?: string | null
           matricula: string
           motivo_recuperacao?: string | null
           nome: string
@@ -6279,16 +6290,23 @@ export type Database = {
           recuperado_em?: string | null
           recuperado_no_lote_id?: string | null
           status?: string
+          status_origem?: string | null
           telefones?: Json | null
+          tipo?: string | null
           valor?: number
+          veiculo_id?: string | null
           vencimento: string
         }
         Update: {
+          associado_id?: string | null
+          cpf?: string | null
           created_at?: string
+          data_vencimento?: string | null
           enviado_em?: string | null
           id?: string
           linha_digitavel?: string
           lote_id?: string
+          match_origem?: string | null
           matricula?: string
           motivo_recuperacao?: string | null
           nome?: string
@@ -6296,11 +6314,63 @@ export type Database = {
           recuperado_em?: string | null
           recuperado_no_lote_id?: string | null
           status?: string
+          status_origem?: string | null
           telefones?: Json | null
+          tipo?: string | null
           valor?: number
+          veiculo_id?: string | null
           vencimento?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
           {
             foreignKeyName: "cobranca_csv_boletos_lote_id_fkey"
             columns: ["lote_id"]
@@ -6313,6 +6383,41 @@ export type Database = {
             columns: ["recuperado_no_lote_id"]
             isOneToOne: false
             referencedRelation: "cobranca_csv_lotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
             referencedColumns: ["id"]
           },
         ]

@@ -525,32 +525,12 @@ function EmissaoCobrancasFechamento() {
 }
 
 export default function EmissaoCobrancas() {
-  const [searchParams] = useSearchParams();
-  const initialSub = searchParams.get('sub') === 'csv' ? 'csv' : 'fechamento';
-  const [tab, setTab] = useState<'fechamento' | 'csv'>(initialSub);
-  useEffect(() => {
-    const s = searchParams.get('sub');
-    if (s === 'csv' || s === 'fechamento') setTab(s);
-  }, [searchParams]);
-
+  // Sub-aba "Fechamento Mensal" desativada — o import de CSV é a fonte canônica
+  // de cobranças (vincula automaticamente a associados/veículos e alimenta a régua).
   return (
     <div className="p-6">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-        <TabsList>
-          <TabsTrigger value="fechamento" className="gap-2">
-            <FileText className="h-4 w-4" /> Fechamento Mensal
-          </TabsTrigger>
-          <TabsTrigger value="csv" className="gap-2">
-            <Upload className="h-4 w-4" /> Importar CSV (SGA)
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="fechamento" className="mt-4 -mx-6">
-          <EmissaoCobrancasFechamento />
-        </TabsContent>
-        <TabsContent value="csv" className="mt-4">
-          <ImportarCobrancaCsv />
-        </TabsContent>
-      </Tabs>
+      <ImportarCobrancaCsv />
     </div>
   );
 }
+
