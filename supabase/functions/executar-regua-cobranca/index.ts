@@ -201,15 +201,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Janela de varredura: hoje + dMin .. hoje + dMax (etapa.dias negativo = pré-vencimento)
+    // 3. Janela de varredura
+    //    Etapas: dias > 0 = vencido há X (venc = hoje-X); dias < 0 = vence em |X| (venc = hoje+|X|)
+    //    + Garantia mínima: 1º dia do (mês atual - 2) até último dia do mês atual
+    //    (espelhar 2 meses retroativos + mês corrente em `cobrancas`).
     const dMin = Math.min(...etapas.map((e) => e.dias))   // ex.: -15
     const dMax = Math.max(...etapas.map((e) => e.dias))   // ex.: +61
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
-    const dataInicial = new Date(hoje); dataInicial.setDate(dataInicial.getDate() - dMax) // venc <= hoje + (-dMax) ... espera
-    // Atenção: etapa.dias > 0 = boleto VENCIDO há X dias → vencimento = hoje - X
-    //          etapa.dias < 0 = boleto VENCE em |X| dias → vencimento = hoje + |X|
-    const inicioVenc = new Date(hoje); inicioVenc.setDate(inicioVenc.getDate() - dMax) // mais antigo
-    const fimVenc = new Date(hoje); fimVenc.setDate(fimVenc.getDate() - dMin)          // mais futuro (-dMin = +15)
+    const etapaInicio = new Date(hoje); etapaInicio.setDate(etapaInicio.getDate() - dMax)
+    const etapaFim = new Date(hoje); etapaFim.setDate(etapaFim.getDate() - dMin)
+    const mesAtualPrimeiro = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)
+    const mesAtualUltimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+    const inicioVenc = etapaInicio < mesAtualPrimeiro ? etapaInicio : mesAtualPrimeiro
+    const fimVenc = etapaFim > mesAtualUltimo ? etapaFim : mesAtualUltimo
 
     // 4. Busca Hinova
     let boletos: any[]
