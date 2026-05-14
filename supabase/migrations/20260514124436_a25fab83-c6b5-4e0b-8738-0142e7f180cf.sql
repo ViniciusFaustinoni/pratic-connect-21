@@ -1,0 +1,4 @@
+UPDATE public.contratos SET status='cancelado', data_cancelamento=now(), updated_at=now() WHERE id='13893972-b8a6-4b01-8ef4-9e34c30cbf45';
+UPDATE public.agendamentos_base SET status='cancelado', updated_at=now() WHERE id='51c14014-5046-4092-b97c-8f08eb674975';
+UPDATE public.cotacoes SET status_contratacao='aguardando', plano_id=NULL, plano_escolhido_id=NULL, contrato_gerado_id=NULL, tipo_vistoria=NULL, updated_at=now() WHERE id='d411a54c-8ca4-4356-996d-569ebf93e94d';
+UPDATE public.solicitacoes_troca_titularidade SET aprovado_cadastro_em=NULL, aprovado_cadastro_por=NULL, servico_vistoria_id=NULL, servico_manutencao_id=NULL, tipo_vistoria_troca=NULL, updated_at=now() WHERE id='52cc74c1-910d-4ac7-b854-84cd28db7a0d';
