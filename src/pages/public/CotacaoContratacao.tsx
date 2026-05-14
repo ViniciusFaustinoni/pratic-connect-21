@@ -929,6 +929,7 @@ export default function CotacaoContratacao() {
                     expiradaEm={(solicitacaoTroca as any)?.expirada_em}
                   />
                 ) : (
+                  <>
                 <EtapaPagamentoCotacao
                     cotacaoId={cotacao.id}
                     valorAdesao={cotacao.valor_adesao || 0}
@@ -936,7 +937,6 @@ export default function CotacaoContratacao() {
                     clienteEmail={cotacao.email_solicitante || ''}
                     clienteCpf={cotacao.cliente_cpf || ''}
                     onPagamentoConfirmado={async () => {
-                      // Invalidar e refetch para garantir dados atualizados na Etapa 5
                       await queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
                       await refetch();
                       setEtapaAtual(5);
@@ -961,6 +961,8 @@ export default function CotacaoContratacao() {
                     onAvancar={handleAvancar}
                     navegacaoManual={navegacaoManual}
                   />
+                  </>
+                )}
                 </motion.div>
               )}
 
