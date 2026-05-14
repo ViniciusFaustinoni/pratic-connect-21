@@ -237,12 +237,16 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
 
     // Criar documento no Autentique
     const cpfRaw = (associadoAntigo.cpf || '').replace(/\D/g, '');
+    const posConfig = await buscarPosicoesConfig(admin);
+    posConfig.totalPaginas = estimarPaginasHTML(html);
+    console.log(`[enviar-termo-cancelamento-troca] Usando ${posConfig.totalPaginas} páginas estimadas para SIGNATURE/INITIALS`);
     const signerObj: any = {
       name: associadoAntigo.nome,
       email: associadoAntigo.email,
       action: 'SIGN',
       delivery_method: 'DELIVERY_METHOD_EMAIL',
       security_verifications: [{ type: 'PF_FACIAL' }],
+      positions: gerarPosicoesAssinatura(posConfig),
     };
     if (cpfRaw.length === 11) signerObj.configs = { cpf: cpfRaw };
 
