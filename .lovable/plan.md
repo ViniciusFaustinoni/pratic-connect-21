@@ -1,56 +1,33 @@
-## Objetivo
+## Por que não voltou para a escolha do plano
 
-Na tela `/financeiro/cobrancas/regua → Emissão de Cobranças → Importar CSV`, adicionar:
+A reversão anterior só mexeu em `solicitacoes_troca_titularidade` e zerou `plano_id` da cotação. Mas a tela pública decide a etapa pelo campo **`cotacao.status_contratacao`** (via `determinarEtapa`), e ele continua em `vistoria_agendada`. Além disso a cotação já tem `contrato_gerado_id` (contrato assinado no Autentique) e um agendamento de vistoria base ativo — por isso o link mostra "Em Análise / etapas avançadas" em vez de "Escolha o plano".
 
-1. Botão **"Baixar template (.xlsx)"** que gera um modelo já pronto para preenchimento.
-2. Suporte a **2 novas colunas opcionais** no parser e na persistência:
-   - `valor` (R$ do boleto — ainda funciona junto da extração automática pela linha digitável; quando vier preenchido, o CSV manda)
-   - `link` (URL da fatura/2ª via Hinova)
+Para realmente voltar ao passo de escolha do plano, é preciso desfazer também esses artefatos a jusante.
 
----
+## O que fazer
 
-## Mudanças
+Migração SQL única, escopada à cotação `COT-20260513-192005877-360` (id `d411a54c-…`):
 
-### 1. Template XLSX
-- Novo arquivo `src/lib/cobranca/templateCobrancas.ts` que gera o workbook via `xlsx` (já presente no projeto) com:
-  - Cabeçalho na ordem aceita pelo parser: `Nome, Matrícula, CPF, Placas, Telefone Celular, Telefone, Data Vencimento, Codigo de Barras, Valor, Link, Tipo, Status`
-  - 1 linha de exemplo preenchida (associado fictício, vencimento, boleto, valor R$ 189,90, link `https://hinova.../fatura/...`)
-  - Aba secundária `Instruções` com regras (mínimo: Nome+Matrícula; demais opcionais; valor sobrescreve a extração automática; link é exibido no disparo Meta).
-- Função `baixarTemplateCobrancasXlsx()` que monta o blob e dispara o download como `template-cobrancas.xlsx`.
+1. **Cotação** — voltar ao zero do funil:
+   - `status_contratacao = 'aguardando'`
+   - `plano_id = NULL`, `plano_escolhido_id = NULL`
+   - `contrato_gerado_id = NULL`
+   - `tipo_vistoria = NULL`
 
-### 2. Botão na UI
-- Em `src/components/financeiro/ImportarCobrancaCsv.tsx`, ao lado dos botões "Arquivo / Colar CSV", adicionar `<Button variant="outline" onClick={baixarTemplateCobrancasXlsx}>` com ícone `Download` e label "Baixar template (.xlsx)".
-- Atualizar o texto-guia do card (`Aceita CSV, XLSX...`) listando as duas novas colunas.
+2. **Agendamento base** `51c14014-…`:
+   - `status = 'cancelado'` + `cancelado_em = now()` + motivo "reset para teste de troca de titularidade".
 
-### 3. Parser
-- Em `src/lib/cobranca/parseCsvInadimplentes.ts`:
-  - Adicionar alias `link: ['link', 'link fatura', 'url fatura', 'url boleto', '2via', 'segunda via']`.
-  - Adicionar campo `link?: string` em `BoletoCsv`.
-  - Ao montar o boleto da linha, ler `getCol(cols, 'link')` (sanitizar: tem que começar com `http`).
-  - O alias `valor` já existe; manter a regra: se vier valor no CSV usa esse, senão tenta extrair da linha digitável.
+3. **Contrato** `13893972-…` (atualmente `assinado`):
+   - `status = 'cancelado'`, marcar `cancelado_em` e `motivo_cancelamento = 'reset para teste de troca de titularidade'`.
+   - Não tocar no documento Autentique remoto (apenas marca interna; o link antigo fica órfão).
 
-### 4. Persistência (banco + edge)
-- Migration: `ALTER TABLE cobranca_csv_boletos ADD COLUMN link_fatura text;` (nullable, sem default).
-- Edge `supabase/functions/importar-cobrancas-csv/index.ts`: incluir `link_fatura: boleto.link ?? null` no insert em lote.
+4. **Solicitação de troca** `52cc74c1-…`:
+   - Já está em `cotacao_em_andamento` — só reconfirmar `aprovado_cadastro_em = NULL` e zerar `servico_vistoria_id` / `servico_manutencao_id` se houver.
+   - Manter `termo_cancelamento_assinado_em` (preserva o termo já assinado).
+   - Manter `veiculos.em_troca_titularidade = true` (a marca de troca em andamento permanece).
 
-### 5. Disparo Meta (lote ativo)
-- `src/components/financeiro/LoteAtivoCobrancas.tsx`: quando agrupar por matrícula, pegar o primeiro `link_fatura` não-nulo entre os boletos do associado e enviar como variável `{{link}}` no payload do template (sem alterar nome do template — só passa o parâmetro extra; se o template ainda não consumir, a variável fica disponível).
+Após isso, ao reabrir o link da cotação, o stepper público começa em **Etapa 0 — Escolha de Plano** com o termo de cancelamento já assinado, exatamente como pedido.
 
----
+## Confirmação
 
-## Detalhes técnicos
-
-- Lib XLSX: usar `xlsx` (`import * as XLSX from 'xlsx'`) que já é usado no parser para ler `.xlsx`. Para escrita: `XLSX.utils.aoa_to_sheet`, `XLSX.utils.book_new`, `XLSX.writeFile` (ou `write` + Blob para SPA).
-- Sanitização `link`: descarta valores não-URL para não poluir mensagens.
-- Sem mudança em RLS (`cobranca_csv_boletos` já tem políticas; coluna nova herda).
-
----
-
-## Arquivos tocados
-
-- `src/lib/cobranca/templateCobrancas.ts` (novo)
-- `src/lib/cobranca/parseCsvInadimplentes.ts` (alias + campo `link`)
-- `src/components/financeiro/ImportarCobrancaCsv.tsx` (botão + texto)
-- `src/components/financeiro/LoteAtivoCobrancas.tsx` (variável `{{link}}` no envio)
-- `supabase/functions/importar-cobrancas-csv/index.ts` (persistir `link_fatura`)
-- nova migration `add link_fatura to cobranca_csv_boletos`
+Quer que eu execute essa migração de reset agora? Vou tocar **somente** nesse `cotacao_id` / `contrato_id` / `agendamento_base_id` específicos.
