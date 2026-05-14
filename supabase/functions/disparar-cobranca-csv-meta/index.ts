@@ -140,21 +140,26 @@ serve(async (req) => {
     const destinatarios: DestinatarioIn[] = body.destinatarios || [];
     const isFirstChunk: boolean = body.is_first_chunk === true;
     const isLastChunk: boolean = body.is_last_chunk === true;
+    // init_only: cria o lote (e roda reconciliação), retorna lote_id IMEDIATAMENTE,
+    // sem chamar Meta. Resolve o problema do client perder o lote_id por timeout.
+    const initOnly: boolean = body.init_only === true;
     let loteId: string | null = body.lote_id || null;
     const nomeArquivo: string = body.nome_arquivo || "cobranca.csv";
     const totalRemessa: number | undefined = body.total_remessa;
 
-    if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
-      return new Response(JSON.stringify({ success: false, error: "Lista vazia" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (destinatarios.length > 200) {
-      return new Response(JSON.stringify({ success: false, error: "Máximo 200 por chunk" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!initOnly) {
+      if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
+        return new Response(JSON.stringify({ success: false, error: "Lista vazia" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (destinatarios.length > 200) {
+        return new Response(JSON.stringify({ success: false, error: "Máximo 200 por chunk" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // ===== 1. Criar lote no PRIMEIRO chunk e reconciliar com lote ATIVO anterior =====
