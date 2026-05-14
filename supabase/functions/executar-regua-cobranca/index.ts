@@ -189,6 +189,23 @@ Deno.serve(async (req) => {
       return jsonResp({ ativa: true, message: 'Régua sem etapas habilitadas', total_planejado: 0 })
     }
 
+    // 1.5 Cria run em status 'preparando' IMEDIATAMENTE e devolve run_id.
+    //     Toda a preparação pesada (Hinova, mirror, classificação, dedupe) roda
+    //     em background — caso contrário o `supabase.functions.invoke` cliente
+    //     aborta antes da função enviar headers ("Failed to send a request").
+    const { data: runRow0, error: errRun0 } = await supabase
+      .from('cobranca_runs').insert({
+        status: 'preparando',
+        total_planejado: 0,
+        delay_ms: delayMs,
+        criado_por: criadoPor,
+        payload: { regua_id: regua.id, started_at: startedAt },
+      }).select('id').single()
+    if (errRun0) throw errRun0
+    const runId = (runRow0 as any).id as string
+
+    const prepararEdispararWorker = async () => {
+      try {
     // 2. Pré-carrega slots dos templates (defesa Meta 132000)
     const slotsPorTemplate = new Map<string, number>()
     const tmplNomes = Array.from(new Set(etapas.map((e) => e.template).filter((t): t is string => !!t)))
