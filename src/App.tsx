@@ -580,6 +580,7 @@ const App = () => (
               <Route path="/financeiro/cobrancas" element={<CobrancasLayout />}>
                 <Route index element={<CobrancasList />} />
                 <Route path="regua" element={<ReguaPage />} />
+                <Route path="emissao" element={<EmissaoCobrancas />} />
                 <Route path="recuperados" element={<RecuperadosPage />} />
               </Route>
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
