@@ -48,7 +48,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
     queryFn: async () => {
       if (!servicoId) throw new Error('ID não fornecido');
 
-      // Buscar serviço com joins
+      // Buscar serviço com joins (defensivo: maybeSingle p/ distinguir não-encontrado de erro)
       const { data: servico, error } = await (supabase as any)
         .from('servicos')
         .select(`
@@ -58,9 +58,25 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
           associado:associado_id(id, nome, cpf, telefone, email, whatsapp, status)
         `)
         .eq('id', servicoId)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[AprovacaoInstalacaoDetalhe] erro ao carregar serviço', error);
+        throw error;
+      }
+      if (!servico) {
+        return { servico: null } as any;
+      }
+
+      // Helper: subqueries não derrubam a tela inteira
+      const safe = async <T,>(fn: () => Promise<T>, fallback: T, label: string): Promise<T> => {
+        try {
+          return await fn();
+        } catch (e) {
+          console.warn(`[AprovacaoInstalacaoDetalhe] subquery ${label} falhou`, e);
+          return fallback;
+        }
+      };
 
       // Buscar fotos da instalação
       let fotos: any[] = [];
