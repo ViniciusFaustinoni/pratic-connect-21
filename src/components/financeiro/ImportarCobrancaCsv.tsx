@@ -460,7 +460,7 @@ export function ImportarCobrancaCsv() {
                       </TableCell>
                       <TableCell className="text-right font-semibold">{d.boletos.length}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {d.boletos.map((b) => b.placa).filter(Boolean).join(', ') || '—'}
+                        {Array.from(new Set(d.boletos.map((b) => b.placa).filter(Boolean))).join(', ') || '—'}
                       </TableCell>
                     </TableRow>
                   ))}
