@@ -17,8 +17,15 @@ import {
   RefreshCw,
   AlertTriangle,
   ScanLine,
+  Video,
 } from 'lucide-react';
-import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
+import {
+  getFotosAutovistoria,
+  getInstrucoesVideo360,
+  getLabelVideo360,
+  type TipoVeiculo,
+  type FotoAutovistoria,
+} from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao, type PlacaOcrResultado } from '@/hooks/useCotacaoVistoria';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -28,6 +35,7 @@ import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 
 interface AutovistoriaCotacaoProps {
@@ -43,6 +51,8 @@ interface AutovistoriaCotacaoProps {
 export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosOverride, titulo }: AutovistoriaCotacaoProps) {
   const fotos = fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo);
   const totalFotos = fotos.length;
+  const instrucoesVideo = getInstrucoesVideo360(tipoVeiculo);
+  const labelVideo = getLabelVideo360(tipoVeiculo);
   
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
@@ -54,6 +64,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
   const [hidratado, setHidratado] = useState(false);
   const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, PlacaOcrResultado>>({});
   const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -66,18 +79,24 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
 
   const fotoAtual = fotos[fotoAtualIndex];
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
-  const progresso = (fotosCompletadas / totalFotos) * 100;
+  const totalItens = totalFotos + 1; // fotos + vídeo 360°
+  const itensCompletados = fotosCompletadas + (videoUrl ? 1 : 0);
+  const progresso = (itensCompletados / totalItens) * 100;
   const todasFotosEnviadas = fotosCompletadas >= totalFotos;
-  const todasEnviadas = todasFotosEnviadas;
+  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
 
   
   // Reidratar fotos existentes (refresh mantém progresso)
   useEffect(() => {
     if (fotosExistentes && fotosExistentes.length > 0 && !hidratado) {
       const fotosMap: Record<string, string> = {};
+      let videoExistente: string | null = null;
 
       for (const foto of fotosExistentes) {
-        if (foto.tipo && foto.arquivo_url && foto.tipo !== 'video_360') {
+        if (!foto.tipo || !foto.arquivo_url) continue;
+        if (foto.tipo === 'video_360') {
+          videoExistente = foto.arquivo_url;
+        } else {
           fotosMap[foto.tipo] = foto.arquivo_url;
         }
       }
@@ -85,6 +104,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       if (Object.keys(fotosMap).length > 0) {
         setFotosEnviadas(fotosMap);
         toast.success(`${Object.keys(fotosMap).length} foto(s) carregada(s) de sessão anterior`);
+      }
+      if (videoExistente) {
+        setVideoUrl(videoExistente);
       }
 
       // Ir para próxima foto pendente
@@ -250,8 +272,37 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
     e.target.value = '';
   };
 
+  const handleUploadVideo = useCallback(async (file: File) => {
+    setUploadingVideo(true);
+    setVideoProgress(0);
+    try {
+      const result = await uploadMutation.mutateAsync({
+        cotacaoId,
+        fotoId: 'video_360',
+        file,
+        onProgress: (pct: number) => setVideoProgress(pct),
+      } as any);
+      setVideoUrl(result.url);
+      toast.success('Vídeo 360° enviado!');
+    } catch (e) {
+      console.error('[AutovistoriaCotacao] erro no upload do vídeo:', e);
+      // toast já tratado no helper
+    } finally {
+      setUploadingVideo(false);
+      setVideoProgress(0);
+    }
+  }, [cotacaoId, uploadMutation]);
+
   const handleFinalizar = async () => {
     if (finalizandoRef.current || finalizarMutation.isPending) return;
+    if (!todasFotosEnviadas) {
+      toast.error('Envie todas as fotos antes de finalizar.');
+      return;
+    }
+    if (!videoUrl) {
+      toast.error('Grave o vídeo 360° terminando no painel ligado.');
+      return;
+    }
     finalizandoRef.current = true;
     
     try {
@@ -286,7 +337,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{titulo ?? 'Autovistoria'}</CardTitle>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
-            {fotosCompletadas}/{totalFotos} fotos
+            {itensCompletados}/{totalItens} itens
           </Badge>
         </div>
         <Progress value={progresso} className="h-2" />
@@ -595,7 +646,46 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             </Button>
           )}
         </div>
-        
+
+        {/* Bloco do vídeo 360° (libera após todas as fotos) */}
+        {todasFotosEnviadas && (
+          <div className="space-y-3 pt-4 border-t border-border/50">
+            <div className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-base text-foreground">{labelVideo}</h3>
+              <Badge variant={videoUrl ? 'default' : 'secondary'} className={cn(videoUrl && 'bg-success text-white')}>
+                {videoUrl ? 'Enviado' : 'Obrigatório'}
+              </Badge>
+            </div>
+
+            <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Info className="h-4 w-4 text-primary" />
+                Como gravar
+              </div>
+              <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-5">
+                {instrucoesVideo.map((p) => (
+                  <li key={p.passo}>
+                    {p.texto}
+                    {p.destaque && (
+                      <span className="block text-primary font-medium mt-1">⚠ {p.destaque}</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <VideoCapture
+              onCapture={handleUploadVideo}
+              onReset={() => setVideoUrl(null)}
+              videoUrl={videoUrl || undefined}
+              uploading={uploadingVideo}
+              uploadProgress={uploadingVideo ? videoProgress : undefined}
+              maxDuration={120}
+              label="Grave o vídeo 360° terminando no painel ligado"
+            />
+          </div>
+        )}
 
         {/* Botão finalizar — sticky e destacado para não ficar travado em mobile */}
         {todasEnviadas && (

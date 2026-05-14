@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge,
-  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, AlertCircle, ScanLine
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, AlertCircle, ScanLine, Video, Info
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
+import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, TipoVeiculo } from '@/data/autovistoriaConfig';
 import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente, useFinalizarAutovistoria } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
@@ -17,6 +17,7 @@ import { LocationCapture, Coordenadas } from './LocationCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { supabase } from '@/integrations/supabase/client';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 interface AutovistoriaProps {
   contratoId: string;
@@ -31,6 +32,8 @@ interface AutovistoriaProps {
 
 export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, readOnly, onComplete, onVoltar }: AutovistoriaProps) {
   const fotos = getFotosAutovistoria(tipoVeiculo);
+  const instrucoesVideo = getInstrucoesVideo360(tipoVeiculo);
+  const labelVideo = getLabelVideo360(tipoVeiculo);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
   const [indiceAtual, setIndiceAtual] = useState(0);
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
@@ -43,6 +46,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [hidratado, setHidratado] = useState(false);
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   
   const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, any>>({});
   const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
@@ -63,9 +68,13 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       
       // Montar mapa de fotos: { [tipo]: arquivo_url }
       const fotosMap: Record<string, string> = {};
+      let videoExistente: string | null = null;
       if (vistoriaExistente.fotos && Array.isArray(vistoriaExistente.fotos)) {
         for (const foto of vistoriaExistente.fotos) {
-          if (foto.tipo && foto.arquivo_url) {
+          if (!foto.tipo || !foto.arquivo_url) continue;
+          if (foto.tipo === 'video_360') {
+            videoExistente = foto.arquivo_url;
+          } else if (!foto.tipo.startsWith('video_360_historico_')) {
             fotosMap[foto.tipo] = foto.arquivo_url;
           }
         }
@@ -75,6 +84,9 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         setFotosEnviadas(fotosMap);
         toast.success(`${Object.keys(fotosMap).length} foto(s) carregadas de sessão anterior`);
       }
+      if (videoExistente) {
+        setVideoUrl(videoExistente);
+      }
       
       setHidratado(true);
     }
@@ -82,22 +94,46 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
 
   const totalFotos = fotos.length;
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
-  const progresso = (fotosCompletadas / totalFotos) * 100;
+  const totalItens = totalFotos + 1; // fotos + vídeo 360°
+  const itensCompletados = fotosCompletadas + (videoUrl ? 1 : 0);
+  const progresso = (itensCompletados / totalItens) * 100;
   const todasFotosEnviadas = fotosCompletadas === totalFotos;
-  const todasEnviadas = todasFotosEnviadas;
+  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
   
   const fotoAtual = fotos[indiceAtual];
   const isUltimaFoto = indiceAtual === totalFotos - 1;
   const isPrimeiraFoto = indiceAtual === 0;
   const fotoAtualEnviada = !!fotosEnviadas[fotoAtual.id];
 
-  // Finalizar autovistoria quando todas as fotos forem enviadas
+  // Finalizar autovistoria quando todas as fotos + vídeo forem enviados
   useEffect(() => {
     if (todasEnviadas && vistoriaId && hidratado) {
       finalizarAutovistoria.mutate({ vistoriaId });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todasEnviadas, vistoriaId, hidratado]);
+
+  const handleUploadVideo = useCallback(async (file: File) => {
+    if (!vistoriaId) {
+      toast.error('Inicie a vistoria enviando uma foto antes do vídeo.');
+      return;
+    }
+    setUploadingVideo(true);
+    try {
+      const result = await uploadFoto.mutateAsync({
+        vistoriaId,
+        fotoId: 'video_360',
+        file,
+        contratoId,
+      });
+      setVideoUrl(result.url);
+      toast.success('Vídeo 360° enviado!');
+    } catch (e) {
+      console.error('[Autovistoria] erro no upload do vídeo:', e);
+    } finally {
+      setUploadingVideo(false);
+    }
+  }, [vistoriaId, uploadFoto, contratoId]);
 
   const avancarFoto = () => {
     if (indiceAtual < totalFotos - 1) {
@@ -282,7 +318,56 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     );
   }
 
-  // Se todas as fotos foram enviadas, mostrar tela de conclusão
+  // Etapa de vídeo 360°: todas as fotos enviadas, falta o vídeo
+  if (todasFotosEnviadas && !videoUrl) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Button variant="ghost" size="icon" onClick={onVoltar} className="h-8 w-8">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              {labelVideo}
+            </CardTitle>
+          </div>
+          <Progress value={progresso} className="h-2" />
+          <p className="text-xs text-muted-foreground text-center mt-1">
+            {itensCompletados} de {totalItens} itens enviados
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Info className="h-4 w-4 text-primary" />
+              Como gravar
+            </div>
+            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-5">
+              {instrucoesVideo.map((p) => (
+                <li key={p.passo}>
+                  {p.texto}
+                  {p.destaque && (
+                    <span className="block text-primary font-medium mt-1">⚠ {p.destaque}</span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <VideoCapture
+            onCapture={handleUploadVideo}
+            onReset={() => setVideoUrl(null)}
+            videoUrl={videoUrl || undefined}
+            uploading={uploadingVideo}
+            maxDuration={120}
+            label="Grave o vídeo 360° terminando no painel ligado"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Se todas as fotos + vídeo foram enviados, mostrar tela de conclusão
   if (todasEnviadas) {
     return (
       <Card className="max-w-lg mx-auto">
