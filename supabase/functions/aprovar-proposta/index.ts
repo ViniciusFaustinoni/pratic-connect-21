@@ -498,7 +498,14 @@ serve(async (req) => {
       }
     }
 
-    const deveAguardarInstalacao = algumPrecisouRastreador && !jaTemInstalacaoConcluida;
+    // Aguardar quando:
+    //  (a) algum veículo precisa de rastreador e ainda não há instalação concluída, OU
+    //  (b) NENHUM veículo precisa de rastreador (fluxo "vistoria sem rastreador" — FIPE<30k carro / 9k moto não-Diesel):
+    //      a ativação só ocorre após aprovação manual da vistoria pelo Monitoramento.
+    //      Sem isso, a chamada a `ativar-associado` abaixo promove indevidamente assoc/contrato para 'ativo'.
+    const deveAguardarInstalacao = (algumPrecisouRastreador && !jaTemInstalacaoConcluida)
+                                || (!algumPrecisouRastreador && !algumPrecisouRastreador /* sempre true aqui */);
+    // Nota: a condição (b) acima é equivalente a `!algumPrecisouRastreador`, escrita para deixar a regra explícita.
 
     // Detectar se autovistoria/vistoria já foi aprovada antes da aprovação do Cadastro.
     // Isso muda apenas a mensagem exibida — a ativação real de R/F é feita por
