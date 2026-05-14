@@ -425,7 +425,10 @@ serve(async (req) => {
     // Filtra boleto-a-boleto: remove os duplicados do dia e empurra detalhes "skip"
     const destinatariosProcessar: typeof destinatariosAposLote = [];
     let puladosDuplicidadeDia = 0; // boletos pulados (granular)
-    let assocPuladosTotalmente = 0;
+    const dedupSkipDetalhes: Array<{
+      matricula: string; nome: string; telefone: string;
+      status: "skip"; erro: string; erro_codigo: string;
+    }> = [];
     for (const d of destinatariosAposLote) {
       const matricula = (d.matricula || "").trim();
       const boletosFiltrados: typeof d.boletos = [];
@@ -436,7 +439,7 @@ serve(async (req) => {
           || fallbackJaEnviadosHoje.get(fallbackKey);
         if (loteOrigem) {
           puladosDuplicidadeDia++;
-          detalhes.push({
+          dedupSkipDetalhes.push({
             matricula: d.matricula,
             nome: d.nome,
             telefone: "",
@@ -449,8 +452,7 @@ serve(async (req) => {
         }
       }
       if (boletosFiltrados.length === 0 && (d.boletos || []).length > 0) {
-        assocPuladosTotalmente++;
-        // Já empurramos um skip por boleto acima; não duplicar com skip de associado.
+        // Todos os boletos deste destinatário caíram em dedup; já temos skips granulares.
         continue;
       }
       destinatariosProcessar.push({ ...d, boletos: boletosFiltrados });
