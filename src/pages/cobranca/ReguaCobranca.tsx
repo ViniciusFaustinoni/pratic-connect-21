@@ -205,36 +205,56 @@ export default function ReguaCobranca() {
     }
   };
 
-  // Estado da última execução manual
-  const [ultimaExecucao, setUltimaExecucao] = useState<null | {
-    quando: string;
-    processados?: number;
-    eventos_criados?: number;
-    whatsapp_enviados?: number;
-    whatsapp_falhas?: number;
-    limite_atingido?: boolean;
-    error?: string;
-  }>(null);
+  // Estado da execução em andamento (Hinova-first com delay 10s)
+  const [delaySeg, setDelaySeg] = useState<number>(10);
+  const [runId, setRunId] = useState<string | null>(null);
+
+  const { data: runStatus } = useQuery({
+    queryKey: ['cobranca-run', runId],
+    enabled: !!runId,
+    refetchInterval: (q) => {
+      const s = (q.state.data as any)?.status;
+      return s === 'executando' ? 2000 : false;
+    },
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cobranca_runs')
+        .select('*')
+        .eq('id', runId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const cancelarRun = async () => {
+    if (!runId) return;
+    await (supabase as any).from('cobranca_runs')
+      .update({ status: 'cancelado' })
+      .eq('id', runId);
+    toast.info('Cancelamento solicitado — a régua para após o envio em curso');
+    queryClient.invalidateQueries({ queryKey: ['cobranca-run', runId] });
+  };
 
   const executarAgora = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('executar-regua-cobranca', { body: {} });
+      const { data, error } = await supabase.functions.invoke('executar-regua-cobranca', {
+        body: { delayMs: Math.max(0, delaySeg) * 1000 },
+      });
       if (error) throw error;
       return data;
     },
     onSuccess: (data: any) => {
-      setUltimaExecucao({
-        quando: new Date().toISOString(),
-        processados: data?.processados,
-        eventos_criados: data?.eventos_criados,
-        whatsapp_enviados: data?.whatsapp_enviados,
-        whatsapp_falhas: data?.whatsapp_falhas,
-        limite_atingido: data?.limite_atingido,
-      });
-      toast.success(`Régua executada — ${data?.eventos_criados ?? 0} eventos, ${data?.whatsapp_enviados ?? 0} WhatsApp enviados`);
+      if (data?.run_id) {
+        setRunId(data.run_id);
+        toast.success(`Régua iniciada — ${data.total_planejado} envio(s) com ${(data.delay_ms ?? 10000) / 1000}s entre cada`);
+      } else if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.info(data?.message || 'Sem envios pendentes');
+      }
     },
     onError: (err: any) => {
-      setUltimaExecucao({ quando: new Date().toISOString(), error: err?.message || 'Erro desconhecido' });
       toast.error('Falha ao executar régua: ' + (err?.message || ''));
     }
   });
