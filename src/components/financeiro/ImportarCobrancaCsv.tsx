@@ -208,6 +208,7 @@ export function ImportarCobrancaCsv() {
     let recuperadosValor = 0;
     let reemitidosCount = 0;
     let reemitidosValor = 0;
+    let puladosDuplicidadeDia = 0;
 
     // Snapshot completo para reconciliação no servidor
     const todasLinhasDigitaveis = resultado.destinatarios.flatMap((d) =>
@@ -307,6 +308,7 @@ export function ImportarCobrancaCsv() {
       recuperados_valor: recuperadosValor,
       reemitidos_count: reemitidosCount,
       reemitidos_valor: reemitidosValor,
+      pulados_duplicidade_dia: puladosDuplicidadeDia,
       lote_id: loteId,
       detalhes,
     });
