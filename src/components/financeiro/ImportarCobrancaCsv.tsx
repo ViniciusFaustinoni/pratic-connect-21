@@ -655,6 +655,7 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
   const salvar = useCallback(async () => {
     setSalvando(true);
     setResumo(null);
+    setReconciliacao(null);
     const CHUNK = 200;
     const dests = resultado.destinatarios;
     let loteId: string | null = null;
