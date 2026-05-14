@@ -232,10 +232,10 @@ export default function CobrancasList() {
           let q = supabase
             .from(tabela as any)
             .select(`${statusCol}, ${valorCol}, data_vencimento, ${valorPagoCol}`)
-            .gte('data_vencimento', dataInicio)
-            .lte('data_vencimento', dataFim)
             .range(from, from + chunk - 1);
 
+          if (dataInicio) q = q.gte('data_vencimento', dataInicio);
+          if (dataFim) q = q.lte('data_vencimento', dataFim);
           if (fonte === 'sga_hinova') q = q.eq('origem', 'sga_hinova');
           if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
 
