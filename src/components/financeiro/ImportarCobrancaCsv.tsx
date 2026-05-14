@@ -514,29 +514,69 @@ export function ImportarCobrancaCsv() {
         <SalvarNoSistemaCard resultado={resultado} arquivo={arquivo} />
 
         {/* Botão disparar */}
-        <Card className="bg-primary/5 border-primary/30">
-          <CardContent className="p-4 flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <h3 className="font-semibold flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-primary" />
-                Disparar WhatsApp em massa (opcional)
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                1 mensagem por associado agrupando todos os boletos.
-                Template Meta: <code className="text-xs bg-muted px-1 py-0.5 rounded">{TEMPLATE_NOME}</code>
-              </p>
-            </div>
-            <Button
-              size="lg"
-              onClick={() => setConfirmAberto(true)}
-              disabled={destinatariosValidos.length === 0}
-              className="gap-2"
-            >
-              <Send className="h-4 w-4" />
-              Iniciar envio em massa
-            </Button>
-          </CardContent>
-        </Card>
+        {(() => {
+          const totalBoletosComLink = resultado.destinatarios.reduce(
+            (acc, d) => acc + d.boletos.filter((b) => !!b.link).length,
+            0,
+          );
+          const associadosComLink = resultado.destinatarios.filter(
+            (d) => d.telefones_validos.length > 0 && d.boletos.some((b) => !!b.link),
+          ).length;
+          return (
+            <Card className="bg-primary/5 border-primary/30">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <MessageCircle className="h-5 w-5 text-primary" />
+                      Disparar WhatsApp em massa (opcional)
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      1 mensagem por associado agrupando todos os boletos.
+                      Template Meta:{' '}
+                      <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                        {usarTemplateV2 ? `${TEMPLATE_NOME}_v2` : TEMPLATE_NOME}
+                      </code>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      <strong>{totalBoletosComLink}</strong> boleto(s) com link da 2ª via ·{' '}
+                      <strong>{associadosComLink}</strong> associado(s) receberão botão dinâmico
+                    </p>
+                  </div>
+                  <Button
+                    size="lg"
+                    onClick={() => setConfirmAberto(true)}
+                    disabled={destinatariosValidos.length === 0}
+                    className="gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                    Iniciar envio em massa
+                  </Button>
+                </div>
+                <label className="flex items-start gap-3 p-3 rounded-md bg-background border cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={usarTemplateV2}
+                    onChange={(e) => setUsarTemplateV2(e.target.checked)}
+                    className="mt-1 h-4 w-4 cursor-pointer"
+                  />
+                  <div className="text-sm">
+                    <div className="font-medium">
+                      Usar template com botão dinâmico de URL (v2)
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Quando marcado, usa <code>{TEMPLATE_NOME}_v2</code> (com botão
+                      &quot;Abrir 2ª via&quot;) para associados que tenham link Hinova.
+                      Quem não tiver link cai automaticamente no template padrão.{' '}
+                      <strong>Requer</strong> o template v2 aprovado na Meta — sem ele, o
+                      sistema usa o v1 com o link no corpo da mensagem.
+                    </div>
+                  </div>
+                </label>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         <AlertDialog open={confirmAberto} onOpenChange={setConfirmAberto}>
           <AlertDialogContent>
