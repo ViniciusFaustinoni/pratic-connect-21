@@ -53,6 +53,48 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'Cotação não encontrada' }, 404);
     }
 
+    // 1.b Detectar sub-FIPE (carro <30k / moto <9k não-Diesel) — exige passagem pelo Cadastro
+    // ANTES de entrar na fila do Monitoramento. O servico vistoria_entrada nasce em
+    // `em_analise` (não `concluida`) — quando o Cadastro aprovar (aprovar-proposta),
+    // o serviço é promovido para `concluida` e libera Roubo/Furto + entra na fila do Monitoramento.
+    const FIPE_MIN_CARRO = 30000;
+    const FIPE_MIN_MOTO = 9000;
+    let veiculoSubFipe = false;
+    try {
+      const { data: cfgRows } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto']);
+      const cfgMap: Record<string, string> = {};
+      (cfgRows || []).forEach((r: any) => { cfgMap[r.chave] = r.valor; });
+      const fipeMinCarro = Number(cfgMap['operacional_fipe_minimo_rastreador']) || FIPE_MIN_CARRO;
+      const fipeMinMoto = Number(cfgMap['operacional_fipe_minimo_rastreador_moto']) || FIPE_MIN_MOTO;
+
+      const { data: veicRow } = await supabase
+        .from('veiculos')
+        .select('id, marca, modelo, valor_fipe, combustivel, categoria')
+        .eq('placa', cotacao.veiculo_placa || '___nope___')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (veicRow) {
+        const combustivel = (veicRow.combustivel || '').toLowerCase();
+        if (combustivel !== 'diesel') {
+          const cat = (veicRow.categoria || '').toLowerCase();
+          const modelo = (veicRow.modelo || '').toLowerCase();
+          const isMoto = cat.includes('moto') || cat.includes('ciclomotor') || /\b(moto|cg|cb|cbr|pcx|biz|nxr|bros|titan|fan|ybr|fazer|hornet|crosser|xre)\b/.test(modelo);
+          const fipe = Number(veicRow.valor_fipe || 0);
+          if (fipe > 0) {
+            veiculoSubFipe = isMoto ? fipe < fipeMinMoto : fipe < fipeMinCarro;
+          }
+        }
+      }
+      console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} subFipe=${veiculoSubFipe}`);
+    } catch (e) {
+      console.warn('[finalizar-autovistoria] Falha detect sub-FIPE (segue como ≥30k):', e);
+    }
+
     // 2. Contrato + veículo + associado (último não-cancelado)
     const { data: contrato } = await supabase
       .from('contratos')
