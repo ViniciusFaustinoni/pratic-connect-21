@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { ImportarCobrancaCsv } from '@/components/financeiro/ImportarCobrancaCsv';
+import { LoteAtivoCobrancas } from '@/components/financeiro/LoteAtivoCobrancas';
 
 type CobrancaStatus = 'pendente' | 'emitido' | 'erro';
 
