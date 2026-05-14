@@ -484,8 +484,18 @@ serve(async (req) => {
 
       let envioOkParaEsteAssoc = false;
 
+      // Escolhe template por destinatário: v2 (com botão URL) só se v2 disponível E houver link válido.
+      // Pega o boleto mais antigo (menor vencimento) com link Hinova reconhecível.
+      const boletosOrdenados = [...(dest.boletos || [])].sort(
+        (a, b) => tsVencimento(a.vencimento) - tsVencimento(b.vencimento),
+      );
+      const boletoComLink = boletosOrdenados.find((b) => extrairSufixoHinova(b.link));
+      const sufixoHinova = boletoComLink ? extrairSufixoHinova(boletoComLink.link) : null;
+      const usarV2ParaEste = templateV2Disponivel && !!sufixoHinova;
+      const templateNomeUsado = usarV2ParaEste ? templateNomeBase : templateNomeFallback;
+      const templateCorpo = corposPorTemplate[templateNomeUsado] || corposPorTemplate[templateNomeFallback] || "";
+
       for (const telRaw of dest.telefones_validos || []) {
-        // Já enviou OK pra este associado em outro telefone? Não duplicar (evita 131056 e custo).
         if (envioOkParaEsteAssoc) break;
 
         const tel = validarTelefone(telRaw);
@@ -509,22 +519,33 @@ serve(async (req) => {
 
         for (let i = 0; i < blocos.length; i++) {
           const bloco = blocos[i];
+          const components: any[] = [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: sanitizeMetaParam(nome) },
+                { type: "text", text: sanitizeMetaParam(bloco) },
+              ],
+            },
+          ];
+          // No v2: adiciona o componente button URL dinâmico apenas no PRIMEIRO bloco
+          // (apenas a 1ª mensagem leva o botão; blocos seguintes do mesmo destinatário ficam só com texto).
+          if (usarV2ParaEste && i === 0 && sufixoHinova) {
+            components.push({
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: sufixoHinova }],
+            });
+          }
           const payload = {
             messaging_product: "whatsapp",
             to: tel,
             type: "template",
             template: {
-              name: templateNome,
+              name: i === 0 ? templateNomeUsado : templateNomeFallback,
               language: { code: "pt_BR" },
-              components: [
-                {
-                  type: "body",
-                  parameters: [
-                    { type: "text", text: sanitizeMetaParam(nome) },
-                    { type: "text", text: sanitizeMetaParam(bloco) },
-                  ],
-                },
-              ],
+              components: i === 0 ? components : [components[0]],
             },
           };
 
