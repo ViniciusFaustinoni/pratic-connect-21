@@ -733,6 +733,24 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
             <div className="rounded border bg-background p-2"><div className="text-xs text-orange-600">Sem linha digitável</div><div className="font-semibold">{resumo.ignoradosSemLinha}</div></div>
           </div>
         )}
+        {reconciliacao && (
+          <div className="space-y-2">
+            <div className="text-sm font-semibold flex items-center gap-2">
+              <Check className="h-4 w-4 text-emerald-600" />
+              Reconciliação automática contra cobranças do sistema
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+              <div className="rounded border bg-background p-2"><div className="text-xs text-emerald-600">Marcadas como pagas</div><div className="font-semibold">{reconciliacao.pagas}</div><div className="text-xs text-muted-foreground">R$ {reconciliacao.pagas_valor.toFixed(2)}</div></div>
+              <div className="rounded border bg-background p-2"><div className="text-xs text-blue-600">Atualizadas</div><div className="font-semibold">{reconciliacao.atualizadas}</div></div>
+              <div className="rounded border bg-background p-2"><div className="text-xs text-purple-600">Criadas</div><div className="font-semibold">{reconciliacao.criadas}</div></div>
+              <div className="rounded border bg-background p-2"><div className="text-xs text-amber-600">Sem match</div><div className="font-semibold">{reconciliacao.sem_match}</div></div>
+              <div className="rounded border bg-background p-2"><div className="text-xs text-muted-foreground">Recentes (24h)</div><div className="font-semibold">{reconciliacao.ignoradas_recente}</div></div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Boletos que sumiram da nova listagem foram marcados como pagos. Os que continuam tiveram vencimento/valor sincronizados. Os novos foram inseridos.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
