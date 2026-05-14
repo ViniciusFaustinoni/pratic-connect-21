@@ -486,7 +486,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             </div>
 
             {/* Resultado do OCR de placa */}
-            {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && (
+            {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && !COTACOES_TESTE_BYPASS_OCR_PLACA.has(cotacaoId) && (
               <div className={cn(
                 "rounded-lg p-2.5 flex items-center gap-2 border text-xs",
                 placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel
