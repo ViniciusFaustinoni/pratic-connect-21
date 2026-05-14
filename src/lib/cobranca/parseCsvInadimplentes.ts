@@ -1,12 +1,15 @@
-// Parser do CSV SGA/Hinova de inadimplentes.
-// Cabeçalho esperado:
-// Nome, Matrícula, Placas, Telefone Celular, Telefone, Data Vencimento, Data Vencimento Original, Codigo de Barras
+// Parser do CSV de cobranças (SGA/Hinova ou export externo).
+// Aceita TODOS os tipos e qualquer status (adimplente/inadimplente/pago/pendente).
+// Cabeçalho mínimo: Nome, Matrícula. Demais colunas são opcionais e o parser
+// reconhece variações comuns (cpf, valor, tipo, status, código de barras, placas, telefones, vencimento).
 
 export interface BoletoCsv {
   placa: string;
   vencimento: string; // dd/mm/aaaa
   linha_digitavel: string;
-  valor: number; // extraído da linha digitável (R$); 0 quando não identificável
+  valor: number; // valor (R$); 0 quando não identificável
+  tipo?: string; // mensalidade | taxa | adesao | outros (cru do CSV)
+  status_origem?: string; // adimplente | inadimplente | pago | pendente | etc.
 }
 
 /**
