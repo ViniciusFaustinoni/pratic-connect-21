@@ -657,7 +657,7 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
     const CHUNK = 200;
     const dests = resultado.destinatarios;
     let loteId: string | null = null;
-    let matched = 0, semMatch = 0, gravados = 0, ignoradosSemLinha = 0;
+    let matched = 0, semMatch = 0, gravados = 0, ignoradosSemLinha = 0, duplicados = 0;
     setProgresso({ atual: 0, total: dests.length });
     try {
       for (let i = 0; i < dests.length; i += CHUNK) {
