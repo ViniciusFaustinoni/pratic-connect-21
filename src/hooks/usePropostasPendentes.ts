@@ -650,17 +650,23 @@ export function usePropostasPendentes() {
           }
         }
         if (!vistoria && contrato.cotacao_id) {
-          const fotosLegado = mFotosLegadoPorCotacao.get(contrato.cotacao_id) || [];
-          if (fotosLegado.length > 0) {
-            const isAuto = cotacao?.tipo_vistoria === 'autovistoria';
-            vistoria = {
-              id: contrato.cotacao_id,
-              status: 'pendente',
-              tipo: isAuto ? 'autovistoria' : 'agendada',
-              modalidade: isAuto ? 'autovistoria' : 'presencial',
-              fotos: fotosLegado,
-              video_360_url: mVideoPorCotacao.get(contrato.cotacao_id) || null,
-            };
+          // Só usa fotos legacy de autovistoria quando a cotação AINDA está em
+          // modo autovistoria. Se o associado migrou para vistoria com técnico
+          // (agendada/agendada_base), as fotos parciais antigas são lixo e
+          // NÃO podem contar como vistoria entregue (não liberar R&F).
+          const isAuto = cotacao?.tipo_vistoria === 'autovistoria';
+          if (isAuto) {
+            const fotosLegado = mFotosLegadoPorCotacao.get(contrato.cotacao_id) || [];
+            if (fotosLegado.length > 0) {
+              vistoria = {
+                id: contrato.cotacao_id,
+                status: 'pendente',
+                tipo: 'autovistoria',
+                modalidade: 'autovistoria',
+                fotos: fotosLegado,
+                video_360_url: mVideoPorCotacao.get(contrato.cotacao_id) || null,
+              };
+            }
           }
         }
 
