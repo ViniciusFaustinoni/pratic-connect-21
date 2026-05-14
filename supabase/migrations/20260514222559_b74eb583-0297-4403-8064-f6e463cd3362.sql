@@ -1,0 +1,1 @@
+ALTER TYPE status_associado ADD VALUE IF NOT EXISTS 'aguardando_aprovacao_monitoramento';

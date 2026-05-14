@@ -34886,6 +34886,7 @@ export type Database = {
         | "cancelado"
         | "bloqueado"
         | "recusado"
+        | "aguardando_aprovacao_monitoramento"
       status_chamado:
         | "aberto"
         | "em_atendimento"
@@ -35338,6 +35339,7 @@ export const Constants = {
         "cancelado",
         "bloqueado",
         "recusado",
+        "aguardando_aprovacao_monitoramento",
       ],
       status_chamado: [
         "aberto",
