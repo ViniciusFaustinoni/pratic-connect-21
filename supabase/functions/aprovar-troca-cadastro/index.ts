@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     // 1) Carregar solicitação
     const { data: sol, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, status, termo_cancelamento_assinado_em, associado_antigo_id, novo_titular_dados, cotacao_id, veiculo_id, criado_por')
+      .select('id, status, termo_cancelamento_assinado_em, autovistoria_concluida_em, associado_antigo_id, novo_titular_dados, cotacao_id, veiculo_id, criado_por')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (solErr) throw solErr;
@@ -61,6 +61,17 @@ Deno.serve(async (req) => {
 
     // (Removido) Trava por débito do antigo: a troca não exige mais adimplência.
 
+    // 3) Trava: autovistoria do novo titular precisa estar concluída
+    if (!sol.autovistoria_concluida_em) {
+      return new Response(
+        JSON.stringify({
+          error: 'Aprovação bloqueada: o novo titular ainda não concluiu a autovistoria pelo link público. Cadastro só pode aprovar após as fotos e documentos ficarem prontos.',
+          code: 'AUTOVISTORIA_PENDENTE',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // 4) Resolver profile.id do aprovador
     const { data: prof } = await admin
       .from('profiles')
@@ -70,14 +81,14 @@ Deno.serve(async (req) => {
     const aprovadorId = prof?.id ?? null;
 
     // 5) COMMIT PRIMEIRO: avançar status com CAS (idempotente)
-    // NOVO FLUXO: cadastro aprovado → liberada_para_assinatura DIRETO.
-    // O Monitoramento só vê o caso depois que o novo titular concluir a vistoria
-    // (trigger fn_troca_promover_monitoramento_pos_vistoria promove para
-    // `aguardando_monitoramento` ao detectar vistoria em_analise/concluida).
+    // FLUXO ATUAL: Cadastro aprova → aguardando_monitoramento.
+    // O Monitoramento então decide: aprovar (libera_para_assinatura), pedir
+    // vistoria adicional (aguardando_vistoria) ou agendar manutenção de
+    // rastreador (aguardando_manutencao).
     const { data: updated, error: updErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
-        status: 'liberada_para_assinatura',
+        status: 'aguardando_monitoramento',
         aprovado_cadastro_por: aprovadorId,
         aprovado_cadastro_em: new Date().toISOString(),
         observacao_cadastro: observacao || null,
@@ -93,7 +104,7 @@ Deno.serve(async (req) => {
 
     if (!updated || updated.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, already_advanced: true, status: 'liberada_para_assinatura' }),
+        JSON.stringify({ success: true, already_advanced: true, status: 'aguardando_monitoramento' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -108,7 +119,7 @@ Deno.serve(async (req) => {
     });
 
     return new Response(
-      JSON.stringify({ success: true, status: 'liberada_para_assinatura' }),
+      JSON.stringify({ success: true, status: 'aguardando_monitoramento' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e: any) {

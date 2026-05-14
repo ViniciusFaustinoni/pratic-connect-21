@@ -122,6 +122,17 @@ function TrocaTitularidadeTab({
                               <FileSignature className="h-3 w-3 mr-1" /> Termo assinado
                             </Badge>
                           )}
+                          {s.status === 'aguardando_cadastro' && (
+                            s.autovistoria_concluida_em ? (
+                              <Badge variant="outline" className="text-green-600 border-green-600">
+                                Autovistoria concluída
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-amber-600 border-amber-600">
+                                Aguardando autovistoria
+                              </Badge>
+                            )
+                          )}
                           {(s as any).sga_status === 'falha' && (
                             <Badge variant="destructive">Erro SGA</Badge>
                           )}

@@ -59,6 +59,7 @@ export interface SolicitacaoTroca {
   tipo_vistoria_troca?: TipoVistoriaTroca | null;
   instalar_rastreador?: boolean | null;
   expirada_em?: string | null;
+  autovistoria_concluida_em?: string | null;
   motivo_reprovacao: string | null;
   reprovado_por: string | null;
   reprovado_em: string | null;
@@ -189,12 +190,12 @@ export function useAprovarTrocaCadastro() {
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    onSuccess: (data: any) => {
+      onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
       qc.invalidateQueries({ queryKey: ['solicitacao-troca'] });
       toast.success(data?.silent
         ? 'Aprovada — processamento em segundo plano'
-        : 'Solicitação aprovada e enviada ao Monitoramento');
+        : 'Cadastro aprovado — enviada ao Monitoramento');
     },
     onError: (e: Error) => toast.error(e.message),
   });
