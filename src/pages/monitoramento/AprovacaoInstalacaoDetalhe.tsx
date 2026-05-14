@@ -68,16 +68,6 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         return { servico: null } as any;
       }
 
-      // Helper: subqueries não derrubam a tela inteira
-      const safe = async <T,>(fn: () => Promise<T>, fallback: T, label: string): Promise<T> => {
-        try {
-          return await fn();
-        } catch (e) {
-          console.warn(`[AprovacaoInstalacaoDetalhe] subquery ${label} falhou`, e);
-          return fallback;
-        }
-      };
-
       // Buscar fotos da instalação
       let fotos: any[] = [];
       if (servico.instalacao_origem_id) {
