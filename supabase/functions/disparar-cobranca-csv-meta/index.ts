@@ -420,15 +420,20 @@ serve(async (req) => {
     }
 
     // Corpo do template — usado para gravar o conteúdo real renderizado em whatsapp_mensagens.
-    // Sem isso, o agente-consultor-ia não entende o contexto da cobrança ao responder.
-    let templateCorpo = "";
+    // Carregamos AMBOS (v1 + v2) para suportar fallback automático por destinatário.
+    const corposPorTemplate: Record<string, string> = {};
     {
-      const { data: tpl } = await supabase
+      const nomesParaCarregar = Array.from(new Set([templateNomeBase, templateNomeFallback]));
+      const { data: tpls } = await supabase
         .from("whatsapp_meta_templates")
-        .select("corpo")
-        .eq("nome", templateNome)
-        .maybeSingle();
-      templateCorpo = tpl?.corpo || "";
+        .select("nome, corpo, status")
+        .in("nome", nomesParaCarregar);
+      for (const t of tpls || []) corposPorTemplate[t.nome] = t.corpo || "";
+    }
+    // Se v2 não existe ou não está APPROVED, força v1 globalmente.
+    let templateV2Disponivel = templateV2 && (templateNomeBase === "cobranca_inadimplencia_pratic_v2") && !!corposPorTemplate[templateNomeBase];
+    if (templateV2 && !templateV2Disponivel) {
+      console.warn(`[disparar-cobranca-csv-meta] template ${templateNomeBase} indisponível — usando ${templateNomeFallback}`);
     }
 
     const detalhes: Array<{
