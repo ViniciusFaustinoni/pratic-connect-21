@@ -201,11 +201,11 @@ Deno.serve(async (req) => {
       }).eq('id', loteId);
 
       // Reconciliação automática contra a tabela canônica `cobrancas`.
-      // Não bloqueia o retorno do upload em caso de falha.
       try {
-        await supabase.functions.invoke('reconciliar-csv-cobrancas', {
+        const { data: rec } = await supabase.functions.invoke('reconciliar-csv-cobrancas', {
           body: { lote_id: loteId },
         });
+        (globalThis as any).__lastReconciliacao = rec;
       } catch (e) {
         console.error('[importar-cobrancas-csv] reconciliação falhou', e);
       }
@@ -221,6 +221,7 @@ Deno.serve(async (req) => {
       ignorados_sem_linha_digitavel: ignoradosSemLinha,
       duplicados_ignorados: duplicadosIgnorados,
       valor_total_chunk: valorTotal,
+      reconciliacao: (globalThis as any).__lastReconciliacao || null,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
     return new Response(JSON.stringify({ success: false, error: e.message }), {
