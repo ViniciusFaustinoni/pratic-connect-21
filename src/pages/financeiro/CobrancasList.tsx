@@ -133,7 +133,7 @@ const canonicoParaRawSga = (s: StatusCanonico): string[] => {
 
 interface CobrancaUnificada {
   id: string;
-  origem: 'asaas' | 'sga_hinova';
+  origem: 'asaas' | 'sga_hinova' | 'csv_sga';
   associado_id: string | null;
   associado: { id: string; nome: string; cpf: string; telefone?: string; whatsapp?: string; email?: string } | null;
   tipo: string;
