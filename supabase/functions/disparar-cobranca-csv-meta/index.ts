@@ -291,9 +291,46 @@ serve(async (req) => {
       });
     }
 
-    // ===== 2. Persistir os boletos deste chunk =====
+    // ===== INIT ONLY: devolve lote_id e métricas de reconciliação, sem disparar Meta =====
+    if (initOnly) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          init: true,
+          lote_id: loteId,
+          recuperados_count: recuperadosCount,
+          recuperados_valor: recuperadosValor,
+          reemitidos_count: reemitidosCount,
+          reemitidos_valor: reemitidosValor,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ===== IDEMPOTÊNCIA: pula matrículas já enviadas neste lote (retomada segura) =====
+    const matriculasChunk = Array.from(
+      new Set(destinatarios.map((d) => (d.matricula || "").trim()).filter(Boolean)),
+    );
+    const matriculasJaEnviadas = new Set<string>();
+    if (matriculasChunk.length > 0) {
+      const { data: jaEnv } = await supabase
+        .from("cobranca_csv_boletos")
+        .select("matricula")
+        .eq("lote_id", loteId)
+        .eq("status", "enviado")
+        .in("matricula", matriculasChunk);
+      for (const r of jaEnv || []) {
+        if (r.matricula) matriculasJaEnviadas.add(String(r.matricula).trim());
+      }
+    }
+    const destinatariosProcessar = destinatarios.filter(
+      (d) => !matriculasJaEnviadas.has((d.matricula || "").trim()),
+    );
+    const puladosIdempotencia = destinatarios.length - destinatariosProcessar.length;
+
+    // ===== 2. Persistir os boletos deste chunk (apenas dos não-pulados) =====
     const boletoRows: any[] = [];
-    for (const dest of destinatarios) {
+    for (const dest of destinatariosProcessar) {
       for (const b of dest.boletos || []) {
         boletoRows.push({
           lote_id: loteId,
