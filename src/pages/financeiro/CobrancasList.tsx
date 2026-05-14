@@ -336,7 +336,7 @@ export default function CobrancasList() {
             linha_digitavel: c.linha_digitavel || null,
             veiculo_id: c.veiculo_id || null,
           }));
-        } else {
+        } else if (fonte === 'sga_hinova') {
           let q = supabase
             .from('cobrancas')
             .select(`
@@ -377,6 +377,52 @@ export default function CobrancasList() {
             linha_digitavel: c.linha_digitavel || null,
             veiculo_id: c.veiculo_id || null,
           }));
+        } else {
+          // CSV SGA — boletos importados via Régua (somente leitura)
+          let q = supabase
+            .from('cobranca_csv_boletos')
+            .select(`
+              id, tipo, status_origem, valor, data_vencimento,
+              associado_id, veiculo_id, linha_digitavel, matricula,
+              associado:associados(id, nome, cpf, telefone, whatsapp, email)
+            `)
+            .gte('data_vencimento', dataInicio)
+            .lte('data_vencimento', dataFim)
+            .order('data_vencimento', { ascending: false })
+            .order('id', { ascending: false })
+            .range(offset, offset + PAGE_SIZE - 1);
+
+          if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
+          // status: filtramos client-side via status canonico (status_origem é texto livre do SGA)
+
+          const { data, error } = await q;
+          if (error) throw error;
+          return (data || []).map((c: any): CobrancaUnificada => {
+            const so = String(c.status_origem || '').toLowerCase();
+            const canonico: StatusCanonico = so.startsWith('pago')
+              ? 'pago'
+              : toCanonical('aguardando_pagamento', c.data_vencimento);
+            return {
+              id: c.id,
+              origem: 'csv_sga',
+              associado_id: c.associado_id,
+              associado: c.associado,
+              tipo: c.tipo || 'mensalidade',
+              status_raw: c.status_origem || 'aguardando_pagamento',
+              status: canonico,
+              valor: Number(c.valor) || 0,
+              valor_pago: canonico === 'pago' ? Number(c.valor) || 0 : 0,
+              data_vencimento: c.data_vencimento,
+              competencia: c.data_vencimento
+                ? `${c.data_vencimento.slice(5, 7)}/${c.data_vencimento.slice(0, 4)}`
+                : null,
+              boleto_url: null,
+              pix_copia_cola: null,
+              asaas_id: null,
+              linha_digitavel: c.linha_digitavel || null,
+              veiculo_id: c.veiculo_id || null,
+            };
+          });
         }
       });
 
