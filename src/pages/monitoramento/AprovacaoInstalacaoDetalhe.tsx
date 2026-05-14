@@ -48,7 +48,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
     queryFn: async () => {
       if (!servicoId) throw new Error('ID não fornecido');
 
-      // Buscar serviço com joins
+      // Buscar serviço com joins (defensivo: maybeSingle p/ distinguir não-encontrado de erro)
       const { data: servico, error } = await (supabase as any)
         .from('servicos')
         .select(`
@@ -58,9 +58,15 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
           associado:associado_id(id, nome, cpf, telefone, email, whatsapp, status)
         `)
         .eq('id', servicoId)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[AprovacaoInstalacaoDetalhe] erro ao carregar serviço', error);
+        throw error;
+      }
+      if (!servico) {
+        return { servico: null } as any;
+      }
 
       // Buscar fotos da instalação
       let fotos: any[] = [];
@@ -302,6 +308,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
       };
     },
     enabled: !!servicoId,
+    staleTime: 10_000,
+    refetchOnMount: true,
   });
 }
 
@@ -322,7 +330,7 @@ const fotoLabels: Record<string, string> = {
 export default function AprovacaoInstalacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data, isLoading } = useServicoDetalheAprovacao(id);
+  const { data, isLoading, error, refetch, isFetching } = useServicoDetalheAprovacao(id);
   const aprovar = useAprovarInstalacaoMonitoramento();
   const reprovar = useReprovarInstalacaoMonitoramento();
 
@@ -345,11 +353,36 @@ export default function AprovacaoInstalacaoDetalhe() {
     );
   }
 
-  if (!data) {
+  if (error) {
     return (
-      <div className="text-center py-16 text-muted-foreground">
+      <div className="text-center py-16 space-y-3">
+        <AlertTriangle className="h-10 w-10 mx-auto text-destructive" />
+        <p className="text-foreground font-medium">Erro ao carregar o serviço</p>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto break-words">
+          {(error as any)?.message || 'Falha de rede ou permissão.'}
+        </p>
+        <div className="flex justify-center gap-2 pt-2">
+          <Button variant="outline" onClick={() => navigate(-1)}>Voltar</Button>
+          <Button onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Tentar de novo
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data || !(data as any).servico) {
+    return (
+      <div className="text-center py-16 text-muted-foreground space-y-3">
         <p>Serviço não encontrado</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate(-1)}>Voltar</Button>
+        <div className="flex justify-center gap-2">
+          <Button variant="outline" onClick={() => navigate(-1)}>Voltar</Button>
+          <Button variant="ghost" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Recarregar
+          </Button>
+        </div>
       </div>
     );
   }
