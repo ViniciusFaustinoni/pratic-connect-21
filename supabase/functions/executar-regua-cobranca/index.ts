@@ -405,6 +405,10 @@ Deno.serve(async (req) => {
           boletos_retornados: boletos.length,
           fila_bruta: fila.length,
           duplicados_pulados: fila.length - filaFinal.length,
+          cobrancas_inseridas: mirrorRes.inseridas,
+          cobrancas_baixadas: mirrorRes.baixadas,
+          cobrancas_ignoradas: mirrorRes.ignoradas,
+          cobrancas_erros: mirrorRes.erros,
           regua_id: regua.id,
         },
       }).select('id').single()
