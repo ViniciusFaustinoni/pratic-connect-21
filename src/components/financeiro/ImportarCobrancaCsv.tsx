@@ -633,3 +633,88 @@ function formatarFone(t: string): string {
   if (!m) return t;
   return `+${m[1]} (${m[2]}) ${m[3]}-${m[4]}`;
 }
+
+function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado; arquivo: File | null }) {
+  const [salvando, setSalvando] = useState(false);
+  const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
+  const [resumo, setResumo] = useState<{ matched: number; sem_match: number; gravados: number; lote_id: string | null } | null>(null);
+
+  const salvar = useCallback(async () => {
+    setSalvando(true);
+    setResumo(null);
+    const CHUNK = 200;
+    const dests = resultado.destinatarios;
+    let loteId: string | null = null;
+    let matched = 0, semMatch = 0, gravados = 0;
+    setProgresso({ atual: 0, total: dests.length });
+    try {
+      for (let i = 0; i < dests.length; i += CHUNK) {
+        const slice = dests.slice(i, i + CHUNK);
+        const isFirst = i === 0;
+        const isLast = i + CHUNK >= dests.length;
+        const { data, error } = await supabase.functions.invoke('importar-cobrancas-csv', {
+          body: {
+            destinatarios: slice,
+            lote_id: loteId,
+            is_first_chunk: isFirst,
+            is_last_chunk: isLast,
+            nome_arquivo: arquivo?.name || 'cobranca.csv',
+            ...(isFirst ? {
+              total_remessa_destinatarios: resultado.total_associados,
+              total_remessa_boletos: resultado.total_boletos,
+              total_remessa_valor: resultado.valor_total,
+            } : {}),
+          },
+        });
+        if (error || !data?.success) throw new Error(error?.message || data?.error || 'falha');
+        if (data.lote_id) loteId = data.lote_id;
+        matched += data.matched_associado || 0;
+        semMatch += data.sem_match || 0;
+        gravados += data.gravados || 0;
+        setProgresso({ atual: Math.min(i + CHUNK, dests.length), total: dests.length });
+      }
+      setResumo({ matched, sem_match: semMatch, gravados, lote_id: loteId });
+      toast.success(`${gravados} cobranças salvas no sistema (${matched} vinculadas).`);
+    } catch (e: any) {
+      toast.error(`Erro ao salvar: ${e.message}`);
+    } finally {
+      setSalvando(false);
+    }
+  }, [resultado, arquivo]);
+
+  return (
+    <Card className="bg-emerald-500/5 border-emerald-500/30">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <Check className="h-5 w-5 text-emerald-600" />
+              Salvar cobranças no sistema
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Vincula automaticamente cada linha a associados (matrícula/CPF) e veículos (placa).
+              Salva em lote — funciona com arquivos grandes.
+            </p>
+          </div>
+          <Button size="lg" onClick={salvar} disabled={salvando} className="gap-2">
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {salvando ? 'Salvando...' : `Salvar ${resultado.total_boletos} cobranças`}
+          </Button>
+        </div>
+        {salvando && (
+          <div className="space-y-1">
+            <Progress value={progresso.total > 0 ? (progresso.atual / progresso.total) * 100 : 0} />
+            <p className="text-xs text-muted-foreground">{progresso.atual} de {progresso.total} associados</p>
+          </div>
+        )}
+        {resumo && (
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="rounded border bg-background p-2"><div className="text-xs text-muted-foreground">Gravadas</div><div className="font-semibold">{resumo.gravados}</div></div>
+            <div className="rounded border bg-background p-2"><div className="text-xs text-emerald-600">Vinculadas</div><div className="font-semibold">{resumo.matched}</div></div>
+            <div className="rounded border bg-background p-2"><div className="text-xs text-amber-600">Sem match</div><div className="font-semibold">{resumo.sem_match}</div></div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
