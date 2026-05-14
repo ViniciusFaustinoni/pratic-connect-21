@@ -17,8 +17,15 @@ import {
   RefreshCw,
   AlertTriangle,
   ScanLine,
+  Video,
 } from 'lucide-react';
-import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
+import {
+  getFotosAutovistoria,
+  getInstrucoesVideo360,
+  getLabelVideo360,
+  type TipoVeiculo,
+  type FotoAutovistoria,
+} from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao, type PlacaOcrResultado } from '@/hooks/useCotacaoVistoria';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -28,6 +35,7 @@ import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 
 interface AutovistoriaCotacaoProps {
