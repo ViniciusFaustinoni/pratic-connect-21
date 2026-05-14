@@ -684,10 +684,11 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
         semMatch += data.sem_match || 0;
         gravados += data.gravados || 0;
         ignoradosSemLinha += data.ignorados_sem_linha_digitavel || 0;
+        duplicados += data.duplicados_ignorados || 0;
         setProgresso({ atual: Math.min(i + CHUNK, dests.length), total: dests.length });
       }
-      setResumo({ matched, sem_match: semMatch, gravados, ignoradosSemLinha, lote_id: loteId });
-      toast.success(`${gravados} cobranças salvas no sistema (${matched} vinculadas${ignoradosSemLinha ? `, ${ignoradosSemLinha} ignoradas sem linha digitável` : ''}).`);
+      setResumo({ matched, sem_match: semMatch, gravados, ignoradosSemLinha, duplicados, lote_id: loteId });
+      toast.success(`${gravados} cobranças salvas (${matched} vinculadas${duplicados ? `, ${duplicados} duplicadas ignoradas` : ''}${ignoradosSemLinha ? `, ${ignoradosSemLinha} sem linha` : ''}).`);
     } catch (e: any) {
       toast.error(`Erro ao salvar: ${e.message}`);
     } finally {
