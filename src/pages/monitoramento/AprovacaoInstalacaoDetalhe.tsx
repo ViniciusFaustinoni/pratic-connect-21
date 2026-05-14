@@ -308,6 +308,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
       };
     },
     enabled: !!servicoId,
+    staleTime: 10_000,
+    refetchOnMount: true,
   });
 }
 
