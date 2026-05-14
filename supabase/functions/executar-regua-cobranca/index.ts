@@ -409,28 +409,24 @@ Deno.serve(async (req) => {
     const filaFinal = fila.filter((f) => f.nosso_numero && !jaDisparados.has(`${f.nosso_numero}|${f.etapa.dias}`))
     const totalPlanejado = Math.min(filaFinal.length, MAX)
 
-    // 8. Cria cobranca_runs e dispara em background
-    const { data: runRow, error: errRun } = await supabase
-      .from('cobranca_runs').insert({
-        status: 'executando',
-        total_planejado: totalPlanejado,
-        delay_ms: delayMs,
-        criado_por: criadoPor,
-        payload: {
-          janela_inicio: inicioVenc.toISOString().slice(0, 10),
-          janela_fim: fimVenc.toISOString().slice(0, 10),
-          boletos_retornados: boletos.length,
-          fila_bruta: fila.length,
-          duplicados_pulados: fila.length - filaFinal.length,
-          cobrancas_inseridas: mirrorRes.inseridas,
-          cobrancas_baixadas: mirrorRes.baixadas,
-          cobrancas_ignoradas: mirrorRes.ignoradas,
-          cobrancas_erros: mirrorRes.erros,
-          regua_id: regua.id,
-        },
-      }).select('id').single()
-    if (errRun) throw errRun
-    const runId = (runRow as any).id as string
+    // 8. Atualiza cobranca_runs (de 'preparando' → 'executando') e dispara worker
+    await supabase.from('cobranca_runs').update({
+      status: 'executando',
+      total_planejado: totalPlanejado,
+      payload: {
+        regua_id: regua.id,
+        started_at: startedAt,
+        janela_inicio: inicioVenc.toISOString().slice(0, 10),
+        janela_fim: fimVenc.toISOString().slice(0, 10),
+        boletos_retornados: boletos.length,
+        fila_bruta: fila.length,
+        duplicados_pulados: fila.length - filaFinal.length,
+        cobrancas_inseridas: mirrorRes.inseridas,
+        cobrancas_baixadas: mirrorRes.baixadas,
+        cobrancas_ignoradas: mirrorRes.ignoradas,
+        cobrancas_erros: mirrorRes.erros,
+      },
+    }).eq('id', runId)
 
     // Worker em background
     const worker = (async () => {
