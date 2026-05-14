@@ -443,16 +443,29 @@ export default function VistoriaPrestador() {
     );
   }
 
-  // ── Estado 2: Inválido ──
+  // ── Estado 2: Inválido / Reatribuído / Concluído ──
   if (error || !link || link.status === 'concluida' || link.status === 'cancelada') {
+    const isReatribuida =
+      link?.status === 'cancelada' && !(link as any)?.recusado_em;
+    const isConcluida = link?.status === 'concluida';
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
         <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-          <Lock className="h-8 w-8 text-slate-400" />
+          {isConcluida ? (
+            <CheckCircle className="h-8 w-8 text-green-600" />
+          ) : (
+            <Lock className="h-8 w-8 text-slate-400" />
+          )}
         </div>
-        <h1 className="text-xl font-bold text-slate-800 mb-2">Link inválido</h1>
+        <h1 className="text-xl font-bold text-slate-800 mb-2">
+          {isConcluida ? 'Vistoria concluída' : isReatribuida ? 'Tarefa reatribuída' : 'Link inválido'}
+        </h1>
         <p className="text-slate-500 text-sm text-center max-w-xs">
-          Este link não é válido ou já foi utilizado. Entre em contato com o coordenador.
+          {isConcluida
+            ? 'Obrigado! A equipe Praticcar foi notificada.'
+            : isReatribuida
+              ? 'Esta tarefa foi reatribuída pela central. Verifique o WhatsApp para o novo link de acesso.'
+              : 'Este link não é válido ou já foi utilizado. Entre em contato com o coordenador.'}
         </p>
       </div>
     );
