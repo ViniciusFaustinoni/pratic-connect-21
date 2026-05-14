@@ -186,6 +186,28 @@ export default function PrestadorInstalacao() {
     novoStatus: 'aceito' | 'em_rota' | 'em_execucao',
   ) => {
     if (!token) return;
+
+    // Refresh defensivo: detectar reatribuição/cancelamento antes de gravar
+    const { data: fresh, error: freshErr } = await publicSupabase
+      .from('instalacao_prestador_links' as any)
+      .select('status')
+      .eq('token', token)
+      .maybeSingle();
+    if (freshErr) {
+      toast.error(`Erro ao atualizar status: ${freshErr.message || 'tente novamente'}`);
+      return;
+    }
+    if (!fresh) {
+      toast.error('Link não encontrado');
+      return;
+    }
+    const freshStatus = (fresh as any).status as string;
+    if (!['aguardando', 'aceito', 'em_rota'].includes(freshStatus)) {
+      toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+      queryClient.invalidateQueries({ queryKey: ['prestador-link', token] });
+      return;
+    }
+
     const stamp = new Date().toISOString();
     const fieldStamp =
       novoStatus === 'aceito' ? 'aceito_em' :
@@ -197,11 +219,21 @@ export default function PrestadorInstalacao() {
       updated_at: stamp,
     };
     if (novoStatus === 'em_execucao') payload.chegada_em = stamp;
-    const { error } = await publicSupabase
+    const { data, error } = await publicSupabase
       .from('instalacao_prestador_links' as any)
       .update(payload)
-      .eq('token', token);
-    if (error) { toast.error('Erro ao atualizar status'); return; }
+      .eq('token', token)
+      .select('id, status');
+    if (error) {
+      console.error('[PrestadorInstalacao] update status error', error);
+      toast.error(`Erro ao atualizar status: ${error.message || 'tente novamente'}`);
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error('Esta tarefa foi reatribuída ou encerrada. Abra o link mais recente enviado por WhatsApp.');
+      queryClient.invalidateQueries({ queryKey: ['prestador-link', token] });
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ['prestador-link', token] });
   }, [token, queryClient]);
 
