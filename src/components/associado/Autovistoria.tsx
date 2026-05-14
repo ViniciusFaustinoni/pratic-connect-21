@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge,
-  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, AlertCircle, ScanLine
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, AlertCircle, ScanLine, Video, Info
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { getFotosAutovistoria, TipoVeiculo } from '@/data/autovistoriaConfig';
+import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, TipoVeiculo } from '@/data/autovistoriaConfig';
 import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExistente, useFinalizarAutovistoria } from '@/hooks/useContratoLink';
 import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
@@ -17,6 +17,7 @@ import { LocationCapture, Coordenadas } from './LocationCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { supabase } from '@/integrations/supabase/client';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 interface AutovistoriaProps {
   contratoId: string;
