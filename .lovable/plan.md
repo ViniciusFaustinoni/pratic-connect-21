@@ -1,26 +1,68 @@
 ## Objetivo
-Impedir que o mesmo boleto (mesma `linha_digitavel`) seja gravado mais de uma vez em `cobranca_csv_boletos`, mesmo que o CSV traga linhas repetidas ou que arquivos diferentes contenham o mesmo boleto.
 
-## Como funciona hoje
-- A edge `importar-cobrancas-csv` faz `INSERT` direto em `cobranca_csv_boletos`.
-- A tabela tem índice comum em `linha_digitavel`, mas **não** tem restrição de unicidade — então repetições passam.
+Fazer o dashboard `Financeiro › Cobranças` exibir, com KPIs e filtros completos, **tanto** as cobranças nativas (Asaas + backfill SGA via API → tabela `cobrancas`, ~141k linhas) **quanto** os boletos importados via CSV (tabela `cobranca_csv_boletos`, +39k linhas dos uploads recentes), sem migrar dados nem duplicar.
 
-## Mudanças
+## Diagnóstico (já confirmado)
 
-### 1. Banco (migration)
-- Limpar duplicados existentes mantendo a ocorrência mais antiga por `linha_digitavel` (preserva histórico de status/recuperação).
-- Criar índice único: `CREATE UNIQUE INDEX cobranca_csv_boletos_linha_uq ON cobranca_csv_boletos(linha_digitavel);`
+- `cobranca_csv_boletos` recebeu 39.374 linhas na última hora (ok, importação funcionou).
+- `cobrancas` segue com 141.458 (138.349 pagas, 2.866 pendentes, 243 canceladas) — não recebeu nada do CSV.
+- `useCobrancas` e `CobrancasList` consultam **só** `cobrancas`. Por isso o dashboard ignora o CSV.
 
-### 2. Edge function `importar-cobrancas-csv`
-- Antes do insert, deduplicar dentro do chunk por `linha_digitavel` (último vence — mantém placa/valor mais recente do CSV).
-- Trocar `.insert(rows)` por `.upsert(rows, { onConflict: 'linha_digitavel', ignoreDuplicates: true })` — boletos já existentes no banco são silenciosamente ignorados.
-- Contar `duplicados_ignorados` (diferença entre linhas enviadas e linhas efetivamente persistidas) e devolver no JSON de resposta, junto com `ignorados_sem_linha_digitavel` que já existe.
+## Solução escolhida — UNION via view
 
-### 3. UI `ImportarCobrancaCsv.tsx`
-- Adicionar `duplicadosIgnorados` ao estado `resumo` e exibir no grid de resumo (passa de 4 para 5 colunas, ou agrupa "Ignoradas" em um só bloco com tooltip).
-- Toast final mostra "X duplicadas ignoradas" quando >0.
+Criar uma view única que combina as duas fontes com schema canônico, e apontar o dashboard para ela.
 
-## Comportamento resultante
-- Reimportar o mesmo arquivo: zero novos registros, contador de duplicadas = total.
-- Arquivo novo com alguns boletos já existentes: só os novos entram, os repetidos aparecem no resumo como ignorados.
-- Lote continua sendo criado normalmente para auditoria, mesmo que todos os boletos sejam duplicados.
+### 1. Migração SQL — criar `cobrancas_unificadas`
+
+View em `public.cobrancas_unificadas` (`security_invoker=on`), colunas canônicas:
+
+| coluna | de `cobrancas` | de `cobranca_csv_boletos` |
+|---|---|---|
+| `id` | id | id |
+| `fonte` | `'sistema'` | `'csv_sga'` |
+| `origem` | `origem::text` (sistema/sga_hinova) | `'sga_hinova'` |
+| `associado_id` | associado_id | associado_id |
+| `veiculo_id` | veiculo_id | veiculo_id |
+| `tipo` | tipo | `coalesce(tipo,'mensalidade')` |
+| `status` | status (pago / aguardando_pagamento / vencido / cancelado) | mapeado: `status_origem ILIKE 'Pago%'`→`pago`; senão se `data_vencimento < today`→`vencido`; senão `aguardando_pagamento` |
+| `valor_final` | valor_final | valor |
+| `valor_pago` | valor_pago | valor (se pago) |
+| `data_vencimento` | data_vencimento | data_vencimento |
+| `data_pagamento` | data_pagamento | null |
+| `referencia_mes`/`_ano` | nativos | extract de data_vencimento |
+| `linha_digitavel` | linha_digitavel | linha_digitavel |
+| `criado_em` | created_at | created_at |
+
+Índices auxiliares em `cobranca_csv_boletos(data_vencimento)`, `(status_origem)`, `(associado_id)` para performance.
+
+### 2. Hook `useCobrancas.ts`
+
+- Substituir `.from('cobrancas')` por `.from('cobrancas_unificadas')` nas leituras (`cobrancasQuery`, `estatisticasQuery`, `useCobranca`, `useMinhasCobrancas`).
+- Mutações de criar/registrar pagamento/cancelar **continuam** apontando para `cobrancas` (só linhas nativas são editáveis).
+- Adicionar filtro novo opcional `fonte?: 'sistema' | 'csv_sga' | 'todas'`.
+
+### 3. `CobrancasList.tsx`
+
+- Paginação infinita: trocar `from('cobrancas')` (linha 323) para `from('cobrancas_unificadas')`.
+- KPIs (Total / Pagas / Pendentes / Vencidas) passam a contar a view.
+- Filtro de origem já existe (Asaas / SGA Hinova) — agregar opção "CSV SGA (lote importado)" usando o campo `fonte`.
+- Linhas vindas do CSV: desabilitar ações de "Registrar pagamento" / "Cancelar" (mostrar tooltip "originado de CSV — somente leitura"), pois a fonte de verdade é o SGA externo.
+
+### 4. Validação
+
+Após a migração:
+- Conferir `SELECT count(*) FROM cobrancas_unificadas` ≈ 180k.
+- Conferir KPIs filtrando os 2 lotes recém-importados (data_vencimento dentro do range dos CSVs).
+- Conferir que filtros de status funcionam para ambas as fontes.
+
+## Detalhes técnicos relevantes
+
+- Não migrar/copiar dados — view é viva, sem custo de manutenção.
+- `cobranca_csv_boletos` pode ter múltiplas linhas para o mesmo boleto entre lotes (é gerenciado por `linha_digitavel` único). A view usa o `id` da linha mais recente — adicionar `DISTINCT ON (linha_digitavel) ... ORDER BY created_at DESC` se necessário (validar contagem após criar a view; ajustar se aparecer duplicação).
+- Performance: a view filtra `WHERE recuperado_em IS NULL` em `cobranca_csv_boletos` para não inflar com boletos já marcados como pagos no SGA pós-lote anterior (esses entram pelo lado nativo `cobrancas` quando o `sga-backfill` rodar).
+- View usa `security_invoker=on`; RLS de `cobrancas` e `cobranca_csv_boletos` continua valendo.
+
+## Fora de escopo
+
+- Não vamos rodar `sga-backfill-financeiro` agora (pode ser feito depois para enriquecer com data de pagamento real).
+- Não vamos editar/excluir registros do CSV via dashboard nesta entrega.

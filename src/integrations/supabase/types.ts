@@ -32739,6 +32739,32 @@ export type Database = {
       }
     }
     Views: {
+      cobrancas_unificadas: {
+        Row: {
+          associado_id: string | null
+          boleto_url: string | null
+          codigo_barras: string | null
+          contrato_id: string | null
+          criado_em: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          descricao: string | null
+          fonte: string | null
+          id: string | null
+          linha_digitavel: string | null
+          lote_id: string | null
+          matricula: string | null
+          origem: string | null
+          referencia_ano: number | null
+          referencia_mes: number | null
+          status: string | null
+          tipo: string | null
+          valor_final: number | null
+          valor_pago: number | null
+          veiculo_id: string | null
+        }
+        Relationships: []
+      }
       rastreadores_pendentes_vinculo: {
         Row: {
           associado_email: string | null
