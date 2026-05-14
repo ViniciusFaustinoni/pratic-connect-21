@@ -84,8 +84,37 @@ const ALIASES: Record<string, string[]> = {
   valor: ['valor', 'valor boleto', 'valor cobranca', 'preco'],
   tipo: ['tipo', 'tipo cobranca', 'categoria', 'descricao'],
   status: ['status', 'situacao', 'status pagamento', 'status_pagamento'],
-  link: ['link', 'link fatura', 'link da fatura', 'url fatura', 'url boleto', '2via', 'segunda via', 'link hinova'],
+  link: [
+    'link', 'link fatura', 'link da fatura', 'url fatura', 'url boleto',
+    '2via', 'segunda via', 'link hinova',
+    // Cabeçalhos do export padrão Hinova/SGA:
+    '2a via boleto', '2via boleto', 'segunda via boleto', '2 via', '2 via boleto',
+    'link 2 via', 'link 2via', 'link segunda via', '2a via', 'link da 2a via',
+  ],
 };
+
+/**
+ * Extrai a URL de um campo "Link" / "2ª Via Boleto".
+ * Aceita:
+ *  - URL crua: "https://short.hinova.com.br/v2/XXXX.pdf"
+ *  - HTML anchor: '<a href="https://short.hinova.com.br/v2/XXXX.pdf" target="_blank">LINK</a>'
+ *  - Texto contendo URL no meio
+ * Retorna a primeira URL encontrada ou undefined.
+ */
+export function extrairUrlLink(raw: string): string | undefined {
+  if (!raw) return undefined;
+  const s = raw.trim();
+  if (!s) return undefined;
+  // 1. tag <a href="...">
+  const hrefMatch = s.match(/href\s*=\s*["']([^"']+)["']/i);
+  if (hrefMatch && /^https?:\/\//i.test(hrefMatch[1])) return hrefMatch[1].trim();
+  // 2. URL crua direta
+  if (/^https?:\/\//i.test(s)) return s.split(/\s+/)[0];
+  // 3. URL embutida em texto
+  const urlMatch = s.match(/https?:\/\/[^\s"'<>]+/i);
+  if (urlMatch) return urlMatch[0];
+  return undefined;
+}
 
 function normalizarHeader(s: string): string {
   return s
@@ -281,8 +310,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     const valorCsv = parseValorBR(getCol(cols, 'valor'));
     const tipo = getCol(cols, 'tipo').trim() || undefined;
     const statusOrigem = getCol(cols, 'status').trim() || undefined;
-    const linkRaw = getCol(cols, 'link').trim();
-    const link = /^https?:\/\//i.test(linkRaw) ? linkRaw : undefined;
+    const link = extrairUrlLink(getCol(cols, 'link'));
 
     // Aceita linha sem código de barras se houver vencimento OU valor.
     if (!linhaDig && !venc && valorCsv === 0) continue;

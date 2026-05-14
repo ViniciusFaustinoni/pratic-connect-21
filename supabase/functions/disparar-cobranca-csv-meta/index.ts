@@ -11,6 +11,7 @@ interface BoletoIn {
   vencimento: string;
   linha_digitavel: string;
   valor?: number;
+  link?: string; // URL da 2ª via Hinova (opcional)
 }
 interface DestinatarioIn {
   nome: string;
@@ -20,16 +21,35 @@ interface DestinatarioIn {
   boletos: BoletoIn[];
 }
 
-const MAX_META_BLOCK_LENGTH = 180;
+const MAX_META_BLOCK_LENGTH = 320; // Body do Meta aceita ~1024; usamos 320 para sobrar margem para múltiplos blocos
 const MAX_BLOCOS_POR_DESTINATARIO = 3;
 const SLEEP_ENTRE_BLOCOS_MS = 1500;
 const SLEEP_ENTRE_DESTINATARIOS_MS = 250;
+
+// Extrai o sufixo de uma URL Hinova "https://short.hinova.com.br/v2/XXXX.pdf" → "XXXX".
+// Retorna null quando o formato não bate (template v2 cai automaticamente em v1 nesse caso).
+function extrairSufixoHinova(url?: string | null): string | null {
+  if (!url) return null;
+  const m = url.match(/short\.hinova\.com\.br\/v2\/([A-Za-z0-9_-]+)(?:\.pdf)?/i);
+  return m ? m[1] : null;
+}
+
+// Parser leniente de "dd/mm/aaaa" → timestamp para ordenar boletos por vencimento (mais antigo primeiro).
+function tsVencimento(v?: string): number {
+  if (!v) return Number.MAX_SAFE_INTEGER;
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10)).getTime();
+}
 
 function formatarBoletoCompacto(b: BoletoIn): string {
   const placa = b.placa ? `Placa ${b.placa}` : "Boleto";
   // Linha digitável só dígitos é mais curta e ainda funciona pra cópia.
   const linha = (b.linha_digitavel || "").replace(/\D/g, "");
-  return `• ${placa} venc. ${b.vencimento} | ${linha}`;
+  // Inclui o sufixo Hinova ao final quando disponível (curto e copiável)
+  const sufixoHinova = extrairSufixoHinova(b.link);
+  const linkFrag = sufixoHinova ? ` 🔗 short.hinova.com.br/v2/${sufixoHinova}` : "";
+  return `• ${placa} venc. ${b.vencimento} | ${linha}${linkFrag}`;
 }
 
 function montarBlocoBoletos(boletos: BoletoIn[]): string {
@@ -136,7 +156,12 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const templateNome: string = body.template_nome || "cobranca_inadimplencia_pratic";
+    // Quando template_v2=true, usamos o template Meta com botão URL dinâmico (1 link por mensagem).
+    // Se nenhum boleto do destinatário tem link válido, fazemos fallback automático para v1.
+    const templateV2: boolean = body.template_v2 === true;
+    const templateNomeBase: string = body.template_nome
+      || (templateV2 ? "cobranca_inadimplencia_pratic_v2" : "cobranca_inadimplencia_pratic");
+    const templateNomeFallback = "cobranca_inadimplencia_pratic";
     const destinatarios: DestinatarioIn[] = body.destinatarios || [];
     const isFirstChunk: boolean = body.is_first_chunk === true;
     const isLastChunk: boolean = body.is_last_chunk === true;
@@ -341,6 +366,7 @@ serve(async (req) => {
           linha_digitavel: b.linha_digitavel,
           valor: typeof b.valor === "number" ? b.valor : 0,
           telefones: dest.telefones_validos || [],
+          link_2via: b.link || null,
           status: "pendente_envio",
         });
       }
@@ -394,15 +420,20 @@ serve(async (req) => {
     }
 
     // Corpo do template — usado para gravar o conteúdo real renderizado em whatsapp_mensagens.
-    // Sem isso, o agente-consultor-ia não entende o contexto da cobrança ao responder.
-    let templateCorpo = "";
+    // Carregamos AMBOS (v1 + v2) para suportar fallback automático por destinatário.
+    const corposPorTemplate: Record<string, string> = {};
     {
-      const { data: tpl } = await supabase
+      const nomesParaCarregar = Array.from(new Set([templateNomeBase, templateNomeFallback]));
+      const { data: tpls } = await supabase
         .from("whatsapp_meta_templates")
-        .select("corpo")
-        .eq("nome", templateNome)
-        .maybeSingle();
-      templateCorpo = tpl?.corpo || "";
+        .select("nome, corpo, status")
+        .in("nome", nomesParaCarregar);
+      for (const t of tpls || []) corposPorTemplate[t.nome] = t.corpo || "";
+    }
+    // Se v2 não existe ou não está APPROVED, força v1 globalmente.
+    let templateV2Disponivel = templateV2 && (templateNomeBase === "cobranca_inadimplencia_pratic_v2") && !!corposPorTemplate[templateNomeBase];
+    if (templateV2 && !templateV2Disponivel) {
+      console.warn(`[disparar-cobranca-csv-meta] template ${templateNomeBase} indisponível — usando ${templateNomeFallback}`);
     }
 
     const detalhes: Array<{
@@ -453,8 +484,18 @@ serve(async (req) => {
 
       let envioOkParaEsteAssoc = false;
 
+      // Escolhe template por destinatário: v2 (com botão URL) só se v2 disponível E houver link válido.
+      // Pega o boleto mais antigo (menor vencimento) com link Hinova reconhecível.
+      const boletosOrdenados = [...(dest.boletos || [])].sort(
+        (a, b) => tsVencimento(a.vencimento) - tsVencimento(b.vencimento),
+      );
+      const boletoComLink = boletosOrdenados.find((b) => extrairSufixoHinova(b.link));
+      const sufixoHinova = boletoComLink ? extrairSufixoHinova(boletoComLink.link) : null;
+      const usarV2ParaEste = templateV2Disponivel && !!sufixoHinova;
+      const templateNomeUsado = usarV2ParaEste ? templateNomeBase : templateNomeFallback;
+      const templateCorpo = corposPorTemplate[templateNomeUsado] || corposPorTemplate[templateNomeFallback] || "";
+
       for (const telRaw of dest.telefones_validos || []) {
-        // Já enviou OK pra este associado em outro telefone? Não duplicar (evita 131056 e custo).
         if (envioOkParaEsteAssoc) break;
 
         const tel = validarTelefone(telRaw);
@@ -478,22 +519,33 @@ serve(async (req) => {
 
         for (let i = 0; i < blocos.length; i++) {
           const bloco = blocos[i];
+          const components: any[] = [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: sanitizeMetaParam(nome) },
+                { type: "text", text: sanitizeMetaParam(bloco) },
+              ],
+            },
+          ];
+          // No v2: adiciona o componente button URL dinâmico apenas no PRIMEIRO bloco
+          // (apenas a 1ª mensagem leva o botão; blocos seguintes do mesmo destinatário ficam só com texto).
+          if (usarV2ParaEste && i === 0 && sufixoHinova) {
+            components.push({
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: sufixoHinova }],
+            });
+          }
           const payload = {
             messaging_product: "whatsapp",
             to: tel,
             type: "template",
             template: {
-              name: templateNome,
+              name: i === 0 ? templateNomeUsado : templateNomeFallback,
               language: { code: "pt_BR" },
-              components: [
-                {
-                  type: "body",
-                  parameters: [
-                    { type: "text", text: sanitizeMetaParam(nome) },
-                    { type: "text", text: sanitizeMetaParam(bloco) },
-                  ],
-                },
-              ],
+              components: i === 0 ? components : [components[0]],
             },
           };
 
@@ -563,7 +615,7 @@ serve(async (req) => {
             mensagem: mensagemRenderizada,
             status: "enviada",
             template_variaveis: {
-              template: templateNome,
+              template: templateNomeUsado,
               matricula: dest.matricula,
               blocos: blocos.length,
               boletos: boletosResumo,
@@ -608,7 +660,7 @@ serve(async (req) => {
             mensagem: mensagemRenderizadaErr,
             status: "erro",
             template_variaveis: {
-              template: templateNome,
+              template: templateNomeUsado,
               matricula: dest.matricula,
               boletos: boletosResumoErr,
             },
