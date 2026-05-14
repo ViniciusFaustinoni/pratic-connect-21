@@ -272,8 +272,37 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
     e.target.value = '';
   };
 
+  const handleUploadVideo = useCallback(async (file: File) => {
+    setUploadingVideo(true);
+    setVideoProgress(0);
+    try {
+      const result = await uploadMutation.mutateAsync({
+        cotacaoId,
+        fotoId: 'video_360',
+        file,
+        onProgress: (pct: number) => setVideoProgress(pct),
+      } as any);
+      setVideoUrl(result.url);
+      toast.success('Vídeo 360° enviado!');
+    } catch (e) {
+      console.error('[AutovistoriaCotacao] erro no upload do vídeo:', e);
+      // toast já tratado no helper
+    } finally {
+      setUploadingVideo(false);
+      setVideoProgress(0);
+    }
+  }, [cotacaoId, uploadMutation]);
+
   const handleFinalizar = async () => {
     if (finalizandoRef.current || finalizarMutation.isPending) return;
+    if (!todasFotosEnviadas) {
+      toast.error('Envie todas as fotos antes de finalizar.');
+      return;
+    }
+    if (!videoUrl) {
+      toast.error('Grave o vídeo 360° terminando no painel ligado.');
+      return;
+    }
     finalizandoRef.current = true;
     
     try {
