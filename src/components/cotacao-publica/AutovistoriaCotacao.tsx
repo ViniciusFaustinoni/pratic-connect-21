@@ -51,6 +51,8 @@ interface AutovistoriaCotacaoProps {
 export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosOverride, titulo }: AutovistoriaCotacaoProps) {
   const fotos = fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo);
   const totalFotos = fotos.length;
+  const instrucoesVideo = getInstrucoesVideo360(tipoVeiculo);
+  const labelVideo = getLabelVideo360(tipoVeiculo);
   
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
@@ -62,6 +64,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
   const [hidratado, setHidratado] = useState(false);
   const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, PlacaOcrResultado>>({});
   const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -74,18 +79,24 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
 
   const fotoAtual = fotos[fotoAtualIndex];
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
-  const progresso = (fotosCompletadas / totalFotos) * 100;
+  const totalItens = totalFotos + 1; // fotos + vídeo 360°
+  const itensCompletados = fotosCompletadas + (videoUrl ? 1 : 0);
+  const progresso = (itensCompletados / totalItens) * 100;
   const todasFotosEnviadas = fotosCompletadas >= totalFotos;
-  const todasEnviadas = todasFotosEnviadas;
+  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
 
   
   // Reidratar fotos existentes (refresh mantém progresso)
   useEffect(() => {
     if (fotosExistentes && fotosExistentes.length > 0 && !hidratado) {
       const fotosMap: Record<string, string> = {};
+      let videoExistente: string | null = null;
 
       for (const foto of fotosExistentes) {
-        if (foto.tipo && foto.arquivo_url && foto.tipo !== 'video_360') {
+        if (!foto.tipo || !foto.arquivo_url) continue;
+        if (foto.tipo === 'video_360') {
+          videoExistente = foto.arquivo_url;
+        } else {
           fotosMap[foto.tipo] = foto.arquivo_url;
         }
       }
@@ -93,6 +104,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       if (Object.keys(fotosMap).length > 0) {
         setFotosEnviadas(fotosMap);
         toast.success(`${Object.keys(fotosMap).length} foto(s) carregada(s) de sessão anterior`);
+      }
+      if (videoExistente) {
+        setVideoUrl(videoExistente);
       }
 
       // Ir para próxima foto pendente
