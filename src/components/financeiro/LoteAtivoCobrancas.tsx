@@ -48,7 +48,7 @@ export function LoteAtivoCobrancas() {
       const { data, error } = await supabase
         .from('cobranca_csv_lotes')
         .select('id, nome_arquivo, total_boletos, total_associados, valor_total, total_enviados, status, created_at')
-        .eq('status', 'ativo')
+        .in('status', ['ativo', 'parcial'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
