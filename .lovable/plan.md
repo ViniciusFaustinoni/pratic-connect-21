@@ -1,70 +1,57 @@
 
-## Contexto (caso ANA CAROLINA — `a8adb3eb…`)
+## Causa raiz — Termo de Cancelamento (Troca KOU6D37) sem assinatura visível
 
-A associada tem 2 veículos (Tracker + CG 160). Ao aprovar o **carro** no Monitoramento › Aprovações › Aprovação de Associados, a moto sumiu da fila apesar de ainda estar `em_analise`. E na aba "Veículos" do detalhe do associado, o termo assinado mostrado é o mesmo para os dois veículos (vem de um único `contrato` global do associado).
+O termo do KOU6D37 foi gerado pela edge function **`enviar-termo-cancelamento-troca`** (fluxo de troca de titularidade), não pela `autentique-cancelamento-create` que o cancelamento "padrão" usa.
 
----
+Comparando com o padrão de **nova adesão** (`autentique-create`) e cancelamento direto (`autentique-cancelamento-create`):
 
-## Problema #1 — Aprovação “contamina” os outros veículos
+| Edge function | `gerarPosicoesAssinatura()` (SIGNATURE/INITIALS nativos) |
+|---|---|
+| `autentique-create` (nova adesão) | ✅ |
+| `autentique-cancelamento-create` (cancelamento direto) | ✅ |
+| `autentique-os-saida-create` (saída de OS) | ✅ |
+| `autentique-evento-create` (evento) | ✅ |
+| `autentique-create-by-token` | ✅ |
+| **`enviar-termo-cancelamento-troca`** | ❌ |
+| **`enviar-termo-cancelamento-substituicao`** | ❌ |
 
-### Causa raiz
-`src/hooks/useAprovacaoMonitoramento.ts` → `useInstalacoesAguardandoAprovacao` filtra a fila assim:
+Sem o array `positions` no `signer`, o Autentique não injeta o widget nativo de SIGNATURE — então:
+1. Nada na visualização indica "assinado" depois que o associado conclui.
+2. A imagem da assinatura não aparece em nenhuma página do PDF.
 
-```ts
-return v && v.cobertura_total !== true && a?.status !== 'ativo';
-```
+A imagem que você anexou confirma: o documento está renderizado, com botão "Opções" (ainda assinável), e o rodapé do template tem só o texto "ASSINATURA DO ASSOCIADO" (texto estático), sem o widget nativo. Esse é o sintoma exato de signer sem `positions`.
 
-Quando aprovamos o 1º veículo, `ativar-associado` muda `associados.status` para `'ativo'`. A partir desse momento, **todo serviço pendente do mesmo associado some da fila** porque o segundo termo do filtro casa para todos eles — mesmo que cada `servicos.status` ainda esteja `'concluida'` e o veículo dele continue sem `cobertura_total`.
+## Correção
 
-Confirmado pelo `useAprovacoesMonitoramentoBreakdown` (badge do sidebar) que usa o **mesmo** filtro — por isso o contador também zera junto.
+Padronizar **todas** as gerações de documento Autentique para o mesmo padrão da nova adesão: signer com `positions: gerarPosicoesAssinatura(posConfig)` calculado via `estimarPaginasHTML(html)` + `buscarPosicoesConfig(supabase)`.
 
-### Correção
-Tirar `associado.status` do filtro e manter aprovação 100% por veículo:
+### Arquivos alterados
 
-1. `useInstalacoesAguardandoAprovacao` — filtrar apenas por:
-   - `servicos.status = 'concluida'` (já é)
-   - `veiculo.cobertura_total !== true`
-   - **remover** `associado.status !== 'ativo'`
-2. `useAprovacoesMonitoramentoBreakdown` (`src/hooks/useAprovacoesMonitoramentoCount.ts`, fonte “Aprovação de Associados”) — aplicar exatamente o mesmo filtro para o badge bater com a aba.
-3. `useAprovacaoMonitoramentoStats` — idem, para “Aguardando” não diminuir indevidamente.
-4. **Não mexer** em `ativar-associado`: a função já é por `(veiculo_id, servico_id)` e só precisa continuar promovendo o associado para `ativo` no 1º veículo (idempotente nos demais). Memória core diz "ativação SEMPRE via `ativar-associado` (lock + CAS + log)" — preservado.
-5. Validar manualmente: reabrir o caso da Ana — após o fix a moto (`servicos.status='concluida'`, `veiculos.cobertura_total=false`) volta a aparecer na fila mesmo com a associada já `ativo`.
+1. **`supabase/functions/enviar-termo-cancelamento-troca/index.ts`** (caso reportado)
+   - Importar `gerarPosicoesAssinatura, buscarPosicoesConfig, estimarPaginasHTML` de `_shared/autentique-positions.ts`.
+   - Após montar `html`, calcular `posConfig.totalPaginas = estimarPaginasHTML(html)`.
+   - No `signerObj`, adicionar `positions: gerarPosicoesAssinatura(posConfig)` (manter `delivery_method: DELIVERY_METHOD_EMAIL` e `security_verifications: [{ type: 'PF_FACIAL' }]` — exigência do core memory de Autentique).
 
-> Observação: como a associada já está `ativo`, na reaprovação do 2º veículo o `ativar-associado` cairá no caminho idempotente — apenas liga `cobertura_total` no veículo, faz `enqueue` SGA com `force_resync_media=true` e dispara o histórico/notificação. Sem efeitos colaterais no 1º veículo.
+2. **`supabase/functions/enviar-termo-cancelamento-substituicao/index.ts`** (mesmo bug latente)
+   - Aplicar a mesma mudança.
 
----
+3. **Reenvio do termo do KOU6D37**
+   - Após o deploy, chamar `enviar-termo-cancelamento-troca` com `force_resend: true` para a `solicitacao_id` do MARCOS VINICIUS DATIVO MACHADO. A função já deleta o doc anterior no Autentique e cria um novo — que dessa vez nascerá com o widget nativo. (Fica a seu cargo disparar via UI de "Reenviar termo" na tela da troca; ou eu posso disparar pelo edge se preferir.)
 
-## Problema #2 — Termo (contrato) por veículo no modal
+### Não vou tocar
 
-### Estado atual
-- `AssociadoDetalhe.tsx` busca **um único** contrato via `useContratoDoAssociado(id)` e renderiza o botão “Ver Contrato Assinado” no card geral, não no modal por veículo.
-- `VeiculoDetalhesModal` recebe `veiculoId` e usa `useVeiculoDetalhes` que **já busca** `contrato` por `veiculo_id` (`src/hooks/useVeiculoDetalhes.ts` linhas 161-168), mas o `select` traz só `numero, status, plano_nome, valor_mensal, data_inicio, data_fim` — **faltam `pdf_assinado_url` e `pdf_url`**, então o modal não tem como exibir o link.
-- A aba “Documentos” do modal lista apenas anexos de `contratos_documentos` (CRLV, CNH, etc.), não o PDF do termo.
+- Templates de markdown (`TERMO_CANCELAMENTO_V1`) — eles continuam com texto "ASSINATURA DO ASSOCIADO" como fallback visual; o widget nativo do Autentique cai por cima na coordenada configurada.
+- `autentique-cancelamento-create`, `autentique-create`, `autentique-evento-create`, `autentique-os-saida-create`, `autentique-create-by-token` — já estão no padrão correto.
 
-### Correção
-1. `useVeiculoDetalhes.ts` — adicionar `pdf_assinado_url, pdf_url, data_assinatura` ao `.select()` do contrato (linha 164).
-2. `VeiculoDetalhesModal.tsx` — na seção “Contrato” (linhas 237-247), quando `contrato.pdf_assinado_url || contrato.pdf_url`:
-   - mostrar bloco “Termo de Filiação” com botão **Ver Termo Assinado** (abre o PDF em nova aba) e badge de status (Assinado/Pendente).
-   - se houver `data_assinatura`, exibir “Assinado em DD/MM/AAAA”.
-3. (Opcional, mesma tela) na aba “Documentos” do modal, injetar uma linha sintética “Proposta/Termo de Filiação” apontando para o mesmo PDF, igual ao padrão usado em `AssociadoDetalhe` (linhas 444-453). Mantém o documento descobrível por quem só olha a lista.
-4. Não alterar o card geral do associado — termo continua acessível ali também (UX não regride).
+### Validação
 
----
+1. Reenviar termo do KOU6D37 → assinar → conferir no Autentique:
+   - Status do documento muda para "Assinado" no painel.
+   - PDF gerado mostra a imagem da assinatura na última página (e rubrica nas demais).
+2. Disparar uma substituição de teste para validar `enviar-termo-cancelamento-substituicao`.
+3. Memória a registrar (Core ou leaf): "Toda criação de documento Autentique DEVE usar `gerarPosicoesAssinatura` — sem isso o doc fica sem widget de assinatura mesmo após assinado."
 
-## Arquivos tocados
+### Riscos
 
-```text
-src/hooks/useAprovacaoMonitoramento.ts          (filtro fila + stats)
-src/hooks/useAprovacoesMonitoramentoCount.ts    (filtro do badge)
-src/hooks/useVeiculoDetalhes.ts                 (select contrato)
-src/components/cadastro/VeiculoDetalhesModal.tsx (UI termo por veículo)
-```
-
-Sem migração de banco, sem mudança em edge functions.
-
-## Validação
-
-1. Caso Ana Carolina: fila “Aprovação de Associados” deve listar a CG 160 isoladamente; aprovar a moto não deve mexer no Tracker já ativo.
-2. Badge do sidebar bate com a aba (mantém memória `mem://hooks/aprovacoes-monitoramento-breakdown`).
-3. Modal do Tracker → mostra termo do Tracker; modal da CG 160 → mostra termo da CG 160 (PDFs distintos quando os contratos forem distintos; se compartilharem o mesmo PDF, o link é o mesmo — comportamento correto).
-4. Smoke nas demais abas de Aprovações Unificadas (Troca, Liberação, Recusas, Ressalvas, Imprevistos) — não tocadas.
+- Posições padrão (`buscarPosicoesConfig` lê de `configuracoes`) podem cair em cima de texto do template. Já é o mesmo cálculo dos outros fluxos em produção, então o risco é baixo.
+- `estimarPaginasHTML` adiciona +2 de margem; páginas inexistentes são ignoradas pela API — sem impacto.
