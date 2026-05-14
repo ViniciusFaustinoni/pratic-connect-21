@@ -45,6 +45,7 @@ interface ResultadoEnvio {
   recuperados_valor: number;
   reemitidos_count: number;
   reemitidos_valor: number;
+  pulados_duplicidade_dia: number;
   lote_id: string | null;
   detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro' | 'skip'; erro?: string; erro_codigo?: number | string }>;
 }
@@ -207,6 +208,7 @@ export function ImportarCobrancaCsv() {
     let recuperadosValor = 0;
     let reemitidosCount = 0;
     let reemitidosValor = 0;
+    let puladosDuplicidadeDia = 0;
 
     // Snapshot completo para reconciliação no servidor
     const todasLinhasDigitaveis = resultado.destinatarios.flatMap((d) =>
@@ -277,6 +279,7 @@ export function ImportarCobrancaCsv() {
           if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
           sucesso += data.sucesso || 0;
           erros += data.erros || 0;
+          puladosDuplicidadeDia += data.pulados_duplicidade_dia || 0;
           if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
           chunkOk = true;
         } catch (e: any) {
@@ -305,6 +308,7 @@ export function ImportarCobrancaCsv() {
       recuperados_valor: recuperadosValor,
       reemitidos_count: reemitidosCount,
       reemitidos_valor: reemitidosValor,
+      pulados_duplicidade_dia: puladosDuplicidadeDia,
       lote_id: loteId,
       detalhes,
     });
@@ -624,13 +628,26 @@ export function ImportarCobrancaCsv() {
   if (etapa === 'concluido' && resultadoEnvio) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <KpiCard label="Total" value={resultadoEnvio.total} />
           <KpiCard label="Enviadas" value={resultadoEnvio.sucesso} accent="success" />
           <KpiCard label="Com erro" value={resultadoEnvio.erros} accent="warning" />
+          <KpiCard label="Já enviados hoje" value={resultadoEnvio.pulados_duplicidade_dia} accent="warning" />
           <KpiCard label="Recuperados" value={resultadoEnvio.recuperados_count} accent="primary" />
           <KpiCard label="Valor recuperado" valueText={formatBRL(resultadoEnvio.recuperados_valor)} accent="success" />
         </div>
+
+        {resultadoEnvio.pulados_duplicidade_dia > 0 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>{resultadoEnvio.pulados_duplicidade_dia} boleto(s)</strong> foram automaticamente
+              pulados porque já tinham sido disparados <strong>hoje</strong> em outro lote — para evitar
+              que o mesmo associado receba a mesma cobrança duas vezes no dia. Para reenviar, aguarde o
+              próximo dia.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {resultadoEnvio.recuperados_count > 0 && (
           <Alert>
