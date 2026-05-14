@@ -59,6 +59,7 @@ export interface SolicitacaoTroca {
   tipo_vistoria_troca?: TipoVistoriaTroca | null;
   instalar_rastreador?: boolean | null;
   expirada_em?: string | null;
+  autovistoria_concluida_em?: string | null;
   motivo_reprovacao: string | null;
   reprovado_por: string | null;
   reprovado_em: string | null;
