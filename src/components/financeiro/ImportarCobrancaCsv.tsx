@@ -649,7 +649,7 @@ function formatarFone(t: string): string {
 function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado; arquivo: File | null }) {
   const [salvando, setSalvando] = useState(false);
   const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
-  const [resumo, setResumo] = useState<{ matched: number; sem_match: number; gravados: number; ignoradosSemLinha: number; lote_id: string | null } | null>(null);
+  const [resumo, setResumo] = useState<{ matched: number; sem_match: number; gravados: number; ignoradosSemLinha: number; duplicados: number; lote_id: string | null } | null>(null);
 
   const salvar = useCallback(async () => {
     setSalvando(true);
