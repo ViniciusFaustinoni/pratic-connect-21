@@ -421,12 +421,36 @@ Deno.serve(async (req) => {
       const itens = filaFinal.slice(0, totalPlanejado)
 
       for (let i = 0; i < itens.length; i++) {
-        // Verifica cancelamento
+        // Verifica cancelamento / pausa
         const { data: rState } = await supabase
           .from('cobranca_runs').select('status').eq('id', runId).maybeSingle()
-        if ((rState as any)?.status === 'cancelado') {
+        const st = (rState as any)?.status
+        if (st === 'cancelado') {
           console.log(`[regua run ${runId}] cancelado em ${i}/${itens.length}`)
           break
+        }
+        if (st === 'pausado') {
+          // Aguarda retomada (status volta para 'executando') ou cancelamento.
+          // Polling a cada 5s; timeout duro de 1h para não vazar worker.
+          const inicioPausa = Date.now()
+          let retomado = false
+          while (Date.now() - inicioPausa < 60 * 60 * 1000) {
+            await new Promise((r) => setTimeout(r, 5_000))
+            const { data: r2 } = await supabase
+              .from('cobranca_runs').select('status').eq('id', runId).maybeSingle()
+            const s2 = (r2 as any)?.status
+            if (s2 === 'cancelado') { console.log(`[regua run ${runId}] cancelado durante pausa`); break }
+            if (s2 === 'executando') { retomado = true; break }
+          }
+          if (!retomado) {
+            // saiu por cancelamento ou timeout
+            const { data: r3 } = await supabase
+              .from('cobranca_runs').select('status').eq('id', runId).maybeSingle()
+            if ((r3 as any)?.status !== 'executando') break
+          }
+          // Reavalia o item atual no próximo ciclo (decrementa i)
+          i--
+          continue
         }
 
         const it = itens[i]
