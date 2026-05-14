@@ -243,12 +243,12 @@ Deno.serve(async (req) => {
     } catch (e: any) {
       if (e instanceof HinovaTransientError) {
         const retry = calcularProximoRetry(e.reason)
-        return jsonResp({
-          erro: 'hinova_transitorio',
-          motivo: e.reason,
-          retry_em: retry.toISOString(),
-          message: 'Hinova indisponível — tente novamente em instantes',
-        }, 503)
+        // Estamos dentro do worker em background — `return` aqui não atualiza
+        // o cobranca_runs e a UI fica eterna em "preparando". Lança para o
+        // try/catch externo que marca status='falhou' com payload.erro.
+        throw new Error(
+          `Hinova indisponível (${e.reason}). Próxima tentativa sugerida: ${retry.toISOString()}`,
+        )
       }
       throw e
     }

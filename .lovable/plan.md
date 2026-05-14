@@ -1,36 +1,69 @@
 ## Causa raiz (confirmada)
 
-Gleice e João Victor aparecem corretamente na fila **Monitoramento › Aprovação de Associados** (são `servicos` do tipo `vistoria_entrada`, status `concluida`, com veículo sem `cobertura_total` e associado em `aguardando_instalacao`).
+A Régua fica em "PREPARANDO… 0/0 (0%)" porque **o worker da edge function `executar-regua-cobranca` morre silenciosamente** sem nunca atualizar a `cobranca_runs` para `executando` ou `falhou`.
 
-Mas ao abrir o detalhe (`/monitoramento/aprovacao-associados/{id}`), a tela mostra **"Serviço não encontrado"**.
+### Evidência no banco
+Últimas 3 execuções (`cobranca_runs`):
+```
+status=preparando, total_planejado=0, finished_at=NULL  (18:07 BRT)
+status=preparando, total_planejado=0, finished_at=NULL  (17:50 BRT)
+status=preparando, total_planejado=0, finished_at=NULL  (17:49 BRT)
+```
+Nenhuma jamais saiu de `preparando`. A UI faz polling a cada 2s enquanto o status for `preparando` ou `executando` (`ReguaCobranca.tsx` linha 215) → loop infinito mostrando 0/0.
 
-O problema **não é dado faltando** nem RLS. É um bug na query do hook `useServicoDetalheAprovacao` em `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` (linha 57):
+### O bug no código
+Em `supabase/functions/executar-regua-cobranca/index.ts`, dentro do worker `prepararEdispararWorker` (linhas 207–589), quando o Hinova devolve erro transitório (janela horária fechada, 401, 429, 5xx) o catch faz:
 
 ```ts
-veiculo:veiculo_id(id, placa, marca, modelo, ano_modelo, cor, valor_fipe,
-  combustivel, categoria, cobertura_roubo_furto, cobertura_total)
+} catch (e: any) {
+  if (e instanceof HinovaTransientError) {
+    const retry = calcularProximoRetry(e.reason)
+    return jsonResp({ erro: 'hinova_transitorio', ... }, 503)   // ← linha 246
+  }
+  throw e
+}
 ```
 
-A coluna **`categoria` não existe na tabela `veiculos`** (verificado no `information_schema`). Categoria de veículo no nosso modelo vive em `contratos.veiculo_categoria` (taxi/leilão) e o tipo (carro/moto) é derivado de `marca+modelo` — conforme memory `cotacao-categoria-vs-tipo-veiculo`.
+`jsonResp(...)` devolve um `Response`, mas **estamos dentro de um worker em background** (`EdgeRuntime.waitUntil(prepararEdispararWorker())`). Esse `Response` não vai pra lugar nenhum — ninguém lê. O worker simplesmente termina e a linha do `cobranca_runs` fica **eternamente em `preparando`** com `total_planejado=0`.
 
-PostgREST devolve erro 400 nessa SELECT, o `if (error) throw error` dispara, `data` fica `undefined` no React Query e a UI cai no fallback "Serviço não encontrado". Acontece para **todos** os itens dessa fila — Gleice e João Victor são apenas os primeiros que aparecem agora.
+A `try/catch` externa (linhas 582–589) que marca `status='falhou'` só é acionada quando há `throw`. O `return` silencioso escapa dela.
 
-Confirmação no DB:
-- `servicos` 35dd6fb5… (Gleice, placa LTV3631) e 1ceb80e7… (João Victor, placa RKL6I08) existem, ambos `vistoria_entrada / concluida`.
-- Coluna `categoria` ausente em `veiculos` (apenas `placa, marca, modelo, ano_modelo, cor, valor_fipe, combustivel, cobertura_roubo_furto, cobertura_total` existem).
+### Por que o Hinova está dando transitório agora
+Provavelmente "janela horária restrita" (Hinova bloqueia /listar/boleto-associado fora de horário comercial) ou auth 401. Mas isso **não deveria travar a UI** — o sistema deveria avisar e permitir tentar de novo.
 
-## Plano (mudança mínima, só frontend)
+## Plano (mudança mínima e correta)
 
-**Arquivo:** `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`, linha 57.
+**Arquivo único:** `supabase/functions/executar-regua-cobranca/index.ts`
 
-1. Remover `categoria` do select do join `veiculo:veiculo_id(...)`. O campo não é referenciado em nenhum lugar do arquivo (`rg veiculo.categoria` não retorna ocorrências), então remover é seguro e não quebra nenhum render.
-2. Validar abrindo o detalhe da Gleice (`35dd6fb5-3e68-45cd-9526-37202cba2128`) e do João Victor (`1ceb80e7-5c7b-4cab-880f-8c70c8abbedd`) como diretor — devem carregar com fotos, vistoria, documentos e botões Aprovar/Reprovar.
+### 1. Worker nunca pode sair sem atualizar status
+Substituir os `return jsonResp(...)` de dentro do worker por `throw` (com mensagem amigável). A try/catch externa (linhas 582–589) já marca `status='falhou'` + grava `payload.erro`. Isso garante que **toda saída anormal vire `falhou`** e a UI saia do loop "PREPARANDO…".
+
+Pontos a corrigir no worker:
+- Linha 244–254: `HinovaTransientError` → trocar `return jsonResp(...)` por `throw new Error(\`Hinova indisponível (${e.reason}). Tente novamente em instantes.\`)`.
+
+### 2. UI reagir a `status='falhou'`
+Em `src/pages/cobranca/ReguaCobranca.tsx`:
+- O `refetchInterval` (linha 217) já para quando status sai de `executando|preparando`, então `falhou` derruba o polling automaticamente.
+- Adicionar um efeito (`useEffect` sobre `runStatus`) que dispara `toast.error` com `payload.erro` quando o run termina em `falhou`, e zera `runId` (ou mostra um botão "Tentar novamente") para a UI sair do estado "PREPARANDO".
+
+### 3. Resgate dos runs travados (data fix one-shot)
+Marcar como `falhou` os 3 runs presos para limpar o estado:
+```sql
+UPDATE cobranca_runs
+SET status='falhou', finished_at=now(),
+    payload = COALESCE(payload,'{}'::jsonb) || jsonb_build_object('erro','marcado por cleanup — worker abandonou em preparando')
+WHERE status='preparando' AND finished_at IS NULL;
+```
+(Via migration tool, single statement.)
 
 ## Por que não é paliativo
 
-A coluna nunca existiu em `veiculos` — categoria é por contrato/derivada. O SELECT estava simplesmente errado. A correção elimina o 400 do PostgREST que era a única causa do "Serviço não encontrado". Não há trade-off, não há feature perdida, não há mudança de schema.
+- O `return` silencioso dentro de um background worker é o defeito real — qualquer falha temporária do Hinova vai recriar o sintoma. Trocar por `throw` integra a falha no fluxo de erro existente que já sabe atualizar `cobranca_runs.status='falhou'` com payload.
+- A UI ganha sinal claro (toast + saída do loop) em vez de spinner infinito.
+- Não muda comportamento de sucesso, não muda contratos, não muda schema.
 
 ## Fora de escopo
 
-- Nenhuma migration.
-- Nenhuma mudança em hooks de fila, edge functions, RLS ou fluxo de aprovação.
+- Não vamos diagnosticar a falha Hinova específica (provável janela horária); a régua só precisa **reportar** o erro corretamente.
+- Não vamos refatorar o worker para retry automático.
+- Não vamos mexer em `mirrorBoletosEmCobrancas` nem na varredura de dedupe.
