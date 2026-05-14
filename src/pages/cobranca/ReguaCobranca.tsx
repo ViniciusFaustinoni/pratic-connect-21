@@ -724,12 +724,12 @@ export default function ReguaCobranca() {
                 value={delaySeg}
                 onChange={(e) => setDelaySeg(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
                 className="w-28"
-                disabled={(runStatus as any)?.status === 'executando'}
+                disabled={(runStatus as any)?.status === 'executando' || (runStatus as any)?.status === 'pausado'}
               />
             </div>
             <Button
               onClick={() => executarAgora.mutate()}
-              disabled={!reguaAtiva || executarAgora.isPending || (runStatus as any)?.status === 'executando'}
+              disabled={!reguaAtiva || executarAgora.isPending || (runStatus as any)?.status === 'executando' || (runStatus as any)?.status === 'pausado'}
               className="gap-2"
             >
               {executarAgora.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
