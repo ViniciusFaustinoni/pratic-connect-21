@@ -51,6 +51,7 @@ export interface DestinatarioParsed {
   nome: string;
   primeiro_nome: string;
   matricula: string;
+  cpf?: string; // opcional, quando coluna CPF está presente no CSV
   telefones_validos: string[]; // formato 55DDDNNNNNNNNN
   telefones_invalidos: string[]; // raw
   boletos: BoletoCsv[];
@@ -68,16 +69,21 @@ export interface ParseResultado {
   erros: string[];
 }
 
-// Cabeçalho canônico (normalizado)
-const COLUNAS_OBRIGATORIAS = [
-  'nome',
-  'matricula',
-  'placas',
-  'telefone celular',
-  'telefone',
-  'data vencimento',
-  'codigo de barras',
-];
+// Cabeçalho mínimo obrigatório.
+const COLUNAS_OBRIGATORIAS = ['nome', 'matricula'];
+
+// Aliases de colunas opcionais (chave canônica → variantes aceitas no header).
+const ALIASES: Record<string, string[]> = {
+  cpf: ['cpf', 'cpf/cnpj', 'cpf cnpj', 'documento'],
+  placas: ['placas', 'placa'],
+  'telefone celular': ['telefone celular', 'celular', 'whatsapp'],
+  telefone: ['telefone', 'telefone fixo', 'fone'],
+  'data vencimento': ['data vencimento', 'vencimento', 'dt vencimento'],
+  'codigo de barras': ['codigo de barras', 'linha digitavel', 'codigo barras', 'boleto'],
+  valor: ['valor', 'valor boleto', 'valor cobranca', 'preco'],
+  tipo: ['tipo', 'tipo cobranca', 'categoria', 'descricao'],
+  status: ['status', 'situacao', 'status pagamento', 'status_pagamento'],
+};
 
 function normalizarHeader(s: string): string {
   return s
