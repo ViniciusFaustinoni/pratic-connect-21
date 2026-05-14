@@ -649,7 +649,7 @@ function formatarFone(t: string): string {
 function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado; arquivo: File | null }) {
   const [salvando, setSalvando] = useState(false);
   const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
-  const [resumo, setResumo] = useState<{ matched: number; sem_match: number; gravados: number; ignoradosSemLinha: number; lote_id: string | null } | null>(null);
+  const [resumo, setResumo] = useState<{ matched: number; sem_match: number; gravados: number; ignoradosSemLinha: number; duplicados: number; lote_id: string | null } | null>(null);
 
   const salvar = useCallback(async () => {
     setSalvando(true);
@@ -657,7 +657,7 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
     const CHUNK = 200;
     const dests = resultado.destinatarios;
     let loteId: string | null = null;
-    let matched = 0, semMatch = 0, gravados = 0, ignoradosSemLinha = 0;
+    let matched = 0, semMatch = 0, gravados = 0, ignoradosSemLinha = 0, duplicados = 0;
     setProgresso({ atual: 0, total: dests.length });
     try {
       for (let i = 0; i < dests.length; i += CHUNK) {
@@ -684,10 +684,11 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
         semMatch += data.sem_match || 0;
         gravados += data.gravados || 0;
         ignoradosSemLinha += data.ignorados_sem_linha_digitavel || 0;
+        duplicados += data.duplicados_ignorados || 0;
         setProgresso({ atual: Math.min(i + CHUNK, dests.length), total: dests.length });
       }
-      setResumo({ matched, sem_match: semMatch, gravados, ignoradosSemLinha, lote_id: loteId });
-      toast.success(`${gravados} cobranças salvas no sistema (${matched} vinculadas${ignoradosSemLinha ? `, ${ignoradosSemLinha} ignoradas sem linha digitável` : ''}).`);
+      setResumo({ matched, sem_match: semMatch, gravados, ignoradosSemLinha, duplicados, lote_id: loteId });
+      toast.success(`${gravados} cobranças salvas (${matched} vinculadas${duplicados ? `, ${duplicados} duplicadas ignoradas` : ''}${ignoradosSemLinha ? `, ${ignoradosSemLinha} sem linha` : ''}).`);
     } catch (e: any) {
       toast.error(`Erro ao salvar: ${e.message}`);
     } finally {
@@ -721,11 +722,12 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
           </div>
         )}
         {resumo && (
-          <div className="grid grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
             <div className="rounded border bg-background p-2"><div className="text-xs text-muted-foreground">Gravadas</div><div className="font-semibold">{resumo.gravados}</div></div>
             <div className="rounded border bg-background p-2"><div className="text-xs text-emerald-600">Vinculadas</div><div className="font-semibold">{resumo.matched}</div></div>
             <div className="rounded border bg-background p-2"><div className="text-xs text-amber-600">Sem match</div><div className="font-semibold">{resumo.sem_match}</div></div>
-            <div className="rounded border bg-background p-2"><div className="text-xs text-orange-600">Ignoradas sem linha</div><div className="font-semibold">{resumo.ignoradosSemLinha}</div></div>
+            <div className="rounded border bg-background p-2"><div className="text-xs text-blue-600">Duplicadas ignoradas</div><div className="font-semibold">{resumo.duplicados}</div></div>
+            <div className="rounded border bg-background p-2"><div className="text-xs text-orange-600">Sem linha digitável</div><div className="font-semibold">{resumo.ignoradosSemLinha}</div></div>
           </div>
         )}
       </CardContent>

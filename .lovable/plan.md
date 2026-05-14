@@ -1,33 +1,26 @@
-## Por que não voltou para a escolha do plano
+## Objetivo
+Impedir que o mesmo boleto (mesma `linha_digitavel`) seja gravado mais de uma vez em `cobranca_csv_boletos`, mesmo que o CSV traga linhas repetidas ou que arquivos diferentes contenham o mesmo boleto.
 
-A reversão anterior só mexeu em `solicitacoes_troca_titularidade` e zerou `plano_id` da cotação. Mas a tela pública decide a etapa pelo campo **`cotacao.status_contratacao`** (via `determinarEtapa`), e ele continua em `vistoria_agendada`. Além disso a cotação já tem `contrato_gerado_id` (contrato assinado no Autentique) e um agendamento de vistoria base ativo — por isso o link mostra "Em Análise / etapas avançadas" em vez de "Escolha o plano".
+## Como funciona hoje
+- A edge `importar-cobrancas-csv` faz `INSERT` direto em `cobranca_csv_boletos`.
+- A tabela tem índice comum em `linha_digitavel`, mas **não** tem restrição de unicidade — então repetições passam.
 
-Para realmente voltar ao passo de escolha do plano, é preciso desfazer também esses artefatos a jusante.
+## Mudanças
 
-## O que fazer
+### 1. Banco (migration)
+- Limpar duplicados existentes mantendo a ocorrência mais antiga por `linha_digitavel` (preserva histórico de status/recuperação).
+- Criar índice único: `CREATE UNIQUE INDEX cobranca_csv_boletos_linha_uq ON cobranca_csv_boletos(linha_digitavel);`
 
-Migração SQL única, escopada à cotação `COT-20260513-192005877-360` (id `d411a54c-…`):
+### 2. Edge function `importar-cobrancas-csv`
+- Antes do insert, deduplicar dentro do chunk por `linha_digitavel` (último vence — mantém placa/valor mais recente do CSV).
+- Trocar `.insert(rows)` por `.upsert(rows, { onConflict: 'linha_digitavel', ignoreDuplicates: true })` — boletos já existentes no banco são silenciosamente ignorados.
+- Contar `duplicados_ignorados` (diferença entre linhas enviadas e linhas efetivamente persistidas) e devolver no JSON de resposta, junto com `ignorados_sem_linha_digitavel` que já existe.
 
-1. **Cotação** — voltar ao zero do funil:
-   - `status_contratacao = 'aguardando'`
-   - `plano_id = NULL`, `plano_escolhido_id = NULL`
-   - `contrato_gerado_id = NULL`
-   - `tipo_vistoria = NULL`
+### 3. UI `ImportarCobrancaCsv.tsx`
+- Adicionar `duplicadosIgnorados` ao estado `resumo` e exibir no grid de resumo (passa de 4 para 5 colunas, ou agrupa "Ignoradas" em um só bloco com tooltip).
+- Toast final mostra "X duplicadas ignoradas" quando >0.
 
-2. **Agendamento base** `51c14014-…`:
-   - `status = 'cancelado'` + `cancelado_em = now()` + motivo "reset para teste de troca de titularidade".
-
-3. **Contrato** `13893972-…` (atualmente `assinado`):
-   - `status = 'cancelado'`, marcar `cancelado_em` e `motivo_cancelamento = 'reset para teste de troca de titularidade'`.
-   - Não tocar no documento Autentique remoto (apenas marca interna; o link antigo fica órfão).
-
-4. **Solicitação de troca** `52cc74c1-…`:
-   - Já está em `cotacao_em_andamento` — só reconfirmar `aprovado_cadastro_em = NULL` e zerar `servico_vistoria_id` / `servico_manutencao_id` se houver.
-   - Manter `termo_cancelamento_assinado_em` (preserva o termo já assinado).
-   - Manter `veiculos.em_troca_titularidade = true` (a marca de troca em andamento permanece).
-
-Após isso, ao reabrir o link da cotação, o stepper público começa em **Etapa 0 — Escolha de Plano** com o termo de cancelamento já assinado, exatamente como pedido.
-
-## Confirmação
-
-Quer que eu execute essa migração de reset agora? Vou tocar **somente** nesse `cotacao_id` / `contrato_id` / `agendamento_base_id` específicos.
+## Comportamento resultante
+- Reimportar o mesmo arquivo: zero novos registros, contador de duplicadas = total.
+- Arquivo novo com alguns boletos já existentes: só os novos entram, os repetidos aparecem no resumo como ignorados.
+- Lote continua sendo criado normalmente para auditoria, mesmo que todos os boletos sejam duplicados.
