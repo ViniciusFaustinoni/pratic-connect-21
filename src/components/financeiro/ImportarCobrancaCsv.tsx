@@ -722,11 +722,12 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
           </div>
         )}
         {resumo && (
-          <div className="grid grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
             <div className="rounded border bg-background p-2"><div className="text-xs text-muted-foreground">Gravadas</div><div className="font-semibold">{resumo.gravados}</div></div>
             <div className="rounded border bg-background p-2"><div className="text-xs text-emerald-600">Vinculadas</div><div className="font-semibold">{resumo.matched}</div></div>
             <div className="rounded border bg-background p-2"><div className="text-xs text-amber-600">Sem match</div><div className="font-semibold">{resumo.sem_match}</div></div>
-            <div className="rounded border bg-background p-2"><div className="text-xs text-orange-600">Ignoradas sem linha</div><div className="font-semibold">{resumo.ignoradosSemLinha}</div></div>
+            <div className="rounded border bg-background p-2"><div className="text-xs text-blue-600">Duplicadas ignoradas</div><div className="font-semibold">{resumo.duplicados}</div></div>
+            <div className="rounded border bg-background p-2"><div className="text-xs text-orange-600">Sem linha digitável</div><div className="font-semibold">{resumo.ignoradosSemLinha}</div></div>
           </div>
         )}
       </CardContent>
