@@ -660,11 +660,20 @@ serve(async (req) => {
         .eq("id", loteId);
     }
 
-    // ===== 5. Promove o lote para 'ativo' no último chunk =====
+    // ===== 5. Promove o lote no último chunk: 'ativo' se sem erros, 'parcial' caso contrário =====
     if (isLastChunk) {
+      // Estado real: olha contadores no banco para decidir
+      const { data: loteAtual } = await supabase
+        .from("cobranca_csv_lotes")
+        .select("total_enviados, total_associados, total_associados_atingidos")
+        .eq("id", loteId)
+        .single();
+      const totalAssoc = loteAtual?.total_associados || 0;
+      const atingidos = loteAtual?.total_associados_atingidos || 0;
+      const novoStatus = totalAssoc > 0 && atingidos < totalAssoc ? "parcial" : "ativo";
       await supabase
         .from("cobranca_csv_lotes")
-        .update({ status: "ativo" })
+        .update({ status: novoStatus })
         .eq("id", loteId);
     }
 
@@ -673,6 +682,7 @@ serve(async (req) => {
         success: true,
         sucesso,
         erros,
+        pulados_idempotencia: puladosIdempotencia,
         detalhes,
         lote_id: loteId,
         recuperados_count: recuperadosCount,
