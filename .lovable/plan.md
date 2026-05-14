@@ -1,54 +1,85 @@
-## Diagnóstico
+## Objetivo
 
-**O envio Meta funciona — mas as conversas NÃO aparecem no Chat IA Maya.**
+Toda nova listagem CSV importada em **Régua › Emissão de Cobranças › Importar CSV (SGA)** deve **reconciliar a tabela canônica `cobrancas`**, refletindo:
+- **Pagamentos**: boletos que estavam em aberto e sumiram do novo CSV → marcar como **pagos**.
+- **Atrasos / atualizações**: boletos que continuam no novo CSV → atualizar `data_vencimento`, `valor`, `valor_final`, `linha_digitavel`, `link_fatura` se mudaram.
+- **Novos boletos**: linhas do CSV que não existem em `cobrancas` → criar registros (`origem='sga_hinova'`, `status='aguardando_pagamento'`).
 
-### O que está OK
-- Edge function `disparar-cobranca-csv-meta` chama corretamente `graph.facebook.com/v21.0/.../messages` com o template `cobranca_inadimplencia_pratic` (parâmetros `{{1}}=nome` e `{{2}}=blocos de boletos`).
-- Sanitização Meta (#132000/#132018), validação de DDD/celular BR, deduplicação por associado (1 mensagem por matrícula, no máx. 3 blocos), throttle entre blocos (1.5s) e entre destinatários (250ms) — tudo conforme as regras Meta.
-- Lotes recentes (13/05) **incrementam `total_enviados` corretamente**: 2, 11, 11, 15 envios efetivos contabilizados em `cobranca_csv_lotes`.
-- Boletos enviados são marcados como `status='enviado'` em `cobranca_csv_boletos`.
-- Instância `provedor='meta'` ativa existe em `whatsapp_instancias`.
+Hoje a reconciliação acontece **só no escopo `cobranca_csv_boletos`** (marca como `recuperado` / `reemitido`), mas **não toca em `cobrancas`** — então o painel financeiro não enxerga essas baixas.
 
-### O bug
-A tabela `whatsapp_mensagens` (que alimenta o Chat IA Maya em `/eventos/chat-ia`) tem:
-- **0 registros** com `referencia_tipo='cobranca_csv'`
-- **0 registros** com `provedor='meta'`
+## Plano
 
-Mesmo com **39 envios contabilizados nos lotes**, nenhum chegou na tabela de mensagens — logo, **nenhuma conversa de cobrança CSV aparece no Chat IA Maya**.
+### 1. Edge Function nova: `reconciliar-csv-cobrancas`
+Disparada uma única vez ao final do upload (no último chunk, junto com a promoção do lote para `ativo`). Recebe `lote_id`.
 
-A edge function tenta inserir nas linhas 494-512 (sucesso) e 527-545 (erro), mas o erro é apenas logado com `console.error("[whatsapp_mensagens insert ok]", insErr.message)` e ignorado — falha silenciosa.
+**Algoritmo (em transação por matrícula, em lotes de 500):**
 
-## Plano de correção
+```
+Para cada matricula presente no novo lote (cobranca_csv_boletos.lote_id = X):
+  1. Lê linhas_digitaveis_novas = set(boletos do CSV dessa matrícula)
+  2. Lê cobrancas_abertas = SELECT * FROM cobrancas
+        WHERE associado_id = (associado da matrícula)
+          AND status = 'aguardando_pagamento'
+          AND origem = 'sga_hinova'
 
-### 1. Reproduzir e capturar o erro real do INSERT
-Adicionar instrumentação na edge `disparar-cobranca-csv-meta`:
-- Promover os `console.error` dos 2 INSERTs em `whatsapp_mensagens` para também aparecerem no payload de retorno (campo `warnings[]`) quando ocorrerem, para inspeção imediata na UI.
-- Logar o objeto inteiro do erro (code, details, hint), não só `.message`.
+  3. PAGAMENTOS: para cada cobranca_aberta cuja linha_digitavel
+     NÃO está em linhas_digitaveis_novas:
+        UPDATE cobrancas SET
+          status = 'pago',
+          data_pagamento = (data do CSV anterior ou hoje),
+          valor_pago = valor_final,           -- não inflar
+          forma_pagamento = 'baixa_csv_sga',
+          updated_at = now()
 
-### 2. Tornar o INSERT robusto
-Causas prováveis do INSERT falhar silenciosamente (a investigar com o log real):
-- Algum trigger `BEFORE INSERT` em `whatsapp_mensagens` rejeitando `tipo='template'` + `referencia_tipo='cobranca_csv'`.
-- Tamanho do `template_variaveis.boletos` (jsonb com boletos completos por destinatário com 18+ boletos) excedendo limite de algum trigger downstream.
-- Trigger que tenta resolver `referencia_id` exigindo UUID válido quando `referencia_tipo` está setado.
+  4. ATUALIZAÇÕES: para cada linha do CSV que JÁ existe em cobrancas
+     (match por linha_digitavel):
+        UPDATE cobrancas SET
+          data_vencimento = csv.vencimento,
+          valor = csv.valor,
+          valor_final = csv.valor,
+          link_fatura = csv.link,
+          updated_at = now()
+        WHERE status = 'aguardando_pagamento'
 
-Ações conforme causa identificada:
-- Se trigger: ajustar para aceitar `referencia_tipo='cobranca_csv'` sem `referencia_id` (esse fluxo usa `lote_id` no `template_variaveis`, não tem cobrança individual).
-- Se payload: enxugar `template_variaveis.boletos` (gravar só `placa + vencimento`, não o objeto completo).
+  5. NOVOS: para cada linha do CSV cuja linha_digitavel NÃO existe
+     em cobrancas (do mesmo associado):
+        INSERT INTO cobrancas (...)
+        VALUES (origem='sga_hinova', status='aguardando_pagamento', ...)
+```
 
-### 3. Garantir agregação correta no Chat IA Maya
-Confirmado que `EventosChatIA.tsx` linha 153 já reconhece `'cobranca_csv'` como tipo de cobrança e mostra o badge `ultima_cobranca`. Nenhuma alteração de UI necessária — basta as mensagens entrarem na tabela.
+### 2. Match de associado e veículo
+Já existe em `cobranca_csv_boletos`: campos `associado_id`, `veiculo_id`, `match_origem`.
+A reconciliação só roda nas linhas onde `associado_id IS NOT NULL` (skip silencioso para CSV sem match — registra count em `lote.observacao`).
 
-### 4. Validação
-Após correção, disparar 1 lote pequeno (5–10 destinatários) e verificar:
-- `select count(*) from whatsapp_mensagens where referencia_tipo='cobranca_csv'` > 0
-- A conversa aparece em `/eventos/chat-ia` com o template renderizado e badge de cobrança recente
-- Quando o associado responder, a Maya tem o contexto correto da cobrança no histórico
+### 3. Salvaguardas (lições aprendidas)
+- **Não inflar `valor_pago`**: gravar exatamente `valor_final` (corrige o bug histórico que vimos).
+- **Idempotência**: rodar `reconciliar-csv-cobrancas` 2× no mesmo lote não cria duplicatas — UPDATEs filtram por `status='aguardando_pagamento'` (já pago não muda) e INSERT usa `ON CONFLICT (linha_digitavel) DO NOTHING` (vou criar índice único parcial `WHERE linha_digitavel IS NOT NULL`).
+- **Janela de proteção**: cobranças criadas há **menos de 24h** não são marcadas como pagas (pode ser CSV parcial). Marcar como pago só se `created_at < now() - 24h`.
+- **Auditoria**: tabela nova `cobranca_reconciliacao_log` armazena `lote_id`, `cobranca_id`, `acao` (`pago_por_ausencia` / `atualizada` / `criada`), `valor`, `created_at` — para rastrear cada baixa e poder reverter se necessário.
+
+### 4. UI de feedback
+Após o upload, exibir card de resumo na tela:
+- ✅ X cobranças marcadas como pagas (R$ Y)
+- 🔄 Z cobranças atualizadas (vencimento/valor)
+- ➕ N cobranças criadas
+- ⚠️ M linhas sem match de associado (ignoradas)
+
+Hoje já há contadores `recuperados_count` / `reemitidos_count` no card; os novos contadores são complementares e ficam em outro bloco (reconciliação ≠ comparação entre lotes CSV).
+
+### 5. Migrations necessárias
+- Criar tabela `cobranca_reconciliacao_log` com RLS (apenas funcionários veem).
+- Criar índice único parcial em `cobrancas (linha_digitavel)` onde `linha_digitavel IS NOT NULL`.
 
 ### Fora do escopo
-- Backfill das 39 mensagens já enviadas é impossível (o `message_id` da Meta foi perdido — só os contadores ficaram).
-- Mudanças no fluxo de envio Meta em si (que está correto).
+- Não recalcular `valor_pago` retroativamente.
+- Não criar pagamentos no SGA Hinova (apenas reflete o que o SGA já confirmou via ausência no CSV).
+- Não enviar mensagens — esta reconciliação é **muda** (não dispara WhatsApp).
+
+## Decisões a confirmar
+1. **Marcar como `pago` ou `baixado_por_csv`?** Recomendo `pago` (forma_pagamento='baixa_csv_sga') para o painel já mostrar como recebido. Alternativa: criar status novo `presumido_pago` se preferir.
+2. **`valor_pago` = `valor_final` exato** (sem juros/multa)? Recomendo sim, para evitar repetir o bug de inflação.
+3. **Janela de proteção 24h** está OK ou prefere outro valor (ex.: 48h, ou desabilitada)?
 
 ## Detalhes técnicos
-- Arquivo: `supabase/functions/disparar-cobranca-csv-meta/index.ts` linhas 494-512 e 527-545.
-- Tabela alvo: `public.whatsapp_mensagens` (RLS é bypass via SERVICE_ROLE_KEY na edge, então não é problema de policy).
-- UI do chat: `src/pages/eventos/EventosChatIA.tsx` (já compatível).
+- Arquivos: `supabase/functions/reconciliar-csv-cobrancas/index.ts` (novo), patch em `supabase/functions/disparar-cobranca-csv-meta/index.ts` (chamar a nova edge no `isLastChunk`), `src/components/financeiro/ImportarCobrancaCsv.tsx` (mostrar resumo).
+- Migration: `cobranca_reconciliacao_log` + índice único parcial em `cobrancas.linha_digitavel`.
