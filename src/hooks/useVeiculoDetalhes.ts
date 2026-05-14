@@ -161,7 +161,7 @@ export function useVeiculoCompleto(veiculoId: string | undefined) {
       let contrato = null;
       const { data: contr } = await supabase
         .from('contratos')
-        .select('id, numero, status, plano_nome, valor_mensal, data_inicio, data_fim')
+        .select('id, numero, status, plano_nome, valor_mensal, data_inicio, data_fim, pdf_assinado_url, pdf_url, data_assinatura')
         .eq('veiculo_id', veiculoId)
         .order('created_at', { ascending: false })
         .limit(1)
