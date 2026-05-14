@@ -1,17 +1,9 @@
 // Configuração das fotos obrigatórias para autovistoria.
-// Conjunto novo (mai/2026): 9 fotos por veículo, sem vídeo 360°.
-//   1. Frente — placa + frente
-//   2. Frente — placa + lateral esquerda (diagonal)
-//   3. Frente — placa + lateral direita (diagonal)
-//   4. Traseira — placa + frente
-//   5. Traseira — placa + lateral esquerda (diagonal)
-//   6. Traseira — placa + lateral direita (diagonal)
-//   7. Chassi (gravado no veículo)
-//   8. Motor
-//   9. Painel com o veículo ligado
-//
-// As 6 primeiras passam por OCR de placa (`placa-ocr`) para garantir que a
-// placa fotografada bate com a do veículo cadastrado.
+// Conjunto enxuto (mai/2026 — revertido):
+//   1. Frente — placa centralizada (OCR de placa)
+//   2. Chassi gravado no veículo
+//   + Vídeo 360° em volta do veículo terminando no PAINEL LIGADO
+//     (motor funcionando, hodômetro visível) — obrigatório.
 
 export interface FotoAutovistoria {
   id: string;
@@ -26,15 +18,8 @@ export interface FotoAutovistoria {
   validaPlaca?: boolean;
 }
 
-// Ids canônicos das 6 fotos de placa — usados pelos hooks/edge functions.
-export const FOTOS_VALIDAR_PLACA = [
-  'frente_centro',
-  'frente_lateral_esquerda',
-  'frente_lateral_direita',
-  'traseira_centro',
-  'traseira_lateral_esquerda',
-  'traseira_lateral_direita',
-] as const;
+// Ids canônicos das fotos com OCR de placa.
+export const FOTOS_VALIDAR_PLACA = ['frente_centro'] as const;
 
 const fotosCarro: FotoAutovistoria[] = [
   {
@@ -57,94 +42,10 @@ const fotosCarro: FotoAutovistoria[] = [
     dicaExtra: 'A placa será verificada automaticamente — capriche na nitidez.',
   },
   {
-    id: 'frente_lateral_esquerda',
-    label: 'Frente — diagonal lateral esquerda',
-    descricao: 'Foto da frente em diagonal mostrando a lateral esquerda + a placa.',
-    ordem: 2,
-    categoria: 'exterior_frente',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal frontal-esquerda do veículo (aprox. 45°)',
-      'Enquadre a frente e toda a lateral esquerda',
-      'A placa dianteira deve aparecer legível',
-    ],
-    evitar: [
-      'Cortar a roda dianteira esquerda',
-      'Placa cortada ou ilegível',
-    ],
-  },
-  {
-    id: 'frente_lateral_direita',
-    label: 'Frente — diagonal lateral direita',
-    descricao: 'Foto da frente em diagonal mostrando a lateral direita + a placa.',
-    ordem: 3,
-    categoria: 'exterior_frente',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal frontal-direita do veículo (aprox. 45°)',
-      'Enquadre a frente e toda a lateral direita',
-      'A placa dianteira deve aparecer legível',
-    ],
-    evitar: [
-      'Cortar a roda dianteira direita',
-      'Placa cortada ou ilegível',
-    ],
-  },
-  {
-    id: 'traseira_centro',
-    label: 'Traseira — placa centralizada',
-    descricao: 'Foto traseira do veículo com a placa nítida e centralizada.',
-    ordem: 4,
-    categoria: 'exterior_traseira',
-    validaPlaca: true,
-    instrucoes: [
-      'Posicione-se atrás do veículo, a uns 2 metros',
-      'Mantenha a placa traseira no centro do enquadramento',
-    ],
-    evitar: [
-      'Reflexos ou sujeira sobre a placa',
-      'Foto muito angulada',
-    ],
-  },
-  {
-    id: 'traseira_lateral_esquerda',
-    label: 'Traseira — diagonal lateral esquerda',
-    descricao: 'Foto da traseira em diagonal mostrando a lateral esquerda + a placa.',
-    ordem: 5,
-    categoria: 'exterior_traseira',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal traseira-esquerda (aprox. 45°)',
-      'Enquadre a traseira e toda a lateral esquerda',
-      'A placa traseira deve aparecer legível',
-    ],
-    evitar: [
-      'Cortar a roda traseira esquerda',
-      'Placa cortada ou ilegível',
-    ],
-  },
-  {
-    id: 'traseira_lateral_direita',
-    label: 'Traseira — diagonal lateral direita',
-    descricao: 'Foto da traseira em diagonal mostrando a lateral direita + a placa.',
-    ordem: 6,
-    categoria: 'exterior_traseira',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal traseira-direita (aprox. 45°)',
-      'Enquadre a traseira e toda a lateral direita',
-      'A placa traseira deve aparecer legível',
-    ],
-    evitar: [
-      'Cortar a roda traseira direita',
-      'Placa cortada ou ilegível',
-    ],
-  },
-  {
     id: 'chassi',
     label: 'Número do Chassi',
     descricao: 'Foto do número do chassi gravado no veículo (legível).',
-    ordem: 7,
+    ordem: 2,
     categoria: 'identificacao',
     instrucoes: [
       'Localize o chassi (geralmente na base do para-brisa, lado do motorista)',
@@ -158,47 +59,13 @@ const fotosCarro: FotoAutovistoria[] = [
     ],
     dicaExtra: 'O chassi será confrontado com o CRLV. Capriche na nitidez!',
   },
-  {
-    id: 'motor',
-    label: 'Compartimento do Motor',
-    descricao: 'Foto do compartimento do motor com o capô aberto.',
-    ordem: 8,
-    categoria: 'identificacao',
-    instrucoes: [
-      'Abra o capô completamente',
-      'Enquadre o compartimento do motor por inteiro',
-      'Mantenha boa iluminação e foco',
-    ],
-    evitar: [
-      'Capô fechado ou parcialmente aberto',
-      'Foto desfocada, escura ou tremida',
-    ],
-  },
-  {
-    id: 'painel_ligado',
-    label: 'Painel com o veículo ligado',
-    descricao: 'Foto do painel com o motor ligado mostrando hodômetro e luzes acesas.',
-    ordem: 9,
-    categoria: 'interior',
-    instrucoes: [
-      'Ligue o veículo (motor funcionando)',
-      'Aguarde as luzes do painel se estabilizarem',
-      'Enquadre o painel por completo, com o hodômetro legível',
-    ],
-    evitar: [
-      'Veículo desligado (luzes apagadas)',
-      'Reflexos do vidro do painel atrapalhando a leitura',
-      'Hodômetro fora do enquadramento',
-    ],
-    dicaExtra: 'O painel deve estar com o veículo LIGADO — usado também para conferir a quilometragem.',
-  },
 ];
 
 const fotosMoto: FotoAutovistoria[] = [
   {
     id: 'frente_centro',
-    label: 'Frente da moto — placa centralizada (se houver)',
-    descricao: 'Foto frontal da moto. Algumas motos não têm placa dianteira — fotografe a frente da mesma forma.',
+    label: 'Frente da moto — placa (se houver)',
+    descricao: 'Foto frontal da moto. Se houver placa dianteira, mantenha-a no centro.',
     ordem: 1,
     categoria: 'exterior_frente',
     validaPlaca: true,
@@ -212,75 +79,10 @@ const fotosMoto: FotoAutovistoria[] = [
     ],
   },
   {
-    id: 'frente_lateral_esquerda',
-    label: 'Frente — diagonal lateral esquerda',
-    descricao: 'Foto da frente em diagonal mostrando a lateral esquerda da moto.',
-    ordem: 2,
-    categoria: 'exterior_frente',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal frontal-esquerda (aprox. 45°)',
-      'Enquadre frente, tanque e parte da lateral esquerda',
-    ],
-    evitar: ['Cortar roda dianteira ou tanque'],
-  },
-  {
-    id: 'frente_lateral_direita',
-    label: 'Frente — diagonal lateral direita',
-    descricao: 'Foto da frente em diagonal mostrando a lateral direita da moto.',
-    ordem: 3,
-    categoria: 'exterior_frente',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal frontal-direita (aprox. 45°)',
-      'Enquadre frente, tanque e parte da lateral direita',
-    ],
-    evitar: ['Cortar roda dianteira ou tanque'],
-  },
-  {
-    id: 'traseira_centro',
-    label: 'Traseira — placa centralizada',
-    descricao: 'Foto traseira da moto com a placa nítida e centralizada.',
-    ordem: 4,
-    categoria: 'exterior_traseira',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique atrás da moto, a uns 2 metros',
-      'A placa traseira deve estar no centro e legível',
-    ],
-    evitar: ['Reflexos ou sujeira sobre a placa'],
-  },
-  {
-    id: 'traseira_lateral_esquerda',
-    label: 'Traseira — diagonal lateral esquerda',
-    descricao: 'Foto da traseira em diagonal mostrando a lateral esquerda + a placa.',
-    ordem: 5,
-    categoria: 'exterior_traseira',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal traseira-esquerda (aprox. 45°)',
-      'Enquadre traseira completa com a placa visível',
-    ],
-    evitar: ['Cortar a roda traseira', 'Placa ilegível'],
-  },
-  {
-    id: 'traseira_lateral_direita',
-    label: 'Traseira — diagonal lateral direita',
-    descricao: 'Foto da traseira em diagonal mostrando a lateral direita + a placa.',
-    ordem: 6,
-    categoria: 'exterior_traseira',
-    validaPlaca: true,
-    instrucoes: [
-      'Fique na diagonal traseira-direita (aprox. 45°)',
-      'Enquadre traseira completa com a placa visível',
-    ],
-    evitar: ['Cortar a roda traseira', 'Placa ilegível'],
-  },
-  {
     id: 'chassi',
     label: 'Chassi da Moto',
-    descricao: 'Foto do número do chassi gravado na moto.',
-    ordem: 7,
+    descricao: 'Foto do número do chassi gravado na moto (legível).',
+    ordem: 2,
     categoria: 'identificacao',
     instrucoes: [
       'Fotografe o chassi (geralmente no tubo do garfo dianteiro)',
@@ -291,38 +93,7 @@ const fotosMoto: FotoAutovistoria[] = [
       'Foto desfocada ou com números ilegíveis',
       'Enquadramento cortando parte da numeração',
     ],
-  },
-  {
-    id: 'motor',
-    label: 'Motor da Moto',
-    descricao: 'Foto aproximada do motor da moto.',
-    ordem: 8,
-    categoria: 'identificacao',
-    instrucoes: [
-      'Enquadre o motor por inteiro com boa iluminação',
-      'Mantenha o foco nítido',
-    ],
-    evitar: [
-      'Foto desfocada, escura ou tremida',
-      'Enquadramento cortando partes do motor',
-    ],
-  },
-  {
-    id: 'painel_ligado',
-    label: 'Painel com a moto ligada',
-    descricao: 'Foto do painel/hodômetro com a moto ligada (luzes do painel acesas).',
-    ordem: 9,
-    categoria: 'interior',
-    instrucoes: [
-      'Ligue a moto (motor funcionando)',
-      'Aguarde as luzes do painel se estabilizarem',
-      'Enquadre o painel mostrando o hodômetro legível',
-    ],
-    evitar: [
-      'Moto desligada (luzes apagadas)',
-      'Reflexos atrapalhando a leitura do hodômetro',
-    ],
-    dicaExtra: 'O painel deve estar com a moto LIGADA — usado também para conferir a quilometragem.',
+    dicaExtra: 'O chassi será confrontado com o CRLV. Capriche na nitidez!',
   },
 ];
 
@@ -340,9 +111,7 @@ export function isFotoComValidacaoPlaca(fotoId: string): boolean {
   return (FOTOS_VALIDAR_PLACA as readonly string[]).includes(fotoId);
 }
 
-// ===== INSTRUÇÕES DE VÍDEO 360° (deprecated — substituído pelas 9 fotos) =====
-// Mantidos como stubs para evitar quebra de imports legados em telas que ainda
-// referenciam as funções até serem atualizadas. Retornam dados vazios.
+// ===== INSTRUÇÕES DO VÍDEO 360° =====
 
 export interface InstrucaoVideo360 {
   passo: number;
@@ -350,14 +119,38 @@ export interface InstrucaoVideo360 {
   destaque?: string;
 }
 
-/** @deprecated Vídeo 360° removido. Use as 9 fotos de `getFotosAutovistoria`. */
-export function getInstrucoesVideo360(_tipo: TipoVeiculo): InstrucaoVideo360[] {
-  return [];
+const instrucoesVideoCarro: InstrucaoVideo360[] = [
+  { passo: 1, texto: 'Comece de FRENTE para o veículo, mostrando a placa dianteira.' },
+  { passo: 2, texto: 'Caminhe pela LATERAL ESQUERDA, enquadrando toda a lateral.' },
+  { passo: 3, texto: 'Mostre a TRASEIRA com a placa nítida e legível.' },
+  { passo: 4, texto: 'Continue pela LATERAL DIREITA até voltar à frente.' },
+  { passo: 5, texto: 'Abra a porta e LIGUE o veículo (motor funcionando).' },
+  {
+    passo: 6,
+    texto: 'Aproxime a câmera do PAINEL com a moto/carro LIGADO, mostrando hodômetro e luzes acesas.',
+    destaque: 'Painel ligado é OBRIGATÓRIO — comprova o funcionamento do veículo.',
+  },
+];
+
+const instrucoesVideoMoto: InstrucaoVideo360[] = [
+  { passo: 1, texto: 'Comece de FRENTE para a moto, enquadrando o farol.' },
+  { passo: 2, texto: 'Caminhe pela LATERAL ESQUERDA mostrando tanque e motor.' },
+  { passo: 3, texto: 'Mostre a TRASEIRA com a placa nítida.' },
+  { passo: 4, texto: 'Continue pela LATERAL DIREITA até voltar à frente.' },
+  { passo: 5, texto: 'LIGUE a moto (motor funcionando).' },
+  {
+    passo: 6,
+    texto: 'Aproxime a câmera do PAINEL com a moto LIGADA, mostrando hodômetro e luzes acesas.',
+    destaque: 'Painel ligado é OBRIGATÓRIO — comprova o funcionamento da moto.',
+  },
+];
+
+export function getInstrucoesVideo360(tipo: TipoVeiculo): InstrucaoVideo360[] {
+  return tipo === 'moto' ? instrucoesVideoMoto : instrucoesVideoCarro;
 }
 
-/** @deprecated Vídeo 360° removido. */
 export function getLabelVideo360(_tipo: TipoVeiculo): string {
-  return '';
+  return 'Vídeo 360° + painel ligado';
 }
 
 // ===== CONFIGURAÇÃO DE PERÍODOS PARA VISTORIA PRESENCIAL =====
