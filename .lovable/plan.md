@@ -1,143 +1,53 @@
-# Plano de correção definitiva do disparo em massa de cobranças
+## Causa raiz
 
-## Diagnóstico fechado
-O problema não é só um erro isolado de validação. Há uma falha estrutural no fluxo de disparo em massa:
+No caso do KOU6D37 (Marcos Vinicius Dativo Machado):
 
-1. **A Edge Function depende de `lote_id` para chunks seguintes**.
-2. **O frontend do importador só recebe esse `lote_id` se a resposta do 1º chunk voltar com sucesso**.
-3. **Na prática, o 1º chunk chegou a executar e enviar mensagens**, mas o fluxo foi interrompido antes de concluir o ciclo completo no cliente.
-4. **Isso deixou lotes presos em `processando`**, com envio parcial gravado no banco.
-5. Depois disso, a tela de **Lote ativo** tenta operar sobre um lote antigo/errado ou sem continuidade válida, e novas tentativas acabam estourando em erros como `lote_id ausente` ou falhas genéricas de Edge Function.
+1. Associado escolheu **Autovistoria**, enviou 2 fotos (`frente_centro`, `frente_lateral_esquerda`) → ficaram gravadas em `cotacoes_vistoria_fotos`.
+2. Voltou e trocou para **"técnico vai até mim"** → `cotacoes.tipo_vistoria` virou `'agendada'` e `vistoria_data_agendada = 2026-05-14`.
+3. As 2 fotos órfãs **continuaram** na tabela legacy.
 
-## Evidências encontradas
-- Existem lotes recentes presos em **`processando`** com contadores parcialmente avançados:
-  - `dbaca865-...` com **83 associados**, **50 enviados**, status **processando**.
-  - `2f4624ed-...` com o mesmo padrão.
-- A função **efetivamente enviou mensagens** e gravou histórico em `whatsapp_mensagens` por volta de **15:29–15:30**.
-- Ao mesmo tempo, o fluxo do importador exibiu **83 erros / 0 enviadas** na UI, o que mostra divergência entre **estado real do backend** e **estado percebido pelo frontend**.
-- A tela `LoteAtivoCobrancas` já tem guarda para não chamar a função sem lote, então o erro atual é mais profundo do que “faltou um if”.
-- A Edge Function `disparar-cobranca-csv-meta` mistura responsabilidades demais no mesmo endpoint:
-  - criação do lote
-  - reconciliação com lote anterior
-  - persistência dos boletos do chunk
-  - envio via Meta
-  - gravação de histórico
-  - atualização de KPIs
-  - promoção do lote para `ativo`
+No Cadastro:
+- `usePropostasPendentes.ts` (linha 1035-1064) faz fallback em `cotacoes_vistoria_fotos` **sem checar o `tipo_vistoria` atual da cotação** → devolve `proposta.vistoria.fotos = [2 fotos]`.
+- `PropostaAnalise.tsx` (linha 139): `cadastroAvaliaFotos = planoTemRouboFurto && temFotosOuVideo` → `true`.
+- Resultado: stepper mostra "Fotos & Vistoria — Concluído" e o botão verde **"Liberar Cobertura Roubo e Furto"**, mesmo sem vistoria completa nem decisão do técnico.
 
-## Causa raiz provável
-O fluxo atual é **frágil a timeout/interrupção entre chunks**. Quando o 1º chunk processa no servidor mas a resposta não é concluída no cliente (timeout, rede, cold start, falha transitória ou erro após envio parcial), o cliente perde o `lote_id`, e os próximos chunks falham. Isso gera:
+Comportamento esperado (regra do usuário):
+- R&F só pode ser liberado quando **todas** as fotos obrigatórias + vídeo 360° foram entregues numa autovistoria de fato concluída.
+- Se o associado abandonou a autovistoria e migrou para vistoria com técnico, o Cadastro deve avaliar **apenas documentos** e liberar para o Monitoramento atribuir a instalação. As fotos parciais antigas não contam.
 
-- envio parcial já consumado
-- lote órfão em `processando`
-- duplicidade potencial em novas tentativas
-- UI inconsistente
-- impossibilidade de retomada segura
+## Correção
 
-## Correção definitiva proposta
+### 1. Frontend — ignorar fotos parciais quando tipo_vistoria mudou
 
-### 1) Separar “criação/recuperação do lote” de “envio dos chunks”
-Criar um fluxo resiliente em duas fases:
+`src/hooks/usePropostasPendentes.ts` (ambas as ocorrências do fallback legacy — linhas ~640-665 e ~1035-1064):
 
-- **Fase A: inicialização do lote**
-  - criar ou retomar um lote de disparo
-  - reconciliar com lote anterior
-  - persistir metadados do CSV/remessa
-  - devolver **sempre** um `lote_id` estável antes do envio pesado
-- **Fase B: processamento de chunks**
-  - receber `lote_id` obrigatório
-  - persistir boletos do chunk
-  - disparar mensagens
-  - atualizar status incrementalmente
+- Antes de cair no fallback `cotacoes_vistoria_fotos`, checar `mCotacao.get(contrato.cotacao_id)?.tipo_vistoria` (já buscado no hook).
+- Só usar as fotos legacy quando `tipo_vistoria === 'autovistoria'`. Se `'agendada'` ou `'agendada_base'`, devolver `vistoria = null` (técnico ainda vai fazer; partials são lixo).
 
-Isso elimina a dependência perigosa de “o primeiro chunk precisa terminar inteiro para só então existir lote”.
+### 2. Frontend — autovistoria incompleta não libera R&F
 
-### 2) Implementar retomada idempotente de lote em `processando`
-Se houver lote recente da mesma remessa ainda em `processando`, o sistema deve:
-- reaproveitar o lote existente
-- não recriar tudo
-- não duplicar boletos já persistidos
-- permitir continuação segura do envio
+`src/pages/cadastro/PropostaAnalise.tsx` (linhas 116-144):
 
-### 3) Tornar o processamento por destinatário/boletos idempotente
-Antes de inserir/enviar, o sistema deve reconhecer itens já processados para o mesmo `lote_id`, evitando:
-- duplicação de boletos no lote
-- reenvio da mesma cobrança para o mesmo associado/telefone
-- contadores inflados
+- Adicionar conceito `autovistoriaCompleta`:
+  - Para autovistoria, exige `proposta.vistoria.video_360_url` presente **e** quantidade de fotos ≥ mínimo do roteiro (31 carro / 15 moto — usar `useDetectarTipoVeiculo` que já está no escopo).
+- `cadastroAvaliaFotos = planoTemRouboFurto && temFotosOuVideo && (não é autovistoria || autovistoriaCompleta)`.
+- Quando autovistoria incompleta: tratar como `isVistoriaAgendadaSemFotos` (mostra banner "vistoria pendente — só aprova documentos, instalação fica para Monitoramento").
 
-### 4) Introduzir status mais claros no ciclo do lote
-Hoje `processando` e `ativo` não bastam. O plano é consolidar estados operacionais como:
-- `processando`
-- `parcial`
-- `ativo`
-- `falha`
-- `substituido`
-- `cancelado`
+### 3. Backend — limpeza de fotos órfãs ao trocar tipo_vistoria
 
-Assim a UI deixa de tratar lote quebrado como se estivesse pronto para uso.
+Trigger em `cotacoes`: quando `tipo_vistoria` muda de `'autovistoria'` para outro valor, **apagar** rows correspondentes em `cotacoes_vistoria_fotos` da mesma `cotacao_id` (evita lixo crescente e reforça a regra no banco).
 
-### 5) Corrigir a regra da tela “Lote ativo · Disparo Meta”
-Essa tela deve aceitar somente lotes realmente utilizáveis, com validações como:
-- não usar lote em `processando` incompleto
-- exibir aviso para **retomar lote pendente** ou **descartar/reiniciar remessa**
-- nunca disparar em cima de lote inconsistente herdado de tentativa interrompida
+Migração também roda DELETE one-shot para limpar órfãs históricas (todas as cotações onde `tipo_vistoria != 'autovistoria'` e ainda têm linhas em `cotacoes_vistoria_fotos`) — o caso do KOU6D37 fica sanado.
 
-### 6) Melhorar o tratamento de erro do frontend
-O frontend precisa distinguir:
-- erro de rede/timeout
-- erro real do backend
-- envio parcial concluído no servidor
-- lote pendente de retomada
+### 4. Verificação no caso reportado
 
-Em vez de mostrar tudo como “falhou”, a tela deve refletir o estado real do lote.
+Após aplicar:
+- Cotação `71d97652-ea80-4aac-9172-2e302a1b575a` perde as 2 fotos órfãs.
+- Stepper do contrato `bfa583c8…` passa a mostrar somente Documentos + Aprovação, com o botão "Aprovar para Monitoramento" (sem liberar R&F).
+- Após aprovação, fluxo segue para `aguardando_monitoramento` para atribuição da instalação pelo técnico — exatamente como pedido.
 
-### 7) Instrumentação e logs diagnósticos
-Adicionar logs estruturados por etapa:
-- início do lote
-- lote retomado vs criado
-- chunk recebido
-- boletos inseridos
-- mensagens enviadas
-- promoção para ativo
-- falha final com contexto
+## Arquivos afetados
 
-Isso permitirá diagnosticar rapidamente qualquer nova ocorrência.
-
-### 8) Saneamento dos dados quebrados já existentes
-Corrigir os lotes órfãos atuais para que o sistema volte a operar sem carregar estado corrompido. Isso inclui:
-- identificar lotes presos em `processando`
-- classificar se são retomáveis, finalizáveis ou descartáveis
-- alinhar seus status com a realidade dos boletos/mensagens já gravados
-
-## Arquivos e áreas que serão envolvidos
-- `supabase/functions/disparar-cobranca-csv-meta/index.ts`
-- `src/components/financeiro/ImportarCobrancaCsv.tsx`
-- `src/components/financeiro/LoteAtivoCobrancas.tsx`
-- possível migração SQL para reforço de status/índices/idempotência do fluxo
-
-## Resultado esperado após a correção
-- O disparo em massa não perde mais o `lote_id` no meio do processo.
-- Quedas de rede ou timeout não deixam o fluxo irrecuperável.
-- O sistema consegue retomar remessas interrompidas sem duplicar envio.
-- A tela mostra o estado real do lote e não mascara sucesso parcial como falha total.
-- Lotes quebrados antigos deixam de contaminar novas tentativas.
-
-## Detalhes técnicos
-```text
-Fluxo alvo:
-1. Importador inicia remessa
-2. Backend cria/retoma lote e devolve lote_id imediatamente
-3. Frontend envia chunks sempre com lote_id garantido
-4. Backend processa chunks de forma idempotente
-5. Último chunk consolida status final do lote
-6. Tela de lote ativo só opera sobre lotes íntegros
-```
-
-## Validação final
-Após implementar, vou validar com estes cenários:
-- disparo normal com remessa pequena
-- disparo com múltiplos chunks
-- interrupção após 1º chunk e retomada
-- reexecução da mesma remessa sem duplicação
-- lote interrompido não aparecendo como ativo indevido
-- KPIs e tabela final refletindo exatamente o que foi enviado
+- `src/hooks/usePropostasPendentes.ts` (2 blocos de fallback)
+- `src/pages/cadastro/PropostaAnalise.tsx` (lógica `cadastroAvaliaFotos`)
+- Nova migration SQL: trigger `tg_cotacoes_limpar_fotos_autovistoria_abandonada` + DELETE one-shot
