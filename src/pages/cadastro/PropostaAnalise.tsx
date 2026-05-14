@@ -132,16 +132,31 @@ export default function PropostaAnalise() {
         proposta?.instalacao_info?.concluida_em == null)
     );
 
+  // Autovistoria só é considerada COMPLETA (e portanto liberadora de R&F)
+  // quando entregou TODAS as fotos obrigatórias do roteiro + vídeo 360°.
+  // Mínimo: 31 fotos (carro) / 15 fotos (moto).
+  const isMoto = (tipoVeiculo || '').toLowerCase().includes('moto');
+  const minFotosAutovistoria = isMoto ? 15 : 31;
+  const totalFotosAuto = proposta?.vistoria?.fotos?.length || 0;
+  const temVideo360 = !!proposta?.vistoria?.video_360_url;
+  const autovistoriaCompleta = isAutovistoria
+    ? (totalFotosAuto >= minFotosAutovistoria && temVideo360)
+    : true;
+
   // Cadastro avalia fotos quando:
-  //   1) o plano tem cobertura de Roubo/Furto (precisa inspecionar o veículo) E
-  //   2) já existem fotos/vídeo a revisar (autovistoria entregue ou
-  //      vistoria agendada já realizada).
-  const cadastroAvaliaFotos = planoTemRouboFurto && temFotosOuVideo;
+  //   1) o plano tem cobertura de Roubo/Furto E
+  //   2) já existem fotos/vídeo a revisar E
+  //   3) se for autovistoria, está COMPLETA (todas as fotos + vídeo 360°).
+  // Autovistoria parcial/abandonada NÃO libera R&F — cai no fluxo agendado.
+  const cadastroAvaliaFotos =
+    planoTemRouboFurto && temFotosOuVideo && (!isAutovistoria || autovistoriaCompleta);
 
   // Aprovação documental basta quando:
   //   - plano sem R&F (independente de fotos), OU
-  //   - vistoria agendada que ainda não foi realizada (sem fotos).
-  const aprovarApenasDocumentos = !planoTemRouboFurto || isVistoriaAgendadaSemFotos;
+  //   - vistoria agendada que ainda não foi realizada (sem fotos), OU
+  //   - autovistoria abandonada/incompleta (não libera R&F; aguarda técnico).
+  const aprovarApenasDocumentos =
+    !planoTemRouboFurto || isVistoriaAgendadaSemFotos || (isAutovistoria && !autovistoriaCompleta);
 
   const podeAprovar =
     proposta?.status === 'assinado' &&
