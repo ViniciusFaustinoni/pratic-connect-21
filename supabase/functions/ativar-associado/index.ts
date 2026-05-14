@@ -124,8 +124,8 @@ Deno.serve(async (req) => {
       // Quando o novo veículo/contrato exige instalação física, NÃO promover
       // contrato/veículo/cotação para 'ativo' nesta etapa — eles ficam 'aguardando_instalacao'
       // até o Monitoramento aprovar a pós-instalação (que rechamará esta edge sem aguardar_instalacao).
-      const contratoTargetStatus = aguardar_instalacao ? 'aguardando_instalacao' : 'ativo';
-      const cotacaoTargetStatus = aguardar_instalacao ? 'aguardando_instalacao' : 'ativo';
+      const contratoTargetStatus = aguardar_instalacao ? 'assinado' : 'ativo';
+      const cotacaoTargetStatus = aguardar_instalacao ? 'contrato_assinado' : 'ativo';
 
       if (targetContratoId) {
         const contratoUpdate: Record<string, unknown> = { status: contratoTargetStatus };
@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
 
     // ----- 7) Atualizar contrato (CAS opcional) -----
     const targetContratoId = contrato_id ?? assoc.contrato_id;
-    const contratoTargetStatusFlow = aguardar_instalacao ? 'aguardando_instalacao' : 'ativo';
+    const contratoTargetStatusFlow = aguardar_instalacao ? 'assinado' : 'ativo';
     if (targetContratoId) {
       const contratoUpdate: Record<string, unknown> = { status: contratoTargetStatusFlow };
       if (!aguardar_instalacao) contratoUpdate.data_ativacao = agora;
@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
 
     // ----- 9) Atualizar cotação -----
     if (cotacao_id) {
-      const cotacaoTargetStatusFlow = aguardar_instalacao ? 'aguardando_instalacao' : 'ativo';
+      const cotacaoTargetStatusFlow = aguardar_instalacao ? 'contrato_assinado' : 'ativo';
       const { error: cotErr } = await supabase
         .from('cotacoes')
         .update({ status_contratacao: cotacaoTargetStatusFlow })
