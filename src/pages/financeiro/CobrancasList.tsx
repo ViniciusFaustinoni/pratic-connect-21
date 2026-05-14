@@ -390,12 +390,12 @@ export default function CobrancasList() {
               associado_id, veiculo_id, linha_digitavel, matricula,
               associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
-            .gte('data_vencimento', dataInicio)
-            .lte('data_vencimento', dataFim)
             .order('data_vencimento', { ascending: false })
             .order('id', { ascending: false })
             .range(offset, offset + PAGE_SIZE - 1);
 
+          if (dataInicio) q = q.gte('data_vencimento', dataInicio);
+          if (dataFim) q = q.lte('data_vencimento', dataFim);
           if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
           // status: filtramos client-side via status canonico (status_origem é texto livre do SGA)
 
