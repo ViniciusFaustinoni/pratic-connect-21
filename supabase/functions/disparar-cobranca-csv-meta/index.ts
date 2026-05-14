@@ -371,8 +371,11 @@ serve(async (req) => {
       erro?: string;
       erro_codigo?: number | string;
     }> = [];
+    const warnings: string[] = []; // erros que não bloqueiam o envio (ex.: insert em whatsapp_mensagens)
     let sucesso = 0;
     let erros = 0;
+    let mensagensGravadas = 0;
+    let mensagensFalhasGravar = 0;
     const associadosAtingidos = new Set<string>();
 
     for (const dest of destinatarios) {
