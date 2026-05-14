@@ -615,7 +615,7 @@ serve(async (req) => {
             mensagem: mensagemRenderizada,
             status: "enviada",
             template_variaveis: {
-              template: templateNome,
+              template: templateNomeUsado,
               matricula: dest.matricula,
               blocos: blocos.length,
               boletos: boletosResumo,
