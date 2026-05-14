@@ -71,6 +71,7 @@ const origemOptions = [
 ];
 
 const meses = [
+  { value: '0', label: 'Todos os meses' },
   { value: '1', label: 'Janeiro' }, { value: '2', label: 'Fevereiro' }, { value: '3', label: 'Março' },
   { value: '4', label: 'Abril' }, { value: '5', label: 'Maio' }, { value: '6', label: 'Junho' },
   { value: '7', label: 'Julho' }, { value: '8', label: 'Agosto' }, { value: '9', label: 'Setembro' },
@@ -79,7 +80,8 @@ const meses = [
 
 const getAnos = () => {
   const anoAtual = new Date().getFullYear();
-  return Array.from({ length: 5 }, (_, i) => ({ value: String(anoAtual - i), label: String(anoAtual - i) }));
+  const anos = Array.from({ length: 5 }, (_, i) => ({ value: String(anoAtual - i), label: String(anoAtual - i) }));
+  return [{ value: '0', label: 'Todos os anos' }, ...anos];
 };
 
 const formatCurrency = (value: number) =>
