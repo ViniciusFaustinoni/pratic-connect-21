@@ -526,11 +526,19 @@ function EmissaoCobrancasFechamento() {
 }
 
 export default function EmissaoCobrancas() {
-  // Sub-aba "Fechamento Mensal" desativada — o import de CSV é a fonte canônica
-  // de cobranças (vincula automaticamente a associados/veículos e alimenta a régua).
+  // Lote ativo (boletos já salvos) é a fonte canônica para disparo via Meta.
+  // O importador alimenta o lote; o disparo opera somente sobre boletos persistidos.
+  const [tab, setTab] = useState<'lote' | 'importar'>('lote');
   return (
     <div className="p-6">
-      <ImportarCobrancaCsv />
+      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
+        <TabsList>
+          <TabsTrigger value="lote" className="gap-2"><Send className="h-4 w-4" /> Lote ativo · Disparo Meta</TabsTrigger>
+          <TabsTrigger value="importar" className="gap-2"><Upload className="h-4 w-4" /> Importar CSV</TabsTrigger>
+        </TabsList>
+        <TabsContent value="lote" className="mt-4"><LoteAtivoCobrancas /></TabsContent>
+        <TabsContent value="importar" className="mt-4"><ImportarCobrancaCsv /></TabsContent>
+      </Tabs>
     </div>
   );
 }
