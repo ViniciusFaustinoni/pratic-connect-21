@@ -735,10 +735,21 @@ export default function ReguaCobranca() {
               {executarAgora.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               Executar Agora
             </Button>
-            {(runStatus as any)?.status === 'executando' && (
-              <Button variant="destructive" onClick={cancelarRun} className="gap-2">
-                <XCircle className="h-4 w-4" /> Cancelar
-              </Button>
+            {((runStatus as any)?.status === 'executando' || (runStatus as any)?.status === 'pausado') && (
+              <>
+                {(runStatus as any)?.status === 'executando' ? (
+                  <Button variant="secondary" onClick={pausarRun} className="gap-2">
+                    <Pause className="h-4 w-4" /> Pausar
+                  </Button>
+                ) : (
+                  <Button variant="default" onClick={retomarRun} className="gap-2">
+                    <Play className="h-4 w-4" /> Retomar
+                  </Button>
+                )}
+                <Button variant="destructive" onClick={cancelarRun} className="gap-2">
+                  <XCircle className="h-4 w-4" /> Cancelar
+                </Button>
+              </>
             )}
           </div>
 
