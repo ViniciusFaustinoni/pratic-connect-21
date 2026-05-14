@@ -919,56 +919,75 @@ O técnico mais próximo será designado em breve.
     // 9. CHAIN ATIVAÇÃO — para inclusão/adesão isenta com instalação criada,
     // dispara ativar-associado (single-source-activation). Idempotente: edge
     // valida lock + CAS internamente.
+    //
+    // GUARD vistoria-sem-rastreador: se o veículo NÃO precisa de rastreador
+    // (FIPE<30k carro / 9k moto, não-Diesel), NÃO chamar ativar-associado.
+    // Esse fluxo só pode ativar via aprovação manual da vistoria pelo Monitoramento
+    // (edge `aplicar-conclusao-vistoria` → `ativar-associado`). Ver memória
+    // `mem://logic/operations/vistoria-sem-rastreador-flow`.
     if (novaInstalacaoId && contrato.associado_id) {
       try {
-        const { data: cotEntrada } = await supabase
-          .from('cotacoes')
-          .select('tipo_entrada, dados_extras, valor_adesao, cobertura_total, cobertura_roubo_furto')
-          .eq('id', cotacaoId)
-          .maybeSingle();
-        const tipoEntradaCot = (cotEntrada as any)?.tipo_entrada
-          || ((cotEntrada as any)?.dados_extras?.tipo_entrada)
-          || 'adesao';
-        const valorAdesaoCot = Number((cotEntrada as any)?.valor_adesao || 0);
-        const isInclusao = tipoEntradaCot === 'inclusao';
-        const isAdesaoIsenta = valorAdesaoCot <= 0;
+        let veiculoPrecisaRastreador = true;
+        try {
+          const { data: precisaRow } = await supabase
+            .rpc('fn_veiculo_precisa_rastreador', { _veiculo_id: veiculoIdFinal });
+          if (precisaRow === false) veiculoPrecisaRastreador = false;
+        } catch (rpcErr) {
+          console.warn('[CriarInstalacaoPosPagamento] fn_veiculo_precisa_rastreador indisponível, assumindo true:', rpcErr);
+        }
 
-        if (isInclusao || isAdesaoIsenta) {
-          // Veículo NOVO sempre aguarda a vistoria/instalação concluir antes de
-          // virar 'ativo'. Mesmo veículos com dispensa_rastreador (FIPE < limite)
-          // precisam passar pela vistoria fotográfica aprovada manualmente —
-          // paridade total com fluxo ≥30k/9k.
-          const aguardarInstalacaoFisica = true;
-          console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta}, veiculo=${veiculoIdFinal}, aguardar_instalacao=${aguardarInstalacaoFisica})`);
-          const ativResp = await fetch(`${supabaseUrl}/functions/v1/ativar-associado`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${serviceRoleKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              associado_id: contrato.associado_id,
-              contrato_id: contrato.id,
-              veiculo_id: veiculoIdFinal,
-              cotacao_id: cotacaoId,
-              instalacao_id: novaInstalacaoId,
-              source: 'edge:criar-instalacao-pos-pagamento',
-              ativar_cobertura_total: !!(cotEntrada as any)?.cobertura_total,
-              ativar_cobertura_roubo_furto: !!(cotEntrada as any)?.cobertura_roubo_furto,
-              aguardar_instalacao: aguardarInstalacaoFisica,
-              metadata: {
-                tipo_entrada: tipoEntradaCot,
-                isento: isAdesaoIsenta,
-                motivo: isInclusao ? 'inclusao_pos_instalacao' : 'adesao_isenta_pos_instalacao',
-                aguardar_instalacao: aguardarInstalacaoFisica,
+        if (!veiculoPrecisaRastreador) {
+          console.log(`[CriarInstalacaoPosPagamento] Veículo ${veiculoIdFinal} NÃO precisa de rastreador — ativação aguardará aprovação manual da vistoria pelo Monitoramento. Chain ativar-associado SUPRIMIDO.`);
+        } else {
+          const { data: cotEntrada } = await supabase
+            .from('cotacoes')
+            .select('tipo_entrada, dados_extras, valor_adesao, cobertura_total, cobertura_roubo_furto')
+            .eq('id', cotacaoId)
+            .maybeSingle();
+          const tipoEntradaCot = (cotEntrada as any)?.tipo_entrada
+            || ((cotEntrada as any)?.dados_extras?.tipo_entrada)
+            || 'adesao';
+          const valorAdesaoCot = Number((cotEntrada as any)?.valor_adesao || 0);
+          const isInclusao = tipoEntradaCot === 'inclusao';
+          const isAdesaoIsenta = valorAdesaoCot <= 0;
+
+          if (isInclusao || isAdesaoIsenta) {
+            // Veículo NOVO sempre aguarda a vistoria/instalação concluir antes de
+            // virar 'ativo'. Mesmo veículos com dispensa_rastreador (FIPE < limite)
+            // precisam passar pela vistoria fotográfica aprovada manualmente —
+            // paridade total com fluxo ≥30k/9k.
+            const aguardarInstalacaoFisica = true;
+            console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta}, veiculo=${veiculoIdFinal}, aguardar_instalacao=${aguardarInstalacaoFisica})`);
+            const ativResp = await fetch(`${supabaseUrl}/functions/v1/ativar-associado`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${serviceRoleKey}`,
+                'Content-Type': 'application/json',
               },
-            }),
-          });
-          if (!ativResp.ok) {
-            const txt = await ativResp.text();
-            console.warn(`[CriarInstalacaoPosPagamento] ativar-associado retornou ${ativResp.status}: ${txt}`);
-          } else {
-            console.log('[CriarInstalacaoPosPagamento] ✓ ativar-associado concluído');
+              body: JSON.stringify({
+                associado_id: contrato.associado_id,
+                contrato_id: contrato.id,
+                veiculo_id: veiculoIdFinal,
+                cotacao_id: cotacaoId,
+                instalacao_id: novaInstalacaoId,
+                source: 'edge:criar-instalacao-pos-pagamento',
+                ativar_cobertura_total: !!(cotEntrada as any)?.cobertura_total,
+                ativar_cobertura_roubo_furto: !!(cotEntrada as any)?.cobertura_roubo_furto,
+                aguardar_instalacao: aguardarInstalacaoFisica,
+                metadata: {
+                  tipo_entrada: tipoEntradaCot,
+                  isento: isAdesaoIsenta,
+                  motivo: isInclusao ? 'inclusao_pos_instalacao' : 'adesao_isenta_pos_instalacao',
+                  aguardar_instalacao: aguardarInstalacaoFisica,
+                },
+              }),
+            });
+            if (!ativResp.ok) {
+              const txt = await ativResp.text();
+              console.warn(`[CriarInstalacaoPosPagamento] ativar-associado retornou ${ativResp.status}: ${txt}`);
+            } else {
+              console.log('[CriarInstalacaoPosPagamento] ✓ ativar-associado concluído');
+            }
           }
         }
       } catch (ativErr) {

@@ -34527,6 +34527,10 @@ export type Database = {
         Args: { _associado_id: string }
         Returns: Json
       }
+      fn_veiculo_precisa_rastreador: {
+        Args: { _veiculo_id: string }
+        Returns: boolean
+      }
       fn_verificar_almoco_profissional: {
         Args: { p_profissional_id: string }
         Returns: boolean
