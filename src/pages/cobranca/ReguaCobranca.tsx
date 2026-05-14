@@ -214,7 +214,7 @@ export default function ReguaCobranca() {
     enabled: !!runId,
     refetchInterval: (q) => {
       const s = (q.state.data as any)?.status;
-      return s === 'executando' ? 2000 : false;
+      return (s === 'executando' || s === 'preparando') ? 2000 : false;
     },
     queryFn: async () => {
       const { data, error } = await supabase
@@ -724,28 +724,28 @@ export default function ReguaCobranca() {
                 value={delaySeg}
                 onChange={(e) => setDelaySeg(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
                 className="w-28"
-                disabled={(runStatus as any)?.status === 'executando' || (runStatus as any)?.status === 'pausado'}
+                disabled={['preparando','executando','pausado'].includes((runStatus as any)?.status)}
               />
             </div>
             <Button
               onClick={() => executarAgora.mutate()}
-              disabled={!reguaAtiva || executarAgora.isPending || (runStatus as any)?.status === 'executando' || (runStatus as any)?.status === 'pausado'}
+              disabled={!reguaAtiva || executarAgora.isPending || ['preparando','executando','pausado'].includes((runStatus as any)?.status)}
               className="gap-2"
             >
               {executarAgora.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               Executar Agora
             </Button>
-            {((runStatus as any)?.status === 'executando' || (runStatus as any)?.status === 'pausado') && (
+            {['preparando','executando','pausado'].includes((runStatus as any)?.status) && (
               <>
                 {(runStatus as any)?.status === 'executando' ? (
                   <Button variant="secondary" onClick={pausarRun} className="gap-2">
                     <Pause className="h-4 w-4" /> Pausar
                   </Button>
-                ) : (
+                ) : (runStatus as any)?.status === 'pausado' ? (
                   <Button variant="default" onClick={retomarRun} className="gap-2">
                     <Play className="h-4 w-4" /> Retomar
                   </Button>
-                )}
+                ) : null}
                 <Button variant="destructive" onClick={cancelarRun} className="gap-2">
                   <XCircle className="h-4 w-4" /> Cancelar
                 </Button>
@@ -757,10 +757,11 @@ export default function ReguaCobranca() {
             <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
               <div className="flex items-center justify-between">
                 <Badge variant={(runStatus as any).status === 'executando' ? 'default'
+                  : (runStatus as any).status === 'preparando' ? 'secondary'
                   : (runStatus as any).status === 'pausado' ? 'secondary'
                   : (runStatus as any).status === 'concluido' ? 'secondary'
                   : (runStatus as any).status === 'cancelado' ? 'outline' : 'destructive'}>
-                  {(runStatus as any).status?.toUpperCase()}
+                  {(runStatus as any).status === 'preparando' ? 'PREPARANDO…' : (runStatus as any).status?.toUpperCase()}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
                   Run {String((runStatus as any).id || '').slice(0, 8)}

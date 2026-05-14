@@ -189,6 +189,23 @@ Deno.serve(async (req) => {
       return jsonResp({ ativa: true, message: 'Régua sem etapas habilitadas', total_planejado: 0 })
     }
 
+    // 1.5 Cria run em status 'preparando' IMEDIATAMENTE e devolve run_id.
+    //     Toda a preparação pesada (Hinova, mirror, classificação, dedupe) roda
+    //     em background — caso contrário o `supabase.functions.invoke` cliente
+    //     aborta antes da função enviar headers ("Failed to send a request").
+    const { data: runRow0, error: errRun0 } = await supabase
+      .from('cobranca_runs').insert({
+        status: 'preparando',
+        total_planejado: 0,
+        delay_ms: delayMs,
+        criado_por: criadoPor,
+        payload: { regua_id: regua.id, started_at: startedAt },
+      }).select('id').single()
+    if (errRun0) throw errRun0
+    const runId = (runRow0 as any).id as string
+
+    const prepararEdispararWorker = async () => {
+      try {
     // 2. Pré-carrega slots dos templates (defesa Meta 132000)
     const slotsPorTemplate = new Map<string, number>()
     const tmplNomes = Array.from(new Set(etapas.map((e) => e.template).filter((t): t is string => !!t)))
@@ -392,28 +409,24 @@ Deno.serve(async (req) => {
     const filaFinal = fila.filter((f) => f.nosso_numero && !jaDisparados.has(`${f.nosso_numero}|${f.etapa.dias}`))
     const totalPlanejado = Math.min(filaFinal.length, MAX)
 
-    // 8. Cria cobranca_runs e dispara em background
-    const { data: runRow, error: errRun } = await supabase
-      .from('cobranca_runs').insert({
-        status: 'executando',
-        total_planejado: totalPlanejado,
-        delay_ms: delayMs,
-        criado_por: criadoPor,
-        payload: {
-          janela_inicio: inicioVenc.toISOString().slice(0, 10),
-          janela_fim: fimVenc.toISOString().slice(0, 10),
-          boletos_retornados: boletos.length,
-          fila_bruta: fila.length,
-          duplicados_pulados: fila.length - filaFinal.length,
-          cobrancas_inseridas: mirrorRes.inseridas,
-          cobrancas_baixadas: mirrorRes.baixadas,
-          cobrancas_ignoradas: mirrorRes.ignoradas,
-          cobrancas_erros: mirrorRes.erros,
-          regua_id: regua.id,
-        },
-      }).select('id').single()
-    if (errRun) throw errRun
-    const runId = (runRow as any).id as string
+    // 8. Atualiza cobranca_runs (de 'preparando' → 'executando') e dispara worker
+    await supabase.from('cobranca_runs').update({
+      status: 'executando',
+      total_planejado: totalPlanejado,
+      payload: {
+        regua_id: regua.id,
+        started_at: startedAt,
+        janela_inicio: inicioVenc.toISOString().slice(0, 10),
+        janela_fim: fimVenc.toISOString().slice(0, 10),
+        boletos_retornados: boletos.length,
+        fila_bruta: fila.length,
+        duplicados_pulados: fila.length - filaFinal.length,
+        cobrancas_inseridas: mirrorRes.inseridas,
+        cobrancas_baixadas: mirrorRes.baixadas,
+        cobrancas_ignoradas: mirrorRes.ignoradas,
+        cobrancas_erros: mirrorRes.erros,
+      },
+    }).eq('id', runId)
 
     // Worker em background
     const worker = (async () => {
@@ -565,22 +578,31 @@ Deno.serve(async (req) => {
       }).eq('id', runId)
     })
 
+    await worker
+      } catch (prepErr: any) {
+        console.error(`[regua run ${runId}] preparo falhou:`, prepErr)
+        await supabase.from('cobranca_runs').update({
+          status: 'falhou',
+          finished_at: new Date().toISOString(),
+          payload: { erro: String(prepErr?.message || prepErr), fase: 'preparacao' },
+        }).eq('id', runId)
+      }
+    }
+
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
-      EdgeRuntime.waitUntil(worker)
+      EdgeRuntime.waitUntil(prepararEdispararWorker())
+    } else {
+      // fallback (dev): roda sem aguardar
+      prepararEdispararWorker()
     }
 
     return jsonResp({
       ativa: true,
       run_id: runId,
-      total_planejado: totalPlanejado,
+      status: 'preparando',
       delay_ms: delayMs,
-      janela: { inicio: inicioVenc.toISOString().slice(0, 10), fim: fimVenc.toISOString().slice(0, 10) },
-      boletos_retornados: boletos.length,
-      duplicados_pulados: fila.length - filaFinal.length,
       started_at: startedAt,
-      message: totalPlanejado > 0
-        ? `Régua iniciada — ${totalPlanejado} envio(s) agendado(s) com ${delayMs}ms entre cada`
-        : 'Nenhum envio pendente para hoje (tudo já disparado ou sem etapa correspondente)',
+      message: 'Régua iniciada — preparando fila (Hinova + mirror). Acompanhe pelo run_id.',
     })
   } catch (error: any) {
     console.error('Erro régua:', error)
