@@ -1,69 +1,45 @@
-## Causa raiz (confirmada)
+# Plano — Auto-atualização de "Documentos Pendentes"
 
-A Régua fica em "PREPARANDO… 0/0 (0%)" porque **o worker da edge function `executar-regua-cobranca` morre silenciosamente** sem nunca atualizar a `cobranca_runs` para `executando` ou `falhou`.
+## Diagnóstico
 
-### Evidência no banco
-Últimas 3 execuções (`cobranca_runs`):
-```
-status=preparando, total_planejado=0, finished_at=NULL  (18:07 BRT)
-status=preparando, total_planejado=0, finished_at=NULL  (17:50 BRT)
-status=preparando, total_planejado=0, finished_at=NULL  (17:49 BRT)
-```
-Nenhuma jamais saiu de `preparando`. A UI faz polling a cada 2s enquanto o status for `preparando` ou `executando` (`ReguaCobranca.tsx` linha 215) → loop infinito mostrando 0/0.
+O sino é alimentado por `usePendenciasDocumentos` (`src/hooks/usePendenciasDocumentos.ts`) que:
 
-### O bug no código
-Em `supabase/functions/executar-regua-cobranca/index.ts`, dentro do worker `prepararEdispararWorker` (linhas 207–589), quando o Hinova devolve erro transitório (janela horária fechada, 401, 429, 5xx) o catch faz:
+1. Faz query em `documentos_solicitados` filtrando `status='pendente'`.
+2. Assina Realtime no canal `pendencias-documentos-rt` para `INSERT/UPDATE/DELETE` em `documentos_solicitados` e invalida o cache no callback.
 
-```ts
-} catch (e: any) {
-  if (e instanceof HinovaTransientError) {
-    const retry = calcularProximoRetry(e.reason)
-    return jsonResp({ erro: 'hinova_transitorio', ... }, 503)   // ← linha 246
-  }
-  throw e
-}
-```
+Verificações no banco:
+- A tabela está na publication `supabase_realtime` ✅
+- Quando o associado envia o doc no fluxo público (`DocumentosPendentesPublico.tsx`), o registro vai de `status='pendente'` → `'enviado'` (UPDATE) — Realtime deve disparar.
 
-`jsonResp(...)` devolve um `Response`, mas **estamos dentro de um worker em background** (`EdgeRuntime.waitUntil(prepararEdispararWorker())`). Esse `Response` não vai pra lugar nenhum — ninguém lê. O worker simplesmente termina e a linha do `cobranca_runs` fica **eternamente em `preparando`** com `total_planejado=0`.
+Pontos frágeis identificados que justificam o relato do usuário ("não atualiza sozinho"):
 
-A `try/catch` externa (linhas 582–589) que marca `status='falhou'` só é acionada quando há `throw`. O `return` silencioso escapa dela.
+1. **Canal Realtime com nome fixo global** (`pendencias-documentos-rt`). Em HMR/StrictMode/duas abas montando o sino, podem ocorrer colisões silenciosas — uma das instâncias fica sem evento. Solução: sufixar com `profile.id` + um id estável por mount.
+2. **Sem fallback de polling.** Se o WS do Realtime cair (rede, sleep do laptop, proxy), o badge fica preso até refresh manual. Solução: `refetchInterval` discreto (60s) + `refetchIntervalInBackground:false`.
+3. **Sem `refetchOnWindowFocus`.** Voltando à aba não recarrega. Ligar.
+4. **Sem visibilidade de falha de subscribe.** Hoje ignoramos o status do `subscribe()`. Logar `SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT / CLOSED` ajuda diagnóstico futuro.
+5. **`staleTime: 30s`** não é problema (invalidate força refetch), mas combinado com a falta de polling vira ponto cego quando o Realtime falha.
+6. **Listener escuta apenas `documentos_solicitados`.** Quando o monitoramento aprova o documento manualmente, o registro muda para `status='aprovado'` na mesma tabela — coberto. Nenhuma mudança fora dessa tabela impacta a lista.
 
-### Por que o Hinova está dando transitório agora
-Provavelmente "janela horária restrita" (Hinova bloqueia /listar/boleto-associado fora de horário comercial) ou auth 401. Mas isso **não deveria travar a UI** — o sistema deveria avisar e permitir tentar de novo.
+Não há mudanças de schema/RLS necessárias — a publication já está correta e a RLS atual já permite que gestor/diretor/analista vejam updates dessas linhas (mesma RLS de SELECT).
 
-## Plano (mudança mínima e correta)
+## Mudanças (apenas em `src/hooks/usePendenciasDocumentos.ts`)
 
-**Arquivo único:** `supabase/functions/executar-regua-cobranca/index.ts`
-
-### 1. Worker nunca pode sair sem atualizar status
-Substituir os `return jsonResp(...)` de dentro do worker por `throw` (com mensagem amigável). A try/catch externa (linhas 582–589) já marca `status='falhou'` + grava `payload.erro`. Isso garante que **toda saída anormal vire `falhou`** e a UI saia do loop "PREPARANDO…".
-
-Pontos a corrigir no worker:
-- Linha 244–254: `HinovaTransientError` → trocar `return jsonResp(...)` por `throw new Error(\`Hinova indisponível (${e.reason}). Tente novamente em instantes.\`)`.
-
-### 2. UI reagir a `status='falhou'`
-Em `src/pages/cobranca/ReguaCobranca.tsx`:
-- O `refetchInterval` (linha 217) já para quando status sai de `executando|preparando`, então `falhou` derruba o polling automaticamente.
-- Adicionar um efeito (`useEffect` sobre `runStatus`) que dispara `toast.error` com `payload.erro` quando o run termina em `falhou`, e zera `runId` (ou mostra um botão "Tentar novamente") para a UI sair do estado "PREPARANDO".
-
-### 3. Resgate dos runs travados (data fix one-shot)
-Marcar como `falhou` os 3 runs presos para limpar o estado:
-```sql
-UPDATE cobranca_runs
-SET status='falhou', finished_at=now(),
-    payload = COALESCE(payload,'{}'::jsonb) || jsonb_build_object('erro','marcado por cleanup — worker abandonou em preparando')
-WHERE status='preparando' AND finished_at IS NULL;
-```
-(Via migration tool, single statement.)
-
-## Por que não é paliativo
-
-- O `return` silencioso dentro de um background worker é o defeito real — qualquer falha temporária do Hinova vai recriar o sintoma. Trocar por `throw` integra a falha no fluxo de erro existente que já sabe atualizar `cobranca_runs.status='falhou'` com payload.
-- A UI ganha sinal claro (toast + saída do loop) em vez de spinner infinito.
-- Não muda comportamento de sucesso, não muda contratos, não muda schema.
+1. Adicionar ao `useQuery`:
+   - `refetchInterval: 60_000`
+   - `refetchIntervalInBackground: false`
+   - `refetchOnWindowFocus: true`
+2. Trocar o canal para `pendencias-documentos-rt-${profile.id}` (e gerar um sufixo aleatório por mount via `useRef`) para evitar colisão.
+3. Capturar status do `subscribe((status) => console.log(...))` — apenas log, sem UI.
+4. Manter o invalidate por prefixo `['pendencias-documentos']` (já correto).
 
 ## Fora de escopo
 
-- Não vamos diagnosticar a falha Hinova específica (provável janela horária); a régua só precisa **reportar** o erro corretamente.
-- Não vamos refatorar o worker para retry automático.
-- Não vamos mexer em `mirrorBoletosEmCobrancas` nem na varredura de dedupe.
+- Não mexer no componente `PendenciasDocumentosBell` (UI permanece igual; ele já reage ao `total` do hook).
+- Não alterar RLS, edge functions, fluxo público de upload, nem aprovação de documentos.
+- Não tocar em `usePropostasPendentes` / sidebar.
+
+## Validação
+
+- Abrir `/monitoramento/aprovacao-associados` e o sino, observar console: deve aparecer `[pendencias-documentos-rt] SUBSCRIBED`.
+- Em outra aba (associado), enviar um doc pendente → badge deve cair em ≤2s sem refresh.
+- Cortar Wi-Fi por 30s e religar → no máximo em 60s o polling reconcilia o badge.

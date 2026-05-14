@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -72,6 +72,9 @@ export function usePendenciasDocumentos() {
     queryKey: ['pendencias-documentos', profile?.id, veTudo],
     enabled,
     staleTime: 30_000,
+    refetchInterval: enabled ? 60_000 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<PendenciaPropostaAgrupada[]> => {
       let q = supabase
         .from('documentos_solicitados')
@@ -128,21 +131,30 @@ export function usePendenciasDocumentos() {
     },
   });
 
+  // Sufixo único e estável por mount para evitar colisão de canal (HMR/StrictMode/múltiplas abas)
+  const channelSuffixRef = useRef<string>(Math.random().toString(36).slice(2, 10));
+
   // Realtime: invalida ao inserir/atualizar/deletar pendências
   useEffect(() => {
     if (!enabled) return;
+    const channelName = `pendencias-documentos-rt-${profile?.id ?? 'anon'}-${channelSuffixRef.current}`;
     const channel = supabase
-      .channel('pendencias-documentos-rt')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'documentos_solicitados' },
-        () => queryClient.invalidateQueries({ queryKey: ['pendencias-documentos'] }),
+        (payload) => {
+          console.log('[pendencias-documentos-rt] event', payload.eventType);
+          queryClient.invalidateQueries({ queryKey: ['pendencias-documentos'] });
+        },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[pendencias-documentos-rt]', status, channelName);
+      });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [enabled, queryClient]);
+  }, [enabled, profile?.id, queryClient]);
 
   const total = useMemo(() => query.data?.length ?? 0, [query.data]);
 
