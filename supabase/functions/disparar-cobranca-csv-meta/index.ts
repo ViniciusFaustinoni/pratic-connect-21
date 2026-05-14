@@ -168,7 +168,7 @@ serve(async (req) => {
     let reemitidosCount = 0;
     let reemitidosValor = 0;
 
-    if (isFirstChunk) {
+    if (isFirstChunk || initOnly) {
       const todasLinhas = (body.todas_linhas_digitaveis as string[] | undefined) ?? [];
       const todasMatriculas = (body.todas_matriculas as string[] | undefined) ?? [];
       const totalBoletosRemessa = todasLinhas.length;
