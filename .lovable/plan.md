@@ -1,44 +1,89 @@
-## Causas raiz dos 4 problemas
+## Diagnóstico do fluxo atual (Troca de Titularidade pós-assinatura do termo de cancelamento)
 
-Levantamento direto no banco e no código da tela `AprovacaoInstalacaoDetalhe.tsx` para o caso `COT-…-563` (servico `622f57ee…`, vistoria `ee76355d…`):
+Levantamento direto do código:
 
-| # | Sintoma | Causa raiz |
-|---|---------|------------|
-| 1 | "Fotos da Instalação (0)" mesmo com 32 fotos copiadas | A edge `finalizar-autovistoria-cotacao` cria a vistoria, mas **não preenche `servicos.vistoria_origem_id`**. A tela busca fotos por `servico.vistoria_origem_id` (ou `instalacao_origem_id`). Ambos = `NULL` → array vazio. |
-| 2 | "Documentação do Associado" mostra só o Laudo | Os 4 documentos aprovados (CNH, CRLV, comprovante) ficam em **`contratos_documentos`** (vinculados por `cotacao_id`), enquanto a tela só lê `documentos` por `associado_id`. Conferido: `contratos_documentos` tem 4 linhas `aprovado`. |
-| 3 | Status do associado "aguardando_instalacao" | `aprovar-proposta` aplica esse status sem distinguir o caso "vistoria sem rastreador". Não existe valor semântico no enum `status_associado` para "concluiu vistoria, aguarda aprovação do Monitoramento sem instalação". |
-| 4 | Campo "Instalador" sempre visível | Label fixo no JSX (linhas 500-503 da página), independente do `servicos.tipo`. Para `vistoria_entrada` sem rastreador não há instalador. |
+| Etapa | Hoje | Problema |
+|---|---|---|
+| Termo de cancelamento assinado (Autentique webhook) | Solicitação vai para `aguardando_cadastro` | ✅ correto |
+| Novo titular acessa link público | `trocaLiberada` em `CotacaoContratacao.tsx` (linha 208) considera **liberado** se houver `termo_cancelamento_assinado_em`, mesmo em `aguardando_cadastro`. Comentário diz "cadastro é auto-aprovado por vincular-cotacao-troca" — mas a edge **não auto-aprova mais** (memória `troca-titularidade-cadastro-auto`). | ❌ Comentário/lógica desatualizada. Cliente segue Plano → Docs → Contrato → Autovistoria sem o Cadastro nunca olhar. |
+| Autovistoria concluída | Trigger `fn_troca_promover_monitoramento_pos_vistoria` promove `liberada_para_assinatura`/`aguardando_vistoria` → `aguardando_monitoramento`. **NÃO reage a `aguardando_cadastro`** — porém a solicitação está justamente em `aguardando_cadastro` quando a vistoria roda no novo fluxo. | ❌ Cadastro é "pulado": ou trigger promove direto, ou solicitação fica órfã em `aguardando_cadastro` enquanto a cotação avança sozinha. |
+| Cadastro aprova | `aprovar-troca-cadastro` envia direto para `liberada_para_assinatura` (pula Monitoramento). | ❌ Inverte a hierarquia que o usuário descreveu (Cadastro → Monitoramento). |
+| Monitoramento (Aprovar / Solicitar vistoria / Agendar manutenção) | `aprovar-troca-monitoramento` já cobre as 3 ações. Botões existem em `ModalDetalhesTroca`. | ✅ funcional, só precisa entrar na ordem certa. |
+| Após vistoria adicional pedida pelo Monitoramento | Trigger devolve para `aguardando_monitoramento`. | ✅ correto. |
+| Cron de expiração à meia-noite | `cron-expirar-trocas-titularidade` cancela veículo + cotação + WhatsApp; novo titular precisa nova cotação. | ✅ correto. |
 
-## O que vamos corrigir
+## Fluxo alvo (acordado com o usuário)
 
-### A. Edge `finalizar-autovistoria-cotacao`
-- Ao criar o `servicos` (ou atualizar o existente para `concluida`), setar `vistoria_origem_id = vistoriaId`.
-- Continua idempotente; quando a vistoria já existe, faz `update` no servico para garantir o vínculo.
+```text
+Termo cancelamento assinado
+        │
+        ▼
+aguardando_cadastro  ◄── novo titular acessa link público
+        │              executa: Plano → Docs → Contrato → AUTOVISTORIA
+        │              (Pagamento fica TRAVADO até Monitoramento liberar)
+        ▼
+[autovistoria concluída]  fotos + docs prontos para análise
+        │
+        ▼
+Cadastro analisa em /cadastro/processos?tab=titularidade
+        │
+        ├── Reprova ──► reprovada_cadastro (fim)
+        │
+        └── Aprova ──► aguardando_monitoramento
+                                │
+                                ▼
+                Monitoramento decide:
+                  ├─ Aprovar ──────────────────► liberada_para_assinatura → Pagamento → efetivada
+                  ├─ Solicitar vistoria ───────► aguardando_vistoria
+                  │      (link atualiza para agendamento OU autovistoria extra)
+                  │      vistoria concluída ──► aguardando_monitoramento (loop)
+                  └─ Agendar manutenção ──────► aguardando_manutencao
+                         manutenção concluída ► aguardando_monitoramento
 
-### B. Migration de enum
-- `ALTER TYPE status_associado ADD VALUE IF NOT EXISTS 'aguardando_aprovacao_monitoramento';`
-- Esse valor representa: cadastro aprovado, autovistoria/presencial concluída, aguardando decisão do Monitoramento. Vale para qualquer veículo sem rastreador obrigatório.
+Se passar 23:59:59 BRT do dia da assinatura sem termo de filiação assinado
+   → cron expira: solicitação=expirada, veículo=cancelado, cotação=recusada,
+     link público mostra "Solicitação expirada — exigir nova cotação".
+```
 
-### C. `aprovar-proposta` (`supabase/functions/aprovar-proposta/index.ts`)
-- Já existe a flag `algumPrecisouRastreador`. Quando ela é `false` e existe vistoria materializada, definir `status_alvo = 'aguardando_aprovacao_monitoramento'` em vez de `aguardando_instalacao`.
-- Atualizar `allowed_from` em `ativar-associado` (linha 567) para incluir esse novo valor.
+## Mudanças propostas
 
-### D. Tela `AprovacaoInstalacaoDetalhe.tsx`
-1. **Documentos**: no hook `useServicoDetalheAprovacao`, em paralelo ao `documentos`, fazer `select` em `contratos_documentos` por `cotacao_id` (e por `contrato_id` como fallback) e mesclar no array `documentos`. Manter o mesmo shape (`tipo`, `arquivo_url`, `status`).
-2. **Instalador**: trocar label/valor para condicional —
-   - `servico.tipo === 'vistoria_entrada'` e sem `profissional`: ocultar o campo (renderizar bloco "Vistoria sem instalação de rastreador" com badge informativa).
-   - Caso contrário, manter "Instalador".
-3. **Status do associado**: mapear o novo valor para badge "Aguardando aprovação do Monitoramento" com cor neutra/primária.
-4. **Header da seção "Fotos"**: trocar dinamicamente para "Fotos da Vistoria" quando `tipo='vistoria_entrada'` (label menor, mas evita confundir o operador).
+### 1. Edge `vincular-cotacao-troca/index.ts`
+- Manter sem auto-aprovação (já está). Atualizar comentário só por higiene.
 
-### E. Backfill do caso atual (COT-…-563)
-- `UPDATE servicos SET vistoria_origem_id = 'ee76355d-2b71-4bc4-bdac-a8b133d7dc8c' WHERE id = '622f57ee-669c-437d-8354-82000757ef9a';`
-- `UPDATE associados SET status = 'aguardando_aprovacao_monitoramento' WHERE id = '2e8c514d-d835-4e4d-8db0-b375438a0985';`
+### 2. Tela pública `src/pages/public/CotacaoContratacao.tsx`
+- Reescrever `trocaLiberada`:
+  - Liberar **navegação até a Autovistoria** quando `termo_cancelamento_assinado_em` existir e status ∈ {`aguardando_cadastro`, `aguardando_monitoramento`, `aguardando_vistoria`, `aguardando_manutencao`, `liberada_para_assinatura`, `efetivada`}.
+  - Bloquear etapa **Pagamento** enquanto status ≠ `liberada_para_assinatura` / `efetivada`. Mostrar `TelaAnaliseTrocaTitularidade` no lugar com mensagem "Aguardando aprovação do Cadastro/Monitoramento" baseada no status real.
+- Atualizar o comentário da linha 205.
 
-### F. Atualizar memória
-- Atualizar `mem://logic/operations/vistoria-sem-rastreador-flow` (ou criar `mem://logic/operations/autovistoria-materializa-vistoria`) registrando: vínculo `servicos.vistoria_origem_id`, leitura de `contratos_documentos` na fila de aprovação e o novo status `aguardando_aprovacao_monitoramento`.
+### 3. Trigger `fn_troca_promover_monitoramento_pos_vistoria` (nova migration)
+- **Não promover direto para `aguardando_monitoramento`**. Em vez disso:
+  - Se solicitação está em `aguardando_cadastro` → manter `aguardando_cadastro` mas marcar uma flag (ex.: `vistoria_pronta_para_cadastro=true` ou `autovistoria_concluida_em=now()`) — Cadastro vê na fila com badge "Autovistoria concluída — pronta para análise".
+  - Se solicitação está em `aguardando_vistoria` (vistoria pedida pelo Monitoramento, modalidade autovistoria) → promover para `aguardando_monitoramento` (comportamento atual).
+- Adicionar coluna `autovistoria_concluida_em timestamptz` em `solicitacoes_troca_titularidade`.
+
+### 4. Edge `aprovar-troca-cadastro/index.ts`
+- Trocar destino de `liberada_para_assinatura` para `aguardando_monitoramento`.
+- Pré-checagem: bloquear aprovação se `autovistoria_concluida_em IS NULL` (cadastro só aprova depois das fotos).
+- Atualizar `useAprovarTrocaCadastro` (toast: "enviada ao Monitoramento").
+
+### 5. Tela `src/pages/cadastro/ProcessosOperacionais.tsx` + `ModalDetalhesTroca`
+- Subaba "Aguardando Cadastro" passa a mostrar badge **"Autovistoria concluída"** (verde) vs **"Aguardando autovistoria"** (cinza). Botão "Aprovar/Reprovar" só habilita quando concluída.
+- Modal Cadastro: adicionar bloco com fotos da autovistoria + documentos (CNH/CRLV/comprovante) usando o mesmo padrão da fila de Monitoramento (reaproveitar `useServicoDetalheAprovacao` ou query equivalente baseada em `vistoria_origem_id`).
+
+### 6. Tela `ModalDetalhesTroca` (modo Monitoramento)
+- Já tem os 3 botões (Aprovar / Solicitar vistoria / Agendar manutenção). Conferir que aparecem apenas em `aguardando_monitoramento`. Adicionar/realçar botão "Solicitar manutenção de rastreador" se hoje estiver oculto.
+
+### 7. Backfill (migration)
+- Solicitações hoje em `liberada_para_assinatura` que NÃO têm `aprovado_monitoramento_em` voltam para `aguardando_monitoramento` (corrige presas pelo fluxo antigo).
+- Solicitações em `aguardando_cadastro` com vistoria já em `em_analise/concluida/aprovada` recebem `autovistoria_concluida_em = updated_at` para aparecerem prontas na fila.
+
+### 8. Memória
+- Atualizar `mem://logic/operations/troca-titularidade-monitoramento-pos-vistoria`: novo fluxo é **Cadastro → Monitoramento** com Cadastro analisando depois da autovistoria; trigger não promove mais `aguardando_cadastro`.
+- Atualizar `mem://logic/operations/troca-titularidade-cadastro-auto`: cadastro continua manual; aprovar agora envia para Monitoramento (não mais para `liberada_para_assinatura`).
 
 ## Fora de escopo
 - Mudar set canônico de fotos da autovistoria (segue 2 fotos + 360°).
-- Fluxo presencial (já materializa vistoria/instalação corretamente).
-- Mexer em `documentos` × `contratos_documentos` em outros pontos do app (apenas mesclar leitura na tela de aprovação).
+- Cron de expiração (já está correto).
+- Tela `AprovacoesTroca` do Monitoramento (mantém comportamento — só passa a receber casos pós-cadastro).
+- Etapa Pagamento (mantém regra atual; só ganha bloqueio condicional).
