@@ -240,9 +240,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       
       // OCR de placa (6 fotos exteriores)
       let bloqueadoPorPlaca = false;
+      const bypassOcrPlaca = COTACOES_TESTE_BYPASS_OCR_PLACA.has(cotacaoId);
       if (result.placaOcr) {
         setPlacaOcrPorFoto((prev) => ({ ...prev, [fotoAtual.id]: result.placaOcr! }));
-        if (result.placaOcr.skipped) {
+        if (bypassOcrPlaca) {
+          // Cotação de teste autorizada — não bloqueia por OCR de placa
+          setPlacaMismatch(null);
+        } else if (result.placaOcr.skipped) {
           // 0KM ou sem placa real — não valida
         } else if (!result.placaOcr.legivel) {
           setPlacaMismatch(null);
