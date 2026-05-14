@@ -998,8 +998,8 @@ export default function CobrancasList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={cobranca.origem === 'asaas' ? 'default' : 'secondary'}>
-                        {cobranca.origem === 'asaas' ? 'Asaas' : 'SGA'}
+                      <Badge variant={cobranca.origem === 'asaas' ? 'default' : cobranca.origem === 'csv_sga' ? 'outline' : 'secondary'}>
+                        {cobranca.origem === 'asaas' ? 'Asaas' : cobranca.origem === 'csv_sga' ? 'CSV SGA' : 'SGA'}
                       </Badge>
                     </TableCell>
                     <TableCell>
