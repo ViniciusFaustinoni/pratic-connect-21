@@ -197,6 +197,7 @@ const RecuperadosPage = lazy(() => import("./pages/financeiro/RecuperadosPage"))
 const CobrancaDetalhe = lazy(() => import("./pages/financeiro/CobrancaDetalhe"));
 const FaturamentoMensal = lazy(() => import("./pages/financeiro/FaturamentoMensal"));
 const ReguaPage = lazy(() => import("./pages/financeiro/ReguaPage"));
+const EmissaoCobrancas = lazy(() => import("./pages/financeiro/EmissaoCobrancas"));
 const ContasPagar = lazy(() => import("./pages/financeiro/ContasPagar"));
 const Extrato = lazy(() => import("./pages/financeiro/Extrato"));
 // ExtratosBancarios removido — consolidado em /financeiro/extrato
