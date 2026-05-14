@@ -386,6 +386,8 @@ export default function PrestadorInstalacao() {
   }
 
   if (error || !link || link.status === 'concluida' || link.status === 'cancelada') {
+    const isReatribuida =
+      link?.status === 'cancelada' && !(link as any)?.recusado_em;
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
         <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
@@ -396,12 +398,18 @@ export default function PrestadorInstalacao() {
           )}
         </div>
         <h1 className="text-xl font-bold text-slate-800 mb-2">
-          {link?.status === 'concluida' ? 'Instalação concluída' : 'Link inválido'}
+          {link?.status === 'concluida'
+            ? 'Instalação concluída'
+            : isReatribuida
+              ? 'Tarefa reatribuída'
+              : 'Link inválido'}
         </h1>
         <p className="text-slate-500 text-sm text-center max-w-xs">
           {link?.status === 'concluida'
             ? 'Obrigado! A equipe Praticcar foi notificada.'
-            : 'Este link não é válido ou já foi utilizado. Entre em contato com o coordenador.'}
+            : isReatribuida
+              ? 'Esta tarefa foi reatribuída pela central. Verifique o WhatsApp para o novo link de acesso.'
+              : 'Este link não é válido ou já foi utilizado. Entre em contato com o coordenador.'}
         </p>
       </div>
     );
