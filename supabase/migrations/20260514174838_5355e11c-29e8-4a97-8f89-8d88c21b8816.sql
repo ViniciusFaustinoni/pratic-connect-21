@@ -1,0 +1,3 @@
+ALTER TABLE public.cobranca_runs DROP CONSTRAINT IF EXISTS cobranca_runs_status_chk;
+ALTER TABLE public.cobranca_runs ADD CONSTRAINT cobranca_runs_status_chk
+  CHECK (status = ANY (ARRAY['preparando','executando','pausado','concluido','falhou','cancelado']));
