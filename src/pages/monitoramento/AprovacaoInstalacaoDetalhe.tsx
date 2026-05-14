@@ -519,8 +519,16 @@ export default function AprovacaoInstalacaoDetalhe() {
             <p className="font-medium text-foreground">{veiculo?.ano_modelo || '---'}</p>
           </div>
           <div>
-            <span className="text-muted-foreground text-xs">Instalador</span>
-            <p className="font-medium text-foreground">{profissional?.nome || '---'}</p>
+            <span className="text-muted-foreground text-xs">
+              {servico.tipo === 'vistoria_entrada' && !profissional?.nome ? 'Modalidade' : 'Instalador'}
+            </span>
+            <p className="font-medium text-foreground">
+              {profissional?.nome
+                ? profissional.nome
+                : servico.tipo === 'vistoria_entrada'
+                  ? (servico.modalidade === 'autovistoria' ? 'Autovistoria (sem instalação)' : 'Vistoria sem instalação')
+                  : '---'}
+            </p>
           </div>
         </CardContent>
       </Card>
