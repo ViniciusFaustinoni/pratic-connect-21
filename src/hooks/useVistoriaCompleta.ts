@@ -48,11 +48,12 @@ export function useAprovarVeiculoVistoria() {
       }
 
       // 1. Atualizar veículo (cobertura/ativação só na aprovação do monitoramento)
+      // OBS: o vínculo veículo↔rastreador é mantido em rastreadores.veiculo_id
+      // (passo 0 acima). A tabela `veiculos` NÃO possui coluna `rastreador_id`.
       const veiculoUpdate: Record<string, any> = {
         status: 'em_analise',
         updated_at: agora,
       };
-      if (data.rastreadorId) veiculoUpdate.rastreador_id = data.rastreadorId;
       const { error: veiculoError } = await supabase
         .from('veiculos')
         .update(veiculoUpdate)
