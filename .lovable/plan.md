@@ -1,52 +1,53 @@
-## Estado atual da régua
+# Régua de Cobrança — corrigir "Failed to send a request to the Edge Function"
 
-O motor `executar-regua-cobranca` já cobre a maior parte do que você descreveu:
+## Diagnóstico
 
-- ✅ Busca via `/listar/boleto-associado/periodo` (já fatia em janelas de 31 dias internamente)
-- ✅ Identifica status PAGO / CANCELADO / VENCIDO / A VENCER (regex `SITUACAO_PAGA`/`SITUACAO_CANCELADA` + `data_pagamento`)
-- ✅ Casa cada boleto não-pago com a etapa correspondente (D-N para lembretes, D+N para atrasados)
-- ✅ Usa nome/celular/telefone fixo/comercial do retorno Hinova + fallback do mirror local
-- ✅ Ordenação: inadimplentes mais antigos → maior valor → depois lembretes (mais próximos do vencimento primeiro)
-- ✅ Delay configurável (default 10s, range 0–60s)
-- ✅ Dedupe diário por `(nosso_numero, dia_regua)` em `cobranca_eventos`
-- ✅ Worker em background (`EdgeRuntime.waitUntil`) com cancelamento via `cobranca_runs.status='cancelado'`
+Logs mostram que a edge function `executar-regua-cobranca` boota, executa, e em 17:41:12 emitiu apenas um warning de retry de auth Hinova antes do shutdown. O cliente recebeu **"Failed to send a request to the Edge Function"** — não é um 4xx/5xx, é o `supabase.functions.invoke` desistindo da conexão.
 
-## Lacunas detectadas (vs. o que você pediu nas mensagens anteriores)
+Causa raiz: a função faz **muito trabalho síncrono ANTES de responder**:
 
-### 1. Janela de varredura ≠ "2 meses retroativos + mês atual"
-Hoje a janela é derivada de `min/max(etapa.dias)` (`hoje - dMax` … `hoje - dMin`). Se as etapas configuradas forem curtas, perdemos boletos antigos que ainda estão em aberto e deveriam entrar na régua. Você pediu explicitamente uma janela mínima de **2 meses retroativos + mês atual**, independente das etapas.
+1. Lê régua + templates
+2. Calcula janela
+3. Chama Hinova `/listar/boleto-associado/periodo` (paginado, pode levar dezenas de segundos, e ainda tem retry de auth)
+4. Pré-carrega `associados` + `veiculos`
+5. Espelha boletos em `cobrancas` (mirror)
+6. Classifica + ordena
+7. Dedupe via `cobranca_eventos` (chunks de 200)
+8. **Só então** cria `cobranca_runs` e retorna `run_id`
 
-**Correção**: forçar `inicioVenc = min(hoje - dMax, primeiroDiaDoMes(hoje - 2 meses))` e `fimVenc = max(hoje - dMin, últimoDiaDoMês(hoje))`. Isso garante que toda a janela de cobrança esteja coberta mesmo quando as etapas mudarem.
+Esse pipeline rotineiramente excede o limite efetivo de CPU/tempo até o primeiro byte de resposta. Quando Hinova precisa do retry de auth (visto no log) o tempo extrapola e o `invoke` aborta antes da função enviar headers.
 
-### 2. Mirror em `cobrancas` não está implementado
-A régua hoje só grava em `cobranca_eventos`. Não há upsert na tabela `cobrancas` (insere novas, atualiza vencimento/status, baixa pagas) — o que você pediu para acontecer "diariamente, ao executar a régua".
+## Correção
 
-**Correção**: criar helper compartilhado `_shared/cobrancas-sga-upsert.ts` (extraindo a lógica que já existe em `sga-sync-financeiro-veiculo`) e chamá-lo em `executar-regua-cobranca` logo após o fetch dos boletos, antes da fila de disparos. Chave: `(associado_id, nosso_numero)` com fallback `(associado_id, veiculo_id, data_vencimento, valor)`. Atualiza `valor_pago`, `data_pagamento`, `situacao_boleto`, `linha_digitavel`, `boleto_url`, `data_vencimento_original`, `dados_brutos_sga`, `sincronizado_sga_em` (janela de proteção 24h, conforme memória `mem://logic/billing/reconciliacao-csv-cobrancas`).
+Inverter a ordem: criar o `cobranca_runs` **imediatamente** com `status='preparando'`, devolver `{ run_id }` em <1s, e mover TODO o resto (Hinova → mirror → classificação → dedupe → disparo) para `EdgeRuntime.waitUntil`. A UI já faz polling em `cobranca_runs` — só precisa aceitar o estado intermediário `preparando`.
 
-Adicionar contadores em `cobranca_runs.payload`: `cobrancas_inseridas`, `cobrancas_atualizadas`, `cobrancas_baixadas`, `cobrancas_ignoradas`.
+### Alterações
 
-### 3. Pequenos itens de consistência
-- O cálculo `dataInicial` (linha 203) está duplicado/morto — sobrescrito por `inicioVenc` (linha 206). Limpar.
-- O comentário do cabeçalho (linha 4) ainda diz "janela = etapas D-min..D+max" — atualizar para refletir a regra "2 meses + mês atual".
-- Para `SITUACAO_PAGA`, considerar baixar a `cobrancas` correspondente (status='pago') mesmo quando `data_pagamento` vier nulo, evitando que a próxima rodada continue mirando boleto pago.
+**1. `supabase/functions/executar-regua-cobranca/index.ts`**
+- Após validar régua/etapas (passos 1–2 atuais, leves), inserir `cobranca_runs` com:
+  - `status='preparando'`
+  - `total_planejado=0` (será atualizado pelo worker)
+  - `payload={ regua_id, started_at }`
+- Retornar `{ run_id, status: 'preparando' }` imediatamente.
+- Embrulhar TODO o restante (janela, Hinova, mirror, mapas locais, classificação, dedupe, worker de disparo) dentro de uma função async chamada via `EdgeRuntime.waitUntil(...)`.
+- O worker, ao terminar a fase de preparação, faz `UPDATE cobranca_runs SET status='executando', total_planejado=…, payload=jsonb_set(...)` antes de iniciar o loop de envios. O loop de envios e a lógica pausar/cancelar permanecem iguais.
+- Tratar falha da fase de preparação (ex.: Hinova 503) atualizando o run para `status='falhou'` com `payload.erro=…`.
 
-## O que NÃO precisa mudar
+**2. Migration**
+- Adicionar `'preparando'` ao check constraint de `cobranca_runs.status` (hoje aceita `executando|pausado|concluido|cancelado|falhou`).
 
-- Ordenação, dedupe, delay, worker em background, mapa de templates, pré-carregamento de slots — tudo isso já está correto e alinhado.
-- Janelamento Hinova de 31 dias já é resolvido em `listarBoletosPorPeriodo` (auto-fatia).
+**3. `src/pages/cobranca/ReguaCobranca.tsx`**
+- Aceitar `preparando` como estado ativo: badge `secondary` "Preparando…", desabilitar "Executar Agora" e mostrar Cancelar (sem Pausar enquanto preparando — a pausa só faz sentido depois que começa a enviar).
+- Polling já existe; só mapear o novo status.
 
-## Detalhes técnicos das mudanças
+## O que NÃO muda
 
-**`supabase/functions/executar-regua-cobranca/index.ts`**
-- Substituir cálculo de `inicioVenc`/`fimVenc` por união entre intervalo das etapas e "2 meses retroativos + mês atual".
-- Após `listarBoletosPorPeriodo`, chamar `await mirrorBoletosEmCobrancas(supabase, boletos)` (novo helper) e somar contadores ao `payload` do run.
-- Remover linha morta de `dataInicial` e atualizar o cabeçalho do arquivo.
+- Schema de `cobrancas`, `cobranca_eventos`, helper `cobrancas-sga-upsert`, lógica de templates, dispatcher WhatsApp, IA, ordenação, dedupe, janela 2 meses + corrente.
+- Comportamento de pausar/retomar/cancelar durante o envio.
+- Nenhuma chamada a Hinova é alterada.
 
-**`supabase/functions/_shared/cobrancas-sga-upsert.ts`** (novo)
-- Função pura `mirrorBoletosEmCobrancas(supabase, boletos): Promise<{ inseridas, atualizadas, baixadas, ignoradas }>`.
-- Reaproveita lógica de upsert atualmente embutida em `sga-sync-financeiro-veiculo`.
+## Resultado esperado
 
-**`supabase/functions/sga-sync-financeiro-veiculo/index.ts`**
-- Refatorar para consumir o novo helper, sem mudança de comportamento.
-
-Sem alterações em UI, schema de `cobrancas`, cliente Hinova ou na fila de disparos.
+- Botão "Executar Agora" responde em <1s com toast "Run iniciada".
+- UI mostra "Preparando…" enquanto Hinova/mirror rodam, depois transita para "Executando" e contadores começam a subir.
+- Sem mais "Failed to send a request to the Edge Function".
