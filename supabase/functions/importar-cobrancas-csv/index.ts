@@ -204,11 +204,12 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       lote_id: loteId,
-      gravados: rows.length,
+      gravados: gravadosReais,
       matched_associado: matchedAssoc,
       matched_veiculo: matchedVeic,
       sem_match: semMatch,
       ignorados_sem_linha_digitavel: ignoradosSemLinha,
+      duplicados_ignorados: duplicadosIgnorados,
       valor_total_chunk: valorTotal,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
