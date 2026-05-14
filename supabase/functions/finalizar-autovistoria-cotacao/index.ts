@@ -193,13 +193,18 @@ Deno.serve(async (req) => {
     let createdServico = false;
     const agora = new Date();
 
+    // Sub-FIPE: nasce em `em_analise` para o Cadastro analisar antes de promover.
+    // ≥30k (legado): nasce em `concluida` direto na fila do Monitoramento.
+    const servicoStatusInicial = veiculoSubFipe ? 'em_analise' : 'concluida';
+    const obsTag = veiculoSubFipe ? ' [AUTOVISTORIA_AGUARDA_CADASTRO]' : '';
+
     if (!servicoId) {
       const hojeISO = agora.toISOString().slice(0, 10);
       const { data: novoServico, error: errServ } = await supabase
         .from('servicos')
         .insert({
           tipo: 'vistoria_entrada',
-          status: 'concluida',
+          status: servicoStatusInicial,
           modalidade: 'autovistoria',
           data_agendada: hojeISO,
           periodo: 'manha',
@@ -208,12 +213,12 @@ Deno.serve(async (req) => {
           contrato_id: contratoId,
           cotacao_id: cotacaoId,
           vistoria_origem_id: vistoriaId,
-          concluida_em: agora.toISOString(),
+          concluida_em: veiculoSubFipe ? null : agora.toISOString(),
           iniciada_em: agora.toISOString(),
           km_atual: cotacao.km_atual ?? null,
           video_360_url: videoUrl,
           origem: 'autovistoria_publica',
-          observacoes: `Autovistoria — ${cotacao.nome_solicitante || ''} (${cotacao.numero}).`,
+          observacoes: `Autovistoria — ${cotacao.nome_solicitante || ''} (${cotacao.numero}).${obsTag}`,
         })
         .select('id')
         .single();
@@ -225,15 +230,19 @@ Deno.serve(async (req) => {
         createdServico = true;
       }
     } else {
-      // Garantir que servico fica em 'concluida' e vinculado à vistoria
-      await supabase
-        .from('servicos')
-        .update({
-          status: 'concluida',
-          concluida_em: agora.toISOString(),
-          vistoria_origem_id: vistoriaId,
-        })
-        .eq('id', servicoId);
+      // Garantir status correto e vinculado à vistoria.
+      // Para sub-FIPE, NÃO sobrescrever 'concluida' ou 'aprovada' (caso o Cadastro já tenha promovido).
+      const isTerminal = ['concluida', 'aprovada', 'aprovada_ressalvas'].includes(servicoExistente?.status || '');
+      if (!isTerminal) {
+        await supabase
+          .from('servicos')
+          .update({
+            status: servicoStatusInicial,
+            concluida_em: veiculoSubFipe ? null : agora.toISOString(),
+            vistoria_origem_id: vistoriaId,
+          })
+          .eq('id', servicoId);
+      }
     }
 
     // 7. Atualizar cotação + contrato com referências
@@ -241,10 +250,11 @@ Deno.serve(async (req) => {
       .from('cotacoes')
       .update({
         tipo_vistoria: cotacao.tipo_vistoria || 'autovistoria',
-        status_contratacao: 'vistoria_ok',
+        status_contratacao: veiculoSubFipe ? 'aguardando_aprovacao_cadastro' : 'vistoria_ok',
         vistoria_concluida_em: cotacao.vistoria_concluida_em || agora.toISOString(),
       })
       .eq('id', cotacaoId);
+
 
     if (contratoId && !contrato?.vistoria_id && vistoriaId) {
       await supabase
