@@ -174,13 +174,15 @@ export default function CobrancasList() {
   const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
 
+  // mes=0 OU ano=0 = "Todos" -> dataInicio/dataFim viram null e os filtros de data são omitidos
+  const semFiltroData = filters.mes === 0 || filters.ano === 0;
   const dataInicio = useMemo(
-    () => format(startOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
-    [filters.mes, filters.ano],
+    () => semFiltroData ? null : format(startOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
+    [filters.mes, filters.ano, semFiltroData],
   );
   const dataFim = useMemo(
-    () => format(endOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
-    [filters.mes, filters.ano],
+    () => semFiltroData ? null : format(endOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
+    [filters.mes, filters.ano, semFiltroData],
   );
 
   // Status efetivo (filters.status OU activeTab — tab tem prioridade se diferente de "todas")
