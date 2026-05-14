@@ -578,22 +578,31 @@ Deno.serve(async (req) => {
       }).eq('id', runId)
     })
 
+    await worker
+      } catch (prepErr: any) {
+        console.error(`[regua run ${runId}] preparo falhou:`, prepErr)
+        await supabase.from('cobranca_runs').update({
+          status: 'falhou',
+          finished_at: new Date().toISOString(),
+          payload: { erro: String(prepErr?.message || prepErr), fase: 'preparacao' },
+        }).eq('id', runId)
+      }
+    }
+
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
-      EdgeRuntime.waitUntil(worker)
+      EdgeRuntime.waitUntil(prepararEdispararWorker())
+    } else {
+      // fallback (dev): roda sem aguardar
+      prepararEdispararWorker()
     }
 
     return jsonResp({
       ativa: true,
       run_id: runId,
-      total_planejado: totalPlanejado,
+      status: 'preparando',
       delay_ms: delayMs,
-      janela: { inicio: inicioVenc.toISOString().slice(0, 10), fim: fimVenc.toISOString().slice(0, 10) },
-      boletos_retornados: boletos.length,
-      duplicados_pulados: fila.length - filaFinal.length,
       started_at: startedAt,
-      message: totalPlanejado > 0
-        ? `Régua iniciada — ${totalPlanejado} envio(s) agendado(s) com ${delayMs}ms entre cada`
-        : 'Nenhum envio pendente para hoje (tudo já disparado ou sem etapa correspondente)',
+      message: 'Régua iniciada — preparando fila (Hinova + mirror). Acompanhe pelo run_id.',
     })
   } catch (error: any) {
     console.error('Erro régua:', error)
