@@ -757,6 +757,7 @@ export default function ReguaCobranca() {
             <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
               <div className="flex items-center justify-between">
                 <Badge variant={(runStatus as any).status === 'executando' ? 'default'
+                  : (runStatus as any).status === 'pausado' ? 'secondary'
                   : (runStatus as any).status === 'concluido' ? 'secondary'
                   : (runStatus as any).status === 'cancelado' ? 'outline' : 'destructive'}>
                   {(runStatus as any).status?.toUpperCase()}
