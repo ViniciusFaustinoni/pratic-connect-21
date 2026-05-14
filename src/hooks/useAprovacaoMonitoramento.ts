@@ -35,12 +35,13 @@ export function useInstalacoesAguardandoAprovacao() {
 
       if (error) throw error;
 
-      // Filtrar: veículo sem cobertura_total E associado ainda não ativo
-      // (após a poda dos triggers, TODA instalação concluída cai aqui até o monitoramento aprovar)
+      // Filtrar APENAS por veículo (cobertura_total !== true).
+      // NÃO filtrar por associado.status: quando o associado tem múltiplos veículos,
+      // aprovar o 1º promove o associado para 'ativo' e os demais veículos sumiriam
+      // indevidamente da fila. Cada veículo precisa ser aprovado individualmente.
       const pendentes = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
-        const a = s.associado;
-        return v && v.cobertura_total !== true && a?.status !== 'ativo';
+        return v && v.cobertura_total !== true;
       });
 
       return pendentes;
