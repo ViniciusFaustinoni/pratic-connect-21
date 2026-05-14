@@ -127,10 +127,11 @@ export function useAprovarVeiculoVistoria() {
       }
 
       // 4c. Encerrar serviço materializado vinculado a esta vistoria
+      // status='concluida' é o que a fila do monitoramento (useAprovacaoMonitoramento) lê.
       await supabase
         .from('servicos')
         .update({
-          status: 'aprovada',
+          status: 'concluida',
           concluida_em: agora,
           updated_at: agora,
         })
