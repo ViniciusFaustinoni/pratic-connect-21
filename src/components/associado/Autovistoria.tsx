@@ -318,7 +318,56 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     );
   }
 
-  // Se todas as fotos foram enviadas, mostrar tela de conclusão
+  // Etapa de vídeo 360°: todas as fotos enviadas, falta o vídeo
+  if (todasFotosEnviadas && !videoUrl) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Button variant="ghost" size="icon" onClick={onVoltar} className="h-8 w-8">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              {labelVideo}
+            </CardTitle>
+          </div>
+          <Progress value={progresso} className="h-2" />
+          <p className="text-xs text-muted-foreground text-center mt-1">
+            {itensCompletados} de {totalItens} itens enviados
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Info className="h-4 w-4 text-primary" />
+              Como gravar
+            </div>
+            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal pl-5">
+              {instrucoesVideo.map((p) => (
+                <li key={p.passo}>
+                  {p.texto}
+                  {p.destaque && (
+                    <span className="block text-primary font-medium mt-1">⚠ {p.destaque}</span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <VideoCapture
+            onCapture={handleUploadVideo}
+            onReset={() => setVideoUrl(null)}
+            videoUrl={videoUrl || undefined}
+            uploading={uploadingVideo}
+            maxDuration={120}
+            label="Grave o vídeo 360° terminando no painel ligado"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Se todas as fotos + vídeo foram enviados, mostrar tela de conclusão
   if (todasEnviadas) {
     return (
       <Card className="max-w-lg mx-auto">
