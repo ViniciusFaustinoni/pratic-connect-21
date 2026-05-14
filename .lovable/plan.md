@@ -1,57 +1,50 @@
 
-## Causa raiz — Termo de Cancelamento (Troca KOU6D37) sem assinatura visível
+## Objetivo
 
-O termo do KOU6D37 foi gerado pela edge function **`enviar-termo-cancelamento-troca`** (fluxo de troca de titularidade), não pela `autentique-cancelamento-create` que o cancelamento "padrão" usa.
+Reverter o conjunto de mai/2026 (9 fotos) e voltar à autovistoria enxuta:
+- **2 fotos obrigatórias** (carro e moto): `frente_centro` + `chassi`
+- **1 vídeo 360°** mostrando o veículo em volta + **painel ligado** (motor funcionando, hodômetro visível)
 
-Comparando com o padrão de **nova adesão** (`autentique-create`) e cancelamento direto (`autentique-cancelamento-create`):
+Aplicar tanto na Cotação (fluxo público novo — `EtapaVistoria` → `AutovistoriaCotacao`) quanto na Autovistoria do associado existente (`Autovistoria.tsx`), que hoje compartilham `getFotosAutovistoria`.
 
-| Edge function | `gerarPosicoesAssinatura()` (SIGNATURE/INITIALS nativos) |
-|---|---|
-| `autentique-create` (nova adesão) | ✅ |
-| `autentique-cancelamento-create` (cancelamento direto) | ✅ |
-| `autentique-os-saida-create` (saída de OS) | ✅ |
-| `autentique-evento-create` (evento) | ✅ |
-| `autentique-create-by-token` | ✅ |
-| **`enviar-termo-cancelamento-troca`** | ❌ |
-| **`enviar-termo-cancelamento-substituicao`** | ❌ |
+## Mudanças
 
-Sem o array `positions` no `signer`, o Autentique não injeta o widget nativo de SIGNATURE — então:
-1. Nada na visualização indica "assinado" depois que o associado conclui.
-2. A imagem da assinatura não aparece em nenhuma página do PDF.
+### 1) `src/data/autovistoriaConfig.ts`
+- Substituir `fotosCarro` e `fotosMoto` por **apenas 2 itens** cada:
+  1. `frente_centro` — "Frente — placa centralizada" (validaPlaca: true)
+  2. `chassi` — "Número do Chassi" (validaPlaca: false; carro = base do para-brisa, moto = tubo do garfo)
+- Reduzir `FOTOS_VALIDAR_PLACA` para `['frente_centro']` (única foto com OCR de placa).
+- Reativar `getInstrucoesVideo360` e `getLabelVideo360` (remover stubs `@deprecated`):
+  - Passos: 1) Frente, 2) Lateral esquerda, 3) Traseira, 4) Lateral direita, 5) Voltar à frente, 6) **Pan para o painel com a moto/carro LIGADO mostrando hodômetro**.
+  - Label: "Vídeo 360° + painel ligado".
+- Atualizar comentário do topo do arquivo registrando o novo conjunto.
 
-A imagem que você anexou confirma: o documento está renderizado, com botão "Opções" (ainda assinável), e o rodapé do template tem só o texto "ASSINATURA DO ASSOCIADO" (texto estático), sem o widget nativo. Esse é o sintoma exato de signer sem `positions`.
+### 2) `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
+- Importar `VideoCapture`, `getInstrucoesVideo360`, `getLabelVideo360`, `useUploadFotoCotacaoVistoria` (já usado).
+- Estado novo: `videoUrl`, `uploadingVideo`, `videoProgress`.
+- Reidratar `video_360` a partir de `fotosExistentes` (filtro hoje é o oposto: `tipo !== 'video_360'` — adicionar bloco que detecta e popula `videoUrl`).
+- Adicionar bloco "Vídeo 360°" abaixo das 2 fotos:
+  - Lista os passos retornados por `getInstrucoesVideo360(tipoVeiculo)` (último passo destacando "painel ligado").
+  - `<VideoCapture>` chamando `uploadMutation.mutateAsync({ cotacaoId, fotoId: 'video_360', file, ... })` (helper já trata `isVideo`).
+- `handleFinalizar`: bloquear se `!todasFotosEnviadas || !videoUrl`. Mostrar toast claro ("Grave o vídeo 360° com o painel ligado").
+- Atualizar contador no header: `{fotosCompletadas + (videoUrl?1:0)}/{totalFotos+1} itens` ou similar (visual claro de "2 fotos + vídeo").
+- O OCR do hodômetro era acoplado a `painel_ligado` (foto). Como a leitura agora vem do vídeo, **remover** o branch `isFotoOdometro` e o input manual de KM nesse componente — o KM passa a ser informado/aprovado pela equipe na revisão (ou por OCR futuro do frame final do vídeo, fora deste escopo).
 
-## Correção
+### 3) `src/components/associado/Autovistoria.tsx`
+- Mesma lógica do passo 2: 2 fotos + vídeo 360° + painel ligado obrigatório. Usar `vistoria_videos`/coluna `video_360_url` já existente para associados (manter o caminho atual de upload de vídeo se houver; senão replicar o `VideoCapture` com `useUploadFotoCotacaoVistoria` quando aplicável). Verificar e seguir o mesmo padrão da cotação.
 
-Padronizar **todas** as gerações de documento Autentique para o mesmo padrão da nova adesão: signer com `positions: gerarPosicoesAssinatura(posConfig)` calculado via `estimarPaginasHTML(html)` + `buscarPosicoesConfig(supabase)`.
+### 4) Sem mudanças em `concluir-etapa-fotos-publica` / banco
+- A coluna `vistorias.video_360_url` já existe (vide `AcompanhamentoProposta` e edge function).
+- `cotacoes_vistoria_fotos` já aceita `tipo='video_360'` (`useUploadFotoCotacaoVistoria` trata).
+- Não criar migration.
 
-### Arquivos alterados
+## Fora de escopo
+- Vistoria completa 31/15 (sub-FIPE) — segue como está (`vistoriaConfigCompleta`).
+- Vistoria do técnico em campo (instalador) — não altera.
+- OCR automático de hodômetro a partir do vídeo — pode ser feito em fase futura.
 
-1. **`supabase/functions/enviar-termo-cancelamento-troca/index.ts`** (caso reportado)
-   - Importar `gerarPosicoesAssinatura, buscarPosicoesConfig, estimarPaginasHTML` de `_shared/autentique-positions.ts`.
-   - Após montar `html`, calcular `posConfig.totalPaginas = estimarPaginasHTML(html)`.
-   - No `signerObj`, adicionar `positions: gerarPosicoesAssinatura(posConfig)` (manter `delivery_method: DELIVERY_METHOD_EMAIL` e `security_verifications: [{ type: 'PF_FACIAL' }]` — exigência do core memory de Autentique).
-
-2. **`supabase/functions/enviar-termo-cancelamento-substituicao/index.ts`** (mesmo bug latente)
-   - Aplicar a mesma mudança.
-
-3. **Reenvio do termo do KOU6D37**
-   - Após o deploy, chamar `enviar-termo-cancelamento-troca` com `force_resend: true` para a `solicitacao_id` do MARCOS VINICIUS DATIVO MACHADO. A função já deleta o doc anterior no Autentique e cria um novo — que dessa vez nascerá com o widget nativo. (Fica a seu cargo disparar via UI de "Reenviar termo" na tela da troca; ou eu posso disparar pelo edge se preferir.)
-
-### Não vou tocar
-
-- Templates de markdown (`TERMO_CANCELAMENTO_V1`) — eles continuam com texto "ASSINATURA DO ASSOCIADO" como fallback visual; o widget nativo do Autentique cai por cima na coordenada configurada.
-- `autentique-cancelamento-create`, `autentique-create`, `autentique-evento-create`, `autentique-os-saida-create`, `autentique-create-by-token` — já estão no padrão correto.
-
-### Validação
-
-1. Reenviar termo do KOU6D37 → assinar → conferir no Autentique:
-   - Status do documento muda para "Assinado" no painel.
-   - PDF gerado mostra a imagem da assinatura na última página (e rubrica nas demais).
-2. Disparar uma substituição de teste para validar `enviar-termo-cancelamento-substituicao`.
-3. Memória a registrar (Core ou leaf): "Toda criação de documento Autentique DEVE usar `gerarPosicoesAssinatura` — sem isso o doc fica sem widget de assinatura mesmo após assinado."
-
-### Riscos
-
-- Posições padrão (`buscarPosicoesConfig` lê de `configuracoes`) podem cair em cima de texto do template. Já é o mesmo cálculo dos outros fluxos em produção, então o risco é baixo.
-- `estimarPaginasHTML` adiciona +2 de margem; páginas inexistentes são ignoradas pela API — sem impacto.
+## Verificação
+1. Reabrir a cotação `COT-20260514-164930343-286` (TDC0F74) → step Vistoria deve mostrar **2 fotos + bloco de vídeo 360°**.
+2. Tentar finalizar sem vídeo → bloqueado com toast.
+3. Enviar vídeo + 2 fotos → finalizar com sucesso e seguir para Pagamento.
+4. Refresh no meio do fluxo → fotos e vídeo reidratam.
