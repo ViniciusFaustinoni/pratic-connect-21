@@ -1039,33 +1039,43 @@ export function useProposta(contratoId: string | undefined) {
       }
 
       // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
+      //    Só conta como vistoria entregue se a cotação AINDA está em modo
+      //    'autovistoria'. Se o associado migrou para 'agendada'/'agendada_base',
+      //    as fotos parciais antigas são lixo e NÃO podem liberar R&F.
       if (!vistoria && contrato.cotacao_id) {
-        // Buscar vistoria pela cotacao_id para obter video_360_url
-        const { data: vistoriaCotacao } = await supabase
-          .from('vistorias')
-          .select('video_360_url, observacoes, km_atual')
-          .eq('cotacao_id', contrato.cotacao_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
+        const { data: cotTipo } = await supabase
+          .from('cotacoes')
+          .select('tipo_vistoria')
+          .eq('id', contrato.cotacao_id)
           .maybeSingle();
 
-        const { data: fotosLegado } = await supabase
-          .from('cotacoes_vistoria_fotos')
-          .select('id, tipo, arquivo_url, created_at')
-          .eq('cotacao_id', contrato.cotacao_id)
-          .order('created_at', { ascending: true });
+        if (cotTipo?.tipo_vistoria === 'autovistoria') {
+          const { data: vistoriaCotacao } = await supabase
+            .from('vistorias')
+            .select('video_360_url, observacoes, km_atual')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (fotosLegado && fotosLegado.length > 0) {
-          vistoria = {
-            id: contrato.cotacao_id,
-            status: 'pendente',
-            tipo: 'autovistoria',
-            modalidade: 'autovistoria', // Legado sempre é autovistoria
-            fotos: fotosLegado as VistoriaFotoInfo[],
-            video_360_url: vistoriaCotacao?.video_360_url || null,
-            observacoes: vistoriaCotacao?.observacoes,
-            km_atual: vistoriaCotacao?.km_atual,
-          };
+          const { data: fotosLegado } = await supabase
+            .from('cotacoes_vistoria_fotos')
+            .select('id, tipo, arquivo_url, created_at')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: true });
+
+          if (fotosLegado && fotosLegado.length > 0) {
+            vistoria = {
+              id: contrato.cotacao_id,
+              status: 'pendente',
+              tipo: 'autovistoria',
+              modalidade: 'autovistoria',
+              fotos: fotosLegado as VistoriaFotoInfo[],
+              video_360_url: vistoriaCotacao?.video_360_url || null,
+              observacoes: vistoriaCotacao?.observacoes,
+              km_atual: vistoriaCotacao?.km_atual,
+            };
+          }
         }
       }
 
