@@ -301,6 +301,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const { data: documentos, isLoading: isLoadingDocs } = useDocumentosPorAssociado(id);
   const { data: stats } = useAssociadoStats(id);
   const { data: contrato } = useContratoDoAssociado(id);
+  const { data: contratosLista = [] } = useContratosDoAssociado(id);
   const cotacaoId = contrato?.cotacao_id;
   const { data: resumoFinanceiro } = useResumoFinanceiroAssociado(id);
   const { data: cobrancasData, isLoading: isLoadingCobrancas } = useCobrancasAssociado(id);
