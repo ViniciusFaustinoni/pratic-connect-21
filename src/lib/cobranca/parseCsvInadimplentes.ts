@@ -310,8 +310,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     const valorCsv = parseValorBR(getCol(cols, 'valor'));
     const tipo = getCol(cols, 'tipo').trim() || undefined;
     const statusOrigem = getCol(cols, 'status').trim() || undefined;
-    const linkRaw = getCol(cols, 'link').trim();
-    const link = /^https?:\/\//i.test(linkRaw) ? linkRaw : undefined;
+    const link = extrairUrlLink(getCol(cols, 'link'));
 
     // Aceita linha sem código de barras se houver vencimento OU valor.
     if (!linhaDig && !venc && valorCsv === 0) continue;
