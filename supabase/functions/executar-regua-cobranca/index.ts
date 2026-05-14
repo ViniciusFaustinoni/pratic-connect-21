@@ -1,13 +1,17 @@
 // ============================================================================
 // Régua de Cobrança — motor Hinova-first
 // ----------------------------------------------------------------------------
-// 1. Busca boletos via /listar/boleto-associado/periodo (janela = etapas D-min..D+max).
-// 2. Classifica status (PAGO/CANCELADO/VENCIDO/A VENCER).
-// 3. Casa cada boleto não-pago com a etapa correspondente.
-// 4. Ordena: inadimplentes mais antigos primeiro, depois por valor, depois lembretes.
-// 5. Dedupe por (nosso_numero + dia_regua + dia_civil_SP).
-// 6. Dispara WhatsApp em BACKGROUND com delay configurável (default 10s).
-// 7. Devolve { run_id, total_planejado } imediatamente; UI faz polling em cobranca_runs.
+// 1. Busca boletos via /listar/boleto-associado/periodo.
+//    Janela = união de [hoje-dMax .. hoje-dMin] com [1º dia (mês-2) .. último
+//    dia mês atual] — garante 2 meses retroativos + mês corrente para
+//    espelhar TODOS os boletos relevantes em `cobrancas`.
+// 2. Espelha boletos na tabela `cobrancas` (insert/update/baixa pagas).
+// 3. Classifica status (PAGO/CANCELADO/VENCIDO/A VENCER).
+// 4. Casa cada boleto não-pago com a etapa correspondente.
+// 5. Ordena: inadimplentes mais antigos primeiro, depois por valor, depois lembretes.
+// 6. Dedupe por (nosso_numero + dia_regua + dia_civil_SP).
+// 7. Dispara WhatsApp em BACKGROUND com delay configurável (default 10s).
+// 8. Devolve { run_id, total_planejado } imediatamente; UI faz polling em cobranca_runs.
 // ============================================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
@@ -17,6 +21,7 @@ import {
   HinovaTransientError,
   calcularProximoRetry,
 } from '../_shared/hinova-client.ts'
+import { mirrorBoletosEmCobrancas } from '../_shared/cobrancas-sga-upsert.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
