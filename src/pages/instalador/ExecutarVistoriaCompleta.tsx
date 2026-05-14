@@ -333,15 +333,17 @@ export default function ExecutarVistoriaCompleta() {
   const todasFotosEnviadas = totalFotosObrigatorias === 0 ? true : totalFotosEnviadas >= totalFotosObrigatorias;
   const videoEnviado = modoApenasInstalacao || !!video360Url;
   // Rastreador é obrigatório quando o veículo precisa de rastreador.
-  // Se o veículo já vier com rastreador vinculado (campo `rastreador_id` no veículo
-  // ou na instalação), consideramos satisfeito.
-  const veiculoJaTemRastreador = !!(veiculo as any)?.rastreador_id || !!(vistoria as any)?.instalacao?.rastreador_id;
+  // O vínculo veículo↔rastreador vive em `rastreadores.veiculo_id` (e em
+  // `instalacoes.rastreador_id` quando há instalação prévia). A tabela `veiculos`
+  // NÃO possui coluna `rastreador_id`.
+  const rastreadorJaInstaladoNoVeiculo = !!(veiculo as any)?.rastreador?.id;
+  const veiculoJaTemRastreador = rastreadorJaInstaladoNoVeiculo || !!(vistoria as any)?.instalacao?.rastreador_id;
   const rastreadorVinculado = !veiculoPrecisaRastreador || veiculoJaTemRastreador || !!rastreadorEncontrado;
   // ID do rastreador ativo nesta vistoria (recém vinculado OU já existente no veículo/instalação)
   const rastreadorIdAtivo: string | null =
     rastreadorEncontrado?.id ||
     (vistoria as any)?.instalacao?.rastreador_id ||
-    (veiculo as any)?.rastreador_id ||
+    (veiculo as any)?.rastreador?.id ||
     null;
   // Verificação visual da posição é obrigatória quando o veículo exige rastreador e há um ID ativo
   const precisaConfirmarPosicao = veiculoPrecisaRastreador && !!rastreadorIdAtivo;
