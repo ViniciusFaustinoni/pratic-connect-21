@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Receipt, ListChecks, TrendingUp } from 'lucide-react';
+import { Receipt, ListChecks } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 
 export default function CobrancasLayout() {
@@ -9,34 +9,27 @@ export default function CobrancasLayout() {
   const { isGerencia } = usePermissions();
 
   const isRegua = location.pathname.startsWith('/financeiro/cobrancas/regua');
-  const isRecuperados = location.pathname.startsWith('/financeiro/cobrancas/recuperados');
-  const activeTab = isRecuperados ? 'recuperados' : isRegua ? 'regua' : 'faturas';
+  // Aba "Recuperados" desativada no menu — rota continua viva.
+  const activeTab = isRegua ? 'regua' : 'faturas';
 
   const handleTabChange = (value: string) => {
     if (value === 'faturas') navigate('/financeiro/cobrancas');
     else if (value === 'regua') navigate('/financeiro/cobrancas/regua');
-    else navigate('/financeiro/cobrancas/recuperados');
   };
 
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className={`grid w-full ${isGerencia ? 'max-w-2xl grid-cols-3' : 'max-w-md grid-cols-1'}`}>
+        <TabsList className={`grid w-full ${isGerencia ? 'max-w-xl grid-cols-2' : 'max-w-md grid-cols-1'}`}>
           <TabsTrigger value="faturas" className="gap-2">
             <Receipt className="h-4 w-4" />
             Faturas
           </TabsTrigger>
           {isGerencia && (
-            <>
-              <TabsTrigger value="regua" className="gap-2">
-                <ListChecks className="h-4 w-4" />
-                Régua
-              </TabsTrigger>
-              <TabsTrigger value="recuperados" className="gap-2">
-                <TrendingUp className="h-4 w-4" />
-                Recuperados
-              </TabsTrigger>
-            </>
+            <TabsTrigger value="regua" className="gap-2">
+              <ListChecks className="h-4 w-4" />
+              Régua
+            </TabsTrigger>
           )}
         </TabsList>
       </Tabs>
@@ -44,4 +37,3 @@ export default function CobrancasLayout() {
     </div>
   );
 }
-
