@@ -687,6 +687,7 @@ function SalvarNoSistemaCard({ resultado, arquivo }: { resultado: ParseResultado
         gravados += data.gravados || 0;
         ignoradosSemLinha += data.ignorados_sem_linha_digitavel || 0;
         duplicados += data.duplicados_ignorados || 0;
+        if (data.reconciliacao) setReconciliacao(data.reconciliacao);
         setProgresso({ atual: Math.min(i + CHUNK, dests.length), total: dests.length });
       }
       setResumo({ matched, sem_match: semMatch, gravados, ignoradosSemLinha, duplicados, lote_id: loteId });
