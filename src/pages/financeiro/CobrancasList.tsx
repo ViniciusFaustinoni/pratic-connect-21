@@ -158,7 +158,7 @@ export default function CobrancasList() {
   const [filters, setFilters] = useState({
     status: 'todos',
     tipo: 'todos',
-    origem: 'todas' as 'todas' | 'asaas' | 'sga_hinova',
+    origem: 'todas' as 'todas' | 'asaas' | 'sga_hinova' | 'csv_sga',
     mes: new Date().getMonth() + 1,
     ano: new Date().getFullYear(),
     busca: '',
