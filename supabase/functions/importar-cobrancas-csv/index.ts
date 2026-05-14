@@ -201,12 +201,26 @@ Deno.serve(async (req) => {
         valor_total: totalValor,
       }).eq('id', loteId);
 
-      // Reconciliação automática contra a tabela canônica `cobrancas`.
+      // Reconciliação automática contra `cobrancas` — paginada para evitar timeout.
       try {
-        const { data: rec } = await supabase.functions.invoke('reconciliar-csv-cobrancas', {
-          body: { lote_id: loteId },
-        });
-        reconciliacao = rec || null;
+        let off = 0;
+        const acumulado = { pagas: 0, pagas_valor: 0, atualizadas: 0, criadas: 0, ignoradas_recente: 0, sem_match: 0, total_associados: 0 };
+        for (let i = 0; i < 100; i++) { // hard cap de 100 chunks (até 10k associados)
+          const { data: rec, error: errRec } = await supabase.functions.invoke('reconciliar-csv-cobrancas', {
+            body: { lote_id: loteId, offset: off, limit: 100 },
+          });
+          if (errRec || !rec?.success) break;
+          acumulado.pagas += rec.pagas || 0;
+          acumulado.pagas_valor += rec.pagas_valor || 0;
+          acumulado.atualizadas += rec.atualizadas || 0;
+          acumulado.criadas += rec.criadas || 0;
+          acumulado.ignoradas_recente += rec.ignoradas_recente || 0;
+          acumulado.sem_match = rec.sem_match || 0;
+          acumulado.total_associados = rec.total_associados || 0;
+          if (!rec.tem_mais) break;
+          off = rec.proximo_offset || (off + 100);
+        }
+        reconciliacao = acumulado;
       } catch (e) {
         console.error('[importar-cobrancas-csv] reconciliação falhou', e);
       }
