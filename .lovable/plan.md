@@ -1,39 +1,54 @@
-## Diagnóstico de duplicidade por `linha_digitavel`
+## Diagnóstico
 
-Rodei a contagem nas duas fontes do dashboard unificado:
+**O envio Meta funciona — mas as conversas NÃO aparecem no Chat IA Maya.**
 
-| Fonte | Total | Linhas digitáveis válidas (numéricas) | Duplicadas reais |
-|---|---:|---:|---:|
-| `cobranca_csv_boletos` (CSV SGA) | 39.442 | 39.442 | **0** |
-| `cobrancas` (Asaas + backfill SGA) | 141.458 | 941 | **0** |
-| Interseção CSV × cobrancas | — | — | **1** |
+### O que está OK
+- Edge function `disparar-cobranca-csv-meta` chama corretamente `graph.facebook.com/v21.0/.../messages` com o template `cobranca_inadimplencia_pratic` (parâmetros `{{1}}=nome` e `{{2}}=blocos de boletos`).
+- Sanitização Meta (#132000/#132018), validação de DDD/celular BR, deduplicação por associado (1 mensagem por matrícula, no máx. 3 blocos), throttle entre blocos (1.5s) e entre destinatários (250ms) — tudo conforme as regras Meta.
+- Lotes recentes (13/05) **incrementam `total_enviados` corretamente**: 2, 11, 11, 15 envios efetivos contabilizados em `cobranca_csv_lotes`.
+- Boletos enviados são marcados como `status='enviado'` em `cobranca_csv_boletos`.
+- Instância `provedor='meta'` ativa existe em `whatsapp_instancias`.
 
-### Por que `cobrancas` parecia ter 140k duplicados
+### O bug
+A tabela `whatsapp_mensagens` (que alimenta o Chat IA Maya em `/eventos/chat-ia`) tem:
+- **0 registros** com `referencia_tipo='cobranca_csv'`
+- **0 registros** com `provedor='meta'`
 
-A coluna `linha_digitavel` em `cobrancas` está preenchida com **mensagens de erro do SGA** (não com a linha real) em 140.517 registros:
+Mesmo com **39 envios contabilizados nos lotes**, nenhum chegou na tabela de mensagens — logo, **nenhuma conversa de cobrança CSV aparece no Chat IA Maya**.
 
-- 138.349 com texto `"Não foi possível disponibilizar esta informação pois o boleto se encontra na situação BAIXADO"`
-- 1.925 com `"...EXCLUIDO"`
-- 243 com `"...CANCELADO"`
+A edge function tenta inserir nas linhas 494-512 (sucesso) e 527-545 (erro), mas o erro é apenas logado com `console.error("[whatsapp_mensagens insert ok]", insErr.message)` e ignorado — falha silenciosa.
 
-Cada uma dessas linhas é um **boleto distinto** (id, associado, vencimento, valor próprios) — só compartilham o placeholder textual. **Não são duplicatas** e não devem ser apagadas: representam todo o histórico financeiro pago/cancelado vindo do `sga-backfill-financeiro`.
+## Plano de correção
 
-### Único cruzamento real
+### 1. Reproduzir e capturar o erro real do INSERT
+Adicionar instrumentação na edge `disparar-cobranca-csv-meta`:
+- Promover os `console.error` dos 2 INSERTs em `whatsapp_mensagens` para também aparecerem no payload de retorno (campo `warnings[]`) quando ocorrerem, para inspeção imediata na UI.
+- Logar o objeto inteiro do erro (code, details, hint), não só `.message`.
 
-Apenas 1 boleto (`linha_digitavel: 34191.09743 79236.220939 75008.900005 1 14220000022290`) aparece nas duas fontes:
+### 2. Tornar o INSERT robusto
+Causas prováveis do INSERT falhar silenciosamente (a investigar com o log real):
+- Algum trigger `BEFORE INSERT` em `whatsapp_mensagens` rejeitando `tipo='template'` + `referencia_tipo='cobranca_csv'`.
+- Tamanho do `template_variaveis.boletos` (jsonb com boletos completos por destinatário com 18+ boletos) excedendo limite de algum trigger downstream.
+- Trigger que tenta resolver `referencia_id` exigindo UUID válido quando `referencia_tipo` está setado.
 
-- CSV: `1d526413-...` — sem `associado_id`, sem `data_vencimento`, valor R$ 222,90
-- cobrancas: `b5df203f-...` — associado `8ac25a4d-...`, vencimento 2026-04-20, status `aguardando_pagamento`, valor R$ 222,90
+Ações conforme causa identificada:
+- Se trigger: ajustar para aceitar `referencia_tipo='cobranca_csv'` sem `referencia_id` (esse fluxo usa `lote_id` no `template_variaveis`, não tem cobrança individual).
+- Se payload: enxugar `template_variaveis.boletos` (gravar só `placa + vencimento`, não o objeto completo).
 
-Provavelmente o mesmo boleto registrado pelas duas vias.
+### 3. Garantir agregação correta no Chat IA Maya
+Confirmado que `EventosChatIA.tsx` linha 153 já reconhece `'cobranca_csv'` como tipo de cobrança e mostra o badge `ultima_cobranca`. Nenhuma alteração de UI necessária — basta as mensagens entrarem na tabela.
 
-## Opções
+### 4. Validação
+Após correção, disparar 1 lote pequeno (5–10 destinatários) e verificar:
+- `select count(*) from whatsapp_mensagens where referencia_tipo='cobranca_csv'` > 0
+- A conversa aparece em `/eventos/chat-ia` com o template renderizado e badge de cobrança recente
+- Quando o associado responder, a Maya tem o contexto correto da cobrança no histórico
 
-Como **não há duplicidade real para remover**, deixo as opções abertas — escolha o que faz sentido:
+### Fora do escopo
+- Backfill das 39 mensagens já enviadas é impossível (o `message_id` da Meta foi perdido — só os contadores ficaram).
+- Mudanças no fluxo de envio Meta em si (que está correto).
 
-1. **Não fazer nada** — o dashboard unificado já funciona. O placeholder textual é histórico legítimo do SGA.
-2. **Limpar o placeholder de `cobrancas.linha_digitavel`** — fazer `UPDATE cobrancas SET linha_digitavel = NULL WHERE linha_digitavel LIKE 'Não foi possível%'` (140.517 linhas). Mantém os registros, só remove o lixo textual da coluna. Recomendado para higiene.
-3. **Dedup automático no dashboard** — na view `cobrancas_unificadas`, suprimir linhas do CSV cujo `linha_digitavel` já existe em `cobrancas` com linha real (afeta hoje só aquele 1 boleto, mas previne crescimento futuro).
-4. **Resolver os 2 registros do boleto comum** — apagar o lado CSV (sem associado/vencimento) e manter o de `cobrancas` (mais completo).
-
-Diga qual caminho seguir (pode combinar 2 + 3 + 4) que abro o plano de execução.
+## Detalhes técnicos
+- Arquivo: `supabase/functions/disparar-cobranca-csv-meta/index.ts` linhas 494-512 e 527-545.
+- Tabela alvo: `public.whatsapp_mensagens` (RLS é bypass via SERVICE_ROLE_KEY na edge, então não é problema de policy).
+- UI do chat: `src/pages/eventos/EventosChatIA.tsx` (já compatível).
