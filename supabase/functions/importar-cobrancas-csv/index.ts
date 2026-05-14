@@ -184,6 +184,7 @@ Deno.serve(async (req) => {
     }
     const duplicadosIgnorados = duplicadosIntraChunk + duplicadosBanco;
 
+    let reconciliacao: any = null;
     if (body.is_last_chunk && loteId) {
       // Consolida totais reais do lote.
       const { data: agg } = await supabase
@@ -199,6 +200,16 @@ Deno.serve(async (req) => {
         total_associados: totalAssoc,
         valor_total: totalValor,
       }).eq('id', loteId);
+
+      // Reconciliação automática contra a tabela canônica `cobrancas`.
+      try {
+        const { data: rec } = await supabase.functions.invoke('reconciliar-csv-cobrancas', {
+          body: { lote_id: loteId },
+        });
+        reconciliacao = rec || null;
+      } catch (e) {
+        console.error('[importar-cobrancas-csv] reconciliação falhou', e);
+      }
     }
 
     return new Response(JSON.stringify({
@@ -211,6 +222,7 @@ Deno.serve(async (req) => {
       ignorados_sem_linha_digitavel: ignoradosSemLinha,
       duplicados_ignorados: duplicadosIgnorados,
       valor_total_chunk: valorTotal,
+      reconciliacao,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
     return new Response(JSON.stringify({ success: false, error: e.message }), {

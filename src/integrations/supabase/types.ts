@@ -6679,6 +6679,60 @@ export type Database = {
           },
         ]
       }
+      cobranca_reconciliacao_log: {
+        Row: {
+          acao: string
+          associado_id: string | null
+          cobranca_id: string | null
+          created_at: string
+          detalhes: Json | null
+          id: string
+          linha_digitavel: string | null
+          lote_id: string
+          valor: number | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          acao: string
+          associado_id?: string | null
+          cobranca_id?: string | null
+          created_at?: string
+          detalhes?: Json | null
+          id?: string
+          linha_digitavel?: string | null
+          lote_id: string
+          valor?: number | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          acao?: string
+          associado_id?: string | null
+          cobranca_id?: string | null
+          created_at?: string
+          detalhes?: Json | null
+          id?: string
+          linha_digitavel?: string | null
+          lote_id?: string
+          valor?: number | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_reconciliacao_log_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_reconciliacao_log_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "cobranca_csv_lotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cobrancas: {
         Row: {
           associado_id: string
