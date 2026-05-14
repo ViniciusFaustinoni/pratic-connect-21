@@ -1,78 +1,123 @@
-## Problema
+## Diagnóstico final — confirmado com evidência
 
-A idempotência atual da edge `disparar-cobranca-csv-meta` só protege **dentro do mesmo lote** (mesmo `lote_id`). Se no mesmo dia o operador importar um segundo CSV (novo lote), os mesmos boletos serão disparados de novo — o associado recebe a mesma cobrança 2x no WhatsApp.
+### O que encontrei na linha do tempo da Gleice
 
-## Objetivo
+| # | Hora UTC | from → to | Origem | Observação |
+|---|---|---|---|---|
+| 1 | 14/05 11:23:55.474 | `pendente_vistoria` → `aguardando_instalacao` | `db:trigger` (associados) | Resultado da analista CAROLINE FLORIANO marcando `cadastro_aprovado=true`. **O Cadastro fez o trabalho dele.** |
+| 2 | 14/05 11:24:03.239 | `aguardando_instalacao` → `ativo` | `db:trigger` (associados) | É o trigger `trg_log_associado_status_change` apenas **registrando** o UPDATE feito pela edge no passo 3 (não há trigger DB que promova para ativo) |
+| 3 | 14/05 11:24:03.340 | `aguardando_instalacao` → `ativo` | `edge:ativar-associado<-edge:criar-instalacao-pos-pagamento` | **Payload pediu `aguardar_instalacao: true` — a edge ignorou** |
+| 4 | 14/05 11:24:04.530 | `ativo` → `ativo` | `edge:ativar-associado<-edge:aprovar-proposta#idem-side-effects` | Re-confirmou estado já corrompido |
 
-Garantir que, **dentro do mesmo dia (data civil)**, o sistema nunca dispare o mesmo boleto duas vezes — independente de lote, fonte (CSV / botão manual / cron) ou template (v1 / v2).
+### Causa raiz (código)
 
-## Estratégia de deduplicação
+A edge `supabase/functions/ativar-associado/index.ts` aplica `aguardar_instalacao` somente ao veículo (linha 304). Para associado, contrato e cotação, ela escreve `status='ativo'` incondicionalmente:
 
-Chave de duplicidade: **`(matricula, linha_digitavel)`** com status `enviado` cujo `enviado_em::date = current_date` em `cobranca_csv_boletos`.
+- Linha 247-258 — `UPDATE associados SET status='ativo'` ❌
+- Linha 286-294 — `UPDATE contratos SET status='ativo'` ❌
+- Linha 335-339 — `UPDATE cotacoes SET status_contratacao='ativo'` ❌
+- Linhas 117-202 (caminho idempotente quando associado já está ativo) — também promove contrato/veículo/cotação sem checar `aguardar_instalacao` ❌
 
-Por que essa chave:
-- `linha_digitavel` é única por boleto Hinova → mesmo boleto, mesmo dia = duplicado.
-- `matricula` evita colisão acidental entre associados diferentes que tenham linhas iguais por erro de import.
-- Janela "dia civil" (`current_date` no fuso `America/Sao_Paulo`) é o que o usuário pediu — mais previsível que "últimas 24h".
+A edge chamadora `criar-instalacao-pos-pagamento` (linha 941) passa corretamente `aguardar_instalacao: true`. O bug está exclusivamente em `ativar-associado`.
 
-Fallback para boletos sem `linha_digitavel` (raro, mas possível em CSV malformado): chave `(matricula, vencimento, valor)` no mesmo dia.
+### Vítimas identificadas (sintoma: assoc=`ativo` + contrato=`ativo` + veículo=`instalacao_pendente`)
 
-## Mudanças
+Listei todos os contratos no banco com o mesmo padrão. Pelo menos **12+ associados** estão ativos sem instalação concluída, indo desde 22/04 até 14/05. Exemplos:
 
-### 1. Edge function `disparar-cobranca-csv-meta`
+- GLEICE KELLE VIANA GONÇALVES — contrato CTR-20260513174646-7YE999
+- LUIZ FERNANDO PINTO DE OLIVEIRA — CTR-20260512174145-0XABXJ
+- MARCIO WELLINGTON BRITO SOUZA DA FONSECA — CTR-20260422152857-AOSYMV
+- MATHEUS MARTINEZ DE OLIVEIRA — CTR-20260505215312-27ZJUJ
+- RAFAEL NAPOLEÃO DO NASCIMENTO — CTR-20260422200810-SW0UEJ
+- DOUGLAS DE PAULA PEREIRA, DANIEL FERREIRA DA SILVA, JUAN DOMINGOS CHAGAS, WENDEL LUIZ PEDRO SANTIAGO, ALEX DE OLIVEIRA SOBRINHO, JADIR DOS SANTOS OLIVEIRA, ALEXSANDRA RIBEIRO RAMOS… (lista completa será gerada na execução)
 
-Logo após o `INIT_ONLY` retornar e antes do loop de envio (entre as linhas atuais 333 e 467):
+A maioria está com **cobertura desligada no veículo** (a parte mais crítica) — então não houve cobertura indevida ativa. O dano é **comercial/processual**: contratos figurando como ativos antes da instalação, pulando a fila de Aprovação do Monitoramento, possivelmente disparando comissão/cobrança/SGA antes da hora.
 
-a. **Buscar boletos já enviados hoje** (qualquer lote) cujas `linha_digitavel` estejam no chunk atual:
-   ```ts
-   const linhasChunk = destinatarios.flatMap(d => d.boletos.map(b => b.linha_digitavel)).filter(Boolean);
-   const { data: jaEnviadosHoje } = await supabase
-     .from("cobranca_csv_boletos")
-     .select("matricula, linha_digitavel, lote_id, enviado_em")
-     .eq("status", "enviado")
-     .gte("enviado_em", inicioDoDiaSP())  // 00:00 fuso SP em ISO UTC
-     .in("linha_digitavel", linhasChunk);
-   ```
-b. Construir `Set<string>` `linhasJaEnviadasHoje` com chave `${matricula}|${linha_digitavel}`.
-c. **Filtrar boleto-a-boleto** (não só matrícula-a-matrícula) dentro de cada destinatário antes de chamar `montarBlocosBoletosSegmentados`. Se sobrarem 0 boletos, marcar destinatário inteiro como `skip` com motivo `duplicado_no_dia` e empurrar para `detalhes`.
-d. Estender o atual loop de "matriculasJaEnviadas" (linhas 335-353) para **mesclar** as duas regras: pular por matrícula+lote (retomada) **ou** por linha+dia (cross-lote).
-e. Registrar nos `detalhes` cada boleto pulado com `erro_codigo: 'duplicado_dia'` e o `lote_id` original em `erro` para auditoria.
+---
 
-### 2. KPI no resultado do envio
+## Plano de correção — passo a passo
 
-Adicionar contador `pulados_duplicidade_dia: number` no JSON de resposta, paralelo ao `pulados_idempotencia` que já existe.
+### Passo 1 — Corrigir a edge `ativar-associado`
 
-### 3. Frontend `ImportarCobrancaCsv.tsx`
+Patch único em `supabase/functions/ativar-associado/index.ts`, sem alterar a assinatura nem quebrar chamadores existentes:
 
-- Acumular `pulados_duplicidade_dia` ao longo dos chunks.
-- Na tela "Concluído", exibir um `KpiCard` adicional: **"Pulados (já enviados hoje)"** + badge nos detalhes da tabela com o motivo `duplicado_no_dia`.
-- Mostrar um `Alert` informativo no topo do passo 2 (preview) lembrando que boletos disparados hoje em lotes anteriores serão automaticamente pulados.
+**1.a. Caminho normal (associado ainda não está `ativo`)**
+- Quando `aguardar_instalacao === true`:
+  - `associados.status` → manter em `aguardando_instalacao` (o CAS atual permite essa transição como no-op se já estiver lá; se vier de `pendente_vistoria/aprovado`, fazer UPDATE para `aguardando_instalacao`).
+  - **Não** preencher `data_ativacao` no associado.
+  - `contratos.status` → `aguardando_instalacao`, **não** preencher `data_ativacao`.
+  - `cotacoes.status_contratacao` → `aguardando_instalacao` (não `ativo`).
+  - Veículo: comportamento atual (já correto).
+- Quando `aguardar_instalacao === false` (default): comportamento atual.
+- O log fica com `to_status='aguardando_instalacao'` e payload `aguardar_instalacao: true` para auditoria.
+- Resposta JSON ganha um campo extra: `aguardando_instalacao: true` (opcional, transparente para chamadores que ignoram campos novos).
 
-### 4. Migração — índice de performance
+**1.b. Caminho idempotente (associado já é `ativo`, novo veículo)**
+- Quando `aguardar_instalacao === true`:
+  - **Não** promover o novo contrato para `ativo` — escrever `aguardando_instalacao`.
+  - Veículo: aplicar `instalacao_pendente` (já é o que o caminho idempotente NÃO faz hoje — hoje força `ativo`. Vou alinhar ao caminho normal usando `promoverStatus`).
+  - Cotação: idem.
 
-Criar índice em `cobranca_csv_boletos(linha_digitavel, enviado_em)` filtrado por `status='enviado'` para tornar a query de checagem barata (hoje a tabela é varrida por `lote_id`, sem cobrir essa busca cross-lote).
+**1.c. Garantia de "promoção definitiva"**
+- A promoção real para `ativo` continua acontecendo via:
+  - `aprovar-monitoramento` / `aprovar-troca-monitoramento` (após Monitoramento aprovar a vistoria/instalação) chamando `ativar-associado` **sem** `aguardar_instalacao`.
+  - `processar-vistoria` / `concluir-etapa-fotos-publica` quando aplicável.
+- Vou validar que esses chamadores não passam `aguardar_instalacao: true` por engano. Se passarem, ajustar.
 
-```sql
-CREATE INDEX IF NOT EXISTS idx_csv_boletos_dedupe_dia
-  ON public.cobranca_csv_boletos (linha_digitavel, enviado_em DESC)
-  WHERE status = 'enviado';
-```
+### Passo 2 — Migração de correção do estado dos afetados
 
-### 5. Cobertura para outros pontos de disparo
+Migration one-shot que:
+1. Identifica todos os `(associado, contrato, veículo)` onde:
+   - `associados.status='ativo'` AND `contratos.status='ativo'` AND `veiculos.status='instalacao_pendente'`
+   - AND não existe `servicos` com `tipo='instalacao'` e `status='concluida'` para o contrato.
+2. Para cada um:
+   - `UPDATE associados SET status='aguardando_instalacao', data_ativacao=NULL`
+   - `UPDATE contratos SET status='aguardando_instalacao', data_ativacao=NULL`
+   - `UPDATE cotacoes SET status_contratacao='aguardando_instalacao'` (via `cotacao_id` do contrato)
+   - Mantém `cadastro_aprovado=true`, `aprovado_em`, `aprovado_por` (foi feito de fato).
+   - Insere linha em `ativacao_status_log` com `source='manual:fix-bug-aguardar-instalacao'` e payload com lista de side-effects.
+3. **Não mexe** em veículos (já estão certos), nem em comissões nesta migration (item separado, ver passo 3).
 
-Verificar se existem outras edges/jobs que disparam `cobranca_inadimplencia_pratic*` sem passar por essa função (ex.: dispatcher manual no LoteAtivoCobrancas). Se sim, extrair a checagem para uma função SQL `is_boleto_ja_enviado_hoje(matricula text, linha text)` e chamá-la de todos os pontos. Caso contrário, manter inline na edge.
+A migration usa CTE para garantir atomicidade e gravar quem foi tocado.
 
-## Resumo
+### Passo 3 — Verificar e reverter comissões indevidas
 
-| Camada | Antes | Depois |
-|---|---|---|
-| Idempotência | Por `lote_id` | Por `lote_id` **+** `(matricula, linha_digitavel)` no mesmo dia civil |
-| Granularidade | Matrícula inteira | Boleto-a-boleto |
-| Janela cross-lote | Nenhuma | `enviado_em::date = current_date` (fuso SP) |
-| Visibilidade | `pulados_idempotencia` | + `pulados_duplicidade_dia` na UI e detalhes |
+O trigger `trigger_comissao_ao_ativar` em `contratos` calcula comissão na ativação. Para cada vítima, vou:
+1. Consultar `comissoes_geradas` (ou nome equivalente) por `contrato_id`.
+2. Se comissão foi gerada com `created_at` posterior à `data_ativacao` errada, marcar como `pendente_revalidacao` ou estornar — vou trazer a lista para você decidir antes de executar.
+3. Após instalação concluir + aprovação Monitoramento, a ativação real chamará o trigger normalmente e gerará a comissão correta.
 
-## Riscos / pontos de atenção
+### Passo 4 — Verificar SGA
 
-- **Fuso horário**: `enviado_em` é UTC. Calcular o início do dia SP em UTC (ex.: `03:00Z` no horário padrão) para evitar pular boletos enviados após 21h SP do dia anterior. Vou usar `new Date().toLocaleString('en-CA', { timeZone: 'America/Sao_Paulo' })` para derivar a data civil SP.
-- **Reprocessamento legítimo**: se o operador realmente quiser reenviar (ex.: corrigir uma falha), precisará esperar o próximo dia. Aceitável segundo a regra pedida; opcional adicionar override `forcar_reenvio: true` no body — **não vou adicionar agora** a menos que você confirme.
-- **Boletos sem `linha_digitavel`**: usar fallback `(matricula, vencimento, valor)` para não deixar brecha.
+O contrato/associado ativado erradamente pode ter sido sincronizado com o Hinova. Pela memória `sga-hinova-sync-and-pre-check-v3` e pela regra Core "sistema NUNCA envia situação ATIVO", o pior cenário é o associado/veículo no SGA estar como PENDENTE (3) — o que está correto. Vou confirmar consultando `sga_sync_queue` para os afetados.
+
+### Passo 5 — Auditoria no UI
+
+Após a migration, esses contratos vão reaparecer na fila correta (Propostas Pendentes / aguardando instalação). Gleice, especificamente, voltará para a fila pré-instalação com a vistoria agendada para 15/05 — exatamente onde deveria estar.
+
+### Passo 6 — Atualizar memória
+
+Atualizar `mem://architecture/activation/single-source-activation` com a regra explícita: "`aguardar_instalacao=true` significa NÃO promover associado, contrato nem cotação para `ativo` — só veículo permanece em `instalacao_pendente`. A promoção definitiva sempre vem da aprovação do Monitoramento."
+
+---
+
+## Ordem de execução proposta
+
+1. Patch da edge `ativar-associado` (passos 1.a, 1.b, 1.c) — não rompe nenhum chamador.
+2. Validação rápida nos chamadores `aprovar-monitoramento` / `aprovar-troca-monitoramento` / `processar-vistoria` / `concluir-etapa-fotos-publica` para confirmar que **não** passam `aguardar_instalacao: true`.
+3. Listagem completa de vítimas + comissões geradas indevidamente (consulta read-only, devolvo a tabela aqui).
+4. Migration de reversão (após você aprovar a lista).
+5. Atualização de memória.
+
+---
+
+## O que NÃO está envolvido
+
+- **Setor de Cadastro**: trabalhou corretamente. A analista Caroline aprovou normalmente.
+- **Triggers do banco**: nenhum trigger promove para `ativo`; o `db:trigger` no log #2 é só registro (`trg_log_associado_status_change`).
+- **Edge `criar-instalacao-pos-pagamento`**: enviou o payload correto (`aguardar_instalacao: true`).
+- **Veículos**: estão no estado certo (`instalacao_pendente`, coberturas corretas).
+
+A culpa é única e exclusivamente da edge `ativar-associado` por ignorar o flag.
+
+Posso executar os passos 1 e 2 imediatamente após sua aprovação. Os passos 3 e 4 dependem de você revisar a lista antes do rollback de massa.
