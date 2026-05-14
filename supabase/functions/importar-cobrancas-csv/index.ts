@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
 
     // Monta linhas para upsert.
     const rows: any[] = [];
-    let matchedAssoc = 0, matchedVeic = 0, semMatch = 0, valorTotal = 0;
+    let matchedAssoc = 0, matchedVeic = 0, semMatch = 0, valorTotal = 0, ignoradosSemLinha = 0;
 
     for (const d of body.destinatarios) {
       const matricula = (d.matricula || '').trim();
@@ -125,6 +125,12 @@ Deno.serve(async (req) => {
       }
 
       for (const b of d.boletos || []) {
+        const linhaDigitavel = (b.linha_digitavel || '').replace(/\D/g, '');
+        if (!linhaDigitavel) {
+          ignoradosSemLinha++;
+          continue;
+        }
+
         const placaNorm = (b.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         const veic = placaNorm ? veicByPlaca.get(placaNorm) : null;
         let veicId: string | null = veic?.id || null;
@@ -144,7 +150,7 @@ Deno.serve(async (req) => {
           placa: placaNorm || null,
           vencimento: b.vencimento || null,
           data_vencimento: parseDataBR(b.vencimento),
-          linha_digitavel: (b.linha_digitavel || '').replace(/\D/g, '') || null,
+          linha_digitavel: linhaDigitavel,
           valor: Number(b.valor || 0),
           tipo: b.tipo || 'mensalidade',
           status_origem: b.status_origem || null,
@@ -187,6 +193,7 @@ Deno.serve(async (req) => {
       matched_associado: matchedAssoc,
       matched_veiculo: matchedVeic,
       sem_match: semMatch,
+      ignorados_sem_linha_digitavel: ignoradosSemLinha,
       valor_total_chunk: valorTotal,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
