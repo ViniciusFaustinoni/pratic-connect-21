@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
           veiculo_id: veiculoId,
           contrato_id: contratoId,
           cotacao_id: cotacaoId,
+          vistoria_origem_id: vistoriaId,
           concluida_em: agora.toISOString(),
           iniciada_em: agora.toISOString(),
           km_atual: cotacao.km_atual ?? null,
@@ -181,11 +182,15 @@ Deno.serve(async (req) => {
         servicoId = novoServico.id;
         createdServico = true;
       }
-    } else if (servicoExistente?.status !== 'concluida') {
-      // Garantir que servico fica em 'concluida' para entrar na fila
+    } else {
+      // Garantir que servico fica em 'concluida' e vinculado à vistoria
       await supabase
         .from('servicos')
-        .update({ status: 'concluida', concluida_em: agora.toISOString() })
+        .update({
+          status: 'concluida',
+          concluida_em: agora.toISOString(),
+          vistoria_origem_id: vistoriaId,
+        })
         .eq('id', servicoId);
     }
 

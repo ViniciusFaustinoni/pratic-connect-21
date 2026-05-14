@@ -128,6 +128,27 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         documentos = docsData || [];
       }
 
+      // Mesclar documentos enviados na cotação pública (contratos_documentos)
+      // Esses são CNH/CRLV/comprovante aprovados no fluxo público — não vivem em "documentos".
+      if (servico.cotacao_id || servico.contrato_id) {
+        let q = supabase.from('contratos_documentos').select('*');
+        if (servico.cotacao_id) q = q.eq('cotacao_id', servico.cotacao_id);
+        else q = q.eq('contrato_id', servico.contrato_id);
+        const { data: cdData } = await q.order('created_at', { ascending: false });
+        const extras = (cdData || []).map((d: any) => ({
+          id: `cd-${d.id}`,
+          tipo: d.tipo,
+          status: d.status,
+          arquivo_url: d.arquivo_url,
+          created_at: d.created_at,
+          origem_tabela: 'contratos_documentos',
+        }));
+        // Evitar duplicatas por (tipo + arquivo_url)
+        const chave = (d: any) => `${d.tipo}|${d.arquivo_url}`;
+        const existentes = new Set(documentos.map(chave));
+        documentos = [...documentos, ...extras.filter((d) => !existentes.has(chave(d)))];
+      }
+
       // Buscar vídeo 360° do instalador (da vistoria vinculada ao serviço)
       let videoInstalador: string | null = null;
       if (servico.vistoria_origem_id) {
@@ -498,8 +519,16 @@ export default function AprovacaoInstalacaoDetalhe() {
             <p className="font-medium text-foreground">{veiculo?.ano_modelo || '---'}</p>
           </div>
           <div>
-            <span className="text-muted-foreground text-xs">Instalador</span>
-            <p className="font-medium text-foreground">{profissional?.nome || '---'}</p>
+            <span className="text-muted-foreground text-xs">
+              {servico.tipo === 'vistoria_entrada' && !profissional?.nome ? 'Modalidade' : 'Instalador'}
+            </span>
+            <p className="font-medium text-foreground">
+              {profissional?.nome
+                ? profissional.nome
+                : servico.tipo === 'vistoria_entrada'
+                  ? (servico.modalidade === 'autovistoria' ? 'Autovistoria (sem instalação)' : 'Vistoria sem instalação')
+                  : '---'}
+            </p>
           </div>
         </CardContent>
       </Card>
