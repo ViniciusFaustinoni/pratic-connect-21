@@ -48,6 +48,12 @@ interface AutovistoriaCotacaoProps {
   titulo?: string;
 }
 
+// EXCEÇÃO TEMPORÁRIA — apenas para testes pontuais autorizados.
+// Não replicar este padrão; em produção a validação de placa é obrigatória.
+const COTACOES_TESTE_BYPASS_OCR_PLACA = new Set<string>([
+  '1b0b711f-2fec-42c6-973b-93afb4836d0f', // COT-20260514-182523494-563
+]);
+
 export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosOverride, titulo }: AutovistoriaCotacaoProps) {
   const fotos = fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo);
   const totalFotos = fotos.length;
@@ -234,9 +240,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       
       // OCR de placa (6 fotos exteriores)
       let bloqueadoPorPlaca = false;
+      const bypassOcrPlaca = COTACOES_TESTE_BYPASS_OCR_PLACA.has(cotacaoId);
       if (result.placaOcr) {
         setPlacaOcrPorFoto((prev) => ({ ...prev, [fotoAtual.id]: result.placaOcr! }));
-        if (result.placaOcr.skipped) {
+        if (bypassOcrPlaca) {
+          // Cotação de teste autorizada — não bloqueia por OCR de placa
+          setPlacaMismatch(null);
+        } else if (result.placaOcr.skipped) {
           // 0KM ou sem placa real — não valida
         } else if (!result.placaOcr.legivel) {
           setPlacaMismatch(null);
@@ -476,7 +486,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             </div>
 
             {/* Resultado do OCR de placa */}
-            {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && (
+            {placaOcrPorFoto[fotoAtual.id] && !placaOcrPorFoto[fotoAtual.id].skipped && !COTACOES_TESTE_BYPASS_OCR_PLACA.has(cotacaoId) && (
               <div className={cn(
                 "rounded-lg p-2.5 flex items-center gap-2 border text-xs",
                 placaOcrPorFoto[fotoAtual.id].match && placaOcrPorFoto[fotoAtual.id].legivel
