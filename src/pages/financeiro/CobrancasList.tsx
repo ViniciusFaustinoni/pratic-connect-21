@@ -67,6 +67,7 @@ const origemOptions = [
   { value: 'todas', label: 'Todas as origens' },
   { value: 'asaas', label: 'Asaas' },
   { value: 'sga_hinova', label: 'SGA Hinova' },
+  { value: 'csv_sga', label: 'CSV SGA (lote)' },
 ];
 
 const meses = [
@@ -132,7 +133,7 @@ const canonicoParaRawSga = (s: StatusCanonico): string[] => {
 
 interface CobrancaUnificada {
   id: string;
-  origem: 'asaas' | 'sga_hinova';
+  origem: 'asaas' | 'sga_hinova' | 'csv_sga';
   associado_id: string | null;
   associado: { id: string; nome: string; cpf: string; telefone?: string; whatsapp?: string; email?: string } | null;
   tipo: string;
@@ -157,7 +158,7 @@ export default function CobrancasList() {
   const [filters, setFilters] = useState({
     status: 'todos',
     tipo: 'todos',
-    origem: 'todas' as 'todas' | 'asaas' | 'sga_hinova',
+    origem: 'todas' as 'todas' | 'asaas' | 'sga_hinova' | 'csv_sga',
     mes: new Date().getMonth() + 1,
     ano: new Date().getFullYear(),
     busca: '',
@@ -191,9 +192,10 @@ export default function CobrancasList() {
   const { data: kpis, isLoading: loadingKpis } = useQuery({
     queryKey: ['cobrancas-kpis-unificado', dataInicio, dataFim, filters.origem, filters.tipo],
     queryFn: async () => {
-      const fontes: Array<'asaas' | 'sga_hinova'> = [];
+      const fontes: Array<'asaas' | 'sga_hinova' | 'csv_sga'> = [];
       if (filters.origem === 'todas' || filters.origem === 'asaas') fontes.push('asaas');
       if (filters.origem === 'todas' || filters.origem === 'sga_hinova') fontes.push('sga_hinova');
+      if (filters.origem === 'todas' || filters.origem === 'csv_sga') fontes.push('csv_sga');
 
       const totals = {
         total: 0,
@@ -208,17 +210,24 @@ export default function CobrancasList() {
       const hojeIso = format(new Date(), 'yyyy-MM-dd');
 
       for (const fonte of fontes) {
-        const tabela = fonte === 'asaas' ? 'asaas_cobrancas' : 'cobrancas';
-        const valorPagoCol = fonte === 'asaas' ? 'pagamento_valor' : 'valor_pago';
+        const tabela =
+          fonte === 'asaas' ? 'asaas_cobrancas'
+          : fonte === 'sga_hinova' ? 'cobrancas'
+          : 'cobranca_csv_boletos';
+        const valorPagoCol =
+          fonte === 'asaas' ? 'pagamento_valor'
+          : fonte === 'sga_hinova' ? 'valor_pago'
+          : 'valor';
+        const valorCol = fonte === 'csv_sga' ? 'valor' : 'valor';
+        const statusCol = fonte === 'csv_sga' ? 'status_origem' : 'status';
 
-        // Buscar APENAS colunas leves para agregar em memória (status, valor, data_vencimento)
-        // Usa paginação interna para superar o limite de 1000 do Supabase
+        // Buscar APENAS colunas leves para agregar em memória
         let from = 0;
         const chunk = 1000;
         for (;;) {
           let q = supabase
             .from(tabela as any)
-            .select(`status, valor, data_vencimento, ${valorPagoCol}`)
+            .select(`${statusCol}, ${valorCol}, data_vencimento, ${valorPagoCol}`)
             .gte('data_vencimento', dataInicio)
             .lte('data_vencimento', dataFim)
             .range(from, from + chunk - 1);
@@ -231,8 +240,16 @@ export default function CobrancasList() {
           if (!data || data.length === 0) break;
 
           for (const row of data as any[]) {
-            const canonico = toCanonical(row.status, row.data_vencimento);
-            const valor = Number(row.valor) || 0;
+            // CSV: status_origem ('Pago em dia'/'Não pago'/...) -> canonico
+            let canonico: StatusCanonico;
+            if (fonte === 'csv_sga') {
+              const so = String(row.status_origem || '').toLowerCase();
+              if (so.startsWith('pago')) canonico = 'pago';
+              else canonico = toCanonical('aguardando_pagamento', row.data_vencimento);
+            } else {
+              canonico = toCanonical(row.status, row.data_vencimento);
+            }
+            const valor = Number(row[valorCol]) || 0;
             const valorPago = Number(row[valorPagoCol]) || 0;
             totals.total += 1;
             tabCounts.todas += 1;
@@ -274,9 +291,10 @@ export default function CobrancasList() {
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
       const offset = pageParam as number;
-      const fontes: Array<'asaas' | 'sga_hinova'> = [];
+      const fontes: Array<'asaas' | 'sga_hinova' | 'csv_sga'> = [];
       if (filters.origem === 'todas' || filters.origem === 'asaas') fontes.push('asaas');
       if (filters.origem === 'todas' || filters.origem === 'sga_hinova') fontes.push('sga_hinova');
+      if (filters.origem === 'todas' || filters.origem === 'csv_sga') fontes.push('csv_sga');
 
       // Busca PAGE_SIZE de cada fonte em paralelo (offset igual nas duas), depois merge
       const promises = fontes.map(async (fonte): Promise<CobrancaUnificada[]> => {
@@ -318,7 +336,7 @@ export default function CobrancasList() {
             linha_digitavel: c.linha_digitavel || null,
             veiculo_id: c.veiculo_id || null,
           }));
-        } else {
+        } else if (fonte === 'sga_hinova') {
           let q = supabase
             .from('cobrancas')
             .select(`
@@ -359,6 +377,52 @@ export default function CobrancasList() {
             linha_digitavel: c.linha_digitavel || null,
             veiculo_id: c.veiculo_id || null,
           }));
+        } else {
+          // CSV SGA — boletos importados via Régua (somente leitura)
+          let q = supabase
+            .from('cobranca_csv_boletos')
+            .select(`
+              id, tipo, status_origem, valor, data_vencimento,
+              associado_id, veiculo_id, linha_digitavel, matricula,
+              associado:associados(id, nome, cpf, telefone, whatsapp, email)
+            `)
+            .gte('data_vencimento', dataInicio)
+            .lte('data_vencimento', dataFim)
+            .order('data_vencimento', { ascending: false })
+            .order('id', { ascending: false })
+            .range(offset, offset + PAGE_SIZE - 1);
+
+          if (filters.tipo !== 'todos') q = q.ilike('tipo', `%${filters.tipo}%`);
+          // status: filtramos client-side via status canonico (status_origem é texto livre do SGA)
+
+          const { data, error } = await q;
+          if (error) throw error;
+          return (data || []).map((c: any): CobrancaUnificada => {
+            const so = String(c.status_origem || '').toLowerCase();
+            const canonico: StatusCanonico = so.startsWith('pago')
+              ? 'pago'
+              : toCanonical('aguardando_pagamento', c.data_vencimento);
+            return {
+              id: c.id,
+              origem: 'csv_sga',
+              associado_id: c.associado_id,
+              associado: c.associado,
+              tipo: c.tipo || 'mensalidade',
+              status_raw: c.status_origem || 'aguardando_pagamento',
+              status: canonico,
+              valor: Number(c.valor) || 0,
+              valor_pago: canonico === 'pago' ? Number(c.valor) || 0 : 0,
+              data_vencimento: c.data_vencimento,
+              competencia: c.data_vencimento
+                ? `${c.data_vencimento.slice(5, 7)}/${c.data_vencimento.slice(0, 4)}`
+                : null,
+              boleto_url: null,
+              pix_copia_cola: null,
+              asaas_id: null,
+              linha_digitavel: c.linha_digitavel || null,
+              veiculo_id: c.veiculo_id || null,
+            };
+          });
         }
       });
 
@@ -934,8 +998,8 @@ export default function CobrancasList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={cobranca.origem === 'asaas' ? 'default' : 'secondary'}>
-                        {cobranca.origem === 'asaas' ? 'Asaas' : 'SGA'}
+                      <Badge variant={cobranca.origem === 'asaas' ? 'default' : cobranca.origem === 'csv_sga' ? 'outline' : 'secondary'}>
+                        {cobranca.origem === 'asaas' ? 'Asaas' : cobranca.origem === 'csv_sga' ? 'CSV SGA' : 'SGA'}
                       </Badge>
                     </TableCell>
                     <TableCell>
