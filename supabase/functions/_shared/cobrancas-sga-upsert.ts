@@ -23,10 +23,10 @@ export interface MirrorResultado {
 }
 
 interface ResolverArgs {
-  /** Mapa codigo_associado_hinova → { id, ... } */
+  /** Mapa codigo_associado_hinova → { id } */
   associadosPorCodigoHinova: Map<number, { id: string }>
-  /** Mapa placa (UPPER) → { id, associado_id } */
-  veiculosPorPlaca: Map<string, { id: string; associado_id: string | null }>
+  /** Mapa placa (UPPER) → { id } */
+  veiculosPorPlaca: Map<string, { id: string }>
 }
 
 export async function mirrorBoletosEmCobrancas(
