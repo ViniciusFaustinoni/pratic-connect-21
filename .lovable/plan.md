@@ -1,85 +1,38 @@
-## Objetivo
+## Diagnóstico dos uploads de hoje (14/05)
 
-Toda nova listagem CSV importada em **Régua › Emissão de Cobranças › Importar CSV (SGA)** deve **reconciliar a tabela canônica `cobrancas`**, refletindo:
-- **Pagamentos**: boletos que estavam em aberto e sumiram do novo CSV → marcar como **pagos**.
-- **Atrasos / atualizações**: boletos que continuam no novo CSV → atualizar `data_vencimento`, `valor`, `valor_final`, `linha_digitavel`, `link_fatura` se mudaram.
-- **Novos boletos**: linhas do CSV que não existem em `cobrancas` → criar registros (`origem='sga_hinova'`, `status='aguardando_pagamento'`).
+Foram 4 uploads do arquivo `SGA - RELATORIO DE BOLETOS`. Nenhum deles atualizou a tabela canônica `cobrancas` ainda. Detalhes:
 
-Hoje a reconciliação acontece **só no escopo `cobranca_csv_boletos`** (marca como `recuperado` / `reemitido`), mas **não toca em `cobrancas`** — então o painel financeiro não enxerga essas baixas.
+| Hora  | Lote (id curto) | Header diz | Persistido | Com match | Status no banco |
+|-------|-----------------|-----------:|-----------:|----------:|-----------------|
+| 13:23 | 8d077125…      | 35.135     | **13.753** |  11.370   | `processando` (travou) |
+| 13:34 | 593722ac…      | 35.135     | **21.374** |  17.118   | `processando` (travou) |
+| 13:35 | 068e8308…      | 1.000      |    1.000\* |     —     | `ativo`        |
+| 13:36 | 7c31cb05…      | 1.000      |    1.000\* |     —     | `ativo`        |
 
-## Plano
+\* Os 2 últimos foram cortados pelo limite de 1.000 linhas — provavelmente uma tentativa abortada ou um arquivo pequeno de teste.
 
-### 1. Edge Function nova: `reconciliar-csv-cobrancas`
-Disparada uma única vez ao final do upload (no último chunk, junto com a promoção do lote para `ativo`). Recebe `lote_id`.
+**Por que nada apareceu em `cobrancas`:**
+1. Os 2 lotes grandes ficaram em `processando` — o navegador não chegou a enviar o último chunk (`is_last_chunk=true`), então a finalização do lote e a reconciliação nunca dispararam.
+2. Os 2 lotes pequenos finalizaram (`ativo`), mas foram salvos **antes** do deploy da reconciliação automática (que acabei de subir). A tabela `cobranca_reconciliacao_log` está zerada — nenhuma baixa/atualização/criação rodou.
+3. O painel `/financeiro/cobrancas` mostra "Total 0" porque o filtro **CSV SGA (lote)** está selecionado, e os boletos importados ficam em `cobranca_csv_boletos` (não em `cobrancas`) — só caem em `cobrancas` depois da reconciliação.
 
-**Algoritmo (em transação por matrícula, em lotes de 500):**
+## O que sugiro fazer agora
 
-```
-Para cada matricula presente no novo lote (cobranca_csv_boletos.lote_id = X):
-  1. Lê linhas_digitaveis_novas = set(boletos do CSV dessa matrícula)
-  2. Lê cobrancas_abertas = SELECT * FROM cobrancas
-        WHERE associado_id = (associado da matrícula)
-          AND status = 'aguardando_pagamento'
-          AND origem = 'sga_hinova'
+### 1. Rodar a reconciliação retroativa nos 2 lotes finalizados
+Invocar `reconciliar-csv-cobrancas` para `068e8308` e `7c31cb05`. Isso vai:
+- Marcar como `pago` (com proteção de 24h) cobranças em aberto que sumiram desses CSVs.
+- Atualizar vencimento/valor das que continuam.
+- Criar as novas (origem `sga_hinova`).
 
-  3. PAGAMENTOS: para cada cobranca_aberta cuja linha_digitavel
-     NÃO está em linhas_digitaveis_novas:
-        UPDATE cobrancas SET
-          status = 'pago',
-          data_pagamento = (data do CSV anterior ou hoje),
-          valor_pago = valor_final,           -- não inflar
-          forma_pagamento = 'baixa_csv_sga',
-          updated_at = now()
+### 2. Decidir o que fazer com os 2 lotes travados em `processando`
+Opções:
+- **A — Promover para `ativo` e reconciliar com o que já foi gravado** (rápido, mas a baixa de "ausentes" usaria uma listagem incompleta — risco de marcar como pagas cobranças que na verdade continuam abertas, só que não chegaram a ser gravadas).
+- **B — Marcar os 2 lotes travados como `cancelado` e refazer só os uploads grandes** (recomendado — evita falso pago).
 
-  4. ATUALIZAÇÕES: para cada linha do CSV que JÁ existe em cobrancas
-     (match por linha_digitavel):
-        UPDATE cobrancas SET
-          data_vencimento = csv.vencimento,
-          valor = csv.valor,
-          valor_final = csv.valor,
-          link_fatura = csv.link,
-          updated_at = now()
-        WHERE status = 'aguardando_pagamento'
+### 3. Salvaguarda contra travamento
+Adicionar no `ImportarCobrancaCsv.tsx`/`SalvarNoSistemaCard` retry automático por chunk (3 tentativas com backoff) e um botão **"Retomar lote em processamento"** na tela do Lote ativo, que continua de onde parou — para que arquivos grandes (35k linhas) não fiquem órfãos quando a aba é fechada no meio.
 
-  5. NOVOS: para cada linha do CSV cuja linha_digitavel NÃO existe
-     em cobrancas (do mesmo associado):
-        INSERT INTO cobrancas (...)
-        VALUES (origem='sga_hinova', status='aguardando_pagamento', ...)
-```
-
-### 2. Match de associado e veículo
-Já existe em `cobranca_csv_boletos`: campos `associado_id`, `veiculo_id`, `match_origem`.
-A reconciliação só roda nas linhas onde `associado_id IS NOT NULL` (skip silencioso para CSV sem match — registra count em `lote.observacao`).
-
-### 3. Salvaguardas (lições aprendidas)
-- **Não inflar `valor_pago`**: gravar exatamente `valor_final` (corrige o bug histórico que vimos).
-- **Idempotência**: rodar `reconciliar-csv-cobrancas` 2× no mesmo lote não cria duplicatas — UPDATEs filtram por `status='aguardando_pagamento'` (já pago não muda) e INSERT usa `ON CONFLICT (linha_digitavel) DO NOTHING` (vou criar índice único parcial `WHERE linha_digitavel IS NOT NULL`).
-- **Janela de proteção**: cobranças criadas há **menos de 24h** não são marcadas como pagas (pode ser CSV parcial). Marcar como pago só se `created_at < now() - 24h`.
-- **Auditoria**: tabela nova `cobranca_reconciliacao_log` armazena `lote_id`, `cobranca_id`, `acao` (`pago_por_ausencia` / `atualizada` / `criada`), `valor`, `created_at` — para rastrear cada baixa e poder reverter se necessário.
-
-### 4. UI de feedback
-Após o upload, exibir card de resumo na tela:
-- ✅ X cobranças marcadas como pagas (R$ Y)
-- 🔄 Z cobranças atualizadas (vencimento/valor)
-- ➕ N cobranças criadas
-- ⚠️ M linhas sem match de associado (ignoradas)
-
-Hoje já há contadores `recuperados_count` / `reemitidos_count` no card; os novos contadores são complementares e ficam em outro bloco (reconciliação ≠ comparação entre lotes CSV).
-
-### 5. Migrations necessárias
-- Criar tabela `cobranca_reconciliacao_log` com RLS (apenas funcionários veem).
-- Criar índice único parcial em `cobrancas (linha_digitavel)` onde `linha_digitavel IS NOT NULL`.
-
-### Fora do escopo
-- Não recalcular `valor_pago` retroativamente.
-- Não criar pagamentos no SGA Hinova (apenas reflete o que o SGA já confirmou via ausência no CSV).
-- Não enviar mensagens — esta reconciliação é **muda** (não dispara WhatsApp).
-
-## Decisões a confirmar
-1. **Marcar como `pago` ou `baixado_por_csv`?** Recomendo `pago` (forma_pagamento='baixa_csv_sga') para o painel já mostrar como recebido. Alternativa: criar status novo `presumido_pago` se preferir.
-2. **`valor_pago` = `valor_final` exato** (sem juros/multa)? Recomendo sim, para evitar repetir o bug de inflação.
-3. **Janela de proteção 24h** está OK ou prefere outro valor (ex.: 48h, ou desabilitada)?
-
-## Detalhes técnicos
-- Arquivos: `supabase/functions/reconciliar-csv-cobrancas/index.ts` (novo), patch em `supabase/functions/disparar-cobranca-csv-meta/index.ts` (chamar a nova edge no `isLastChunk`), `src/components/financeiro/ImportarCobrancaCsv.tsx` (mostrar resumo).
-- Migration: `cobranca_reconciliacao_log` + índice único parcial em `cobrancas.linha_digitavel`.
+### Confirmação que preciso
+1. Posso rodar a reconciliação retroativa só nos 2 lotes ativos pequenos (`068e8308`, `7c31cb05`)?
+2. Para os 2 lotes travados, prefere **A** (promover e reconciliar parcial — risco de falso pago) ou **B** (cancelar e te pedir para refazer o upload grande)?
+3. Implemento já a salvaguarda de retomada de lote?
