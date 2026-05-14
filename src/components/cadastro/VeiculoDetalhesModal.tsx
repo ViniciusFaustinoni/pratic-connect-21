@@ -235,13 +235,47 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                       <Shield className="h-4 w-4" /> Contrato
                     </h3>
                     {contrato ? (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <InfoItem label="Número" value={contrato.numero} mono />
-                        <InfoItem label="Plano" value={contrato.plano_nome} />
-                        <InfoItem label="Valor Mensal" value={formatCurrency(contrato.valor_mensal)} highlight />
-                        <InfoItem label="Status" value={contrato.status} />
-                        <InfoItem label="Início" value={formatDate(contrato.data_inicio)} />
-                        <InfoItem label="Fim" value={formatDate(contrato.data_fim)} />
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <InfoItem label="Número" value={contrato.numero} mono />
+                          <InfoItem label="Plano" value={contrato.plano_nome} />
+                          <InfoItem label="Valor Mensal" value={formatCurrency(contrato.valor_mensal)} highlight />
+                          <InfoItem label="Status" value={contrato.status} />
+                          <InfoItem label="Início" value={formatDate(contrato.data_inicio)} />
+                          <InfoItem label="Fim" value={formatDate(contrato.data_fim)} />
+                        </div>
+
+                        {/* Termo de Filiação por veículo */}
+                        {(contrato.pdf_assinado_url || contrato.pdf_url) && (
+                          <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="h-4 w-4 text-primary shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">Termo de Filiação</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {contrato.pdf_assinado_url
+                                    ? `Assinado${contrato.data_assinatura ? ` em ${formatDate(contrato.data_assinatura)}` : ''}`
+                                    : 'Aguardando assinatura'}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              asChild
+                              className="shrink-0"
+                            >
+                              <a
+                                href={contrato.pdf_assinado_url || contrato.pdf_url || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                {contrato.pdf_assinado_url ? 'Ver Termo Assinado' : 'Ver Termo'}
+                              </a>
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Nenhum contrato encontrado</p>
