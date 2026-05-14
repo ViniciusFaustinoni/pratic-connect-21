@@ -199,6 +199,16 @@ Deno.serve(async (req) => {
         total_associados: totalAssoc,
         valor_total: totalValor,
       }).eq('id', loteId);
+
+      // Reconciliação automática contra a tabela canônica `cobrancas`.
+      // Não bloqueia o retorno do upload em caso de falha.
+      try {
+        await supabase.functions.invoke('reconciliar-csv-cobrancas', {
+          body: { lote_id: loteId },
+        });
+      } catch (e) {
+        console.error('[importar-cobrancas-csv] reconciliação falhou', e);
+      }
     }
 
     return new Response(JSON.stringify({
