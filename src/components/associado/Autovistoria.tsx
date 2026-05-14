@@ -32,6 +32,8 @@ interface AutovistoriaProps {
 
 export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, readOnly, onComplete, onVoltar }: AutovistoriaProps) {
   const fotos = getFotosAutovistoria(tipoVeiculo);
+  const instrucoesVideo = getInstrucoesVideo360(tipoVeiculo);
+  const labelVideo = getLabelVideo360(tipoVeiculo);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
   const [indiceAtual, setIndiceAtual] = useState(0);
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
@@ -44,6 +46,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [hidratado, setHidratado] = useState(false);
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   
   const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, any>>({});
   const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
@@ -64,9 +68,13 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       
       // Montar mapa de fotos: { [tipo]: arquivo_url }
       const fotosMap: Record<string, string> = {};
+      let videoExistente: string | null = null;
       if (vistoriaExistente.fotos && Array.isArray(vistoriaExistente.fotos)) {
         for (const foto of vistoriaExistente.fotos) {
-          if (foto.tipo && foto.arquivo_url) {
+          if (!foto.tipo || !foto.arquivo_url) continue;
+          if (foto.tipo === 'video_360') {
+            videoExistente = foto.arquivo_url;
+          } else if (!foto.tipo.startsWith('video_360_historico_')) {
             fotosMap[foto.tipo] = foto.arquivo_url;
           }
         }
@@ -76,6 +84,9 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         setFotosEnviadas(fotosMap);
         toast.success(`${Object.keys(fotosMap).length} foto(s) carregadas de sessão anterior`);
       }
+      if (videoExistente) {
+        setVideoUrl(videoExistente);
+      }
       
       setHidratado(true);
     }
@@ -83,22 +94,46 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
 
   const totalFotos = fotos.length;
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
-  const progresso = (fotosCompletadas / totalFotos) * 100;
+  const totalItens = totalFotos + 1; // fotos + vídeo 360°
+  const itensCompletados = fotosCompletadas + (videoUrl ? 1 : 0);
+  const progresso = (itensCompletados / totalItens) * 100;
   const todasFotosEnviadas = fotosCompletadas === totalFotos;
-  const todasEnviadas = todasFotosEnviadas;
+  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
   
   const fotoAtual = fotos[indiceAtual];
   const isUltimaFoto = indiceAtual === totalFotos - 1;
   const isPrimeiraFoto = indiceAtual === 0;
   const fotoAtualEnviada = !!fotosEnviadas[fotoAtual.id];
 
-  // Finalizar autovistoria quando todas as fotos forem enviadas
+  // Finalizar autovistoria quando todas as fotos + vídeo forem enviados
   useEffect(() => {
     if (todasEnviadas && vistoriaId && hidratado) {
       finalizarAutovistoria.mutate({ vistoriaId });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todasEnviadas, vistoriaId, hidratado]);
+
+  const handleUploadVideo = useCallback(async (file: File) => {
+    if (!vistoriaId) {
+      toast.error('Inicie a vistoria enviando uma foto antes do vídeo.');
+      return;
+    }
+    setUploadingVideo(true);
+    try {
+      const result = await uploadFoto.mutateAsync({
+        vistoriaId,
+        fotoId: 'video_360',
+        file,
+        contratoId,
+      });
+      setVideoUrl(result.url);
+      toast.success('Vídeo 360° enviado!');
+    } catch (e) {
+      console.error('[Autovistoria] erro no upload do vídeo:', e);
+    } finally {
+      setUploadingVideo(false);
+    }
+  }, [vistoriaId, uploadFoto, contratoId]);
 
   const avancarFoto = () => {
     if (indiceAtual < totalFotos - 1) {
