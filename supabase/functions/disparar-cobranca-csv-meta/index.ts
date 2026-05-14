@@ -11,6 +11,7 @@ interface BoletoIn {
   vencimento: string;
   linha_digitavel: string;
   valor?: number;
+  link?: string; // URL da 2ª via Hinova (opcional)
 }
 interface DestinatarioIn {
   nome: string;
@@ -20,16 +21,35 @@ interface DestinatarioIn {
   boletos: BoletoIn[];
 }
 
-const MAX_META_BLOCK_LENGTH = 180;
+const MAX_META_BLOCK_LENGTH = 320; // Body do Meta aceita ~1024; usamos 320 para sobrar margem para múltiplos blocos
 const MAX_BLOCOS_POR_DESTINATARIO = 3;
 const SLEEP_ENTRE_BLOCOS_MS = 1500;
 const SLEEP_ENTRE_DESTINATARIOS_MS = 250;
+
+// Extrai o sufixo de uma URL Hinova "https://short.hinova.com.br/v2/XXXX.pdf" → "XXXX".
+// Retorna null quando o formato não bate (template v2 cai automaticamente em v1 nesse caso).
+function extrairSufixoHinova(url?: string | null): string | null {
+  if (!url) return null;
+  const m = url.match(/short\.hinova\.com\.br\/v2\/([A-Za-z0-9_-]+)(?:\.pdf)?/i);
+  return m ? m[1] : null;
+}
+
+// Parser leniente de "dd/mm/aaaa" → timestamp para ordenar boletos por vencimento (mais antigo primeiro).
+function tsVencimento(v?: string): number {
+  if (!v) return Number.MAX_SAFE_INTEGER;
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10)).getTime();
+}
 
 function formatarBoletoCompacto(b: BoletoIn): string {
   const placa = b.placa ? `Placa ${b.placa}` : "Boleto";
   // Linha digitável só dígitos é mais curta e ainda funciona pra cópia.
   const linha = (b.linha_digitavel || "").replace(/\D/g, "");
-  return `• ${placa} venc. ${b.vencimento} | ${linha}`;
+  // Inclui o sufixo Hinova ao final quando disponível (curto e copiável)
+  const sufixoHinova = extrairSufixoHinova(b.link);
+  const linkFrag = sufixoHinova ? ` 🔗 short.hinova.com.br/v2/${sufixoHinova}` : "";
+  return `• ${placa} venc. ${b.vencimento} | ${linha}${linkFrag}`;
 }
 
 function montarBlocoBoletos(boletos: BoletoIn[]): string {
