@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { useSituacaoFinanceiraCadastro } from '@/hooks/useSituacaoFinanceiraCadastro';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useRegistrarAvisoSGA } from '@/hooks/useRegistrarAvisoSGA';
 import { toast } from 'sonner';
 
 interface Props {
