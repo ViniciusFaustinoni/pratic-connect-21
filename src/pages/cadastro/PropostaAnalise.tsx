@@ -46,6 +46,7 @@ import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useGerarVistoriaLink } from '@/hooks/useVistoriaLinkPublica';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
+import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
 import {
