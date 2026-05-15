@@ -169,15 +169,42 @@ export function DialogTipoOperacao({
                 </Button>
               )}
               {debitosCarregados && temDebito && bloqueioAtivo && (
-                <Button disabled className="gap-2">
-                  <Ban className="h-4 w-4" />
-                  Inclusão bloqueada
-                </Button>
+                <>
+                  <Button disabled className="gap-2">
+                    <Ban className="h-4 w-4" />
+                    Inclusão bloqueada
+                  </Button>
+                  {isDiretor && (
+                    <Button
+                      variant="destructive"
+                      onClick={() => setShowBypass(true)}
+                      className="gap-2"
+                    >
+                      Ignorar e Prosseguir (Diretor)
+                    </Button>
+                  )}
+                </>
               )}
             </>
           )}
         </AlertDialogFooter>
       </AlertDialogContent>
+
+      <IgnorarAvisoSGADialog
+        open={showBypass}
+        onOpenChange={setShowBypass}
+        aviso={{
+          tipo: 'inclusao_associado_com_debito',
+          titulo: 'Inclusão de 2º veículo com associado inadimplente',
+          mensagem: `${veiculoAtivo.associado_nome} possui débitos no SGA. Saldo: ${debitos?.saldoTotal ?? 0}.`,
+          associado_id: veiculoAtivo.associado_id,
+          detalhes: {
+            saldoTotal: debitos?.saldoTotal ?? 0,
+            veiculo_atual: `${veiculoAtivo.veiculo_marca} ${veiculoAtivo.veiculo_modelo} ${veiculoAtivo.veiculo_placa}`,
+          },
+        }}
+        onConfirm={handleProsseguirComAviso}
+      />
     </AlertDialog>
   );
 }
