@@ -126,6 +126,33 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
     refetch();
   };
 
+  // Permite excluir cotação órfã quando ela está em rascunho e não tem
+  // contrato/serviço/instalação vinculado (caso típico: vinculação à troca falhou
+  // e a cotação ficou solta). Edge `delete-cotacao` valida permissão e cascata.
+  const podeExcluirOrfa = (item: OutroProcessoItem): boolean => {
+    if (!item.cotacao_id) return false;
+    if (item.cotacao_status !== 'rascunho') return false;
+    // Apenas trocas de titularidade que NÃO efetivaram entram no critério "órfã"
+    if (item.tipo === 'troca_titularidade') {
+      return !['efetivada', 'liberada_para_assinatura'].includes(item.troca_status || '');
+    }
+    return false;
+  };
+
+  const handleConfirmExclusao = async () => {
+    if (!excluirItem?.cotacao_id) return;
+    try {
+      await excluirCotacao.mutateAsync({
+        cotacaoId: excluirItem.cotacao_id,
+        motivo: 'Exclusão manual: cotação órfã de troca de titularidade',
+      });
+      setExcluirItem(null);
+      refetch();
+    } catch {
+      // toast já tratado no hook
+    }
+  };
+
   return (
     <div className={cn('space-y-4', className)}>
       {/* Filtros */}
