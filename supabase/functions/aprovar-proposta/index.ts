@@ -537,6 +537,25 @@ serve(async (req) => {
                   .update({ cobertura_roubo_furto: true })
                   .eq('id', veiculoId);
 
+                // Marcar o servico vistoria_entrada (autovistoria) como `aprovada`
+                // (terminal, fora da fila do Monitoramento). A fila só receberá o
+                // caso quando o servico PRESENCIAL do técnico for concluído.
+                if (contrato.cotacao_id) {
+                  const { error: errAprovServ } = await supabase
+                    .from('servicos')
+                    .update({
+                      status: 'aprovada',
+                      analisado_em: agora,
+                      analisado_por: aprovado_por || null,
+                      observacoes_analise: 'Autovistoria aprovada pelo Cadastro — Roubo/Furto liberado. Aguardando vistoria/instalação presencial do técnico para entrar na fila do Monitoramento.',
+                    })
+                    .eq('cotacao_id', contrato.cotacao_id)
+                    .eq('tipo', 'vistoria_entrada')
+                    .eq('modalidade', 'autovistoria')
+                    .eq('status', 'em_analise');
+                  if (errAprovServ) console.warn('[aprovar-proposta] Falha ao marcar servico autovistoria como aprovada:', errAprovServ);
+                }
+
                 await supabase.from('associados_historico').insert({
                   associado_id: associadoId,
                   contrato_id: contrato_id,
