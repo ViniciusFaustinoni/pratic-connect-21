@@ -111,6 +111,38 @@ serve(async (req) => {
       throw new Error(`Este contrato não pode ser aprovado. Status atual: ${contrato.status}`);
     }
 
+    // ── GATE: Situação Financeira (SGA) ────────────────────────────────────
+    // Bloqueia aprovação se não houver registro liberador recente em
+    // sga_situacao_check (≤ 24h). Liberador = !tem_debito OU bypass=true OU
+    // origem_resultado em ('transitorio','associado_inexistente_sga').
+    {
+      const dia = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: ultimo } = await supabase
+        .from('sga_situacao_check')
+        .select('id, tem_debito, bypass, origem_resultado, verificado_em')
+        .eq('contrato_id', contrato_id)
+        .gte('verificado_em', dia)
+        .order('verificado_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const liberador = ultimo && (
+        !ultimo.tem_debito ||
+        ultimo.bypass === true ||
+        ultimo.origem_resultado === 'transitorio' ||
+        ultimo.origem_resultado === 'associado_inexistente_sga'
+      );
+      if (!liberador) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'inadimplencia_sga_pendente',
+            message: 'Consulte a situação financeira do associado no SGA antes de aprovar.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
     const associadoId = contrato.associado_id;
 
     // 2. Registrar aprovação cadastral no contrato sem ativar ainda.
