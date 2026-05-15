@@ -1609,8 +1609,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
           cenario_adesao: cenarioExterno,
         } : {}),
-        // Marcação na coluna `tipo_entrada` quando originada de Troca de Titularidade
-        ...(origemTroca ? { tipo_entrada: 'troca_titularidade' as const } : {}),
+        // Tipo da cotação (informativo) — coluna direta + espelho em dados_extras
+        tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as any,
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
@@ -1632,9 +1632,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             alertaDesagio: p.alertaDesagio,
             coberturasRemovidas: p.coberturasRemovidas || [],
           })),
+          // Tipo da cotação (informativo) espelhado
+          tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as string,
+          ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
+            ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
+            : {}),
           // Marcação de origem para Troca de Titularidade (quando aplicável)
           ...(origemTroca ? {
-            tipo_entrada: 'troca_titularidade' as const,
             solicitacao_troca_id: origemTroca.solicitacaoId,
             associado_antigo_id: origemTroca.associadoAntigoId,
             veiculo_origem_id: origemTroca.veiculoOrigemId,
