@@ -458,7 +458,7 @@ serve(async (req) => {
       }
 
       // 2. Contrato (vendedor + plano + valores)
-      const contratoSel = 'numero, vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, cobertura_fipe';
+      const contratoSel = 'id, numero, vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, cobertura_fipe, pdf_assinado_url';
       let contrato: any = null;
       const { data: cByVeic } = await supabase.from('contratos').select(contratoSel)
         .eq('veiculo_id', _vid).order('created_at', { ascending: false }).limit(1).maybeSingle();
