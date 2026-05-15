@@ -291,7 +291,8 @@ export default function CotacaoContratacao() {
       case 2: // Contrato - concluído se status >= contrato_assinado
         return statusConcluidos.contrato.includes(cotacao.status_contratacao);
       case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
-        return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
+              // OU troca de titularidade dentro da janela mesmo-dia (vistoria dispensada)
+        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
       case 5: // Instalação (apenas autovistoria) - concluída quando instalação agendada ou status final
