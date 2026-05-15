@@ -71,6 +71,7 @@ export default function PropostaAnalise() {
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
+  const [sgaLiberado, setSgaLiberado] = useState(false);
   
   // Campos editáveis do veículo para SGA Hinova
   const [veiculoRenavam, setVeiculoRenavam] = useState('');
