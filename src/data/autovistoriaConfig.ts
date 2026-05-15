@@ -18,28 +18,27 @@ export interface FotoAutovistoria {
   validaPlaca?: boolean;
 }
 
-// Ids canônicos das fotos com OCR de placa.
-export const FOTOS_VALIDAR_PLACA = ['frente_centro'] as const;
+// Ids canônicos das fotos com OCR de placa (atualmente nenhum — validação de placa fica a cargo do CRLV/cadastro).
+export const FOTOS_VALIDAR_PLACA = [] as const;
 
 const fotosCarro: FotoAutovistoria[] = [
   {
-    id: 'frente_centro',
-    label: 'Frente — placa centralizada',
-    descricao: 'Foto frontal do veículo com a placa nítida e centralizada.',
+    id: 'motor',
+    label: 'Motor',
+    descricao: 'Foto do compartimento do motor com o capô aberto.',
     ordem: 1,
-    categoria: 'exterior_frente',
-    validaPlaca: true,
+    categoria: 'identificacao',
     instrucoes: [
-      'Posicione-se de frente para o veículo, a uns 2 metros de distância',
-      'Mantenha a placa dianteira no centro do enquadramento',
-      'Use luz natural ou ligue os faróis se estiver escuro',
+      'Abra o capô e estabilize-o',
+      'Enquadre todo o compartimento do motor',
+      'Garanta boa iluminação — use flash se necessário',
     ],
     evitar: [
-      'Foto angulada onde a placa fica deformada',
-      'Reflexos ou sombras sobre a placa',
-      'Distância muito grande deixando a placa pequena',
+      'Foto parcial mostrando só uma parte do motor',
+      'Capô fechando ou atrapalhando o enquadramento',
+      'Sombras fortes sobre o bloco',
     ],
-    dicaExtra: 'A placa será verificada automaticamente — capriche na nitidez.',
+    dicaExtra: 'O motor é usado para confirmar o estado de conservação do veículo.',
   },
   {
     id: 'chassi',
@@ -63,19 +62,19 @@ const fotosCarro: FotoAutovistoria[] = [
 
 const fotosMoto: FotoAutovistoria[] = [
   {
-    id: 'frente_centro',
-    label: 'Frente da moto — placa (se houver)',
-    descricao: 'Foto frontal da moto. Se houver placa dianteira, mantenha-a no centro.',
+    id: 'motor',
+    label: 'Motor da moto',
+    descricao: 'Foto lateral do bloco do motor da moto.',
     ordem: 1,
-    categoria: 'exterior_frente',
-    validaPlaca: true,
+    categoria: 'identificacao',
     instrucoes: [
-      'Posicione-se de frente para a moto, a uns 2 metros',
-      'Enquadre toda a frente: farol, garfo dianteiro e roda',
+      'Posicione-se ao lado da moto',
+      'Enquadre o bloco do motor por inteiro',
+      'Use boa iluminação',
     ],
     evitar: [
-      'Reflexos no farol que atrapalhem o enquadramento',
-      'Foto de muito perto cortando o veículo',
+      'Foto desfocada ou muito de longe',
+      'Sujeira excessiva escondendo o bloco',
     ],
   },
   {
