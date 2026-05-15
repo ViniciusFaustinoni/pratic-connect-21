@@ -30,6 +30,7 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
   const { data, isLoading, isError, reconsultar, bypass } =
     useSituacaoFinanceiraCadastro({ contratoId, solicitacaoTrocaId });
   const { isDiretor } = usePermissions();
+  const registrarAviso = useRegistrarAvisoSGA();
   const [bypassOpen, setBypassOpen] = useState(false);
   const [motivo, setMotivo] = useState('');
 
