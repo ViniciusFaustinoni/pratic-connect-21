@@ -1,6 +1,8 @@
 // Vincula uma cotação recém-criada (pelo CotacaoFormDialog padrão) a uma
-// solicitação de Troca de Titularidade E AUTO-APROVA o Cadastro quando o
-// termo de cancelamento já está assinado pelo titular antigo.
+// solicitação de Troca de Titularidade. NÃO promove status — Cadastro
+// SEMPRE aprova manualmente em /cadastro/aprovacoes-troca (mesma regra
+// da cotação comum). Apenas registra cotacao_id e dispara trabalho pesado
+// (snapshot SGA + atribuição vendedor + WhatsApp) em background.
 //
 // Substitui o caminho antigo `criar-cotacao-troca-titularidade` que pré-criava rascunho.
 //
