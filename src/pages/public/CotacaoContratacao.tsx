@@ -829,8 +829,43 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* Substituição: pergunta sobre localização dos veículos */}
-                  {isSubstituicao && substituicaoMesmoLocal === null && !cotacao?.vistoria_concluida_em && !cotacao?.tipo_vistoria ? (
+                  {/* Troca de titularidade dentro da janela mesmo-dia: vistoria dispensada */}
+                  {dispensaVistoriaTroca ? (
+                    <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
+                      <CardContent className="py-12 text-center space-y-6">
+                        <motion.div
+                          className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                        >
+                          <ShieldCheck className="h-10 w-10 text-primary" />
+                        </motion.div>
+                        <div>
+                          <Badge className="bg-primary/20 text-primary border-primary/30 mb-4">
+                            Vistoria Dispensada
+                          </Badge>
+                          <h2 className="text-2xl font-bold mb-3 text-foreground">
+                            Sem necessidade de vistoria inicial
+                          </h2>
+                          <p className="text-muted-foreground max-w-md mx-auto">
+                            Como a troca de titularidade está sendo feita ainda no dia da assinatura do termo,
+                            a proteção do titular antigo é estendida a você. O Monitoramento avaliará a
+                            pontuação do rastreador na análise final e decidirá se uma vistoria é necessária.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            const idx = navOrder.indexOf(3);
+                            const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                            setEtapaAtual(next);
+                          }}
+                        >
+                          Continuar
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ) : isSubstituicao && substituicaoMesmoLocal === null && !cotacao?.vistoria_concluida_em && !cotacao?.tipo_vistoria ? (
                     <AgendamentoSubstituicao
                       veiculoAntigoPlaca={dadosExtras?.veiculo_antigo_placa || '???'}
                       veiculoAntigoModelo={dadosExtras?.veiculo_antigo_modelo || ''}
