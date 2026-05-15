@@ -33,6 +33,7 @@ export interface VistoriaFotoConfig {
   categoria: string;
   ordem: number;
   visivelCliente?: boolean; // default true
+  opcional?: boolean; // default false — quando true, não bloqueia a finalização
   descricao?: string;
   instrucoes?: string[];
   evitar?: string[];
