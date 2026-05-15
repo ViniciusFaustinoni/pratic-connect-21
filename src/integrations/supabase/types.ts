@@ -34512,6 +34512,10 @@ export type Database = {
         Returns: string
       }
       expirar_encaixes_urgentes: { Args: never; Returns: number }
+      fn_alerta_cadastro_pendente_pos_operacao: {
+        Args: { _contrato_id: string; _origem: string }
+        Returns: undefined
+      }
       fn_associado_em_estado_terminal: {
         Args: { _associado_id: string }
         Returns: string
@@ -34529,10 +34533,6 @@ export type Database = {
         Returns: Json
       }
       fn_auditoria_usuario_atual: { Args: never; Returns: Json }
-      fn_auto_promover_cadastro_pos_operacao: {
-        Args: { _contrato_id: string; _origem: string }
-        Returns: undefined
-      }
       fn_calcular_bonificacao_adesao: {
         Args: {
           p_ano: number

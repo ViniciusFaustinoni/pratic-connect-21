@@ -193,10 +193,11 @@ Deno.serve(async (req) => {
     let createdServico = false;
     const agora = new Date();
 
-    // Sub-FIPE: nasce em `em_analise` para o Cadastro analisar antes de promover.
-    // ≥30k (legado): nasce em `concluida` direto na fila do Monitoramento.
-    const servicoStatusInicial = veiculoSubFipe ? 'em_analise' : 'concluida';
-    const obsTag = veiculoSubFipe ? ' [AUTOVISTORIA_AGUARDA_CADASTRO]' : '';
+    // REGRA MESTRA (8 etapas): autovistoria SEMPRE espera Cadastro aprovar manualmente
+    // antes de virar serviço pronto p/ Monitoramento. Vale para sub-FIPE e ≥30k.
+    // `aprovar-proposta` promove em_analise → concluida ao registrar cadastro_aprovado=true.
+    const servicoStatusInicial = 'em_analise';
+    const obsTag = ' [AUTOVISTORIA_AGUARDA_CADASTRO]';
 
     if (!servicoId) {
       const hojeISO = agora.toISOString().slice(0, 10);
@@ -213,7 +214,7 @@ Deno.serve(async (req) => {
           contrato_id: contratoId,
           cotacao_id: cotacaoId,
           vistoria_origem_id: vistoriaId,
-          concluida_em: veiculoSubFipe ? null : agora.toISOString(),
+          concluida_em: null,
           iniciada_em: agora.toISOString(),
           km_atual: cotacao.km_atual ?? null,
           video_360_url: videoUrl,
@@ -238,7 +239,7 @@ Deno.serve(async (req) => {
           .from('servicos')
           .update({
             status: servicoStatusInicial,
-            concluida_em: veiculoSubFipe ? null : agora.toISOString(),
+            concluida_em: null,
             vistoria_origem_id: vistoriaId,
           })
           .eq('id', servicoId);
@@ -250,7 +251,7 @@ Deno.serve(async (req) => {
       .from('cotacoes')
       .update({
         tipo_vistoria: cotacao.tipo_vistoria || 'autovistoria',
-        status_contratacao: veiculoSubFipe ? 'aguardando_aprovacao_cadastro' : 'vistoria_ok',
+        status_contratacao: 'aguardando_aprovacao_cadastro',
         vistoria_concluida_em: cotacao.vistoria_concluida_em || agora.toISOString(),
       })
       .eq('id', cotacaoId);
