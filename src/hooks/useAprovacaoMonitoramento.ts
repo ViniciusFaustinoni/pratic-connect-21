@@ -66,12 +66,13 @@ export function useAprovacaoMonitoramentoStats() {
       // Aguardando = servicos concluidos com veículo sem cobertura_total
       const { data: pendentes } = await (supabase as any)
         .from('servicos')
-        .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total)')
+        .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado))')
         .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida');
 
-      const aguardando = (pendentes || []).filter((s: any) => 
-        s.veiculo?.cobertura_total !== true
+      const aguardando = (pendentes || []).filter((s: any) =>
+        s.veiculo?.cobertura_total !== true &&
+        s.instalacao?.contrato?.cadastro_aprovado === true
       ).length;
 
       // Aprovados hoje = histórico com tipo aprovação do monitoramento hoje
