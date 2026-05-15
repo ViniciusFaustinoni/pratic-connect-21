@@ -469,6 +469,14 @@ serve(async (req) => {
       data_ativacao: now.toISOString(),
       tipo_entrada: "troca_titularidade",
       origem_troca_titularidade_id: solicitacao_id,
+      // Troca já passou por Cadastro + Monitoramento da própria solicitação ⇒
+      // o contrato nasce APROVADO no Cadastro para liberar régua de cobrança.
+      cadastro_aprovado: true,
+      aprovado_em: now.toISOString(),
+      aprovado_por: solicitacao.aprovado_monitoramento_por
+        || solicitacao.aprovado_cadastro_por
+        || solicitacao.criado_por
+        || null,
       carencia_isenta: carenciaIsenta,
       carencia_motivo_isencao: carenciaIsenta ? `Cenário ${cenario}: carência dispensada na troca de titularidade` : null,
       // Carência de vidros e faróis
@@ -501,26 +509,66 @@ serve(async (req) => {
     contratoData.cliente_email = dadosNovoTitular.email || null;
     contratoData.cliente_telefone = dadosNovoTitular.telefone || null;
 
-    const { data: novoContrato, error: contratoError } = await supabase
-      .from("contratos")
-      .insert(contratoData)
-      .select("id, numero")
-      .single();
+    // 7.0 IDEMPOTÊNCIA — se já existir contrato vinculado a esta solicitação,
+    // reaproveita (UPDATE) em vez de criar duplicado. Cobre dois casos:
+    //   (a) reprocessamento manual após falha;
+    //   (b) contrato pré-existente criado por aprovar-proposta no link público.
+    let novoContrato: { id: string; numero: string } | null = null;
+    {
+      const { data: existentes } = await supabase
+        .from("contratos")
+        .select("id, numero, status")
+        .eq("origem_troca_titularidade_id", solicitacao_id)
+        .order("created_at", { ascending: true });
 
-    if (contratoError || !novoContrato) {
-      console.error("[efetivar-troca] Erro ao criar contrato:", contratoError);
-      // Rollback: revert vehicle transfer
-      await supabase
-        .from("veiculos")
-        .update({ associado_id: solicitacao.associado_id })
-        .eq("id", veiculoId);
-      return new Response(JSON.stringify({ success: false, error: "Erro ao criar contrato do novo titular" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const ativosOuPendentes = (existentes || []).filter(
+        (c: any) => c.status === "ativo" || c.status === "pendente" || c.status === "assinado",
+      );
+
+      if (ativosOuPendentes.length > 0) {
+        // Mantém o mais antigo como vencedor; cancela os demais
+        const vencedor = ativosOuPendentes[0];
+        const { data: atualizado, error: updErr } = await supabase
+          .from("contratos")
+          .update({ ...contratoData, numero: vencedor.numero, updated_at: now.toISOString() })
+          .eq("id", vencedor.id)
+          .select("id, numero")
+          .single();
+        if (updErr || !atualizado) {
+          console.error("[efetivar-troca] Erro ao atualizar contrato existente:", updErr);
+          return new Response(JSON.stringify({ success: false, error: "Erro ao reaproveitar contrato existente" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        novoContrato = atualizado;
+        // Cancela quaisquer duplicatas
+        const idsCancelar = ativosOuPendentes.slice(1).map((c: any) => c.id);
+        if (idsCancelar.length) {
+          await supabase.from("contratos").update({
+            status: "cancelado",
+            data_cancelamento: now.toISOString(),
+            updated_at: now.toISOString(),
+          }).in("id", idsCancelar);
+          console.log(`[efetivar-troca] Cancelados ${idsCancelar.length} contrato(s) duplicado(s) da troca`);
+        }
+        console.log(`[efetivar-troca] Contrato existente reaproveitado: ${novoContrato.numero} (${novoContrato.id})`);
+      } else {
+        const { data: criado, error: contratoError } = await supabase
+          .from("contratos")
+          .insert(contratoData)
+          .select("id, numero")
+          .single();
+        if (contratoError || !criado) {
+          console.error("[efetivar-troca] Erro ao criar contrato:", contratoError);
+          await supabase.from("veiculos").update({ associado_id: solicitacao.associado_id }).eq("id", veiculoId);
+          return new Response(JSON.stringify({ success: false, error: "Erro ao criar contrato do novo titular" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        novoContrato = criado;
+        console.log(`[efetivar-troca] Contrato criado: ${novoContrato.numero} (${novoContrato.id})`);
+      }
     }
-
-    console.log(`[efetivar-troca] Contrato criado: ${novoContrato.numero} (${novoContrato.id})`);
 
     // 8. Encerrar contrato anterior
     if (contratoAnterior) {
