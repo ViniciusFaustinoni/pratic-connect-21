@@ -18,6 +18,7 @@ import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssocia
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
+import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
