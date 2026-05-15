@@ -883,7 +883,7 @@ export function MapaVistoriasContent() {
                         <CalendarClock className="h-4 w-4" />
                       </Button>
                     )}
-                    {v.tipo_servico === 'instalacao' && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
+                    {(v.tipo_servico === 'instalacao' || v.tipo_servico === 'vistoria_entrada') && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
                       <Button
                         variant="outline"
                         size="icon"
@@ -1084,7 +1084,7 @@ export function MapaVistoriasContent() {
                         <CalendarClock className="h-3 w-3" />Reagendar
                       </button>
                     )}
-                    {v.tipo_servico === 'instalacao' && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
+                    {(v.tipo_servico === 'instalacao' || v.tipo_servico === 'vistoria_entrada') && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
                       <button
                         onClick={() => setRealocarState({
                           instalacaoId: v.id,
