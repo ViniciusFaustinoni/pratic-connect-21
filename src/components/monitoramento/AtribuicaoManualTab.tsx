@@ -26,14 +26,15 @@ function getTipoLabel(tipo: string) {
 }
 
 function getTipoBadgeClass(tipo: string) {
-  if (tipo === 'instalacao') return 'border-blue-300 text-blue-700 dark:text-blue-300';
+  // 'vistoria_entrada' é equivalente a 'instalacao' (primeira visita ao veículo)
+  if (tipo === 'instalacao' || tipo === 'vistoria_entrada') return 'border-blue-300 text-blue-700 dark:text-blue-300';
   if (tipo === 'revistoria') return 'border-teal-300 text-teal-700 dark:text-teal-300';
   if (tipo === 'vistoria_base') return 'border-green-300 text-green-700 dark:text-green-300';
   return 'border-amber-300 text-amber-700 dark:text-amber-300';
 }
 
 function getTipoIcon(tipo: string) {
-  if (tipo === 'instalacao') return <Wrench className="h-3 w-3 text-blue-500" />;
+  if (tipo === 'instalacao' || tipo === 'vistoria_entrada') return <Wrench className="h-3 w-3 text-blue-500" />;
   if (tipo === 'revistoria') return <FileText className="h-3 w-3 text-teal-500" />;
   if (tipo === 'vistoria_base') return <ClipboardCheck className="h-3 w-3 text-green-500" />;
   return <ClipboardCheck className="h-3 w-3 text-amber-500" />;
