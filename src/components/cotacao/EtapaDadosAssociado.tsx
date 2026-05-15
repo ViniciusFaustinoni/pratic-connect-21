@@ -18,6 +18,7 @@ import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssocia
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
+import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -95,6 +96,8 @@ export function EtapaDadosAssociado({
   const { data: veiculoAtivoCpf, isLoading: verificandoCpf, isFetching: refazendoCpf, refetch: refetchVeiculoCpf, erroTransitorio: cpfErroTransitorio, motivoTransitorio: cpfMotivoTransitorio } = useVerificarVeiculoAtivoCpf(cpfBusca);
   const { data: debitosSGA } = useVerificarDebitosAssociado(cpfDigits.length === 11 ? cpfDigits : undefined);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
+  const [bypassDebitoSGA, setBypassDebitoSGA] = useState(false);
+  const [showBypassDebitoDialog, setShowBypassDebitoDialog] = useState(false);
 
   // Auto-atribui o vendedor logado se ele não for liderança (ou pré-seleciona p/ liderança)
   useEffect(() => {
@@ -107,12 +110,13 @@ export function EtapaDadosAssociado({
   // Bloqueia se houver débito SGA — ex-cliente precisa quitar antes.
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
   const temDebitoSGA = debitosSGA?.temDebito === true;
+  const debitoBloqueia = temDebitoSGA && !bypassDebitoSGA;
   const canProceed =
     nome.trim() !== '' &&
     telefoneValido &&
     consultorId !== '' &&
     (!isIndicacao || indicadorId !== '') &&
-    !temDebitoSGA;
+    !debitoBloqueia;
 
   const [isImportandoIndicador, setIsImportandoIndicador] = useState(false);
 
@@ -240,17 +244,50 @@ export function EtapaDadosAssociado({
 
           {/* Aviso de débito SGA — ex-cliente com saldo devedor */}
           {temDebitoSGA && debitosSGA && (
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 space-y-2">
               <DebitosCard
                 debitos={debitosSGA.debitosPorVeiculo}
                 saldoTotal={debitosSGA.saldoTotal}
-                bloqueante
+                bloqueante={!bypassDebitoSGA}
                 cpf={cpfDigits}
-                titulo="Este CPF já foi cliente Pratic e está com saldo devedor"
-                descricao="É necessário quitar os boletos abaixo no SGA antes de iniciar uma nova cotação."
+                titulo={
+                  bypassDebitoSGA
+                    ? 'Débitos no SGA — prosseguindo por decisão do Diretor (auditado)'
+                    : 'Este CPF já foi cliente Pratic e está com saldo devedor'
+                }
+                descricao={
+                  bypassDebitoSGA
+                    ? 'O histórico desta decisão será enviado no campo observação do veículo no SGA.'
+                    : 'É necessário quitar os boletos abaixo no SGA antes de iniciar uma nova cotação.'
+                }
               />
+              {isDiretor && !bypassDebitoSGA && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowBypassDebitoDialog(true)}
+                  >
+                    Ignorar e Prosseguir (Diretor)
+                  </Button>
+                </div>
+              )}
             </div>
           )}
+
+          <IgnorarAvisoSGADialog
+            open={showBypassDebitoDialog}
+            onOpenChange={setShowBypassDebitoDialog}
+            aviso={{
+              tipo: 'cpf_ex_cliente_inadimplente',
+              titulo: 'Ex-cliente com saldo devedor no SGA',
+              mensagem: `CPF ${cpfDigits} possui ${debitosSGA?.debitosPorVeiculo?.reduce((s, d) => s + d.quantidade, 0) ?? 0} boleto(s) em aberto no SGA Hinova (saldo total ${debitosSGA?.saldoTotal ?? 0}).`,
+              cpf: cpfDigits,
+              detalhes: { saldoTotal: debitosSGA?.saldoTotal ?? 0 },
+            }}
+            onConfirm={() => setBypassDebitoSGA(true)}
+          />
 
           {/* E-mail */}
           <div className="space-y-2 md:col-span-2">
