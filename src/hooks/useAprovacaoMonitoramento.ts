@@ -23,12 +23,14 @@ export function useInstalacoesAguardandoAprovacao() {
           veiculo_id,
           associado_id,
           instalacao_origem_id,
+          vistoria_origem_id,
           observacoes,
           decisao_instalador,
           profissional:profissional_id(nome),
           veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(nome, telefone, email, cpf, status),
-          instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado))
+          instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)),
+          vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))
         `)
         .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida')
@@ -37,11 +39,13 @@ export function useInstalacoesAguardandoAprovacao() {
       if (error) throw error;
 
       // Gate do Cadastro: Monitoramento só recebe após aprovação manual do Cadastro.
-      // Filtros: veículo sem cobertura_total + contrato com cadastro_aprovado=true.
+      // Filtros: veículo sem cobertura_total + contrato (via instalação OU vistoria) com cadastro_aprovado=true.
       const pendentes = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
         if (!v || v.cobertura_total === true) return false;
-        const cadastroAprovado = s.instalacao?.contrato?.cadastro_aprovado === true;
+        const cadastroAprovado =
+          s.instalacao?.contrato?.cadastro_aprovado === true ||
+          s.vistoria?.contrato?.cadastro_aprovado === true;
         return cadastroAprovado;
       });
 
