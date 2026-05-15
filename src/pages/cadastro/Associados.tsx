@@ -354,13 +354,18 @@ export default function Associados() {
     if (statusAnalise.includes(associado.status)) {
       const { data: contrato } = await supabase
         .from('contratos')
-        .select('id')
+        .select('id, cadastro_aprovado')
         .eq('associado_id', associado.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (contrato) {
+      // Só envia para a fila de Propostas Pendentes se o Cadastro AINDA não aprovou.
+      // Após aprovação manual o item sai daquela fila (usePropostasPendentes filtra
+      // por cadastro_aprovado=true), então abrir /cadastro/propostas/:id seria
+      // inconsistente — o usuário cairia numa tela "Aprovar Proposta" para um
+      // contrato que já passou pelo gate. Nesse caso vai para o detalhe do associado.
+      if (contrato && (contrato as any).cadastro_aprovado !== true) {
         navigate(`/cadastro/propostas/${contrato.id}`);
         return;
       }
