@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
       .from('cotacoes')
       .update({
         tipo_vistoria: cotacao.tipo_vistoria || 'autovistoria',
-        status_contratacao: veiculoSubFipe ? 'aguardando_aprovacao_cadastro' : 'vistoria_ok',
+        status_contratacao: 'aguardando_aprovacao_cadastro',
         vistoria_concluida_em: cotacao.vistoria_concluida_em || agora.toISOString(),
       })
       .eq('id', cotacaoId);
