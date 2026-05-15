@@ -1751,45 +1751,106 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // CRÍTICO: a vinculação NÃO pode falhar silenciosamente — sem ela a cotação
         // fica órfã da solicitação, o link público não enxerga `liberada_para_assinatura`,
         // o contrato nunca é gerado e o cliente trava na etapa de Pagamento.
+        //
+        // ⚠ Usamos `fetch` direto em vez de `supabase.functions.invoke()` porque o
+        // proxy de fetch da Preview da Lovable (lovable.js) intercepta chamadas via
+        // `functions.invoke` e ocasionalmente lança `FunctionsFetchError: Failed to
+        // send a request to the Edge Function` ANTES de a requisição sair do
+        // navegador. Logs do Supabase confirmam que, nesses casos, a edge nem é
+        // acionada. `fetch` direto same-origin contorna o proxy.
+        const SUPABASE_FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+        const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+
+        async function chamarEdge<T = any>(
+          name: string,
+          body: any,
+          opts: { timeoutMs?: number } = {},
+        ): Promise<T> {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token || SUPABASE_ANON;
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 25000);
+          let res: Response;
+          try {
+            res = await fetch(`${SUPABASE_FUNCTIONS_URL}/${name}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+                apikey: SUPABASE_ANON,
+              },
+              body: JSON.stringify(body),
+              signal: ctrl.signal,
+            });
+          } catch (netErr: any) {
+            const transp: any = new Error(
+              netErr?.name === 'AbortError'
+                ? `Timeout ao chamar ${name}`
+                : `Falha de rede ao chamar ${name}: ${netErr?.message || netErr}`,
+            );
+            transp.code = 'TRANSPORTE';
+            transp.cause = netErr;
+            throw transp;
+          } finally {
+            clearTimeout(t);
+          }
+          const text = await res.text();
+          let payload: any = null;
+          try { payload = text ? JSON.parse(text) : null; } catch { /* não-JSON */ }
+          if (!res.ok) {
+            const err: any = new Error(
+              payload?.error || `HTTP ${res.status} em ${name}`,
+            );
+            err.code = payload?.code || `HTTP_${res.status}`;
+            err.status = res.status;
+            err.payload = payload ?? text;
+            throw err;
+          }
+          if (payload && payload.success === false) {
+            const err: any = new Error(payload.error || `${name} retornou success=false`);
+            err.code = payload.code || 'NEGOCIO';
+            err.payload = payload;
+            throw err;
+          }
+          return payload as T;
+        }
+
         if (origemTroca && novaCotacao?.id) {
           try {
-            const { data: vincData, error: vincErr } = await supabase.functions.invoke('vincular-cotacao-troca', {
-              body: { solicitacao_id: origemTroca.solicitacaoId, cotacao_id: novaCotacao.id },
+            await chamarEdge('vincular-cotacao-troca', {
+              solicitacao_id: origemTroca.solicitacaoId,
+              cotacao_id: novaCotacao.id,
             });
-            if (vincErr) throw vincErr;
-            // Edge pode retornar 4xx com payload {error, code} sem setar vincErr — tratar como falha
-            if (vincData && (vincData as any).error) {
-              const err: any = new Error((vincData as any).error);
-              err.code = (vincData as any).code;
-              throw err;
-            }
             toast.success('Cotação vinculada à troca de titularidade.');
             navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
           } catch (e: any) {
+            const tipo = e?.code === 'TRANSPORTE' ? 'transporte' : 'negocio';
             console.error('[vincular-cotacao-troca] FALHA — iniciando rollback', {
+              tipo,
               solicitacao_id: origemTroca.solicitacaoId,
               cotacao_id: novaCotacao.id,
+              url: `${SUPABASE_FUNCTIONS_URL}/vincular-cotacao-troca`,
               error_code: e?.code,
+              error_status: e?.status,
               error_message: e?.message,
+              payload: e?.payload,
               error: e,
             });
-            // Rollback via edge function `delete-cotacao` (caminho seguro/auditado).
-            // Fallback para delete direto se a edge falhar.
             let rollbackOk = false;
             try {
-              const { data: delData, error: delErr } = await supabase.functions.invoke('delete-cotacao', {
-                body: {
-                  cotacaoId: novaCotacao.id,
-                  motivo: 'Rollback automático: falha ao vincular à troca de titularidade',
-                },
+              await chamarEdge('delete-cotacao', {
+                cotacaoId: novaCotacao.id,
+                motivo: 'Rollback automático: falha ao vincular à troca de titularidade',
               });
-              if (delErr) throw delErr;
-              if (delData && (delData as any).success === false) {
-                throw new Error((delData as any).error || 'delete-cotacao retornou success=false');
-              }
               rollbackOk = true;
-            } catch (delErr) {
-              console.error('[vincular-cotacao-troca] rollback via edge falhou — tentando delete direto', delErr);
+            } catch (delErr: any) {
+              console.error('[vincular-cotacao-troca] rollback via edge falhou — tentando delete direto', {
+                tipo: delErr?.code === 'TRANSPORTE' ? 'transporte' : 'negocio',
+                error_code: delErr?.code,
+                error_status: delErr?.status,
+                error_message: delErr?.message,
+                payload: delErr?.payload,
+              });
               try {
                 const { error: rawDelErr } = await supabase
                   .from('cotacoes')
@@ -1812,6 +1873,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 ? 'A cotação não corresponde a esta solicitação de troca.'
                 : code === 'TERMO_NAO_ASSINADO'
                 ? 'O termo de cancelamento ainda não foi assinado pelo titular antigo.'
+                : code === 'TRANSPORTE'
+                ? 'Falha de rede ao contatar o servidor para vincular a cotação. Verifique sua conexão e tente novamente.'
                 : 'Não foi possível vincular a cotação à troca de titularidade.';
             toast.error(
               baseMsg + (rollbackOk
