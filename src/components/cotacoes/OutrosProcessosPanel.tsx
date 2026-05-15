@@ -402,6 +402,27 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={!!excluirItem} onOpenChange={(v) => !v && setExcluirItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cotação órfã?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A cotação <strong>{excluirItem?.cotacao_numero || excluirItem?.cotacao_id?.slice(0, 8)}</strong> está em rascunho e não tem vínculo válido com a solicitação de troca de titularidade. Ela será excluída permanentemente (junto com leads/agendamentos órfãos), liberando a solicitação para uma nova cotação. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmExclusao}
+              disabled={excluirCotacao.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {excluirCotacao.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
