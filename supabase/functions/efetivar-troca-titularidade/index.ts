@@ -293,7 +293,19 @@ serve(async (req) => {
         console.log(`[efetivar-troca] Associado reativado`);
       }
     } else {
-      // Create new associado
+      // Create new associado — copia endereço do novo_titular_dados (se enviado pelo
+      // link público). Fallback adiado: depois que carregarmos contratoAnterior tentamos
+      // herdar UF/CEP/cidade/bairro/logradouro para evitar erro "ESTADO inválido" no SGA.
+      const ndt: Record<string, any> = (dadosNovoTitular as any) || {};
+      const enderecoBase: Record<string, any> = {
+        cep: (ndt.cep || '').toString().replace(/\D/g, '') || null,
+        logradouro: ndt.logradouro || ndt.endereco || null,
+        numero: ndt.numero || null,
+        complemento: ndt.complemento || null,
+        bairro: ndt.bairro || null,
+        cidade: ndt.cidade || null,
+        uf: ndt.uf || ndt.estado || null,
+      };
       const { data: novoAssociado, error: criarError } = await supabase
         .from("associados")
         .insert({
@@ -303,7 +315,7 @@ serve(async (req) => {
           telefone: dadosNovoTitular.telefone || null,
           whatsapp: dadosNovoTitular.telefone || null,
           status: "ativo",
-          tipo_entrada: "troca_titularidade",
+          ...enderecoBase,
         })
         .select("id")
         .single();
@@ -334,6 +346,39 @@ serve(async (req) => {
       console.warn("[efetivar-troca] Nenhum contrato ativo encontrado para o titular anterior, continuando sem herança de contrato");
     }
 
+    // 4.1 Fallback de endereço para o novo associado: se ainda estiver sem UF/CEP,
+    //     herda do contrato anterior (snapshot que veio do CRLV/cotação).
+    try {
+      const { data: assocCheck } = await supabase
+        .from("associados")
+        .select("uf, cep, cidade, bairro, logradouro, numero, complemento")
+        .eq("id", novoAssociadoId)
+        .maybeSingle();
+      if (assocCheck && contratoAnterior) {
+        const { data: ctrFull } = await supabase
+          .from("contratos")
+          .select("cliente_uf, cliente_cep, cliente_cidade, cliente_bairro, cliente_logradouro, cliente_numero, cliente_complemento")
+          .eq("id", contratoAnterior.id)
+          .maybeSingle();
+        if (ctrFull) {
+          const patch: Record<string, unknown> = {};
+          if (!assocCheck.uf && ctrFull.cliente_uf) patch.uf = ctrFull.cliente_uf;
+          if (!assocCheck.cep && ctrFull.cliente_cep) patch.cep = String(ctrFull.cliente_cep).replace(/\D/g, '');
+          if (!assocCheck.cidade && ctrFull.cliente_cidade) patch.cidade = ctrFull.cliente_cidade;
+          if (!assocCheck.bairro && ctrFull.cliente_bairro) patch.bairro = ctrFull.cliente_bairro;
+          if (!assocCheck.logradouro && ctrFull.cliente_logradouro) patch.logradouro = ctrFull.cliente_logradouro;
+          if (!assocCheck.numero && ctrFull.cliente_numero) patch.numero = ctrFull.cliente_numero;
+          if (!assocCheck.complemento && ctrFull.cliente_complemento) patch.complemento = ctrFull.cliente_complemento;
+          if (Object.keys(patch).length) {
+            await supabase.from("associados").update(patch).eq("id", novoAssociadoId);
+            console.log(`[efetivar-troca] Endereço herdado do contrato anterior:`, Object.keys(patch));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca] Fallback endereço falhou:", (e as Error)?.message);
+    }
+
     // 5. Ler configurações
     const taxaTroca = await getConfiguracaoNumero(supabase, "taxa_troca_titularidade", 50);
     const carenciaPadrao = await getConfiguracaoNumero(supabase, "carencia_dias_padrao", 120);
@@ -345,7 +390,9 @@ serve(async (req) => {
 
     console.log(`[efetivar-troca] Config: taxa=${taxaTroca}, carência=${carenciaDias} dias (isenta: ${carenciaIsenta}), vidros=${carenciaVidrosDias}`);
 
-    // 6. Transferir veículo
+    // 6. Transferir veículo + LIMPAR cobertura suspensa por troca
+    //    (motivo `troca_titularidade_em_andamento` foi setado quando a troca iniciou
+    //     — após efetivada, a cobertura volta normal para o novo titular).
     const { error: transferError } = await supabase
       .from("veiculos")
       .update({
@@ -353,6 +400,9 @@ serve(async (req) => {
         em_troca_titularidade: false,
         troca_titularidade_id: null,
         troca_titularidade_iniciada_em: null,
+        cobertura_suspensa: false,
+        cobertura_suspensa_motivo: null,
+        cobertura_suspensa_em: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", veiculoId);
@@ -419,6 +469,14 @@ serve(async (req) => {
       data_ativacao: now.toISOString(),
       tipo_entrada: "troca_titularidade",
       origem_troca_titularidade_id: solicitacao_id,
+      // Troca já passou por Cadastro + Monitoramento da própria solicitação ⇒
+      // o contrato nasce APROVADO no Cadastro para liberar régua de cobrança.
+      cadastro_aprovado: true,
+      aprovado_em: now.toISOString(),
+      aprovado_por: solicitacao.aprovado_monitoramento_por
+        || solicitacao.aprovado_cadastro_por
+        || solicitacao.criado_por
+        || null,
       carencia_isenta: carenciaIsenta,
       carencia_motivo_isencao: carenciaIsenta ? `Cenário ${cenario}: carência dispensada na troca de titularidade` : null,
       // Carência de vidros e faróis
@@ -451,26 +509,66 @@ serve(async (req) => {
     contratoData.cliente_email = dadosNovoTitular.email || null;
     contratoData.cliente_telefone = dadosNovoTitular.telefone || null;
 
-    const { data: novoContrato, error: contratoError } = await supabase
-      .from("contratos")
-      .insert(contratoData)
-      .select("id, numero")
-      .single();
+    // 7.0 IDEMPOTÊNCIA — se já existir contrato vinculado a esta solicitação,
+    // reaproveita (UPDATE) em vez de criar duplicado. Cobre dois casos:
+    //   (a) reprocessamento manual após falha;
+    //   (b) contrato pré-existente criado por aprovar-proposta no link público.
+    let novoContrato: { id: string; numero: string } | null = null;
+    {
+      const { data: existentes } = await supabase
+        .from("contratos")
+        .select("id, numero, status")
+        .eq("origem_troca_titularidade_id", solicitacao_id)
+        .order("created_at", { ascending: true });
 
-    if (contratoError || !novoContrato) {
-      console.error("[efetivar-troca] Erro ao criar contrato:", contratoError);
-      // Rollback: revert vehicle transfer
-      await supabase
-        .from("veiculos")
-        .update({ associado_id: solicitacao.associado_id })
-        .eq("id", veiculoId);
-      return new Response(JSON.stringify({ success: false, error: "Erro ao criar contrato do novo titular" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const ativosOuPendentes = (existentes || []).filter(
+        (c: any) => c.status === "ativo" || c.status === "pendente" || c.status === "assinado",
+      );
+
+      if (ativosOuPendentes.length > 0) {
+        // Mantém o mais antigo como vencedor; cancela os demais
+        const vencedor = ativosOuPendentes[0];
+        const { data: atualizado, error: updErr } = await supabase
+          .from("contratos")
+          .update({ ...contratoData, numero: vencedor.numero, updated_at: now.toISOString() })
+          .eq("id", vencedor.id)
+          .select("id, numero")
+          .single();
+        if (updErr || !atualizado) {
+          console.error("[efetivar-troca] Erro ao atualizar contrato existente:", updErr);
+          return new Response(JSON.stringify({ success: false, error: "Erro ao reaproveitar contrato existente" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        novoContrato = atualizado;
+        // Cancela quaisquer duplicatas
+        const idsCancelar = ativosOuPendentes.slice(1).map((c: any) => c.id);
+        if (idsCancelar.length) {
+          await supabase.from("contratos").update({
+            status: "cancelado",
+            data_cancelamento: now.toISOString(),
+            updated_at: now.toISOString(),
+          }).in("id", idsCancelar);
+          console.log(`[efetivar-troca] Cancelados ${idsCancelar.length} contrato(s) duplicado(s) da troca`);
+        }
+        console.log(`[efetivar-troca] Contrato existente reaproveitado: ${novoContrato.numero} (${novoContrato.id})`);
+      } else {
+        const { data: criado, error: contratoError } = await supabase
+          .from("contratos")
+          .insert(contratoData)
+          .select("id, numero")
+          .single();
+        if (contratoError || !criado) {
+          console.error("[efetivar-troca] Erro ao criar contrato:", contratoError);
+          await supabase.from("veiculos").update({ associado_id: solicitacao.associado_id }).eq("id", veiculoId);
+          return new Response(JSON.stringify({ success: false, error: "Erro ao criar contrato do novo titular" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        novoContrato = criado;
+        console.log(`[efetivar-troca] Contrato criado: ${novoContrato.numero} (${novoContrato.id})`);
+      }
     }
-
-    console.log(`[efetivar-troca] Contrato criado: ${novoContrato.numero} (${novoContrato.id})`);
 
     // 8. Encerrar contrato anterior
     if (contratoAnterior) {

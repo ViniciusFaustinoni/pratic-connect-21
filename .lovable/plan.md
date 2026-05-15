@@ -1,75 +1,67 @@
-## O que aconteceu quando você clicou em "Aprovar"
+## Diagnóstico (associado MARCUS VINICIUS / 988dbfa9 + veículo KOU6D37 / Ford Fiesta)
 
-Solicitação testada: `06037fb8-84bb-4856-a723-2b2baea55c5d` — veículo `2315cece…`, novo associado `988dbfa9…`, cotação `9db388ed…`.
+A troca `06037fb8-...` ficou `efetivada` mas deixou o estado inconsistente. Comparando as duas abas dos prints e o banco, encontrei **4 divergências reais**, todas causadas pela edge `efetivar-troca-titularidade` e pelo fluxo de aprovação da troca:
 
-A edge `aprovar-troca-monitoramento` executou nesta ordem:
+| # | Sintoma na UI | Realidade no banco | Causa raiz |
+|---|---|---|---|
+| 1 | Aba **Veículos** mostra "Cobertura Ativa"; aba **Resumo** mostra "Cobertura suspensa — troca_titularidade_em_andamento" | `veiculos.cobertura_suspensa=true`, motivo `troca_titularidade_em_andamento`, mas `solicitacoes_troca_titularidade.status='efetivada'` | `efetivar-troca-titularidade` (passo 6) atualiza `em_troca_titularidade=false` mas **não limpa** `cobertura_suspensa` / `cobertura_suspensa_motivo` / `cobertura_suspensa_em`. As duas abas leem campos diferentes (Veículos olha `status`, Resumo olha `cobertura_suspensa`) → divergência visível |
+| 2 | (não visível, mas grave) Existem **2 contratos ATIVOS** para a mesma placa/associado | `06313261-...` (CTR-...WFIEBL, criado por `aprovar-proposta` durante o link público) e `a8e6e9b7-...` (TRC-20260515-7954, criado pelo reprocessamento manual) — ambos `status='ativo'`, mesmo `origem_troca_titularidade_id`, mesmo veículo, mesmo associado | `efetivar-troca-titularidade` (passo 7) faz INSERT cego sem checar se já existe contrato com `origem_troca_titularidade_id = solicitacao_id`. Viola a regra "1 contrato ativo por veículo" |
+| 3 | Card mostra "Plano Select Basic / Mensalidade R$166,70" mas **Mensalidade: —** em "Vencimentos" | Novo contrato `a8e6e9b7` está `ativo` mas com `cadastro_aprovado=false` e `aprovado_em=NULL` — a régua de cobrança não emite mensalidade nesse estado | `efetivar-troca-titularidade` insere o contrato direto com `status='ativo'` sem passar pelo caminho canônico (`ativar-associado` + `cadastro_aprovado=true`). Viola a Core rule "Ativação centralizada" e "Cadastro nunca recebe `cadastro_aprovado=true` automaticamente, mas contrato ativo exige aprovação prévia" |
+| 4 | SGA fica "pendente" para sempre | `sga_erro: "campo ESTADO do objeto associado é inválido"` — `associados.estado` do novo titular está NULL | `efetivar-troca-titularidade` cria o associado novo (linhas 297-309) sem copiar `endereco/estado/cidade/cep` do `novo_titular_dados` nem fazer fallback. Quando o cron `sga-hinova-sync` roda, falha eternamente |
 
-1. ✅ Atualizou `solicitacoes_troca_titularidade.status` → **`liberada_para_assinatura`** (por isso veio o toast "Liberado para assinatura" e o card sumiu da aba "Pendentes" e foi para "Aprovadas").
-2. ✅ Disparou `ativar-associado` para o novo titular (ativação do contrato novo).
-3. ❌ Disparou `efetivar-troca-titularidade` que retornou **404 "Solicitação não encontrada"** (log às 21:51:51Z) — nada foi efetivado de fato.
+## Plano de correção raiz
 
-Estado real no banco depois do clique: `status=liberada_para_assinatura`, `sga_status=pendente`, `sga_codigo_associado_novo=NULL`, `sga_codigo_veiculo_novo=NULL`, `aprovado_monitoramento_em` preenchido — ou seja, **a troca NÃO foi concluída**: veículo não migrou de titular, contrato antigo não foi cancelado, SGA não foi sincronizado e a solicitação não chegou a `efetivada`.
+### 1. `supabase/functions/efetivar-troca-titularidade/index.ts`
 
-## Por que falhou (causa-raiz)
+**Idempotência de contrato (passo 7):** antes do INSERT do contrato novo, fazer SELECT em `contratos` por `origem_troca_titularidade_id = solicitacao_id` AND `status IN ('ativo','pendente')`. Se já existir, **reaproveitar** (UPDATE para refletir os dados atuais) em vez de inserir. Ao final, garantir que TODO contrato com `origem_troca_titularidade_id = solicitacao_id` que não seja o "vencedor" seja marcado `status='cancelado'` com `data_cancelamento=now`.
 
-`supabase/functions/efetivar-troca-titularidade/index.ts` linha 184–188 ainda lê da tabela legada **`chat_solicitacoes_ia`**:
-
-```ts
-const { data: solicitacao, error: solError } = await supabase
-  .from("chat_solicitacoes_ia")        // ← tabela errada
-  .select("*")
-  .eq("id", solicitacao_id)
-  .single();
+**Limpar suspensão do veículo (passo 6):** acrescentar ao UPDATE de `veiculos`:
 ```
-
-Mas o fluxo novo usa **`solicitacoes_troca_titularidade`** (com colunas `novo_titular_dados`, `veiculo_id`, `novo_associado_id`, `cotacao_id`, `associado_antigo_id`). Como o ID da solicitação nova não existe em `chat_solicitacoes_ia`, o `.single()` devolve `PGRST116` e a função aborta antes de qualquer escrita real. Toda a lógica seguinte (cenário A/B, cancelar contrato antigo, criar contrato novo, mover veículo, sincronizar SGA, atualizar status para `efetivada`) nunca roda.
-
-## Comportamento correto esperado (regra do fluxo)
-
-Pelas regras do projeto (Troca de Titularidade) o passo 7 é:
-
-> Após a vistoria (ou direto, quando dispensada), Monitoramento aprova → **troca é efetivada**: contrato anterior é cancelado, veículo é transferido, contrato novo entra em vigor, associado/veículo são enviados ao SGA, e a solicitação some das filas indo para `efetivada`.
-
-Não existe etapa de "assinatura" depois do Monitoramento — o termo de filiação do novo titular já foi assinado lá no início do link público. Portanto o status `liberada_para_assinatura` aqui é semanticamente errado para esse caminho: o aprovar do Monitoramento deveria levar direto para `efetivada` (ou `aguardando_sga` se Hinova falhar, com retry).
-
-## Plano de correção
-
-### 1. Corrigir `efetivar-troca-titularidade` para ler da tabela nova
-Substituir o bloco que lê `chat_solicitacoes_ia` por uma leitura em `solicitacoes_troca_titularidade` e mapear os campos:
-
-- `solicitacao.associado_id` → `solicitacao.associado_antigo_id`
-- `solicitacao.dados_novo_titular` → `solicitacao.novo_titular_dados`
-- `dados.veiculo_id` → `solicitacao.veiculo_id` (já presente em coluna própria)
-- `dados.resultado_protocolo` / `solicitacao.resultado_protocolo` → manter `cenario_override` vindo do caller (que já passa `'B'`); para legado, deixar fallback `'B'`.
-- Manter compatibilidade: tentar `solicitacoes_troca_titularidade` primeiro; só cair em `chat_solicitacoes_ia` se `cenario_override` não vier (legado puro).
-
-### 2. Atualizar status final na própria efetivação
-No final do fluxo de sucesso (perto da linha 829, junto com o update de `sga_*`), gravar também:
-
-```ts
-status: 'efetivada',
-efetivada_em: new Date().toISOString(),
+cobertura_suspensa: false,
+cobertura_suspensa_motivo: null,
+cobertura_suspensa_em: null,
 ```
+Isso elimina a divergência entre Resumo e Veículos.
 
-Assim o card sai de "Aprovadas" e vai para o estado terminal correto.
+**Cadastro aprovado no novo contrato (passo 7):** o contrato da troca já passou por aprovação de Cadastro + Monitoramento, então no INSERT/UPDATE incluir:
+```
+cadastro_aprovado: true,
+aprovado_em: now,
+aprovado_por: solicitacao.aprovado_monitoramento_por,
+```
+Isso libera a régua de cobrança a emitir a mensalidade do novo titular.
 
-### 3. Ajustar `aprovar-troca-monitoramento` para refletir o status certo no caminho feliz
-- Trocar o update intermediário de `liberada_para_assinatura` por um marcador de transição (ex.: manter `aguardando_monitoramento` até `efetivar` retornar) **ou** mudar para `'efetivada'` **somente após** a edge `efetivar-troca-titularidade` responder `success: true`. Em caso de falha, registrar `sga_status='falha'` e manter um status que ainda apareça em "Pendentes" do Monitoramento para reprocesso.
-- Trocar a label do toast no front (`useSolicitacoesTroca.ts` linha 240) para "Troca efetivada" no caminho de sucesso.
+**Endereço do novo associado (passo 3):** ao criar novo associado, copiar `endereco/numero/complemento/bairro/cidade/estado/cep` do `novo_titular_dados` (vem do link público). Se ainda assim faltar `estado`, herdar do contrato anterior (`contratoAnterior.cliente_uf`) como fallback. Resolve o erro SGA persistente.
 
-### 4. Reprocessar a solicitação que ficou travada
-Para `06037fb8-84bb-4856-a723-2b2baea55c5d`: depois do fix, chamar manualmente `efetivar-troca-titularidade` com `{ solicitacao_id, cenario_override: 'B' }` para concluir a transferência (veículo + cancelamento do contrato antigo + SGA). Confirmar que `sga_status` vai a `sincronizado` e `status` a `efetivada`.
+### 2. Reconciliação do caso atual (one-shot SQL via migration)
 
-### 5. Verificações pós-fix
-- Edge logs de `efetivar-troca-titularidade` sem `PGRST116`.
-- `solicitacoes_troca_titularidade` com `status='efetivada'`, `sga_status='sincronizado'`, `sga_codigo_associado_novo` e `sga_codigo_veiculo_novo` preenchidos.
-- `veiculos.associado_id` migrou para o novo titular; contrato antigo `cancelado`; novo contrato `ativo`.
-- Card sai da fila de Monitoramento.
+Para o associado 988dbfa9 / solicitação 06037fb8:
+- Cancelar `06313261-c4c4-4a47-9a36-cf7875ff439e` (manter `a8e6e9b7-...` como vencedor) — `status='cancelado'`, `data_cancelamento=now`, `motivo_cancelamento='duplicidade_pos_troca_titularidade'`
+- `UPDATE contratos SET cadastro_aprovado=true, aprovado_em=now, aprovado_por=<monitor>` no contrato vencedor
+- `UPDATE veiculos SET cobertura_suspensa=false, cobertura_suspensa_motivo=NULL, cobertura_suspensa_em=NULL WHERE id='2315cece-...'`
+- Preencher `associados.estado` (e demais campos de endereço se vazios) do 988dbfa9 a partir do link público / contrato anterior, depois disparar manualmente o `sga-hinova-sync` para aquele associado
 
-## Arquivos que serão tocados
+### 3. Memória
 
-- `supabase/functions/efetivar-troca-titularidade/index.ts` (leitura da tabela + update final de status)
-- `supabase/functions/aprovar-troca-monitoramento/index.ts` (ordem do update de status + tratamento do retorno de efetivação)
-- `src/hooks/useSolicitacoesTroca.ts` (label do toast no caminho de sucesso)
+Atualizar `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e.md` (criada na rodada anterior) acrescentando 4 invariantes:
+- "efetivar-troca-titularidade DEVE limpar `cobertura_suspensa` do veículo"
+- "efetivar-troca-titularidade DEVE ser idempotente por `origem_troca_titularidade_id` — nunca cria 2º contrato"
+- "Contrato pós-troca nasce com `cadastro_aprovado=true` (já passou por Cadastro+Monitoramento da troca)"
+- "Novo associado da troca DEVE ter endereço completo copiado do link público antes de mandar pro SGA"
 
-Sem migração de schema necessária — `solicitacoes_troca_titularidade` já tem todas as colunas usadas.
+## Detalhes técnicos / arquivos tocados
+
+- `supabase/functions/efetivar-troca-titularidade/index.ts` — passos 3, 6 e 7 (idempotência + cobertura + cadastro_aprovado + endereço)
+- 1 migration SQL de reconciliação (apenas o caso travado)
+- `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e.md` — invariantes adicionais
+- Sem mudança de schema, sem mudança de UI (a UI já está correta — o que está errado é o dado)
+
+## Como vou validar
+
+1. Após o fix, abrir a aba Resumo e Veículos → ambas devem mostrar "Cobertura Ativa" coerente
+2. `SELECT count(*) FROM contratos WHERE origem_troca_titularidade_id='06037fb8...' AND status='ativo'` → deve retornar 1
+3. `cobertura_suspensa` do KOU6D37 → false
+4. `sga-hinova-sync` retry → `sga_status='sincronizado'` e códigos preenchidos
+5. Vencimentos do Resumo passa a mostrar a próxima mensalidade
+
+Sem efeito colateral em outros associados — a migration é escopada por id.
