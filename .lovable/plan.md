@@ -1,57 +1,60 @@
-## Objetivo
+## Veredito atual
 
-Adicionar um campo **"Tipo da cotação"** (informativo, com sugestões + texto livre) no fluxo padrão de cotação, salvar na cotação e enviar no campo `observacao` do veículo no SGA junto ao histórico de avisos já existente.
+- O recurso de **excluir cotação já existe** no sistema (`delete-cotacao` + hooks/ações). Vou **reaproveitar esse fluxo**, não criar um mecanismo paralelo.
+- As duas cotações com erro são:
+  - `0f5e1db1-7b1d-4fe9-9ae1-30becdc18c90` → `COT-20260515-163104960-422`
+  - `d54499fc-f325-4d3e-bf09-dffd88c35e40` → `COT-20260515-163244658-205`
+- Ambas foram criadas com payload coerente para troca:
+  - `tipo_entrada = troca_titularidade`
+  - `dados_extras.solicitacao_troca_id = 06037fb8-84bb-4856-a723-2b2baea55c5d`
+- O endpoint `vincular-cotacao-troca` **aceitou o mesmo payload quando reexecutei manualmente** e vinculou com sucesso a solicitação à cotação `d54499fc...`.
+- Como não apareceram logs do edge function para as tentativas que falharam, o cenário mais provável é:
+  1. a cotação foi criada no banco,
+  2. a chamada do `invoke('vincular-cotacao-troca')` falhou **antes de chegar de fato ao edge** ou falhou de forma transitória no cliente,
+  3. o rollback tentou apagar a cotação com `supabase.from('cotacoes').delete()` direto no frontend,
+  4. essa limpeza não foi confiável sob RLS/permissões e deixou as duas cotações órfãs.
 
-## Estado atual (auditado)
+## O que vou implementar
 
-- `cotacoes.tipo_entrada` (text, sem default) **já existe** no DB. Valores canônicos em uso: `adesao`, `migracao`, `inclusao`, `troca_titularidade`, `reativacao`, `substituicao_placa`.
-- `CotacaoFormDialog` já preenche automaticamente quando o contexto é claro:
-  - `origemTroca` → `tipo_entrada = 'troca_titularidade'`
-- Pages `Cotador.tsx` / `Cotacao.tsx` preenchem `inclusao` ou `substituicao` quando vêm via querystring.
-- `sga-hinova-sync` (linha 877) já monta `observacao` com cabeçalho + histórico de `cotacao_avisos_sga`. **Não inclui o tipo hoje.**
+### 1) Corrigir a limpeza de falha no fluxo de troca
+- Trocar o rollback frágil do frontend (`from('cotacoes').delete()`) por exclusão via **edge function existente `delete-cotacao`**.
+- Garantir que, se a vinculação falhar, a exclusão use o mesmo caminho seguro e auditável já usado pelo sistema.
+- Melhorar a mensagem de erro para distinguir:
+  - falha de vínculo,
+  - falha de exclusão da órfã,
+  - cotação já vinculada.
 
-## Alterações
+### 2) Expor ação para apagar cotações não vinculadas no fluxo de troca
+- Adicionar ação visível no painel/lista de **Outros Processos / Troca de Titularidade** para excluir rascunhos órfãos da troca.
+- Regras da ação:
+  - disponível apenas quando a cotação estiver em `rascunho`
+  - e quando a solicitação de troca ainda não tiver `cotacao_id` apontando para ela, ou quando for uma sobra órfã detectável
+  - usando o fluxo seguro já existente de exclusão.
 
-### 1. UI — `src/components/cotacoes/CotacaoFormDialog.tsx`
-- Novo bloco "Tipo da cotação" (uma linha, dentro do passo de dados gerais).
-- Componente: `Select` com opções:
-  - Cotação nova (adesão) → `adesao`
-  - Inclusão de veículo → `inclusao`
-  - Substituição de veículo → `substituicao_placa`
-  - Troca de titularidade → `troca_titularidade`
-  - Reativação → `reativacao`
-  - Migração → `migracao`
-  - Outro (texto livre) → mostra `Input` adicional para descrição
-- Pré-seleção automática:
-  - `origemTroca` presente → `troca_titularidade` (campo desabilitado/locked)
-  - `cotacaoBase` com `tipo_entrada` → herda
-  - default: `adesao`
-- Se selecionar "Outro", salvar `tipo_entrada = 'outro'` e `dados_extras.tipo_entrada_descricao` com o texto livre.
-- O fluxo de cotação não muda — campo é apenas informativo.
+### 3) Melhorar observabilidade do erro
+- Registrar melhor o erro do `supabase.functions.invoke('vincular-cotacao-troca')` no frontend:
+  - `solicitacao_id`
+  - `cotacao_id`
+  - status/response da função quando houver
+  - falha do rollback separadamente
+- Isso evita novo caso “sem logs úteis”.
 
-### 2. Persistência — `src/components/cotacoes/CotacaoFormDialog.tsx`
-- Estender o objeto enviado ao criar a cotação:
-  - Coluna direta `tipo_entrada` (já há precedente para troca).
-  - `dados_extras.tipo_entrada` espelhado (mantém padrão atual).
-  - `dados_extras.tipo_entrada_descricao` quando "Outro".
-- Sem migração: campo já existe; `dados_extras` é `jsonb`.
+### 4) Limpar este caso específico
+- Depois da correção, remover as duas cotações criadas com erro do associado usando o fluxo seguro.
+- Preservar apenas o vínculo válido já restabelecido ou ajustar conforme o estado final correto da solicitação.
 
-### 3. SGA — `supabase/functions/sga-hinova-sync/index.ts`
-- No bloco que monta `observacao` (linha 877), buscar a cotação vinculada ao contrato (`contratos.cotacao_id`) e ler `tipo_entrada` + `dados_extras.tipo_entrada_descricao`.
-- Inserir cabeçalho:
-  ```
-  Tipo: <label legível em pt-BR>[ — <descricao livre>]
-  ```
-  antes da linha "Cadastro via Pratic Connect — contrato …".
-- Mapa de labels: `adesao`→"Cotação nova (adesão)", `inclusao`→"Inclusão de veículo", `substituicao_placa`→"Substituição de veículo", `troca_titularidade`→"Troca de titularidade", `reativacao`→"Reativação", `migracao`→"Migração", `outro`→"Outro".
-- Mantém o truncamento de 1900 caracteres já existente.
+## Detalhes técnicos
 
-### 4. Sem alterações
-- Não mexer em `Cotador.tsx`/`Cotacao.tsx` (já preenchem o tipo via querystring) — apenas garantir que o novo Select respeite valor pré-existente.
-- Sem alterações em RLS, triggers, outras edges, ou `cotacao_avisos_sga`.
+- Arquivos prováveis:
+  - `src/components/cotacoes/CotacaoFormDialog.tsx`
+  - `src/components/cotacoes/OutrosProcessosPanel.tsx`
+  - possivelmente `src/components/cotacoes/TrocaTimelineDrawer.tsx`
+  - hook/ação já existente em `src/hooks/useCotacoes.ts`
+- Não vou criar nova edge function de exclusão se a existente cobrir o caso.
+- Não há evidência, até agora, de bug determinístico na regra de negócio do `vincular-cotacao-troca`; a evidência aponta mais para **falha de chamada/rollback no cliente** do que para rejeição do backend.
 
 ## Resultado esperado
 
-- Toda cotação criada pelo modal padrão tem `tipo_entrada` preenchido (manual ou auto).
-- Quando o veículo for sincronizado ao SGA, o campo `observacao` começa com `Tipo: <descrição>` seguido pelo cabeçalho do contrato e pelo bloco `=== Avisos SGA durante a cotação ===` já existente.
-- Fluxo, validações e regras de negócio continuam idênticos.
+- Se a vinculação falhar novamente, a cotação não fica mais em limbo.
+- O admin consegue apagar rapidamente rascunhos órfãos de troca.
+- Este caso específico fica saneado sem sobras duplicadas.

@@ -1753,23 +1753,71 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // o contrato nunca é gerado e o cliente trava na etapa de Pagamento.
         if (origemTroca && novaCotacao?.id) {
           try {
-            const { error: vincErr } = await supabase.functions.invoke('vincular-cotacao-troca', {
+            const { data: vincData, error: vincErr } = await supabase.functions.invoke('vincular-cotacao-troca', {
               body: { solicitacao_id: origemTroca.solicitacaoId, cotacao_id: novaCotacao.id },
             });
             if (vincErr) throw vincErr;
+            // Edge pode retornar 4xx com payload {error, code} sem setar vincErr — tratar como falha
+            if (vincData && (vincData as any).error) {
+              const err: any = new Error((vincData as any).error);
+              err.code = (vincData as any).code;
+              throw err;
+            }
             toast.success('Cotação vinculada à troca de titularidade.');
             navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
           } catch (e: any) {
-            console.error('[vincular-cotacao-troca] FALHA — fazendo rollback da cotação', e);
-            // Rollback: remover a cotação órfã para o usuário poder tentar de novo
+            console.error('[vincular-cotacao-troca] FALHA — iniciando rollback', {
+              solicitacao_id: origemTroca.solicitacaoId,
+              cotacao_id: novaCotacao.id,
+              error_code: e?.code,
+              error_message: e?.message,
+              error: e,
+            });
+            // Rollback via edge function `delete-cotacao` (caminho seguro/auditado).
+            // Fallback para delete direto se a edge falhar.
+            let rollbackOk = false;
             try {
-              await supabase.from('cotacoes').delete().eq('id', novaCotacao.id);
+              const { data: delData, error: delErr } = await supabase.functions.invoke('delete-cotacao', {
+                body: {
+                  cotacaoId: novaCotacao.id,
+                  motivo: 'Rollback automático: falha ao vincular à troca de titularidade',
+                },
+              });
+              if (delErr) throw delErr;
+              if (delData && (delData as any).success === false) {
+                throw new Error((delData as any).error || 'delete-cotacao retornou success=false');
+              }
+              rollbackOk = true;
             } catch (delErr) {
-              console.error('[vincular-cotacao-troca] rollback também falhou', delErr);
+              console.error('[vincular-cotacao-troca] rollback via edge falhou — tentando delete direto', delErr);
+              try {
+                const { error: rawDelErr } = await supabase
+                  .from('cotacoes')
+                  .delete()
+                  .eq('id', novaCotacao.id);
+                if (rawDelErr) throw rawDelErr;
+                rollbackOk = true;
+              } catch (rawErr) {
+                console.error('[vincular-cotacao-troca] rollback direto também falhou — cotação pode ter ficado órfã', {
+                  cotacao_id: novaCotacao.id,
+                  error: rawErr,
+                });
+              }
             }
+            const code = e?.code;
+            const baseMsg =
+              code === 'JA_VINCULADA'
+                ? 'Esta solicitação de troca já tem outra cotação vinculada.'
+                : code === 'COTACAO_NAO_PERTENCE'
+                ? 'A cotação não corresponde a esta solicitação de troca.'
+                : code === 'TERMO_NAO_ASSINADO'
+                ? 'O termo de cancelamento ainda não foi assinado pelo titular antigo.'
+                : 'Não foi possível vincular a cotação à troca de titularidade.';
             toast.error(
-              'Não foi possível vincular a cotação à troca de titularidade. ' +
-              'A cotação foi descartada — tente novamente em instantes ou contate o suporte.'
+              baseMsg + (rollbackOk
+                ? ' A cotação foi descartada — tente novamente em instantes.'
+                : ' Atenção: a cotação NÃO pôde ser descartada automaticamente. Use a ação "Excluir cotação órfã" no painel de Outros Processos ou contate o suporte.'),
+              { duration: 8000 }
             );
             // Bloquear navegação: usuário fica no dialog para tentar de novo
             return;

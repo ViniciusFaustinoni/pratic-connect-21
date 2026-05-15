@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, Pencil, ChevronRight, User, MessageCircle, MailWarning } from 'lucide-react';
+import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, Pencil, ChevronRight, User, MessageCircle, MailWarning, Trash2 } from 'lucide-react';
+import { useExcluirCotacao } from '@/hooks/useCotacoes';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
@@ -78,8 +79,10 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
   const [drawerItem, setDrawerItem] = useState<OutroProcessoItem | null>(null);
   const [substItemId, setSubstItemId] = useState<string | null>(null);
   const [resendItem, setResendItem] = useState<OutroProcessoItem | null>(null);
+  const [excluirItem, setExcluirItem] = useState<OutroProcessoItem | null>(null);
 
   const enviarTermo = useEnviarTermoCancelamento();
+  const excluirCotacao = useExcluirCotacao();
 
   const { data: vendedores } = useVendedores({
     enabled: permissions.cotacao.viewScope !== 'own',
@@ -121,6 +124,33 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
     await enviarTermo.mutateAsync({ solicitacao_id: resendItem.solicitacao_troca_id, force_resend: isResend });
     setResendItem(null);
     refetch();
+  };
+
+  // Permite excluir cotação órfã quando ela está em rascunho e não tem
+  // contrato/serviço/instalação vinculado (caso típico: vinculação à troca falhou
+  // e a cotação ficou solta). Edge `delete-cotacao` valida permissão e cascata.
+  const podeExcluirOrfa = (item: OutroProcessoItem): boolean => {
+    if (!item.cotacao_id) return false;
+    if (item.cotacao_status !== 'rascunho') return false;
+    // Apenas trocas de titularidade que NÃO efetivaram entram no critério "órfã"
+    if (item.tipo === 'troca_titularidade') {
+      return !['efetivada', 'liberada_para_assinatura'].includes(item.troca_status || '');
+    }
+    return false;
+  };
+
+  const handleConfirmExclusao = async () => {
+    if (!excluirItem?.cotacao_id) return;
+    try {
+      await excluirCotacao.mutateAsync({
+        cotacaoId: excluirItem.cotacao_id,
+        motivo: 'Exclusão manual: cotação órfã de troca de titularidade',
+      });
+      setExcluirItem(null);
+      refetch();
+    } catch {
+      // toast já tratado no hook
+    }
   };
 
   return (
@@ -320,6 +350,19 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                       </Button>
                     </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>
                   )}
+
+                  {podeExcluirOrfa(item) && (permissions.cotacao.canDelete || permissions.cotacao.viewScope === 'all') && (
+                    <Tooltip><TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-500/10"
+                        onClick={(e) => { e.stopPropagation(); setExcluirItem(item); }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>Excluir cotação órfã (não vinculada)</TooltipContent></Tooltip>
+                  )}
                 </div>
               </div>
             );})}
@@ -355,6 +398,27 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmReenvio} disabled={enviarTermo.isPending}>
               {enviarTermo.isPending ? 'Enviando...' : 'Confirmar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!excluirItem} onOpenChange={(v) => !v && setExcluirItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cotação órfã?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A cotação <strong>{excluirItem?.cotacao_numero || excluirItem?.cotacao_id?.slice(0, 8)}</strong> está em rascunho e não tem vínculo válido com a solicitação de troca de titularidade. Ela será excluída permanentemente (junto com leads/agendamentos órfãos), liberando a solicitação para uma nova cotação. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmExclusao}
+              disabled={excluirCotacao.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {excluirCotacao.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
