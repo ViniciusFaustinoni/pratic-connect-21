@@ -180,22 +180,48 @@ serve(async (req) => {
 
     console.log(`[efetivar-troca] Iniciando efetivação para solicitação ${solicitacao_id}`);
 
-    // 1. Buscar solicitação
-    const { data: solicitacao, error: solError } = await supabase
-      .from("chat_solicitacoes_ia")
-      .select("*")
-      .eq("id", solicitacao_id)
-      .single();
+    // 1. Buscar solicitação — tenta primeiro a tabela nova (solicitacoes_troca_titularidade)
+    //    e cai no fluxo legado (chat_solicitacoes_ia) só se não encontrar.
+    let solicitacao: any = null;
+    let solicitacaoSource: 'nova' | 'legada' = 'nova';
 
-    if (solError || !solicitacao) {
-      console.error("[efetivar-troca] Solicitação não encontrada:", solError);
-      return new Response(JSON.stringify({ success: false, error: "Solicitação não encontrada" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    {
+      const { data: novaSol } = await supabase
+        .from("solicitacoes_troca_titularidade")
+        .select("*")
+        .eq("id", solicitacao_id)
+        .maybeSingle();
+
+      if (novaSol) {
+        // Mapeia para o shape esperado pelo restante da função (que foi escrito
+        // para chat_solicitacoes_ia).
+        solicitacao = {
+          id: novaSol.id,
+          associado_id: novaSol.associado_antigo_id,
+          criado_por: novaSol.criado_por,
+          dados: { veiculo_id: novaSol.veiculo_id },
+          dados_novo_titular: novaSol.novo_titular_dados,
+          resultado_protocolo: null,
+        };
+      } else {
+        const { data: legacySol, error: solError } = await supabase
+          .from("chat_solicitacoes_ia")
+          .select("*")
+          .eq("id", solicitacao_id)
+          .maybeSingle();
+        if (solError || !legacySol) {
+          console.error("[efetivar-troca] Solicitação não encontrada:", solError);
+          return new Response(JSON.stringify({ success: false, error: "Solicitação não encontrada" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        solicitacao = legacySol;
+        solicitacaoSource = 'legada';
+      }
     }
 
-    const dados = solicitacao.dados as Record<string, unknown> || {};
+    const dados = (solicitacao.dados as Record<string, unknown>) || {};
     const dadosNovoTitular = solicitacao.dados_novo_titular as Record<string, string> | null;
 
     if (!dadosNovoTitular?.cpf) {
@@ -206,9 +232,9 @@ serve(async (req) => {
     }
 
     // Determine cenário
-    const resultadoProtocolo = dados.resultado_protocolo as string || solicitacao.resultado_protocolo as string || "";
+    const resultadoProtocolo = (dados.resultado_protocolo as string) || (solicitacao.resultado_protocolo as string) || "";
     const cenario = cenario_override || (resultadoProtocolo.includes("TRC-DISP-") ? "A" : "B");
-    console.log(`[efetivar-troca] Cenário: ${cenario}`);
+    console.log(`[efetivar-troca] Cenário: ${cenario} (source: ${solicitacaoSource})`);
 
     // 2. Buscar veículo
     let veiculoId = dados.veiculo_id as string;
