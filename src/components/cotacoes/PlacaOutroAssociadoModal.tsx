@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AlertTriangle, ArrowRightLeft, User } from 'lucide-react';
 import {
   AlertDialog,
@@ -10,14 +11,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { PlacaOutroAssociadoInfo } from '@/hooks/useVerificarPlacaOutroAssociado';
 import { useNavigate } from 'react-router-dom';
+import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
 
 interface PlacaOutroAssociadoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   placa: string;
   info: PlacaOutroAssociadoInfo | null;
+  /** Quando definido, exibe botão "Ignorar e Prosseguir" */
+  onIgnorarEProsseguir?: () => void;
 }
 
 export function PlacaOutroAssociadoModal({
@@ -25,8 +30,10 @@ export function PlacaOutroAssociadoModal({
   onOpenChange,
   placa,
   info,
+  onIgnorarEProsseguir,
 }: PlacaOutroAssociadoModalProps) {
   const navigate = useNavigate();
+  const [showBypass, setShowBypass] = useState(false);
   if (!info || !info.conflito) return null;
 
   const irParaTroca = () => {
@@ -77,14 +84,37 @@ export function PlacaOutroAssociadoModal({
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="gap-2 flex-col sm:flex-row">
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          {onIgnorarEProsseguir && (
+            <Button variant="destructive" onClick={() => setShowBypass(true)}>
+              Ignorar e Prosseguir
+            </Button>
+          )}
           <AlertDialogAction onClick={irParaTroca} className="gap-2">
             <ArrowRightLeft className="h-4 w-4" />
             Iniciar Troca de Titularidade
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
+
+      {onIgnorarEProsseguir && (
+        <IgnorarAvisoSGADialog
+          open={showBypass}
+          onOpenChange={setShowBypass}
+          aviso={{
+            tipo: 'placa_outro_associado_local',
+            titulo: 'Placa pertence a outro associado',
+            mensagem: `A placa ${placa.toUpperCase()} já está vinculada ao associado ${info.associadoNome} (${info.cpfMascarado}).`,
+            placa,
+            detalhes: { associadoNome: info.associadoNome, status: info.status, associadoId: info.associadoId },
+          }}
+          onConfirm={() => {
+            onOpenChange(false);
+            onIgnorarEProsseguir();
+          }}
+        />
+      )}
     </AlertDialog>
   );
 }

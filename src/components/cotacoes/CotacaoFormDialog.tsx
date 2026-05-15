@@ -248,6 +248,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [showPlacaOutroAssocModal, setShowPlacaOutroAssocModal] = useState(false);
   const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
 
+  // Bypass: placas para as quais o usuário já clicou "Ignorar e Prosseguir"
+  // (registrado em cotacao_avisos_sga). Cada Set guarda placas normalizadas.
+  const [bypassPlacaSGA, setBypassPlacaSGA] = useState<Set<string>>(new Set());
+  const [bypassPlacaOutroAssoc, setBypassPlacaOutroAssoc] = useState<Set<string>>(new Set());
+  const [bypassPlacaDuplicada, setBypassPlacaDuplicada] = useState<Set<string>>(new Set());
+  const placaNorm = (p: string) => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
   // Estados para seleção FIPE manual
   type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
   const [marcas, setMarcas] = useState<FipeMarcaComTipo[]>([]);
@@ -969,15 +976,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       const isTroca = shouldBypassPlateGuards(origemTroca);
 
       if (!isTroca) {
+        const placaKey = placaNorm(placa);
+
         // Primeiro, verificar se a placa já está em cotação de outro vendedor
         const placaDuplicada = await verificarPlacaDuplicada.mutateAsync({ placa, ignorarIds: ignorarPlacaDuplicadaIds });
 
         if (placaDuplicada) {
           if (placaDuplicada.vendedorId !== profile?.id) {
-            setPlacaDuplicadaInfo(placaDuplicada);
-            setShowPlacaDuplicadaModal(true);
-            setBuscandoPlaca(false);
-            return;
+            if (!bypassPlacaDuplicada.has(placaKey)) {
+              setPlacaDuplicadaInfo(placaDuplicada);
+              setShowPlacaDuplicadaModal(true);
+              setBuscandoPlaca(false);
+              return;
+            }
           } else {
             toast.info(`Você já possui uma cotação ativa para esta placa: ${placaDuplicada.numero}`);
           }
@@ -986,7 +997,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Verificar se veículo existe no SGA (Hinova)
         try {
           const sgaResult = await verificarVeiculoSGA.mutateAsync(placa);
-          if (sgaResult.existe) {
+          if (sgaResult.existe && !bypassPlacaSGA.has(placaKey)) {
             setShowSGAModal(true);
             setBuscandoPlaca(false);
             return;
@@ -998,7 +1009,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Verificar se a placa já está vinculada a OUTRO associado na base local
         try {
           const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa });
-          if (localResult?.conflito) {
+          if (localResult?.conflito && !bypassPlacaOutroAssoc.has(placaKey)) {
             setPlacaOutroAssocInfo(localResult);
             setShowPlacaOutroAssocModal(true);
             setBuscandoPlaca(false);
@@ -3147,21 +3158,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         </AlertDialog>
       )}
       
-      {/* Modal de Placa Duplicada - FORA do Dialog principal */}
+      {/* Modal de Placa Duplicada */}
       {showPlacaDuplicadaModal && (
         <PlacaDuplicadaModal
           open={showPlacaDuplicadaModal}
           onOpenChange={setShowPlacaDuplicadaModal}
           placa={placa}
           info={placaDuplicadaInfo}
+          onIgnorarEProsseguir={() => {
+            setBypassPlacaDuplicada((s) => new Set(s).add(placaNorm(placa)));
+            setShowPlacaDuplicadaModal(false);
+            setTimeout(() => buscarPorPlaca(), 100);
+          }}
         />
       )}
-      
+
       {/* Modal Veículo já cadastrado no SGA */}
       <VeiculoSGAModal
         open={showSGAModal}
         onOpenChange={setShowSGAModal}
         placa={placa}
+        onIgnorarEProsseguir={() => {
+          setBypassPlacaSGA((s) => new Set(s).add(placaNorm(placa)));
+          setShowSGAModal(false);
+          setTimeout(() => buscarPorPlaca(), 100);
+        }}
       />
 
       {/* Modal Placa pertence a outro associado (base local) */}
@@ -3170,6 +3191,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onOpenChange={setShowPlacaOutroAssocModal}
         placa={placa}
         info={placaOutroAssocInfo}
+        onIgnorarEProsseguir={() => {
+          setBypassPlacaOutroAssoc((s) => new Set(s).add(placaNorm(placa)));
+          setShowPlacaOutroAssocModal(false);
+          setTimeout(() => buscarPorPlaca(), 100);
+        }}
       />
     </>
   );

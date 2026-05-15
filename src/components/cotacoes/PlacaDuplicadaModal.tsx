@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { format, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, User, FileText, Calendar, Info, Clock } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -11,13 +13,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
+import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
 
 interface PlacaDuplicadaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   placa: string;
   info: PlacaDuplicadaInfo | null;
+  /** Quando definido, exibe botão "Ignorar e Prosseguir" (apenas Diretor recomendado). */
+  onIgnorarEProsseguir?: () => void;
 }
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -31,7 +37,9 @@ export function PlacaDuplicadaModal({
   onOpenChange,
   placa,
   info,
+  onIgnorarEProsseguir,
 }: PlacaDuplicadaModalProps) {
+  const [showBypass, setShowBypass] = useState(false);
   if (!info) return null;
 
   const formatarData = (dataStr: string) => {
@@ -109,12 +117,35 @@ export function PlacaDuplicadaModal({
             </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="gap-2">
+          {onIgnorarEProsseguir && (
+            <Button variant="destructive" onClick={() => setShowBypass(true)}>
+              Ignorar e Prosseguir
+            </Button>
+          )}
           <AlertDialogAction onClick={() => onOpenChange(false)}>
             Entendido
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
+
+      {onIgnorarEProsseguir && (
+        <IgnorarAvisoSGADialog
+          open={showBypass}
+          onOpenChange={setShowBypass}
+          aviso={{
+            tipo: 'placa_duplicada_outro_vendedor',
+            titulo: 'Placa em atendimento por outro consultor',
+            mensagem: `A placa ${placa.toUpperCase()} já está reservada na cotação ${info.numero} do consultor ${info.vendedorNome}.`,
+            placa,
+            detalhes: { numero: info.numero, vendedorNome: info.vendedorNome, status: info.status },
+          }}
+          onConfirm={() => {
+            onOpenChange(false);
+            onIgnorarEProsseguir();
+          }}
+        />
+      )}
     </AlertDialog>
   );
 }

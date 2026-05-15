@@ -9831,6 +9831,148 @@ export type Database = {
           },
         ]
       }
+      cotacao_avisos_sga: {
+        Row: {
+          associado_id: string | null
+          contrato_id: string | null
+          cotacao_id: string | null
+          cpf: string | null
+          created_at: string
+          decidido_em: string
+          decidido_por: string | null
+          decidido_por_nome: string | null
+          decisao: Database["public"]["Enums"]["aviso_sga_decisao"]
+          detalhes: Json | null
+          id: string
+          mensagem: string | null
+          motivo: string | null
+          placa: string | null
+          tipo: Database["public"]["Enums"]["aviso_sga_tipo"]
+          titulo: string
+        }
+        Insert: {
+          associado_id?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          cpf?: string | null
+          created_at?: string
+          decidido_em?: string
+          decidido_por?: string | null
+          decidido_por_nome?: string | null
+          decisao: Database["public"]["Enums"]["aviso_sga_decisao"]
+          detalhes?: Json | null
+          id?: string
+          mensagem?: string | null
+          motivo?: string | null
+          placa?: string | null
+          tipo: Database["public"]["Enums"]["aviso_sga_tipo"]
+          titulo: string
+        }
+        Update: {
+          associado_id?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          cpf?: string | null
+          created_at?: string
+          decidido_em?: string
+          decidido_por?: string | null
+          decidido_por_nome?: string | null
+          decisao?: Database["public"]["Enums"]["aviso_sga_decisao"]
+          detalhes?: Json | null
+          id?: string
+          mensagem?: string | null
+          motivo?: string | null
+          placa?: string | null
+          tipo?: Database["public"]["Enums"]["aviso_sga_tipo"]
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacao_avisos_sga_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["cotacao_id"]
+          },
+        ]
+      }
       cotacao_failure_metrics: {
         Row: {
           codigo: string
@@ -35009,6 +35151,15 @@ export type Database = {
         | "advogado"
         | "sindicante"
         | "analista_monitoramento"
+      aviso_sga_decisao: "ignorado_prosseguiu" | "cancelou" | "visualizou"
+      aviso_sga_tipo:
+        | "placa_duplicada_outro_vendedor"
+        | "veiculo_existe_sga"
+        | "placa_outro_associado_local"
+        | "cpf_associado_veiculo_ativo"
+        | "cpf_ex_cliente_inadimplente"
+        | "inclusao_associado_com_debito"
+        | "cadastro_situacao_financeira_pendente"
       cc_status_lancamento:
         | "pendente"
         | "a_pagar"
@@ -35456,6 +35607,16 @@ export const Constants = {
         "advogado",
         "sindicante",
         "analista_monitoramento",
+      ],
+      aviso_sga_decisao: ["ignorado_prosseguiu", "cancelou", "visualizou"],
+      aviso_sga_tipo: [
+        "placa_duplicada_outro_vendedor",
+        "veiculo_existe_sga",
+        "placa_outro_associado_local",
+        "cpf_associado_veiculo_ativo",
+        "cpf_ex_cliente_inadimplente",
+        "inclusao_associado_com_debito",
+        "cadastro_situacao_financeira_pendente",
       ],
       cc_status_lancamento: [
         "pendente",
