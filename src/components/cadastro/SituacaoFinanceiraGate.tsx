@@ -246,7 +246,26 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
               disabled={motivo.trim().length < 5 || bypass.isPending}
               onClick={() =>
                 bypass.mutate(motivo.trim(), {
-                  onSuccess: () => {
+                  onSuccess: async () => {
+                    // Registrar também em cotacao_avisos_sga para o histórico ir pro SGA
+                    try {
+                      await registrarAviso.mutateAsync({
+                        tipo: 'cadastro_situacao_financeira_pendente',
+                        titulo: 'Bypass de inadimplência no Cadastro',
+                        mensagem: `Saldo devedor ${data?.check?.saldo_devedor ?? 0} (${data?.check?.qtd_boletos_abertos ?? 0} boleto(s)).`,
+                        decisao: 'ignorado_prosseguiu',
+                        motivo: motivo.trim(),
+                        contrato_id: contratoId ?? null,
+                        cpf: data?.check?.cpf ?? null,
+                        detalhes: {
+                          saldo_devedor: data?.check?.saldo_devedor,
+                          qtd_boletos_abertos: data?.check?.qtd_boletos_abertos,
+                          solicitacao_troca_id: solicitacaoTrocaId ?? null,
+                        },
+                      });
+                    } catch (e) {
+                      console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
+                    }
                     toast.success('Bypass registrado — análise liberada');
                     setBypassOpen(false);
                     setMotivo('');
