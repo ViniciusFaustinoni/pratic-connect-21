@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
+import { VistoriaFotosExtras } from '@/components/vistorias/VistoriaFotosExtras';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { VerificarSinalRastreador } from '@/components/instalador/VerificarSinalRastreador';
