@@ -61,7 +61,8 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
   if (!servico) return null;
 
   const isRetirada = servico.tipo === 'vistoria_retirada';
-  const isInstalacao = servico.tipo === 'instalacao' || servico.tipo === 'revistoria';
+  // 'vistoria_entrada' é a primeira visita (equivale a instalação) — ver mem://logic/operations/vistoria-entrada-equivale-instalacao
+  const isInstalacao = servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada' || servico.tipo === 'revistoria';
   const motivoRetirada = (servico as any).motivo_retirada;
   const multaAplicada = (servico as any).multa_aplicada;
   const integridade = (servico as any).integridade_aparelho;
