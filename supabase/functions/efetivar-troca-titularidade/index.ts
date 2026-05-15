@@ -346,6 +346,39 @@ serve(async (req) => {
       console.warn("[efetivar-troca] Nenhum contrato ativo encontrado para o titular anterior, continuando sem herança de contrato");
     }
 
+    // 4.1 Fallback de endereço para o novo associado: se ainda estiver sem UF/CEP,
+    //     herda do contrato anterior (snapshot que veio do CRLV/cotação).
+    try {
+      const { data: assocCheck } = await supabase
+        .from("associados")
+        .select("uf, cep, cidade, bairro, logradouro, numero, complemento")
+        .eq("id", novoAssociadoId)
+        .maybeSingle();
+      if (assocCheck && contratoAnterior) {
+        const { data: ctrFull } = await supabase
+          .from("contratos")
+          .select("cliente_uf, cliente_cep, cliente_cidade, cliente_bairro, cliente_logradouro, cliente_numero, cliente_complemento")
+          .eq("id", contratoAnterior.id)
+          .maybeSingle();
+        if (ctrFull) {
+          const patch: Record<string, unknown> = {};
+          if (!assocCheck.uf && ctrFull.cliente_uf) patch.uf = ctrFull.cliente_uf;
+          if (!assocCheck.cep && ctrFull.cliente_cep) patch.cep = String(ctrFull.cliente_cep).replace(/\D/g, '');
+          if (!assocCheck.cidade && ctrFull.cliente_cidade) patch.cidade = ctrFull.cliente_cidade;
+          if (!assocCheck.bairro && ctrFull.cliente_bairro) patch.bairro = ctrFull.cliente_bairro;
+          if (!assocCheck.logradouro && ctrFull.cliente_logradouro) patch.logradouro = ctrFull.cliente_logradouro;
+          if (!assocCheck.numero && ctrFull.cliente_numero) patch.numero = ctrFull.cliente_numero;
+          if (!assocCheck.complemento && ctrFull.cliente_complemento) patch.complemento = ctrFull.cliente_complemento;
+          if (Object.keys(patch).length) {
+            await supabase.from("associados").update(patch).eq("id", novoAssociadoId);
+            console.log(`[efetivar-troca] Endereço herdado do contrato anterior:`, Object.keys(patch));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca] Fallback endereço falhou:", (e as Error)?.message);
+    }
+
     // 5. Ler configurações
     const taxaTroca = await getConfiguracaoNumero(supabase, "taxa_troca_titularidade", 50);
     const carenciaPadrao = await getConfiguracaoNumero(supabase, "carencia_dias_padrao", 120);
@@ -357,7 +390,9 @@ serve(async (req) => {
 
     console.log(`[efetivar-troca] Config: taxa=${taxaTroca}, carência=${carenciaDias} dias (isenta: ${carenciaIsenta}), vidros=${carenciaVidrosDias}`);
 
-    // 6. Transferir veículo
+    // 6. Transferir veículo + LIMPAR cobertura suspensa por troca
+    //    (motivo `troca_titularidade_em_andamento` foi setado quando a troca iniciou
+    //     — após efetivada, a cobertura volta normal para o novo titular).
     const { error: transferError } = await supabase
       .from("veiculos")
       .update({
@@ -365,6 +400,9 @@ serve(async (req) => {
         em_troca_titularidade: false,
         troca_titularidade_id: null,
         troca_titularidade_iniciada_em: null,
+        cobertura_suspensa: false,
+        cobertura_suspensa_motivo: null,
+        cobertura_suspensa_em: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", veiculoId);
