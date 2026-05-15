@@ -82,7 +82,7 @@ serve(async (req) => {
   if (contratoId) {
     const { data: c, error: cErr } = await admin
       .from('contratos')
-      .select('id, associado_id, cliente_cpf, associado:associados(id, cpf, codigo_hinova)')
+      .select('id, associado_id, cliente_cpf, associado:associados!fk_contratos_associado(id, cpf, codigo_hinova)')
       .eq('id', contratoId)
       .maybeSingle();
     if (cErr) return json(500, { error: 'contrato_lookup_falhou', detail: cErr.message });
