@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Send, Check, X, Eye, Car, Phone, User, MoreHorizontal, ClipboardCopy, ExternalLink, Link2, FileDown, Loader2, Plus, ArrowRight } from 'lucide-react';
