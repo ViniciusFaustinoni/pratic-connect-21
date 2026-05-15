@@ -324,9 +324,14 @@ export default function CotacaoContratacao() {
         etapa = 4;
       }
 
+      // Troca dentro da janela mesmo-dia: pula etapa de vistoria automaticamente
+      if (etapa === 3 && dispensaVistoriaTroca) {
+        etapa = 4;
+      }
+
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, determinarEtapa, setEtapaAtual, navegacaoManual]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade segue a navOrder (Pagamento na sequência), igual à nova adesão.
