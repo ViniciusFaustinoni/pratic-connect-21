@@ -529,8 +529,8 @@ serve(async (req) => {
                   .from('vistorias')
                   .update({
                     status: 'aprovada',
-                    aprovado_em: agora,
-                    aprovado_por: aprovado_por || null,
+                    analisado_em: agora,
+                    analisado_por: aprovado_por || null,
                   })
                   .eq('id', vistAutoRf.id)
                   .eq('status', 'pendente');
