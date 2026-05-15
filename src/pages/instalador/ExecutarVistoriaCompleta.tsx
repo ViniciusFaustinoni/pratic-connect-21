@@ -790,6 +790,20 @@ export default function ExecutarVistoriaCompleta() {
           </Card>
         )}
 
+        {/* Outras imagens (opcional) — só no modo completo (não na etapa "apenas instalação") */}
+        {!modoApenasInstalacao && categorias.length > 0 && (
+          <Card className="border-slate-700 bg-slate-800">
+            <CardContent className="pt-4">
+              <VistoriaFotosExtras
+                fotosExtras={fotosExtrasEnviadas}
+                uploadingTipo={uploadingFoto}
+                onUpload={(tipo, file) => handleUploadFoto(tipo, file, true)}
+                onRemove={handleRemoveFotoExtra}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Vínculo do Rastreador (IMEI) — obrigatório quando o veículo exige rastreador */}
         {veiculoPrecisaRastreador && (
           <Card className={cn(
