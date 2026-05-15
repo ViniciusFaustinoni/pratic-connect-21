@@ -90,11 +90,16 @@ export default function PropostaAnalise() {
   const nextProposta = currentIndex >= 0 && todasPropostas ? todasPropostas[currentIndex + 1] : null;
 
   // Determinar se é autovistoria
+  // OBS: agendamento base (vistoria_base_info) é evento da INSTALAÇÃO posterior
+  // e PODE coexistir com uma autovistoria antecipada (associado fez fotos+vídeo
+  // antes do dia da instalação para liberar R&F já no Cadastro). Por isso NÃO
+  // dependemos mais de !isVistoriaBase aqui — só uma instalação concluída
+  // invalida a autovistoria como fonte de fotos para o Cadastro.
   const isVistoriaBase = !!proposta?.vistoria_base_info;
   const isAutovistoria = (
     proposta?.vistoria?.modalidade === 'autovistoria' ||
     proposta?.vistoria?.tipo === 'autovistoria'
-  ) && !proposta?.instalacao_info && !isVistoriaBase;
+  ) && !proposta?.instalacao_info;
 
   // Tipo de veículo (carro/moto) para personalizar labels do dialog de reenvio
   const { tipoVeiculo } = useDetectarTipoVeiculo(

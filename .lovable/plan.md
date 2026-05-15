@@ -1,45 +1,66 @@
-## O que entendi
+## O que está acontecendo na cotação 434
 
-Hoje, na autovistoria pública (`AutovistoriaCotacao.tsx`):
+Toyota Corolla (FIPE > 30k → precisa rastreador). O associado escolheu **agendamento base** para a instalação, mas ANTES do dia da instalação fez a **autovistoria** (padrão novo: foto do motor + foto do chassi + vídeo 360°) justamente para já liberar R&F antecipadamente.
 
-1. Foto 1 (**motor**) → upload OK → auto-avança para foto 2 (**chassi**) após 300 ms.
-2. Foto 2 (**chassi**) → upload OK → o `setFotoAtualIndex` tenta avançar mas trava na própria foto 2 (`Math.min(prev+1, totalFotos-1)`), então o painel continua mostrando o chassi com selo "Foto enviada".
-3. O bloco do **vídeo 360°** só aparece **abaixo**, depois do botão "Refazer Foto" e das instruções, condicionado a `todasFotosEnviadas`.
+Banco confirma: contrato com `tipo_vistoria='agendada_base'` + `vistorias` com `modalidade='autovistoria'`, status `pendente`, 3 fotos + vídeo 360°.
 
-Em telas pequenas o associado não vê o vídeo aparecer e acredita que terminou. É exatamente o que você descreveu.
+A UI do Cadastro deveria mostrar:
+- Etapa 2 com as fotos da autovistoria + vídeo 360°
+- Botão verde **"Liberar Cobertura Roubo e Furto"**
+- Ao clicar: liberar R&F no veículo + mandar para Monitoramento (que depois faz a instalação base agendada)
 
-## O que vou mudar
+Mas mostra **"Aprovar Proposta"** e ignora a autovistoria.
 
-Transformar o fluxo em uma máquina de etapas linear: `fotos → video → finalizar`. Assim que a foto do **chassi** é aceita (sem mismatch de placa / sem falha de OCR), a tela troca para a etapa do vídeo automaticamente — mesma UX do avanço entre as fotos.
+## Causas (duas, combinadas)
 
-### Mudanças em `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
+1. **Detecção de autovistoria quebrada** em `PropostaAnalise.tsx` (linha 94-97):
+   ```ts
+   isAutovistoria = (modalidade==='autovistoria' || tipo==='autovistoria')
+                    && !instalacao_info && !isVistoriaBase
+   ```
+   `isVistoriaBase` vira `true` porque a cotação tem agendamento base **para a instalação posterior** — isso anula a autovistoria. Os dois eventos coexistem (autovistoria antecipada + base agendada para instalar rastreador), não são exclusivos.
 
-1. **Novo estado `etapa`** (`'fotos' | 'video'`), derivado:
-   - Inicia em `'fotos'`.
-   - Vira `'video'` automaticamente quando `todasFotosEnviadas && !videoUrl`.
-   - Vira `'fotos'` se o usuário tocar num número de etapa anterior (refazer uma foto) — preserva a possibilidade de refazer.
+2. **`autovistoriaCompleta` ainda valida o padrão antigo** (linhas 140-146): exige ≥31 fotos (carro) / ≥15 (moto). A nova canônica é **2 fotos (motor + chassi) + vídeo 360°** (já em `mem://...autovistoria-2-fotos-video-360`). Mesmo se o item 1 fosse corrigido, qualquer autovistoria nova cairia em "incompleta".
 
-2. **Auto-advance no `handleFileChange`** (linha ~267):
-   - Se a foto recém-enviada era a **última** (`fotoAtualIndex === totalFotos - 1`) e tudo passou (sem `bloqueadoPorPlaca`, sem `odometroOcrFalhou`), em vez de tentar `prev + 1`, setar `etapa = 'video'`.
-   - Caso contrário, mantém o comportamento atual (avança índice da próxima foto).
+3. **Backend `aprovar-proposta`** já trata corretamente o caso "precisa rastreador → manda para Monitoramento", mas no caminho `algumPrecisouRastreador` ele **não libera R&F** nem marca a autovistoria como aprovada. Só faz isso no ramo sub-FIPE (linhas 494-546). Resultado: hoje, mesmo se a UI corrigida mostrasse o botão certo, o R&F não seria efetivamente liberado pelo Cadastro — só na aprovação do Monitoramento.
 
-3. **Reidratação** (linha ~118):
-   - Se ao reabrir o link todas as fotos já estão enviadas e o vídeo ainda não, abrir já em `etapa = 'video'`.
-   - Se vídeo também já existe, abrir em `'fotos'` mostrando a última (para revisão) — finalizar continua sticky.
+## Plano de correção (apenas onde falha; sem mexer no resto do fluxo)
 
-4. **Render**:
-   - Quando `etapa === 'video'`: esconder o painel de fotos (mantém só a barra de progresso/numerada no topo, que já existe e permite voltar) e exibir o **bloco do vídeo 360°** como conteúdo principal, com `scrollIntoView` suave ao montar.
-   - Mantém o botão "Refazer" do vídeo e o `onReset` que zera `videoUrl`, voltando o estado para `'video'` (não para fotos).
-   - Botão "Finalizar" continua sticky igual hoje, aparecendo quando `todasEnviadas`.
+### Frontend — `src/pages/cadastro/PropostaAnalise.tsx`
 
-5. **Toast de transição**: ao virar `'video'` automaticamente, dispara um `toast.success('Fotos concluídas! Agora grave o vídeo 360°.')` para reforçar a mudança.
+- **Desacoplar autovistoria do agendamento base.** Remover `&& !isVistoriaBase` da definição de `isAutovistoria`. Manter apenas `&& !instalacao_info` (uma instalação concluída é o que invalida considerar autovistoria como "fonte das fotos"). Comentário explicando que a base agendada é evento posterior.
+- **Atualizar `autovistoriaCompleta` para a canônica nova:**
+  ```
+  autovistoriaCompleta = isAutovistoria
+    ? ((totalFotos >= 2 && temVideo360)         // canônica 2+vídeo
+       || totalFotos >= minFotosAutovistoria)    // legado 31/15 (compat)
+    : true
+  ```
+- Nada mais muda em `podeAprovar`/`cadastroAvaliaFotos`/`aprovarApenasDocumentos` — a lógica deles já está correta uma vez que `isAutovistoria` e `autovistoriaCompleta` voltem a refletir a realidade.
 
-### Não muda
+### Frontend — `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`
 
-- Config canônica (`motor + chassi + video_360`), validações de placa/OCR, upload, finalização (`finalizarMutation`), persistência, hidratação de sessão anterior.
-- Componente `Autovistoria.tsx` do associado interno (escopo é só a autovistoria pública da cotação, que é a tela onde o problema acontece).
-- A etapa numérica clicável no topo continua permitindo voltar manualmente para refazer qualquer foto.
+- Nenhuma mudança de lógica. O rótulo do botão (linha 433-437) já trata `isAutovistoria && !ocultarEtapaFotos && planoTemRouboFurto → "Liberar Cobertura Roubo e Furto"`. Voltará a funcionar automaticamente.
+- Pequeno ajuste no banner contextual: quando há autovistoria completa **e** vistoria base agendada (caso 434), exibir um aviso explicando que a aprovação libera R&F agora e a instalação ocorrerá na data já agendada (texto curto, sem mexer em estrutura).
 
-## Validação
+### Backend — `supabase/functions/aprovar-proposta/index.ts`
 
-Após implementar, vou testar no preview com a credencial de diretor: abrir uma cotação com autovistoria pendente, simular as 2 fotos e confirmar que a tela troca sozinha para o vídeo, sem precisar rolar.
+Antes do bloco `deveAguardarInstalacao`, detectar "autovistoria pendente + canônica completa + plano com R&F" e, nesse caso:
+
+1. `UPDATE vistorias SET status='aprovada', aprovado_em=now(), aprovado_por=<aprovado_por> WHERE id=<vistoriaAutovistoria.id> AND status='pendente'`
+2. `UPDATE veiculos SET cobertura_roubo_furto=true WHERE id=<veiculoId>`
+3. Registrar histórico ("Cobertura Roubo/Furto liberada pelo Cadastro via autovistoria; instalação ocorrerá no agendamento base.")
+
+Manter o resto intacto: associado segue para `aguardando_instalacao`, fila do Monitoramento, instalação base no dia já agendado. A flag `autovistoriaAprovada` (linha 617-630) passa a detectar o caso e a mensagem de histórico/notificação correta é enviada.
+
+### Verificação
+
+- Reabrir `/cadastro/propostas/842c835d-674d-462e-bd5f-982fd4dd6c94` — deve mostrar etapa "Fotos & Vistoria" com 2 fotos + vídeo 360° e botão **"Liberar Cobertura Roubo e Furto"**.
+- Aprovar e conferir: `vistorias.status='aprovada'`, `veiculos.cobertura_roubo_furto=true`, `associados.status='aguardando_instalacao'`, proposta sai da fila do Cadastro e aparece no Monitoramento com a vistoria base já agendada preservada.
+- Confirmar que cotações com autovistoria SEM agendamento base (sub-FIPE) continuam funcionando como antes (não há regressão no ramo `!veiculoPrecisaRastreador`).
+
+## Detalhes técnicos (referência)
+
+- Tabelas tocadas: `vistorias` (status), `veiculos` (cobertura_roubo_furto), `associados_historico` (insert).
+- Nada muda em: `ativar-associado`, `aprovar-vistoria-monitoramento`, fluxo de instalação, agendamento base, SGA sync.
+- Memórias respeitadas: ativação só via `ativar-associado` (não tocamos), autovistoria 2 fotos + 360° canônica, propostas pendentes saem por aprovação do Cadastro.
