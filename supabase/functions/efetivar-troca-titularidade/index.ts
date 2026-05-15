@@ -589,10 +589,12 @@ serve(async (req) => {
       efetivado_em: now.toISOString(),
     };
 
-    await supabase
-      .from("chat_solicitacoes_ia")
-      .update({ dados: dadosAtualizados })
-      .eq("id", solicitacao_id);
+    if (solicitacaoSource === 'legada') {
+      await supabase
+        .from("chat_solicitacoes_ia")
+        .update({ dados: dadosAtualizados })
+        .eq("id", solicitacao_id);
+    }
 
     console.log(`[efetivar-troca] Solicitação atualizada com dados da efetivação`);
 
