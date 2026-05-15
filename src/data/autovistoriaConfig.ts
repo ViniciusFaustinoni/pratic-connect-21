@@ -1,6 +1,6 @@
 // Configuração das fotos obrigatórias para autovistoria.
-// Conjunto enxuto (mai/2026 — revertido):
-//   1. Frente — placa centralizada (OCR de placa)
+// Conjunto enxuto (mai/2026):
+//   1. Motor (compartimento do motor / bloco da moto)
 //   2. Chassi gravado no veículo
 //   + Vídeo 360° em volta do veículo terminando no PAINEL LIGADO
 //     (motor funcionando, hodômetro visível) — obrigatório.
