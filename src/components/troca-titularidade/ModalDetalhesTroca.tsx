@@ -273,7 +273,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
               <TabsContent value="termo" className="pt-3 space-y-3">
                 <div className="rounded border p-3 space-y-2">
-                  <h4 className="font-semibold flex items-center gap-2"><FileSignature className="h-4 w-4" /> Termo de Cancelamento</h4>
+                  <h4 className="font-semibold flex items-center gap-2"><FileSignature className="h-4 w-4" /> Termo de Cancelamento (titular antigo)</h4>
                   {solicitacao.termo_cancelamento_assinado_em ? (
                     <div className="flex items-center gap-2 text-green-600">
                       <CheckCircle2 className="h-4 w-4" />
@@ -292,6 +292,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     </Button>
                   )}
                 </div>
+                <TermoFiliacaoNovoTitularCard cotacaoId={solicitacao.cotacao?.id} />
               </TabsContent>
 
               <TabsContent value="timeline" className="pt-3 space-y-3">
