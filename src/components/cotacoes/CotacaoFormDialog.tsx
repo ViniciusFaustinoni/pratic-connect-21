@@ -2524,6 +2524,45 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
             <Separator />
 
+            {/* Tipo da Cotação (informativo, vai para observação SGA) */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary" />
+                Tipo da Cotação
+              </h3>
+              <Select
+                value={tipoCotacao}
+                onValueChange={setTipoCotacao}
+                disabled={!!origemTroca}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="adesao">Cotação nova (adesão)</SelectItem>
+                  <SelectItem value="inclusao">Inclusão de veículo</SelectItem>
+                  <SelectItem value="substituicao_placa">Substituição de veículo</SelectItem>
+                  <SelectItem value="troca_titularidade">Troca de titularidade</SelectItem>
+                  <SelectItem value="reativacao">Reativação</SelectItem>
+                  <SelectItem value="migracao">Migração</SelectItem>
+                  <SelectItem value="outro">Outro (descrever)</SelectItem>
+                </SelectContent>
+              </Select>
+              {tipoCotacao === 'outro' && (
+                <Input
+                  placeholder="Descreva o tipo da cotação"
+                  value={tipoCotacaoOutro}
+                  onChange={(e) => setTipoCotacaoOutro(e.target.value)}
+                  maxLength={120}
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Campo informativo. Será enviado no campo <strong>observação</strong> do veículo no SGA junto ao histórico de avisos.
+              </p>
+            </div>
+
+            <Separator />
+
             {/* Tipo de Placa */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
