@@ -23,12 +23,14 @@ export function useInstalacoesAguardandoAprovacao() {
           veiculo_id,
           associado_id,
           instalacao_origem_id,
+          vistoria_origem_id,
           observacoes,
           decisao_instalador,
           profissional:profissional_id(nome),
           veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(nome, telefone, email, cpf, status),
-          instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado))
+          instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)),
+          vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))
         `)
         .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida')
@@ -36,12 +38,30 @@ export function useInstalacoesAguardandoAprovacao() {
 
       if (error) throw error;
 
+      // Resolver cadastro_aprovado via vistoria_origem_id (sem FK declarado → query manual)
+      const vistoriaIds = Array.from(
+        new Set((servicos || [])
+          .filter((s: any) => s.vistoria_origem_id && !s.instalacao?.contrato)
+          .map((s: any) => s.vistoria_origem_id))
+      );
+      const vistoriaContratoMap = new Map<string, boolean>();
+      if (vistoriaIds.length > 0) {
+        const { data: vistorias } = await supabase
+          .from('vistorias')
+          .select('id, contrato_id, contratos:contrato_id(cadastro_aprovado)')
+          .in('id', vistoriaIds as string[]);
+        (vistorias || []).forEach((v: any) => {
+          vistoriaContratoMap.set(v.id, v.contratos?.cadastro_aprovado === true);
+        });
+      }
+
       // Gate do Cadastro: Monitoramento só recebe após aprovação manual do Cadastro.
-      // Filtros: veículo sem cobertura_total + contrato com cadastro_aprovado=true.
       const pendentes = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
         if (!v || v.cobertura_total === true) return false;
-        const cadastroAprovado = s.instalacao?.contrato?.cadastro_aprovado === true;
+        const cadastroAprovado =
+          s.instalacao?.contrato?.cadastro_aprovado === true ||
+          (s.vistoria_origem_id && vistoriaContratoMap.get(s.vistoria_origem_id) === true);
         return cadastroAprovado;
       });
 
@@ -66,13 +86,14 @@ export function useAprovacaoMonitoramentoStats() {
       // Aguardando = servicos concluidos com veículo sem cobertura_total
       const { data: pendentes } = await (supabase as any)
         .from('servicos')
-        .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado))')
+        .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)), vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))')
         .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida');
 
       const aguardando = (pendentes || []).filter((s: any) =>
         s.veiculo?.cobertura_total !== true &&
-        s.instalacao?.contrato?.cadastro_aprovado === true
+        (s.instalacao?.contrato?.cadastro_aprovado === true ||
+         s.vistoria?.contrato?.cadastro_aprovado === true)
       ).length;
 
       // Aprovados hoje = histórico com tipo aprovação do monitoramento hoje
