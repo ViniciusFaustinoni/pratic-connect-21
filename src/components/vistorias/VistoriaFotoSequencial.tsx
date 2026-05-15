@@ -32,8 +32,11 @@ export function VistoriaFotoSequencial({
 
   const fotoAtual = fotos[fotoAtualIndex];
   const totalFotos = fotos.length;
+  const fotosObrigatorias = fotos.filter(f => !f.opcional);
+  const totalObrigatorias = fotosObrigatorias.length;
+  const obrigatoriasEnviadas = fotosObrigatorias.filter(f => fotosEnviadas.some(e => e.tipo === f.id) || uploadedLocally.has(f.id)).length;
   const fotosCompletasCount = fotos.filter(f => fotosEnviadas.some(e => e.tipo === f.id) || uploadedLocally.has(f.id)).length;
-  const todasCompletas = fotosCompletasCount === totalFotos;
+  const todasCompletas = obrigatoriasEnviadas >= totalObrigatorias;
 
   const isFotoEnviada = useCallback((fotoId: string) => {
     return fotosEnviadas.some(f => f.tipo === fotoId) || uploadedLocally.has(fotoId);
