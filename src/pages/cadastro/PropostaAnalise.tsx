@@ -630,22 +630,32 @@ export default function PropostaAnalise() {
         </div>
       )}
 
+      {/* ZONA 1.5: Gate de Situação Financeira (SGA) — bloqueia avanço se inadimplente */}
+      {!isFinalizada && (
+        <SituacaoFinanceiraGate
+          contratoId={proposta.id}
+          onChange={setSgaLiberado}
+        />
+      )}
+
       {/* ZONA 2: Stepper de Aprovação por Etapas */}
-      <PropostaApprovalStepper
-        proposta={proposta}
-        documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
-        onViewDocumento={setDocumentoVisualizar}
-        onAprovarDocumento={handleAprovarDocumento}
-        onReprovarDocumento={handleReprovarDocumento}
-        onAprovar={handleAprovar}
-        onSolicitarDocs={() => setShowSolicitarDocs(true)}
-        onReprovar={() => setShowReprovar(true)}
-        isAprovando={aprovarMutation.isPending}
-        isAutovistoria={isAutovistoria}
-        podeAprovar={podeAprovar}
-        cadastroAvaliaFotos={cadastroAvaliaFotos}
-        planoTemRouboFurto={planoTemRouboFurto}
-      />
+      <div className={!isFinalizada && !sgaLiberado ? 'opacity-50 pointer-events-none' : ''}>
+        <PropostaApprovalStepper
+          proposta={proposta}
+          documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
+          onViewDocumento={setDocumentoVisualizar}
+          onAprovarDocumento={handleAprovarDocumento}
+          onReprovarDocumento={handleReprovarDocumento}
+          onAprovar={handleAprovar}
+          onSolicitarDocs={() => setShowSolicitarDocs(true)}
+          onReprovar={() => setShowReprovar(true)}
+          isAprovando={aprovarMutation.isPending}
+          isAutovistoria={isAutovistoria}
+          podeAprovar={podeAprovar}
+          cadastroAvaliaFotos={cadastroAvaliaFotos}
+          planoTemRouboFurto={planoTemRouboFurto}
+        />
+      </div>
 
       {/* ZONA 3: Tabs de Detalhes (sempre visíveis) */}
       <PropostaDetalhesTabs
