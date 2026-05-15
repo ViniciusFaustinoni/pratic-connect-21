@@ -1,76 +1,45 @@
-## Mudança
+## O que entendi
 
-Trocar a foto **1** da autovistoria de **"Frente — placa centralizada"** para **"Motor"**, mantendo:
+Hoje, na autovistoria pública (`AutovistoriaCotacao.tsx`):
 
-- Foto 2: **Chassi** (inalterada)
-- Vídeo 360° terminando no **painel ligado** (inalterado)
-- Total continua **3 itens** (badge "0/3 itens")
+1. Foto 1 (**motor**) → upload OK → auto-avança para foto 2 (**chassi**) após 300 ms.
+2. Foto 2 (**chassi**) → upload OK → o `setFotoAtualIndex` tenta avançar mas trava na própria foto 2 (`Math.min(prev+1, totalFotos-1)`), então o painel continua mostrando o chassi com selo "Foto enviada".
+3. O bloco do **vídeo 360°** só aparece **abaixo**, depois do botão "Refazer Foto" e das instruções, condicionado a `todasFotosEnviadas`.
 
-## Arquivo único alterado
+Em telas pequenas o associado não vê o vídeo aparecer e acredita que terminou. É exatamente o que você descreveu.
 
-`src/data/autovistoriaConfig.ts`
+## O que vou mudar
 
-### 1. Carro — `fotosCarro[0]`
-Substituir o objeto `frente_centro` por:
-```ts
-{
-  id: 'motor',
-  label: 'Motor',
-  descricao: 'Foto do compartimento do motor com o capô aberto.',
-  ordem: 1,
-  categoria: 'identificacao',
-  instrucoes: [
-    'Abra o capô e estabilize-o',
-    'Enquadre todo o compartimento do motor',
-    'Garanta boa iluminação — use flash se necessário',
-  ],
-  evitar: [
-    'Foto parcial mostrando só uma parte do motor',
-    'Capô fechando ou atrapalhando o enquadramento',
-    'Sombras fortes sobre o bloco',
-  ],
-  dicaExtra: 'O motor é usado para confirmar o estado de conservação do veículo.',
-}
-```
+Transformar o fluxo em uma máquina de etapas linear: `fotos → video → finalizar`. Assim que a foto do **chassi** é aceita (sem mismatch de placa / sem falha de OCR), a tela troca para a etapa do vídeo automaticamente — mesma UX do avanço entre as fotos.
 
-### 2. Moto — `fotosMoto[0]`
-Substituir por:
-```ts
-{
-  id: 'motor',
-  label: 'Motor da moto',
-  descricao: 'Foto lateral do bloco do motor da moto.',
-  ordem: 1,
-  categoria: 'identificacao',
-  instrucoes: [
-    'Posicione-se ao lado da moto',
-    'Enquadre o bloco do motor por inteiro',
-    'Use boa iluminação',
-  ],
-  evitar: [
-    'Foto desfocada ou muito de longe',
-    'Sujeira excessiva escondendo o bloco',
-  ],
-}
-```
+### Mudanças em `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
 
-### 3. Remover OCR de placa da autovistoria
-- `FOTOS_VALIDAR_PLACA = []` (array vazio — preserva o símbolo para imports existentes)
-- Remover `validaPlaca: true` das duas fotos
+1. **Novo estado `etapa`** (`'fotos' | 'video'`), derivado:
+   - Inicia em `'fotos'`.
+   - Vira `'video'` automaticamente quando `todasFotosEnviadas && !videoUrl`.
+   - Vira `'fotos'` se o usuário tocar num número de etapa anterior (refazer uma foto) — preserva a possibilidade de refazer.
 
-## Impacto colateral verificado
+2. **Auto-advance no `handleFileChange`** (linha ~267):
+   - Se a foto recém-enviada era a **última** (`fotoAtualIndex === totalFotos - 1`) e tudo passou (sem `bloqueadoPorPlaca`, sem `odometroOcrFalhou`), em vez de tentar `prev + 1`, setar `etapa = 'video'`.
+   - Caso contrário, mantém o comportamento atual (avança índice da próxima foto).
 
-- `vistoriaSubFipeAdapter.ts` consome via `getFotosByTipoVeiculo` (config completa 31/15) — **não afetado**.
-- `AutovistoriaCotacao.tsx` chama `getFotosAutovistoria` e segue o array — **adapta automaticamente**.
-- `isFotoComValidacaoPlaca` continua existindo, mas passa a retornar `false` para tudo — sem callers quebrados.
-- Validação de placa do veículo passa a depender só do CRLV/cadastro (decisão do usuário).
+3. **Reidratação** (linha ~118):
+   - Se ao reabrir o link todas as fotos já estão enviadas e o vídeo ainda não, abrir já em `etapa = 'video'`.
+   - Se vídeo também já existe, abrir em `'fotos'` mostrando a última (para revisão) — finalizar continua sticky.
 
-## Memória a atualizar
+4. **Render**:
+   - Quando `etapa === 'video'`: esconder o painel de fotos (mantém só a barra de progresso/numerada no topo, que já existe e permite voltar) e exibir o **bloco do vídeo 360°** como conteúdo principal, com `scrollIntoView` suave ao montar.
+   - Mantém o botão "Refazer" do vídeo e o `onReset` que zera `videoUrl`, voltando o estado para `'video'` (não para fotos).
+   - Botão "Finalizar" continua sticky igual hoje, aparecendo quando `todasEnviadas`.
 
-`mem://logic/operations/autovistoria-2-fotos-video-360` e a Core rule:
-> "Autovistoria canônica: 2 fotos (`motor` + `chassi`) + vídeo 360° terminando no PAINEL LIGADO (carro/moto ligado)."
+5. **Toast de transição**: ao virar `'video'` automaticamente, dispara um `toast.success('Fotos concluídas! Agora grave o vídeo 360°.')` para reforçar a mudança.
 
-## Fora de escopo
+### Não muda
 
-- Vídeo 360° já está implementado corretamente (texto "termina no painel ligado", motor funcionando) — nenhuma mudança.
-- Tela só mostra os passos 1 e 2 porque o bloco do vídeo só aparece após as 2 fotos enviadas (comportamento atual mantido).
+- Config canônica (`motor + chassi + video_360`), validações de placa/OCR, upload, finalização (`finalizarMutation`), persistência, hidratação de sessão anterior.
+- Componente `Autovistoria.tsx` do associado interno (escopo é só a autovistoria pública da cotação, que é a tela onde o problema acontece).
+- A etapa numérica clicável no topo continua permitindo voltar manualmente para refazer qualquer foto.
+
+## Validação
+
+Após implementar, vou testar no preview com a credencial de diretor: abrir uma cotação com autovistoria pendente, simular as 2 fotos e confirmar que a tela troca sozinha para o vídeo, sem precisar rolar.
