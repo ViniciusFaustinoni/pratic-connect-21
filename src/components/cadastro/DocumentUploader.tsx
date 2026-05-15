@@ -209,6 +209,13 @@ export const TIPOS_DOCUMENTO_CONFIG: Record<TipoDocumento, TipoDocumentoConfig> 
     icone: FileText,
     descricao: 'PDF do laudo da vistoria',
   },
+  contrato_assinado: {
+    label: 'Termo de Filiação Assinado',
+    obrigatorio: false,
+    categoria: 'pessoal',
+    icone: FileText,
+    descricao: 'PDF do Termo de Filiação assinado via Autentique',
+  },
 };
 
 interface DocumentUploaderProps {
