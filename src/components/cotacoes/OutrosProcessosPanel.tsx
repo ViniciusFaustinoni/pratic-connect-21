@@ -79,8 +79,10 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
   const [drawerItem, setDrawerItem] = useState<OutroProcessoItem | null>(null);
   const [substItemId, setSubstItemId] = useState<string | null>(null);
   const [resendItem, setResendItem] = useState<OutroProcessoItem | null>(null);
+  const [excluirItem, setExcluirItem] = useState<OutroProcessoItem | null>(null);
 
   const enviarTermo = useEnviarTermoCancelamento();
+  const excluirCotacao = useExcluirCotacao();
 
   const { data: vendedores } = useVendedores({
     enabled: permissions.cotacao.viewScope !== 'own',
