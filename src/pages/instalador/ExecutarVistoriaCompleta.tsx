@@ -309,13 +309,15 @@ export default function ExecutarVistoriaCompleta() {
   }, [categorias, fotosMap]);
 
   // Total de fotos obrigatórias e enviadas — restritas ao escopo atual (apenas
-  // instalação ou completo) para não exigir fotos visuais já aprovadas.
+  // instalação ou completo) e excluindo fotos marcadas como `opcional` (ex.: foto
+  // da chave do automóvel) e quaisquer fotos extras (`tipo` começando com `extra_`).
   const fotosObrigatoriasDoTipo = useMemo(
-    () => modoApenasInstalacao
+    () => (modoApenasInstalacao
       ? getFotosApenasInstalacao(tipoVeiculoDetectado).filter(
           f => f.categoria !== 'rastreador' || veiculoPrecisaRastreador,
         )
-      : getFotosFiltradas(tipoVeiculoDetectado, false),
+      : getFotosFiltradas(tipoVeiculoDetectado, false)
+    ).filter(f => !f.opcional),
     [tipoVeiculoDetectado, modoApenasInstalacao, veiculoPrecisaRastreador]
   );
 
