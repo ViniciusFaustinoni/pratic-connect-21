@@ -15,6 +15,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
+import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface VeiculoAtivoInfo {
   associado_id: string;
