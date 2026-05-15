@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
           contrato_id: contratoId,
           cotacao_id: cotacaoId,
           vistoria_origem_id: vistoriaId,
-          concluida_em: veiculoSubFipe ? null : agora.toISOString(),
+          concluida_em: null,
           iniciada_em: agora.toISOString(),
           km_atual: cotacao.km_atual ?? null,
           video_360_url: videoUrl,
