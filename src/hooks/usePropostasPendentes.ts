@@ -552,23 +552,22 @@ export function usePropostasPendentes() {
         const veiculoJaConcluidoOperacionalmente =
           veiculoContrato?.status === 'ativo';
 
-        // Saída de Propostas Pendentes por tipo de vistoria:
-        // - Autovistoria: sai assim que o Cadastro aprova (vai p/ /cadastro/associados)
-        // - Não-autovistoria (agendada / agendada_base / null): permanece com badge
-        //   "Pendente Vistoria Inicial" até a INSTALAÇÃO ser concluída
-        //   ou a VISTORIA NA BASE ser realizada (vai p/ Aprovações do Monitoramento)
+        // Saída de Propostas Pendentes (gate do Cadastro):
+        // Fluxo linear — link público completa tudo (assina → agenda → paga →
+        // vistoria/instalação executada) e a proposta SÓ sai daqui após o
+        // Cadastro aprovar manualmente (`contratos.cadastro_aprovado=true`).
+        // Antes disso, mesmo com instalação concluída ou vistoria_base
+        // realizada, o item permanece na fila do Cadastro. O Monitoramento
+        // só vê após o gate (ver useAprovacaoMonitoramento).
         const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
         const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
         const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
-        const autovistoriaJaAprovadaPeloCadastro = cadastroAprovado && isAutovistoria;
-        // Vistoria na Base realizada → migra para fila do Monitoramento
+        // Vistoria na Base realizada → mantém na fila do Cadastro até aprovação manual
         const vistoriaBaseRealizada = !!(contrato.cotacao_id && mAgendBase.get(contrato.cotacao_id)?.status === 'realizado');
 
         const propostaJaConcluida =
-          instalacaoConcluida ||
           veiculoJaConcluidoOperacionalmente ||
-          autovistoriaJaAprovadaPeloCadastro ||
-          vistoriaBaseRealizada;
+          cadastroAprovado;
         if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;

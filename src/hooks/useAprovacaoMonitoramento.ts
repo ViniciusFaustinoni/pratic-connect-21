@@ -27,7 +27,8 @@ export function useInstalacoesAguardandoAprovacao() {
           decisao_instalador,
           profissional:profissional_id(nome),
           veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
-          associado:associado_id(nome, telefone, email, cpf, status)
+          associado:associado_id(nome, telefone, email, cpf, status),
+          instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado))
         `)
         .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida')
@@ -35,13 +36,13 @@ export function useInstalacoesAguardandoAprovacao() {
 
       if (error) throw error;
 
-      // Filtrar APENAS por veículo (cobertura_total !== true).
-      // NÃO filtrar por associado.status: quando o associado tem múltiplos veículos,
-      // aprovar o 1º promove o associado para 'ativo' e os demais veículos sumiriam
-      // indevidamente da fila. Cada veículo precisa ser aprovado individualmente.
+      // Gate do Cadastro: Monitoramento só recebe após aprovação manual do Cadastro.
+      // Filtros: veículo sem cobertura_total + contrato com cadastro_aprovado=true.
       const pendentes = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
-        return v && v.cobertura_total !== true;
+        if (!v || v.cobertura_total === true) return false;
+        const cadastroAprovado = s.instalacao?.contrato?.cadastro_aprovado === true;
+        return cadastroAprovado;
       });
 
       return pendentes;
@@ -65,12 +66,13 @@ export function useAprovacaoMonitoramentoStats() {
       // Aguardando = servicos concluidos com veículo sem cobertura_total
       const { data: pendentes } = await (supabase as any)
         .from('servicos')
-        .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total)')
+        .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado))')
         .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida');
 
-      const aguardando = (pendentes || []).filter((s: any) => 
-        s.veiculo?.cobertura_total !== true
+      const aguardando = (pendentes || []).filter((s: any) =>
+        s.veiculo?.cobertura_total !== true &&
+        s.instalacao?.contrato?.cadastro_aprovado === true
       ).length;
 
       // Aprovados hoje = histórico com tipo aprovação do monitoramento hoje
