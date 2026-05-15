@@ -34630,6 +34630,15 @@ export type Database = {
         Returns: boolean
       }
       fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
+      fn_listar_contratos_pos_monitoramento_travados: {
+        Args: never
+        Returns: {
+          associado_id: string
+          contrato_id: string
+          servico_id: string
+          veiculo_id: string
+        }[]
+      }
       fn_listar_supervisores_vendedor: {
         Args: { p_data_referencia?: string; p_vendedor_id: string }
         Returns: {
