@@ -248,6 +248,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [showPlacaOutroAssocModal, setShowPlacaOutroAssocModal] = useState(false);
   const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
 
+  // Bypass: placas para as quais o usuário já clicou "Ignorar e Prosseguir"
+  // (registrado em cotacao_avisos_sga). Cada Set guarda placas normalizadas.
+  const [bypassPlacaSGA, setBypassPlacaSGA] = useState<Set<string>>(new Set());
+  const [bypassPlacaOutroAssoc, setBypassPlacaOutroAssoc] = useState<Set<string>>(new Set());
+  const [bypassPlacaDuplicada, setBypassPlacaDuplicada] = useState<Set<string>>(new Set());
+  const placaNorm = (p: string) => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
   // Estados para seleção FIPE manual
   type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
   const [marcas, setMarcas] = useState<FipeMarcaComTipo[]>([]);
