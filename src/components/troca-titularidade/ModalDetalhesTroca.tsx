@@ -58,6 +58,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const [sgaLiberado, setSgaLiberado] = useState(false);
+  const [activeTab, setActiveTab] = useState('dados');
 
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
