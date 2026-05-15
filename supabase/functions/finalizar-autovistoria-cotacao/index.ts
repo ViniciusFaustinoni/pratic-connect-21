@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
           .from('servicos')
           .update({
             status: servicoStatusInicial,
-            concluida_em: veiculoSubFipe ? null : agora.toISOString(),
+            concluida_em: null,
             vistoria_origem_id: vistoriaId,
           })
           .eq('id', servicoId);
