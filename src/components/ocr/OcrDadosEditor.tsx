@@ -64,9 +64,28 @@ export function OcrDadosEditor({
   const schema = useMemo(() => getSchemaForTipo(tipoDocumento), [tipoDocumento]);
   const tipoLabel = tipoDocumento ? (OCR_TIPO_LABEL[tipoDocumento as OcrSchemaTipo] || 'Documento') : 'Documento';
 
-  // OCR considerado falho → abre direto em edição manual
-  const ocrFalhou = legivel === false || sugestao === 'reprovar';
-  const ocrPedeRevisao = sugestao === 'revisar';
+  // Considera o OCR bem-sucedido quando todos os campos importantes do schema
+  // foram extraídos — independentemente de `legivel`/`sugestao`, que muitas
+  // vezes vêm como falha por causa de campos secundários ilegíveis.
+  const importantFields = useMemo(() => schema.filter((f) => f.important), [schema]);
+  const camposImportantesPreenchidos = useMemo(() => {
+    if (!dados) return false;
+    if (importantFields.length === 0) {
+      // Sem campos marcados como importantes: considera OK se houver qualquer dado
+      return Object.values(dados).some((v) => v != null && String(v).trim() !== '');
+    }
+    return importantFields.every((f) => {
+      const raw = (dados as Record<string, unknown>)[f.key];
+      return raw != null && String(raw).trim() !== '';
+    });
+  }, [dados, importantFields]);
+
+  // Só tratamos como falha quando os campos essenciais NÃO vieram preenchidos.
+  const ocrFalhou = (legivel === false || sugestao === 'reprovar') && !camposImportantesPreenchidos;
+  // Se o OCR sinalizou problema mas os essenciais vieram, mostramos "Revise os dados".
+  const ocrPedeRevisao =
+    sugestao === 'revisar' ||
+    ((legivel === false || sugestao === 'reprovar') && camposImportantesPreenchidos);
 
   const initialValues = useMemo(() => {
     const out: Record<string, string> = {};
