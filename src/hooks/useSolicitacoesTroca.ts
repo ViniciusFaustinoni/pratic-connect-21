@@ -92,7 +92,7 @@ export function useSolicitacoesTroca(filtroStatus?: StatusTroca[], criadoPorProf
           *,
           associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone),
           veiculo:veiculos!veiculo_id(id, marca, modelo, ano_modelo, ano_fabricacao, placa, cor, combustivel, codigo_fipe, valor_fipe),
-          cotacao:cotacoes!cotacao_id(id, numero, token_publico, status)
+          cotacao:cotacoes!cotacao_id(id, numero, token_publico, status, tipo_vistoria, agendamentos_base(id, data_agendada, horario, status))
         `)
         .order('created_at', { ascending: false });
       if (filtroStatus && filtroStatus.length) q = q.in('status', filtroStatus);
