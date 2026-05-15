@@ -1,65 +1,45 @@
-## Objetivo
+## Problema
 
-No fluxo da **Vistoria Completa do técnico** (app do vistoriador):
+Marcus Vinicius (LTB4J74, FIPE R$ 69.952 → exige rastreador) apareceu na fila **Aprovações do Monitoramento › Aprovação de Associados** logo após o Cadastro aprovar a autovistoria. O fluxo correto para FIPE ≥ R$ 30k com autovistoria antecipada é:
 
-1. A **foto 2 — "Foto da Chave"** deixa de ser obrigatória (continua disponível, mas não bloqueia a finalização).
-2. Após a **31ª foto** do roteiro, o técnico pode adicionar **fotos extras opcionais** ("Outras imagens"), em quantidade livre.
+1. Autovistoria → Cadastro libera R&F (já funciona ✓)
+2. Técnico faz instalação + vistoria_entrada presencial
+3. **Só então** entra na fila de Aprovação do Monitoramento
 
-Sem mudar nenhum outro fluxo (autovistoria pública, vistoria do prestador, sub-FIPE, moto, etc.).
+Hoje ele entra no passo 1, porque a "REGRA MESTRA" em `aprovar-proposta` (linhas 158-169) promove **qualquer** `servico vistoria_entrada` `em_analise` para `concluida` ao aprovar Cadastro — sem distinguir sub-FIPE de ≥30k.
 
-## Onde mexer
+Confirmado no banco: existem dois serviços `vistoria_entrada` para a placa:
+- `49b7548b…` — modalidade=`autovistoria`, status=`concluida` (errado, é o que aparece na fila)
+- `21611742…` — modalidade=`presencial`, status=`em_andamento` (a vistoria real do técnico, em curso)
 
-- `src/data/vistoriaConfigCompleta.ts` — adicionar campo `opcional?: boolean` em `VistoriaFotoConfig`; marcar `chave` como `opcional: true`; ajustar `getTotalFotosObrigatorias` e adicionar helpers `getFotosObrigatorias(tipo)` que excluem opcionais.
-- `src/pages/instalador/ExecutarVistoriaCompleta.tsx` — calcular `totalFotosObrigatorias`/`totalFotosEnviadas` apenas sobre as fotos não opcionais; manter a chave navegável no carrossel mas não somar à barra de progresso "obrigatórias".
-- `src/components/vistorias/VistoriaFotoSequencial.tsx` — exibir badge **"Opcional"** no slot da chave; permitir avançar sem preenchê-la (não trava o auto-avance, que já depende apenas de `isPending`); progresso do header passa a usar contagem de obrigatórias.
-- **Bloco novo "Outras imagens (opcional)"** — após a 31ª foto (ou seja, ao final da lista do roteiro), renderizar uma seção dentro do `ExecutarVistoriaCompleta` que:
-  - lista as fotos extras já enviadas (lidas de `vistoria_fotos` com `tipo` que começa com `extra_`),
-  - botão "Adicionar imagem" que captura uma nova foto e faz upload com `tipo = extra_<n>` (n = próximo índice livre),
-  - cada extra pode ser refeita ou excluída (delete na tabela; o storage segue regra existente).
-  - `visivel_cliente: true` (segue o padrão do roteiro).
+## Correção
 
-## Detalhes técnicos
+### 1. `supabase/functions/aprovar-proposta/index.ts` (linhas 158-169)
 
-### Schema atual
+Restringir a promoção `em_analise → concluida` do servico de autovistoria **apenas a casos sub-FIPE** (veículo não precisa de rastreador). Para ≥30k:
 
-`vistoria_fotos` tem unique `(vistoria_id, tipo)`. Para extras, cada upload usa `tipo` único (`extra_1`, `extra_2`, …). O reuse `useUploadFotoVistoriaCompleta` já aceita `tipo` arbitrário — não precisa migration.
+- Marcar o servico de autovistoria como `aprovada` (terminal, fora da fila) com `analisado_em`/`analisado_por` preenchidos e observação registrando "autovistoria aprovada — R&F liberado; aguardando vistoria/instalação presencial do técnico".
+- O servico presencial criado por `criar-instalacao-pos-pagamento` (instalação + vistoria do técnico) continua sendo o gatilho da fila, ao concluir.
 
-### Validação `podeAprovar`
+A detecção sub-FIPE × ≥30k já existe mais adiante no mesmo arquivo (`veiculoPrecisaRastreador`, baseada em `valor_fipe`, `tipoVeiculo` e `configuracoes`). Vou mover a decisão para depois desse cálculo, ou replicar uma checagem leve antes do bloco de promoção. Preferência: **mover** o bloco de promoção para depois da resolução de `veiculoPrecisaRastreador` para não duplicar lógica.
 
-Hoje `todasFotosEnviadas = totalFotosEnviadas >= totalFotosObrigatorias`. Vamos:
-```ts
-const fotosObrigatoriasDoTipo = useMemo(
-  () => (modoApenasInstalacao ? ... : getFotosFiltradas(tipo, false))
-        .filter(f => !f.opcional),
-  [...]
-);
-```
-Assim, "chave" não conta para o bloqueio, e os "extras" também não (eles não estão no array de config).
+Comportamento resultante por cenário:
 
-### UI da chave
+| Cenário | Servico autovistoria após aprovar-proposta | Aparece na fila do Monitoramento? |
+|---|---|---|
+| Sub-FIPE (sem rastreador) | `concluida` | Sim — único caminho de aprovação |
+| ≥30k com autovistoria antecipada | `aprovada` | Não — entra só quando técnico conclui presencial |
+| ≥30k sem autovistoria (fluxo padrão) | n/a | Entra ao concluir vistoria/instalação do técnico |
 
-No `VistoriaFotoSequencial`, quando `fotoAtual.opcional`, renderizar uma tag azul "Opcional — pode pular" e o contador do header (`{fotosCompletasCount}/{totalFotos} enviadas`) passa a usar `totalFotos = obrigatórias` (mantém a chave acessível pelas thumbnails, mas estilizada com borda mais discreta).
+### 2. Migração retroativa — caso Marcus (LTB4J74)
 
-### Bloco "Outras imagens"
-
-Componente novo `VistoriaFotosExtras` em `src/components/vistorias/`:
-- props: `vistoriaId`, `fotosExtras: FotoEnviada[]`, `uploadingFoto`, `onUpload(tipo, file)`, `onRemove(fotoId)`.
-- grid simples de cards (thumb + lixeira) + card "+" para adicionar.
-- aparece **apenas** quando `fotoAtualIndex === totalFotos - 1` ou `todasCompletas`, logo abaixo do bloco do carrossel.
-
-### Sincronização com laudo
-
-`useGerarLaudoVistoria` itera sobre `FOTOS_VISTORIA_COMPLETA`. Não vai listar os extras, e está ok — o laudo continua focando no roteiro canônico. (Se quiser mostrá-los no laudo num próximo passo, é incremento separado.)
+- Atualizar `servicos` `49b7548b-d391-4b2c-9f3a-f6c84d94eb0a` de `concluida` para `aprovada`, preenchendo `analisado_em=now()`, `observacoes_analise='[CORREÇÃO RETROATIVA] Autovistoria aprovada pelo Cadastro — R&F liberado; aguardando vistoria/instalação presencial do técnico para entrar na fila do Monitoramento.'`.
+- Sem mexer em `cobertura_roubo_furto` do veículo (já está `true`, correto).
+- Sem tocar no servico `21611742…` (presencial em_andamento — segue normalmente).
+- Registrar entrada em `associados_historico` para auditoria.
 
 ## Fora de escopo
 
-- Autovistoria do associado (link público) — segue 2 fotos + vídeo 360° conforme regra canônica.
-- Vistoria do prestador, sub-FIPE, moto — não mudam.
-- Painel de aprovação (Cadastro/Monitoramento) já lê `vistoria_fotos` direto, então as extras aparecerão automaticamente na galeria de fotos da vistoria.
-
-## Pergunta antes de implementar
-
-Confirma duas coisas:
-
-1. **"Chave" é mesmo a única foto obrigatória que vira opcional?** (a foto 2 do roteiro automóvel é "Foto da Chave"; em moto a foto 2 é "Traseira" — não faz sentido tornar opcional. Vou aplicar **só ao automóvel**.)
-2. As **fotos extras devem aparecer também na vistoria pública (autovistoria)**, ou só no app do técnico (vistoria completa)? Pelo enunciado entendi **só no app do vistoriador**.
+- Sub-FIPE: comportamento mantido (autovistoria → cadastro → monitoramento aprova direto, sem técnico).
+- Troca de titularidade: já tem fluxo próprio (`vincular-cotacao-troca`), não afetado.
+- UI: nenhuma alteração — o filtro do hook `useInstalacoesAguardandoAprovacao` continua igual; só muda quando o item entra.
