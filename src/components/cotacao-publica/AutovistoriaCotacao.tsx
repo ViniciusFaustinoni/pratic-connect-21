@@ -388,17 +388,17 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
           </div>
         )}
 
-        {/* Indicadores de fotos (miniaturas) */}
+        {/* Indicadores de fotos (miniaturas) + vídeo */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           {fotos.map((foto, index) => {
             const enviada = !!fotosEnviadas[foto.id];
-            const atual = index === fotoAtualIndex;
-            
+            const atual = etapa === 'fotos' && index === fotoAtualIndex;
+
             return (
               <button
                 type="button"
                 key={foto.id}
-                onClick={() => setFotoAtualIndex(index)}
+                onClick={() => { setEtapa('fotos'); setFotoAtualIndex(index); }}
                 title={`Ir para: ${foto.label}`}
                 className={cn(
                   "shrink-0 w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center cursor-pointer hover:opacity-80",
@@ -415,9 +415,30 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
               </button>
             );
           })}
+          {/* Miniatura do vídeo 360° */}
+          <button
+            type="button"
+            onClick={() => { if (todasFotosEnviadas) setEtapa('video'); }}
+            disabled={!todasFotosEnviadas}
+            title={todasFotosEnviadas ? 'Vídeo 360°' : 'Conclua as fotos primeiro'}
+            className={cn(
+              "shrink-0 w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center",
+              etapa === 'video' && "border-primary ring-2 ring-primary/20",
+              etapa !== 'video' && videoUrl && "border-success bg-success/10",
+              etapa !== 'video' && !videoUrl && "border-border/50 bg-muted/30",
+              !todasFotosEnviadas && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            {videoUrl ? (
+              <CheckCircle2 className="h-4 w-4 text-success" />
+            ) : (
+              <Video className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
         </div>
-        
+
         {/* Foto atual */}
+        {etapa === 'fotos' && (
         <AnimatePresence mode="wait">
           <motion.div
             key={fotoAtual.id}
