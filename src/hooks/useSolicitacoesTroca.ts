@@ -137,7 +137,7 @@ export function useSolicitacaoTroca(id: string | undefined) {
           *,
           associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone, status, codigo_hinova),
           veiculo:veiculos!veiculo_id(id, marca, modelo, ano_modelo, ano_fabricacao, placa, cor, combustivel, codigo_fipe, valor_fipe),
-          cotacao:cotacoes!cotacao_id(id, numero, token_publico, status, valor_total_mensal, tipo_vistoria, vistoria_concluida_em)
+          cotacao:cotacoes!cotacao_id(id, numero, token_publico, status, valor_total_mensal, tipo_vistoria, vistoria_concluida_em, agendamentos_base(id, data_agendada, horario, status))
         `)
         .eq('id', id)
         .maybeSingle();
