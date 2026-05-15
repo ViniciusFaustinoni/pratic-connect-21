@@ -1,113 +1,66 @@
-## Revisão profunda dos fluxos de cotação
+# Re-auditoria E2E dos Fluxos de Cotação
 
-Auditei o código atual contra a regra mestra das 8 etapas e contra cada fluxo derivado (Comum, Troca, Sub-FIPE, Substituição). Abaixo, gaps identificados e correções propostas — agrupados por fluxo, com ordem de execução e arquivos impactados.
+Vou rodar uma auditoria **real** (não só leitura de código) dos 4 fluxos contra o manual que você reapresentou, usando a conta `admin@teste.com` e cruzando 3 camadas: **código + banco + execução no preview**.
 
----
+## Metodologia (aplicada a cada fluxo)
 
-### Princípio invariante (vale para TODOS os fluxos)
+Para cada fluxo executo o mesmo ciclo:
 
-```
-link público → CADASTRO (manual) → gera serviço de campo → MONITORAMENTO (atribui) → vistoria (ou não) → MONITORAMENTO aprova → ativar-associado → SGA
-```
+1. **Trace de código** — mapeio o caminho real desde o ponto de entrada até `ativar-associado` e listo cada gate (trigger, edge function, hook).
+2. **Sonda de banco** — consulto `cotacoes`, `contratos`, `vistorias`, `servicos`, `instalacoes`, `agendamentos_base` e `solicitacoes_*` em registros recentes para confirmar que os estados intermediários batem com a regra.
+3. **Execução no preview** — entro no sistema como diretor, crio uma cotação de teste, percorro o link público e observo a fila correta em cada etapa (Cadastro → Monitoramento → Ativos).
+4. **Veredito** — para cada item da regra: ✅ conforme, ⚠️ conforme com ressalva, ou ❌ divergente. Divergências viram cards de correção propostos (não aplicados nesta rodada).
 
-- Cadastro **sempre manual**. Trigger `trg_protege_cadastro_aprovado` impede regressão, mas hoje há atalhos que materializam serviço/instalação **antes** do Cadastro aprovar — o que viola a etapa 3.
-- `ativar-associado` é o único caminho para `status='ativo'`.
+## Escopo de cada fluxo
 
----
+### Fluxo 1 — Cotação Comum (8 etapas)
+Verifico em ordem:
+- (1) Link público respeita FIPE: redireciona para autovistoria 2-fotos+vídeo OU agendamento de instalação conforme valor + tipo de veículo.
+- (2) Cadastro recebe com snapshot SGA (existência + situação financeira) — testo um CPF que existe no SGA com débito.
+- (3) Aprovar Cadastro gera serviço de campo; se pediu doc, link público volta para etapa de docs.
+- (4) Monitoramento vê o serviço.
+- (5) Atribuição funciona (técnico interno OU prestador).
+- (6) Vistoria executa (mock conclusão).
+- (7) Monitoramento aprova final → `ativar-associado`.
+- (8) Some das filas, aparece em Associados+Veículos, situação SGA = PENDENTE (3) — confirmo via API SGA log.
 
-### FLUXO 1 — Cotação comum
+### Fluxo 2 — Troca de Titularidade
+Foco no sintoma que você relatou: **"sistema erra e a solicitação é aprovada pelo Cadastro direto, sem chegar no painel"**.
+- Reproduzo: assino termo do antigo associado → acesso link do novo → faço autovistoria.
+- Confirmo em banco: `solicitacao.status` permanece `aguardando_cadastro` (não pula para `liberada_para_assinatura` ou `aguardando_monitoramento` sem clique humano).
+- Verifico que `aprovar-troca-cadastro` exige clique manual em `/cadastro/aprovacoes-troca`.
+- Testo decisão do Monitoramento: aprovar direto vs. pedir vistoria (fotos / fotos+instalação) → link público vira agendamento → vistoria volta para fila do Monitoramento.
+- Botão "Solicitar manutenção de rastreador" presente na tela de aprovação.
+- Cron `cron-expirar-trocas-titularidade` cancela à meia-noite e invalida link antigo.
 
-**Gaps encontrados**
-1. `finalizar-autovistoria-cotacao` cria `servicos.vistoria_entrada` com status `concluida` direto para FIPE ≥ R$ 30k, **antes** do Cadastro aprovar. Para sub-FIPE já nasce `em_analise` (correto). Comum precisa do mesmo tratamento.
-2. `criar-instalacao-pos-pagamento` é chamado pelo `aprovar-proposta` no momento certo, mas há paths de fallback que disparam antes do flag `cadastro_aprovado=true`.
-3. Migration `20260515140337` (auto-promove cadastro pós-operacional) **mascara o defeito**: deve ser convertida em alerta/auditoria, não em promoção automática (a promoção só acontece quando o Cadastro clica aprovar).
+### Fluxo 3 — Sub-FIPE (abaixo do mínimo p/ rastreador)
+- Cotação com FIPE abaixo do mínimo: link público mostra plano sem rastreador → docs → assinatura → pagamento → **autovistoria 31 ou 15 fotos** (mesma estrutura do técnico).
+- Vai pro Cadastro → ao aprovar libera R/F (`cobertura_roubo_furto=true`) e promove `vistoria_entrada` para `concluida`.
+- Vai pro Monitoramento → tela mostra botão "Solicitar vistoria de fotos" + opção "Aprovar direto sem vistoria".
+- Se pedir vistoria: link público atualiza para agendamento, gera `instalacoes(dispensa_rastreador=true)` → técnico só tira fotos (sem instalação) → volta pra fila do Monitoramento → aprovação final → `ativar-associado` → SGA.
 
-**Correções**
-- `finalizar-autovistoria-cotacao`: `servicoStatusInicial = 'em_analise'` para todos os casos (não só sub-FIPE). O serviço só vira `concluida` quando o Cadastro aprovar.
-- `aprovar-proposta`: ao aprovar Cadastro, fazer transição atômica `em_analise → concluida` no serviço de vistoria_entrada existente, antes de promover para Monitoramento.
-- Substituir trigger `fn_auto_promover_cadastro_pos_operacao` por uma versão que **apenas registra alerta** em `logs_auditoria` (`gravidade='warning'`) sem alterar `cadastro_aprovado`.
-- Backfill: contratos hoje aprovados pelo trigger ficam como estão (auditoria já existe).
+### Fluxo 4 — Substituição
+- Modal "Outras entradas" → Substituição pede placa primeiro.
+- Consulta SGA (`useBuscaPlaca` + `criar-solicitacao-substituicao` snapshot).
+- Bloqueia se houver débito vinculado àquele veículo (não só ao associado).
+- Termo de cancelamento (Autentique facial) → após assinado, botão "Criar Nova Cotação" abre cotador padrão pré-preenchido.
+- Cotação segue idêntica à comum mas com `tipo_entrada='substituicao_placa'` — passa pelas 8 etapas do Fluxo 1.
+- `efetivar-substituicao` ao final inativa veículo antigo no SGA (situação 2).
 
----
+## Entregável desta rodada
 
-### FLUXO 2 — Troca de Titularidade
+Um único relatório consolidado por fluxo com:
+- Tabela de itens da regra × veredito × evidência (linha de código / id de registro / screenshot do preview).
+- Lista priorizada de divergências encontradas (se houver) com proposta de correção pontual — você decide quais aplico em rodadas seguintes.
 
-**Gaps encontrados**
-1. Memória `troca-cadastro-sempre-manual` está correta e o código de `vincular-cotacao-troca` mantém `aguardando_cadastro` — porém o **comentário-cabeçalho** de `aprovar-troca-cadastro/index.ts` ainda diz "FLUXO PADRÃO: o cadastro é AUTO-APROVADO em vincular-cotacao-troca". Documentação desencontrada — precisa ser corrigida (e qualquer caminho residual eliminado).
-2. Trigger `trg_promove_para_aguardando_monitoramento` (memória `troca-monitoramento-pos-vistoria`) deve garantir que somente após autovistoria do novo titular **+ aprovação manual do Cadastro** o status vire `aguardando_monitoramento`. Validar.
-3. **Janela de meia-noite** existe via `cron-expirar-trocas-titularidade`, mas confirmar que: (a) cancela o link público antigo, (b) cancela a solicitação, (c) força nova adesão (cotação comum) — não troca.
-4. Botão "Solicitar manutenção de rastreador" no painel de Monitoramento da troca: já existe a ação `agendar_manutencao` em `aprovar-troca-monitoramento`. Validar que a UI de aprovação expõe o botão.
+## Detalhes técnicos
 
-**Correções**
-- Remover/atualizar comentário enganoso em `aprovar-troca-cadastro/index.ts`.
-- Auditar todos os pontos que escrevem `status='aguardando_monitoramento'` em `solicitacoes_troca_titularidade` para garantir que só ocorre via `aprovar-troca-cadastro` (clique manual) ou trigger pós-vistoria após aprovação manual prévia.
-- Reforçar `cron-expirar-trocas-titularidade`: cancelar Autentique, marcar `link_status='cancelado'`, e disparar evento que oriente o atendente a abrir nova cotação comum.
-- UI: garantir botão "Solicitar manutenção de rastreador" no `AprovacaoTrocaMonitoramentoCard`.
+- **Sem mudanças de código nesta rodada** — é auditoria pura. Qualquer fix vira tarefa separada após sua aprovação.
+- **Dados de teste** — uso CPFs/placas fictícios; quando precisar de associado real do SGA, te peço autorização antes.
+- **Ordem de execução**: Fluxo 1 → 2 → 3 → 4 (mesma ordem do manual).
+- **Tempo estimado**: ~4 rodadas (uma por fluxo) já que cada uma exige interação no preview + consultas de banco.
 
----
+## Premissas / pontos de confirmação
 
-### FLUXO 3 — FIPE abaixo do mínimo (sub-FIPE)
-
-**Gaps encontrados**
-1. Hoje (memória `vistoria-sem-rastreador-flow`) está correto na DB: `em_analise → Cadastro libera R/F → concluida → Monitoramento decide`. ✔
-2. **Falta**: quando o Monitoramento decide "precisa vistoria" (somente fotos), o link público **não está se atualizando para a tela de agendamento**. Hoje o link encerra após autovistoria.
-3. Edge `aprovar-troca-monitoramento` tem `tipo_vistoria_troca` para troca; precisa equivalente para o fluxo sub-FIPE comum: ação `solicitar_vistoria_tecnico_fotos` que reabre o link público em modo agendamento.
-
-**Correções**
-- Criar/ajustar edge `aprovar-monitoramento-cotacao` (ou estender a existente) com ação `solicitar_vistoria_fotos`:
-  - reabrir `cotacoes.link_etapa_atual='agendamento_vistoria'`
-  - criar `servicos.tipo='vistoria_entrada'` modalidade `tecnica_somente_fotos` em `aguardando_agendamento`
-  - notificar associado por WhatsApp (template existente de reagendamento)
-- UI pública: adicionar branch no `CotacaoContratacao.tsx` para `link_etapa_atual='agendamento_vistoria'` reaproveitando o componente de agendamento de base/rota.
-- Vistoria técnica de fotos: usar `vistorias.tipo='entrada'` modalidade `tecnica_fotos` (sem instalação). Após conclusão, retorna `aguardando_aprovacao_monitoramento` (já existente).
-
----
-
-### FLUXO 4 — Substituição
-
-**Gaps encontrados (graves — fluxo divergente da regra)**
-1. `criar-solicitacao-substituicao` consulta SGA e grava `tem_debito`, mas **não bloqueia** quando há débito. Usuário exige bloqueio total.
-2. Hoje a Substituição segue um wizard próprio (`StepBeneficios`, `StepRastreador`, `StepVistoria`...) — usuário exige fluxo **idêntico ao de cotação comum**, apenas marcado como `tipo_entrada='substituicao_placa'`, com nome/email/telefone pré-preenchidos.
-3. Falta integração com link público padrão para a substituição (escolha de plano, docs, assinatura, pagamento, vistoria, agendamento) — hoje o wizard interno faz parte disso fora do link.
-
-**Correções**
-- `criar-solicitacao-substituicao`: bloquear (HTTP 409 `inadimplencia_substituicao`) quando `sga.tem_debito === true` para o veículo informado. Mensagem clara para a UI.
-- Refatorar entrada de Substituição para abrir o `CotacaoFormDialog` padrão (mesmo padrão do `troca-titularidade-cotacao-on-demand`), passando contexto `origemSubstituicao` com:
-  - `tipo_entrada='substituicao_placa'`
-  - placa antiga + dados do associado SGA (nome/email/telefone) pré-preenchidos
-- Após salvar, vincular cotação à `solicitacoes_substituicao_placa` via nova edge `vincular-cotacao-substituicao` (espelho de `vincular-cotacao-troca`), sem alterar status do Cadastro (continua manual).
-- Aposentar wizard interno (`StepBeneficios/Rastreador/Vistoria` da substituição) ou marcar como legado para casos antigos. Novo fluxo passa pelas mesmas 8 etapas.
-- `efetivar-substituicao` continua sendo o fechador final (após Monitoramento aprovar via `ativar-associado`), incluindo a inativação do veículo antigo no SGA (memória `sga-inativar-veiculo-substituido`).
-
----
-
-### Detalhes técnicos consolidados
-
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/finalizar-autovistoria-cotacao/index.ts` | `servicoStatusInicial='em_analise'` para todos os casos |
-| `supabase/functions/aprovar-proposta/index.ts` | Promover serviço `em_analise→concluida` ao aprovar Cadastro |
-| Migration nova | Substituir `fn_auto_promover_cadastro_pos_operacao` por versão **alerta-only** (sem UPDATE) |
-| `supabase/functions/aprovar-troca-cadastro/index.ts` | Corrigir comentário-cabeçalho |
-| `supabase/functions/cron-expirar-trocas-titularidade/index.ts` | Garantir cancelamento de link Autentique e marcação `link_status='cancelado'` |
-| Nova edge `aprovar-monitoramento-cotacao` (ou extensão) | Ação `solicitar_vistoria_fotos` que reabre link público |
-| `src/pages/public/CotacaoContratacao.tsx` | Branch para `link_etapa_atual='agendamento_vistoria'` |
-| `supabase/functions/criar-solicitacao-substituicao/index.ts` | Bloqueio HTTP 409 quando `tem_debito=true` |
-| `src/components/vendas/OutrasEntradasMenu.tsx` + componentes substituição | Substituir wizard próprio por `CotacaoFormDialog` padrão com contexto `origemSubstituicao` |
-| Nova edge `vincular-cotacao-substituicao` | Espelho de `vincular-cotacao-troca` |
-
----
-
-### Validação pós-implementação
-
-Para cada fluxo, rodar end-to-end com a conta director (`admin@teste.com`):
-1. Comum (FIPE ≥ 30k, com rastreador) — verificar Cadastro recebe ANTES de qualquer serviço, monitoramento recebe DEPOIS da aprovação manual.
-2. Sub-FIPE — pedir vistoria pelo Monitoramento e validar que link público volta para agendamento.
-3. Troca — antes de meia-noite (autovistoria → cadastro manual → monitoramento) e depois (link cancelado, exige nova cotação).
-4. Substituição — placa com débito (deve bloquear) e sem débito (abre cotação padrão pré-preenchida).
-
----
-
-### Pergunta de escopo antes de implementar
-
-Posso prosseguir em uma única leva, ou prefere que eu implemente fluxo a fluxo (entregando e validando antes de avançar)? Recomendo fluxo a fluxo na ordem: **(1) Comum → (2) Sub-FIPE → (3) Troca → (4) Substituição**, porque (1) e (2) compartilham a correção da auto-promoção de Cadastro e do reabrir-link.
+- Posso usar a conta `admin@teste.com` para criar cotações de teste reais (que ficarão no banco e podem precisar ser limpas depois).
+- Se a auditoria detectar que o problema relatado em Troca já está corrigido em código mas reapareceu por dado legado, sinalizo para você decidir se rodamos uma migração de reconciliação.
