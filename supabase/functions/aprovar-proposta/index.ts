@@ -155,18 +155,15 @@ serve(async (req) => {
       .select('id, status')
       .maybeSingle();
 
-    // REGRA MESTRA: ao aprovar Cadastro, promover qualquer servico vistoria_entrada
-    // que tenha nascido `em_analise` (autovistoria) para `concluida`, liberando-o
-    // para a fila do Monitoramento. Vale para sub-FIPE e ≥30k.
-    if (contratoAtualizado && contrato.cotacao_id) {
-      const { error: errPromoteVist } = await supabase
-        .from('servicos')
-        .update({ status: 'concluida', concluida_em: agora })
-        .eq('cotacao_id', contrato.cotacao_id)
-        .eq('tipo', 'vistoria_entrada')
-        .eq('status', 'em_analise');
-      if (errPromoteVist) console.warn('[aprovar-proposta] promote vistoria_entrada falhou:', errPromoteVist);
-    }
+    // NOTA: a promoção do servico vistoria_entrada (autovistoria) para `concluida`
+    // NÃO é mais feita aqui de forma incondicional. O comportamento agora depende
+    // de o veículo precisar ou não de rastreador:
+    //   - Sub-FIPE (sem rastreador): bloco SUB-FIPE adiante promove para `concluida`
+    //     (único caminho de aprovação, vai direto para a fila do Monitoramento).
+    //   - ≥30k (com rastreador): bloco "AUTOVISTORIA ANTECIPADA" adiante marca o
+    //     servico de autovistoria como `aprovada` (terminal, fora da fila). A fila
+    //     do Monitoramento só verá o caso quando o servico vistoria_entrada/instalacao
+    //     PRESENCIAL do técnico for concluído.
 
     if (contratoError) throw new Error(`Falha ao atualizar contrato: ${contratoError.message}`);
 
