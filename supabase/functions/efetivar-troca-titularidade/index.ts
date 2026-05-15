@@ -293,7 +293,19 @@ serve(async (req) => {
         console.log(`[efetivar-troca] Associado reativado`);
       }
     } else {
-      // Create new associado
+      // Create new associado — copia endereço do novo_titular_dados (se enviado pelo
+      // link público). Fallback adiado: depois que carregarmos contratoAnterior tentamos
+      // herdar UF/CEP/cidade/bairro/logradouro para evitar erro "ESTADO inválido" no SGA.
+      const ndt: Record<string, any> = (dadosNovoTitular as any) || {};
+      const enderecoBase: Record<string, any> = {
+        cep: (ndt.cep || '').toString().replace(/\D/g, '') || null,
+        logradouro: ndt.logradouro || ndt.endereco || null,
+        numero: ndt.numero || null,
+        complemento: ndt.complemento || null,
+        bairro: ndt.bairro || null,
+        cidade: ndt.cidade || null,
+        uf: ndt.uf || ndt.estado || null,
+      };
       const { data: novoAssociado, error: criarError } = await supabase
         .from("associados")
         .insert({
@@ -303,7 +315,7 @@ serve(async (req) => {
           telefone: dadosNovoTitular.telefone || null,
           whatsapp: dadosNovoTitular.telefone || null,
           status: "ativo",
-          tipo_entrada: "troca_titularidade",
+          ...enderecoBase,
         })
         .select("id")
         .single();
