@@ -73,6 +73,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [etapa, setEtapa] = useState<'fotos' | 'video'>('fotos');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
