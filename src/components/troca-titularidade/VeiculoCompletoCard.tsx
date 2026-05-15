@@ -150,16 +150,21 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
           <p className="text-sm text-muted-foreground">Sem documentos anexados.</p>
         ) : (
           <ul className="space-y-1">
-            {todosDocumentos.slice(0, 12).map((d: any) => (
-              <li key={d.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
-                <span className="truncate">{d.tipo_documento || d.tipo || 'documento'}</span>
-                {d.url && (
-                  <a href={d.url} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs">
-                    Abrir <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </li>
-            ))}
+            {todosDocumentos.slice(0, 12).map((d: any) => {
+              const url = d.arquivo_url || d.url;
+              return (
+                <li key={d.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0 gap-2">
+                  <span className="truncate">{d.tipo_documento || d.tipo || 'documento'}</span>
+                  {url ? (
+                    <a href={url} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs shrink-0">
+                      Abrir <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="text-xs text-muted-foreground shrink-0">sem arquivo</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
