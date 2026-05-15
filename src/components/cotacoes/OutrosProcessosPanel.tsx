@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, Pencil, ChevronRight, User, MessageCircle, MailWarning } from 'lucide-react';
+import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, Pencil, ChevronRight, User, MessageCircle, MailWarning, Trash2 } from 'lucide-react';
+import { useExcluirCotacao } from '@/hooks/useCotacoes';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
