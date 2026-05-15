@@ -110,7 +110,7 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
           <KeyRound className="h-5 w-5 text-amber-600 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-              Liberado por bypass do Diretor
+              Liberado por decisão registrada
             </p>
             <p className="text-xs text-amber-800/80 dark:text-amber-200/70">
               Motivo: {check.bypass_motivo} · {verificadoEm}
@@ -215,12 +215,10 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
               <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
               Consultar SGA novamente
             </Button>
-            {isDiretor && (
-              <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
-                <KeyRound className="h-4 w-4 mr-2" />
-                Prosseguir mesmo assim
-              </Button>
-            )}
+            <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
+              <KeyRound className="h-4 w-4 mr-2" />
+              Ignorar e Prosseguir
+            </Button>
           </div>
         </CardContent>
       </Card>

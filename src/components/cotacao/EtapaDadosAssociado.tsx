@@ -261,7 +261,7 @@ export function EtapaDadosAssociado({
                     : 'É necessário quitar os boletos abaixo no SGA antes de iniciar uma nova cotação.'
                 }
               />
-              {isDiretor && !bypassDebitoSGA && (
+              {!bypassDebitoSGA && (
                 <div className="flex justify-end">
                   <Button
                     type="button"
@@ -269,7 +269,7 @@ export function EtapaDadosAssociado({
                     size="sm"
                     onClick={() => setShowBypassDebitoDialog(true)}
                   >
-                    Ignorar e Prosseguir (Diretor)
+                    Ignorar e Prosseguir
                   </Button>
                 </div>
               )}

@@ -174,15 +174,13 @@ export function DialogTipoOperacao({
                     <Ban className="h-4 w-4" />
                     Inclusão bloqueada
                   </Button>
-                  {isDiretor && (
-                    <Button
-                      variant="destructive"
-                      onClick={() => setShowBypass(true)}
-                      className="gap-2"
-                    >
-                      Ignorar e Prosseguir (Diretor)
-                    </Button>
-                  )}
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowBypass(true)}
+                    className="gap-2"
+                  >
+                    Ignorar e Prosseguir
+                  </Button>
                 </>
               )}
             </>
