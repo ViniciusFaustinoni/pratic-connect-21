@@ -3212,11 +3212,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           onOpenChange={setShowPlacaDuplicadaModal}
           placa={placa}
           info={placaDuplicadaInfo}
-          onIgnorarEProsseguir={() => {
-            setBypassPlacaDuplicada((s) => new Set(s).add(placaNorm(placa)));
-            setShowPlacaDuplicadaModal(false);
-            setTimeout(() => buscarPorPlaca(), 100);
-          }}
         />
       )}
 
