@@ -39,10 +39,14 @@ Deno.serve(async (req) => {
     // O cálculo do prazo agora usa a DATA DO AGENDAMENTO da instalação/vistoria
     // (instalacoes.data_agendada + hora_agendada) — a data de assinatura é apenas
     // fallback para contratos antigos sem instalação registrada.
+    // Só varre contratos AINDA em 'assinado' (sem ativação). Contratos
+    // já promovidos a 'ativo' passaram por monitoramento/instalação completa
+    // e jamais devem ser suspensos por este cron.
     const { data: contratos, error: errContratos } = await supabase
       .from('contratos')
-      .select('id, veiculo_id, associado_id, data_assinatura, liberado_reagendamento_em, status, tipo_vistoria')
-      .in('status', ['assinado', 'ativo'])
+      .select('id, veiculo_id, associado_id, data_assinatura, liberado_reagendamento_em, status, tipo_vistoria, data_ativacao')
+      .eq('status', 'assinado')
+      .is('data_ativacao', null)
       .is('liberado_reagendamento_em', null);
 
     if (errContratos) throw errContratos;
@@ -121,26 +125,32 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Fallback retrocompatibilidade: checar `servicos` (caminho antigo)
+      // Fallback retrocompatibilidade: checar `servicos` (caminho antigo).
+      // `vistoria_entrada` ≡ `instalacao` (mesmo evento físico) e o status
+      // terminal aceito é concluida/aprovada ou concluida_em preenchido.
       const { data: servicoConcluido } = await supabase
         .from('servicos')
-        .select('id')
+        .select('id, tipo, status, concluida_em')
         .eq('veiculo_id', contrato.veiculo_id)
-        .eq('tipo', 'instalacao')
-        .eq('status', 'concluida')
+        .in('tipo', ['instalacao', 'vistoria_entrada'])
+        .or('status.in.(concluida,aprovada),concluida_em.not.is.null')
         .limit(1);
       if ((servicoConcluido?.length ?? 0) > 0) {
-        ignorados.push({ contrato_id: contrato.id, motivo: 'servico instalacao concluido' });
+        ignorados.push({ contrato_id: contrato.id, motivo: 'servico instalacao/vistoria_entrada concluido' });
         continue;
       }
 
       const { data: veiculo } = await supabase
         .from('veiculos')
-        .select('id, placa, modelo, cobertura_suspensa')
+        .select('id, placa, modelo, status, cobertura_suspensa')
         .eq('id', contrato.veiculo_id)
         .maybeSingle();
       if (!veiculo) {
         ignorados.push({ contrato_id: contrato.id, motivo: 'veiculo nao encontrado' });
+        continue;
+      }
+      if (veiculo.status === 'ativo') {
+        ignorados.push({ contrato_id: contrato.id, motivo: 'veiculo ja ativo (não suspender)' });
         continue;
       }
       if (veiculo.cobertura_suspensa) {
