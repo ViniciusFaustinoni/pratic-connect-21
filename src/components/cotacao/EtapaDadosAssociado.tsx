@@ -110,12 +110,13 @@ export function EtapaDadosAssociado({
   // Bloqueia se houver débito SGA — ex-cliente precisa quitar antes.
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
   const temDebitoSGA = debitosSGA?.temDebito === true;
+  const debitoBloqueia = temDebitoSGA && !bypassDebitoSGA;
   const canProceed =
     nome.trim() !== '' &&
     telefoneValido &&
     consultorId !== '' &&
     (!isIndicacao || indicadorId !== '') &&
-    !temDebitoSGA;
+    !debitoBloqueia;
 
   const [isImportandoIndicador, setIsImportandoIndicador] = useState(false);
 
