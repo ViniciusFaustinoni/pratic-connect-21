@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
+import { VistoriaFotosExtras } from '@/components/vistorias/VistoriaFotosExtras';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { VerificarSinalRastreador } from '@/components/instalador/VerificarSinalRastreador';
@@ -23,6 +24,7 @@ import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecu
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria, useVistoriaCompletaPorServico, useVistoriaCompletaPorAgendamentoBase } from '@/hooks/useVistorias';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   useAprovarVeiculoVistoria, 
   useRecusarVeiculoVistoria, 
@@ -154,6 +156,43 @@ export default function ExecutarVistoriaCompleta() {
     });
     return Array.from(map.values());
   }, [fotosServidor, offlineQueue.previewsFotos]);
+
+  // Fotos extras (opcional) — tipo começa com 'extra_'
+  const fotosExtrasEnviadas = useMemo(
+    () => fotosEnviadas
+      .filter(f => f.tipo?.startsWith('extra_'))
+      .sort((a, b) => {
+        const na = Number(a.tipo.replace('extra_', '')) || 0;
+        const nb = Number(b.tipo.replace('extra_', '')) || 0;
+        return na - nb;
+      }),
+    [fotosEnviadas]
+  );
+
+  const queryClient = useQueryClient();
+
+  const handleRemoveFotoExtra = useCallback(async (tipo: string) => {
+    if (!vistoriaId) return;
+    try {
+      const { error } = await supabase
+        .from('vistoria_fotos')
+        .delete()
+        .eq('vistoria_id', vistoriaId)
+        .eq('tipo', tipo);
+      if (error) throw error;
+      // Apaga arquivo do storage (best-effort)
+      try {
+        await supabase.storage.from('vistoria-fotos').remove([`${vistoriaId}/${tipo}.jpg`]);
+      } catch { /* ignore */ }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] }),
+        queryClient.invalidateQueries({ queryKey: ['vistorias'] }),
+      ]);
+      toast.success('Foto extra removida');
+    } catch (e: any) {
+      toast.error(`Falha ao remover: ${e.message ?? e}`);
+    }
+  }, [vistoriaId, queryClient]);
 
   const video360Url = video360UrlServidor || offlineQueue.previewVideo;
 
@@ -309,13 +348,15 @@ export default function ExecutarVistoriaCompleta() {
   }, [categorias, fotosMap]);
 
   // Total de fotos obrigatórias e enviadas — restritas ao escopo atual (apenas
-  // instalação ou completo) para não exigir fotos visuais já aprovadas.
+  // instalação ou completo) e excluindo fotos marcadas como `opcional` (ex.: foto
+  // da chave do automóvel) e quaisquer fotos extras (`tipo` começando com `extra_`).
   const fotosObrigatoriasDoTipo = useMemo(
-    () => modoApenasInstalacao
+    () => (modoApenasInstalacao
       ? getFotosApenasInstalacao(tipoVeiculoDetectado).filter(
           f => f.categoria !== 'rastreador' || veiculoPrecisaRastreador,
         )
-      : getFotosFiltradas(tipoVeiculoDetectado, false),
+      : getFotosFiltradas(tipoVeiculoDetectado, false)
+    ).filter(f => !f.opcional),
     [tipoVeiculoDetectado, modoApenasInstalacao, veiculoPrecisaRastreador]
   );
 
@@ -744,6 +785,20 @@ export default function ExecutarVistoriaCompleta() {
                   const foto = categorias.flatMap(c => c.fotos).find(f => f.id === fotoId);
                   handleUploadFoto(fotoId, file, foto?.visivelCliente !== false);
                 }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Outras imagens (opcional) — só no modo completo (não na etapa "apenas instalação") */}
+        {!modoApenasInstalacao && categorias.length > 0 && (
+          <Card className="border-slate-700 bg-slate-800">
+            <CardContent className="pt-4">
+              <VistoriaFotosExtras
+                fotosExtras={fotosExtrasEnviadas}
+                uploadingTipo={uploadingFoto}
+                onUpload={(tipo, file) => handleUploadFoto(tipo, file, true)}
+                onRemove={handleRemoveFotoExtra}
               />
             </CardContent>
           </Card>

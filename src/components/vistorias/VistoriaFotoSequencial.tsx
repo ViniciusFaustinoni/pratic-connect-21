@@ -32,8 +32,11 @@ export function VistoriaFotoSequencial({
 
   const fotoAtual = fotos[fotoAtualIndex];
   const totalFotos = fotos.length;
+  const fotosObrigatorias = fotos.filter(f => !f.opcional);
+  const totalObrigatorias = fotosObrigatorias.length;
+  const obrigatoriasEnviadas = fotosObrigatorias.filter(f => fotosEnviadas.some(e => e.tipo === f.id) || uploadedLocally.has(f.id)).length;
   const fotosCompletasCount = fotos.filter(f => fotosEnviadas.some(e => e.tipo === f.id) || uploadedLocally.has(f.id)).length;
-  const todasCompletas = fotosCompletasCount === totalFotos;
+  const todasCompletas = obrigatoriasEnviadas >= totalObrigatorias;
 
   const isFotoEnviada = useCallback((fotoId: string) => {
     return fotosEnviadas.some(f => f.tipo === fotoId) || uploadedLocally.has(fotoId);
@@ -154,7 +157,7 @@ export function VistoriaFotoSequencial({
             ? "bg-emerald-900/50 text-emerald-300" 
             : "bg-slate-700 text-slate-300"
         )}>
-          {fotosCompletasCount}/{totalFotos} enviadas
+          {obrigatoriasEnviadas}/{totalObrigatorias} obrigatórias
         </span>
       </div>
 
@@ -162,7 +165,7 @@ export function VistoriaFotoSequencial({
       <div className="w-full bg-slate-700 rounded-full h-1.5">
         <div
           className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
-          style={{ width: `${(fotosCompletasCount / totalFotos) * 100}%` }}
+          style={{ width: `${totalObrigatorias === 0 ? 100 : (obrigatoriasEnviadas / totalObrigatorias) * 100}%` }}
         />
       </div>
 
@@ -255,7 +258,14 @@ export function VistoriaFotoSequencial({
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <h3 className="text-white font-bold text-base leading-tight">{fotoAtual.nome}</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-white font-bold text-base leading-tight">{fotoAtual.nome}</h3>
+                  {fotoAtual.opcional && (
+                    <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300 border border-blue-700/60">
+                      Opcional
+                    </span>
+                  )}
+                </div>
                 {fotoAtual.descricao && (
                   <p className="text-slate-400 text-sm mt-0.5">{fotoAtual.descricao}</p>
                 )}

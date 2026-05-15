@@ -1,66 +1,65 @@
-## O que está acontecendo na cotação 434
+## Objetivo
 
-Toyota Corolla (FIPE > 30k → precisa rastreador). O associado escolheu **agendamento base** para a instalação, mas ANTES do dia da instalação fez a **autovistoria** (padrão novo: foto do motor + foto do chassi + vídeo 360°) justamente para já liberar R&F antecipadamente.
+No fluxo da **Vistoria Completa do técnico** (app do vistoriador):
 
-Banco confirma: contrato com `tipo_vistoria='agendada_base'` + `vistorias` com `modalidade='autovistoria'`, status `pendente`, 3 fotos + vídeo 360°.
+1. A **foto 2 — "Foto da Chave"** deixa de ser obrigatória (continua disponível, mas não bloqueia a finalização).
+2. Após a **31ª foto** do roteiro, o técnico pode adicionar **fotos extras opcionais** ("Outras imagens"), em quantidade livre.
 
-A UI do Cadastro deveria mostrar:
-- Etapa 2 com as fotos da autovistoria + vídeo 360°
-- Botão verde **"Liberar Cobertura Roubo e Furto"**
-- Ao clicar: liberar R&F no veículo + mandar para Monitoramento (que depois faz a instalação base agendada)
+Sem mudar nenhum outro fluxo (autovistoria pública, vistoria do prestador, sub-FIPE, moto, etc.).
 
-Mas mostra **"Aprovar Proposta"** e ignora a autovistoria.
+## Onde mexer
 
-## Causas (duas, combinadas)
+- `src/data/vistoriaConfigCompleta.ts` — adicionar campo `opcional?: boolean` em `VistoriaFotoConfig`; marcar `chave` como `opcional: true`; ajustar `getTotalFotosObrigatorias` e adicionar helpers `getFotosObrigatorias(tipo)` que excluem opcionais.
+- `src/pages/instalador/ExecutarVistoriaCompleta.tsx` — calcular `totalFotosObrigatorias`/`totalFotosEnviadas` apenas sobre as fotos não opcionais; manter a chave navegável no carrossel mas não somar à barra de progresso "obrigatórias".
+- `src/components/vistorias/VistoriaFotoSequencial.tsx` — exibir badge **"Opcional"** no slot da chave; permitir avançar sem preenchê-la (não trava o auto-avance, que já depende apenas de `isPending`); progresso do header passa a usar contagem de obrigatórias.
+- **Bloco novo "Outras imagens (opcional)"** — após a 31ª foto (ou seja, ao final da lista do roteiro), renderizar uma seção dentro do `ExecutarVistoriaCompleta` que:
+  - lista as fotos extras já enviadas (lidas de `vistoria_fotos` com `tipo` que começa com `extra_`),
+  - botão "Adicionar imagem" que captura uma nova foto e faz upload com `tipo = extra_<n>` (n = próximo índice livre),
+  - cada extra pode ser refeita ou excluída (delete na tabela; o storage segue regra existente).
+  - `visivel_cliente: true` (segue o padrão do roteiro).
 
-1. **Detecção de autovistoria quebrada** em `PropostaAnalise.tsx` (linha 94-97):
-   ```ts
-   isAutovistoria = (modalidade==='autovistoria' || tipo==='autovistoria')
-                    && !instalacao_info && !isVistoriaBase
-   ```
-   `isVistoriaBase` vira `true` porque a cotação tem agendamento base **para a instalação posterior** — isso anula a autovistoria. Os dois eventos coexistem (autovistoria antecipada + base agendada para instalar rastreador), não são exclusivos.
+## Detalhes técnicos
 
-2. **`autovistoriaCompleta` ainda valida o padrão antigo** (linhas 140-146): exige ≥31 fotos (carro) / ≥15 (moto). A nova canônica é **2 fotos (motor + chassi) + vídeo 360°** (já em `mem://...autovistoria-2-fotos-video-360`). Mesmo se o item 1 fosse corrigido, qualquer autovistoria nova cairia em "incompleta".
+### Schema atual
 
-3. **Backend `aprovar-proposta`** já trata corretamente o caso "precisa rastreador → manda para Monitoramento", mas no caminho `algumPrecisouRastreador` ele **não libera R&F** nem marca a autovistoria como aprovada. Só faz isso no ramo sub-FIPE (linhas 494-546). Resultado: hoje, mesmo se a UI corrigida mostrasse o botão certo, o R&F não seria efetivamente liberado pelo Cadastro — só na aprovação do Monitoramento.
+`vistoria_fotos` tem unique `(vistoria_id, tipo)`. Para extras, cada upload usa `tipo` único (`extra_1`, `extra_2`, …). O reuse `useUploadFotoVistoriaCompleta` já aceita `tipo` arbitrário — não precisa migration.
 
-## Plano de correção (apenas onde falha; sem mexer no resto do fluxo)
+### Validação `podeAprovar`
 
-### Frontend — `src/pages/cadastro/PropostaAnalise.tsx`
+Hoje `todasFotosEnviadas = totalFotosEnviadas >= totalFotosObrigatorias`. Vamos:
+```ts
+const fotosObrigatoriasDoTipo = useMemo(
+  () => (modoApenasInstalacao ? ... : getFotosFiltradas(tipo, false))
+        .filter(f => !f.opcional),
+  [...]
+);
+```
+Assim, "chave" não conta para o bloqueio, e os "extras" também não (eles não estão no array de config).
 
-- **Desacoplar autovistoria do agendamento base.** Remover `&& !isVistoriaBase` da definição de `isAutovistoria`. Manter apenas `&& !instalacao_info` (uma instalação concluída é o que invalida considerar autovistoria como "fonte das fotos"). Comentário explicando que a base agendada é evento posterior.
-- **Atualizar `autovistoriaCompleta` para a canônica nova:**
-  ```
-  autovistoriaCompleta = isAutovistoria
-    ? ((totalFotos >= 2 && temVideo360)         // canônica 2+vídeo
-       || totalFotos >= minFotosAutovistoria)    // legado 31/15 (compat)
-    : true
-  ```
-- Nada mais muda em `podeAprovar`/`cadastroAvaliaFotos`/`aprovarApenasDocumentos` — a lógica deles já está correta uma vez que `isAutovistoria` e `autovistoriaCompleta` voltem a refletir a realidade.
+### UI da chave
 
-### Frontend — `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`
+No `VistoriaFotoSequencial`, quando `fotoAtual.opcional`, renderizar uma tag azul "Opcional — pode pular" e o contador do header (`{fotosCompletasCount}/{totalFotos} enviadas`) passa a usar `totalFotos = obrigatórias` (mantém a chave acessível pelas thumbnails, mas estilizada com borda mais discreta).
 
-- Nenhuma mudança de lógica. O rótulo do botão (linha 433-437) já trata `isAutovistoria && !ocultarEtapaFotos && planoTemRouboFurto → "Liberar Cobertura Roubo e Furto"`. Voltará a funcionar automaticamente.
-- Pequeno ajuste no banner contextual: quando há autovistoria completa **e** vistoria base agendada (caso 434), exibir um aviso explicando que a aprovação libera R&F agora e a instalação ocorrerá na data já agendada (texto curto, sem mexer em estrutura).
+### Bloco "Outras imagens"
 
-### Backend — `supabase/functions/aprovar-proposta/index.ts`
+Componente novo `VistoriaFotosExtras` em `src/components/vistorias/`:
+- props: `vistoriaId`, `fotosExtras: FotoEnviada[]`, `uploadingFoto`, `onUpload(tipo, file)`, `onRemove(fotoId)`.
+- grid simples de cards (thumb + lixeira) + card "+" para adicionar.
+- aparece **apenas** quando `fotoAtualIndex === totalFotos - 1` ou `todasCompletas`, logo abaixo do bloco do carrossel.
 
-Antes do bloco `deveAguardarInstalacao`, detectar "autovistoria pendente + canônica completa + plano com R&F" e, nesse caso:
+### Sincronização com laudo
 
-1. `UPDATE vistorias SET status='aprovada', aprovado_em=now(), aprovado_por=<aprovado_por> WHERE id=<vistoriaAutovistoria.id> AND status='pendente'`
-2. `UPDATE veiculos SET cobertura_roubo_furto=true WHERE id=<veiculoId>`
-3. Registrar histórico ("Cobertura Roubo/Furto liberada pelo Cadastro via autovistoria; instalação ocorrerá no agendamento base.")
+`useGerarLaudoVistoria` itera sobre `FOTOS_VISTORIA_COMPLETA`. Não vai listar os extras, e está ok — o laudo continua focando no roteiro canônico. (Se quiser mostrá-los no laudo num próximo passo, é incremento separado.)
 
-Manter o resto intacto: associado segue para `aguardando_instalacao`, fila do Monitoramento, instalação base no dia já agendado. A flag `autovistoriaAprovada` (linha 617-630) passa a detectar o caso e a mensagem de histórico/notificação correta é enviada.
+## Fora de escopo
 
-### Verificação
+- Autovistoria do associado (link público) — segue 2 fotos + vídeo 360° conforme regra canônica.
+- Vistoria do prestador, sub-FIPE, moto — não mudam.
+- Painel de aprovação (Cadastro/Monitoramento) já lê `vistoria_fotos` direto, então as extras aparecerão automaticamente na galeria de fotos da vistoria.
 
-- Reabrir `/cadastro/propostas/842c835d-674d-462e-bd5f-982fd4dd6c94` — deve mostrar etapa "Fotos & Vistoria" com 2 fotos + vídeo 360° e botão **"Liberar Cobertura Roubo e Furto"**.
-- Aprovar e conferir: `vistorias.status='aprovada'`, `veiculos.cobertura_roubo_furto=true`, `associados.status='aguardando_instalacao'`, proposta sai da fila do Cadastro e aparece no Monitoramento com a vistoria base já agendada preservada.
-- Confirmar que cotações com autovistoria SEM agendamento base (sub-FIPE) continuam funcionando como antes (não há regressão no ramo `!veiculoPrecisaRastreador`).
+## Pergunta antes de implementar
 
-## Detalhes técnicos (referência)
+Confirma duas coisas:
 
-- Tabelas tocadas: `vistorias` (status), `veiculos` (cobertura_roubo_furto), `associados_historico` (insert).
-- Nada muda em: `ativar-associado`, `aprovar-vistoria-monitoramento`, fluxo de instalação, agendamento base, SGA sync.
-- Memórias respeitadas: ativação só via `ativar-associado` (não tocamos), autovistoria 2 fotos + 360° canônica, propostas pendentes saem por aprovação do Cadastro.
+1. **"Chave" é mesmo a única foto obrigatória que vira opcional?** (a foto 2 do roteiro automóvel é "Foto da Chave"; em moto a foto 2 é "Traseira" — não faz sentido tornar opcional. Vou aplicar **só ao automóvel**.)
+2. As **fotos extras devem aparecer também na vistoria pública (autovistoria)**, ou só no app do técnico (vistoria completa)? Pelo enunciado entendi **só no app do vistoriador**.
