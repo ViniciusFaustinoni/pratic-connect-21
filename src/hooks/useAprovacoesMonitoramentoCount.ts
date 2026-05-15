@@ -37,14 +37,22 @@ export function useAprovacoesMonitoramentoBreakdown() {
         safe((async () => {
           const { data } = await (supabase as any)
             .from('servicos')
-            .select('id, veiculo:veiculo_id(cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)), vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))')
+            .select('id, vistoria_origem_id, veiculo:veiculo_id(cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado))')
             .in('tipo', ['instalacao', 'vistoria_entrada'])
             .eq('status', 'concluida');
+          const vistIds = Array.from(new Set((data || [])
+            .filter((s: any) => s?.vistoria_origem_id && !s.instalacao?.contrato)
+            .map((s: any) => s.vistoria_origem_id)));
+          const vMap = new Map<string, boolean>();
+          if (vistIds.length) {
+            const { data: vs } = await supabase.from('vistorias')
+              .select('id, contratos:contrato_id(cadastro_aprovado)').in('id', vistIds as string[]);
+            (vs || []).forEach((v: any) => vMap.set(v.id, v.contratos?.cadastro_aprovado === true));
+          }
           return (data || []).filter((s: any) =>
-            s?.veiculo &&
-            s.veiculo.cobertura_total !== true &&
+            s?.veiculo && s.veiculo.cobertura_total !== true &&
             (s.instalacao?.contrato?.cadastro_aprovado === true ||
-             s.vistoria?.contrato?.cadastro_aprovado === true)
+             (s.vistoria_origem_id && vMap.get(s.vistoria_origem_id) === true))
           ).length;
         })()),
 
