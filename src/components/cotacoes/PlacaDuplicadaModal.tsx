@@ -117,12 +117,35 @@ export function PlacaDuplicadaModal({
             </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="gap-2">
+          {onIgnorarEProsseguir && (
+            <Button variant="destructive" onClick={() => setShowBypass(true)}>
+              Ignorar e Prosseguir
+            </Button>
+          )}
           <AlertDialogAction onClick={() => onOpenChange(false)}>
             Entendido
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
+
+      {onIgnorarEProsseguir && (
+        <IgnorarAvisoSGADialog
+          open={showBypass}
+          onOpenChange={setShowBypass}
+          aviso={{
+            tipo: 'placa_duplicada_outro_vendedor',
+            titulo: 'Placa em atendimento por outro consultor',
+            mensagem: `A placa ${placa.toUpperCase()} já está reservada na cotação ${info.numero} do consultor ${info.vendedorNome}.`,
+            placa,
+            detalhes: { numero: info.numero, vendedorNome: info.vendedorNome, status: info.status },
+          }}
+          onConfirm={() => {
+            onOpenChange(false);
+            onIgnorarEProsseguir();
+          }}
+        />
+      )}
     </AlertDialog>
   );
 }
