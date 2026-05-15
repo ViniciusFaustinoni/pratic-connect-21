@@ -26475,6 +26475,144 @@ export type Database = {
         }
         Relationships: []
       }
+      sga_situacao_check: {
+        Row: {
+          associado_id: string | null
+          bypass: boolean
+          bypass_motivo: string | null
+          bypass_por: string | null
+          codigo_hinova: number | null
+          contrato_id: string | null
+          cpf: string
+          id: string
+          motivo: string | null
+          origem_resultado: string
+          payload: Json | null
+          qtd_boletos_abertos: number
+          saldo_devedor: number
+          solicitacao_troca_id: string | null
+          tem_debito: boolean
+          verificado_em: string
+          verificado_por: string | null
+        }
+        Insert: {
+          associado_id?: string | null
+          bypass?: boolean
+          bypass_motivo?: string | null
+          bypass_por?: string | null
+          codigo_hinova?: number | null
+          contrato_id?: string | null
+          cpf: string
+          id?: string
+          motivo?: string | null
+          origem_resultado?: string
+          payload?: Json | null
+          qtd_boletos_abertos?: number
+          saldo_devedor?: number
+          solicitacao_troca_id?: string | null
+          tem_debito: boolean
+          verificado_em?: string
+          verificado_por?: string | null
+        }
+        Update: {
+          associado_id?: string | null
+          bypass?: boolean
+          bypass_motivo?: string | null
+          bypass_por?: string | null
+          codigo_hinova?: number | null
+          contrato_id?: string | null
+          cpf?: string
+          id?: string
+          motivo?: string | null
+          origem_resultado?: string
+          payload?: Json | null
+          qtd_boletos_abertos?: number
+          saldo_devedor?: number
+          solicitacao_troca_id?: string | null
+          tem_debito?: boolean
+          verificado_em?: string
+          verificado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sga_situacao_check_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "sga_situacao_check_solicitacao_troca_id_fkey"
+            columns: ["solicitacao_troca_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_troca_titularidade"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sga_sync_financeiro_jobs: {
         Row: {
           agendado_em: string

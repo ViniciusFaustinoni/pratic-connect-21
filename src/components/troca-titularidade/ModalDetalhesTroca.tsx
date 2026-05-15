@@ -17,6 +17,7 @@ import { TimelineAprovacao } from './TimelineAprovacao';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { VeiculoCompletoCard } from './VeiculoCompletoCard';
 import { AnalisePreviaNovoTitularCard } from './AnalisePreviaNovoTitularCard';
+import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
@@ -55,6 +56,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [criandoCotacao, setCriandoCotacao] = useState(false);
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
+  const [sgaLiberado, setSgaLiberado] = useState(false);
 
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
@@ -309,15 +311,21 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
             {podeAgir && !confirmandoReprovar && (
               <div className="border-t pt-4 space-y-3">
                 {modo === 'cadastro' && (
-                  <Alert>
-                    <ClipboardCheck className="h-4 w-4" />
-                    <AlertTitle>Análise do Cadastro</AlertTitle>
-                    <AlertDescription>
-                      Verifique CNH/CRLV/comprovante e as fotos da autovistoria do novo titular.
-                      Aprovar envia a solicitação para o <strong>Monitoramento</strong> (próxima etapa).
-                      O botão só libera após o novo titular concluir a autovistoria pelo link público.
-                    </AlertDescription>
-                  </Alert>
+                  <>
+                    <SituacaoFinanceiraGate
+                      solicitacaoTrocaId={solicitacao.id}
+                      onChange={setSgaLiberado}
+                    />
+                    <Alert>
+                      <ClipboardCheck className="h-4 w-4" />
+                      <AlertTitle>Análise do Cadastro</AlertTitle>
+                      <AlertDescription>
+                        Verifique CNH/CRLV/comprovante e as fotos da autovistoria do novo titular.
+                        Aprovar envia a solicitação para o <strong>Monitoramento</strong> (próxima etapa).
+                        O botão só libera após o novo titular concluir a autovistoria pelo link público.
+                      </AlertDescription>
+                    </Alert>
+                  </>
                 )}
                 <div>
                   <Label htmlFor="obs">Observação (opcional)</Label>
@@ -363,11 +371,14 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
                     const bloqueadoPorAutovistoria = modo === 'cadastro' && !solicitacao.autovistoria_concluida_em;
-                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria;
+                    const bloqueadoPorSga = modo === 'cadastro' && !sgaLiberado;
+                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria || bloqueadoPorSga;
                     const motivoBloqueio = bloqueadoPorAssinatura
                       ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
                       : bloqueadoPorAutovistoria
                       ? 'Aguardando o novo titular concluir a autovistoria pelo link público.'
+                      : bloqueadoPorSga
+                      ? 'Pendência financeira no SGA — regularize ou use o bypass do Diretor acima.'
                       : '';
                     const btn = (
                       <Button

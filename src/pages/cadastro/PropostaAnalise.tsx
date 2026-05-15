@@ -46,6 +46,7 @@ import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useGerarVistoriaLink } from '@/hooks/useVistoriaLinkPublica';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
+import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
 import {
@@ -70,6 +71,7 @@ export default function PropostaAnalise() {
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
+  const [sgaLiberado, setSgaLiberado] = useState(false);
   
   // Campos editáveis do veículo para SGA Hinova
   const [veiculoRenavam, setVeiculoRenavam] = useState('');
@@ -161,7 +163,8 @@ export default function PropostaAnalise() {
   const podeAprovar =
     proposta?.status === 'assinado' &&
     !proposta?.tem_documento_pendente &&
-    (!aguardandoExecucao || aprovarApenasDocumentos);
+    (!aguardandoExecucao || aprovarApenasDocumentos) &&
+    sgaLiberado;
 
   // Estado final (já aprovado / reprovado / cancelado)
   const isAprovada = proposta?.status === 'ativo';
@@ -627,22 +630,32 @@ export default function PropostaAnalise() {
         </div>
       )}
 
+      {/* ZONA 1.5: Gate de Situação Financeira (SGA) — bloqueia avanço se inadimplente */}
+      {!isFinalizada && (
+        <SituacaoFinanceiraGate
+          contratoId={proposta.id}
+          onChange={setSgaLiberado}
+        />
+      )}
+
       {/* ZONA 2: Stepper de Aprovação por Etapas */}
-      <PropostaApprovalStepper
-        proposta={proposta}
-        documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
-        onViewDocumento={setDocumentoVisualizar}
-        onAprovarDocumento={handleAprovarDocumento}
-        onReprovarDocumento={handleReprovarDocumento}
-        onAprovar={handleAprovar}
-        onSolicitarDocs={() => setShowSolicitarDocs(true)}
-        onReprovar={() => setShowReprovar(true)}
-        isAprovando={aprovarMutation.isPending}
-        isAutovistoria={isAutovistoria}
-        podeAprovar={podeAprovar}
-        cadastroAvaliaFotos={cadastroAvaliaFotos}
-        planoTemRouboFurto={planoTemRouboFurto}
-      />
+      <div className={!isFinalizada && !sgaLiberado ? 'opacity-50 pointer-events-none' : ''}>
+        <PropostaApprovalStepper
+          proposta={proposta}
+          documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
+          onViewDocumento={setDocumentoVisualizar}
+          onAprovarDocumento={handleAprovarDocumento}
+          onReprovarDocumento={handleReprovarDocumento}
+          onAprovar={handleAprovar}
+          onSolicitarDocs={() => setShowSolicitarDocs(true)}
+          onReprovar={() => setShowReprovar(true)}
+          isAprovando={aprovarMutation.isPending}
+          isAutovistoria={isAutovistoria}
+          podeAprovar={podeAprovar}
+          cadastroAvaliaFotos={cadastroAvaliaFotos}
+          planoTemRouboFurto={planoTemRouboFurto}
+        />
+      </div>
 
       {/* ZONA 3: Tabs de Detalhes (sempre visíveis) */}
       <PropostaDetalhesTabs
