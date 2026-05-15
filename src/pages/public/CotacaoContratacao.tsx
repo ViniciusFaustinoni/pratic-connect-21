@@ -216,6 +216,22 @@ export default function CotacaoContratacao() {
     solicitacaoTroca.status === 'efetivada'
   );
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
+
+  // Janela mesmo-dia: até 23:59:59.999 BRT do dia em que o termo de cancelamento
+  // foi assinado, autovistoria/vistoria inicial é DISPENSADA — proteção do
+  // titular antigo é estendida ao novo. Monitoramento avalia depois.
+  const trocaDentroJanelaMesmoDia = useMemo(() => {
+    if (!isTrocaTitularidade) return false;
+    const assinado = solicitacaoTroca?.termo_cancelamento_assinado_em;
+    if (!assinado) return false;
+    const a = new Date(assinado);
+    const fimDiaBRTemUTC = new Date(Date.UTC(
+      a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+      26, 59, 59, 999
+    ));
+    return new Date() <= fimDiaBRTemUTC;
+  }, [isTrocaTitularidade, solicitacaoTroca?.termo_cancelamento_assinado_em]);
+  const dispensaVistoriaTroca = trocaDentroJanelaMesmoDia;
   // FLUXO UNIFICADO: troca de titularidade segue o MESMO stepper da nova adesão
   // após o termo de cancelamento estar assinado: Plano → Docs → Contrato → Vistoria → Pagamento.
   // O passo de Pagamento sempre aparece — quando a adesão é isenta, o próprio
