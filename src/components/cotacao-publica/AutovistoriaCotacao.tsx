@@ -73,6 +73,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [etapa, setEtapa] = useState<'fotos' | 'video'>('fotos');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -119,8 +120,11 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       const indexPendente = fotos.findIndex(f => !fotosMap[f.id]);
       if (indexPendente >= 0) {
         setFotoAtualIndex(indexPendente);
+      } else if (!videoExistente) {
+        // Todas as fotos prontas e vídeo pendente: já abre na etapa do vídeo
+        setEtapa('video');
       }
-      
+
       setHidratado(true);
     }
   }, [fotosExistentes, fotos, hidratado]);
@@ -262,11 +266,17 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
         }
       }
 
-      // Avançar para próxima foto automaticamente
+      // Avançar para próxima foto / etapa do vídeo automaticamente
       // Não avança se OCR do odômetro falhou ou se placa não confere/ilegível
       if (!odometroOcrFalhou && !bloqueadoPorPlaca) {
+        const eraUltimaFoto = fotoAtualIndex >= totalFotos - 1;
         setTimeout(() => {
-          setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
+          if (eraUltimaFoto) {
+            setEtapa('video');
+            toast.success('Fotos concluídas! Agora grave o vídeo 360°.');
+          } else {
+            setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
+          }
         }, 300);
       }
     } catch (error: any) {
@@ -378,17 +388,17 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
           </div>
         )}
 
-        {/* Indicadores de fotos (miniaturas) */}
+        {/* Indicadores de fotos (miniaturas) + vídeo */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           {fotos.map((foto, index) => {
             const enviada = !!fotosEnviadas[foto.id];
-            const atual = index === fotoAtualIndex;
-            
+            const atual = etapa === 'fotos' && index === fotoAtualIndex;
+
             return (
               <button
                 type="button"
                 key={foto.id}
-                onClick={() => setFotoAtualIndex(index)}
+                onClick={() => { setEtapa('fotos'); setFotoAtualIndex(index); }}
                 title={`Ir para: ${foto.label}`}
                 className={cn(
                   "shrink-0 w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center cursor-pointer hover:opacity-80",
@@ -405,9 +415,30 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
               </button>
             );
           })}
+          {/* Miniatura do vídeo 360° */}
+          <button
+            type="button"
+            onClick={() => { if (todasFotosEnviadas) setEtapa('video'); }}
+            disabled={!todasFotosEnviadas}
+            title={todasFotosEnviadas ? 'Vídeo 360°' : 'Conclua as fotos primeiro'}
+            className={cn(
+              "shrink-0 w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center",
+              etapa === 'video' && "border-primary ring-2 ring-primary/20",
+              etapa !== 'video' && videoUrl && "border-success bg-success/10",
+              etapa !== 'video' && !videoUrl && "border-border/50 bg-muted/30",
+              !todasFotosEnviadas && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            {videoUrl ? (
+              <CheckCircle2 className="h-4 w-4 text-success" />
+            ) : (
+              <Video className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
         </div>
-        
+
         {/* Foto atual */}
+        {etapa === 'fotos' && (
         <AnimatePresence mode="wait">
           <motion.div
             key={fotoAtual.id}
@@ -627,8 +658,10 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             </div>
           </motion.div>
         </AnimatePresence>
-        
+        )}
+
         {/* Botão de captura */}
+        {etapa === 'fotos' && (
         <div className="flex justify-center pt-2">
           {!fotoJaEnviada ? (
             <Button
@@ -656,9 +689,10 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             </Button>
           )}
         </div>
+        )}
 
-        {/* Bloco do vídeo 360° (libera após todas as fotos) */}
-        {todasFotosEnviadas && (
+        {/* Bloco do vídeo 360° — etapa dedicada após as fotos */}
+        {etapa === 'video' && todasFotosEnviadas && (
           <div className="space-y-3 pt-4 border-t border-border/50">
             <div className="flex items-center gap-2">
               <Video className="h-5 w-5 text-primary" />
