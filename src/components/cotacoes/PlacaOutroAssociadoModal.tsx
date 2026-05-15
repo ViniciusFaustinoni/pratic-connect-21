@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AlertTriangle, ArrowRightLeft, User } from 'lucide-react';
 import {
   AlertDialog,
@@ -10,14 +11,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { PlacaOutroAssociadoInfo } from '@/hooks/useVerificarPlacaOutroAssociado';
 import { useNavigate } from 'react-router-dom';
+import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
 
 interface PlacaOutroAssociadoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   placa: string;
   info: PlacaOutroAssociadoInfo | null;
+  /** Quando definido, exibe botão "Ignorar e Prosseguir" */
+  onIgnorarEProsseguir?: () => void;
 }
 
 export function PlacaOutroAssociadoModal({
@@ -25,8 +30,10 @@ export function PlacaOutroAssociadoModal({
   onOpenChange,
   placa,
   info,
+  onIgnorarEProsseguir,
 }: PlacaOutroAssociadoModalProps) {
   const navigate = useNavigate();
+  const [showBypass, setShowBypass] = useState(false);
   if (!info || !info.conflito) return null;
 
   const irParaTroca = () => {
