@@ -153,10 +153,6 @@ Deno.serve(async (req) => {
         ignorados.push({ contrato_id: contrato.id, motivo: 'veiculo ja ativo (não suspender)' });
         continue;
       }
-      if (!veiculo) {
-        ignorados.push({ contrato_id: contrato.id, motivo: 'veiculo nao encontrado' });
-        continue;
-      }
       if (veiculo.cobertura_suspensa) {
         ignorados.push({ contrato_id: contrato.id, motivo: 'cobertura ja suspensa' });
         continue;
