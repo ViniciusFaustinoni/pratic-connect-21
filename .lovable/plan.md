@@ -1,45 +1,91 @@
-## Problema
+## Diagnóstico — `vistoria_entrada` vs `instalacao`
 
-Marcus Vinicius (LTB4J74, FIPE R$ 69.952 → exige rastreador) apareceu na fila **Aprovações do Monitoramento › Aprovação de Associados** logo após o Cadastro aprovar a autovistoria. O fluxo correto para FIPE ≥ R$ 30k com autovistoria antecipada é:
+Sim, há confusão real e ela afeta a lógica em pontos pontuais. Os dois valores são **dois nomes para o mesmo evento físico** (a primeira ida do técnico ao veículo — que pode ser só vistoria, só instalação, ou ambas), mas o código nem sempre trata os dois juntos.
 
-1. Autovistoria → Cadastro libera R&F (já funciona ✓)
-2. Técnico faz instalação + vistoria_entrada presencial
-3. **Só então** entra na fila de Aprovação do Monitoramento
+### O que confirma que são equivalentes
 
-Hoje ele entra no passo 1, porque a "REGRA MESTRA" em `aprovar-proposta` (linhas 158-169) promove **qualquer** `servico vistoria_entrada` `em_analise` para `concluida` ao aprovar Cadastro — sem distinguir sub-FIPE de ≥30k.
+- `src/hooks/useServicos.ts:1428` já tem o helper canônico:
+  ```ts
+  isInstalacao(tipo) = tipo === 'instalacao' || tipo === 'vistoria_entrada'
+  ```
+- Filas críticas do Monitoramento usam os dois juntos:
+  - `useAprovacaoMonitoramento`, `useAprovacoesMonitoramentoCount`, `aprovar-proposta` → `.in('tipo', ['instalacao', 'vistoria_entrada'])`
+- Comentário oficial em `useContratoLink.ts:397` registra o legado: `tipo: 'instalacao' as any, // Instalação (anteriormente "entrada")`.
 
-Confirmado no banco: existem dois serviços `vistoria_entrada` para a placa:
-- `49b7548b…` — modalidade=`autovistoria`, status=`concluida` (errado, é o que aparece na fila)
-- `21611742…` — modalidade=`presencial`, status=`em_andamento` (a vistoria real do técnico, em curso)
+### Por que existem dois nomes hoje
 
-## Correção
+Trigger `sync_instalacao_to_servicos` (qualquer linha em `instalacoes`) → grava sempre `servicos.tipo = 'instalacao'`.
+Trigger `sync_vistoria_to_servicos` → usa `map_vistoria_tipo_to_servico`, cujo **default é `vistoria_entrada`**. Logo, quando o caso nasce pela tabela `vistorias` (autovistoria, fluxo Base via `agendamentos_base`, Sub-FIPE, Troca de titularidade), o mesmo evento aparece como `vistoria_entrada`.
 
-### 1. `supabase/functions/aprovar-proposta/index.ts` (linhas 158-169)
+### Onde a dualidade quebra alguma coisa
 
-Restringir a promoção `em_analise → concluida` do servico de autovistoria **apenas a casos sub-FIPE** (veículo não precisa de rastreador). Para ≥30k:
+1. **Filtros que olham só `'instalacao'`** (perdem casos `vistoria_entrada`):
+   - `src/pages/monitoramento/Encaixes.tsx` (`encaixe.tipo === 'instalacao'`)
+   - `src/components/mapa/MapaVistoriasContent.tsx` (botões e ações condicionais por `'instalacao'`)
+   - `src/hooks/useTarefaAtual.ts`, `src/hooks/useEquipe.ts`, `src/hooks/useEncaixesDisponiveis.ts`, `src/hooks/useMovimentacoes.ts`
+   - `src/components/monitoramento/CalendarioDiaModal.tsx`, `RotaModal.tsx`, `AtribuicaoManualTab.tsx`
+   - `src/pages/public/AcompanhamentoProposta.tsx` (exclui `'instalacao'` de eventos visíveis, mas não exclui `vistoria_entrada`)
+2. **Labels de UI inconsistentes**: várias telas usam `tipo === 'instalacao' ? 'Instalação' : 'Vistoria'`, então um `vistoria_entrada` que de fato inclui instalação aparece como genérico "Vistoria" no calendário, rotas, mapa, encaixe, push do instalador.
+3. **Notificações WhatsApp/push** com texto errado:
+   - `notificar-inicio-rota`, `cron-expirar-confirmacoes`, `confirmar-vistorias-manha-cron`, `atribuir-proxima-tarefa`, `processar-encaixes-automaticos`, `whatsapp-webhook` — todas decidem o substantivo só pelo `=== 'instalacao'`.
+4. **`TIPO_SERVICO_LABELS.vistoria_entrada = 'Vistoria de Entrada'`** — label antigo, perpetua a noção de duas coisas distintas.
 
-- Marcar o servico de autovistoria como `aprovada` (terminal, fora da fila) com `analisado_em`/`analisado_por` preenchidos e observação registrando "autovistoria aprovada — R&F liberado; aguardando vistoria/instalação presencial do técnico".
-- O servico presencial criado por `criar-instalacao-pos-pagamento` (instalação + vistoria do técnico) continua sendo o gatilho da fila, ao concluir.
+### O que NÃO está quebrado (já trata os dois juntos)
 
-A detecção sub-FIPE × ≥30k já existe mais adiante no mesmo arquivo (`veiculoPrecisaRastreador`, baseada em `valor_fipe`, `tipoVeiculo` e `configuracoes`). Vou mover a decisão para depois desse cálculo, ou replicar uma checagem leve antes do bloco de promoção. Preferência: **mover** o bloco de promoção para depois da resolução de `veiculoPrecisaRastreador` para não duplicar lógica.
+- Aprovações do Monitoramento (count, listagem, detalhe).
+- Guard anti-duplicação em `criar-instalacao-pos-pagamento` e `aprovar-proposta`.
+- Reconciliador `reconciliar-contratos-pos-monitoramento`.
+- Cron `cron-followup-reagendamento`, `enviar-link-reagendamento` (mapeiam `vistoria_entrada → 'vistoria'`).
 
-Comportamento resultante por cenário:
+---
 
-| Cenário | Servico autovistoria após aprovar-proposta | Aparece na fila do Monitoramento? |
-|---|---|---|
-| Sub-FIPE (sem rastreador) | `concluida` | Sim — único caminho de aprovação |
-| ≥30k com autovistoria antecipada | `aprovada` | Não — entra só quando técnico conclui presencial |
-| ≥30k sem autovistoria (fluxo padrão) | n/a | Entra ao concluir vistoria/instalação do técnico |
+## Plano de saneamento (Opção A — conservadora, recomendada)
 
-### 2. Migração retroativa — caso Marcus (LTB4J74)
+Mantemos os dois valores no enum `tipo_servico` (evita migração de dados arriscada), mas eliminamos os pontos onde o sistema esquece um deles.
 
-- Atualizar `servicos` `49b7548b-d391-4b2c-9f3a-f6c84d94eb0a` de `concluida` para `aprovada`, preenchendo `analisado_em=now()`, `observacoes_analise='[CORREÇÃO RETROATIVA] Autovistoria aprovada pelo Cadastro — R&F liberado; aguardando vistoria/instalação presencial do técnico para entrar na fila do Monitoramento.'`.
-- Sem mexer em `cobertura_roubo_furto` do veículo (já está `true`, correto).
-- Sem tocar no servico `21611742…` (presencial em_andamento — segue normalmente).
-- Registrar entrada em `associados_historico` para auditoria.
+### Passo 1 — Helpers unificados (frontend)
+Em `src/hooks/useServicos.ts`:
+- Manter `isInstalacao(tipo)`.
+- Adicionar `labelPrimeiraVisita(tipo)` retornando `'Instalação'` para `'instalacao'` e `'Vistoria de Entrada (Instalação)'` para `'vistoria_entrada'`.
+- Atualizar `TIPO_SERVICO_LABELS.vistoria_entrada = 'Vistoria de Entrada (Instalação)'`.
 
-## Fora de escopo
+### Passo 2 — Auditoria de filtros `=== 'instalacao'`
+Substituir por `isInstalacao(tipo)` (ou pelo conjunto `['instalacao','vistoria_entrada']`) nestes arquivos:
+- `src/pages/monitoramento/Encaixes.tsx`
+- `src/components/mapa/MapaVistoriasContent.tsx`
+- `src/components/monitoramento/{CalendarioDiaModal,RotaModal,AtribuicaoManualTab}.tsx`
+- `src/components/mapa/MapaMobileContent.tsx`
+- `src/hooks/{useTarefaAtual,useEquipe,useEncaixesDisponiveis,useMovimentacoes,useAlterarEnderecoTipo}.ts`
+- `src/components/vistoriador/EncaixeCard.tsx`
+- `src/pages/public/AcompanhamentoProposta.tsx` (incluir `vistoria_entrada` na lista de tipos excluídos do timeline público)
 
-- Sub-FIPE: comportamento mantido (autovistoria → cadastro → monitoramento aprova direto, sem técnico).
-- Troca de titularidade: já tem fluxo próprio (`vincular-cotacao-troca`), não afetado.
-- UI: nenhuma alteração — o filtro do hook `useInstalacoesAguardandoAprovacao` continua igual; só muda quando o item entra.
+### Passo 3 — Texto correto em notificações (edge functions)
+Centralizar em uma função `rotuloPrimeiraVisita(tipo, requerInstalacao)` e aplicar em:
+- `notificar-inicio-rota`
+- `cron-expirar-confirmacoes`
+- `confirmar-vistorias-manha-cron`
+- `atribuir-proxima-tarefa`
+- `processar-encaixes-automaticos`
+- `whatsapp-webhook` (linha 2485)
+
+Critério: se o caso tem rastreador a instalar (FIPE ≥ 30k carro / 9k moto / qualquer Diesel) → palavra **"instalação"**; senão → **"vistoria"**.
+
+### Passo 4 — Documentação
+Criar memory `mem://logic/operations/vistoria-entrada-equivale-instalacao` registrando:
+- Equivalência operacional dos dois valores.
+- Default do `map_vistoria_tipo_to_servico`.
+- Regra obrigatória: novos filtros sobre "primeira visita" devem usar `isInstalacao()`.
+
+### Passo 5 — Validação
+- Login como diretor, abrir Monitoramento › Aprovações, Encaixes, Calendário e Mapa: confirmar que casos Sub-FIPE/Autovistoria/Troca aparecem nos mesmos lugares dos casos com instalação clássica.
+- Disparar push/WhatsApp de teste para uma vistoria base (sem rastreador) e uma instalação 30k+ e conferir o substantivo.
+
+### O que NÃO é alterado
+- Enum no banco (sem migração).
+- Triggers `sync_instalacao_to_servicos` / `sync_vistoria_to_servicos` (continuam gerando os dois tipos).
+- Edge functions de aprovação que já usam `.in('tipo', [...])`.
+
+---
+
+## Alternativa rejeitada — Opção B (unificação total)
+Migrar todos os `vistoria_entrada` históricos para `instalacao`, deprecar o valor do enum, ajustar 50+ pontos. Risco alto de quebrar relatórios e auditoria histórica — recomendo NÃO seguir agora.
