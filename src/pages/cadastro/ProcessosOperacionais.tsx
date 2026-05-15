@@ -122,17 +122,41 @@ function TrocaTitularidadeTab({
                               <FileSignature className="h-3 w-3 mr-1" /> Termo assinado
                             </Badge>
                           )}
-                          {s.status === 'aguardando_cadastro' && (
-                            s.autovistoria_concluida_em ? (
-                              <Badge variant="outline" className="text-green-600 border-green-600">
-                                Autovistoria concluída
-                              </Badge>
-                            ) : (
+                          {s.status === 'aguardando_cadastro' && (() => {
+                            // Caminho 1: cliente fez autovistoria
+                            if (s.autovistoria_concluida_em) {
+                              return (
+                                <Badge variant="outline" className="text-green-600 border-green-600">
+                                  Autovistoria concluída
+                                </Badge>
+                              );
+                            }
+                            // Caminho 2: troca foi pelo caminho de vistoria base (FIPE >= mínimo)
+                            const tipoVistoria = (s as any).cotacao?.tipo_vistoria as string | undefined;
+                            const agendamento = (s as any).cotacao?.agendamentos_base?.[0];
+                            if (tipoVistoria === 'agendada_base' || agendamento) {
+                              if (agendamento?.data_agendada) {
+                                const dt = new Date(`${agendamento.data_agendada}T${agendamento.horario || '00:00:00'}-03:00`);
+                                const periodo = (agendamento.horario || '').startsWith('08') ? 'Manhã' : (agendamento.horario || '').startsWith('13') ? 'Tarde' : '';
+                                return (
+                                  <Badge variant="outline" className="text-blue-600 border-blue-600">
+                                    Vistoria base agendada {dt.toLocaleDateString('pt-BR')} {periodo}
+                                  </Badge>
+                                );
+                              }
+                              return (
+                                <Badge variant="outline" className="text-blue-600 border-blue-600">
+                                  Aguardando vistoria base
+                                </Badge>
+                              );
+                            }
+                            // Default: caminho autovistoria pendente
+                            return (
                               <Badge variant="outline" className="text-amber-600 border-amber-600">
                                 Aguardando autovistoria
                               </Badge>
-                            )
-                          )}
+                            );
+                          })()}
                           {(s as any).sga_status === 'falha' && (
                             <Badge variant="destructive">Erro SGA</Badge>
                           )}
