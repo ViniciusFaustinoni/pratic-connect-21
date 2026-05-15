@@ -1,54 +1,151 @@
-# Causa-raiz
+# Por que está travado
 
-O WhatsApp de suspensão chegou ao THYAGO (KZL9153) **mesmo com o contrato `ativo` e a vistoria/instalação já concluída**. Investigação dos dados:
+Estado real do banco para esta troca (KOU6D37 / `06037fb8…`):
 
-- Contrato `548cf476…` — `status='ativo'`, `data_ativacao=2026-05-15 13:42`, UF=RJ (prazo 48h).
-- Veículo `cdb3d209…` — `status='ativo'` (foi ativado às 13:42), mas o cron rodou às 17:07 e setou `cobertura_suspensa=true`.
-- Tabela `instalacoes` para esse contrato → **vazia**.
-- Tabela `servicos` para o veículo → 1 linha: `tipo='vistoria_entrada'`, `status='aprovada'`, `concluida_em=2026-05-13 20:01`.
+| Campo | Valor |
+|---|---|
+| `solicitacoes_troca_titularidade.status` | `aguardando_cadastro` |
+| `termo_cancelamento_assinado_em` | 15/05 19:28 BRT |
+| `autovistoria_concluida_em` | NULL |
+| `cotacoes.tipo_vistoria` | `agendada_base` (escolhido erradamente no link público) |
+| `agendamentos_base` ativo | 1 (18/05) |
 
-A função `cron-suspender-cobertura-inativacao` tem dois problemas:
+Dois pontos travam o Cadastro:
 
-1. O **fallback em `servicos`** procura `tipo='instalacao' AND status='concluida'`. Pelo padrão canônico do projeto (`mem://logic/operations/vistoria-entrada-equivale-instalacao`), `vistoria_entrada` é o mesmo evento físico de instalação e o status terminal aceito é `aprovada`/`concluida`/`concluida_em IS NOT NULL`. Como a fila usou `vistoria_entrada` + `aprovada`, o cron **não viu a instalação concluída** e suspendeu indevidamente.
-2. Não há **guarda de segurança** para contrato já em `status='ativo'` com `data_ativacao` preenchida — um contrato ativado pelo `ativar-associado` jamais deveria ser suspenso por este cron.
+1. **Backend** — `supabase/functions/aprovar-troca-cadastro/index.ts` linhas 93-102 retornam HTTP 400 `AUTOVISTORIA_PENDENTE` se `autovistoria_concluida_em` for NULL.
+2. **Frontend** — `src/components/troca-titularidade/ModalDetalhesTroca.tsx` linha 373 desabilita o botão "Aprovar" pela mesma regra.
 
-# Correção
+Mas a regra correta (reafirmada): a troca herda apenas a **proteção/cobertura vigente** do titular antigo dentro da janela de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo). Isso significa: **autovistoria inicial não é exigida** — o novo titular faz a cotação normalmente, mas pula a etapa de vistoria. O **Monitoramento**, na fase pós-Cadastro, avalia a pontuação do rastreador e decide se pede uma vistoria (só fotos, ou fotos + instalação). Passada a meia-noite, o `cron-expirar-trocas-titularidade` cancela e força nova adesão.
 
-### 1. `supabase/functions/cron-suspender-cobertura-inativacao/index.ts`
+# Fluxo canônico
 
-- Selecionar somente `status='assinado'` (remover `'ativo'` da lista) **e** ignorar contratos com `data_ativacao` setada — contrato ativado já passou por monitoramento/instalação completa.
-- Trocar o fallback em `servicos` para reconhecer o par canônico:
-  ```
-  .in('tipo', ['instalacao','vistoria_entrada'])
-  .or('status.in.(concluida,aprovada),concluida_em.not.is.null')
-  ```
-- Adicionar guarda extra: ler `veiculos.status`; se já estiver `'ativo'`, registrar em `ignorados` e não suspender.
+```text
+Termo de cancelamento assinado (titular antigo)
+        ↓
+Link público (novo titular) — cotação nova
+        ↓
+  ┌─ DENTRO da janela mesmo-dia ─────────────────────┐
+  │ Etapas: docs → assinatura → pagamento → "Em      │
+  │ Análise Cadastral". Sem autovistoria, sem        │
+  │ agendamento de vistoria.                          │
+  └──────────────────────────────────────────────────┘
+        ↓
+Cadastro aprova MANUALMENTE a documentação
+        ↓
+Monitoramento (manual) — avalia pontuação do rastreador:
+  ├─ Aprova → liberada_para_assinatura → efetivar-troca-titularidade
+  ├─ Pede vistoria (só fotos OU fotos+instalação)
+  │      → status='aguardando_vistoria'; link público vira "agendamento"
+  │      → técnico executa → trigger devolve para aguardando_monitoramento
+  └─ Pede manutenção de rastreador (botão já existente)
 
-### 2. Migration de saneamento (caso pontual KZL9153)
-
-Reverter a suspensão indevida e religar cobertura:
-```sql
-UPDATE veiculos
-   SET cobertura_suspensa = false,
-       cobertura_suspensa_motivo = NULL,
-       cobertura_suspensa_em = NULL,
-       cobertura_total = true,
-       cobertura_roubo_furto = true
- WHERE id = 'cdb3d209-a498-4093-96f1-a240dbdee170';
-
-INSERT INTO logs_auditoria (acao, modulo, descricao, dados_novos)
-VALUES ('reativacao_cobertura_correcao_bug','monitoramento',
-        'Cobertura religada manualmente — falso-positivo do cron de suspensão por não-instalação (vistoria_entrada não reconhecida).',
-        jsonb_build_object('veiculo_id','cdb3d209-a498-4093-96f1-a240dbdee170','placa','KZL9153'));
+Se passa de 23:59:59 BRT → cron-expirar-trocas-titularidade
+   cancela veículo + invalida link → exige nova adesão.
 ```
 
-Não disparar template de “cobertura religada” para evitar nova mensagem confusa — apenas reverter silenciosamente.
+# Plano
 
-### 3. Atualizar memória
+## 1. Backend — desbloquear Cadastro na janela mesmo-dia
 
-`mem://logic/operations/suspensao-cobertura-nao-instalacao-escopo`: acrescentar que o cron deve respeitar `vistoria_entrada ≡ instalacao` e nunca tocar contratos já ativados (`data_ativacao IS NOT NULL`).
+**`supabase/functions/aprovar-troca-cadastro/index.ts`** (substituir bloco 93-102):
 
-# Não escopo
+```ts
+// Janela de mesmo-dia: até 23:59:59.999 BRT (UTC-3) do dia em que o termo
+// de cancelamento foi assinado, autovistoria é DISPENSADA (proteção herdada).
+const dispensaAutovistoriaPorJanela = (() => {
+  if (!sol.termo_cancelamento_assinado_em) return false;
+  const a = new Date(sol.termo_cancelamento_assinado_em);
+  // Fim do dia BRT em UTC = 02:59:59.999 do dia seguinte UTC
+  const fimDiaBRTemUTC = new Date(Date.UTC(
+    a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+    26, 59, 59, 999
+  ));
+  return new Date() <= fimDiaBRTemUTC;
+})();
 
-- Recurso de apagar cotações órfãs e fluxo de troca de titularidade (já entregue em mensagens anteriores).
-- Mudanças no template Meta — o template em si está correto; o problema é o gatilho.
+if (!sol.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela) {
+  return new Response(
+    JSON.stringify({
+      error: 'Aprovação bloqueada: passou da janela de mesmo-dia. O fluxo de troca expirou — peça nova adesão.',
+      code: 'JANELA_TROCA_EXPIRADA',
+    }),
+    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+  );
+}
+```
+
+## 2. Frontend — espelhar a mesma regra
+
+**`src/components/troca-titularidade/ModalDetalhesTroca.tsx`** (linha 373):
+
+```ts
+const dispensaAutovistoriaPorJanela = (() => {
+  if (!solicitacao.termo_cancelamento_assinado_em) return false;
+  const a = new Date(solicitacao.termo_cancelamento_assinado_em);
+  const fimDiaBRTemUTC = new Date(Date.UTC(
+    a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+    26, 59, 59, 999
+  ));
+  return new Date() <= fimDiaBRTemUTC;
+})();
+const bloqueadoPorAutovistoria =
+  modo === 'cadastro'
+  && !solicitacao.autovistoria_concluida_em
+  && !dispensaAutovistoriaPorJanela;
+```
+
+E esconder o badge "Aguardando autovistoria" quando `dispensaAutovistoriaPorJanela=true`.
+
+## 3. Link público — pular a etapa de vistoria na janela mesmo-dia
+
+**`src/pages/public/CotacaoContratacao.tsx`**
+
+Quando `isTrocaTitularidade=true` E está na janela (mesma helper, alimentada por `solicitacaoTroca.termo_cancelamento_assinado_em`):
+
+- **Etapa 3 (Vistoria):** não renderizar `<EtapaVistoria>`. Mostrar card "Vistoria inicial dispensada — proteção do titular antigo estendida a você. O Monitoramento avaliará a pontuação do rastreador na análise final" com botão "Continuar".
+- **Remover etapa "Vistoria"** do `STEPS` visíveis (mesma técnica já usada para adicionar etapa "Instalação" no caminho autovistoria).
+- Após pagamento, render `TelaAnaliseTrocaTitularidade` (já existente, linha 922).
+- Se a cotação tiver `tipo_vistoria` setado por engano (`agendada_base`/`agendada`), ignorar no cálculo de `etapaDoStatus` quando troca em janela.
+
+Fora da janela: mostrar "Prazo expirado — esta troca foi cancelada".
+
+## 4. Saneamento do caso COT-20260515-172515652-649
+
+```sql
+-- Cancelar agendamento_base criado por bug de roteamento
+UPDATE agendamentos_base
+   SET status='cancelado',
+       cancelado_em=now(),
+       motivo_cancelamento='Troca de titularidade dentro da janela mesmo-dia — vistoria inicial dispensada. Agendamento criado por bug de roteamento.'
+ WHERE cotacao_id=(SELECT cotacao_id FROM solicitacoes_troca_titularidade WHERE id='06037fb8-84bb-4856-a723-2b2baea55c5d')
+   AND status NOT IN ('cancelado','concluido');
+
+-- Limpar tipo_vistoria errado
+UPDATE cotacoes
+   SET tipo_vistoria=NULL
+ WHERE id=(SELECT cotacao_id FROM solicitacoes_troca_titularidade WHERE id='06037fb8-84bb-4856-a723-2b2baea55c5d');
+
+INSERT INTO logs_auditoria(acao,modulo,descricao,dados_novos)
+VALUES('reset_vistoria_troca_janela_mesmo_dia','troca_titularidade',
+       'Vistoria dispensada (janela mesmo-dia). Cancelado agendamento_base e limpado tipo_vistoria.',
+       jsonb_build_object('solicitacao_id','06037fb8-84bb-4856-a723-2b2baea55c5d','placa','KOU6D37'));
+```
+
+Após isso, abro como admin em `/cadastro/processos`, confirmo "Situação Financeira (SGA)" e clico **Aprovar** — agora desbloqueado. Vai para `aguardando_monitoramento` para análise final (avaliação do rastreador).
+
+## 5. "Cadastro aprovava direto sem aparecer no painel"
+
+Auditado: `vincular-cotacao-troca` grava `aguardando_cadastro, cadastro_auto_aprovado=false` (linhas 122-123). A migration `20260514231321` reescreveu o trigger para nunca promover automaticamente a partir de `aguardando_cadastro`. **Já corrigido — sem ação.**
+
+## 6. Memória
+
+Substituir `mem://logic/operations/troca-titularidade-monitoramento-pos-vistoria` (desatualizado) por `mem://logic/operations/troca-titularidade-janela-mesmo-dia`:
+
+> Troca de titularidade — janela mesmo-dia: até 23:59:59 BRT do dia da assinatura do termo de cancelamento, a autovistoria inicial é DISPENSADA — apenas a cobertura/proteção do titular antigo é estendida ao novo. Link público da troca pula a etapa de vistoria (vai docs → assinatura → pagamento → "Em Análise Cadastral"). Cadastro aprova manualmente → `aguardando_monitoramento`. Monitoramento avalia a pontuação do rastreador e decide: aprovar / pedir vistoria (só fotos ou fotos+instalação, link vira agendamento) / pedir manutenção de rastreador. Vistoria pedida → técnico executa → trigger devolve para `aguardando_monitoramento`. Passou da janela → `cron-expirar-trocas-titularidade` cancela veículo + invalida link → exige nova adesão.
+
+Atualizar o índice substituindo o item antigo (não duplicar).
+
+# Fora de escopo
+
+- Botão "Solicitar manutenção de rastreador" no Monitoramento — já existe.
+- `cron-expirar-trocas-titularidade` / `aprovar-proposta` — comportamento permanece igual.
