@@ -237,7 +237,7 @@ export function useAprovarTrocaMonitoramento() {
       qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
       qc.invalidateQueries({ queryKey: ['solicitacao-troca'] });
       const msg = vars.acao === 'aprovar'
-        ? 'Liberado para assinatura'
+        ? 'Troca efetivada'
         : vars.acao === 'agendar_manutencao'
           ? 'Manutenção agendada'
           : 'Vistoria solicitada';

@@ -140,13 +140,15 @@ Deno.serve(async (req) => {
     };
 
     if (acao === 'aprovar') {
+      // Marca a aprovação do monitoramento (sem mudar status ainda — só efetiva
+      // depois que a edge `efetivar-troca-titularidade` confirmar sucesso).
       const { error } = await admin
         .from('solicitacoes_troca_titularidade')
-        .update({ ...baseUpdate, status: 'liberada_para_assinatura' })
+        .update(baseUpdate)
         .eq('id', solicitacao_id);
       if (error) throw error;
 
-      // Ativação + efetivação (mesmo fluxo já existente)
+      // Ativação do contrato do novo titular (idempotente)
       if (solicitacao.novo_associado_id) {
         try {
           let contratoNovoId: string | null = null;
@@ -182,8 +184,11 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Efetivação (transferência de veículo + cancelamento contrato antigo + SGA).
+      // A própria edge atualiza status='efetivada' em caso de sucesso.
+      let efetivadaOk = false;
       try {
-        await fetch(`${SUPABASE_URL}/functions/v1/efetivar-troca-titularidade`, {
+        const efetivResp = await fetch(`${SUPABASE_URL}/functions/v1/efetivar-troca-titularidade`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -191,8 +196,22 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({ solicitacao_id, cenario_override: 'B' }),
         });
+        const efetivJson = await efetivResp.json().catch(() => ({}));
+        efetivadaOk = !!efetivJson?.success;
+        if (!efetivadaOk) {
+          console.error('[aprovar-troca-monitoramento] efetivar-troca falhou:', efetivJson);
+        }
       } catch (efetErr) {
         console.error('[aprovar-troca-monitoramento] erro ao efetivar troca:', efetErr);
+      }
+
+      // Fallback: se a efetivação falhou, manter a solicitação visível em
+      // "Pendentes" para reprocessamento (não promover a 'liberada/efetivada').
+      if (!efetivadaOk) {
+        await admin
+          .from('solicitacoes_troca_titularidade')
+          .update({ sga_status: 'falha' })
+          .eq('id', solicitacao_id);
       }
     } else if (acao === 'solicitar_vistoria') {
       // Persiste a modalidade da vistoria escolhida pelo monitoramento e
