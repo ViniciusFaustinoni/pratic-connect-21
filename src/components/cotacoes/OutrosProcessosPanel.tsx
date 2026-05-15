@@ -350,6 +350,19 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                       </Button>
                     </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>
                   )}
+
+                  {podeExcluirOrfa(item) && (permissions.cotacao.canDelete || permissions.cotacao.viewScope === 'all') && (
+                    <Tooltip><TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-500/10"
+                        onClick={(e) => { e.stopPropagation(); setExcluirItem(item); }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>Excluir cotação órfã (não vinculada)</TooltipContent></Tooltip>
+                  )}
                 </div>
               </div>
             );})}
