@@ -215,18 +215,14 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
                 {solicitacao.cotacao ? (
-                  <div className="rounded border p-3 space-y-2">
-                    <h4 className="font-semibold">Cotação vinculada</h4>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Nº {solicitacao.cotacao.numero || solicitacao.cotacao.id.slice(0, 8)} — {solicitacao.cotacao.status}</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => { onOpenChange(false); navigate(`/vendas/cotacoes?abrir=${solicitacao.cotacao!.id}`); }}
-                      >
-                        <ExternalLink className="h-3 w-3 mr-1" /> Abrir cotação
-                      </Button>
+                  <div className="rounded border p-3 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Termo de Filiação</h4>
+                      <p className="text-xs text-muted-foreground mt-1">Documento assinado pelo novo titular.</p>
                     </div>
+                    <Button size="sm" variant="outline" onClick={() => setActiveTab('termo')}>
+                      <ExternalLink className="h-3 w-3 mr-1" /> Ver termo
+                    </Button>
                   </div>
                 ) : (
                   <div className="rounded border p-3 space-y-3 bg-muted/30">
