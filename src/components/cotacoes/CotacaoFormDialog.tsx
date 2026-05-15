@@ -219,6 +219,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   
   // Estado para tipo de placa
   const [tipoPlacaSelecionado, setTipoPlacaSelecionado] = useState<string>('');
+
+  // Tipo da cotação (informativo) — enviado no campo observação do veículo no SGA
+  const [tipoCotacao, setTipoCotacao] = useState<string>(origemTroca ? 'troca_titularidade' : 'adesao');
+  const [tipoCotacaoOutro, setTipoCotacaoOutro] = useState<string>('');
   
   // Estado para combustível detectado/selecionado
   const [combustivelSelecionado, setCombustivelSelecionado] = useState<string>('');
@@ -1605,8 +1609,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
           cenario_adesao: cenarioExterno,
         } : {}),
-        // Marcação na coluna `tipo_entrada` quando originada de Troca de Titularidade
-        ...(origemTroca ? { tipo_entrada: 'troca_titularidade' as const } : {}),
+        // Tipo da cotação (informativo) — coluna direta + espelho em dados_extras
+        tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as any,
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
@@ -1628,9 +1632,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             alertaDesagio: p.alertaDesagio,
             coberturasRemovidas: p.coberturasRemovidas || [],
           })),
+          // Tipo da cotação (informativo) espelhado
+          tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as string,
+          ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
+            ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
+            : {}),
           // Marcação de origem para Troca de Titularidade (quando aplicável)
           ...(origemTroca ? {
-            tipo_entrada: 'troca_titularidade' as const,
             solicitacao_troca_id: origemTroca.solicitacaoId,
             associado_antigo_id: origemTroca.associadoAntigoId,
             veiculo_origem_id: origemTroca.veiculoOrigemId,
@@ -2516,6 +2524,45 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   </AlertDescription>
                 </Alert>
               )}
+            </div>
+
+            <Separator />
+
+            {/* Tipo da Cotação (informativo, vai para observação SGA) */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary" />
+                Tipo da Cotação
+              </h3>
+              <Select
+                value={tipoCotacao}
+                onValueChange={setTipoCotacao}
+                disabled={!!origemTroca}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="adesao">Cotação nova (adesão)</SelectItem>
+                  <SelectItem value="inclusao">Inclusão de veículo</SelectItem>
+                  <SelectItem value="substituicao_placa">Substituição de veículo</SelectItem>
+                  <SelectItem value="troca_titularidade">Troca de titularidade</SelectItem>
+                  <SelectItem value="reativacao">Reativação</SelectItem>
+                  <SelectItem value="migracao">Migração</SelectItem>
+                  <SelectItem value="outro">Outro (descrever)</SelectItem>
+                </SelectContent>
+              </Select>
+              {tipoCotacao === 'outro' && (
+                <Input
+                  placeholder="Descreva o tipo da cotação"
+                  value={tipoCotacaoOutro}
+                  onChange={(e) => setTipoCotacaoOutro(e.target.value)}
+                  maxLength={120}
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Campo informativo. Será enviado no campo <strong>observação</strong> do veículo no SGA junto ao histórico de avisos.
+              </p>
             </div>
 
             <Separator />

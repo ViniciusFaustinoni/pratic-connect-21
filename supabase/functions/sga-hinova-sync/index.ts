@@ -873,8 +873,36 @@ serve(async (req) => {
           ? Number(contrato.cobertura_fipe)
           : undefined;
 
-        // Observação rastreável (ajuda a auditoria do SGA) + histórico de avisos SGA
+        // Observação rastreável (ajuda a auditoria do SGA) + tipo da cotação + histórico de avisos
         let observacao = `Cadastro via Pratic Connect — contrato ${contrato?.numero ?? _vid}`;
+        try {
+          if (contrato?.cotacao_id) {
+            const { data: cotTipo } = await supabase
+              .from('cotacoes')
+              .select('tipo_entrada, dados_extras')
+              .eq('id', contrato.cotacao_id)
+              .maybeSingle();
+            const tipoCanon = (cotTipo?.tipo_entrada as string | null) ?? null;
+            const desc = (cotTipo?.dados_extras as any)?.tipo_entrada_descricao as string | undefined;
+            const labels: Record<string, string> = {
+              adesao: 'Cotação nova (adesão)',
+              inclusao: 'Inclusão de veículo',
+              substituicao_placa: 'Substituição de veículo',
+              substituicao: 'Substituição de veículo',
+              troca_titularidade: 'Troca de titularidade',
+              reativacao: 'Reativação',
+              migracao: 'Migração',
+              outro: 'Outro',
+            };
+            if (tipoCanon) {
+              const lbl = labels[tipoCanon] ?? tipoCanon;
+              const sufixo = desc ? ` — ${desc}` : '';
+              observacao = `Tipo: ${lbl}${sufixo}\n${observacao}`;
+            }
+          }
+        } catch (e) {
+          console.warn('[sga-hinova-sync] falha ao ler tipo_entrada da cotação:', (e as any)?.message);
+        }
         try {
           const cpfAssoc = (associado as any)?.cpf ? String((associado as any).cpf).replace(/\D/g, '') : null;
           const placaVeic = veiculo?.placa ? String(veiculo.placa).replace(/[^A-Za-z0-9]/g, '').toUpperCase() : null;

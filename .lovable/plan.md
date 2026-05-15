@@ -1,45 +1,57 @@
 ## Objetivo
 
-Remover o gate de **Diretor** dos pontos de bloqueio que ainda travam o fluxo, deixando o **botão "Ignorar e Prosseguir" disponível para qualquer usuário**, mantendo o registro auditado da decisão (já implementado em `cotacao_avisos_sga`) e o envio do histórico no campo `observacao` do veículo SGA (já implementado em `sga-hinova-sync`).
+Adicionar um campo **"Tipo da cotação"** (informativo, com sugestões + texto livre) no fluxo padrão de cotação, salvar na cotação e enviar no campo `observacao` do veículo no SGA junto ao histórico de avisos já existente.
 
 ## Estado atual (auditado)
 
-| # | Bloqueio | Arquivo | Bypass hoje |
-|---|----------|---------|-------------|
-| 1.1 | Placa duplicada (outro vendedor) | `CotacaoFormDialog` → `PlacaDuplicadaModal` | ✅ qualquer usuário |
-| 1.2 | Veículo já existe no SGA | `CotacaoFormDialog` → `VeiculoSGAModal` | ✅ qualquer usuário |
-| 1.3 | Placa de outro associado (base local) | `CotacaoFormDialog` → `PlacaOutroAssociadoModal` | ✅ qualquer usuário |
-| 2.1 | CPF já é associado com veículo ativo | `DialogTipoOperacao` | Não é hard-block — oferece Substituição/Inclusão |
-| 2.2 | Ex-cliente inadimplente (CPF) | `EtapaDadosAssociado` | ❌ só Diretor |
-| 3.1 | Inclusão com débito (flag ativa) | `DialogTipoOperacao` | ❌ só Diretor |
-| 4.1 | Boletos vencidos no Cadastro | `SituacaoFinanceiraGate` | ❌ só Diretor |
-
-Os 3 últimos casos têm o diálogo `IgnorarAvisoSGADialog` pronto e o registro em `cotacao_avisos_sga` já funciona — falta apenas remover a checagem `isDiretor` que esconde o botão.
+- `cotacoes.tipo_entrada` (text, sem default) **já existe** no DB. Valores canônicos em uso: `adesao`, `migracao`, `inclusao`, `troca_titularidade`, `reativacao`, `substituicao_placa`.
+- `CotacaoFormDialog` já preenche automaticamente quando o contexto é claro:
+  - `origemTroca` → `tipo_entrada = 'troca_titularidade'`
+- Pages `Cotador.tsx` / `Cotacao.tsx` preenchem `inclusao` ou `substituicao` quando vêm via querystring.
+- `sga-hinova-sync` (linha 877) já monta `observacao` com cabeçalho + histórico de `cotacao_avisos_sga`. **Não inclui o tipo hoje.**
 
 ## Alterações
 
-### 1. `src/components/cotacao/EtapaDadosAssociado.tsx` (caso 2.2)
-- Remover a condição `isDiretor && !bypassDebitoSGA` do bloco que renderiza o botão "Ignorar e Prosseguir (Diretor)".
-- Trocar label para `"Ignorar e Prosseguir"` (sem o sufixo "(Diretor)").
-- Manter `IgnorarAvisoSGADialog` exigindo justificativa ≥ 5 caracteres.
+### 1. UI — `src/components/cotacoes/CotacaoFormDialog.tsx`
+- Novo bloco "Tipo da cotação" (uma linha, dentro do passo de dados gerais).
+- Componente: `Select` com opções:
+  - Cotação nova (adesão) → `adesao`
+  - Inclusão de veículo → `inclusao`
+  - Substituição de veículo → `substituicao_placa`
+  - Troca de titularidade → `troca_titularidade`
+  - Reativação → `reativacao`
+  - Migração → `migracao`
+  - Outro (texto livre) → mostra `Input` adicional para descrição
+- Pré-seleção automática:
+  - `origemTroca` presente → `troca_titularidade` (campo desabilitado/locked)
+  - `cotacaoBase` com `tipo_entrada` → herda
+  - default: `adesao`
+- Se selecionar "Outro", salvar `tipo_entrada = 'outro'` e `dados_extras.tipo_entrada_descricao` com o texto livre.
+- O fluxo de cotação não muda — campo é apenas informativo.
 
-### 2. `src/components/cotacao/DialogTipoOperacao.tsx` (caso 3.1)
-- Remover `{isDiretor && (...)}` em volta do botão de bypass para inclusão de 2º veículo com débito; mostrar para qualquer usuário sempre que `bloqueioAtivo && temDebito`.
-- Trocar label para `"Ignorar e Prosseguir"`.
-- Remover import/uso de `usePermissions` se não houver mais consumo no arquivo.
+### 2. Persistência — `src/components/cotacoes/CotacaoFormDialog.tsx`
+- Estender o objeto enviado ao criar a cotação:
+  - Coluna direta `tipo_entrada` (já há precedente para troca).
+  - `dados_extras.tipo_entrada` espelhado (mantém padrão atual).
+  - `dados_extras.tipo_entrada_descricao` quando "Outro".
+- Sem migração: campo já existe; `dados_extras` é `jsonb`.
 
-### 3. `src/components/cadastro/SituacaoFinanceiraGate.tsx` (caso 4.1)
-- Remover o `isDiretor &&` que esconde o botão de abrir o diálogo de bypass na linha 218.
-- Manter o registro duplo: `bypass.mutate(...)` + `cotacao_avisos_sga` (já presente, com `tipo: cadastro_situacao_financeira_pendente`, `decisao: ignorado_prosseguiu`).
-- Trocar o texto "Liberado por bypass do Diretor" para `"Liberado por decisão registrada"` para refletir que não é mais exclusivo de Diretor.
-- Remover import/uso de `usePermissions` se não houver mais consumo.
+### 3. SGA — `supabase/functions/sga-hinova-sync/index.ts`
+- No bloco que monta `observacao` (linha 877), buscar a cotação vinculada ao contrato (`contratos.cotacao_id`) e ler `tipo_entrada` + `dados_extras.tipo_entrada_descricao`.
+- Inserir cabeçalho:
+  ```
+  Tipo: <label legível em pt-BR>[ — <descricao livre>]
+  ```
+  antes da linha "Cadastro via Pratic Connect — contrato …".
+- Mapa de labels: `adesao`→"Cotação nova (adesão)", `inclusao`→"Inclusão de veículo", `substituicao_placa`→"Substituição de veículo", `troca_titularidade`→"Troca de titularidade", `reativacao`→"Reativação", `migracao`→"Migração", `outro`→"Outro".
+- Mantém o truncamento de 1900 caracteres já existente.
 
 ### 4. Sem alterações
-- Casos 1.1 / 1.2 / 1.3: bypass já universal e auditado.
-- Caso 2.1: já é um fluxo de escolha, não bloqueio.
-- Tabela `cotacao_avisos_sga`, hook `useRegistrarAvisoSGA`, edge `sga-hinova-sync` (concatenação no `observacao`): permanecem como estão.
-- Nenhuma migração necessária.
+- Não mexer em `Cotador.tsx`/`Cotacao.tsx` (já preenchem o tipo via querystring) — apenas garantir que o novo Select respeite valor pré-existente.
+- Sem alterações em RLS, triggers, outras edges, ou `cotacao_avisos_sga`.
 
 ## Resultado esperado
 
-Em todos os 7 pontos listados, o usuário verá o aviso, poderá clicar **"Ignorar e Prosseguir"**, justificar, e o fluxo continua. Cada decisão fica em `cotacao_avisos_sga` com tipo, motivo, autor, e o histórico completo é enviado no campo `observacao` do veículo no SGA quando o veículo for sincronizado.
+- Toda cotação criada pelo modal padrão tem `tipo_entrada` preenchido (manual ou auto).
+- Quando o veículo for sincronizado ao SGA, o campo `observacao` começa com `Tipo: <descrição>` seguido pelo cabeçalho do contrato e pelo bloco `=== Avisos SGA durante a cotação ===` já existente.
+- Fluxo, validações e regras de negócio continuam idênticos.
