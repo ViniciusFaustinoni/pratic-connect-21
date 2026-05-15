@@ -96,6 +96,8 @@ export function EtapaDadosAssociado({
   const { data: veiculoAtivoCpf, isLoading: verificandoCpf, isFetching: refazendoCpf, refetch: refetchVeiculoCpf, erroTransitorio: cpfErroTransitorio, motivoTransitorio: cpfMotivoTransitorio } = useVerificarVeiculoAtivoCpf(cpfBusca);
   const { data: debitosSGA } = useVerificarDebitosAssociado(cpfDigits.length === 11 ? cpfDigits : undefined);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
+  const [bypassDebitoSGA, setBypassDebitoSGA] = useState(false);
+  const [showBypassDebitoDialog, setShowBypassDebitoDialog] = useState(false);
 
   // Auto-atribui o vendedor logado se ele não for liderança (ou pré-seleciona p/ liderança)
   useEffect(() => {
