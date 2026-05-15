@@ -1,151 +1,75 @@
-# Por que está travado
+## O que aconteceu quando você clicou em "Aprovar"
 
-Estado real do banco para esta troca (KOU6D37 / `06037fb8…`):
+Solicitação testada: `06037fb8-84bb-4856-a723-2b2baea55c5d` — veículo `2315cece…`, novo associado `988dbfa9…`, cotação `9db388ed…`.
 
-| Campo | Valor |
-|---|---|
-| `solicitacoes_troca_titularidade.status` | `aguardando_cadastro` |
-| `termo_cancelamento_assinado_em` | 15/05 19:28 BRT |
-| `autovistoria_concluida_em` | NULL |
-| `cotacoes.tipo_vistoria` | `agendada_base` (escolhido erradamente no link público) |
-| `agendamentos_base` ativo | 1 (18/05) |
+A edge `aprovar-troca-monitoramento` executou nesta ordem:
 
-Dois pontos travam o Cadastro:
+1. ✅ Atualizou `solicitacoes_troca_titularidade.status` → **`liberada_para_assinatura`** (por isso veio o toast "Liberado para assinatura" e o card sumiu da aba "Pendentes" e foi para "Aprovadas").
+2. ✅ Disparou `ativar-associado` para o novo titular (ativação do contrato novo).
+3. ❌ Disparou `efetivar-troca-titularidade` que retornou **404 "Solicitação não encontrada"** (log às 21:51:51Z) — nada foi efetivado de fato.
 
-1. **Backend** — `supabase/functions/aprovar-troca-cadastro/index.ts` linhas 93-102 retornam HTTP 400 `AUTOVISTORIA_PENDENTE` se `autovistoria_concluida_em` for NULL.
-2. **Frontend** — `src/components/troca-titularidade/ModalDetalhesTroca.tsx` linha 373 desabilita o botão "Aprovar" pela mesma regra.
+Estado real no banco depois do clique: `status=liberada_para_assinatura`, `sga_status=pendente`, `sga_codigo_associado_novo=NULL`, `sga_codigo_veiculo_novo=NULL`, `aprovado_monitoramento_em` preenchido — ou seja, **a troca NÃO foi concluída**: veículo não migrou de titular, contrato antigo não foi cancelado, SGA não foi sincronizado e a solicitação não chegou a `efetivada`.
 
-Mas a regra correta (reafirmada): a troca herda apenas a **proteção/cobertura vigente** do titular antigo dentro da janela de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo). Isso significa: **autovistoria inicial não é exigida** — o novo titular faz a cotação normalmente, mas pula a etapa de vistoria. O **Monitoramento**, na fase pós-Cadastro, avalia a pontuação do rastreador e decide se pede uma vistoria (só fotos, ou fotos + instalação). Passada a meia-noite, o `cron-expirar-trocas-titularidade` cancela e força nova adesão.
+## Por que falhou (causa-raiz)
 
-# Fluxo canônico
-
-```text
-Termo de cancelamento assinado (titular antigo)
-        ↓
-Link público (novo titular) — cotação nova
-        ↓
-  ┌─ DENTRO da janela mesmo-dia ─────────────────────┐
-  │ Etapas: docs → assinatura → pagamento → "Em      │
-  │ Análise Cadastral". Sem autovistoria, sem        │
-  │ agendamento de vistoria.                          │
-  └──────────────────────────────────────────────────┘
-        ↓
-Cadastro aprova MANUALMENTE a documentação
-        ↓
-Monitoramento (manual) — avalia pontuação do rastreador:
-  ├─ Aprova → liberada_para_assinatura → efetivar-troca-titularidade
-  ├─ Pede vistoria (só fotos OU fotos+instalação)
-  │      → status='aguardando_vistoria'; link público vira "agendamento"
-  │      → técnico executa → trigger devolve para aguardando_monitoramento
-  └─ Pede manutenção de rastreador (botão já existente)
-
-Se passa de 23:59:59 BRT → cron-expirar-trocas-titularidade
-   cancela veículo + invalida link → exige nova adesão.
-```
-
-# Plano
-
-## 1. Backend — desbloquear Cadastro na janela mesmo-dia
-
-**`supabase/functions/aprovar-troca-cadastro/index.ts`** (substituir bloco 93-102):
+`supabase/functions/efetivar-troca-titularidade/index.ts` linha 184–188 ainda lê da tabela legada **`chat_solicitacoes_ia`**:
 
 ```ts
-// Janela de mesmo-dia: até 23:59:59.999 BRT (UTC-3) do dia em que o termo
-// de cancelamento foi assinado, autovistoria é DISPENSADA (proteção herdada).
-const dispensaAutovistoriaPorJanela = (() => {
-  if (!sol.termo_cancelamento_assinado_em) return false;
-  const a = new Date(sol.termo_cancelamento_assinado_em);
-  // Fim do dia BRT em UTC = 02:59:59.999 do dia seguinte UTC
-  const fimDiaBRTemUTC = new Date(Date.UTC(
-    a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
-    26, 59, 59, 999
-  ));
-  return new Date() <= fimDiaBRTemUTC;
-})();
-
-if (!sol.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela) {
-  return new Response(
-    JSON.stringify({
-      error: 'Aprovação bloqueada: passou da janela de mesmo-dia. O fluxo de troca expirou — peça nova adesão.',
-      code: 'JANELA_TROCA_EXPIRADA',
-    }),
-    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-  );
-}
+const { data: solicitacao, error: solError } = await supabase
+  .from("chat_solicitacoes_ia")        // ← tabela errada
+  .select("*")
+  .eq("id", solicitacao_id)
+  .single();
 ```
 
-## 2. Frontend — espelhar a mesma regra
+Mas o fluxo novo usa **`solicitacoes_troca_titularidade`** (com colunas `novo_titular_dados`, `veiculo_id`, `novo_associado_id`, `cotacao_id`, `associado_antigo_id`). Como o ID da solicitação nova não existe em `chat_solicitacoes_ia`, o `.single()` devolve `PGRST116` e a função aborta antes de qualquer escrita real. Toda a lógica seguinte (cenário A/B, cancelar contrato antigo, criar contrato novo, mover veículo, sincronizar SGA, atualizar status para `efetivada`) nunca roda.
 
-**`src/components/troca-titularidade/ModalDetalhesTroca.tsx`** (linha 373):
+## Comportamento correto esperado (regra do fluxo)
+
+Pelas regras do projeto (Troca de Titularidade) o passo 7 é:
+
+> Após a vistoria (ou direto, quando dispensada), Monitoramento aprova → **troca é efetivada**: contrato anterior é cancelado, veículo é transferido, contrato novo entra em vigor, associado/veículo são enviados ao SGA, e a solicitação some das filas indo para `efetivada`.
+
+Não existe etapa de "assinatura" depois do Monitoramento — o termo de filiação do novo titular já foi assinado lá no início do link público. Portanto o status `liberada_para_assinatura` aqui é semanticamente errado para esse caminho: o aprovar do Monitoramento deveria levar direto para `efetivada` (ou `aguardando_sga` se Hinova falhar, com retry).
+
+## Plano de correção
+
+### 1. Corrigir `efetivar-troca-titularidade` para ler da tabela nova
+Substituir o bloco que lê `chat_solicitacoes_ia` por uma leitura em `solicitacoes_troca_titularidade` e mapear os campos:
+
+- `solicitacao.associado_id` → `solicitacao.associado_antigo_id`
+- `solicitacao.dados_novo_titular` → `solicitacao.novo_titular_dados`
+- `dados.veiculo_id` → `solicitacao.veiculo_id` (já presente em coluna própria)
+- `dados.resultado_protocolo` / `solicitacao.resultado_protocolo` → manter `cenario_override` vindo do caller (que já passa `'B'`); para legado, deixar fallback `'B'`.
+- Manter compatibilidade: tentar `solicitacoes_troca_titularidade` primeiro; só cair em `chat_solicitacoes_ia` se `cenario_override` não vier (legado puro).
+
+### 2. Atualizar status final na própria efetivação
+No final do fluxo de sucesso (perto da linha 829, junto com o update de `sga_*`), gravar também:
 
 ```ts
-const dispensaAutovistoriaPorJanela = (() => {
-  if (!solicitacao.termo_cancelamento_assinado_em) return false;
-  const a = new Date(solicitacao.termo_cancelamento_assinado_em);
-  const fimDiaBRTemUTC = new Date(Date.UTC(
-    a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
-    26, 59, 59, 999
-  ));
-  return new Date() <= fimDiaBRTemUTC;
-})();
-const bloqueadoPorAutovistoria =
-  modo === 'cadastro'
-  && !solicitacao.autovistoria_concluida_em
-  && !dispensaAutovistoriaPorJanela;
+status: 'efetivada',
+efetivada_em: new Date().toISOString(),
 ```
 
-E esconder o badge "Aguardando autovistoria" quando `dispensaAutovistoriaPorJanela=true`.
+Assim o card sai de "Aprovadas" e vai para o estado terminal correto.
 
-## 3. Link público — pular a etapa de vistoria na janela mesmo-dia
+### 3. Ajustar `aprovar-troca-monitoramento` para refletir o status certo no caminho feliz
+- Trocar o update intermediário de `liberada_para_assinatura` por um marcador de transição (ex.: manter `aguardando_monitoramento` até `efetivar` retornar) **ou** mudar para `'efetivada'` **somente após** a edge `efetivar-troca-titularidade` responder `success: true`. Em caso de falha, registrar `sga_status='falha'` e manter um status que ainda apareça em "Pendentes" do Monitoramento para reprocesso.
+- Trocar a label do toast no front (`useSolicitacoesTroca.ts` linha 240) para "Troca efetivada" no caminho de sucesso.
 
-**`src/pages/public/CotacaoContratacao.tsx`**
+### 4. Reprocessar a solicitação que ficou travada
+Para `06037fb8-84bb-4856-a723-2b2baea55c5d`: depois do fix, chamar manualmente `efetivar-troca-titularidade` com `{ solicitacao_id, cenario_override: 'B' }` para concluir a transferência (veículo + cancelamento do contrato antigo + SGA). Confirmar que `sga_status` vai a `sincronizado` e `status` a `efetivada`.
 
-Quando `isTrocaTitularidade=true` E está na janela (mesma helper, alimentada por `solicitacaoTroca.termo_cancelamento_assinado_em`):
+### 5. Verificações pós-fix
+- Edge logs de `efetivar-troca-titularidade` sem `PGRST116`.
+- `solicitacoes_troca_titularidade` com `status='efetivada'`, `sga_status='sincronizado'`, `sga_codigo_associado_novo` e `sga_codigo_veiculo_novo` preenchidos.
+- `veiculos.associado_id` migrou para o novo titular; contrato antigo `cancelado`; novo contrato `ativo`.
+- Card sai da fila de Monitoramento.
 
-- **Etapa 3 (Vistoria):** não renderizar `<EtapaVistoria>`. Mostrar card "Vistoria inicial dispensada — proteção do titular antigo estendida a você. O Monitoramento avaliará a pontuação do rastreador na análise final" com botão "Continuar".
-- **Remover etapa "Vistoria"** do `STEPS` visíveis (mesma técnica já usada para adicionar etapa "Instalação" no caminho autovistoria).
-- Após pagamento, render `TelaAnaliseTrocaTitularidade` (já existente, linha 922).
-- Se a cotação tiver `tipo_vistoria` setado por engano (`agendada_base`/`agendada`), ignorar no cálculo de `etapaDoStatus` quando troca em janela.
+## Arquivos que serão tocados
 
-Fora da janela: mostrar "Prazo expirado — esta troca foi cancelada".
+- `supabase/functions/efetivar-troca-titularidade/index.ts` (leitura da tabela + update final de status)
+- `supabase/functions/aprovar-troca-monitoramento/index.ts` (ordem do update de status + tratamento do retorno de efetivação)
+- `src/hooks/useSolicitacoesTroca.ts` (label do toast no caminho de sucesso)
 
-## 4. Saneamento do caso COT-20260515-172515652-649
-
-```sql
--- Cancelar agendamento_base criado por bug de roteamento
-UPDATE agendamentos_base
-   SET status='cancelado',
-       cancelado_em=now(),
-       motivo_cancelamento='Troca de titularidade dentro da janela mesmo-dia — vistoria inicial dispensada. Agendamento criado por bug de roteamento.'
- WHERE cotacao_id=(SELECT cotacao_id FROM solicitacoes_troca_titularidade WHERE id='06037fb8-84bb-4856-a723-2b2baea55c5d')
-   AND status NOT IN ('cancelado','concluido');
-
--- Limpar tipo_vistoria errado
-UPDATE cotacoes
-   SET tipo_vistoria=NULL
- WHERE id=(SELECT cotacao_id FROM solicitacoes_troca_titularidade WHERE id='06037fb8-84bb-4856-a723-2b2baea55c5d');
-
-INSERT INTO logs_auditoria(acao,modulo,descricao,dados_novos)
-VALUES('reset_vistoria_troca_janela_mesmo_dia','troca_titularidade',
-       'Vistoria dispensada (janela mesmo-dia). Cancelado agendamento_base e limpado tipo_vistoria.',
-       jsonb_build_object('solicitacao_id','06037fb8-84bb-4856-a723-2b2baea55c5d','placa','KOU6D37'));
-```
-
-Após isso, abro como admin em `/cadastro/processos`, confirmo "Situação Financeira (SGA)" e clico **Aprovar** — agora desbloqueado. Vai para `aguardando_monitoramento` para análise final (avaliação do rastreador).
-
-## 5. "Cadastro aprovava direto sem aparecer no painel"
-
-Auditado: `vincular-cotacao-troca` grava `aguardando_cadastro, cadastro_auto_aprovado=false` (linhas 122-123). A migration `20260514231321` reescreveu o trigger para nunca promover automaticamente a partir de `aguardando_cadastro`. **Já corrigido — sem ação.**
-
-## 6. Memória
-
-Substituir `mem://logic/operations/troca-titularidade-monitoramento-pos-vistoria` (desatualizado) por `mem://logic/operations/troca-titularidade-janela-mesmo-dia`:
-
-> Troca de titularidade — janela mesmo-dia: até 23:59:59 BRT do dia da assinatura do termo de cancelamento, a autovistoria inicial é DISPENSADA — apenas a cobertura/proteção do titular antigo é estendida ao novo. Link público da troca pula a etapa de vistoria (vai docs → assinatura → pagamento → "Em Análise Cadastral"). Cadastro aprova manualmente → `aguardando_monitoramento`. Monitoramento avalia a pontuação do rastreador e decide: aprovar / pedir vistoria (só fotos ou fotos+instalação, link vira agendamento) / pedir manutenção de rastreador. Vistoria pedida → técnico executa → trigger devolve para `aguardando_monitoramento`. Passou da janela → `cron-expirar-trocas-titularidade` cancela veículo + invalida link → exige nova adesão.
-
-Atualizar o índice substituindo o item antigo (não duplicar).
-
-# Fora de escopo
-
-- Botão "Solicitar manutenção de rastreador" no Monitoramento — já existe.
-- `cron-expirar-trocas-titularidade` / `aprovar-proposta` — comportamento permanece igual.
+Sem migração de schema necessária — `solicitacoes_troca_titularidade` já tem todas as colunas usadas.
