@@ -42,6 +42,8 @@ export function DialogTipoOperacao({
   onInclusao,
 }: DialogTipoOperacaoProps) {
   const [mostrarVerificacao, setMostrarVerificacao] = useState(false);
+  const [showBypass, setShowBypass] = useState(false);
+  const { isDiretor } = usePermissions();
 
   const { data: debitos, isLoading: isLoadingDebitos } = useVerificarDebitosAssociado(
     mostrarVerificacao ? veiculoAtivo.associado_id : undefined
