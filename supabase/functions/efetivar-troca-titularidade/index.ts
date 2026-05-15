@@ -854,8 +854,11 @@ serve(async (req) => {
       });
     }
 
-    // 16. Atualiza solicitacoes_troca_titularidade (se este registro existir)
+    // 16. Atualiza solicitacoes_troca_titularidade — marca como efetivada
     await supabase.from('solicitacoes_troca_titularidade').update({
+      status: 'efetivada',
+      efetivada_em: new Date().toISOString(),
+      novo_associado_id: novoAssociadoId,
       sga_status: sgaStatus === 'nao_aplicavel' ? 'pendente' : sgaStatus,
       sga_erro: sgaErro,
       sga_codigo_associado_novo: sgaCodigoAssociadoNovo,
