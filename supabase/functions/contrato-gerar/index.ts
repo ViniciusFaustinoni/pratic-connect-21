@@ -1212,6 +1212,14 @@ serve(async (req) => {
             data_inicio: hoje,
             validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             created_by: vendedorIdFinal,
+            // Vínculo direto com a solicitação de troca de titularidade (quando aplicável)
+            // Garante que UI/regras encontrem o contrato pela solicitação sem depender da efetivação.
+            origem_troca_titularidade_id:
+              tipoEntrada === 'troca_titularidade'
+                ? ((cotacao as any).dados_extras?.solicitacao_troca_id
+                  || (cotacao as any).dados_extras?.troca_titularidade_id
+                  || null)
+                : null,
           })
       .select()
       .single();
