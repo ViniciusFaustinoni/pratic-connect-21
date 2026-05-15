@@ -371,11 +371,14 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
                     const bloqueadoPorAutovistoria = modo === 'cadastro' && !solicitacao.autovistoria_concluida_em;
-                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria;
+                    const bloqueadoPorSga = modo === 'cadastro' && !sgaLiberado;
+                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria || bloqueadoPorSga;
                     const motivoBloqueio = bloqueadoPorAssinatura
                       ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
                       : bloqueadoPorAutovistoria
                       ? 'Aguardando o novo titular concluir a autovistoria pelo link público.'
+                      : bloqueadoPorSga
+                      ? 'Pendência financeira no SGA — regularize ou use o bypass do Diretor acima.'
                       : '';
                     const btn = (
                       <Button
