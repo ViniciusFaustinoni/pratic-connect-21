@@ -157,6 +157,43 @@ export default function ExecutarVistoriaCompleta() {
     return Array.from(map.values());
   }, [fotosServidor, offlineQueue.previewsFotos]);
 
+  // Fotos extras (opcional) — tipo começa com 'extra_'
+  const fotosExtrasEnviadas = useMemo(
+    () => fotosEnviadas
+      .filter(f => f.tipo?.startsWith('extra_'))
+      .sort((a, b) => {
+        const na = Number(a.tipo.replace('extra_', '')) || 0;
+        const nb = Number(b.tipo.replace('extra_', '')) || 0;
+        return na - nb;
+      }),
+    [fotosEnviadas]
+  );
+
+  const queryClient = useQueryClient();
+
+  const handleRemoveFotoExtra = useCallback(async (tipo: string) => {
+    if (!vistoriaId) return;
+    try {
+      const { error } = await supabase
+        .from('vistoria_fotos')
+        .delete()
+        .eq('vistoria_id', vistoriaId)
+        .eq('tipo', tipo);
+      if (error) throw error;
+      // Apaga arquivo do storage (best-effort)
+      try {
+        await supabase.storage.from('vistoria-fotos').remove([`${vistoriaId}/${tipo}.jpg`]);
+      } catch { /* ignore */ }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] }),
+        queryClient.invalidateQueries({ queryKey: ['vistorias'] }),
+      ]);
+      toast.success('Foto extra removida');
+    } catch (e: any) {
+      toast.error(`Falha ao remover: ${e.message ?? e}`);
+    }
+  }, [vistoriaId, queryClient]);
+
   const video360Url = video360UrlServidor || offlineQueue.previewVideo;
 
   // ========== RESTAURAR DADOS SALVOS ==========
