@@ -976,15 +976,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       const isTroca = shouldBypassPlateGuards(origemTroca);
 
       if (!isTroca) {
+        const placaKey = placaNorm(placa);
+
         // Primeiro, verificar se a placa já está em cotação de outro vendedor
         const placaDuplicada = await verificarPlacaDuplicada.mutateAsync({ placa, ignorarIds: ignorarPlacaDuplicadaIds });
 
         if (placaDuplicada) {
           if (placaDuplicada.vendedorId !== profile?.id) {
-            setPlacaDuplicadaInfo(placaDuplicada);
-            setShowPlacaDuplicadaModal(true);
-            setBuscandoPlaca(false);
-            return;
+            if (!bypassPlacaDuplicada.has(placaKey)) {
+              setPlacaDuplicadaInfo(placaDuplicada);
+              setShowPlacaDuplicadaModal(true);
+              setBuscandoPlaca(false);
+              return;
+            }
           } else {
             toast.info(`Você já possui uma cotação ativa para esta placa: ${placaDuplicada.numero}`);
           }
@@ -993,7 +997,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Verificar se veículo existe no SGA (Hinova)
         try {
           const sgaResult = await verificarVeiculoSGA.mutateAsync(placa);
-          if (sgaResult.existe) {
+          if (sgaResult.existe && !bypassPlacaSGA.has(placaKey)) {
             setShowSGAModal(true);
             setBuscandoPlaca(false);
             return;
@@ -1005,7 +1009,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Verificar se a placa já está vinculada a OUTRO associado na base local
         try {
           const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa });
-          if (localResult?.conflito) {
+          if (localResult?.conflito && !bypassPlacaOutroAssoc.has(placaKey)) {
             setPlacaOutroAssocInfo(localResult);
             setShowPlacaOutroAssocModal(true);
             setBuscandoPlaca(false);
