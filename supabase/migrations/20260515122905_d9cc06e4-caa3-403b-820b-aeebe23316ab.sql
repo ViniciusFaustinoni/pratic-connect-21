@@ -1,0 +1,1 @@
+ALTER TYPE public.tipo_documento ADD VALUE IF NOT EXISTS 'contrato_assinado';

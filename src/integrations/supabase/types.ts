@@ -35125,6 +35125,7 @@ export type Database = {
         | "pneu_traseiro_direito"
         | "pneu_traseiro_esquerdo"
         | "laudo_vistoria"
+        | "contrato_assinado"
       tipo_foto_os: "entrada" | "execucao" | "conclusao"
       tipo_item_os: "peca" | "mao_de_obra" | "servico_terceiro"
       tipo_pix: "cpf" | "cnpj" | "email" | "telefone" | "aleatoria"
@@ -35586,6 +35587,7 @@ export const Constants = {
         "pneu_traseiro_direito",
         "pneu_traseiro_esquerdo",
         "laudo_vistoria",
+        "contrato_assinado",
       ],
       tipo_foto_os: ["entrada", "execucao", "conclusao"],
       tipo_item_os: ["peca", "mao_de_obra", "servico_terceiro"],
