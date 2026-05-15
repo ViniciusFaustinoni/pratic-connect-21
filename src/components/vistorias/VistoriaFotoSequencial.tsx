@@ -258,7 +258,14 @@ export function VistoriaFotoSequencial({
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <h3 className="text-white font-bold text-base leading-tight">{fotoAtual.nome}</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-white font-bold text-base leading-tight">{fotoAtual.nome}</h3>
+                  {fotoAtual.opcional && (
+                    <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300 border border-blue-700/60">
+                      Opcional
+                    </span>
+                  )}
+                </div>
                 {fotoAtual.descricao && (
                   <p className="text-slate-400 text-sm mt-0.5">{fotoAtual.descricao}</p>
                 )}
