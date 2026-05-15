@@ -3158,21 +3158,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         </AlertDialog>
       )}
       
-      {/* Modal de Placa Duplicada - FORA do Dialog principal */}
+      {/* Modal de Placa Duplicada */}
       {showPlacaDuplicadaModal && (
         <PlacaDuplicadaModal
           open={showPlacaDuplicadaModal}
           onOpenChange={setShowPlacaDuplicadaModal}
           placa={placa}
           info={placaDuplicadaInfo}
+          onIgnorarEProsseguir={() => {
+            setBypassPlacaDuplicada((s) => new Set(s).add(placaNorm(placa)));
+            setShowPlacaDuplicadaModal(false);
+            setTimeout(() => buscarPorPlaca(), 100);
+          }}
         />
       )}
-      
+
       {/* Modal Veículo já cadastrado no SGA */}
       <VeiculoSGAModal
         open={showSGAModal}
         onOpenChange={setShowSGAModal}
         placa={placa}
+        onIgnorarEProsseguir={() => {
+          setBypassPlacaSGA((s) => new Set(s).add(placaNorm(placa)));
+          setShowSGAModal(false);
+          setTimeout(() => buscarPorPlaca(), 100);
+        }}
       />
 
       {/* Modal Placa pertence a outro associado (base local) */}
@@ -3181,6 +3191,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onOpenChange={setShowPlacaOutroAssocModal}
         placa={placa}
         info={placaOutroAssocInfo}
+        onIgnorarEProsseguir={() => {
+          setBypassPlacaOutroAssoc((s) => new Set(s).add(placaNorm(placa)));
+          setShowPlacaOutroAssocModal(false);
+          setTimeout(() => buscarPorPlaca(), 100);
+        }}
       />
     </>
   );
