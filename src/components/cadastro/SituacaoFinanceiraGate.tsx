@@ -215,12 +215,10 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
               <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
               Consultar SGA novamente
             </Button>
-            {isDiretor && (
-              <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
-                <KeyRound className="h-4 w-4 mr-2" />
-                Prosseguir mesmo assim
-              </Button>
-            )}
+            <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
+              <KeyRound className="h-4 w-4 mr-2" />
+              Ignorar e Prosseguir
+            </Button>
           </div>
         </CardContent>
       </Card>
