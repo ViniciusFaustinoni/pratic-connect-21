@@ -90,12 +90,27 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3) Trava: autovistoria do novo titular precisa estar concluída
-    if (!sol.autovistoria_concluida_em) {
+    // 3) Trava: autovistoria do novo titular OU janela mesmo-dia
+    // Janela mesmo-dia: até 23:59:59.999 BRT (UTC-3) do dia em que o termo
+    // de cancelamento foi assinado, a autovistoria é DISPENSADA — a proteção
+    // do titular antigo é estendida ao novo. Passou da janela, o cron
+    // `cron-expirar-trocas-titularidade` deve cancelar; aqui devolvemos erro.
+    const dispensaAutovistoriaPorJanela = (() => {
+      if (!sol.termo_cancelamento_assinado_em) return false;
+      const a = new Date(sol.termo_cancelamento_assinado_em);
+      // Fim do dia BRT em UTC = 02:59:59.999 do dia seguinte UTC
+      const fimDiaBRTemUTC = new Date(Date.UTC(
+        a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+        26, 59, 59, 999
+      ));
+      return new Date() <= fimDiaBRTemUTC;
+    })();
+
+    if (!sol.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela) {
       return new Response(
         JSON.stringify({
-          error: 'Aprovação bloqueada: o novo titular ainda não concluiu a autovistoria pelo link público. Cadastro só pode aprovar após as fotos e documentos ficarem prontos.',
-          code: 'AUTOVISTORIA_PENDENTE',
+          error: 'Aprovação bloqueada: passou da janela de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo). O fluxo de troca expirou — peça nova adesão.',
+          code: 'JANELA_TROCA_EXPIRADA',
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );

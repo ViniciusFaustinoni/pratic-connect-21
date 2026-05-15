@@ -369,14 +369,26 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     </>
                   )}
                   {(() => {
+                    // Janela mesmo-dia: até 23:59:59.999 BRT do dia da assinatura
+                    // do termo de cancelamento, autovistoria é DISPENSADA (proteção
+                    // herdada do titular antigo). Monitoramento decide depois.
+                    const dispensaAutovistoriaPorJanela = (() => {
+                      if (!solicitacao.termo_cancelamento_assinado_em) return false;
+                      const a = new Date(solicitacao.termo_cancelamento_assinado_em);
+                      const fimDiaBRTemUTC = new Date(Date.UTC(
+                        a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+                        26, 59, 59, 999
+                      ));
+                      return new Date() <= fimDiaBRTemUTC;
+                    })();
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
-                    const bloqueadoPorAutovistoria = modo === 'cadastro' && !solicitacao.autovistoria_concluida_em;
+                    const bloqueadoPorAutovistoria = modo === 'cadastro' && !solicitacao.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela;
                     const bloqueadoPorSga = modo === 'cadastro' && !sgaLiberado;
                     const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria || bloqueadoPorSga;
                     const motivoBloqueio = bloqueadoPorAssinatura
                       ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
                       : bloqueadoPorAutovistoria
-                      ? 'Aguardando o novo titular concluir a autovistoria pelo link público.'
+                      ? 'Janela mesmo-dia expirada — peça nova adesão.'
                       : bloqueadoPorSga
                       ? 'Pendência financeira no SGA — regularize ou use o bypass do Diretor acima.'
                       : '';

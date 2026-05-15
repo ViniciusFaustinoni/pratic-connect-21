@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, Loader2, Puzzle, Building2 } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2, CalendarCheck, Calendar, Clock, MapPin, PartyPopper, Shield, ShieldCheck, Loader2, Puzzle, Building2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCotacaoContratacao } from '@/hooks/useCotacaoContratacao';
@@ -216,6 +217,22 @@ export default function CotacaoContratacao() {
     solicitacaoTroca.status === 'efetivada'
   );
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
+
+  // Janela mesmo-dia: até 23:59:59.999 BRT do dia em que o termo de cancelamento
+  // foi assinado, autovistoria/vistoria inicial é DISPENSADA — proteção do
+  // titular antigo é estendida ao novo. Monitoramento avalia depois.
+  const trocaDentroJanelaMesmoDia = useMemo(() => {
+    if (!isTrocaTitularidade) return false;
+    const assinado = solicitacaoTroca?.termo_cancelamento_assinado_em;
+    if (!assinado) return false;
+    const a = new Date(assinado);
+    const fimDiaBRTemUTC = new Date(Date.UTC(
+      a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+      26, 59, 59, 999
+    ));
+    return new Date() <= fimDiaBRTemUTC;
+  }, [isTrocaTitularidade, solicitacaoTroca?.termo_cancelamento_assinado_em]);
+  const dispensaVistoriaTroca = trocaDentroJanelaMesmoDia;
   // FLUXO UNIFICADO: troca de titularidade segue o MESMO stepper da nova adesão
   // após o termo de cancelamento estar assinado: Plano → Docs → Contrato → Vistoria → Pagamento.
   // O passo de Pagamento sempre aparece — quando a adesão é isenta, o próprio
@@ -275,7 +292,8 @@ export default function CotacaoContratacao() {
       case 2: // Contrato - concluído se status >= contrato_assinado
         return statusConcluidos.contrato.includes(cotacao.status_contratacao);
       case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
-        return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
+              // OU troca de titularidade dentro da janela mesmo-dia (vistoria dispensada)
+        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
       case 5: // Instalação (apenas autovistoria) - concluída quando instalação agendada ou status final
@@ -289,7 +307,7 @@ export default function CotacaoContratacao() {
       default:
         return false;
     }
-  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido]);
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido, dispensaVistoriaTroca]);
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
@@ -307,9 +325,14 @@ export default function CotacaoContratacao() {
         etapa = 4;
       }
 
+      // Troca dentro da janela mesmo-dia: pula etapa de vistoria automaticamente
+      if (etapa === 3 && dispensaVistoriaTroca) {
+        etapa = 4;
+      }
+
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, determinarEtapa, setEtapaAtual, navegacaoManual]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade segue a navOrder (Pagamento na sequência), igual à nova adesão.
@@ -807,8 +830,43 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* Substituição: pergunta sobre localização dos veículos */}
-                  {isSubstituicao && substituicaoMesmoLocal === null && !cotacao?.vistoria_concluida_em && !cotacao?.tipo_vistoria ? (
+                  {/* Troca de titularidade dentro da janela mesmo-dia: vistoria dispensada */}
+                  {dispensaVistoriaTroca ? (
+                    <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
+                      <CardContent className="py-12 text-center space-y-6">
+                        <motion.div
+                          className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                        >
+                          <ShieldCheck className="h-10 w-10 text-primary" />
+                        </motion.div>
+                        <div>
+                          <Badge className="bg-primary/20 text-primary border-primary/30 mb-4">
+                            Vistoria Dispensada
+                          </Badge>
+                          <h2 className="text-2xl font-bold mb-3 text-foreground">
+                            Sem necessidade de vistoria inicial
+                          </h2>
+                          <p className="text-muted-foreground max-w-md mx-auto">
+                            Como a troca de titularidade está sendo feita ainda no dia da assinatura do termo,
+                            a proteção do titular antigo é estendida a você. O Monitoramento avaliará a
+                            pontuação do rastreador na análise final e decidirá se uma vistoria é necessária.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            const idx = navOrder.indexOf(3);
+                            const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                            setEtapaAtual(next);
+                          }}
+                        >
+                          Continuar
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ) : isSubstituicao && substituicaoMesmoLocal === null && !cotacao?.vistoria_concluida_em && !cotacao?.tipo_vistoria ? (
                     <AgendamentoSubstituicao
                       veiculoAntigoPlaca={dadosExtras?.veiculo_antigo_placa || '???'}
                       veiculoAntigoModelo={dadosExtras?.veiculo_antigo_modelo || ''}
