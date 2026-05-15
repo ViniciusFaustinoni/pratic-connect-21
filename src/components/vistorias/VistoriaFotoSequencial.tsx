@@ -157,7 +157,17 @@ export function VistoriaFotoSequencial({
             ? "bg-emerald-900/50 text-emerald-300" 
             : "bg-slate-700 text-slate-300"
         )}>
-          {fotosCompletasCount}/{totalFotos} enviadas
+          {obrigatoriasEnviadas}/{totalObrigatorias} obrigatórias
+        </span>
+      </div>
+
+      {/* Barra de progresso */}
+      <div className="w-full bg-slate-700 rounded-full h-1.5">
+        <div
+          className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+          style={{ width: `${totalObrigatorias === 0 ? 100 : (obrigatoriasEnviadas / totalObrigatorias) * 100}%` }}
+        />
+      </div>
         </span>
       </div>
 
