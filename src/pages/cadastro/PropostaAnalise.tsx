@@ -90,11 +90,16 @@ export default function PropostaAnalise() {
   const nextProposta = currentIndex >= 0 && todasPropostas ? todasPropostas[currentIndex + 1] : null;
 
   // Determinar se é autovistoria
+  // OBS: agendamento base (vistoria_base_info) é evento da INSTALAÇÃO posterior
+  // e PODE coexistir com uma autovistoria antecipada (associado fez fotos+vídeo
+  // antes do dia da instalação para liberar R&F já no Cadastro). Por isso NÃO
+  // dependemos mais de !isVistoriaBase aqui — só uma instalação concluída
+  // invalida a autovistoria como fonte de fotos para o Cadastro.
   const isVistoriaBase = !!proposta?.vistoria_base_info;
   const isAutovistoria = (
     proposta?.vistoria?.modalidade === 'autovistoria' ||
     proposta?.vistoria?.tipo === 'autovistoria'
-  ) && !proposta?.instalacao_info && !isVistoriaBase;
+  ) && !proposta?.instalacao_info;
 
   // Tipo de veículo (carro/moto) para personalizar labels do dialog de reenvio
   const { tipoVeiculo } = useDetectarTipoVeiculo(
@@ -135,14 +140,15 @@ export default function PropostaAnalise() {
     );
 
   // Autovistoria só é considerada COMPLETA (e portanto liberadora de R&F)
-  // quando entregou TODAS as fotos obrigatórias do roteiro + vídeo 360°.
-  // Mínimo: 31 fotos (carro) / 15 fotos (moto).
+  // quando entregou o roteiro obrigatório + vídeo 360°.
+  // Canônica nova: 2 fotos (motor + chassi) + vídeo 360°.
+  // Compat legado: roteiro antigo de 31 fotos (carro) / 15 (moto) também é aceito.
   const isMoto = (tipoVeiculo || '').toLowerCase().includes('moto');
   const minFotosAutovistoria = isMoto ? 15 : 31;
   const totalFotosAuto = proposta?.vistoria?.fotos?.length || 0;
   const temVideo360 = !!proposta?.vistoria?.video_360_url;
   const autovistoriaCompleta = isAutovistoria
-    ? (totalFotosAuto >= minFotosAutovistoria && temVideo360)
+    ? ((totalFotosAuto >= 2 && temVideo360) || totalFotosAuto >= minFotosAutovistoria)
     : true;
 
   // Cadastro avalia fotos quando:

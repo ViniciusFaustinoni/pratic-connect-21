@@ -491,6 +491,72 @@ serve(async (req) => {
             console.warn('[aprovar-proposta] Exceção no fallback criar-instalacao-pos-pagamento:', e);
           }
         }
+
+        // ============================================================
+        // AUTOVISTORIA ANTECIPADA + RASTREADOR OBRIGATÓRIO
+        // ------------------------------------------------------------
+        // Cenário: associado fez autovistoria (motor + chassi + vídeo 360°)
+        // ANTES do dia da instalação base já agendada, justamente para liberar
+        // a Cobertura R&F já no Cadastro. Quando a autovistoria está completa
+        // (canônica nova >=2 fotos+vídeo OU legado 31/15) e o plano tem R&F,
+        // o Cadastro libera R&F agora e marca a autovistoria como aprovada.
+        // A instalação do rastreador segue para o Monitoramento normalmente.
+        // ============================================================
+        if (planoTemRouboFurto) {
+          try {
+            const { data: vistAutoRf } = await supabase
+              .from('vistorias')
+              .select('id, status, video_360_url')
+              .eq('veiculo_id', veiculoId)
+              .eq('modalidade', 'autovistoria')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (vistAutoRf?.id && vistAutoRf.status === 'pendente') {
+              const { count: nFotos } = await supabase
+                .from('vistoria_fotos')
+                .select('id', { count: 'exact', head: true })
+                .eq('vistoria_id', vistAutoRf.id);
+
+              const isMotoVeic = (tipoVeiculo || '').toLowerCase().includes('moto');
+              const minLegado = isMotoVeic ? 15 : 31;
+              const temFotosCanonicas = (nFotos ?? 0) >= 2 && !!vistAutoRf.video_360_url;
+              const temFotosLegado = (nFotos ?? 0) >= minLegado;
+
+              if (temFotosCanonicas || temFotosLegado) {
+                await supabase
+                  .from('vistorias')
+                  .update({
+                    status: 'aprovada',
+                    aprovado_em: agora,
+                    aprovado_por: aprovado_por || null,
+                  })
+                  .eq('id', vistAutoRf.id)
+                  .eq('status', 'pendente');
+
+                await supabase
+                  .from('veiculos')
+                  .update({ cobertura_roubo_furto: true })
+                  .eq('id', veiculoId);
+
+                await supabase.from('associados_historico').insert({
+                  associado_id: associadoId,
+                  contrato_id: contrato_id,
+                  tipo: 'status_alterado',
+                  descricao: `Cobertura Roubo/Furto liberada pelo Cadastro via autovistoria (veículo ${veiculo.placa}). Instalação do rastreador segue no agendamento já marcado.`,
+                  usuario_id: aprovado_por || null,
+                });
+
+                console.log(`[aprovar-proposta] Autovistoria ${vistAutoRf.id} aprovada e R&F liberado para veículo ${veiculo.placa}.`);
+              } else {
+                console.log(`[aprovar-proposta] Autovistoria ${vistAutoRf.id} incompleta (fotos=${nFotos}, video=${!!vistAutoRf.video_360_url}) — R&F não liberado.`);
+              }
+            }
+          } catch (e) {
+            console.warn('[aprovar-proposta] Erro liberação R&F via autovistoria antecipada:', e);
+          }
+        }
       } else if (!veiculoPrecisaRastreador) {
         // SUB-FIPE: Cadastro está aprovando após a autovistoria. Promove o servico
         // vistoria_entrada (em_analise → concluida) para entrar na fila do Monitoramento,

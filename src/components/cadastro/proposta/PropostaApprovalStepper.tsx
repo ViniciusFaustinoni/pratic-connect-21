@@ -409,6 +409,33 @@ export function PropostaApprovalStepper({
                       )}
                     </div>
                   )}
+
+                  {/* Aviso extra: autovistoria antecipada + base agendada para a INSTALAÇÃO.
+                      Reforça que a aprovação libera R&F agora e a instalação ocorrerá
+                      no agendamento já feito (ex.: cotação 434). */}
+                  {isAutovistoria && planoTemRouboFurto && proposta.vistoria_base_info && (
+                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
+                      <ShieldCheck className="h-5 w-5 text-info shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-info">
+                          Autovistoria antecipada + instalação base agendada
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Aprovar agora <strong>libera a Cobertura Roubo &amp; Furto</strong> imediatamente.
+                          A <strong>instalação do rastreador</strong> seguirá no agendamento base já marcado
+                          {proposta.vistoria_base_info.data_agendada && (
+                            <>
+                              {' '}para <strong className="text-foreground">
+                                {new Date(proposta.vistoria_base_info.data_agendada + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </strong>
+                              {proposta.vistoria_base_info.horario && <> — <strong className="text-foreground">{formatPeriodoLabel(proposta.vistoria_base_info.horario)}</strong></>}
+                            </>
+                          )}
+                          .
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
