@@ -83,7 +83,8 @@ export const FOTOS_VISTORIA_COMPLETA: VistoriaFotoConfig[] = [
     icone: Key, 
     categoria: 'roteiro', 
     ordem: 2,
-    descricao: 'Chave do veículo em destaque',
+    opcional: true,
+    descricao: 'Chave do veículo em destaque (opcional — pode pular se o cliente não tiver a chave em mãos)',
     instrucoes: [
       'Segure a chave na mão ou coloque sobre superfície lisa',
       'A chave deve estar inteira e nítida na foto',
