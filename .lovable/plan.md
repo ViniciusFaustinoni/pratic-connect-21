@@ -1,52 +1,31 @@
-## Diagnóstico do estado atual
+## Problema
 
-Para sub-FIPE (carro <30k / moto <9k não-Diesel), hoje:
+No link público (cotação), mesmo quando o OCR lê o documento e preenche os campos importantes (ex.: comprovante de residência com nome + CEP), o componente `OcrDadosEditor` exibe a badge vermelha **"Não foi possível ler"** e o texto **"Não conseguimos ler o documento automaticamente. Preencha os campos manualmente abaixo."**
 
-1. Cliente conclui plano → docs → termo → pagamento → autovistoria 31/15 no link público. ✅ já existe.
-2. `finalizar-autovistoria-cotacao` materializa `vistorias` + `vistoria_fotos` + `servicos.tipo='vistoria_entrada' status='concluida'` → **vai DIRETO para a fila Monitoramento › Aprovação de Associados**, pulando o Cadastro.
-3. Monitoramento aprova OU pede vistoria de técnico via `solicitar-vistoria-tecnico-sub-fipe` (já existe, só fotos, sem instalação). Pós-vistoria volta para Monitoramento via `aplicar-conclusao-vistoria`. Aprovação final chama `ativar-associado` → SGA. ✅ já existe.
+Isso acontece porque o componente confia em `legivel === false` ou `sugestao === 'reprovar'` vindos do edge `document-ocr` — que marca como falha sempre que campos secundários (validade, número, etc.) não puderam ser lidos, mesmo com confiança ≥ 70% e dados essenciais OK.
 
-**Gap:** falta o passo **Cadastro analisa autovistoria → libera Roubo/Furto → manda pro Monitoramento**. Hoje o Cadastro é pulado nesse fluxo.
+Resultado: o associado vê erro vermelho num documento que foi lido com sucesso, gerando confusão.
 
-## Mudanças propostas
+## Solução (apenas UI / presentation)
 
-### 1. `supabase/functions/finalizar-autovistoria-cotacao/index.ts`
-- Detectar sub-FIPE (`!precisaRastreador(...)`) carregando `veiculos.valor_fipe`, `combustivel`, `categoria`.
-- Se sub-FIPE: criar `servicos` com `status='em_analise'` (não `concluida`) e tag `[AUTOVISTORIA_AGUARDA_CADASTRO]` em `observacoes`.
-- Atualizar `cotacoes.status_contratacao='aguardando_aprovacao_cadastro'`.
-- Se ≥30k continua igual (não muda nada).
+Apenas no `src/components/ocr/OcrDadosEditor.tsx`, recalcular o estado "OCR falhou" levando em conta o que efetivamente foi extraído:
 
-### 2. Cadastro › Propostas Pendentes
-- `src/pages/cadastro/PropostasPendentes.tsx` + `PropostaAnalise.tsx`: detectar sub-FIPE com autovistoria já concluída e exibir um painel de análise da autovistoria (fotos via `useFotosByVistoriaId` + vídeo 360° + docs já anexados via `DocumentosAnexadosPanel`).
-- 3 ações: **Aprovar (libera Roubo/Furto)** | **Solicitar documentos** | **Reprovar**.
-- Badge específico no card da fila para diferenciar de propostas com rastreador.
+1. Considerar o OCR como **bem-sucedido** quando **todos os campos `important: true` do schema** estiverem preenchidos em `dados` (não vazios após trim), independentemente de `legivel`/`sugestao`.
+2. Só tratar como `ocrFalhou` (badge vermelha + banner + auto-edição) quando faltar algum campo importante OU quando não houver nenhum dado extraído.
+3. Quando o OCR retornou `legivel=false`/`sugestao=reprovar` mas os campos importantes estão todos preenchidos:
+   - Esconder a badge "Não foi possível ler" e o banner em vermelho.
+   - Mostrar a badge "Revise os dados" (amarela) — sinalizando que vale conferir, sem alarmar.
+   - Não forçar modo edição automático (deixar usuário abrir se quiser ajustar).
+4. Manter o comportamento atual quando realmente não há dados (schema com importantes vazios) ou quando `forceEdit=true`.
 
-### 3. Edge nova `aprovar-cadastro-sub-fipe`
-- Service role; recebe `cotacaoId`.
-- Idempotente: se já promovido, retorna sucesso.
-- Marca `contratos.cadastro_aprovado=true`, `veiculos.cobertura_roubo_furto=true`.
-- Promove `servicos` (`vistoria_entrada` da cotação) de `em_analise` → `concluida` → entra na fila do Monitoramento.
-- Atualiza `cotacoes.status_contratacao='aguardando_aprovacao_monitoramento'`.
-- Insere `associados_historico` `cadastro_aprovou_autovistoria_sub_fipe`.
-- **Não** chama `ativar-associado` (segue regra: ativação só pelo Monitoramento).
+## Escopo
 
-### 4. Monitoramento › Aprovação
-- Sem mudanças estruturais — o caso já chega na fila assim que o serviço vira `concluida`.
-- Confirmar UI: botão "Solicitar Vistoria de Técnico" (já existe via `useSolicitarVistoriaTecnico`) e botão Aprovar (já chama `ativar-associado`). Pós-vistoria do técnico → `aplicar-conclusao-vistoria` devolve para Monitoramento (já existe).
+- Único arquivo alterado: `src/components/ocr/OcrDadosEditor.tsx`.
+- Sem mudanças no edge `document-ocr`, no schema de campos, nem nos fluxos que consomem o componente.
+- Sem mudança de tokens de design ou layout — apenas a lógica que decide qual badge/banner mostrar.
 
-### 5. Documentação
-- Atualizar `mem://logic/operations/vistoria-sem-rastreador-flow` para descrever o passo do Cadastro entre autovistoria e Monitoramento, e a liberação de Roubo/Furto na aprovação do Cadastro.
-- Atualizar `mem://logic/operations/autovistoria-materializa-vistoria` para refletir o novo destino (`em_analise` para sub-FIPE, `concluida` para ≥30k).
+## Aceite
 
-## Fora de escopo
-
-- Fluxo ≥30k (com rastreador) — inalterado.
-- Etapas de plano/docs/termo/pagamento — inalteradas.
-- `solicitar-vistoria-tecnico-sub-fipe`, `aplicar-conclusao-vistoria`, `ativar-associado` — já atendem.
-- Cron de expiração / link público (sem mudanças visuais).
-
-## Notas técnicas
-
-- Sem novas tabelas/colunas — reaproveitamos `cadastro_aprovado`, `cobertura_roubo_furto`, `status_contratacao` e `servicos.status`.
-- **Backfill:** cotações sub-FIPE já em `aguardando_aprovacao_monitoramento` sem `cadastro_aprovado=true` ficam onde estão (não retroceder casos vivos); novos seguem o fluxo novo.
-- Chamadas repetidas de `aprovar-cadastro-sub-fipe` são seguras (idempotentes por `servicos.status`/`cadastro_aprovado`).
+- Comprovante de residência (screenshot) com nome + CEP preenchidos e 70% confiança: cabeçalho mostra **"70% confiança"** + **"Revise os dados"** (amarela), sem texto vermelho de erro, sem auto-abrir edição.
+- Documento sem CEP nem nome (campos importantes vazios): continua mostrando **"Não foi possível ler"** + banner vermelho + modo edição aberto, como hoje.
+- Documento lido com `sugestao='aprovar'`: continua mostrando **"Lido com sucesso"** (verde).
