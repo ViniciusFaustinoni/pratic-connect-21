@@ -311,15 +311,21 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
             {podeAgir && !confirmandoReprovar && (
               <div className="border-t pt-4 space-y-3">
                 {modo === 'cadastro' && (
-                  <Alert>
-                    <ClipboardCheck className="h-4 w-4" />
-                    <AlertTitle>Análise do Cadastro</AlertTitle>
-                    <AlertDescription>
-                      Verifique CNH/CRLV/comprovante e as fotos da autovistoria do novo titular.
-                      Aprovar envia a solicitação para o <strong>Monitoramento</strong> (próxima etapa).
-                      O botão só libera após o novo titular concluir a autovistoria pelo link público.
-                    </AlertDescription>
-                  </Alert>
+                  <>
+                    <SituacaoFinanceiraGate
+                      solicitacaoTrocaId={solicitacao.id}
+                      onChange={setSgaLiberado}
+                    />
+                    <Alert>
+                      <ClipboardCheck className="h-4 w-4" />
+                      <AlertTitle>Análise do Cadastro</AlertTitle>
+                      <AlertDescription>
+                        Verifique CNH/CRLV/comprovante e as fotos da autovistoria do novo titular.
+                        Aprovar envia a solicitação para o <strong>Monitoramento</strong> (próxima etapa).
+                        O botão só libera após o novo titular concluir a autovistoria pelo link público.
+                      </AlertDescription>
+                    </Alert>
+                  </>
                 )}
                 <div>
                   <Label htmlFor="obs">Observação (opcional)</Label>
