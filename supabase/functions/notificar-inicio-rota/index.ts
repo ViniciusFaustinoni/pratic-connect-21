@@ -153,7 +153,8 @@ serve(async (req) => {
       try {
         console.log(`[notificar-inicio-rota] Notificando cliente ${associado.nome} via notificar-cliente...`);
         
-        const tipoServico = servico.tipo === 'instalacao' ? 'instalação' : 'vistoria';
+        // 'vistoria_entrada' equivale a 'instalacao' (primeira visita) — ver mem://logic/operations/vistoria-entrada-equivale-instalacao
+        const tipoServico = (servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada') ? 'instalação' : 'vistoria';
         const periodoLabel = servico.periodo === 'manha' ? 'Manhã (08:00-12:00)' : servico.periodo === 'tarde' ? 'Tarde (14:00-18:00)' : 'A definir';
         
         const { error: notifyError } = await supabase.functions.invoke('notificar-cliente', {
@@ -198,7 +199,7 @@ serve(async (req) => {
       try {
         console.log(`[notificar-inicio-rota] Notificando profissional ${profissional.nome}...`);
         
-        const tipoServico = servico.tipo === 'instalacao' ? 'INSTALAÇÃO' : 'VISTORIA';
+        const tipoServico = (servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada') ? 'INSTALAÇÃO' : 'VISTORIA';
         const periodoLabel = servico.periodo === 'manha' ? 'Manhã' : servico.periodo === 'tarde' ? 'Tarde' : 'Integral';
         
         // Montar endereço completo
