@@ -25987,6 +25987,20 @@ export type Database = {
             referencedColumns: ["cotacao_id"]
           },
           {
+            foreignKeyName: "servicos_instalacao_origem_id_fkey"
+            columns: ["instalacao_origem_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_instalacao_origem_id_fkey"
+            columns: ["instalacao_origem_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
             foreignKeyName: "servicos_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -26159,6 +26173,20 @@ export type Database = {
             columns: ["veiculo_id"]
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_vistoria_origem_id_fkey"
+            columns: ["vistoria_origem_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["vistoria_id"]
+          },
+          {
+            foreignKeyName: "servicos_vistoria_origem_id_fkey"
+            columns: ["vistoria_origem_id"]
+            isOneToOne: false
+            referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
         ]
@@ -33003,6 +33031,20 @@ export type Database = {
           updated_at: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "servicos_instalacao_origem_id_fkey"
+            columns: ["instalacao_origem_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_instalacao_origem_id_fkey"
+            columns: ["instalacao_origem_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
           {
             foreignKeyName: "servicos_profissional_id_fkey"
             columns: ["profissional_id"]
