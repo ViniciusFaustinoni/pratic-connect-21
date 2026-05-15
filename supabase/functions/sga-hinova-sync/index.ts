@@ -873,8 +873,36 @@ serve(async (req) => {
           ? Number(contrato.cobertura_fipe)
           : undefined;
 
-        // Observação rastreável (ajuda a auditoria do SGA)
-        const observacao = `Cadastro via Pratic Connect — contrato ${contrato?.numero ?? _vid}`;
+        // Observação rastreável (ajuda a auditoria do SGA) + histórico de avisos SGA
+        let observacao = `Cadastro via Pratic Connect — contrato ${contrato?.numero ?? _vid}`;
+        try {
+          const cpfAssoc = (associado as any)?.cpf ? String((associado as any).cpf).replace(/\D/g, '') : null;
+          const placaVeic = veiculo?.placa ? String(veiculo.placa).replace(/[^A-Za-z0-9]/g, '').toUpperCase() : null;
+          const filtros: string[] = [];
+          if (contrato?.id) filtros.push(`contrato_id.eq.${contrato.id}`);
+          if (cpfAssoc) filtros.push(`cpf.eq.${cpfAssoc}`);
+          if (placaVeic) filtros.push(`placa.eq.${placaVeic}`);
+          if (filtros.length > 0) {
+            const { data: avisos } = await supabase
+              .from('cotacao_avisos_sga')
+              .select('tipo,titulo,mensagem,decisao,motivo,decidido_por_nome,decidido_em')
+              .or(filtros.join(','))
+              .order('decidido_em', { ascending: true });
+            if (avisos && avisos.length > 0) {
+              const linhas = avisos.map((a: any) => {
+                const dt = a.decidido_em ? new Date(a.decidido_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+                const dec = a.decisao === 'ignorado_prosseguiu' ? 'Concordou e prosseguiu' : a.decisao === 'cancelou' ? 'Cancelou' : 'Visualizou';
+                const por = a.decidido_por_nome ? ` por ${a.decidido_por_nome}` : '';
+                const motivo = a.motivo ? ` — Motivo: ${a.motivo}` : '';
+                return `[${dt}] ${a.titulo}: ${dec}${por}${motivo}`;
+              });
+              observacao += `\n\n=== Avisos SGA durante a cotação ===\n${linhas.join('\n')}`;
+              if (observacao.length > 1900) observacao = observacao.slice(0, 1897) + '...';
+            }
+          }
+        } catch (e) {
+          console.warn('[sga-hinova-sync] falha ao montar histórico de avisos:', (e as any)?.message);
+        }
 
         const ctxV: VeiculoCtx = {
           codigo_associado: codigoAssociadoHinova!,
