@@ -201,7 +201,8 @@ export function MapaMobileContent() {
 
   // Navegar para execução
   const iniciarServico = (t: TarefaAtual) => {
-    if (t.tipo === 'instalacao') {
+    // 'vistoria_entrada' é equivalente a 'instalacao' (primeira visita)
+    if (t.tipo === 'instalacao' || t.tipo === 'vistoria_entrada') {
       navigate(`/instalador/instalacao/${t.id}`);
     } else {
       navigate(`/vistoriador/vistoria-completa/${t.id}`);
@@ -298,14 +299,14 @@ export function MapaMobileContent() {
         {posicaoTarefa && tarefa && (
           <Marker
             position={posicaoTarefa}
-            icon={getTarefaIcon(tarefa.tipo === 'instalacao' ? '#10B981' : '#3B82F6')}
+            icon={getTarefaIcon((tarefa.tipo === 'instalacao' || tarefa.tipo === 'vistoria_entrada') ? '#10B981' : '#3B82F6')}
           >
             <Popup>
               <div className="min-w-[220px]">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold text-sm">{tarefa.veiculo.placa || "Sem placa"}</h3>
                   <Badge className="text-xs">
-                    {tarefa.tipo === 'instalacao' ? 'Instalação' : TIPO_SERVICO_LABELS[tarefa.tipo]}
+                    {(tarefa.tipo === 'instalacao' || tarefa.tipo === 'vistoria_entrada') ? 'Instalação' : TIPO_SERVICO_LABELS[tarefa.tipo]}
                   </Badge>
                 </div>
 
@@ -360,13 +361,13 @@ export function MapaMobileContent() {
             size="lg"
             onClick={() => iniciarServico(tarefa)}
           >
-            {tarefa.tipo === 'instalacao' ? (
+            {(tarefa.tipo === 'instalacao' || tarefa.tipo === 'vistoria_entrada') ? (
               <Wrench className="h-5 w-5" />
             ) : (
               <ClipboardCheck className="h-5 w-5" />
             )}
             <span className="font-semibold">
-              {tarefa.tipo === 'instalacao' ? 'INSTALAÇÃO' : 'VISTORIA'} - {tarefa.veiculo.placa}
+              {(tarefa.tipo === 'instalacao' || tarefa.tipo === 'vistoria_entrada') ? 'INSTALAÇÃO' : 'VISTORIA'} - {tarefa.veiculo.placa}
             </span>
             {rotaReal.distanciaKm > 0 && (
               <Badge variant="secondary" className="ml-1 gap-1">

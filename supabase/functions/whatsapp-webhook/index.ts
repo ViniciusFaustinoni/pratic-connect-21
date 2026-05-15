@@ -2482,7 +2482,8 @@ Responda *1*, *2* ou *3*.`;
       return new Response(JSON.stringify({ ok: false, error: "servico_incompleto" }), { headers: corsHeaders });
     }
 
-    const tipoServico = servicoOriginalDados.tipo === 'instalacao' 
+    // 'vistoria_entrada' equivale a 'instalacao' (primeira visita) — ver mem://logic/operations/vistoria-entrada-equivale-instalacao
+    const tipoServico = (servicoOriginalDados.tipo === 'instalacao' || servicoOriginalDados.tipo === 'vistoria_entrada')
       ? 'instalação do rastreador' 
       : servicoOriginalDados.tipo === 'vistoria' 
         ? 'vistoria veicular' 

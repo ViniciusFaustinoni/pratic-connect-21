@@ -120,7 +120,7 @@ serve(async (req) => {
         const telefoneFormatado = telefone.replace(/\D/g, "");
 
         // Tipo de serviço
-        const tipoLabel = servico.tipo === 'instalacao' ? 'instalação'
+        const tipoLabel = (servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada') ? 'instalação'
           : servico.tipo === 'vistoria' ? 'vistoria'
           : servico.tipo === 'remocao' ? 'remoção'
           : servico.tipo === 'manutencao' ? 'manutenção' : 'serviço';

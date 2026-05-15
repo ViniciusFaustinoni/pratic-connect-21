@@ -695,7 +695,7 @@ serve(async (req) => {
           
           if (telefoneEncaixe && servico.associado_id) {
             const telefoneFormatado = telefoneEncaixe.replace(/\D/g, '');
-            const tipoServicoEncaixe = servico.tipo === 'instalacao' ? 'instalação do rastreador' : 'vistoria veicular';
+            const tipoServicoEncaixe = (servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada') ? 'instalação do rastreador' : 'vistoria veicular';
             
             const mensagemEncaixe = `Olá, *${nomeEncaixe.split(' ')[0]}*! 👋
 
@@ -927,7 +927,7 @@ Aguardamos sua confirmação! ⚡`;
 
         // 8. Enviar notificação push para o profissional
         try {
-          const tipoLabel = servico.tipo === 'instalacao' ? 'Instalação' : 'Vistoria';
+          const tipoLabel = (servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada') ? 'Instalação' : 'Vistoria';
           const localLabel = servico.bairro || servico.cidade || 'Local não informado';
           const clienteLabel = servico.associado_nome || 'Cliente';
           
@@ -980,7 +980,7 @@ Aguardamos sua confirmação! ⚡`;
             if (telProfSuffix && telClienteSuffix && telProfSuffix === telClienteSuffix) {
               console.log(`[atribuir-proxima-tarefa] ⚠️ Telefone do profissional = telefone do cliente (${telProfSuffix}). WhatsApp do vistoriador SUPRIMIDO para evitar confusão. Push já foi enviado.`);
             } else {
-              const tipoServicoLabelWhats = servico.tipo === 'instalacao' 
+              const tipoServicoLabelWhats = (servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada')
                 ? 'INSTALAÇÃO' 
                 : 'VISTORIA';
               

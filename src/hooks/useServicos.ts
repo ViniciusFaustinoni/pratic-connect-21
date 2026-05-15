@@ -216,7 +216,7 @@ export interface ServicoFilters {
 export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
   instalacao: 'Instalação',
   revistoria: 'Revistoria',
-  vistoria_entrada: 'Vistoria de Entrada',
+  vistoria_entrada: 'Vistoria de Entrada (Instalação)',
   vistoria_saida: 'Vistoria de Saída',
   vistoria_sinistro: 'Vistoria de Sinistro',
   vistoria_periodica: 'Vistoria Periódica',
@@ -1424,9 +1424,25 @@ export function useEnviarParaMonitoramento() {
   });
 }
 
-// Helper para verificar se é uma instalação
-export function isInstalacao(tipo: TipoServico): boolean {
+// Helper para verificar se é uma instalação / primeira visita ao veículo.
+// IMPORTANTE: 'vistoria_entrada' e 'instalacao' são DOIS NOMES PARA O MESMO
+// EVENTO físico (a primeira ida do técnico ao veículo — pode ser só vistoria,
+// só instalação, ou ambas). Sempre que filtrar por "primeira visita", use este
+// helper. Ver mem://logic/operations/vistoria-entrada-equivale-instalacao.
+export function isInstalacao(tipo: TipoServico | string | null | undefined): boolean {
   return tipo === 'instalacao' || tipo === 'vistoria_entrada';
+}
+
+// Rótulo curto para a primeira visita; quando precisarRastreador é true,
+// devolve sempre "Instalação" (carro/moto que precisa rastreador).
+export function labelPrimeiraVisita(
+  tipo: TipoServico | string | null | undefined,
+  precisaRastreador?: boolean
+): string {
+  if (precisaRastreador) return 'Instalação';
+  if (tipo === 'instalacao') return 'Instalação';
+  if (tipo === 'vistoria_entrada') return 'Vistoria de Entrada (Instalação)';
+  return 'Vistoria';
 }
 
 // Helper para verificar se é uma revistoria

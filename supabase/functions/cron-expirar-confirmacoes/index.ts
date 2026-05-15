@@ -101,7 +101,7 @@ serve(async (req) => {
         // Montar dados para mensagem
         const ctx = conf.contexto_ia as any;
         const nomeCliente = ctx?.nome_cliente || 'Cliente';
-        const tipoServico = servico.tipo === 'instalacao' ? 'instalação'
+        const tipoServico = (servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada') ? 'instalação'
           : servico.tipo === 'vistoria' ? 'vistoria'
           : servico.tipo === 'remocao' ? 'remoção' : 'serviço';
         const dataFormatada = servico.data_agendada || 'agendada';
