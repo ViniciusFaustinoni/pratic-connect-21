@@ -4,11 +4,25 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import fs from "fs";
+import { execSync } from "child_process";
+
+const gitSha = (() => {
+  try {
+    return execSync("git rev-parse --short=7 HEAD", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+})();
 
 const BUILD_ID =
   process.env.BUILD_ID ||
   process.env.VERCEL_GIT_COMMIT_SHA ||
   process.env.COMMIT_REF ||
+  gitSha ||
   new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 12);
 
 // Plugin que escreve public/version.json com o BUILD_ID atual
