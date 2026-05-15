@@ -458,7 +458,7 @@ serve(async (req) => {
       }
 
       // 2. Contrato (vendedor + plano + valores)
-      const contratoSel = 'numero, vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, cobertura_fipe';
+      const contratoSel = 'id, numero, vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, cobertura_fipe, pdf_assinado_url';
       let contrato: any = null;
       const { data: cByVeic } = await supabase.from('contratos').select(contratoSel)
         .eq('veiculo_id', _vid).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -1000,6 +1000,21 @@ serve(async (req) => {
           id: d.id, tipo: d.tipo, nome_arquivo: d.arquivo_nome, arquivo_url: d.arquivo_url,
         })),
       ];
+
+      // Fallback: termo de filiação assinado direto de contratos.pdf_assinado_url
+      // (cobre contratos antigos sem registro em contratos_documentos)
+      const jaTemContrato = documentosEntrada.some(
+        (d) => (d.tipo || '').toLowerCase() === 'contrato_assinado'
+      );
+      if (!jaTemContrato && (contrato as any)?.pdf_assinado_url) {
+        documentosEntrada.push({
+          id: `termo-${(contrato as any).id ?? _aid}`,
+          tipo: 'contrato_assinado',
+          nome_arquivo: `Contrato ${contrato?.numero ?? _aid} - Assinado.pdf`,
+          arquivo_url: (contrato as any).pdf_assinado_url,
+        });
+      }
+
       if (associadoFoto?.avatar_url) {
         documentosEntrada.push({
           id: `avatar-${_aid}`,

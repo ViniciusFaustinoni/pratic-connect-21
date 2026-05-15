@@ -67,43 +67,47 @@ async function anexarContratoAssinado(
       .update({ pdf_assinado_url: publicUrl })
       .eq("id", contrato.id);
 
-    const { data: existingDoc } = await supabase
-      .from("documentos")
-      .select("id")
-      .eq("associado_id", contrato.associado_id)
-      .eq("tipo", "contrato_assinado")
-      .eq("contrato_id", contrato.id)
-      .maybeSingle();
+    // Anexar termo assinado em contratos_documentos (lido pelo sga-hinova-sync)
+    const cotacaoIdContrato = (contrato as any).cotacao_id ?? null;
+    if (cotacaoIdContrato) {
+      const { data: existingCDoc } = await supabase
+        .from("contratos_documentos")
+        .select("id")
+        .eq("cotacao_id", cotacaoIdContrato)
+        .eq("tipo", "contrato_assinado")
+        .maybeSingle();
 
-    if (existingDoc) {
-      console.log("[autentique-sync-contrato] Documento já existe, atualizando...");
-      await supabase
-        .from("documentos")
-        .update({
-          arquivo_url: publicUrl,
-          nome_arquivo: `Contrato ${contratoNumero} - Assinado.pdf`,
-          status: "aprovado",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingDoc.id);
-    } else {
-      console.log("[autentique-sync-contrato] Criando registro de documento...");
-      const { error: docError } = await supabase.from("documentos").insert({
-        associado_id: contrato.associado_id,
-        contrato_id: contrato.id,
-        tipo: "contrato_assinado",
-        nome_arquivo: `Contrato ${contratoNumero} - Assinado.pdf`,
-        arquivo_url: publicUrl,
-        status: "aprovado",
-        observacao: `Contrato assinado eletronicamente por ${signerName} via Autentique (sync)`,
-      });
-
-      if (docError) {
-        console.error("[autentique-sync-contrato] Erro ao criar documento:", docError);
+      if (existingCDoc) {
+        console.log("[autentique-sync-contrato] contratos_documentos já existe, atualizando...");
+        await supabase
+          .from("contratos_documentos")
+          .update({
+            arquivo_url: publicUrl,
+            arquivo_nome: `Contrato ${contratoNumero} - Assinado.pdf`,
+            status: "aprovado",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingCDoc.id);
       } else {
-        console.log("[autentique-sync-contrato] ✓ Documento criado com sucesso!");
+        console.log("[autentique-sync-contrato] Criando registro em contratos_documentos...");
+        const { error: cDocError } = await supabase.from("contratos_documentos").insert({
+          cotacao_id: cotacaoIdContrato,
+          tipo: "contrato_assinado",
+          arquivo_nome: `Contrato ${contratoNumero} - Assinado.pdf`,
+          arquivo_url: publicUrl,
+          status: "aprovado",
+          observacao: `Contrato assinado eletronicamente por ${signerName} via Autentique (sync)`,
+        });
+        if (cDocError) {
+          console.error("[autentique-sync-contrato] Erro ao criar contratos_documentos:", cDocError);
+        } else {
+          console.log("[autentique-sync-contrato] ✓ contratos_documentos criado!");
+        }
       }
+    } else {
+      console.warn("[autentique-sync-contrato] Contrato sem cotacao_id — pulando contratos_documentos");
     }
+
 
     if (contrato.associado_id) {
       await supabase.from("associados_historico").insert({

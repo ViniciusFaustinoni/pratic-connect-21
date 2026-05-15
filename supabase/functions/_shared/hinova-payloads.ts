@@ -310,6 +310,12 @@ export function buildFotosPayload(
       rg_frente: 'rg',
       rg_verso: 'rg',
       foto_cpf: 'cpf',
+      // Termo de Filiação assinado (Autentique)
+      contrato: 'contrato_assinado',
+      termo: 'contrato_assinado',
+      termo_filiacao: 'contrato_assinado',
+      termo_afiliacao: 'contrato_assinado',
+      termo_assinado: 'contrato_assinado',
     };
     return aliases[s] || s;
   };
