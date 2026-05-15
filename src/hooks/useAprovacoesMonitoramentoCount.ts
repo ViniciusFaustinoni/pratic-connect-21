@@ -37,11 +37,14 @@ export function useAprovacoesMonitoramentoBreakdown() {
         safe((async () => {
           const { data } = await (supabase as any)
             .from('servicos')
-            .select('id, veiculo:veiculo_id(cobertura_total)')
+            .select('id, veiculo:veiculo_id(cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)), vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))')
             .in('tipo', ['instalacao', 'vistoria_entrada'])
             .eq('status', 'concluida');
           return (data || []).filter((s: any) =>
-            s?.veiculo && s.veiculo.cobertura_total !== true
+            s?.veiculo &&
+            s.veiculo.cobertura_total !== true &&
+            (s.instalacao?.contrato?.cadastro_aprovado === true ||
+             s.vistoria?.contrato?.cadastro_aprovado === true)
           ).length;
         })()),
 
