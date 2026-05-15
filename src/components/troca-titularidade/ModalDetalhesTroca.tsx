@@ -17,6 +17,7 @@ import { TimelineAprovacao } from './TimelineAprovacao';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { VeiculoCompletoCard } from './VeiculoCompletoCard';
 import { AnalisePreviaNovoTitularCard } from './AnalisePreviaNovoTitularCard';
+import { TermoFiliacaoNovoTitularCard } from './TermoFiliacaoNovoTitularCard';
 import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
