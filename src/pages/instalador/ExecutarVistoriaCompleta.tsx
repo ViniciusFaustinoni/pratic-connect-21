@@ -24,6 +24,7 @@ import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecu
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria, useVistoriaCompletaPorServico, useVistoriaCompletaPorAgendamentoBase } from '@/hooks/useVistorias';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   useAprovarVeiculoVistoria, 
   useRecusarVeiculoVistoria, 
