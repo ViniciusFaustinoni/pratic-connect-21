@@ -163,7 +163,8 @@ export default function PropostaAnalise() {
   const podeAprovar =
     proposta?.status === 'assinado' &&
     !proposta?.tem_documento_pendente &&
-    (!aguardandoExecucao || aprovarApenasDocumentos);
+    (!aguardandoExecucao || aprovarApenasDocumentos) &&
+    sgaLiberado;
 
   // Estado final (já aprovado / reprovado / cancelado)
   const isAprovada = proposta?.status === 'ativo';
