@@ -193,10 +193,11 @@ Deno.serve(async (req) => {
     let createdServico = false;
     const agora = new Date();
 
-    // Sub-FIPE: nasce em `em_analise` para o Cadastro analisar antes de promover.
-    // ≥30k (legado): nasce em `concluida` direto na fila do Monitoramento.
-    const servicoStatusInicial = veiculoSubFipe ? 'em_analise' : 'concluida';
-    const obsTag = veiculoSubFipe ? ' [AUTOVISTORIA_AGUARDA_CADASTRO]' : '';
+    // REGRA MESTRA (8 etapas): autovistoria SEMPRE espera Cadastro aprovar manualmente
+    // antes de virar serviço pronto p/ Monitoramento. Vale para sub-FIPE e ≥30k.
+    // `aprovar-proposta` promove em_analise → concluida ao registrar cadastro_aprovado=true.
+    const servicoStatusInicial = 'em_analise';
+    const obsTag = ' [AUTOVISTORIA_AGUARDA_CADASTRO]';
 
     if (!servicoId) {
       const hojeISO = agora.toISOString().slice(0, 10);
