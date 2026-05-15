@@ -1,10 +1,11 @@
-// Aprovação MANUAL da etapa de Cadastro — fallback legado.
-// FLUXO PADRÃO: o cadastro é AUTO-APROVADO em `vincular-cotacao-troca`
-// no momento em que a cotação é vinculada (porque o termo de cancelamento
-// já foi assinado). Esta função existe apenas para itens legados que
-// ficaram presos em `aguardando_cadastro` antes da mudança.
-//
-// Antes de aprovar:
+// Aprovação MANUAL da etapa de Cadastro na Troca de Titularidade.
+// REGRA MESTRA: o Cadastro NUNCA é auto-aprovado — segue exatamente o
+// mesmo princípio da cotação comum. `vincular-cotacao-troca` apenas
+// vincula a cotação à solicitação e mantém o status `aguardando_cadastro`.
+// Esta função é o único caminho para promover a solicitação para
+// `aguardando_monitoramento`, validando termo de cancelamento assinado,
+// situação financeira do antigo titular no SGA e autovistoria do novo
+// titular concluída.
 //   1) trava se termo de cancelamento não foi assinado
 //   2) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
