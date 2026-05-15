@@ -266,11 +266,17 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
         }
       }
 
-      // Avançar para próxima foto automaticamente
+      // Avançar para próxima foto / etapa do vídeo automaticamente
       // Não avança se OCR do odômetro falhou ou se placa não confere/ilegível
       if (!odometroOcrFalhou && !bloqueadoPorPlaca) {
+        const eraUltimaFoto = fotoAtualIndex >= totalFotos - 1;
         setTimeout(() => {
-          setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
+          if (eraUltimaFoto) {
+            setEtapa('video');
+            toast.success('Fotos concluídas! Agora grave o vídeo 360°.');
+          } else {
+            setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
+          }
         }, 300);
       }
     } catch (error: any) {
