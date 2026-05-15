@@ -155,6 +155,19 @@ serve(async (req) => {
       .select('id, status')
       .maybeSingle();
 
+    // REGRA MESTRA: ao aprovar Cadastro, promover qualquer servico vistoria_entrada
+    // que tenha nascido `em_analise` (autovistoria) para `concluida`, liberando-o
+    // para a fila do Monitoramento. Vale para sub-FIPE e ≥30k.
+    if (contratoAtualizado && contrato.cotacao_id) {
+      const { error: errPromoteVist } = await supabase
+        .from('servicos')
+        .update({ status: 'concluida', concluida_em: agora })
+        .eq('cotacao_id', contrato.cotacao_id)
+        .eq('tipo', 'vistoria_entrada')
+        .eq('status', 'em_analise');
+      if (errPromoteVist) console.warn('[aprovar-proposta] promote vistoria_entrada falhou:', errPromoteVist);
+    }
+
     if (contratoError) throw new Error(`Falha ao atualizar contrato: ${contratoError.message}`);
 
     if (!contratoAtualizado) {
