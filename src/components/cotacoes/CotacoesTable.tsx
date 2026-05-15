@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Send, Check, X, Eye, Car, Phone, User, MoreHorizontal, ClipboardCopy, ExternalLink, Link2, FileDown, Loader2, Plus, ArrowRight } from 'lucide-react';
@@ -211,7 +211,7 @@ export function CotacoesTable({
                 const colSpan = (selectable ? 1 : 0) + 7;
 
                 return (
-                  <>
+                  <React.Fragment key={cotacao.id}>
                     {showDateHeader && (
                       <TableRow key={`date-${dateKey}`} className="bg-muted/60 hover:bg-muted/60">
                         <TableCell colSpan={colSpan} className="py-2 px-4">
@@ -510,7 +510,7 @@ export function CotacoesTable({
                 </TableRow>
                     );
                     })()}
-                  </>
+                  </React.Fragment>
                 );
               });
             })()}
