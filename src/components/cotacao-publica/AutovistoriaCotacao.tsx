@@ -120,8 +120,11 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       const indexPendente = fotos.findIndex(f => !fotosMap[f.id]);
       if (indexPendente >= 0) {
         setFotoAtualIndex(indexPendente);
+      } else if (!videoExistente) {
+        // Todas as fotos prontas e vídeo pendente: já abre na etapa do vídeo
+        setEtapa('video');
       }
-      
+
       setHidratado(true);
     }
   }, [fotosExistentes, fotos, hidratado]);
