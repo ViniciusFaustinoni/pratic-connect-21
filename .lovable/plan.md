@@ -1,91 +1,45 @@
-## Diagnóstico — `vistoria_entrada` vs `instalacao`
+## Objetivo
 
-Sim, há confusão real e ela afeta a lógica em pontos pontuais. Os dois valores são **dois nomes para o mesmo evento físico** (a primeira ida do técnico ao veículo — que pode ser só vistoria, só instalação, ou ambas), mas o código nem sempre trata os dois juntos.
+Remover o gate de **Diretor** dos pontos de bloqueio que ainda travam o fluxo, deixando o **botão "Ignorar e Prosseguir" disponível para qualquer usuário**, mantendo o registro auditado da decisão (já implementado em `cotacao_avisos_sga`) e o envio do histórico no campo `observacao` do veículo SGA (já implementado em `sga-hinova-sync`).
 
-### O que confirma que são equivalentes
+## Estado atual (auditado)
 
-- `src/hooks/useServicos.ts:1428` já tem o helper canônico:
-  ```ts
-  isInstalacao(tipo) = tipo === 'instalacao' || tipo === 'vistoria_entrada'
-  ```
-- Filas críticas do Monitoramento usam os dois juntos:
-  - `useAprovacaoMonitoramento`, `useAprovacoesMonitoramentoCount`, `aprovar-proposta` → `.in('tipo', ['instalacao', 'vistoria_entrada'])`
-- Comentário oficial em `useContratoLink.ts:397` registra o legado: `tipo: 'instalacao' as any, // Instalação (anteriormente "entrada")`.
+| # | Bloqueio | Arquivo | Bypass hoje |
+|---|----------|---------|-------------|
+| 1.1 | Placa duplicada (outro vendedor) | `CotacaoFormDialog` → `PlacaDuplicadaModal` | ✅ qualquer usuário |
+| 1.2 | Veículo já existe no SGA | `CotacaoFormDialog` → `VeiculoSGAModal` | ✅ qualquer usuário |
+| 1.3 | Placa de outro associado (base local) | `CotacaoFormDialog` → `PlacaOutroAssociadoModal` | ✅ qualquer usuário |
+| 2.1 | CPF já é associado com veículo ativo | `DialogTipoOperacao` | Não é hard-block — oferece Substituição/Inclusão |
+| 2.2 | Ex-cliente inadimplente (CPF) | `EtapaDadosAssociado` | ❌ só Diretor |
+| 3.1 | Inclusão com débito (flag ativa) | `DialogTipoOperacao` | ❌ só Diretor |
+| 4.1 | Boletos vencidos no Cadastro | `SituacaoFinanceiraGate` | ❌ só Diretor |
 
-### Por que existem dois nomes hoje
+Os 3 últimos casos têm o diálogo `IgnorarAvisoSGADialog` pronto e o registro em `cotacao_avisos_sga` já funciona — falta apenas remover a checagem `isDiretor` que esconde o botão.
 
-Trigger `sync_instalacao_to_servicos` (qualquer linha em `instalacoes`) → grava sempre `servicos.tipo = 'instalacao'`.
-Trigger `sync_vistoria_to_servicos` → usa `map_vistoria_tipo_to_servico`, cujo **default é `vistoria_entrada`**. Logo, quando o caso nasce pela tabela `vistorias` (autovistoria, fluxo Base via `agendamentos_base`, Sub-FIPE, Troca de titularidade), o mesmo evento aparece como `vistoria_entrada`.
+## Alterações
 
-### Onde a dualidade quebra alguma coisa
+### 1. `src/components/cotacao/EtapaDadosAssociado.tsx` (caso 2.2)
+- Remover a condição `isDiretor && !bypassDebitoSGA` do bloco que renderiza o botão "Ignorar e Prosseguir (Diretor)".
+- Trocar label para `"Ignorar e Prosseguir"` (sem o sufixo "(Diretor)").
+- Manter `IgnorarAvisoSGADialog` exigindo justificativa ≥ 5 caracteres.
 
-1. **Filtros que olham só `'instalacao'`** (perdem casos `vistoria_entrada`):
-   - `src/pages/monitoramento/Encaixes.tsx` (`encaixe.tipo === 'instalacao'`)
-   - `src/components/mapa/MapaVistoriasContent.tsx` (botões e ações condicionais por `'instalacao'`)
-   - `src/hooks/useTarefaAtual.ts`, `src/hooks/useEquipe.ts`, `src/hooks/useEncaixesDisponiveis.ts`, `src/hooks/useMovimentacoes.ts`
-   - `src/components/monitoramento/CalendarioDiaModal.tsx`, `RotaModal.tsx`, `AtribuicaoManualTab.tsx`
-   - `src/pages/public/AcompanhamentoProposta.tsx` (exclui `'instalacao'` de eventos visíveis, mas não exclui `vistoria_entrada`)
-2. **Labels de UI inconsistentes**: várias telas usam `tipo === 'instalacao' ? 'Instalação' : 'Vistoria'`, então um `vistoria_entrada` que de fato inclui instalação aparece como genérico "Vistoria" no calendário, rotas, mapa, encaixe, push do instalador.
-3. **Notificações WhatsApp/push** com texto errado:
-   - `notificar-inicio-rota`, `cron-expirar-confirmacoes`, `confirmar-vistorias-manha-cron`, `atribuir-proxima-tarefa`, `processar-encaixes-automaticos`, `whatsapp-webhook` — todas decidem o substantivo só pelo `=== 'instalacao'`.
-4. **`TIPO_SERVICO_LABELS.vistoria_entrada = 'Vistoria de Entrada'`** — label antigo, perpetua a noção de duas coisas distintas.
+### 2. `src/components/cotacao/DialogTipoOperacao.tsx` (caso 3.1)
+- Remover `{isDiretor && (...)}` em volta do botão de bypass para inclusão de 2º veículo com débito; mostrar para qualquer usuário sempre que `bloqueioAtivo && temDebito`.
+- Trocar label para `"Ignorar e Prosseguir"`.
+- Remover import/uso de `usePermissions` se não houver mais consumo no arquivo.
 
-### O que NÃO está quebrado (já trata os dois juntos)
+### 3. `src/components/cadastro/SituacaoFinanceiraGate.tsx` (caso 4.1)
+- Remover o `isDiretor &&` que esconde o botão de abrir o diálogo de bypass na linha 218.
+- Manter o registro duplo: `bypass.mutate(...)` + `cotacao_avisos_sga` (já presente, com `tipo: cadastro_situacao_financeira_pendente`, `decisao: ignorado_prosseguiu`).
+- Trocar o texto "Liberado por bypass do Diretor" para `"Liberado por decisão registrada"` para refletir que não é mais exclusivo de Diretor.
+- Remover import/uso de `usePermissions` se não houver mais consumo.
 
-- Aprovações do Monitoramento (count, listagem, detalhe).
-- Guard anti-duplicação em `criar-instalacao-pos-pagamento` e `aprovar-proposta`.
-- Reconciliador `reconciliar-contratos-pos-monitoramento`.
-- Cron `cron-followup-reagendamento`, `enviar-link-reagendamento` (mapeiam `vistoria_entrada → 'vistoria'`).
+### 4. Sem alterações
+- Casos 1.1 / 1.2 / 1.3: bypass já universal e auditado.
+- Caso 2.1: já é um fluxo de escolha, não bloqueio.
+- Tabela `cotacao_avisos_sga`, hook `useRegistrarAvisoSGA`, edge `sga-hinova-sync` (concatenação no `observacao`): permanecem como estão.
+- Nenhuma migração necessária.
 
----
+## Resultado esperado
 
-## Plano de saneamento (Opção A — conservadora, recomendada)
-
-Mantemos os dois valores no enum `tipo_servico` (evita migração de dados arriscada), mas eliminamos os pontos onde o sistema esquece um deles.
-
-### Passo 1 — Helpers unificados (frontend)
-Em `src/hooks/useServicos.ts`:
-- Manter `isInstalacao(tipo)`.
-- Adicionar `labelPrimeiraVisita(tipo)` retornando `'Instalação'` para `'instalacao'` e `'Vistoria de Entrada (Instalação)'` para `'vistoria_entrada'`.
-- Atualizar `TIPO_SERVICO_LABELS.vistoria_entrada = 'Vistoria de Entrada (Instalação)'`.
-
-### Passo 2 — Auditoria de filtros `=== 'instalacao'`
-Substituir por `isInstalacao(tipo)` (ou pelo conjunto `['instalacao','vistoria_entrada']`) nestes arquivos:
-- `src/pages/monitoramento/Encaixes.tsx`
-- `src/components/mapa/MapaVistoriasContent.tsx`
-- `src/components/monitoramento/{CalendarioDiaModal,RotaModal,AtribuicaoManualTab}.tsx`
-- `src/components/mapa/MapaMobileContent.tsx`
-- `src/hooks/{useTarefaAtual,useEquipe,useEncaixesDisponiveis,useMovimentacoes,useAlterarEnderecoTipo}.ts`
-- `src/components/vistoriador/EncaixeCard.tsx`
-- `src/pages/public/AcompanhamentoProposta.tsx` (incluir `vistoria_entrada` na lista de tipos excluídos do timeline público)
-
-### Passo 3 — Texto correto em notificações (edge functions)
-Centralizar em uma função `rotuloPrimeiraVisita(tipo, requerInstalacao)` e aplicar em:
-- `notificar-inicio-rota`
-- `cron-expirar-confirmacoes`
-- `confirmar-vistorias-manha-cron`
-- `atribuir-proxima-tarefa`
-- `processar-encaixes-automaticos`
-- `whatsapp-webhook` (linha 2485)
-
-Critério: se o caso tem rastreador a instalar (FIPE ≥ 30k carro / 9k moto / qualquer Diesel) → palavra **"instalação"**; senão → **"vistoria"**.
-
-### Passo 4 — Documentação
-Criar memory `mem://logic/operations/vistoria-entrada-equivale-instalacao` registrando:
-- Equivalência operacional dos dois valores.
-- Default do `map_vistoria_tipo_to_servico`.
-- Regra obrigatória: novos filtros sobre "primeira visita" devem usar `isInstalacao()`.
-
-### Passo 5 — Validação
-- Login como diretor, abrir Monitoramento › Aprovações, Encaixes, Calendário e Mapa: confirmar que casos Sub-FIPE/Autovistoria/Troca aparecem nos mesmos lugares dos casos com instalação clássica.
-- Disparar push/WhatsApp de teste para uma vistoria base (sem rastreador) e uma instalação 30k+ e conferir o substantivo.
-
-### O que NÃO é alterado
-- Enum no banco (sem migração).
-- Triggers `sync_instalacao_to_servicos` / `sync_vistoria_to_servicos` (continuam gerando os dois tipos).
-- Edge functions de aprovação que já usam `.in('tipo', [...])`.
-
----
-
-## Alternativa rejeitada — Opção B (unificação total)
-Migrar todos os `vistoria_entrada` históricos para `instalacao`, deprecar o valor do enum, ajustar 50+ pontos. Risco alto de quebrar relatórios e auditoria histórica — recomendo NÃO seguir agora.
+Em todos os 7 pontos listados, o usuário verá o aviso, poderá clicar **"Ignorar e Prosseguir"**, justificar, e o fluxo continua. Cada decisão fica em `cotacao_avisos_sga` com tipo, motivo, autor, e o histórico completo é enviado no campo `observacao` do veículo no SGA quando o veículo for sincronizado.
