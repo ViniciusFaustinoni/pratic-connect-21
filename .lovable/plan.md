@@ -1,94 +1,96 @@
-## Diagnóstico
+## 🎯 Problema confirmado
 
-Auditoria das cotações dos últimos 60 dias (`cotacoes`):
+O link público da cotação não acompanha a fase real do funil porque `cotacoes.status_contratacao` fica **travado em estados intermediários** (`aguardando_aprovacao_cadastro`, `vistoria_ok`, etc.) mesmo após o associado/contrato terem sido ativados. O Cadastro › Propostas Pendentes acerta porque deriva a etapa de várias tabelas (`contratos`, `associados`, `instalacoes`), mas o **link público depende exclusivamente** de `cotacoes.status_contratacao`.
 
-| Métrica | Resultado |
-|---|---|
-| Cotações com `veiculo_zero_km = true` | **0** |
-| Cotações com `veiculo_chassi` preenchido | dezenas — **todas com placa real** (não-0KM) |
-| Cotações com `veiculo_placa = NULL` e `status_contratacao ∈ {pagamento_ok, ativo}` | 6 (HONDA CG 160, YAMAHA XTZ 250, FIAT CRONOS) — provavelmente 0KM tratados informalmente |
+## 📊 Casos detectados (varredura completa)
 
-Ou seja: **na prática, nenhuma cotação 0KM hoje cumpre a regra canônica do manual**.
+3 cotações estão hoje no estado inconsistente "tudo concluído mas status_contratacao travado":
 
-## Causa raiz
+| Cotação | Cliente / Placa | status_contratacao | Realidade |
+|---|---|---|---|
+| `5115004f…b48a` | ANDRE COELHO · LUB5F76 | `aguardando_aprovacao_cadastro` | Associado ativo, contrato ativo, adesão paga, instalação concluída |
+| `2310279e…a832` | LEONARDO C. SILVA · LQM4E19 | `aguardando_aprovacao_cadastro` | Contrato assinado, adesão paga, instalação agendada (não concluída) |
+| `825a2dad…4269` | RICARDO A. T. SOARES · RKD2A94 | `vistoria_ok` | Associado ativo, contrato assinado, sem instalação registrada |
 
-O toggle **"Veículo dentro da Agência (0km)"** em `src/components/cotacao/EtapaConsultaFipe.tsx` é controlado por `modoNotaFiscal` em `src/pages/vendas/Cotacao.tsx`. Esse estado é usado **apenas localmente** para:
+Total de cotações com associado/contrato já ativos: **76** — só **74** estão corretas em `status_contratacao='ativo'`.
 
-1. Desabilitar consulta FIPE
-2. Trocar o rótulo "Valor FIPE" → "Valor da Nota Fiscal"
-3. Passar `origemValor='nota'` para `EtapaResultado`
+## 🗺️ Mapa de solução (3 frentes)
 
-E nada mais. Quando o vendedor clica em **Iniciar Cadastro** (`handleIniciarCadastro`, linha 276 de `Cotacao.tsx`), o payload `dadosCotacao` enviado para `/vendas/contratos` **não inclui** `veiculo_zero_km`, `chassi` ou `renavam`. A interface `PrefilledCotacaoData` em `ContratoFormDialog.tsx` (linha 84) também não tem esses campos. Resultado: a flag morre no front-end e a coluna `cotacoes.veiculo_zero_km` nunca recebe `true` por esse caminho.
+### Frente 1 — Backend canônico: `recompute_cotacao_status_contratacao` passa a AVANÇAR
 
-A única forma do flag ser gravado hoje é via `EtapaDadosPessoaisDocumentos.tsx` (linha 153 — `isZeroKm` default `false`), onde o **próprio associado** precisa lembrar de marcar no link público. Fonte de verdade errada.
-
-## Consequências em cascata (regras quebradas)
-
-- `sga-hinova-sync` (mem://logic/operations/sga-renavam-opcional-zero-km): só dispensa RENAVAM quando placa `0KM*` ou `aguardando_placa_definitiva=true`. Sem o flag, o sync exige RENAVAM e falha silenciosamente.
-- `softruck-ativar-dispositivo` / `softruck-api` (mem://logic/integrations/softruck-placa-zero-km): só usa chassi como `plate/vin` quando `is_zero_km`. Sem o flag, registra rastreador com placa vazia/inválida.
-- `documento-veiculo-equivalencia` (CRLV/CRV/NF aceitos para 0KM): sem o flag o link público continua exigindo CRLV e rejeita NF.
-- O ramo "abaixo do mínimo FIPE → autovistoria completa obrigatória" continua funcionando (depende só de FIPE), mas a contratação + emplacamento + SGA quebram para 0KM.
-
-## Plano de correção
-
-### 1. Propagar `veiculo_zero_km` end-to-end no fluxo interno
-
-**`src/pages/vendas/Cotacao.tsx`** — `handleIniciarCadastro`:
-- Incluir `veiculo_zero_km: modoNotaFiscal` em `dadosCotacao.veiculo`
-- Quando `modoNotaFiscal && !placa`, gerar placeholder `placa = 'AAAA0000'` + marcar `aguardando_placa_definitiva: true` (formato canônico — o sufixo `*` só é mascaramento; coluna real aceita 7 chars)
-- Incluir `valor_origem: 'nota_fiscal'` no payload
-
-**`src/components/contratos/ContratoFormDialog.tsx`**:
-- Estender `PrefilledCotacaoData.veiculo` com `zero_km?: boolean` e `aguardando_placa_definitiva?: boolean`
-- Repassar essas flags para `useCreateContrato`/edge `contrato-gerar`
-
-**Edge `contrato-gerar`** (verificar):
-- Já aceita esses campos? Se não, adicionar à validação Zod e gravar em `cotacoes.veiculo_zero_km` + `cotacoes.aguardando_placa_definitiva` (criar coluna se ausente) + `contratos.aguardando_placa_definitiva`.
-
-### 2. Tornar o link público derivado, não auto-declarado
-
-**`src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`**:
-- `useState(false)` → inicializar a partir de `cotacao.veiculo_zero_km`
-- Travar o toggle (read-only) se a cotação já está marcada como 0KM pelo vendedor
-- Quando 0KM: tornar RENAVAM opcional, aceitar `nota_fiscal_veiculo` ou `atpv_e` no lugar do CRLV (já existe a lista `TIPOS_EQUIVALENTES_CRLV`, validar que está sendo usada na regra de bloqueio do botão "Avançar")
-
-### 3. UI do Cadastro
-
-**`PropostaDetalhesTabs.tsx` / cards de aprovação** (auditar):
-- Mostrar badge "0KM — aguardando placa definitiva" quando `cotacoes.veiculo_zero_km = true`
-- Exibir chassi (identificador principal) com destaque ≥ placa
-
-### 4. Backfill controlado (apenas leitura → relatório)
-
-- Gerar SQL de auditoria listando as **6 cotações suspeitas** (sem placa + status ≥ `pagamento_ok` + categorias compatíveis com agência).
-- **Não** marcar `veiculo_zero_km=true` automaticamente — esses casos já contrataram informalmente; apresentar lista ao operador para confirmação manual.
-- Para cada caso confirmado: UPDATE pontual em migration nominal.
-
-### 5. Guard de regressão
-
-- Migration: criar trigger `BEFORE INSERT/UPDATE` em `cotacoes` que, quando `veiculo_zero_km = true`, exige um dos: `veiculo_chassi IS NOT NULL` **ou** `aguardando_placa_definitiva = true`. Bloqueia gravar 0KM "vazio".
-- Migration: criar trigger em `contratos` espelhando a mesma invariante.
-
-### 6. Memória canônica
-
-Criar `mem://logic/quotation/cotacao-0km-fluxo-canonico` consolidando: toggle do vendedor é fonte de verdade → propagação até `cotacoes.veiculo_zero_km` → herança pelo link público → SGA/Softruck dependem do flag → backfill só com confirmação humana.
-
-## Arquivos a modificar
+Hoje a função preserva os estados pós-autovistoria (memória `recompute-cotacao-preserva-pos-autovistoria`). Vamos manter "não rebobina", **mas habilitar promoção para a frente** com base nos marcos reais:
 
 ```text
-src/pages/vendas/Cotacao.tsx                                   (handleIniciarCadastro: propagar 0km)
-src/components/contratos/ContratoFormDialog.tsx                (estender PrefilledCotacaoData)
-src/hooks/useCreateContrato.ts                                 (gravar flag em cotação + contrato)
-supabase/functions/contrato-gerar/index.ts                     (validar e persistir flag)
-src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx (derivar isZeroKm da cotação, lock)
-src/components/cadastro/proposta/PropostaDetalhesTabs.tsx      (badge 0KM + chassi como ID)
-supabase/migrations/<ts>_cotacao_0km_guard_e_backfill.sql      (coluna aguardando_placa_definitiva em cotacoes se faltar, triggers de invariante, relatório)
-mem://logic/quotation/cotacao-0km-fluxo-canonico.md             (nova regra)
-mem://index.md                                                  (referência à nova memória)
+Se status_contratacao ∈ {aguardando_aprovacao_cadastro,
+                         aguardando_aprovacao_monitoramento,
+                         vistoria_concluida, vistoria_ok,
+                         contrato_assinado, autovistoria_ok}:
+
+  if associado.status='ativo' AND contrato.status ∈ {'assinado','ativo'}
+     → status_contratacao = 'ativo'
+  elif contrato.adesao_paga=true AND contrato.status ∈ {'assinado','ativo'}
+       AND EXISTS instalacao concluida/aprovada
+     → status_contratacao = 'pagamento_ok' (ou 'contrato_gerado' se preferir)
+  elif contrato.adesao_paga=true AND contrato.status ∈ {'assinado','ativo'}
+     → status_contratacao = 'pagamento_ok'
 ```
 
-## Pontos de atenção / decisão do usuário
+- Adicionar triggers que chamem o recompute **após mudança em `contratos.status`/`adesao_paga`, `associados.status`, `instalacoes.status`**. Hoje só dispara em mudanças de `cotacoes`.
+- Mantém a regra dura "nunca rebobina"; só promove para o nível canonicamente mais avançado.
 
-1. **6 cotações já contratadas sem flag 0KM** — vou listar e aguardar você confirmar quais marcar retroativamente. Posso aplicar todas? Ou prefere caso a caso?
-2. **Placeholder de placa** — confirmar formato (sugestão: `0KM` + 4 dígitos do `numero` da cotação para garantir unicidade, ex. `0KM5025`). Aceita?
-3. O SGA Hinova e a Softruck **não** serão re-sincronizados nesta task (são integrações externas com efeito colateral); apenas o flag será corrigido para que **as próximas** cotações 0KM já entrem corretas. Confirma?
+### Frente 2 — Frontend defensivo no link público
+
+Mesmo com o backend correto, o link público não deve depender só de `status_contratacao`:
+
+- Adicionar query secundária pública em `useCotacaoContratacao` para puxar `contrato.status`, `adesao_paga`, `associado.status` e `instalacoes` da cotação.
+- Criar `src/lib/cotacaoEtapaPublica.ts` (puro, testável) que recebe esse snapshot e devolve o índice de etapa **e** uma flag `concluido` para o stepper.
+- Em `CotacaoContratacao.tsx`: novo estado **"concluido"** → todos os 6 steps marcados + badge "✅ Associado Ativo · em monitoramento".
+- Adicionar realtime: subscrever `contratos` (por id), `associados` (por id) e `instalacoes` (por cotacao_id) — invalidar a query no cache em cada evento.
+- Estados `aguardando_aprovacao_cadastro` / `aguardando_aprovacao_monitoramento` exibem badge "Em análise" no step de Vistoria (não voltam para Plano).
+
+### Frente 3 — Backfill controlado dos 3 casos travados
+
+Migration única e idempotente (não roda no Andre/Leonardo/Ricardo de forma especial — usa a **mesma regra** da Frente 1, aplicada uma vez a TODAS as cotações):
+
+```sql
+UPDATE cotacoes c
+SET status_contratacao = 'ativo'
+FROM contratos ct JOIN associados a ON a.id = ct.associado_id
+WHERE ct.id = c.contrato_gerado_id
+  AND a.status = 'ativo'
+  AND ct.status IN ('assinado','ativo')
+  AND c.status_contratacao NOT IN ('ativo','contrato_gerado','cancelado');
+
+UPDATE cotacoes c
+SET status_contratacao = 'pagamento_ok'
+FROM contratos ct
+WHERE ct.id = c.contrato_gerado_id
+  AND ct.adesao_paga = true
+  AND ct.status IN ('assinado','ativo')
+  AND c.status_contratacao NOT IN ('ativo','contrato_gerado','pagamento_ok','cancelado');
+```
+
+- Logar no `cotacoes_historico` com `acao='backfill_status_contratacao'` para auditoria.
+- Executar **depois** que a Frente 1 estiver no ar (assim o backfill cobre histórico e o trigger cobre o futuro).
+
+## ✅ Validação
+
+1. Reabrir link público dos 3 casos travados → stepper deve mostrar todos os passos verdes + badge "Associado Ativo" (ANDRE/RICARDO) e "Aguardando instalação" (LEONARDO).
+2. Rodar nova cotação completa em sandbox → checar que cada marco (assinatura, pagamento, instalação concluída, ativação) propaga `status_contratacao` em tempo real para o link público.
+3. Conferir Cadastro › Propostas Pendentes (sem regressão — ANDRE/RICARDO devem sair da fila; LEONARDO permanece em "Aguard. Instalação").
+4. Query de auditoria pós-deploy: nenhuma cotação com associado ativo deve ter `status_contratacao ≠ 'ativo'`.
+
+## 📁 Arquivos previstos
+
+- **Migration**: ajuste em `recompute_cotacao_status_contratacao` + novos triggers em `contratos`, `associados`, `instalacoes` + backfill dos 3 casos com log de auditoria.
+- `src/hooks/useCotacaoContratacao.ts` — query secundária + realtime de contratos/associados/instalacoes.
+- `src/lib/cotacaoEtapaPublica.ts` (novo) — derivação pura de etapa+flag concluído.
+- `src/pages/public/CotacaoContratacao.tsx` — usar `derivarEtapaPublica`; renderizar estado terminal "Associado Ativo".
+- **Memória**: atualizar `mem://logic/quotation/recompute-cotacao-preserva-pos-autovistoria` para refletir "preserva nível, mas avança quando marcos posteriores confirmam"; criar `mem://logic/quotation/link-publico-deriva-de-marcos-reais`.
+
+## ❓ Confirmações antes de executar
+
+1. **Backfill**: posso aplicar a regra `associado ativo + contrato assinado/ativo → status_contratacao='ativo'` em toda a base (não só nos 3 casos)? Isso é mais seguro que tratar caso a caso e fica auditado.
+2. **Estado terminal no stepper público**: o badge deve dizer **"Associado Ativo · em monitoramento"** ou prefere algo mais neutro como **"Contratação concluída"**?
+
+Se aprovar com "sim, backfill geral + badge Associado Ativo", começo pela migration (Frente 1 + Frente 3 juntas) e logo em seguida o frontend (Frente 2).

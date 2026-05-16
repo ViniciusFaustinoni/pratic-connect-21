@@ -35085,6 +35085,7 @@ export type Database = {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string
       }
+      rank_status_contratacao: { Args: { p: string }; Returns: number }
       realocar_servico: {
         Args: {
           _categoria?: string
