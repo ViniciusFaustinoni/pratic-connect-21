@@ -96,10 +96,14 @@ export default function PropostaAnalise() {
   // dependemos mais de !isVistoriaBase aqui — só uma instalação concluída
   // invalida a autovistoria como fonte de fotos para o Cadastro.
   const isVistoriaBase = !!proposta?.vistoria_base_info;
+  // CORREÇÃO: a existência de uma instalação agendada (criada pelo link público
+  // após o agendamento) NÃO deve ocultar a autovistoria. ≥30k pode ter as duas
+  // em paralelo — autovistoria opcional/enxuta para liberar R/F antes do técnico.
+  // Só uma instalação CONCLUÍDA invalida a autovistoria como fonte de fotos.
   const isAutovistoria = (
     proposta?.vistoria?.modalidade === 'autovistoria' ||
     proposta?.vistoria?.tipo === 'autovistoria'
-  ) && !proposta?.instalacao_info;
+  ) && !proposta?.instalacao_info?.concluida_em;
 
   // Tipo de veículo (carro/moto) para personalizar labels do dialog de reenvio
   const { tipoVeiculo } = useDetectarTipoVeiculo(
