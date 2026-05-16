@@ -207,6 +207,58 @@ export interface PropostaPendente {
   plano_tem_roubo_furto: boolean;
   /** True quando o Cadastro já aprovou a proposta (flag em contratos.cadastro_aprovado). */
   cadastro_aprovado: boolean;
+  /**
+   * Tipo de adesão (origem da cotação/contrato).
+   * Ex.: 'comum' | 'troca_titularidade' | 'substituicao_placa' | 'inclusao'.
+   * Resolvido com prioridade no contrato e fallback na cotação.
+   */
+  tipo_entrada: string | null;
+  /**
+   * Endereço de instalação escolhido pelo associado no link público,
+   * SOMENTE quando diferente do endereço residencial. Caso contrário, null.
+   */
+  endereco_instalacao: {
+    logradouro: string | null;
+    numero: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    uf: string | null;
+    cep: string | null;
+  } | null;
+}
+
+// Normaliza string para comparação de endereço (trim + lowercase + sem acento)
+function _normEnd(v: string | null | undefined): string {
+  return (v || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Monta `endereco_instalacao` a partir dos campos vistoria_* / vistoria_completa_*
+ * da cotação. Retorna null quando vazio ou quando coincide com o residencial.
+ */
+function _resolveEnderecoInstalacao(cot: any, residencial: { logradouro?: string | null; numero?: string | null; bairro?: string | null; cidade?: string | null }) {
+  if (!cot) return null;
+  const pick = (k: string) => cot[`vistoria_completa_endereco_${k}`] || cot[`vistoria_endereco_${k}`] || null;
+  const logradouro = pick('logradouro');
+  const numero = pick('numero');
+  const bairro = pick('bairro');
+  const cidade = pick('cidade');
+  const estado = pick('estado');
+  const cep = pick('cep');
+  if (!logradouro && !bairro && !cidade) return null;
+  const sameRes =
+    _normEnd(logradouro) === _normEnd(residencial.logradouro) &&
+    _normEnd(numero) === _normEnd(residencial.numero) &&
+    _normEnd(bairro) === _normEnd(residencial.bairro) &&
+    _normEnd(cidade) === _normEnd(residencial.cidade);
+  if (sameRes) return null;
+  return { logradouro, numero, bairro, cidade, uf: estado, cep };
 }
 
 /**
