@@ -262,6 +262,18 @@ export interface DocumentoEntrada {
   tipo: string | null;
   nome_arquivo: string | null;
   arquivo_url: string | null;
+  /** Tabela/fonte de origem (para dedupe em sga_fotos_enviadas). */
+  origem?: 'contratos_documentos' | 'vistoria_fotos' | 'avatar' | 'pdf_assinado';
+  /** ID estável dentro da origem (uuid do documento/foto, ou identificador do avatar/termo). */
+  origem_id?: string;
+}
+
+export interface FotoMeta {
+  origem: string;
+  origem_id: string;
+  arquivo_url: string;
+  codigo_tipo: number;
+  nome_arquivo: string;
 }
 
 export function buildFotosPayload(
@@ -269,11 +281,13 @@ export function buildFotosPayload(
   resolverCodigoTipo: (tipo: string) => number | null,
 ): {
   fotos: FotoHinovaPayload[];
+  metas: FotoMeta[];
   descartadasSemLink: string[];
   descartadasSemTipo: Array<{ id: string; tipo: string }>;
   descartadasVideo: Array<{ id: string; arquivo_url: string }>;
 } {
   const fotos: FotoHinovaPayload[] = [];
+  const metas: FotoMeta[] = [];
   const descartadasSemLink: string[] = [];
   const descartadasSemTipo: Array<{ id: string; tipo: string }> = [];
   const descartadasVideo: Array<{ id: string; arquivo_url: string }> = [];
@@ -356,14 +370,22 @@ export function buildFotosPayload(
       descartadasSemTipo.push({ id: doc.id, tipo: String(doc.tipo) });
       continue;
     }
+    const nome = doc.nome_arquivo || `documento_${doc.id}.jpg`;
     fotos.push({
-      nome_arquivo: doc.nome_arquivo || `documento_${doc.id}.jpg`,
+      nome_arquivo: nome,
       codigo_tipo: codigoTipo,
       link: doc.arquivo_url,
     });
+    metas.push({
+      origem: doc.origem || 'desconhecida',
+      origem_id: doc.origem_id || doc.id,
+      arquivo_url: doc.arquivo_url,
+      codigo_tipo: codigoTipo,
+      nome_arquivo: nome,
+    });
   }
 
-  return { fotos, descartadasSemLink, descartadasSemTipo, descartadasVideo };
+  return { fotos, metas, descartadasSemLink, descartadasSemTipo, descartadasVideo };
 }
 
 export function chunk<T>(arr: T[], size: number): T[][] {
