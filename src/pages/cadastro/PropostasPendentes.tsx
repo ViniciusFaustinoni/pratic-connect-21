@@ -226,9 +226,45 @@ export default function PropostasPendentes() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [tipoEntradaFilter, setTipoEntradaFilter] = useState<string>('todos');
+  const [tipoVistoriaFilter, setTipoVistoriaFilter] = useState<string>('todos');
+  const [rfFilter, setRfFilter] = useState<'todos' | 'com_rf' | 'sem_rf'>('todos');
+  const [slaFilter, setSlaFilter] = useState<string>('todos');
+  const [apenasReanalise, setApenasReanalise] = useState(false);
+  const [caracteristicas, setCaracteristicas] = useState<Set<CaracteristicaKey>>(new Set());
+  const [ordenacao, setOrdenacao] = useState<string>('reanalise_primeiro');
   const [ativandoRastreadorId, setAtivandoRastreadorId] = useState<string | null>(null);
   const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
   const [associadoParaExcluir, setAssociadoParaExcluir] = useState<{ id: string; nome: string } | null>(null);
+
+  const toggleCaracteristica = (key: CaracteristicaKey) => {
+    setCaracteristicas(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const limparFiltros = () => {
+    setSearch('');
+    setStatusFilter('todos');
+    setTipoEntradaFilter('todos');
+    setTipoVistoriaFilter('todos');
+    setRfFilter('todos');
+    setSlaFilter('todos');
+    setApenasReanalise(false);
+    setCaracteristicas(new Set());
+    setOrdenacao('reanalise_primeiro');
+  };
+
+  const totalFiltrosAtivos =
+    (statusFilter !== 'todos' ? 1 : 0) +
+    (tipoEntradaFilter !== 'todos' ? 1 : 0) +
+    (tipoVistoriaFilter !== 'todos' ? 1 : 0) +
+    (rfFilter !== 'todos' ? 1 : 0) +
+    (slaFilter !== 'todos' ? 1 : 0) +
+    (apenasReanalise ? 1 : 0) +
+    caracteristicas.size;
 
   const { isDiretor } = usePermissions();
   const { mutate: deleteAssociado, isPending: isExcluindo } = useDeleteAssociado();
