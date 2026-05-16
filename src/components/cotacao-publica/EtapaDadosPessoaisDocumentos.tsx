@@ -110,6 +110,7 @@ interface EtapaDadosPessoaisDocumentosProps {
   defaultValues?: Partial<DadosPessoaisForm>;
   readOnly?: boolean;
   placaEsperada?: string;
+  zeroKmFromCotacao?: boolean;
 }
 
 export function EtapaDadosPessoaisDocumentos({
@@ -119,6 +120,7 @@ export function EtapaDadosPessoaisDocumentos({
   defaultValues,
   readOnly = false,
   placaEsperada,
+  zeroKmFromCotacao = false,
 }: EtapaDadosPessoaisDocumentosProps) {
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   const [dadosExtraidos, setDadosExtraidos] = useState<DadosExtraidos>({});
@@ -149,8 +151,13 @@ export function EtapaDadosPessoaisDocumentos({
   const [mostrarManualEndereco, setMostrarManualEndereco] = useState(false);
   const [camposManuais, setCamposManuais] = useState<Set<string>>(new Set());
 
-  // Marcação 0KM do veículo (fallback quando OCR falha ou cliente declara veículo novo)
-  const [isZeroKm, setIsZeroKm] = useState(false);
+  // Marcação 0KM do veículo — herda da cotação (interno) ou fallback manual no link público
+  const [isZeroKm, setIsZeroKm] = useState(zeroKmFromCotacao);
+
+  // Sincroniza quando a cotação chegar/atualizar marcando 0KM
+  useEffect(() => {
+    if (zeroKmFromCotacao) setIsZeroKm(true);
+  }, [zeroKmFromCotacao]);
 
   const setCampoManual = useCallback((campo: keyof DadosExtraidos, valor: any) => {
     setDadosExtraidos(prev => ({ ...prev, [campo]: valor }));

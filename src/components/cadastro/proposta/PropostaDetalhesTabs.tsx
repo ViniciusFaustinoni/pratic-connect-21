@@ -275,10 +275,13 @@ export function PropostaDetalhesTabs({
             </div>
 
             {/* Status especiais */}
-            {(proposta.veiculo_alienado || proposta.veiculo_blindado || proposta.veiculo_financeira || proposta.veiculo_cobertura_total || proposta.uso_aplicativo) && (
+            {((proposta as any).veiculo_zero_km || proposta.veiculo_alienado || proposta.veiculo_blindado || proposta.veiculo_financeira || proposta.veiculo_cobertura_total || proposta.uso_aplicativo) && (
               <div className="border-t border-border/50 pt-3">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">Características especiais</p>
                 <div className="flex flex-wrap gap-2">
+                  {(proposta as any).veiculo_zero_km && (
+                    <Badge variant="outline" className="text-emerald-600 border-emerald-500/40 bg-emerald-500/10 font-semibold">0KM</Badge>
+                  )}
                   {proposta.veiculo_alienado && (
                     <Badge variant="outline" className="text-warning border-warning/40 bg-warning/10">Alienado</Badge>
                   )}
