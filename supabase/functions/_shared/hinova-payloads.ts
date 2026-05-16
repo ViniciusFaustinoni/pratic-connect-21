@@ -268,16 +268,26 @@ export interface DocumentoEntrada {
   origem_id?: string;
 }
 
+export interface FotoMeta {
+  origem: string;
+  origem_id: string;
+  arquivo_url: string;
+  codigo_tipo: number;
+  nome_arquivo: string;
+}
+
 export function buildFotosPayload(
   documentos: DocumentoEntrada[],
   resolverCodigoTipo: (tipo: string) => number | null,
 ): {
   fotos: FotoHinovaPayload[];
+  metas: FotoMeta[];
   descartadasSemLink: string[];
   descartadasSemTipo: Array<{ id: string; tipo: string }>;
   descartadasVideo: Array<{ id: string; arquivo_url: string }>;
 } {
   const fotos: FotoHinovaPayload[] = [];
+  const metas: FotoMeta[] = [];
   const descartadasSemLink: string[] = [];
   const descartadasSemTipo: Array<{ id: string; tipo: string }> = [];
   const descartadasVideo: Array<{ id: string; arquivo_url: string }> = [];
