@@ -991,7 +991,9 @@ export function useProposta(contratoId: string | undefined) {
             plano_escolhido_id, vistoria_permite_encaixe, 
             vistoria_data_agendada, vistoria_horario_agendado,
             vistoria_completa_data_agendada, vistoria_completa_horario_agendado,
-            tipo_vistoria, veiculo_blindado, cenario_adesao
+            tipo_vistoria, veiculo_blindado, cenario_adesao, tipo_entrada,
+            vistoria_endereco_logradouro, vistoria_endereco_numero, vistoria_endereco_bairro, vistoria_endereco_cidade, vistoria_endereco_estado, vistoria_endereco_cep,
+            vistoria_completa_endereco_logradouro, vistoria_completa_endereco_numero, vistoria_completa_endereco_bairro, vistoria_completa_endereco_cidade, vistoria_completa_endereco_estado, vistoria_completa_endereco_cep
           `)
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
