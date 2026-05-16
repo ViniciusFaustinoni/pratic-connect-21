@@ -458,8 +458,14 @@ serve(async (req) => {
       }
     }
 
-    // Se tem data e o Cadastro já aprovou, criar instalação normalmente
-    if (dataAgendada && cadastroAprovado) {
+    // MUDANÇA: materializar a instalação sempre que houver data agendada, mesmo
+    // antes do Cadastro aprovar. A instalação nasce em status='agendada' (sem
+    // técnico atribuído) — representa o compromisso do cliente com data/local.
+    // Quando o Cadastro aprovar depois, a chamada idempotente em aprovar-proposta
+    // reutiliza a instalação existente. Isso elimina a janela em que a cotação
+    // ficava com snapshot em `vistoria_completa_*` sem registro operacional real,
+    // travando o caso entre Cadastro e Monitoramento.
+    if (dataAgendada) {
       // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
       if (!endereco.latitude || !endereco.longitude) {
         console.warn('[CriarInstalacaoPosPagamento] ⚠️ Coordenadas ausentes! Tentando geocodificar...');
