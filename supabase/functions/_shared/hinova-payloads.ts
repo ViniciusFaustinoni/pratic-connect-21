@@ -262,6 +262,10 @@ export interface DocumentoEntrada {
   tipo: string | null;
   nome_arquivo: string | null;
   arquivo_url: string | null;
+  /** Tabela/fonte de origem (para dedupe em sga_fotos_enviadas). */
+  origem?: 'contratos_documentos' | 'vistoria_fotos' | 'avatar' | 'pdf_assinado';
+  /** ID estável dentro da origem (uuid do documento/foto, ou identificador do avatar/termo). */
+  origem_id?: string;
 }
 
 export function buildFotosPayload(
