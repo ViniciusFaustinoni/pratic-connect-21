@@ -186,6 +186,13 @@ export function PropostaDetalhesTabs({
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-3">
+            {/* Badge tipo de adesão */}
+            <div className="flex items-center gap-2 -mt-1">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Tipo de Adesão:</span>
+              <Badge variant="outline" className="text-primary border-primary/40 bg-primary/10 font-semibold">
+                {rotuloTipoEntrada(proposta.tipo_entrada)}
+              </Badge>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <FichaField icon={User} label="Nome Completo" value={proposta.cliente_nome || associado?.nome} highlight iconColor="text-primary" />
               <FichaField icon={FileText} label="CPF" value={maskCPF(proposta.cliente_cpf || associado?.cpf)} iconColor="text-primary" />
@@ -194,7 +201,7 @@ export function PropostaDetalhesTabs({
               <FichaField icon={Mail} label="Email" value={proposta.cliente_email || associado?.email} iconColor="text-primary" className="sm:col-span-2" />
               <FichaField
                 icon={MapPin}
-                label="Endereço"
+                label="Endereço Residencial"
                 value={
                   associado?.logradouro
                     ? `${associado.logradouro}, ${associado.numero || 'S/N'} - ${associado.bairro || ''}, ${associado.cidade || ''} - ${associado.uf || ''}`
@@ -203,6 +210,19 @@ export function PropostaDetalhesTabs({
                 iconColor="text-primary"
                 className="sm:col-span-2"
               />
+              {proposta.endereco_instalacao && (
+                <div className="sm:col-span-2 space-y-1">
+                  <FichaField
+                    icon={MapPin}
+                    label="Endereço de Instalação"
+                    value={`${proposta.endereco_instalacao.logradouro || ''}, ${proposta.endereco_instalacao.numero || 'S/N'} - ${proposta.endereco_instalacao.bairro || ''}, ${proposta.endereco_instalacao.cidade || ''} - ${proposta.endereco_instalacao.uf || ''}`}
+                    iconColor="text-info"
+                  />
+                  <p className="text-[10px] text-info/80 pl-3">
+                    O associado escolheu um endereço diferente do residencial para a instalação.
+                  </p>
+                </div>
+              )}
               <FichaField icon={Calendar} label="Data de Nascimento" value={associado?.data_nascimento ? format(new Date(associado.data_nascimento + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR }) : null} iconColor="text-primary" />
               <FichaField icon={User} label="Estado Civil" value={associado?.estado_civil} iconColor="text-primary" />
               <FichaField icon={User} label="Profissão" value={associado?.profissao} iconColor="text-primary" />
