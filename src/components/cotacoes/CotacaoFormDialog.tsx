@@ -2155,18 +2155,43 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 Veículo
               </h3>
               
+              {/* Toggle: Veículo 0KM (dentro da Agência) */}
+              <div className={`flex items-start gap-3 rounded-lg border p-3 ${isZeroKm ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}>
+                <div className="flex-1 space-y-0.5">
+                  <Label htmlFor="cot-0km" className="text-sm font-medium cursor-pointer">
+                    Veículo 0KM (dentro da Agência)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Sem placa definitiva. Use o valor da Nota Fiscal e preencha marca/modelo/ano manualmente.
+                  </p>
+                </div>
+                <Switch
+                  id="cot-0km"
+                  checked={isZeroKm}
+                  onCheckedChange={(checked) => {
+                    setIsZeroKm(checked);
+                    if (checked) {
+                      setPlaca('');
+                      setVeiculoEncontrado(null);
+                      form.setValue('valor_fipe', 0);
+                    }
+                  }}
+                />
+              </div>
+
               <div className="flex gap-2">
                 <Input
-                  placeholder="ABC1D23"
+                  placeholder={isZeroKm ? 'Sem placa (0KM)' : 'ABC1D23'}
                   value={placa}
                   onChange={(e) => setPlaca(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
                   maxLength={8}
                   className="uppercase font-mono text-lg tracking-wider flex-1"
+                  disabled={isZeroKm}
                 />
-                <Button 
+                <Button
                   type="button"
                   onClick={buscarPorPlaca}
-                  disabled={buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
+                  disabled={isZeroKm || buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
                 >
                   {buscandoPlaca ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
