@@ -77,6 +77,9 @@ export default function AprovacaoAssociadosMonitoramento() {
     const fromAnalise: ItemUnificado[] = (instalacoesAnalise || []).map((s: any) => ({
       id: s.id,
       tipo: 'analise',
+      sub_tipo: (s.tipo as AnaliseSub) ?? null,
+      veiculo_id: s.veiculo_id,
+      associado_id: s.associado_id,
       associado_nome: s.associado?.nome,
       associado_cpf: s.associado?.cpf,
       veiculo_placa: s.veiculo?.placa,
@@ -91,6 +94,8 @@ export default function AprovacaoAssociadosMonitoramento() {
     const fromAtivacao: ItemUnificado[] = (instalacoesAtivacao || []).map((inst: any) => ({
       id: inst.id,
       tipo: 'ativacao',
+      veiculo_id: inst.veiculos?.id,
+      associado_id: inst.associados?.id,
       associado_nome: inst.associados?.nome,
       associado_cpf: inst.associados?.cpf,
       veiculo_placa: inst.veiculos?.placa,
@@ -102,7 +107,22 @@ export default function AprovacaoAssociadosMonitoramento() {
       data_referencia: inst.concluida_em ?? inst.created_at,
     }));
 
-    return [...fromAtivacao, ...fromAnalise];
+    // Deduplicação canônica: 1 linha por veículo (fallback: associado + placa).
+    // Prioridade: 'ativacao' > 'analise:instalacao' > 'analise:vistoria_entrada'.
+    const chave = (it: ItemUnificado) =>
+      it.veiculo_id || `${it.associado_id || ''}::${it.veiculo_placa || it.veiculo_chassi || ''}`;
+    const rank = (it: ItemUnificado) =>
+      it.tipo === 'ativacao' ? 0 : it.sub_tipo === 'instalacao' ? 1 : 2;
+
+    const map = new Map<string, ItemUnificado>();
+    for (const it of [...fromAtivacao, ...fromAnalise]) {
+      const k = chave(it);
+      const atual = map.get(k);
+      if (!atual || rank(it) < rank(atual)) {
+        map.set(k, it);
+      }
+    }
+    return Array.from(map.values());
   }, [instalacoesAnalise, instalacoesAtivacao]);
 
   const filtradas = itens.filter((item) => {
