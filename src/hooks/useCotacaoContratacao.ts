@@ -310,6 +310,22 @@ export function useCotacaoContratacao(token: string | undefined) {
           refetch();
         }
       );
+
+      // 6. Subscrição para instalacoes (detecta conclusão da instalação → promove status_contratacao)
+      channel = channel.on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'instalacoes',
+          filter: `cotacao_id=eq.${cotacao.id}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: instalacao atualizada:', payload);
+          queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
+          refetch();
+        }
+      );
     }
 
     channel.subscribe((status) => {
