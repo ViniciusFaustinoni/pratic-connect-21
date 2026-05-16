@@ -370,14 +370,22 @@ export function buildFotosPayload(
       descartadasSemTipo.push({ id: doc.id, tipo: String(doc.tipo) });
       continue;
     }
+    const nome = doc.nome_arquivo || `documento_${doc.id}.jpg`;
     fotos.push({
-      nome_arquivo: doc.nome_arquivo || `documento_${doc.id}.jpg`,
+      nome_arquivo: nome,
       codigo_tipo: codigoTipo,
       link: doc.arquivo_url,
     });
+    metas.push({
+      origem: doc.origem || 'desconhecida',
+      origem_id: doc.origem_id || doc.id,
+      arquivo_url: doc.arquivo_url,
+      codigo_tipo: codigoTipo,
+      nome_arquivo: nome,
+    });
   }
 
-  return { fotos, descartadasSemLink, descartadasSemTipo, descartadasVideo };
+  return { fotos, metas, descartadasSemLink, descartadasSemTipo, descartadasVideo };
 }
 
 export function chunk<T>(arr: T[], size: number): T[][] {
