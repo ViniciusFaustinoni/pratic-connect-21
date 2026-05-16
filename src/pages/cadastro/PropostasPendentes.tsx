@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Clock,
   Eye,
@@ -30,6 +34,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePropostasPendentes, usePropostaStats, PropostaPendente } from '@/hooks/usePropostasPendentes';
@@ -49,9 +55,109 @@ import { UserAvatar } from '@/components/UserAvatar';
 const statusFilters = [
   { value: 'todos', label: 'Todos' },
   { value: 'assinado', label: 'Aguardando' },
+  { value: 'aguard_doc', label: 'Aguard. Doc' },
   { value: 'pendente_vistoria', label: 'Pend. Vistoria' },
+  { value: 'aguard_vistoria', label: 'Aguard. Vistoria' },
+  { value: 'aguard_instalacao', label: 'Aguard. Instalação' },
+  { value: 'agendado', label: 'Agendado' },
   { value: 'em_analise', label: 'Em Análise' },
 ];
+
+const tipoEntradaOptions = [
+  { value: 'todos', label: 'Todos os tipos' },
+  { value: 'comum', label: 'Nova adesão' },
+  { value: 'inclusao', label: 'Inclusão de veículo' },
+  { value: 'troca_titularidade', label: 'Troca de titularidade' },
+  { value: 'substituicao_placa', label: 'Substituição de placa' },
+];
+
+const tipoVistoriaOptions = [
+  { value: 'todos', label: 'Todas' },
+  { value: 'autovistoria', label: 'Autovistoria' },
+  { value: 'agendada_base', label: 'Vistoria na base' },
+  { value: 'agendada', label: 'Vistoria agendada' },
+  { value: 'sem_vistoria', label: 'Sem vistoria definida' },
+];
+
+const slaOptions = [
+  { value: 'todos', label: 'Qualquer tempo' },
+  { value: 'novo', label: 'Até 24h (no prazo)' },
+  { value: 'atencao', label: '24h–48h (atenção)' },
+  { value: 'atrasado', label: 'Acima de 48h (atrasado)' },
+];
+
+const ordenacaoOptions = [
+  { value: 'reanalise_primeiro', label: 'Reanálise primeiro' },
+  { value: 'mais_antiga', label: 'Mais antiga na fila' },
+  { value: 'mais_recente', label: 'Mais recente' },
+  { value: 'maior_valor', label: 'Maior valor FIPE' },
+];
+
+type CaracteristicaKey = 'zero_km' | 'blindado' | 'alienado' | 'uso_app' | 'diesel' | 'cobertura_total';
+const caracteristicaOptions: { key: CaracteristicaKey; label: string }[] = [
+  { key: 'zero_km', label: '0KM' },
+  { key: 'blindado', label: 'Blindado' },
+  { key: 'alienado', label: 'Alienado' },
+  { key: 'uso_app', label: 'Uso APP' },
+  { key: 'diesel', label: 'Diesel' },
+  { key: 'cobertura_total', label: 'Cobertura Total' },
+];
+
+// Predicados compartilhados — usados em filtros e KPIs (mantém badge ↔ filtro coerentes)
+function isPendenteVistoriaInicial(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    p.cadastro_aprovado === true &&
+    p.tipo_vistoria !== 'autovistoria' &&
+    (!p.instalacao_info || p.instalacao_info.status !== 'concluida')
+  );
+}
+function isAguardandoDoc(p: PropostaPendente) {
+  return p.status === 'assinado' && p.tem_documento_pendente === true;
+}
+function isAgendado(p: PropostaPendente) {
+  return p.status === 'assinado' && p.tipo_etapa_analise === 'agendamento_confirmado';
+}
+function isAguardVistoriaRF(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    p.plano_tem_roubo_furto &&
+    (!p.vistoria || !['concluida', 'aprovada', 'aprovada_ressalvas'].includes(p.vistoria.status || ''))
+  );
+}
+function isAguardInstalacaoRF(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    p.plano_tem_roubo_furto &&
+    !!p.vistoria &&
+    ['concluida', 'aprovada', 'aprovada_ressalvas'].includes(p.vistoria.status || '') &&
+    (!p.instalacao_info || p.instalacao_info.status !== 'concluida')
+  );
+}
+function horasNaFila(p: PropostaPendente): number {
+  const ref = p.tempo_referencia || p.data_assinatura;
+  if (!ref) return 0;
+  return (Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60);
+}
+function isCombustivelDiesel(c: string | null | undefined) {
+  return !!c && /diesel/i.test(c);
+}
+
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-primary/10 text-primary border border-primary/30">
+      {label}
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+        aria-label={`Remover filtro ${label}`}
+      >
+        <X className="h-2.5 w-2.5" />
+      </button>
+    </span>
+  );
+}
 
 function getStatusBadge(
   status: string | null,
@@ -136,9 +242,45 @@ export default function PropostasPendentes() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [tipoEntradaFilter, setTipoEntradaFilter] = useState<string>('todos');
+  const [tipoVistoriaFilter, setTipoVistoriaFilter] = useState<string>('todos');
+  const [rfFilter, setRfFilter] = useState<'todos' | 'com_rf' | 'sem_rf'>('todos');
+  const [slaFilter, setSlaFilter] = useState<string>('todos');
+  const [apenasReanalise, setApenasReanalise] = useState(false);
+  const [caracteristicas, setCaracteristicas] = useState<Set<CaracteristicaKey>>(new Set());
+  const [ordenacao, setOrdenacao] = useState<string>('reanalise_primeiro');
   const [ativandoRastreadorId, setAtivandoRastreadorId] = useState<string | null>(null);
   const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
   const [associadoParaExcluir, setAssociadoParaExcluir] = useState<{ id: string; nome: string } | null>(null);
+
+  const toggleCaracteristica = (key: CaracteristicaKey) => {
+    setCaracteristicas(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const limparFiltros = () => {
+    setSearch('');
+    setStatusFilter('todos');
+    setTipoEntradaFilter('todos');
+    setTipoVistoriaFilter('todos');
+    setRfFilter('todos');
+    setSlaFilter('todos');
+    setApenasReanalise(false);
+    setCaracteristicas(new Set());
+    setOrdenacao('reanalise_primeiro');
+  };
+
+  const totalFiltrosAtivos =
+    (statusFilter !== 'todos' ? 1 : 0) +
+    (tipoEntradaFilter !== 'todos' ? 1 : 0) +
+    (tipoVistoriaFilter !== 'todos' ? 1 : 0) +
+    (rfFilter !== 'todos' ? 1 : 0) +
+    (slaFilter !== 'todos' ? 1 : 0) +
+    (apenasReanalise ? 1 : 0) +
+    caracteristicas.size;
 
   const { isDiretor } = usePermissions();
   const { mutate: deleteAssociado, isPending: isExcluindo } = useDeleteAssociado();
@@ -215,41 +357,153 @@ export default function PropostasPendentes() {
   };
 
   // Ordenar: reanálise no topo, depois por data
-  const propostasFiltradas = propostas
-    ?.filter((proposta) => {
-      const searchLower = search.toLowerCase();
-      const matchSearch = !search ||
-        proposta.cliente_nome?.toLowerCase().includes(searchLower) ||
-        proposta.cliente_cpf?.includes(search) ||
-        proposta.veiculo_placa?.toLowerCase().includes(searchLower) ||
-        proposta.veiculo_chassi?.toLowerCase().includes(searchLower);
-      // "Pend. Vistoria" é um status derivado (mesmo predicado do badge "Pendente Vistoria Inicial"):
-      // contrato assinado + cadastro aprovado + cenário NÃO autovistoria + instalação não concluída.
-      const isPendenteVistoria =
-        proposta.status === 'assinado' &&
-        proposta.cadastro_aprovado === true &&
-        proposta.tipo_vistoria !== 'autovistoria' &&
-        (!proposta.instalacao_info || proposta.instalacao_info.status !== 'concluida');
+  const propostasFiltradas = useMemo(() => {
+    if (!propostas) return undefined;
 
+    const searchLower = search.trim().toLowerCase();
+    const searchDigits = search.replace(/\D/g, '');
+
+    const filtradas = propostas.filter((p) => {
+      // Busca textual ampliada: nome, CPF, CNPJ, placa, chassi, número da proposta, email, telefone
+      const matchSearch =
+        !searchLower ||
+        p.cliente_nome?.toLowerCase().includes(searchLower) ||
+        (searchDigits && p.cliente_cpf?.replace(/\D/g, '').includes(searchDigits)) ||
+        (searchDigits && p.cliente_telefone?.replace(/\D/g, '').includes(searchDigits)) ||
+        p.cliente_email?.toLowerCase().includes(searchLower) ||
+        p.veiculo_placa?.toLowerCase().includes(searchLower) ||
+        p.veiculo_chassi?.toLowerCase().includes(searchLower) ||
+        p.veiculo_modelo?.toLowerCase().includes(searchLower) ||
+        p.veiculo_marca?.toLowerCase().includes(searchLower) ||
+        p.numero?.toLowerCase().includes(searchLower) ||
+        p.plano?.nome?.toLowerCase().includes(searchLower) ||
+        p.plano_nome?.toLowerCase().includes(searchLower);
+
+      // Status (derivados sincronizados com os badges exibidos)
       let matchStatus = true;
-      if (statusFilter === 'todos') {
-        matchStatus = true;
-      } else if (statusFilter === 'pendente_vistoria') {
-        matchStatus = isPendenteVistoria;
-      } else if (statusFilter === 'assinado') {
-        // "Aguardando" exclui as que já caíram no bucket Pend. Vistoria, evitando contagem duplicada visual.
-        matchStatus = proposta.status === 'assinado' && !isPendenteVistoria;
-      } else {
-        matchStatus = proposta.status === statusFilter;
+      if (statusFilter !== 'todos') {
+        const pendVist = isPendenteVistoriaInicial(p);
+        switch (statusFilter) {
+          case 'assinado':
+            matchStatus = p.status === 'assinado' && !pendVist && !isAguardandoDoc(p) && !isAgendado(p);
+            break;
+          case 'aguard_doc':
+            matchStatus = isAguardandoDoc(p);
+            break;
+          case 'pendente_vistoria':
+            matchStatus = pendVist;
+            break;
+          case 'aguard_vistoria':
+            matchStatus = isAguardVistoriaRF(p);
+            break;
+          case 'aguard_instalacao':
+            matchStatus = isAguardInstalacaoRF(p);
+            break;
+          case 'agendado':
+            matchStatus = isAgendado(p);
+            break;
+          case 'em_analise':
+            matchStatus = p.status === 'em_analise';
+            break;
+          default:
+            matchStatus = p.status === statusFilter;
+        }
       }
-      return matchSearch && matchStatus;
-    })
-    ?.sort((a, b) => {
-      const aReanalise = (a.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
-      const bReanalise = (b.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
-      if (bReanalise !== aReanalise) return bReanalise - aReanalise;
+
+      // Tipo de adesão
+      const matchEntrada =
+        tipoEntradaFilter === 'todos' || (p.tipo_entrada || 'comum') === tipoEntradaFilter;
+
+      // Tipo de vistoria
+      let matchVistoria = true;
+      if (tipoVistoriaFilter !== 'todos') {
+        matchVistoria =
+          tipoVistoriaFilter === 'sem_vistoria'
+            ? !p.tipo_vistoria
+            : p.tipo_vistoria === tipoVistoriaFilter;
+      }
+
+      // Plano com/sem Roubo e Furto
+      const matchRF =
+        rfFilter === 'todos' ||
+        (rfFilter === 'com_rf' && p.plano_tem_roubo_furto) ||
+        (rfFilter === 'sem_rf' && !p.plano_tem_roubo_furto);
+
+      // SLA (horas na fila)
+      let matchSla = true;
+      if (slaFilter !== 'todos') {
+        const h = horasNaFila(p);
+        if (slaFilter === 'novo') matchSla = h <= 24;
+        else if (slaFilter === 'atencao') matchSla = h > 24 && h <= 48;
+        else if (slaFilter === 'atrasado') matchSla = h > 48;
+      }
+
+      // Reanálise (cliente reenviou docs solicitados)
+      const matchReanalise =
+        !apenasReanalise || (p.documentos_solicitados_enviados?.length || 0) > 0;
+
+      // Características do veículo (multi-seleção: AND)
+      let matchCaracts = true;
+      if (caracteristicas.size > 0) {
+        matchCaracts = Array.from(caracteristicas).every((k) => {
+          switch (k) {
+            case 'zero_km':
+              return !!(p as any).veiculo_zero_km;
+            case 'blindado':
+              return !!p.veiculo_blindado;
+            case 'alienado':
+              return !!p.veiculo_alienado;
+            case 'uso_app':
+              return !!p.uso_aplicativo;
+            case 'diesel':
+              return isCombustivelDiesel(p.veiculo_combustivel);
+            case 'cobertura_total':
+              return !!p.veiculo_cobertura_total;
+            default:
+              return true;
+          }
+        });
+      }
+
+      return (
+        matchSearch &&
+        matchStatus &&
+        matchEntrada &&
+        matchVistoria &&
+        matchRF &&
+        matchSla &&
+        matchReanalise &&
+        matchCaracts
+      );
+    });
+
+    const refTs = (p: PropostaPendente) =>
+      new Date(p.tempo_referencia || p.data_assinatura || 0).getTime();
+
+    return [...filtradas].sort((a, b) => {
+      if (ordenacao === 'reanalise_primeiro') {
+        const aR = (a.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
+        const bR = (b.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
+        if (bR !== aR) return bR - aR;
+        return refTs(a) - refTs(b); // depois, mais antigas primeiro
+      }
+      if (ordenacao === 'mais_antiga') return refTs(a) - refTs(b);
+      if (ordenacao === 'mais_recente') return refTs(b) - refTs(a);
+      if (ordenacao === 'maior_valor') return (b.veiculo_valor_fipe || 0) - (a.veiculo_valor_fipe || 0);
       return 0;
     });
+  }, [
+    propostas,
+    search,
+    statusFilter,
+    tipoEntradaFilter,
+    tipoVistoriaFilter,
+    rfFilter,
+    slaFilter,
+    apenasReanalise,
+    caracteristicas,
+    ordenacao,
+  ]);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -299,23 +553,176 @@ export default function PropostasPendentes() {
 
 
       {/* Filtros */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar nome, CPF, placa ou chassi..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-card border-border h-10 text-sm rounded-xl"
-          />
+      <div className="space-y-3">
+        {/* Linha 1: busca + filtros avançados + ordenação */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, CPF, telefone, email, placa, chassi, modelo, nº da proposta…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 bg-card border-border h-10 text-sm rounded-xl"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                aria-label="Limpar busca"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filtros
+                  {totalFiltrosAtivos > 0 && (
+                    <Badge className="ml-1 h-5 min-w-5 px-1.5 bg-primary text-primary-foreground text-[10px]">
+                      {totalFiltrosAtivos}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[340px] p-4 space-y-4 bg-popover border-border">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">Filtros avançados</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={limparFiltros}
+                    disabled={totalFiltrosAtivos === 0 && !search}
+                  >
+                    Limpar tudo
+                  </Button>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Tipo de adesão</Label>
+                  <Select value={tipoEntradaFilter} onValueChange={setTipoEntradaFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {tipoEntradaOptions.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Tipo de vistoria</Label>
+                  <Select value={tipoVistoriaFilter} onValueChange={setTipoVistoriaFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {tipoVistoriaOptions.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Cobertura do plano</Label>
+                  <div className="flex gap-1">
+                    {([
+                      { v: 'todos', l: 'Todos' },
+                      { v: 'com_rf', l: 'Com R&F' },
+                      { v: 'sem_rf', l: 'Sem R&F' },
+                    ] as const).map(o => (
+                      <button
+                        key={o.v}
+                        type="button"
+                        onClick={() => setRfFilter(o.v as any)}
+                        className={cn(
+                          'flex-1 px-2 py-1.5 text-xs rounded-md border transition-all',
+                          rfFilter === o.v
+                            ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
+                            : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {o.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Tempo na fila</Label>
+                  <Select value={slaFilter} onValueChange={setSlaFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {slaOptions.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Características do veículo</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {caracteristicaOptions.map(o => {
+                      const ativo = caracteristicas.has(o.key);
+                      return (
+                        <button
+                          key={o.key}
+                          type="button"
+                          onClick={() => toggleCaracteristica(o.key)}
+                          className={cn(
+                            'flex items-center gap-2 px-2 py-1.5 text-xs rounded-md border transition-all text-left',
+                            ativo
+                              ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
+                              : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <Checkbox checked={ativo} className="h-3.5 w-3.5 pointer-events-none" />
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox
+                    id="apenas-reanalise"
+                    checked={apenasReanalise}
+                    onCheckedChange={(v) => setApenasReanalise(v === true)}
+                  />
+                  <Label htmlFor="apenas-reanalise" className="text-sm cursor-pointer">
+                    Apenas propostas em reanálise (NOVO)
+                  </Label>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Select value={ordenacao} onValueChange={setOrdenacao}>
+              <SelectTrigger className="h-10 w-[180px] rounded-xl text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ordenacaoOptions.map(o => (
+                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {/* Linha 2: chips de status (rolagem horizontal no mobile) */}
         <div className="flex items-center gap-2">
-          <div className="flex gap-0.5 bg-muted/50 p-0.5 rounded-xl">
+          <div className="flex gap-0.5 bg-muted/50 p-0.5 rounded-xl overflow-x-auto no-scrollbar">
             {statusFilters.map(f => (
               <button
                 key={f.value}
                 className={cn(
-                  "px-3 py-2 text-xs rounded-lg transition-all",
+                  'px-3 py-2 text-xs rounded-lg transition-all whitespace-nowrap',
                   statusFilter === f.value
                     ? 'bg-card shadow-sm text-foreground font-semibold'
                     : 'text-muted-foreground hover:text-foreground'
@@ -327,11 +734,46 @@ export default function PropostasPendentes() {
             ))}
           </div>
           {propostasFiltradas && (
-            <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
+            <span className="text-xs text-muted-foreground whitespace-nowrap ml-auto">
               {propostasFiltradas.length} resultado(s)
             </span>
           )}
         </div>
+
+        {/* Linha 3: chips de filtros ativos com remoção individual */}
+        {totalFiltrosAtivos > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tipoEntradaFilter !== 'todos' && (
+              <FilterChip label={tipoEntradaOptions.find(o => o.value === tipoEntradaFilter)?.label || ''} onClear={() => setTipoEntradaFilter('todos')} />
+            )}
+            {tipoVistoriaFilter !== 'todos' && (
+              <FilterChip label={`Vistoria: ${tipoVistoriaOptions.find(o => o.value === tipoVistoriaFilter)?.label}`} onClear={() => setTipoVistoriaFilter('todos')} />
+            )}
+            {rfFilter !== 'todos' && (
+              <FilterChip label={rfFilter === 'com_rf' ? 'Com R&F' : 'Sem R&F'} onClear={() => setRfFilter('todos')} />
+            )}
+            {slaFilter !== 'todos' && (
+              <FilterChip label={slaOptions.find(o => o.value === slaFilter)?.label || ''} onClear={() => setSlaFilter('todos')} />
+            )}
+            {apenasReanalise && (
+              <FilterChip label="Reanálise (NOVO)" onClear={() => setApenasReanalise(false)} />
+            )}
+            {Array.from(caracteristicas).map(k => (
+              <FilterChip
+                key={k}
+                label={caracteristicaOptions.find(o => o.key === k)?.label || k}
+                onClear={() => toggleCaracteristica(k)}
+              />
+            ))}
+            <button
+              type="button"
+              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline ml-1"
+              onClick={limparFiltros}
+            >
+              Limpar todos
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Cards de Propostas */}
