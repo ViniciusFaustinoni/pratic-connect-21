@@ -982,7 +982,8 @@ export function useProposta(contratoId: string | undefined) {
       let tipoVistoriaCotacao: 'autovistoria' | 'agendada' | 'agendada_base' | null = null;
       let veiculoBlindadoCot: boolean | null = null;
       let cenarioAdesaoCot: string | null = null;
-      
+      let cotacaoDetalhe: any = null;
+
       if (contrato.cotacao_id) {
         const { data: cotacao } = await supabase
           .from('cotacoes')
