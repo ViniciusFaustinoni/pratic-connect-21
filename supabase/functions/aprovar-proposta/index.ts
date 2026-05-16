@@ -658,6 +658,8 @@ serve(async (req) => {
       ]);
 
       const totalRegistros = (instCount || 0) + (vistCount || 0) + (agbCount || 0) + (servCount || 0);
+      const semInstalacaoOuAgendamento = (instCount || 0) === 0 && (agbCount || 0) === 0;
+
       if (totalRegistros === 0) {
         console.warn('[aprovar-proposta] LIMBO detectado — sem instalação/vistoria/agendamento/servico. Revertendo cadastro_aprovado.');
         await supabase.from('contratos')
@@ -679,6 +681,33 @@ serve(async (req) => {
           mensagem: algumPrecisouRastreador
             ? 'Não é possível aprovar: a cotação ainda não possui agendamento de vistoria/instalação. Oriente o cliente a concluir a etapa Vistoria no link público.'
             : 'Não é possível aprovar: a autovistoria/vistoria não foi materializada. Peça ao cliente para refinalizar a vistoria pelo link público.',
+          contratoId: contrato_id,
+          associadoId,
+        }, 409);
+      }
+
+      // GUARD ADICIONAL: rastreador obrigatório + só existe autovistoria (sem instalação
+      // física agendada). Autovistoria antecipa R/F, mas a instalação do rastreador é
+      // OBRIGATÓRIA e precisa estar agendada antes da aprovação do Cadastro.
+      if (algumPrecisouRastreador && semInstalacaoOuAgendamento) {
+        console.warn('[aprovar-proposta] BLOQUEIO — autovistoria sem instalação física agendada (rastreador obrigatório). Revertendo cadastro_aprovado.');
+        await supabase.from('contratos')
+          .update({ cadastro_aprovado: false, aprovado_por: null, aprovado_em: null })
+          .eq('id', contrato_id);
+        try {
+          await supabase.from('logs_auditoria').insert({
+            acao: 'aprovar_proposta_bloqueado_sem_instalacao',
+            modulo: 'contratos',
+            tabela: 'contratos',
+            registro_id: contrato_id,
+            descricao: `Aprovação bloqueada: cotação ${contrato.cotacao_id} tem autovistoria mas o veículo exige rastreador e não há instalação física agendada. Cliente precisa agendar a instalação pelo link público.`,
+            usuario_id: aprovado_por || null,
+          });
+        } catch (_) { /* log opcional */ }
+        return jsonResponse({
+          success: false,
+          codigo: 'instalacao_nao_agendada',
+          mensagem: 'Autovistoria liberou Roubo/Furto, mas a instalação do rastreador precisa ser agendada pelo link público antes da aprovação. O cliente verá a etapa "Instalação" no link.',
           contratoId: contrato_id,
           associadoId,
         }, 409);
