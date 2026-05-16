@@ -341,41 +341,153 @@ export default function PropostasPendentes() {
   };
 
   // Ordenar: reanálise no topo, depois por data
-  const propostasFiltradas = propostas
-    ?.filter((proposta) => {
-      const searchLower = search.toLowerCase();
-      const matchSearch = !search ||
-        proposta.cliente_nome?.toLowerCase().includes(searchLower) ||
-        proposta.cliente_cpf?.includes(search) ||
-        proposta.veiculo_placa?.toLowerCase().includes(searchLower) ||
-        proposta.veiculo_chassi?.toLowerCase().includes(searchLower);
-      // "Pend. Vistoria" é um status derivado (mesmo predicado do badge "Pendente Vistoria Inicial"):
-      // contrato assinado + cadastro aprovado + cenário NÃO autovistoria + instalação não concluída.
-      const isPendenteVistoria =
-        proposta.status === 'assinado' &&
-        proposta.cadastro_aprovado === true &&
-        proposta.tipo_vistoria !== 'autovistoria' &&
-        (!proposta.instalacao_info || proposta.instalacao_info.status !== 'concluida');
+  const propostasFiltradas = useMemo(() => {
+    if (!propostas) return undefined;
 
+    const searchLower = search.trim().toLowerCase();
+    const searchDigits = search.replace(/\D/g, '');
+
+    const filtradas = propostas.filter((p) => {
+      // Busca textual ampliada: nome, CPF, CNPJ, placa, chassi, número da proposta, email, telefone
+      const matchSearch =
+        !searchLower ||
+        p.cliente_nome?.toLowerCase().includes(searchLower) ||
+        (searchDigits && p.cliente_cpf?.replace(/\D/g, '').includes(searchDigits)) ||
+        (searchDigits && p.cliente_telefone?.replace(/\D/g, '').includes(searchDigits)) ||
+        p.cliente_email?.toLowerCase().includes(searchLower) ||
+        p.veiculo_placa?.toLowerCase().includes(searchLower) ||
+        p.veiculo_chassi?.toLowerCase().includes(searchLower) ||
+        p.veiculo_modelo?.toLowerCase().includes(searchLower) ||
+        p.veiculo_marca?.toLowerCase().includes(searchLower) ||
+        p.numero?.toLowerCase().includes(searchLower) ||
+        p.plano?.nome?.toLowerCase().includes(searchLower) ||
+        p.plano_nome?.toLowerCase().includes(searchLower);
+
+      // Status (derivados sincronizados com os badges exibidos)
       let matchStatus = true;
-      if (statusFilter === 'todos') {
-        matchStatus = true;
-      } else if (statusFilter === 'pendente_vistoria') {
-        matchStatus = isPendenteVistoria;
-      } else if (statusFilter === 'assinado') {
-        // "Aguardando" exclui as que já caíram no bucket Pend. Vistoria, evitando contagem duplicada visual.
-        matchStatus = proposta.status === 'assinado' && !isPendenteVistoria;
-      } else {
-        matchStatus = proposta.status === statusFilter;
+      if (statusFilter !== 'todos') {
+        const pendVist = isPendenteVistoriaInicial(p);
+        switch (statusFilter) {
+          case 'assinado':
+            matchStatus = p.status === 'assinado' && !pendVist && !isAguardandoDoc(p) && !isAgendado(p);
+            break;
+          case 'aguard_doc':
+            matchStatus = isAguardandoDoc(p);
+            break;
+          case 'pendente_vistoria':
+            matchStatus = pendVist;
+            break;
+          case 'aguard_vistoria':
+            matchStatus = isAguardVistoriaRF(p);
+            break;
+          case 'aguard_instalacao':
+            matchStatus = isAguardInstalacaoRF(p);
+            break;
+          case 'agendado':
+            matchStatus = isAgendado(p);
+            break;
+          case 'em_analise':
+            matchStatus = p.status === 'em_analise';
+            break;
+          default:
+            matchStatus = p.status === statusFilter;
+        }
       }
-      return matchSearch && matchStatus;
-    })
-    ?.sort((a, b) => {
-      const aReanalise = (a.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
-      const bReanalise = (b.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
-      if (bReanalise !== aReanalise) return bReanalise - aReanalise;
+
+      // Tipo de adesão
+      const matchEntrada =
+        tipoEntradaFilter === 'todos' || (p.tipo_entrada || 'comum') === tipoEntradaFilter;
+
+      // Tipo de vistoria
+      let matchVistoria = true;
+      if (tipoVistoriaFilter !== 'todos') {
+        matchVistoria =
+          tipoVistoriaFilter === 'sem_vistoria'
+            ? !p.tipo_vistoria
+            : p.tipo_vistoria === tipoVistoriaFilter;
+      }
+
+      // Plano com/sem Roubo e Furto
+      const matchRF =
+        rfFilter === 'todos' ||
+        (rfFilter === 'com_rf' && p.plano_tem_roubo_furto) ||
+        (rfFilter === 'sem_rf' && !p.plano_tem_roubo_furto);
+
+      // SLA (horas na fila)
+      let matchSla = true;
+      if (slaFilter !== 'todos') {
+        const h = horasNaFila(p);
+        if (slaFilter === 'novo') matchSla = h <= 24;
+        else if (slaFilter === 'atencao') matchSla = h > 24 && h <= 48;
+        else if (slaFilter === 'atrasado') matchSla = h > 48;
+      }
+
+      // Reanálise (cliente reenviou docs solicitados)
+      const matchReanalise =
+        !apenasReanalise || (p.documentos_solicitados_enviados?.length || 0) > 0;
+
+      // Características do veículo (multi-seleção: AND)
+      let matchCaracts = true;
+      if (caracteristicas.size > 0) {
+        matchCaracts = Array.from(caracteristicas).every((k) => {
+          switch (k) {
+            case 'zero_km':
+              return !!(p as any).veiculo_zero_km;
+            case 'blindado':
+              return !!p.veiculo_blindado;
+            case 'alienado':
+              return !!p.veiculo_alienado;
+            case 'uso_app':
+              return !!p.uso_aplicativo;
+            case 'diesel':
+              return isCombustivelDiesel(p.veiculo_combustivel);
+            case 'cobertura_total':
+              return !!p.veiculo_cobertura_total;
+            default:
+              return true;
+          }
+        });
+      }
+
+      return (
+        matchSearch &&
+        matchStatus &&
+        matchEntrada &&
+        matchVistoria &&
+        matchRF &&
+        matchSla &&
+        matchReanalise &&
+        matchCaracts
+      );
+    });
+
+    const refTs = (p: PropostaPendente) =>
+      new Date(p.tempo_referencia || p.data_assinatura || 0).getTime();
+
+    return [...filtradas].sort((a, b) => {
+      if (ordenacao === 'reanalise_primeiro') {
+        const aR = (a.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
+        const bR = (b.documentos_solicitados_enviados?.length || 0) > 0 ? 1 : 0;
+        if (bR !== aR) return bR - aR;
+        return refTs(a) - refTs(b); // depois, mais antigas primeiro
+      }
+      if (ordenacao === 'mais_antiga') return refTs(a) - refTs(b);
+      if (ordenacao === 'mais_recente') return refTs(b) - refTs(a);
+      if (ordenacao === 'maior_valor') return (b.veiculo_valor_fipe || 0) - (a.veiculo_valor_fipe || 0);
       return 0;
     });
+  }, [
+    propostas,
+    search,
+    statusFilter,
+    tipoEntradaFilter,
+    tipoVistoriaFilter,
+    rfFilter,
+    slaFilter,
+    apenasReanalise,
+    caracteristicas,
+    ordenacao,
+  ]);
 
   return (
     <div className="space-y-5 animate-fade-in">
