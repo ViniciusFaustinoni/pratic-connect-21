@@ -897,7 +897,8 @@ export function useProposta(contratoId: string | undefined) {
           vendedor_id,
           pdf_assinado_url,
           updated_at,
-          cadastro_aprovado
+          cadastro_aprovado,
+          tipo_entrada
         `)
         .eq('id', contratoId)
         .single();
