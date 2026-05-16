@@ -537,23 +537,176 @@ export default function PropostasPendentes() {
 
 
       {/* Filtros */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar nome, CPF, placa ou chassi..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-card border-border h-10 text-sm rounded-xl"
-          />
+      <div className="space-y-3">
+        {/* Linha 1: busca + filtros avançados + ordenação */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, CPF, telefone, email, placa, chassi, modelo, nº da proposta…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 bg-card border-border h-10 text-sm rounded-xl"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                aria-label="Limpar busca"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filtros
+                  {totalFiltrosAtivos > 0 && (
+                    <Badge className="ml-1 h-5 min-w-5 px-1.5 bg-primary text-primary-foreground text-[10px]">
+                      {totalFiltrosAtivos}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[340px] p-4 space-y-4 bg-popover border-border">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">Filtros avançados</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={limparFiltros}
+                    disabled={totalFiltrosAtivos === 0 && !search}
+                  >
+                    Limpar tudo
+                  </Button>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Tipo de adesão</Label>
+                  <Select value={tipoEntradaFilter} onValueChange={setTipoEntradaFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {tipoEntradaOptions.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Tipo de vistoria</Label>
+                  <Select value={tipoVistoriaFilter} onValueChange={setTipoVistoriaFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {tipoVistoriaOptions.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Cobertura do plano</Label>
+                  <div className="flex gap-1">
+                    {([
+                      { v: 'todos', l: 'Todos' },
+                      { v: 'com_rf', l: 'Com R&F' },
+                      { v: 'sem_rf', l: 'Sem R&F' },
+                    ] as const).map(o => (
+                      <button
+                        key={o.v}
+                        type="button"
+                        onClick={() => setRfFilter(o.v as any)}
+                        className={cn(
+                          'flex-1 px-2 py-1.5 text-xs rounded-md border transition-all',
+                          rfFilter === o.v
+                            ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
+                            : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {o.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Tempo na fila</Label>
+                  <Select value={slaFilter} onValueChange={setSlaFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {slaOptions.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Características do veículo</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {caracteristicaOptions.map(o => {
+                      const ativo = caracteristicas.has(o.key);
+                      return (
+                        <button
+                          key={o.key}
+                          type="button"
+                          onClick={() => toggleCaracteristica(o.key)}
+                          className={cn(
+                            'flex items-center gap-2 px-2 py-1.5 text-xs rounded-md border transition-all text-left',
+                            ativo
+                              ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
+                              : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <Checkbox checked={ativo} className="h-3.5 w-3.5 pointer-events-none" />
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox
+                    id="apenas-reanalise"
+                    checked={apenasReanalise}
+                    onCheckedChange={(v) => setApenasReanalise(v === true)}
+                  />
+                  <Label htmlFor="apenas-reanalise" className="text-sm cursor-pointer">
+                    Apenas propostas em reanálise (NOVO)
+                  </Label>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Select value={ordenacao} onValueChange={setOrdenacao}>
+              <SelectTrigger className="h-10 w-[180px] rounded-xl text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ordenacaoOptions.map(o => (
+                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {/* Linha 2: chips de status (rolagem horizontal no mobile) */}
         <div className="flex items-center gap-2">
-          <div className="flex gap-0.5 bg-muted/50 p-0.5 rounded-xl">
+          <div className="flex gap-0.5 bg-muted/50 p-0.5 rounded-xl overflow-x-auto no-scrollbar">
             {statusFilters.map(f => (
               <button
                 key={f.value}
                 className={cn(
-                  "px-3 py-2 text-xs rounded-lg transition-all",
+                  'px-3 py-2 text-xs rounded-lg transition-all whitespace-nowrap',
                   statusFilter === f.value
                     ? 'bg-card shadow-sm text-foreground font-semibold'
                     : 'text-muted-foreground hover:text-foreground'
@@ -565,11 +718,46 @@ export default function PropostasPendentes() {
             ))}
           </div>
           {propostasFiltradas && (
-            <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
+            <span className="text-xs text-muted-foreground whitespace-nowrap ml-auto">
               {propostasFiltradas.length} resultado(s)
             </span>
           )}
         </div>
+
+        {/* Linha 3: chips de filtros ativos com remoção individual */}
+        {totalFiltrosAtivos > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tipoEntradaFilter !== 'todos' && (
+              <FilterChip label={tipoEntradaOptions.find(o => o.value === tipoEntradaFilter)?.label || ''} onClear={() => setTipoEntradaFilter('todos')} />
+            )}
+            {tipoVistoriaFilter !== 'todos' && (
+              <FilterChip label={`Vistoria: ${tipoVistoriaOptions.find(o => o.value === tipoVistoriaFilter)?.label}`} onClear={() => setTipoVistoriaFilter('todos')} />
+            )}
+            {rfFilter !== 'todos' && (
+              <FilterChip label={rfFilter === 'com_rf' ? 'Com R&F' : 'Sem R&F'} onClear={() => setRfFilter('todos')} />
+            )}
+            {slaFilter !== 'todos' && (
+              <FilterChip label={slaOptions.find(o => o.value === slaFilter)?.label || ''} onClear={() => setSlaFilter('todos')} />
+            )}
+            {apenasReanalise && (
+              <FilterChip label="Reanálise (NOVO)" onClear={() => setApenasReanalise(false)} />
+            )}
+            {Array.from(caracteristicas).map(k => (
+              <FilterChip
+                key={k}
+                label={caracteristicaOptions.find(o => o.key === k)?.label || k}
+                onClear={() => toggleCaracteristica(k)}
+              />
+            ))}
+            <button
+              type="button"
+              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline ml-1"
+              onClick={limparFiltros}
+            >
+              Limpar todos
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Cards de Propostas */}
