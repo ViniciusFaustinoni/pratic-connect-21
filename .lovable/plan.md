@@ -1,67 +1,53 @@
-## Diagnóstico (associado MARCUS VINICIUS / 988dbfa9 + veículo KOU6D37 / Ford Fiesta)
+## Contexto consolidado
 
-A troca `06037fb8-...` ficou `efetivada` mas deixou o estado inconsistente. Comparando as duas abas dos prints e o banco, encontrei **4 divergências reais**, todas causadas pela edge `efetivar-troca-titularidade` e pelo fluxo de aprovação da troca:
+- Probe nos códigos 13–20 retornou `200 / "Inserido"` em todos.
+- Conferência visual no SGA (vehículo 36183 / KOU-6D37) mostrou os 8 PDFs **sem rótulo na coluna "Tipo Imagem/Documento"** — nenhum dos códigos 13–20 está mapeado nessa regional.
+- Conclusão: a numeração correta de "Termo de Filiação", "Nota Fiscal", "CRLV" etc. é definida na regional Praticcar e precisa vir do suporte Hinova. A API não valida o número.
+- Em paralelo, o `dia_vencimento` está sendo enviado correto pelo sistema mas chega errado no SGA — isso é independente do mapeamento de fotos e deve ser corrigido agora.
 
-| # | Sintoma na UI | Realidade no banco | Causa raiz |
-|---|---|---|---|
-| 1 | Aba **Veículos** mostra "Cobertura Ativa"; aba **Resumo** mostra "Cobertura suspensa — troca_titularidade_em_andamento" | `veiculos.cobertura_suspensa=true`, motivo `troca_titularidade_em_andamento`, mas `solicitacoes_troca_titularidade.status='efetivada'` | `efetivar-troca-titularidade` (passo 6) atualiza `em_troca_titularidade=false` mas **não limpa** `cobertura_suspensa` / `cobertura_suspensa_motivo` / `cobertura_suspensa_em`. As duas abas leem campos diferentes (Veículos olha `status`, Resumo olha `cobertura_suspensa`) → divergência visível |
-| 2 | (não visível, mas grave) Existem **2 contratos ATIVOS** para a mesma placa/associado | `06313261-...` (CTR-...WFIEBL, criado por `aprovar-proposta` durante o link público) e `a8e6e9b7-...` (TRC-20260515-7954, criado pelo reprocessamento manual) — ambos `status='ativo'`, mesmo `origem_troca_titularidade_id`, mesmo veículo, mesmo associado | `efetivar-troca-titularidade` (passo 7) faz INSERT cego sem checar se já existe contrato com `origem_troca_titularidade_id = solicitacao_id`. Viola a regra "1 contrato ativo por veículo" |
-| 3 | Card mostra "Plano Select Basic / Mensalidade R$166,70" mas **Mensalidade: —** em "Vencimentos" | Novo contrato `a8e6e9b7` está `ativo` mas com `cadastro_aprovado=false` e `aprovado_em=NULL` — a régua de cobrança não emite mensalidade nesse estado | `efetivar-troca-titularidade` insere o contrato direto com `status='ativo'` sem passar pelo caminho canônico (`ativar-associado` + `cadastro_aprovado=true`). Viola a Core rule "Ativação centralizada" e "Cadastro nunca recebe `cadastro_aprovado=true` automaticamente, mas contrato ativo exige aprovação prévia" |
-| 4 | SGA fica "pendente" para sempre | `sga_erro: "campo ESTADO do objeto associado é inválido"` — `associados.estado` do novo titular está NULL | `efetivar-troca-titularidade` cria o associado novo (linhas 297-309) sem copiar `endereco/estado/cidade/cep` do `novo_titular_dados` nem fazer fallback. Quando o cron `sga-hinova-sync` roda, falha eternamente |
+## Plano
 
-## Plano de correção raiz
+### 1. Solicitação à Hinova (fora do código)
 
-### 1. `supabase/functions/efetivar-troca-titularidade/index.ts`
+Você abre chamado pedindo:
+- Tabela oficial `codigo_tipo` × rótulo da regional Praticcar para o endpoint `cadastrar-fotos` (associado e veículo).
+- Confirmação de qual código corresponde a: **Termo de Filiação / Contrato**, **Nota Fiscal do Veículo**, **CRLV**, **CNH**, **Comprovante de Endereço**, **Foto Veículo (frente/lateral/etc.)**, **Chassi**, **Motor**.
+- Lista da regional (não a genérica da Hinova).
 
-**Idempotência de contrato (passo 7):** antes do INSERT do contrato novo, fazer SELECT em `contratos` por `origem_troca_titularidade_id = solicitacao_id` AND `status IN ('ativo','pendente')`. Se já existir, **reaproveitar** (UPDATE para refletir os dados atuais) em vez de inserir. Ao final, garantir que TODO contrato com `origem_troca_titularidade_id = solicitacao_id` que não seja o "vencedor" seja marcado `status='cancelado'` com `data_cancelamento=now`.
+Sem essa tabela, qualquer mapeamento que eu chutar continuará caindo na lixeira "sem tipo" igual aos probes 13–20.
 
-**Limpar suspensão do veículo (passo 6):** acrescentar ao UPDATE de `veiculos`:
-```
-cobertura_suspensa: false,
-cobertura_suspensa_motivo: null,
-cobertura_suspensa_em: null,
-```
-Isso elimina a divergência entre Resumo e Veículos.
+### 2. Tornar o mapeamento configurável (preparar terreno)
 
-**Cadastro aprovado no novo contrato (passo 7):** o contrato da troca já passou por aprovação de Cadastro + Monitoramento, então no INSERT/UPDATE incluir:
-```
-cadastro_aprovado: true,
-aprovado_em: now,
-aprovado_por: solicitacao.aprovado_monitoramento_por,
-```
-Isso libera a régua de cobrança a emitir a mensalidade do novo titular.
+Hoje os códigos estão hardcoded em edge functions. Mudo para a tabela `hinova_mapeamentos` que já existe, com seed vazio para os tipos faltantes:
 
-**Endereço do novo associado (passo 3):** ao criar novo associado, copiar `endereco/numero/complemento/bairro/cidade/estado/cep` do `novo_titular_dados` (vem do link público). Se ainda assim faltar `estado`, herdar do contrato anterior (`contratoAnterior.cliente_uf`) como fallback. Resolve o erro SGA persistente.
+- Adicionar entradas `tipo='tipo_foto_sga'` com `codigo_local` ∈ {`contrato_assinado`, `nota_fiscal_veiculo`, `crlv`, `cnh`, `comprovante_endereco`, `foto_veiculo_frente`, `foto_chassi`, `foto_motor`} e `codigo_hinova = NULL` + `ativo=false`.
+- Edge `sga-hinova-sync` e qualquer outra que chame `cadastrar-fotos` passam a ler dessa tabela. Quando `codigo_hinova IS NULL` ou `ativo=false`, **pula o envio dessa foto** e loga `mapping_pendente` (em vez de mandar um número errado).
+- Quando a Hinova devolver os números, você (ou eu via migration de 1 linha) preenche `codigo_hinova` + marca `ativo=true` e o sistema passa a enviar sem deploy.
 
-### 2. Reconciliação do caso atual (one-shot SQL via migration)
+Benefício: a próxima descoberta de código (ou correção de regional) vira UPDATE de 1 linha, não nova edge.
 
-Para o associado 988dbfa9 / solicitação 06037fb8:
-- Cancelar `06313261-c4c4-4a47-9a36-cf7875ff439e` (manter `a8e6e9b7-...` como vencedor) — `status='cancelado'`, `data_cancelamento=now`, `motivo_cancelamento='duplicidade_pos_troca_titularidade'`
-- `UPDATE contratos SET cadastro_aprovado=true, aprovado_em=now, aprovado_por=<monitor>` no contrato vencedor
-- `UPDATE veiculos SET cobertura_suspensa=false, cobertura_suspensa_motivo=NULL, cobertura_suspensa_em=NULL WHERE id='2315cece-...'`
-- Preencher `associados.estado` (e demais campos de endereço se vazios) do 988dbfa9 a partir do link público / contrato anterior, depois disparar manualmente o `sga-hinova-sync` para aquele associado
+### 3. Limpeza do probe
 
-### 3. Memória
+- Remover edge `probe-tipo-foto-contrato` (já cumpriu o papel).
+- Deletar do SGA os 8 PDFs `probe_termo_filiacao_tipo_13..20` do veículo 36183 (manual no painel — não tem endpoint público de delete confiável).
 
-Atualizar `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e.md` (criada na rodada anterior) acrescentando 4 invariantes:
-- "efetivar-troca-titularidade DEVE limpar `cobertura_suspensa` do veículo"
-- "efetivar-troca-titularidade DEVE ser idempotente por `origem_troca_titularidade_id` — nunca cria 2º contrato"
-- "Contrato pós-troca nasce com `cadastro_aprovado=true` (já passou por Cadastro+Monitoramento da troca)"
-- "Novo associado da troca DEVE ter endereço completo copiado do link público antes de mandar pro SGA"
+### 4. Fix do `dia_vencimento` (independente, paralelo)
 
-## Detalhes técnicos / arquivos tocados
+Já tinha sido mapeado anteriormente. Resumo do que aplico:
 
-- `supabase/functions/efetivar-troca-titularidade/index.ts` — passos 3, 6 e 7 (idempotência + cobertura + cadastro_aprovado + endereço)
-- 1 migration SQL de reconciliação (apenas o caso travado)
-- `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e.md` — invariantes adicionais
-- Sem mudança de schema, sem mudança de UI (a UI já está correta — o que está errado é o dado)
+- Auditar `sga-hinova-sync` / `cadastrar-associado-sga`: hoje o `dia_vencimento` vem do contrato local mas é convertido em data completa antes de enviar — em alguns caminhos o dia está sendo recalculado a partir de `created_at` (timezone UTC) e cai 1 dia antes para vencimentos perto da virada do mês.
+- Forçar envio do **número puro do dia** (1–31) lido de `contratos.dia_vencimento` (BRT), sem reconstruir data.
+- Validar com 2 contratos de homologação cobrindo dias 1, 15 e 31.
+- Registrar em `mem://logic/integrations/sga-dia-vencimento-fonte` que o campo é número 1–31 lido direto de `contratos.dia_vencimento` (sem timezone).
 
-## Como vou validar
+## Detalhes técnicos
 
-1. Após o fix, abrir a aba Resumo e Veículos → ambas devem mostrar "Cobertura Ativa" coerente
-2. `SELECT count(*) FROM contratos WHERE origem_troca_titularidade_id='06037fb8...' AND status='ativo'` → deve retornar 1
-3. `cobertura_suspensa` do KOU6D37 → false
-4. `sga-hinova-sync` retry → `sga_status='sincronizado'` e códigos preenchidos
-5. Vencimentos do Resumo passa a mostrar a próxima mensalidade
+- Tabela: `hinova_mapeamentos (tipo text, codigo_local text, codigo_hinova int, descricao text, ativo bool)` — já existe; só insiro linhas novas.
+- Edges tocadas no item 4: `sga-hinova-sync/index.ts` (e helpers de payload). Sem mudança de schema.
+- Edges tocadas no item 2: helper compartilhado de `cadastrar-fotos` (criar `_shared/sga-tipo-foto.ts` que resolve `codigo_local → codigo_hinova` via tabela; cache em memória por invocação).
+- Migration para deletar a edge `probe-tipo-foto-contrato` via `supabase--delete_edge_functions`.
 
-Sem efeito colateral em outros associados — a migration é escopada por id.
+## Fora de escopo
+
+- Adivinhar mais códigos sem confirmação da Hinova.
+- Mexer em qualquer outra integração SGA (situação, RENAVAM, etc.).
