@@ -26447,6 +26447,42 @@ export type Database = {
           },
         ]
       }
+      sga_fotos_enviadas: {
+        Row: {
+          arquivo_url: string
+          codigo_tipo: number
+          codigo_veiculo_hinova: number
+          enviado_em: string
+          hinova_response: Json | null
+          id: string
+          origem: string
+          origem_id: string
+          veiculo_id: string
+        }
+        Insert: {
+          arquivo_url: string
+          codigo_tipo: number
+          codigo_veiculo_hinova: number
+          enviado_em?: string
+          hinova_response?: Json | null
+          id?: string
+          origem: string
+          origem_id: string
+          veiculo_id: string
+        }
+        Update: {
+          arquivo_url?: string
+          codigo_tipo?: number
+          codigo_veiculo_hinova?: number
+          enviado_em?: string
+          hinova_response?: Json | null
+          id?: string
+          origem?: string
+          origem_id?: string
+          veiculo_id?: string
+        }
+        Relationships: []
+      }
       sga_health_checks: {
         Row: {
           conexao_ok: boolean

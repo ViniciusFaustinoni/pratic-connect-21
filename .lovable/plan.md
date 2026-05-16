@@ -1,56 +1,81 @@
-## Objetivo
+# Causa raiz dos documentos duplicados no SGA
 
-Parar de descartar Contrato/Termo e Nota Fiscal na sincronização SGA. Subir agora com **códigos de teste** (já validados como aceitos pela Hinova) — mesmo que apareçam sem rótulo ou no rótulo errado no painel SGA. Quando o suporte Hinova devolver os códigos oficiais da regional Praticcar (ou descobrirmos pelo `QOO5C17 / 1659789`), basta 1 UPDATE em `hinova_mapeamentos` — sem deploy.
+## Diagnóstico
 
-## Contexto
+`sga-hinova-sync` monta a lista de documentos (`contratos_documentos` + `vistoria_fotos` + avatar + `pdf_assinado_url`) e chama `POST /veiculo/foto/cadastrar` toda vez que é executado — **sem nenhum controle de "já enviei essa foto"**.
 
-- Probe confirmou: Hinova aceita qualquer `codigo_tipo` numérico com `200 / "Inserido"`; não valida contra tabela.
-- Códigos 1–12 já mapeados (CNH, CRLV, fotos do veículo, RG, CPF).
-- Códigos 13–20 foram aceitos no probe mas caíram em "sem tipo" no painel.
-- Veículo QOO5C17 mostra um contrato real categorizado como "DOCUMENTOS BENEFICIARIO" — número desconhecido.
+Confirmado em produção para o veículo **KOU6D37** (placa da screenshot):
+- 15/05 19:07 → `enviar_fotos` `success` (6 fotos)
+- 15/05 19:21 → `enviar_fotos` `success` (6 fotos)
+- Resultado: SGA recebeu 12 registros para os mesmos 6 arquivos. A screenshot mostra os mesmos PDFs/JPEGs repetidos às 09:15, 11:06 e 12:16 (3 execuções).
 
-## Plano
+Por que o sync roda múltiplas vezes:
+1. Triggers de pós-evento (autentique-webhook, concluir-instalacao-prestador, ativar-associado, cron-sga-retry, sga-reprocessar-cotacoes-ativacoes, process-integration-queue).
+2. Retentativas após erro intermitente do Hinova (queue `upsertQueue`).
+3. Ação manual "Reenviar SGA" no painel.
 
-### 1. Ativar placeholders com códigos de teste
+Não existe coluna `hinova_*` / `enviado_em` em `contratos_documentos` nem em `vistoria_fotos` — verifiquei `information_schema`. O Hinova também não rejeita duplicatas: aceita o mesmo `nome_arquivo`+`base64` e devolve sucesso sempre.
 
-`UPDATE` em `hinova_mapeamentos` (linhas já criadas inativas no turno anterior):
+**Causa raiz**: ausência de idempotência no envio de fotos. Cada execução re-uploada o conjunto inteiro.
 
-| codigo_local | codigo_hinova (teste) | ativo |
-|---|---|---|
-| `contrato_assinado` | **13** | true |
-| `termo_filiacao` | **13** | true |
-| `contrato` | **13** | true |
-| `nota_fiscal_veiculo` | **14** | true |
-| `nota_fiscal` | **14** | true |
+## Plano de correção
 
-Resultado imediato: próxima sync de qualquer veículo passa a enviar contrato assinado e NF para o SGA. Eles podem aparecer sem rótulo ou com rótulo "errado" — mas o arquivo entra.
+### 1. Tabela de auditoria de envios
 
-### 2. Marcar como temporário na descrição
+```sql
+CREATE TABLE public.sga_fotos_enviadas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  veiculo_id uuid NOT NULL,
+  codigo_veiculo_hinova bigint NOT NULL,
+  origem text NOT NULL,           -- 'contratos_documentos' | 'vistoria_fotos' | 'avatar' | 'pdf_assinado'
+  origem_id text NOT NULL,        -- id do documento/foto/avatar/contrato
+  arquivo_url text NOT NULL,
+  arquivo_hash text,              -- sha256(url) para fallback
+  codigo_tipo int NOT NULL,
+  enviado_em timestamptz NOT NULL DEFAULT now(),
+  hinova_response jsonb,
+  UNIQUE (veiculo_id, origem, origem_id)
+);
+CREATE INDEX ON public.sga_fotos_enviadas (veiculo_id);
+-- RLS: somente service_role lê/escreve (sem policies = bloqueado para anon/auth)
+ALTER TABLE public.sga_fotos_enviadas ENABLE ROW LEVEL SECURITY;
+```
 
-Atualizo a `descricao` das 5 linhas para deixar explícito no banco que é código provisório, ex.:
-`"CONTRATO/TERMO DE FILIAÇÃO — código de teste 13 (aguardando confirmação oficial Hinova)"`.
+### 2. Filtro de dedupe em `sga-hinova-sync`
 
-Assim qualquer dev/operador que abrir a tabela vê que é placeholder, não definitivo.
+Antes de chamar `buildFotosPayload`:
 
-### 3. Quando a Hinova responder (ou QOO5C17 revelar o código)
+- Carregar `SELECT origem, origem_id FROM sga_fotos_enviadas WHERE veiculo_id = _vid` → `Set<"origem:origem_id">`.
+- Atribuir `origem` ao montar `documentosEntrada` (já faço hoje só pelo prefixo de id: `vist-`, `avatar-`, `termo-`). Mudar para passar `{origem, origem_id}` explícitos.
+- Filtrar fora qualquer documento cujo par `origem:origem_id` já esteja no set.
 
-Único passo: `UPDATE public.hinova_mapeamentos SET codigo_hinova = <oficial>, descricao = '<oficial>' WHERE tipo='tipo_foto' AND codigo_local IN (...)`.
-Nada de código pra mudar, nada de redeploy.
+### 3. Persistir cada envio bem-sucedido
 
-### 4. Atualizar memória
+No loop que chama `cadastrarFotosVeiculoHinova(lote)`, quando `r.ok`, fazer `insert` em `sga_fotos_enviadas` com um registro por foto do lote (origem, origem_id, arquivo_url, codigo_tipo, resposta). Usar `onConflict: 'veiculo_id,origem,origem_id'` `ignoreDuplicates: true` por segurança.
 
-Atualizar `mem://logic/integrations/sga-dia-vencimento-fonte`? Não — ela é sobre dia_vencimento.
+### 4. Reset opcional para casos legítimos
 
-Criar/ajustar nota em `mem://integrations/hinova/tipo-foto-contrato-temporario` (curta) registrando: **os códigos 13 (contrato) e 14 (NF) são provisórios**, devem ser trocados pelos oficiais assim que a Hinova confirmar; o sistema ENVIA mesmo sem rótulo correto por decisão de negócio (preferimos doc no SGA com rótulo errado a doc não enviado).
+- Adicionar ação `forceResend?: boolean` no body do `sga-hinova-sync`: quando `true`, ignora o set de já-enviadas (caso operador realmente precise reenviar tudo).
+- Botão "Reenviar tudo (forçar)" continua disponível no painel SGA — apenas o caminho automático fica idempotente.
 
-## Detalhes técnicos
+### 5. Limpeza dos duplicados existentes no SGA
 
-- Migration: 1 `UPDATE` afetando 5 linhas. Sem mudança de schema.
-- Nenhuma edge function precisa ser tocada — `buildFotosPayload` já resolve via tabela e respeita `ativo=true`.
-- Não vou deployar nada (não há código mudando).
+A API Hinova `/veiculo/foto/excluir` aceita lista de IDs. Não consta no diagnóstico se temos esses IDs salvos (não temos). Proposta:
+- **Manual primeiro** no painel SGA para os casos já flagrados (KOU6D37 e similares).
+- Documentar no `mem://` que duplicatas pré-correção precisam ser limpas manualmente.
 
-## Fora de escopo
+### 6. Memória
 
-- Mexer no `dia_vencimento` (já fixado no turno anterior).
-- Adivinhar mais códigos / fazer novos probes.
-- Deletar os PDFs de probe do veículo 36183 (manual no painel SGA).
+Atualizar `mem://logic/integrations/sga-dia-vencimento-fonte` (ou criar `mem://logic/integrations/sga-fotos-idempotencia`) com a invariante: "Todo envio de foto para o Hinova deve ser registrado em `sga_fotos_enviadas` e filtrado antes do re-envio".
+
+## Arquivos a tocar
+
+- `supabase/migrations/<novo>.sql` — tabela `sga_fotos_enviadas`.
+- `supabase/functions/sga-hinova-sync/index.ts` — filtro + insert pós-envio + flag `forceResend`.
+- `supabase/functions/_shared/hinova-payloads.ts` — `DocumentoEntrada` ganha `origem` (opcional) ou permanece como está e o sync passa a montar tuplas separadas. Provavelmente mais limpo estender o tipo.
+- `mem://logic/integrations/sga-fotos-idempotencia.md` + atualizar `mem://index.md`.
+
+## Não escopo
+
+- Não vamos deduplicar olhando hash do arquivo (custo de baixar para hashear). `(origem, origem_id)` é suficiente porque cada documento/foto físico tem id único em nossa base.
+- Não vamos apagar duplicatas existentes no SGA via API automaticamente (sem ids confiáveis).
