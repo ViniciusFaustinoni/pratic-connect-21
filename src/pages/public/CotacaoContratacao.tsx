@@ -340,7 +340,7 @@ export default function CotacaoContratacao() {
       default:
         return false;
     }
-  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido, dispensaVistoriaTroca]);
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, dispensaVistoriaTroca]);
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
