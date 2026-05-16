@@ -275,11 +275,17 @@ serve(async (req) => {
       }).eq('id', veiculoId);
 
       // Verificar se já existe instalação ativa para este veículo.
-      // IMPORTANTE: criamos instalação para TODOS os veículos (mesmo os que dispensam rastreador),
-      // porque o link público de vistoria depende de uma instalação como âncora.
-      // Veículos sem rastreador recebem dispensa_rastreador=true; o link público trata o resto.
+      // REGRA CANÔNICA (sub-FIPE / dispensa_rastreador): veículos que NÃO precisam de
+      // rastreador NÃO geram instalacao — o artefato canônico é o servico vistoria_entrada
+      // criado pelo finalizar-autovistoria-cotacao. Criar instalação aqui causava o caso
+      // entrar duplicado na fila do Monitoramento (instalacao concluida + servico concluido)
+      // e pular a etapa de atribuição. Ver mem://logic/operations/vistoria-sem-rastreador-flow.
       let jaTemInstalacaoAtivaDesteVeic = false;
-      if (!instalacaoDesteVeiculo) {
+      if (!veiculoPrecisaRastreador) {
+        console.log(`[aprovar-proposta] Veículo ${veiculo.placa} dispensa rastreador — NÃO criar instalação (artefato canônico = servico vistoria_entrada).`);
+        jaTemInstalacaoAtivaDesteVeic = true; // bloqueia o bloco de criação abaixo
+      }
+      if (!instalacaoDesteVeiculo && veiculoPrecisaRastreador) {
         const { data: instalacaoAtiva } = await supabase.from('instalacoes')
           .select('id')
           .eq('veiculo_id', veiculoId)
