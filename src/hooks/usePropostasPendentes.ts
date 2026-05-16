@@ -381,7 +381,7 @@ export function usePropostasPendentes() {
         cotacaoIds.length
           ? supabase
               .from('cotacoes')
-              .select('id, cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado, vistoria_periodo, vistoria_completa_data_agendada, vistoria_completa_horario_agendado, vistoria_completa_periodo, tipo_vistoria, veiculo_blindado, cenario_adesao')
+              .select('id, cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado, vistoria_periodo, vistoria_completa_data_agendada, vistoria_completa_horario_agendado, vistoria_completa_periodo, tipo_vistoria, veiculo_blindado, cenario_adesao, tipo_entrada, vistoria_endereco_logradouro, vistoria_endereco_numero, vistoria_endereco_bairro, vistoria_endereco_cidade, vistoria_endereco_estado, vistoria_endereco_cep, vistoria_completa_endereco_logradouro, vistoria_completa_endereco_numero, vistoria_completa_endereco_bairro, vistoria_completa_endereco_cidade, vistoria_completa_endereco_estado, vistoria_completa_endereco_cep')
               .in('id', cotacaoIds)
           : Promise.resolve({ data: [] as any[] }),
         cotacaoIds.length
