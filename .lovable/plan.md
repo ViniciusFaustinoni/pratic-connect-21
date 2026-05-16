@@ -1,92 +1,121 @@
-# Plano de correção
+## Objetivo
+Restaurar o fluxo canônico da cotação para que nenhum caso entre em Monitoramento antes da etapa correta de Cadastro, eliminar duplicidades na fila de Aprovação de Associados e corrigir o caso do Caio Herculano Gomes da Silva.
 
-## Diagnóstico fechado
-- A cotação `COT-20260516-101252395-551` está hoje em `status_contratacao = aguardando_aprovacao_cadastro`.
-- Existe `vistorias` com `modalidade = autovistoria` e `status = aprovada`.
-- O veículo está em `instalacao_pendente` com `cobertura_roubo_furto = true`.
-- Já existe data na própria cotação (`vistoria_completa_data_agendada = 2026-05-18`, período `manha`), mas **não existe** linha em `instalacoes` nem em `agendamentos_base`.
-- Ou seja: o problema do Leonardo não é mais “faltou data”; o problema é que o fluxo ficou **parcialmente salvo na cotação**, mas não foi **materializado nas tabelas operacionais**.
+## Diagnóstico confirmado
 
-## O que está errado hoje
-1. **Régua pública ainda trata estados pós-cadastro de forma ambígua**
-   - `determinarEtapa()` joga `aguardando_aprovacao_cadastro`, `aguardando_aprovacao_monitoramento` e `vistoria_concluida` todos na etapa 4.
-   - Depois `CotacaoContratacao.tsx` tenta decidir se mostra pagamento, análise ou instalação usando vários atalhos locais.
-   - Isso permite cair em tela errada ou inconsistente quando o caso é “autovistoria R&F já aprovada + instalação ainda não materializada”.
+### 1) O Caio aparece 3 vezes por mistura de duas filas diferentes na mesma tela
+Na rota `Monitoramento > Aprovação de Associados`, a tela junta:
+- **fila de análise** (`useInstalacoesAguardandoAprovacao`) baseada em `servicos` concluídos
+- **fila de ativação** (`useInstalacoesAguardandoAtivacao`) baseada em `instalacoes` concluídas
 
-2. **A etapa 5 usa snapshot da cotação como se fosse instalação real**
-   - Em `CotacaoContratacao.tsx`, o bloco de autovistoria considera `cotacao.vistoria_completa_data_agendada` suficiente para exibir “Instalação agendada”.
-   - No caso do Leonardo, isso mascara o bug real: existe a data no snapshot, mas não existe `instalacoes/agendamentos_base`.
+Para o Caio existem exatamente estes 3 registros operacionais:
+- `servico` `5c63c4fe-84bd-4c20-bfa4-9d84be8be705` — `vistoria_entrada`, `concluida`
+- `servico` `ce188250-c53b-4403-8b6e-2e708054c617` — `instalacao`, `concluida`
+- `instalacao` `39ca3173-0baf-4235-b9b5-aa67cade299e` — `concluida`
 
-3. **O backend só materializa instalação se `cadastroAprovado` já estiver true no momento da chamada**
-   - `criar-instalacao-pos-pagamento` tem esta regra:
-     - se há `dataAgendada` e `cadastroAprovado` => cria `instalacoes`
-     - se há `dataAgendada` e `!cadastroAprovado` => apenas loga e não cria nada
-   - Isso abre a janela de inconsistência: o cliente agenda, os dados ficam na cotação, mas a instalação não nasce.
-   - Depois, se o cadastro aprovar sem uma nova chamada idempotente de materialização, o caso fica travado exatamente como o do Leonardo.
+A query consolidada da fila mostra que o problema não é isolado:
+- **Caio**: 3 itens
+- **Romario Rocha Soares**: 3 itens
+- **Felipe Campanha Soares**: 2 itens
+- **Icaro de Carvalho Omari Rubim**: 2 itens
 
-## Implementação proposta
+### 2) O serviço foi pulado porque a instalação nasceu concluída, sem atribuição
+No caso do Caio, a instalação foi criada assim:
+- `instalacao 39ca...`
+- `status = concluida`
+- `instalador_id = null`
+- `instalador_responsavel_id = null`
+- `rota_id = null`
+- `prestador_atribuido_em = null`
+- `dispensa_rastreador = true`
 
-### 1) Tornar o link público determinístico para autovistoria R&F
-Ajustar `src/hooks/useCotacaoContratacao.ts` e `src/pages/public/CotacaoContratacao.tsx` para separar claramente três estados:
-- **Autovistoria enviada / aguardando cadastro**
-- **Cadastro aprovou e falta materialização operacional da instalação**
-- **Instalação realmente criada/agendada nas tabelas operacionais**
+Ou seja: o registro já entrou como se o trabalho de campo estivesse terminado, sem técnico, sem rota e sem atribuição. Isso quebra exatamente a etapa 5 do fluxo que você definiu.
 
-Mudanças:
-- `determinarEtapa()` deixa de tratar todos os pós-cadastro iguais.
-- Criar uma regra explícita para `autovistoria + exige rastreador`:
-  - se **não existe** `instalacoes` nem `agendamentos_base`, o link deve mostrar a etapa de **Instalação** como pendente/ação requerida;
-  - se existe só snapshot em `cotacoes`, mas não existe registro operacional, **não** mostrar “instalação agendada com sucesso”; mostrar estado de recuperação/reenvio da materialização;
-  - se existe registro operacional real, aí sim mostrar o resumo do agendamento.
-- Remover a dependência de `cotacao.vistoria_completa_data_agendada` como prova suficiente de agendamento concluído nesse fluxo.
+### 3) A regra “Cadastro antes de Monitoramento” foi quebrada no banco
+Existe uma migration já aplicada que cria promoção automática do Cadastro para o Monitoramento:
+- `supabase/migrations/20260515140337_4e90b04d-68e2-411c-aa5b-73a77380c492.sql`
 
-### 2) Corrigir o encadeamento backend para materializar instalação de forma idempotente
-Ajustar `supabase/functions/criar-instalacao-pos-pagamento/index.ts` e revisar a chamada de `aprovar-proposta`.
+Ela cria a função `fn_auto_promover_cadastro_pos_operacao` e triggers em:
+- `servicos`
+- `agendamentos_base`
+- `instalacoes`
 
-Objetivo:
-- Sempre que houver:
-  - autovistoria R&F válida,
-  - rastreador obrigatório,
-  - data/endereço já salvos,
-  - e cadastro aprovado,
-- a instalação deve ser materializada nas tabelas operacionais, mesmo que a data tenha sido salva antes.
+Essa lógica faz `contratos.cadastro_aprovado = true` automaticamente quando há avanço operacional. Isso contradiz sua regra de negócio, porque o processo passa a depender do operacional em vez da aprovação manual do Cadastro.
 
-Mudanças:
-- `criar-instalacao-pos-pagamento` passa a ser a função canônica de “materializar agendamento salvo”.
-- `aprovar-proposta` deve, após aprovar cadastro nesse cenário, chamar a materialização idempotente se já houver dados de agendamento na cotação.
-- Se não houver dados de agendamento reais, manter o bloqueio e devolver erro claro orientando que falta o cliente agendar pelo link público.
+Há evidência real dessa quebra em auditoria, com contratos marcados como:
+- `Cadastro auto-aprovado por avanço operacional (origem=backfill:reconciliacao)`
 
-## Backfill do caso Leonardo
-Aplicar um backfill controlado para `COT-20260516-101252395-551`:
-- não mexer na autovistoria aprovada;
-- não retirar `cobertura_roubo_furto`;
-- materializar agora a `instalacoes` (ou `agendamentos_base`, conforme o modo salvo da cotação) a partir dos dados já presentes em `vistoria_completa_*`;
-- garantir que o card apareça corretamente no Monitoramento e que o link público reflita o estado operacional real.
+### 4) O backend atual também materializa instalação cedo demais para casos sem rastreador
+No `aprovar-proposta`, quando o veículo não precisa de rastreador, o código ainda cria instalação com:
+- `dispensa_rastreador: true`
 
-## Arquivos previstos
-- `src/hooks/useCotacaoContratacao.ts`
-- `src/pages/public/CotacaoContratacao.tsx`
-- `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+E no fluxo do Caio isso se combinou com registros concluídos, o que empurrou o caso para Monitoramento sem passar pela atribuição correta.
+
+### 5) O caso do Caio é moto 0km e está sendo tratado como se pudesse encerrar o operacional
+Dados confirmados:
+- Associado: `CAIO HERCULANO GOMES DA SILVA`
+- Veículo: `0KM0B9C8`
+- Status do associado: `aguardando_instalacao`
+- Contrato: `ea20ff65-12c1-40a0-842d-4c58fc3387dd`
+- `cadastro_aprovado = true`
+- Instalação marcada como concluída sem técnico
+
+Isso explica o bug maior: o sistema entendeu que já havia etapa operacional suficiente para expor o caso na fila de Monitoramento, mesmo sem a atribuição/ciclo de campo respeitado.
+
+## Plano de correção
+
+### 1) Remover a autoaprovação do Cadastro por avanço operacional
+- Revogar a lógica de `fn_auto_promover_cadastro_pos_operacao`
+- Remover os triggers que marcam `cadastro_aprovado=true` a partir de `servicos`, `instalacoes` e `agendamentos_base`
+- Garantir que `cadastro_aprovado` só mude por ação explícita do fluxo de Cadastro
+
+### 2) Corrigir a origem da fila de Aprovação de Associados
+Separar o que hoje está misturado em uma mesma lista:
+- **Análise do Monitoramento**: apenas o item canônico que realmente deve ser analisado
+- **Ativação de rastreador**: somente quando for um caso próprio de ativação, sem duplicar o mesmo veículo que ainda está em análise
+
+Regra de deduplicação:
+- um veículo/contrato não pode aparecer ao mesmo tempo em `analise` e `ativacao`
+- se existir `instalacao` concluída e `servico` concluído para a mesma origem, a UI deve mostrar apenas o estado canônico
+
+### 3) Corrigir a materialização para sub-FIPE / dispensa de rastreador
+No backend:
+- impedir que instalação seja criada já como concluída sem técnico
+- impedir que serviço de campo terminal apareça sem ter passado por atribuição
+- revisar a criação para casos com `dispensa_rastreador=true`, principalmente moto 0km e fluxos abaixo da FIPE
+
+### 4) Ajustar `aprovar-proposta` para respeitar estritamente o fluxo canônico
+Ao aprovar no Cadastro:
+- marcar somente a aprovação cadastral
+- criar o operacional correto em estado não terminal
+- nunca jogar direto na fila de Monitoramento por efeito colateral de instalação/serviço concluído
+- para casos sem rastreador, o Monitoramento só deve receber quando o caminho previsto realmente estiver satisfeito
+
+### 5) Backfill corretivo dos casos já contaminados
+Executar correção de dados para:
+- Caio Herculano Gomes da Silva
+- demais contratos autoaprovados por `backfill:reconciliacao` ou por trigger operacional
+- remover itens duplicados ou terminalizados indevidamente
+- recolocar cada caso na fila correta: Cadastro ou Monitoramento, conforme o estágio real
+
+## Arquivos e áreas a ajustar
+- `src/pages/monitoramento/AcionamentosRouboFurto.tsx`
+- `src/hooks/useAprovacaoMonitoramento.ts`
+- `src/hooks/useVistoriaCompletaAnalise.ts`
 - `supabase/functions/aprovar-proposta/index.ts`
-- uma migration/backfill específica para o caso Leonardo
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+- nova migration para remover os triggers/função de autoaprovação e fazer o backfill corretivo
+
+## Validação após a correção
+- O Caio deve aparecer **uma vez só** na fila correta
+- Nenhum caso deve entrar em Monitoramento com `cadastro_aprovado=false`
+- Nenhuma instalação/serviço deve nascer `concluida` sem atribuição real
+- Contratos hoje autoaprovados por trigger devem voltar ao estágio correto
+- A fila de Monitoramento deve refletir apenas casos que realmente já passaram pelo Cadastro
 
 ## Resultado esperado
-- O link público não volta mais para “aprovar proposta” nem fica preso em tela errada nesse cenário.
-- Autovistoria de R&F continua válida acima da FIPE mínima.
-- Quando houver agendamento salvo mas ainda sem materialização operacional, o sistema se recupera corretamente.
-- O caso do Leonardo volta a aparecer de forma correta no fluxo operacional e deixa de ficar travado entre cadastro e monitoramento.
-
-## Detalhes técnicos
-```text
-Estado correto para autovistoria R&F com rastreador obrigatório:
-
-autovistoria aprovada
-→ cadastro aprova
-→ se já houver data/endereço salvos: materializa instalacoes/agendamentos_base
-→ monitoramento recebe serviço real
-→ atribuição / execução
-→ aprovação final
-
-Nunca considerar apenas cotacoes.vistoria_completa_* como fonte final de verdade.
-A fonte final precisa ser operacional: instalacoes / agendamentos_base / servicos.
-```
+Depois da implementação:
+- o processo volta a obedecer seu fluxo oficial
+- o Cadastro deixa de ser pulado
+- a atribuição do serviço volta a ser obrigatória antes da conclusão operacional
+- a fila de Aprovação de Associados deixa de mostrar duplicidades e estados falsos
