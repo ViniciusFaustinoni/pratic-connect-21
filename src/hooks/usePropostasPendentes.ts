@@ -836,6 +836,12 @@ export function usePropostasPendentes() {
           veiculo_blindado: veiculoBlindadoCot,
           cenario_adesao: cenarioAdesaoCot,
           plano_tem_roubo_furto: planoTemRouboFurto,
+          endereco_instalacao: _resolveEnderecoInstalacao(cotacao, {
+            logradouro: associado?.logradouro ?? (contrato as any).cliente_logradouro,
+            numero: associado?.numero ?? null,
+            bairro: associado?.bairro ?? (contrato as any).cliente_bairro,
+            cidade: associado?.cidade ?? null,
+          }),
         } as PropostaPendente;
       });
 
