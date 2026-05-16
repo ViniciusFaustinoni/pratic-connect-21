@@ -143,6 +143,22 @@ function isCombustivelDiesel(c: string | null | undefined) {
   return !!c && /diesel/i.test(c);
 }
 
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-primary/10 text-primary border border-primary/30">
+      {label}
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+        aria-label={`Remover filtro ${label}`}
+      >
+        <X className="h-2.5 w-2.5" />
+      </button>
+    </span>
+  );
+}
+
 function getStatusBadge(
   status: string | null,
   associadoStatus?: string | null,
