@@ -1000,6 +1000,7 @@ export function useProposta(contratoId: string | undefined) {
           .maybeSingle();
         
         if (cotacao) {
+          cotacaoDetalhe = cotacao;
           tipoVistoriaCotacao = (cotacao.tipo_vistoria as any) || null;
           veiculoBlindadoCot = (cotacao as any).veiculo_blindado ?? null;
           cenarioAdesaoCot = (cotacao as any).cenario_adesao ?? null;
