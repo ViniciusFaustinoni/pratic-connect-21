@@ -1523,6 +1523,12 @@ export function useProposta(contratoId: string | undefined) {
         veiculo_blindado: veiculoBlindadoCot,
         cenario_adesao: cenarioAdesaoCot,
         plano_tem_roubo_furto: planoTemRouboFurto,
+        endereco_instalacao: _resolveEnderecoInstalacao(cotacaoDetalhe, {
+          logradouro: (associado as any)?.logradouro ?? (contrato as any).cliente_logradouro,
+          numero: (associado as any)?.numero ?? null,
+          bairro: (associado as any)?.bairro ?? (contrato as any).cliente_bairro,
+          cidade: (associado as any)?.cidade ?? null,
+        }),
       };
       return result;
     },
