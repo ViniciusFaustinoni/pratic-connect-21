@@ -1139,9 +1139,13 @@ export default function CotacaoContratacao() {
                     />
                   ) : cotacao?.tipo_vistoria === 'autovistoria' ? (
                     // ========== FLUXO AUTOVISTORIA ==========
-                    // Verificar se já agendou instalação: campo da cotação OU registro na tabela OU estado local
-                    (cotacao?.vistoria_completa_data_agendada || hasInstalacaoAgendada || agendamentoConcluido) ? (
-                      // Instalação já agendada - mostrar tela de análise
+                    // Fonte da verdade do agendamento: tabelas operacionais
+                    // (instalacoes / agendamentos_base). O snapshot da cotação
+                    // (vistoria_completa_data_agendada) sozinho NÃO conta como
+                    // agendamento materializado — evita exibir "Instalação
+                    // agendada" enquanto o backend não criou o registro real.
+                    (hasInstalacaoAgendada || hasAgendamentoBase || agendamentoConcluido) ? (
+                      // Instalação realmente agendada (registro operacional existe) - mostrar tela de análise
                       <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-6">
                           <motion.div 
@@ -1155,13 +1159,17 @@ export default function CotacaoContratacao() {
                           
                           <div>
                             <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 mb-4">
-                              Em Análise Cadastral
+                              {cotacao?.status_contratacao === 'aguardando_aprovacao_cadastro'
+                                ? 'Aguardando análise do Cadastro'
+                                : cotacao?.status_contratacao === 'aguardando_aprovacao_monitoramento'
+                                  ? 'Aguardando Monitoramento'
+                                  : 'Em Análise'}
                             </Badge>
                             <h2 className="text-2xl font-bold mb-3 text-foreground">
                               Sua proposta está sendo analisada
                             </h2>
                             <p className="text-muted-foreground max-w-md mx-auto">
-                              Seus documentos, contrato assinado e imagens da vistoria estão sendo analisados pelo nosso setor de cadastro. Você será notificado sobre a aprovação em breve.
+                              Seus documentos, contrato assinado e imagens da vistoria estão sendo analisados pela nossa equipe. Você será notificado sobre a aprovação em breve.
                             </p>
                           </div>
 
@@ -1191,7 +1199,11 @@ export default function CotacaoContratacao() {
                             
                             <div className="flex items-center gap-3">
                               <Clock className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                              <span className="text-sm text-muted-foreground">Aguardando aprovação cadastral para ativar cobertura</span>
+                              <span className="text-sm text-muted-foreground">
+                                {cotacao?.status_contratacao === 'aguardando_aprovacao_cadastro'
+                                  ? 'Aguardando aprovação do Cadastro para liberar Roubo/Furto'
+                                  : 'Aguardando Monitoramento para ativar a Proteção 360º'}
+                              </span>
                             </div>
                           </div>
 
