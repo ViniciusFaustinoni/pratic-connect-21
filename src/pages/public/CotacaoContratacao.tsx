@@ -770,6 +770,7 @@ export default function CotacaoContratacao() {
                     isLoading={isPending}
                     readOnly={isEtapaConcluida(1)}
                     placaEsperada={cotacao.veiculo_placa || undefined}
+                    zeroKmFromCotacao={(cotacao as any).veiculo_zero_km === true}
                   />
                   <NavegacaoEtapas
                     etapaAtual={etapaAtual}
