@@ -458,7 +458,7 @@ serve(async (req) => {
       }
 
       // 2. Contrato (vendedor + plano + valores)
-      const contratoSel = 'id, numero, vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, cobertura_fipe, pdf_assinado_url';
+      const contratoSel = 'id, numero, vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, cobertura_fipe, pdf_assinado_url, dia_vencimento';
       let contrato: any = null;
       const { data: cByVeic } = await supabase.from('contratos').select(contratoSel)
         .eq('veiculo_id', _vid).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -671,6 +671,8 @@ serve(async (req) => {
           codigo_como_conheceu: codigoComoConheceuPadrao,
           codigo_profissao: codigoProfissaoPadrao,
           data_contrato_iso: associado.created_at,
+          // Fonte da verdade do vencimento — o associado pode estar dessincronizado.
+          dia_vencimento_contrato: contrato?.dia_vencimento ?? null,
         };
         const payloadA = buildAssociadoPayload(associado, ctxA);
         try {
@@ -951,6 +953,8 @@ serve(async (req) => {
             ?? getMap('cor', veiculo.cor)
             ?? 10, // fallback final: "Não especificado" (cor não bloqueia envio)
           data_contrato_iso: associado.created_at,
+          // Fonte da verdade do vencimento — evita divergência com SGA.
+          dia_vencimento_contrato: contrato?.dia_vencimento ?? null,
         };
         const payloadV = buildVeiculoPayload(veiculo, codigoFipeLimpo, Number(veiculo.valor_fipe) || valorFipeAuto || 0, ctxV);
 

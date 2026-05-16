@@ -6,6 +6,7 @@
  */
 
 import type { FotoHinovaPayload } from './hinova-client.ts';
+import { resolverDiaVencimento } from './vencimento-utils.ts';
 
 export interface AssociadoCtx {
   /** Código da conta bancária. Obrigatório APENAS quando a regional tem mais de uma conta. */
@@ -17,6 +18,12 @@ export interface AssociadoCtx {
   codigo_como_conheceu?: number;
   codigo_profissao?: number;
   data_contrato_iso?: string | null;
+  /**
+   * Dia de vencimento autoritativo (vem de `contratos.dia_vencimento`).
+   * Quando presente, prevalece sobre `associado.dia_vencimento` (que pode
+   * estar dessincronizado). Resolvido com regra 5/10/15/20/25/30.
+   */
+  dia_vencimento_contrato?: number | null;
 }
 
 export interface VeiculoCtx {
@@ -47,6 +54,11 @@ export interface VeiculoCtx {
   porcentagem_fipe_protegido?: number;
   /** Observação livre (ex: "Cadastro via Pratic Connect — contrato XYZ"). */
   observacao?: string;
+  /**
+   * Dia de vencimento autoritativo (vem de `contratos.dia_vencimento`).
+   * Quando presente, prevalece sobre `veiculo.dia_vencimento`.
+   */
+  dia_vencimento_contrato?: number | null;
 }
 
 // ============================================================
@@ -124,7 +136,13 @@ export function buildAssociadoPayload(
     cidade: associado.cidade || '',
     estado: normalizeUF(associado.uf || associado.estado),
     cep: cleanDigits(associado.cep),
-    dia_vencimento: associado.dia_vencimento || 10,
+    // Prioriza o dia_vencimento do CONTRATO (fonte da verdade) — só usa
+    // o do associado como fallback. resolverDiaVencimento garante valor
+    // válido (5/10/15/20/25/30); nunca cai mais no antigo "|| 10" cego.
+    dia_vencimento: resolverDiaVencimento(
+      ctx.dia_vencimento_contrato ?? associado.dia_vencimento,
+      ctx.data_contrato_iso,
+    ).dia,
   };
   if (Number.isFinite(ctx.codigo_conta) && (ctx.codigo_conta as number) > 0) {
     payload.codigo_conta = ctx.codigo_conta;
@@ -198,7 +216,10 @@ export function buildVeiculoPayload(
     valor_fipe,
     kilometragem: Number(veiculo.kilometragem) || 0,
     numero_motor: veiculo.numero_motor || '',
-    dia_vencimento: veiculo.dia_vencimento || 10,
+    dia_vencimento: resolverDiaVencimento(
+      ctx.dia_vencimento_contrato ?? veiculo.dia_vencimento,
+      ctx.data_contrato_iso,
+    ).dia,
     codigo_tipo_veiculo: ctx.tipo_veiculo,
     codigo_voluntario: ctx.codigo_voluntario,
   };
