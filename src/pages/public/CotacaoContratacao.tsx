@@ -270,7 +270,6 @@ export default function CotacaoContratacao() {
         combustivel: (cotacao as any).veiculo_combustivel || undefined,
       } as any).exige;
       const semInstalacao =
-        !cotacao.vistoria_completa_data_agendada &&
         !hasInstalacaoAgendada &&
         !hasAgendamentoBase &&
         !agendamentoConcluido;
