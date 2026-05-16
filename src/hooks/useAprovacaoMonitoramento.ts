@@ -16,12 +16,14 @@ export function useInstalacoesAguardandoAprovacao() {
         .select(`
           id,
           tipo,
+          modalidade,
           status,
           data_agendada,
           concluida_em,
           profissional_id,
           veiculo_id,
           associado_id,
+          contrato_id,
           instalacao_origem_id,
           vistoria_origem_id,
           observacoes,
@@ -56,13 +58,28 @@ export function useInstalacoesAguardandoAprovacao() {
       }
 
       // Gate do Cadastro: Monitoramento só recebe após aprovação manual do Cadastro.
-      const pendentes = (servicos || []).filter((s: any) => {
+      const aprovados = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
         if (!v || v.cobertura_total === true) return false;
         const cadastroAprovado =
           s.instalacao?.contrato?.cadastro_aprovado === true ||
           (s.vistoria_origem_id && vistoriaContratoMap.get(s.vistoria_origem_id) === true);
         return cadastroAprovado;
+      });
+
+      // DEDUPE DEFENSIVO (regra canônica autovistoria acima da FIPE):
+      // Se o contrato já tem uma instalação TÉCNICA (tipo='instalacao' OU modalidade≠'autovistoria')
+      // concluida na fila, suprime qualquer vistoria_entrada de autovistoria do mesmo contrato.
+      // Evita duplicatas e impede que autovistoria opcional acima-FIPE apareça como aprovação final.
+      const contratosComInstalacaoTecnica = new Set<string>();
+      for (const s of aprovados) {
+        const isAuto = (s.modalidade || '').toLowerCase() === 'autovistoria';
+        if (!isAuto && s.contrato_id) contratosComInstalacaoTecnica.add(s.contrato_id);
+      }
+      const pendentes = aprovados.filter((s: any) => {
+        const isAuto = (s.modalidade || '').toLowerCase() === 'autovistoria';
+        if (isAuto && s.contrato_id && contratosComInstalacaoTecnica.has(s.contrato_id)) return false;
+        return true;
       });
 
       return pendentes;

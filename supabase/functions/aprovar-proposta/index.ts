@@ -547,18 +547,24 @@ serve(async (req) => {
                 // (terminal, fora da fila do Monitoramento). A fila só receberá o
                 // caso quando o servico PRESENCIAL do técnico for concluído.
                 if (contrato.cotacao_id) {
+                  // REWIND ROBUSTO: aceita também 'concluida' — em fluxos antigos o
+                  // servico vistoria_entrada de autovistoria foi indevidamente promovido
+                  // para 'concluida' (entrando na fila final do Monitoramento). Como o
+                  // veículo exige rastreador, a fila final só pode receber instalação
+                  // técnica concluída; rebaixamos para 'aprovada' (terminal, fora da fila).
                   const { error: errAprovServ } = await supabase
                     .from('servicos')
                     .update({
                       status: 'aprovada',
                       analisado_em: agora,
                       analisado_por: aprovado_por || null,
+                      concluida_em: null,
                       observacoes_analise: 'Autovistoria aprovada pelo Cadastro — Roubo/Furto liberado. Aguardando vistoria/instalação presencial do técnico para entrar na fila do Monitoramento.',
                     })
                     .eq('cotacao_id', contrato.cotacao_id)
                     .eq('tipo', 'vistoria_entrada')
                     .eq('modalidade', 'autovistoria')
-                    .eq('status', 'em_analise');
+                    .in('status', ['em_analise', 'concluida']);
                   if (errAprovServ) console.warn('[aprovar-proposta] Falha ao marcar servico autovistoria como aprovada:', errAprovServ);
                 }
 
