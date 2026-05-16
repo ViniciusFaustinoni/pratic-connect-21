@@ -329,11 +329,11 @@ export default function CotacaoContratacao() {
         return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
-      case 5: // Instalação (apenas autovistoria) - concluída quando instalação agendada ou status final
+      case 5: // Instalação (apenas autovistoria) - só concluída quando há registro operacional real
         if (cotacao.tipo_vistoria !== 'autovistoria') return false;
         return (
-          !!cotacao.vistoria_completa_data_agendada ||
           hasInstalacaoAgendada ||
+          hasAgendamentoBase ||
           agendamentoConcluido ||
           cotacao.status_contratacao === 'ativo'
         );
