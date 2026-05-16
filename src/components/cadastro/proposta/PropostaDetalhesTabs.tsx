@@ -116,6 +116,20 @@ const categoryBorderColors: Record<string, string> = {
   instalacao: 'border-t-info',
 };
 
+const TIPO_ENTRADA_LABEL: Record<string, string> = {
+  comum: 'Adesão Comum',
+  troca_titularidade: 'Troca de Titularidade',
+  substituicao: 'Substituição de Veículo',
+  substituicao_placa: 'Substituição de Veículo',
+  inclusao: 'Inclusão de Veículo',
+};
+
+function rotuloTipoEntrada(v: string | null | undefined): string {
+  if (!v) return 'Adesão Comum';
+  const k = v.toString().trim().toLowerCase();
+  return TIPO_ENTRADA_LABEL[k] || (k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' '));
+}
+
 export function PropostaDetalhesTabs({
   proposta,
   veiculoRenavam,
