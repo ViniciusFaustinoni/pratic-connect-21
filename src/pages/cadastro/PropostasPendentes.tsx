@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Clock,
   Eye,
@@ -30,6 +34,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePropostasPendentes, usePropostaStats, PropostaPendente } from '@/hooks/usePropostasPendentes';
@@ -49,9 +55,93 @@ import { UserAvatar } from '@/components/UserAvatar';
 const statusFilters = [
   { value: 'todos', label: 'Todos' },
   { value: 'assinado', label: 'Aguardando' },
+  { value: 'aguard_doc', label: 'Aguard. Doc' },
   { value: 'pendente_vistoria', label: 'Pend. Vistoria' },
+  { value: 'aguard_vistoria', label: 'Aguard. Vistoria' },
+  { value: 'aguard_instalacao', label: 'Aguard. Instalação' },
+  { value: 'agendado', label: 'Agendado' },
   { value: 'em_analise', label: 'Em Análise' },
 ];
+
+const tipoEntradaOptions = [
+  { value: 'todos', label: 'Todos os tipos' },
+  { value: 'comum', label: 'Nova adesão' },
+  { value: 'inclusao', label: 'Inclusão de veículo' },
+  { value: 'troca_titularidade', label: 'Troca de titularidade' },
+  { value: 'substituicao_placa', label: 'Substituição de placa' },
+];
+
+const tipoVistoriaOptions = [
+  { value: 'todos', label: 'Todas' },
+  { value: 'autovistoria', label: 'Autovistoria' },
+  { value: 'agendada_base', label: 'Vistoria na base' },
+  { value: 'agendada', label: 'Vistoria agendada' },
+  { value: 'sem_vistoria', label: 'Sem vistoria definida' },
+];
+
+const slaOptions = [
+  { value: 'todos', label: 'Qualquer tempo' },
+  { value: 'novo', label: 'Até 24h (no prazo)' },
+  { value: 'atencao', label: '24h–48h (atenção)' },
+  { value: 'atrasado', label: 'Acima de 48h (atrasado)' },
+];
+
+const ordenacaoOptions = [
+  { value: 'reanalise_primeiro', label: 'Reanálise primeiro' },
+  { value: 'mais_antiga', label: 'Mais antiga na fila' },
+  { value: 'mais_recente', label: 'Mais recente' },
+  { value: 'maior_valor', label: 'Maior valor FIPE' },
+];
+
+type CaracteristicaKey = 'zero_km' | 'blindado' | 'alienado' | 'uso_app' | 'diesel' | 'cobertura_total';
+const caracteristicaOptions: { key: CaracteristicaKey; label: string }[] = [
+  { key: 'zero_km', label: '0KM' },
+  { key: 'blindado', label: 'Blindado' },
+  { key: 'alienado', label: 'Alienado' },
+  { key: 'uso_app', label: 'Uso APP' },
+  { key: 'diesel', label: 'Diesel' },
+  { key: 'cobertura_total', label: 'Cobertura Total' },
+];
+
+// Predicados compartilhados — usados em filtros e KPIs (mantém badge ↔ filtro coerentes)
+function isPendenteVistoriaInicial(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    p.cadastro_aprovado === true &&
+    p.tipo_vistoria !== 'autovistoria' &&
+    (!p.instalacao_info || p.instalacao_info.status !== 'concluida')
+  );
+}
+function isAguardandoDoc(p: PropostaPendente) {
+  return p.status === 'assinado' && p.tem_documento_pendente === true;
+}
+function isAgendado(p: PropostaPendente) {
+  return p.status === 'assinado' && p.tipo_etapa_analise === 'agendamento_confirmado';
+}
+function isAguardVistoriaRF(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    p.plano_tem_roubo_furto &&
+    (!p.vistoria || !['concluida', 'aprovada', 'aprovada_ressalvas'].includes(p.vistoria.status || ''))
+  );
+}
+function isAguardInstalacaoRF(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    p.plano_tem_roubo_furto &&
+    !!p.vistoria &&
+    ['concluida', 'aprovada', 'aprovada_ressalvas'].includes(p.vistoria.status || '') &&
+    (!p.instalacao_info || p.instalacao_info.status !== 'concluida')
+  );
+}
+function horasNaFila(p: PropostaPendente): number {
+  const ref = p.tempo_referencia || p.data_assinatura;
+  if (!ref) return 0;
+  return (Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60);
+}
+function isCombustivelDiesel(c: string | null | undefined) {
+  return !!c && /diesel/i.test(c);
+}
 
 function getStatusBadge(
   status: string | null,
