@@ -1,70 +1,94 @@
-## Auditoria — fila Monitoramento › Aprovação de Associados
+## Diagnóstico
 
-Levantamento direto na tabela `servicos` (`tipo IN ('vistoria_entrada','instalacao')`, `status='concluida'`, `contratos.cadastro_aprovado=true`) mostra **16 cards** com 3 patologias:
+Auditoria das cotações dos últimos 60 dias (`cotacoes`):
 
-| # | Associado | Veículo | FIPE | Patologia |
-|---|---|---|---|---|
-| 1 | **CAIO HERCULANO** (moto) | HONDA CG 160 START | R$ 18.878 (>9k → exige rastreador) | Autovistoria órfã: `vistoria_entrada` (autovistoria) `concluida` + R/F liberado, **sem instalação técnica** (a única instalação está `cancelada`). Aparece como aprovação final. |
-| 2 | **FRANCISCO ERIVALDO** | Yamaha XTZ 250 | R$ 27.948 | Idêntico ao Caio: zero instalação. |
-| 3 | **RIAN SANTOS** | HONDA CG 160 FAN | R$ 19.993 | Aparece **2×** (autovistoria + agendada_base), zero instalação. |
-| 4 | **ROMARIO ROCHA** | Ford Ecosport | R$ 68.956 | Aparece **2×**: instalação técnica concluida + vistoria_entrada de autovistoria concluida. Duplicata. |
-| 5 | **ICARO** (moto) | HONDA PCX 160 | R$ 21.627 | Aparece **2×**: autovistoria + `instalacao` `dispensa_rastreador=true` (instalação fictícia, indevida acima da FIPE). |
-| 6 | André, Eduardo, Cláudia, Bruno, Thaís, Felipe | carros ≥30k | — | Caso correto: instalação técnica concluída → fila legítima. |
+| Métrica | Resultado |
+|---|---|
+| Cotações com `veiculo_zero_km = true` | **0** |
+| Cotações com `veiculo_chassi` preenchido | dezenas — **todas com placa real** (não-0KM) |
+| Cotações com `veiculo_placa = NULL` e `status_contratacao ∈ {pagamento_ok, ativo}` | 6 (HONDA CG 160, YAMAHA XTZ 250, FIAT CRONOS) — provavelmente 0KM tratados informalmente |
 
-### Causa raiz única
+Ou seja: **na prática, nenhuma cotação 0KM hoje cumpre a regra canônica do manual**.
 
-`aprovar-proposta` promove **qualquer** `vistoria_entrada` de autovistoria para `status='concluida'`. Para **sub-FIPE** está certo (autovistoria É o artefato final). Para **acima da FIPE**, o manual diz que a autovistoria só serve para **antecipar R/F** — não substitui a instalação técnica. Como nada distingue os dois ramos, o serviço vai para a fila final indevidamente e gera, em sequência: cards travados, duplicatas quando a instalação real acontece depois, e em alguns casos uma `instalacao` fictícia com `dispensa_rastreador=true`.
+## Causa raiz
 
----
+O toggle **"Veículo dentro da Agência (0km)"** em `src/components/cotacao/EtapaConsultaFipe.tsx` é controlado por `modoNotaFiscal` em `src/pages/vendas/Cotacao.tsx`. Esse estado é usado **apenas localmente** para:
 
-## Plano de correção raiz
+1. Desabilitar consulta FIPE
+2. Trocar o rótulo "Valor FIPE" → "Valor da Nota Fiscal"
+3. Passar `origemValor='nota'` para `EtapaResultado`
 
-### 1. Edge `aprovar-proposta` — ramificar autovistoria por uso
+E nada mais. Quando o vendedor clica em **Iniciar Cadastro** (`handleIniciarCadastro`, linha 276 de `Cotacao.tsx`), o payload `dadosCotacao` enviado para `/vendas/contratos` **não inclui** `veiculo_zero_km`, `chassi` ou `renavam`. A interface `PrefilledCotacaoData` em `ContratoFormDialog.tsx` (linha 84) também não tem esses campos. Resultado: a flag morre no front-end e a coluna `cotacoes.veiculo_zero_km` nunca recebe `true` por esse caminho.
 
-Adicionar, ao aprovar o Cadastro, detecção `veiculoPrecisaRastreador` (FIPE × tipo × diesel, mesma lógica de `precisaRastreador`/`finalizar-autovistoria-cotacao`):
+A única forma do flag ser gravado hoje é via `EtapaDadosPessoaisDocumentos.tsx` (linha 153 — `isZeroKm` default `false`), onde o **próprio associado** precisa lembrar de marcar no link público. Fonte de verdade errada.
 
+## Consequências em cascata (regras quebradas)
+
+- `sga-hinova-sync` (mem://logic/operations/sga-renavam-opcional-zero-km): só dispensa RENAVAM quando placa `0KM*` ou `aguardando_placa_definitiva=true`. Sem o flag, o sync exige RENAVAM e falha silenciosamente.
+- `softruck-ativar-dispositivo` / `softruck-api` (mem://logic/integrations/softruck-placa-zero-km): só usa chassi como `plate/vin` quando `is_zero_km`. Sem o flag, registra rastreador com placa vazia/inválida.
+- `documento-veiculo-equivalencia` (CRLV/CRV/NF aceitos para 0KM): sem o flag o link público continua exigindo CRLV e rejeita NF.
+- O ramo "abaixo do mínimo FIPE → autovistoria completa obrigatória" continua funcionando (depende só de FIPE), mas a contratação + emplacamento + SGA quebram para 0KM.
+
+## Plano de correção
+
+### 1. Propagar `veiculo_zero_km` end-to-end no fluxo interno
+
+**`src/pages/vendas/Cotacao.tsx`** — `handleIniciarCadastro`:
+- Incluir `veiculo_zero_km: modoNotaFiscal` em `dadosCotacao.veiculo`
+- Quando `modoNotaFiscal && !placa`, gerar placeholder `placa = 'AAAA0000'` + marcar `aguardando_placa_definitiva: true` (formato canônico — o sufixo `*` só é mascaramento; coluna real aceita 7 chars)
+- Incluir `valor_origem: 'nota_fiscal'` no payload
+
+**`src/components/contratos/ContratoFormDialog.tsx`**:
+- Estender `PrefilledCotacaoData.veiculo` com `zero_km?: boolean` e `aguardando_placa_definitiva?: boolean`
+- Repassar essas flags para `useCreateContrato`/edge `contrato-gerar`
+
+**Edge `contrato-gerar`** (verificar):
+- Já aceita esses campos? Se não, adicionar à validação Zod e gravar em `cotacoes.veiculo_zero_km` + `cotacoes.aguardando_placa_definitiva` (criar coluna se ausente) + `contratos.aguardando_placa_definitiva`.
+
+### 2. Tornar o link público derivado, não auto-declarado
+
+**`src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`**:
+- `useState(false)` → inicializar a partir de `cotacao.veiculo_zero_km`
+- Travar o toggle (read-only) se a cotação já está marcada como 0KM pelo vendedor
+- Quando 0KM: tornar RENAVAM opcional, aceitar `nota_fiscal_veiculo` ou `atpv_e` no lugar do CRLV (já existe a lista `TIPOS_EQUIVALENTES_CRLV`, validar que está sendo usada na regra de bloqueio do botão "Avançar")
+
+### 3. UI do Cadastro
+
+**`PropostaDetalhesTabs.tsx` / cards de aprovação** (auditar):
+- Mostrar badge "0KM — aguardando placa definitiva" quando `cotacoes.veiculo_zero_km = true`
+- Exibir chassi (identificador principal) com destaque ≥ placa
+
+### 4. Backfill controlado (apenas leitura → relatório)
+
+- Gerar SQL de auditoria listando as **6 cotações suspeitas** (sem placa + status ≥ `pagamento_ok` + categorias compatíveis com agência).
+- **Não** marcar `veiculo_zero_km=true` automaticamente — esses casos já contrataram informalmente; apresentar lista ao operador para confirmação manual.
+- Para cada caso confirmado: UPDATE pontual em migration nominal.
+
+### 5. Guard de regressão
+
+- Migration: criar trigger `BEFORE INSERT/UPDATE` em `cotacoes` que, quando `veiculo_zero_km = true`, exige um dos: `veiculo_chassi IS NOT NULL` **ou** `aguardando_placa_definitiva = true`. Bloqueia gravar 0KM "vazio".
+- Migration: criar trigger em `contratos` espelhando a mesma invariante.
+
+### 6. Memória canônica
+
+Criar `mem://logic/quotation/cotacao-0km-fluxo-canonico` consolidando: toggle do vendedor é fonte de verdade → propagação até `cotacoes.veiculo_zero_km` → herança pelo link público → SGA/Softruck dependem do flag → backfill só com confirmação humana.
+
+## Arquivos a modificar
+
+```text
+src/pages/vendas/Cotacao.tsx                                   (handleIniciarCadastro: propagar 0km)
+src/components/contratos/ContratoFormDialog.tsx                (estender PrefilledCotacaoData)
+src/hooks/useCreateContrato.ts                                 (gravar flag em cotação + contrato)
+supabase/functions/contrato-gerar/index.ts                     (validar e persistir flag)
+src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx (derivar isZeroKm da cotação, lock)
+src/components/cadastro/proposta/PropostaDetalhesTabs.tsx      (badge 0KM + chassi como ID)
+supabase/migrations/<ts>_cotacao_0km_guard_e_backfill.sql      (coluna aguardando_placa_definitiva em cotacoes se faltar, triggers de invariante, relatório)
+mem://logic/quotation/cotacao-0km-fluxo-canonico.md             (nova regra)
+mem://index.md                                                  (referência à nova memória)
 ```
-if (autovistoria && precisaRastreador) {
-  // Acima da FIPE — autovistoria foi APENAS para antecipar R/F.
-  // Libera R/F (cobertura_roubo_furto=true) + cadastro_aprovado=true (já fazem).
-  // NÃO promove servico para 'concluida'. Marca como 'aprovada' (encerrada),
-  // saindo da fila final. Veículo segue 'instalacao_pendente' aguardando
-  // agendamento de instalação técnica via link público.
-  UPDATE servicos SET status='aprovada', concluida_em=now()
-  // Nunca cria instalacao com dispensa_rastreador=true neste ramo.
-}
-else if (autovistoria && !precisaRastreador) {
-  // Sub-FIPE — comportamento atual: promove para 'concluida' (vai p/ fila).
-}
-```
 
-### 2. Hook `useInstalacoesAguardandoAprovacao` — dedupe defensivo
+## Pontos de atenção / decisão do usuário
 
-- Se existe `servicos.tipo='instalacao' status='concluida'` no contrato, **excluir** qualquer `vistoria_entrada` de modalidade `autovistoria` do mesmo contrato.
-- Excluir `vistoria_entrada` de autovistoria quando o veículo **precisa de rastreador** E não há `instalacao concluida` no contrato (significa que falta a instalação técnica — não é aprovação final).
-
-### 3. Backfill via migration (one-shot)
-
-- **Icaro**: cancelar a `instalacao` fictícia `a94dcfbd-…` (`dispensa_rastreador=true` acima da FIPE) e o servico de instalação correlato; marcar a `vistoria_entrada` da autovistoria como `aprovada` (preserva R/F já liberado).
-- **Romario**: marcar a `vistoria_entrada` da autovistoria como `aprovada`; mantém a instalação técnica concluida na fila como única fonte.
-- **Caio / Francisco / Rian**: marcar a(s) `vistoria_entrada` de autovistoria como `aprovada` (preserva R/F). Veículo permanece `instalacao_pendente`, contrato `cadastro_aprovado=true`; o link público continua exibindo o passo de agendamento de instalação, que materializa `instalacao` via `criar-instalacao-pos-pagamento` quando o associado escolher data. Nada de instalação síncrona criada no backfill.
-- Nenhuma cobertura é perdida (R/F já está em `cobertura_roubo_furto=true` em todos).
-
-### 4. Memory
-
-Criar `mem://logic/operations/autovistoria-acima-fipe-libera-rf-nao-conclui-vistoria` consolidando: autovistoria opcional acima da FIPE → marca servico como `aprovada`, não `concluida`; nunca cria instalação com `dispensa_rastreador=true`; fila final só recebe instalação técnica. Cross-reference em `mem://logic/operations/autovistoria-dois-usos`.
-
-### Arquivos alterados
-
-- `supabase/functions/aprovar-proposta/index.ts`
-- `src/hooks/useAprovacaoMonitoramento.ts`
-- `supabase/migrations/<ts>_backfill_autovistoria_acima_fipe.sql`
-- `mem://logic/operations/autovistoria-acima-fipe-libera-rf-nao-conclui-vistoria.md` + atualização do index e do `autovistoria-dois-usos`
-
-### Validação pós-correção (admin@teste.com)
-
-1. Fila Monitoramento › Aprovação de Associados deve mostrar apenas os 6 cards com instalação técnica concluída (André, Eduardo, Cláudia, Bruno, Thaís, Felipe).
-2. Caio / Francisco / Rian saem da fila; link público mostra "Aguardando agendamento de instalação".
-3. Romario e Icaro aparecem **1× cada** (instalação técnica concluida).
-4. Para uma nova cotação acima da FIPE com autovistoria opcional: após aprovação do Cadastro o card sai da fila final, R/F fica liberado, e o veículo aguarda agendamento de instalação técnica como manda o manual.
-5. Para uma nova cotação sub-FIPE: comportamento atual preservado (vai para a fila final do Monitoramento).
+1. **6 cotações já contratadas sem flag 0KM** — vou listar e aguardar você confirmar quais marcar retroativamente. Posso aplicar todas? Ou prefere caso a caso?
+2. **Placeholder de placa** — confirmar formato (sugestão: `0KM` + 4 dígitos do `numero` da cotação para garantir unicidade, ex. `0KM5025`). Aceita?
+3. O SGA Hinova e a Softruck **não** serão re-sincronizados nesta task (são integrações externas com efeito colateral); apenas o flag será corrigido para que **as próximas** cotações 0KM já entrem corretas. Confirma?

@@ -234,6 +234,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Guard de auto-busca (evita loop e re-disparo na mesma abertura)
   const autoBuscaPlacaRef = useRef<string | null>(null);
 
+  // Veículo 0KM (dentro da agência, ainda sem placa definitiva).
+  // Quando true:
+  //  - desabilita o input de placa e a consulta FIPE automática
+  //  - exige preenchimento manual de marca/modelo/ano/valor FIPE (Nota Fiscal)
+  //  - grava cotacoes.veiculo_zero_km=true e veiculo_placa=null
+  //  - contrato-gerar criará o veículo com placa placeholder "0KM*****" e
+  //    aguardando_placa_definitiva=true (necessário para SGA Hinova e Softruck).
+  // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
+  const [isZeroKm, setIsZeroKm] = useState(false);
+
   // Estados para confirmação de valor de adesão
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<CotacaoFormData | null>(null);
@@ -1577,7 +1587,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         veiculo_marca: marcaVeiculo,
         veiculo_modelo: modeloVeiculo,
         veiculo_ano: anoVeiculo,
-        veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
+        veiculo_placa: isZeroKm ? null : (placa || veiculoEncontrado?.extractedPlate || null),
+        // 0KM: marca fonte de verdade para contrato-gerar / SGA Hinova / Softruck.
+        // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
+        veiculo_zero_km: isZeroKm || null,
         veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
         // Número de portas vindo do CRLV/plate-lookup (snapshot para o termo)
         numero_portas: (() => {
@@ -2145,18 +2158,43 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 Veículo
               </h3>
               
+              {/* Toggle: Veículo 0KM (dentro da Agência) */}
+              <div className={`flex items-start gap-3 rounded-lg border p-3 ${isZeroKm ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}>
+                <div className="flex-1 space-y-0.5">
+                  <Label htmlFor="cot-0km" className="text-sm font-medium cursor-pointer">
+                    Veículo 0KM (dentro da Agência)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Sem placa definitiva. Use o valor da Nota Fiscal e preencha marca/modelo/ano manualmente.
+                  </p>
+                </div>
+                <Switch
+                  id="cot-0km"
+                  checked={isZeroKm}
+                  onCheckedChange={(checked) => {
+                    setIsZeroKm(checked);
+                    if (checked) {
+                      setPlaca('');
+                      setVeiculoEncontrado(null);
+                      form.setValue('valor_fipe', 0);
+                    }
+                  }}
+                />
+              </div>
+
               <div className="flex gap-2">
                 <Input
-                  placeholder="ABC1D23"
+                  placeholder={isZeroKm ? 'Sem placa (0KM)' : 'ABC1D23'}
                   value={placa}
                   onChange={(e) => setPlaca(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
                   maxLength={8}
                   className="uppercase font-mono text-lg tracking-wider flex-1"
+                  disabled={isZeroKm}
                 />
-                <Button 
+                <Button
                   type="button"
                   onClick={buscarPorPlaca}
-                  disabled={buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
+                  disabled={isZeroKm || buscandoPlaca || fipeLoading || placa.replace(/[^A-Z0-9]/g, '').length < 7}
                 >
                   {buscandoPlaca ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
