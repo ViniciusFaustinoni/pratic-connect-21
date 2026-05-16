@@ -601,9 +601,8 @@ serve(async (req) => {
           .eq('id', agendamentoBaseId);
         console.log('[CriarInstalacaoPosPagamento] agendamentos_base back-linked:', agendamentoBaseId);
       }
-    } else if (dataAgendada && !cadastroAprovado) {
-      console.log('[CriarInstalacaoPosPagamento] Agendamento encontrado, mas Cadastro ainda não aprovou — instalação não criada.');
     }
+    // (bloco "dataAgendada && !cadastroAprovado" removido — agora sempre materializa quando há data)
 
     // 6.1 GERAR LANÇAMENTOS FINANCEIROS (consultor + módulo Financeiro empresa)
     // Aplica as 4 regras de cenário de adesão:
