@@ -404,6 +404,14 @@ export function useCotacaoContratacao(token: string | undefined) {
         return 4; // Pagamento (vistoria já agendada na base)
       case 'vistoria_ok':
         return 4; // Pagamento (movido)
+      // Estados pós-autovistoria: cliente já enviou autovistoria e está aguardando análise.
+      // Mantém o avanço da régua até a etapa Vistoria (read-only com badge).
+      // Quando rastreador é obrigatório e Cadastro aprovou, a página força a etapa
+      // Instalação (índice 5) para o cliente agendar — ver CotacaoContratacao.tsx.
+      case 'aguardando_aprovacao_cadastro':
+      case 'aguardando_aprovacao_monitoramento':
+      case 'vistoria_concluida':
+        return 4; // Pagamento/análise (a UI decide se mostra "Aguardando análise" ou Instalação)
       case 'pagamento_ok':
       case 'contrato_gerado':
       case 'ativo':

@@ -254,8 +254,42 @@ export default function CotacaoContratacao() {
       return 4;
     }
 
+    // AUTOVISTORIA ANTECIPADA + RASTREADOR OBRIGATÓRIO:
+    // Cliente fez autovistoria opcional (libera R/F), Cadastro já avaliou e o veículo
+    // exige instalação física do rastreador. Se ainda NÃO há instalação/agendamento,
+    // forçar a etapa Instalação (índice 5) para o cliente agendar a visita do técnico.
+    if (
+      cotacao.tipo_vistoria === 'autovistoria' &&
+      ['aguardando_aprovacao_monitoramento', 'vistoria_concluida', 'pagamento_ok'].includes(
+        cotacao.status_contratacao
+      )
+    ) {
+      const precisa = exigeRastreador({
+        tipo: detectarTipoVeiculoDaCotacao(cotacao),
+        valorFipe: Number((cotacao as any).veiculo_valor_fipe ?? (cotacao as any).valor_fipe ?? 0),
+        combustivel: (cotacao as any).veiculo_combustivel || undefined,
+      } as any).exige;
+      const semInstalacao =
+        !cotacao.vistoria_completa_data_agendada &&
+        !hasInstalacaoAgendada &&
+        !hasAgendamentoBase &&
+        !agendamentoConcluido;
+      if (precisa && semInstalacao) {
+        return 5;
+      }
+    }
+
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa]);
+  }, [
+    cotacao?.status_contratacao,
+    cotacao?.tipo_vistoria,
+    cotacao?.vistoria_completa_data_agendada,
+    determinarEtapa,
+    hasInstalacaoAgendada,
+    hasAgendamentoBase,
+    agendamentoConcluido,
+    cotacao,
+  ]);
 
   // STEPS dinâmico:
   //  - autovistoria => adiciona "Instalação" como 6ª etapa
@@ -318,12 +352,7 @@ export default function CotacaoContratacao() {
     if (navegacaoManual) return;
 
     if (cotacao?.status_contratacao) {
-      let etapa = determinarEtapa(cotacao.status_contratacao);
-
-      // Se vistoria já foi escolhida/agendada, avança para pagamento
-      if (etapa === 3 && cotacao.tipo_vistoria) {
-        etapa = 4;
-      }
+      let etapa = etapaDoStatus;
 
       // Troca dentro da janela mesmo-dia: pula etapa de vistoria automaticamente
       if (etapa === 3 && dispensaVistoriaTroca) {
@@ -332,7 +361,7 @@ export default function CotacaoContratacao() {
 
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, determinarEtapa, setEtapaAtual, navegacaoManual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade segue a navOrder (Pagamento na sequência), igual à nova adesão.
