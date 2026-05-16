@@ -1,53 +1,56 @@
-## Contexto consolidado
+## Objetivo
 
-- Probe nos códigos 13–20 retornou `200 / "Inserido"` em todos.
-- Conferência visual no SGA (vehículo 36183 / KOU-6D37) mostrou os 8 PDFs **sem rótulo na coluna "Tipo Imagem/Documento"** — nenhum dos códigos 13–20 está mapeado nessa regional.
-- Conclusão: a numeração correta de "Termo de Filiação", "Nota Fiscal", "CRLV" etc. é definida na regional Praticcar e precisa vir do suporte Hinova. A API não valida o número.
-- Em paralelo, o `dia_vencimento` está sendo enviado correto pelo sistema mas chega errado no SGA — isso é independente do mapeamento de fotos e deve ser corrigido agora.
+Parar de descartar Contrato/Termo e Nota Fiscal na sincronização SGA. Subir agora com **códigos de teste** (já validados como aceitos pela Hinova) — mesmo que apareçam sem rótulo ou no rótulo errado no painel SGA. Quando o suporte Hinova devolver os códigos oficiais da regional Praticcar (ou descobrirmos pelo `QOO5C17 / 1659789`), basta 1 UPDATE em `hinova_mapeamentos` — sem deploy.
+
+## Contexto
+
+- Probe confirmou: Hinova aceita qualquer `codigo_tipo` numérico com `200 / "Inserido"`; não valida contra tabela.
+- Códigos 1–12 já mapeados (CNH, CRLV, fotos do veículo, RG, CPF).
+- Códigos 13–20 foram aceitos no probe mas caíram em "sem tipo" no painel.
+- Veículo QOO5C17 mostra um contrato real categorizado como "DOCUMENTOS BENEFICIARIO" — número desconhecido.
 
 ## Plano
 
-### 1. Solicitação à Hinova (fora do código)
+### 1. Ativar placeholders com códigos de teste
 
-Você abre chamado pedindo:
-- Tabela oficial `codigo_tipo` × rótulo da regional Praticcar para o endpoint `cadastrar-fotos` (associado e veículo).
-- Confirmação de qual código corresponde a: **Termo de Filiação / Contrato**, **Nota Fiscal do Veículo**, **CRLV**, **CNH**, **Comprovante de Endereço**, **Foto Veículo (frente/lateral/etc.)**, **Chassi**, **Motor**.
-- Lista da regional (não a genérica da Hinova).
+`UPDATE` em `hinova_mapeamentos` (linhas já criadas inativas no turno anterior):
 
-Sem essa tabela, qualquer mapeamento que eu chutar continuará caindo na lixeira "sem tipo" igual aos probes 13–20.
+| codigo_local | codigo_hinova (teste) | ativo |
+|---|---|---|
+| `contrato_assinado` | **13** | true |
+| `termo_filiacao` | **13** | true |
+| `contrato` | **13** | true |
+| `nota_fiscal_veiculo` | **14** | true |
+| `nota_fiscal` | **14** | true |
 
-### 2. Tornar o mapeamento configurável (preparar terreno)
+Resultado imediato: próxima sync de qualquer veículo passa a enviar contrato assinado e NF para o SGA. Eles podem aparecer sem rótulo ou com rótulo "errado" — mas o arquivo entra.
 
-Hoje os códigos estão hardcoded em edge functions. Mudo para a tabela `hinova_mapeamentos` que já existe, com seed vazio para os tipos faltantes:
+### 2. Marcar como temporário na descrição
 
-- Adicionar entradas `tipo='tipo_foto_sga'` com `codigo_local` ∈ {`contrato_assinado`, `nota_fiscal_veiculo`, `crlv`, `cnh`, `comprovante_endereco`, `foto_veiculo_frente`, `foto_chassi`, `foto_motor`} e `codigo_hinova = NULL` + `ativo=false`.
-- Edge `sga-hinova-sync` e qualquer outra que chame `cadastrar-fotos` passam a ler dessa tabela. Quando `codigo_hinova IS NULL` ou `ativo=false`, **pula o envio dessa foto** e loga `mapping_pendente` (em vez de mandar um número errado).
-- Quando a Hinova devolver os números, você (ou eu via migration de 1 linha) preenche `codigo_hinova` + marca `ativo=true` e o sistema passa a enviar sem deploy.
+Atualizo a `descricao` das 5 linhas para deixar explícito no banco que é código provisório, ex.:
+`"CONTRATO/TERMO DE FILIAÇÃO — código de teste 13 (aguardando confirmação oficial Hinova)"`.
 
-Benefício: a próxima descoberta de código (ou correção de regional) vira UPDATE de 1 linha, não nova edge.
+Assim qualquer dev/operador que abrir a tabela vê que é placeholder, não definitivo.
 
-### 3. Limpeza do probe
+### 3. Quando a Hinova responder (ou QOO5C17 revelar o código)
 
-- Remover edge `probe-tipo-foto-contrato` (já cumpriu o papel).
-- Deletar do SGA os 8 PDFs `probe_termo_filiacao_tipo_13..20` do veículo 36183 (manual no painel — não tem endpoint público de delete confiável).
+Único passo: `UPDATE public.hinova_mapeamentos SET codigo_hinova = <oficial>, descricao = '<oficial>' WHERE tipo='tipo_foto' AND codigo_local IN (...)`.
+Nada de código pra mudar, nada de redeploy.
 
-### 4. Fix do `dia_vencimento` (independente, paralelo)
+### 4. Atualizar memória
 
-Já tinha sido mapeado anteriormente. Resumo do que aplico:
+Atualizar `mem://logic/integrations/sga-dia-vencimento-fonte`? Não — ela é sobre dia_vencimento.
 
-- Auditar `sga-hinova-sync` / `cadastrar-associado-sga`: hoje o `dia_vencimento` vem do contrato local mas é convertido em data completa antes de enviar — em alguns caminhos o dia está sendo recalculado a partir de `created_at` (timezone UTC) e cai 1 dia antes para vencimentos perto da virada do mês.
-- Forçar envio do **número puro do dia** (1–31) lido de `contratos.dia_vencimento` (BRT), sem reconstruir data.
-- Validar com 2 contratos de homologação cobrindo dias 1, 15 e 31.
-- Registrar em `mem://logic/integrations/sga-dia-vencimento-fonte` que o campo é número 1–31 lido direto de `contratos.dia_vencimento` (sem timezone).
+Criar/ajustar nota em `mem://integrations/hinova/tipo-foto-contrato-temporario` (curta) registrando: **os códigos 13 (contrato) e 14 (NF) são provisórios**, devem ser trocados pelos oficiais assim que a Hinova confirmar; o sistema ENVIA mesmo sem rótulo correto por decisão de negócio (preferimos doc no SGA com rótulo errado a doc não enviado).
 
 ## Detalhes técnicos
 
-- Tabela: `hinova_mapeamentos (tipo text, codigo_local text, codigo_hinova int, descricao text, ativo bool)` — já existe; só insiro linhas novas.
-- Edges tocadas no item 4: `sga-hinova-sync/index.ts` (e helpers de payload). Sem mudança de schema.
-- Edges tocadas no item 2: helper compartilhado de `cadastrar-fotos` (criar `_shared/sga-tipo-foto.ts` que resolve `codigo_local → codigo_hinova` via tabela; cache em memória por invocação).
-- Migration para deletar a edge `probe-tipo-foto-contrato` via `supabase--delete_edge_functions`.
+- Migration: 1 `UPDATE` afetando 5 linhas. Sem mudança de schema.
+- Nenhuma edge function precisa ser tocada — `buildFotosPayload` já resolve via tabela e respeita `ativo=true`.
+- Não vou deployar nada (não há código mudando).
 
 ## Fora de escopo
 
-- Adivinhar mais códigos sem confirmação da Hinova.
-- Mexer em qualquer outra integração SGA (situação, RENAVAM, etc.).
+- Mexer no `dia_vencimento` (já fixado no turno anterior).
+- Adivinhar mais códigos / fazer novos probes.
+- Deletar os PDFs de probe do veículo 36183 (manual no painel SGA).
