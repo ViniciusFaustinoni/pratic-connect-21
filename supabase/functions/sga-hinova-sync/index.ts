@@ -1143,8 +1143,8 @@ serve(async (req) => {
           null);
       }
 
-      const { fotos, descartadasSemLink, descartadasSemTipo, descartadasVideo } = buildFotosPayload(
-        documentosEntrada,
+      const { fotos, metas, descartadasSemLink, descartadasSemTipo, descartadasVideo } = buildFotosPayload(
+        documentosNovos,
         (tipo) => getMap('tipo_foto', tipo),
       );
 
@@ -1157,7 +1157,7 @@ serve(async (req) => {
 
       if (descartadasSemLink.length || descartadasSemTipo.length || descartadasVideo.length) {
         await logSync(_vid, _aid, 'enviar_fotos_descarte', 'info', {
-          qtd_total: documentosEntrada.length,
+          qtd_total: documentosNovos.length,
           qtd_validas: fotos.length,
           descartadas_sem_link: descartadasSemLink,
           descartadas_sem_mapeamento: descartadasSemTipo,
@@ -1168,14 +1168,41 @@ serve(async (req) => {
       let fotosEnviadas = 0;
       let fotosComErro = 0;
       if (fotos.length > 0 && codigoVeiculoHinova) {
-        for (const lote of chunk(fotos, 50)) {
+        // Mantém metas alinhadas 1:1 aos lotes para registrar exatamente o que foi
+        // aceito pela Hinova em sga_fotos_enviadas (dedupe nos próximos syncs).
+        const lotes = chunk(fotos, 50);
+        const lotesMeta = chunk(metas, 50);
+        for (let i = 0; i < lotes.length; i++) {
+          const lote = lotes[i];
+          const loteMeta = lotesMeta[i] || [];
           try {
             const r = await cadastrarFotosVeiculoHinova(supabase, codigoVeiculoHinova, lote);
             await logSync(_vid, _aid, 'enviar_fotos', r.ok ? 'success' : 'error',
               { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }, r.raw,
               r.ok ? null : (r.mensagem || r.errors.join('; ')));
-            if (r.ok) fotosEnviadas += lote.length;
-            else fotosComErro += lote.length;
+            if (r.ok) {
+              fotosEnviadas += lote.length;
+              // Persiste cada foto enviada para bloquear reenvio em syncs futuros.
+              if (loteMeta.length > 0) {
+                const linhas = loteMeta.map((m) => ({
+                  veiculo_id: _vid,
+                  codigo_veiculo_hinova: codigoVeiculoHinova,
+                  origem: m.origem,
+                  origem_id: m.origem_id,
+                  arquivo_url: m.arquivo_url,
+                  codigo_tipo: m.codigo_tipo,
+                  hinova_response: r.raw ?? null,
+                }));
+                const { error: insErr } = await supabase
+                  .from('sga_fotos_enviadas')
+                  .upsert(linhas, { onConflict: 'veiculo_id,origem,origem_id', ignoreDuplicates: true });
+                if (insErr) {
+                  console.warn('[sga_fotos_enviadas] upsert falhou:', insErr.message);
+                }
+              }
+            } else {
+              fotosComErro += lote.length;
+            }
           } catch (e: any) {
             await logSync(_vid, _aid, 'enviar_fotos', 'error',
               { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }, null, String(e?.message || e));
