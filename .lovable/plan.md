@@ -1,86 +1,75 @@
-## Cruzamento: fluxo canônico Sub-FIPE × o que aconteceu em `COT-20260516-094716657-965`
+## Reanálise — `COT-20260516-101252395-551` (Fiat Palio, FIPE R$ 36.472, carro → rastreador OBRIGATÓRIO)
 
-Veículo: moto, chassi `9C6DG334050043147`, FIPE **R$ 27.948** (< R$ 30k → sub-FIPE, dispensa rastreador). Associado: FRANCISCO ERIVALDO TEIXEIRA.
+Corrigindo o entendimento: **autovistoria não é exclusiva de sub-FIPE**. Aqui ela foi usada no modo "antecipação de R/F" — o que é legítimo. O problema NÃO é o cliente ter feito autovistoria; é a **instalação do rastreador não ter sido encaminhada** depois.
 
-| # | Etapa canônica (sub-FIPE) | O que aconteceu | OK? |
-|---|---------------------------|-----------------|-----|
-| 1 | Escolha do plano | 12:47 `plano_escolhido` | ✅ |
-| 2 | Envio de documentos | 12:49 `documentos_ok` | ✅ |
-| 3 | Assinatura do termo (sem rastreador) | 14:19 `contrato_assinado` (Autentique) | ✅ |
-| 4 | Pagamento (se houver) | (adesão sem pagto neste caso) | — |
-| 5 | **Autovistoria 31/15** com mesma estrutura do técnico | 14:27 `finalizar-autovistoria-cotacao` criou `vistoria` (pendente) + `servico` `vistoria_entrada` (em_analise) + bumpou cotação para `aguardando_aprovacao_cadastro` | ✅ |
-| 6 | **Vai para o Cadastro** | Entrou na fila — Alessandra (Cadastro) abriu o caso 15:14 | ✅ até aqui |
-| 6.1 | Cadastro pode "Aprovar / Solicitar Docs / Reprovar"; ao **solicitar docs**, libera R/F só no Aprovar | Alessandra clicou **"Solicitar Documentos"** → `associados.status: pendente_vistoria → documentacao_pendente` | ❌ efeito colateral |
-| 7 | Após Cadastro aprovar → vai para Monitoramento decidir vistoria/aprovar | **NUNCA chegou** porque o caso sumiu das filas | ❌ |
-| 8 | Monitoramento aprova ou pede vistoria de técnico (só fotos) → vistoria → reaprovação | bloqueado | ❌ |
-| 9 | `ativar-associado` → SGA | bloqueado | ❌ |
+### Linha do tempo (cruzada com o fluxo canônico)
 
-## Causa raiz (auditada no banco)
+| # | Etapa canônica | O que aconteceu | OK? |
+|---|----------------|-----------------|-----|
+| 1 | Link público respeita FIPE | Cliente fez autovistoria antecipada (válido, libera R/F mais cedo) | ✅ |
+| 2 | Cadastro vê com situação SGA | Caso chegou na fila | ✅ |
+| 3 | Cadastro aprova → gera serviço de campo (instalação) + atualiza link público | Cadastro aprovou às 15:23: vistoria→`aprovada`, R/F liberado, `cadastro_aprovado=true`, veículo→`instalacao_pendente`. **Não foi criada `instalações` nem `agendamentos_base`** porque o cliente nunca passou pela etapa "Instalação" do link público (vistoria_completa_data_agendada NULL). O fluxo correto exigiria forçar a etapa Instalação a aparecer no link após autovistoria aprovada. | ❌ |
+| 4 | Monitoramento vê serviço de campo | Sem fila — não tem `instalações` nem serviço de instalação | ❌ |
+| 5-7 | Monitoramento atribui/aprova vistoria do técnico | Inacessível | ❌ |
+| 8 | Ativa + envia SGA | Não chega | ❌ |
 
-A trigger `trg_recompute_cotacao_from_associado` em `public.associados` chama `public.recompute_cotacao_status_contratacao(cotacao_id)` em **qualquer** mudança de `associados.status`. A função recalcula `status_contratacao` por uma hierarquia que **não conhece os estados pós-autovistoria do fluxo sub-FIPE**:
+### Por que o link público não atualiza
 
-```
-cancelado > veiculo_recusado > ativo
-  > vistoria_agendada (instalacao agendada + adesao_paga)
-  > pagamento_ok
-  > contrato_assinado          ← cai aqui (contrato.status='assinado')
-  > vistoria_ok / documentos_ok / dados_preenchidos / plano_escolhido
-```
+`useCotacaoContratacao.determinarEtapa` mapeia `status_contratacao → etapa`. **Não conhece** `aguardando_aprovacao_cadastro`, `aguardando_aprovacao_monitoramento` nem `vistoria_concluida` (todos caem em `default → 0`). Soma-se ao recompute antigo que rebobinou para `contrato_assinado` → `pagamento_ok` antes do patch de 15:45. Hoje o link mostra etapa 5 (Conclusão/Instalação) mas como o cliente nunca preencheu a etapa Instalação, a tela aparece "vazia".
 
-`aguardando_aprovacao_cadastro` e `aguardando_aprovacao_monitoramento` **não estão na hierarquia**. Quando o Cadastro clica "Solicitar Documentos" (no fluxo sub-FIPE essa ação está prevista e correta), o `useSolicitarDocumentos` atualiza apenas `associados.status` — e a trigger rebobina silenciosamente `cotacoes.status_contratacao` para `contrato_assinado`.
+### Causa-raiz (corrigida)
 
-Efeitos colaterais (todos observados):
-1. Caso sai da fila "Aprovação do Cadastro" (filtra `aguardando_aprovacao_cadastro`).
-2. Link público volta para **1/6 — Escolha do Plano** (o componente lê `status_contratacao` para escolher a etapa) → cliente vê tela do print.
-3. Caso nunca chega ao Monitoramento → veículo fica permanentemente em `instalacao_pendente`, sem cobertura R/F.
+**A. Após autovistoria aprovada com rastreador obrigatório, o link público não força/abre a etapa "Instalação" para o cliente agendar.** O cliente fez autovistoria, viu como concluída, e o link "ficou" — não pediu agendamento de instalação.
 
-O mesmo bug atingiu o caso do Rian (`COT-20260515-123812646-121`) ontem — qualquer toque em `associados.status` (Cadastro aprovando, solicitando docs, blacklist, etc.) zera o avanço do fluxo sub-FIPE.
+**B. `aprovar-proposta` aprova o Cadastro sem garantia de que a instalação está agendada.** Quando autovistoria libera R/F mas o veículo exige rastreador, o Cadastro só consegue aprovar se houver `vistoria_completa_data_agendada`. Hoje o ramo "autovistoria antecipada" libera R/F mesmo sem agendamento → veículo fica em `instalacao_pendente` sem caminho de saída.
+
+**C. `determinarEtapa` (hook público) não cobre estados pós-cadastro.**
+
+**D. Recompute (já corrigido às 15:45).**
 
 ## Plano de correção
 
-### 1. Migration — patch idempotente em `recompute_cotacao_status_contratacao`
+### 1. Hook do link público — mapear estados pós-cadastro
+`src/hooks/useCotacaoContratacao.ts → determinarEtapa`
+- `aguardando_aprovacao_cadastro` → etapa 3 (Vistoria) read-only com badge "Aguardando análise do Cadastro" se autovistoria já enviada; ou etapa 5 com card "Em análise" se já estava em pagamento.
+- `aguardando_aprovacao_monitoramento` → etapa 5 (Instalação se `tipo_vistoria='autovistoria'` + rastreador obrigatório), com card "Aguardando Monitoramento".
+- `vistoria_concluida` → etapa 5 (Conclusão).
 
-Adicionar guard no início da função: se `v_current ∈ ('aguardando_aprovacao_cadastro','aguardando_aprovacao_monitoramento','vistoria_concluida')` **e** o contrato não está `cancelado` **e** o associado não está `cancelado/recusado` → preserva `v_current` (não recomputa). Demais ramos continuam idênticos para não afetar o fluxo comum.
+### 2. Link público — após autovistoria aprovada + rastreador obrigatório, abrir etapa Instalação
+`src/pages/public/CotacaoContratacao.tsx` + `STEPS` já incluem `STEP_INSTALACAO` quando `tipo_vistoria='autovistoria'`. Adicionar:
+- Quando `exigeRastreador().exige === true` E `cotacao.tipo_vistoria === 'autovistoria'` E (vistoria já existe aprovada OU `cadastro_aprovado=true`) → forçar `etapaAtual = índice da etapa Instalação` e renderizar form de agendamento (`AgendamentoBase` / `AgendamentoVistoriaCompleta`) — não o card "Conclusão".
+- Confirmar `EtapaInstalacao` chama `criar-instalacao-pos-pagamento` (já existe), que materializa `instalações` + `agendamentos_base` quando o cliente confirma data/endereço.
 
-Resultado: o Cadastro pode mover `associados.status` livremente (em_analise ↔ documentacao_pendente ↔ pendente_vistoria) sem desfazer o avanço do fluxo de cotação.
+### 3. `aprovar-proposta` — guard "autovistoria antecipada + rastreador obrigatório"
+`supabase/functions/aprovar-proposta/index.ts`
+- Já bloqueia 409 `sem_agendamento` quando não há vistoria/instalação/agendamento (`mem://logic/operations/aprovar-proposta-guard-sem-agendamento`). Validar que esse guard cobre o caso atual:
+  - Há `vistoria_entrada` autovistoria, mas **sem `instalações` nem `agendamentos_base`** e **rastreador obrigatório**.
+  - Se hoje o guard libera (porque há `vistoria_entrada`), refinar: se `precisaRastreador=true` E não existe `instalações` ativa para o veículo → retornar 409 `instalacao_nao_agendada` e reverter `cadastro_aprovado`.
+- Mensagem orientadora: "Autovistoria liberou Roubo/Furto, mas a instalação do rastreador precisa ser agendada pelo link público antes da aprovação."
 
-### 2. Migration — backfill controlado dos casos travados
+### 4. Backfill controlado — destravar `COT-20260516-101252395-551`
+Migration única (mantém R/F liberado, só reabre etapa Instalação):
+- Reverter `contratos.cadastro_aprovado = false` para esta cotação (motivo: faltou agendamento de instalação).
+- `cotacoes.status_contratacao = 'aguardando_aprovacao_cadastro'` (mantém autovistoria já aprovada).
+- Manter `veiculos.cobertura_roubo_furto = true` (R/F já liberado, não regredir).
+- `veiculos.status = 'instalacao_pendente'` (já está).
+- Log em `logs_auditoria` (`acao='editar'`, descrição: "Backfill: caso travado por falta de agendamento de instalação após autovistoria antecipada; reaberto para cliente agendar via link público").
+- Resultado: a cotação volta para a fila do Cadastro com badge "Aguardando agendamento de instalação"; o cliente Leonardo pelo link público é redirecionado para a etapa Instalação e agenda; ao confirmar, `criar-instalacao-pos-pagamento` cria `instalações`+`agendamentos_base`+serviço; Cadastro aprova de novo, agora com instalação agendada; Monitoramento atribui técnico; vistoria/instalação real é feita; ativação via `ativar-associado`.
 
-Para toda cotação onde:
-- existe `vistorias` com `origem='autovistoria_publica'` materializada (vistoria + servico vinculados via `vistoria_origem_id`),
-- `cotacoes.status_contratacao = 'contrato_assinado'`,
-- contrato NÃO `cancelado` e associado NÃO `cancelado/recusado`,
-- `contratos.cadastro_aprovado = false`,
+### 5. Memória
+- ✅ Já criado `mem://logic/operations/autovistoria-dois-usos.md` (corrige o entendimento).
+- Atualizar entrada no índice depois de mergeada a correção UI.
 
-→ `UPDATE cotacoes SET status_contratacao = 'aguardando_aprovacao_cadastro'` + 1 linha em `logs_auditoria` (`acao='backfill_status_pos_autovistoria'`).
+## Não-escopo
+- Não tocar em `finalizar-autovistoria-cotacao` (autovistoria em si funciona).
+- Não tocar em `recompute_cotacao_status_contratacao` (já patcheado às 15:45).
+- Não alterar fluxo sub-FIPE.
+- Não bloquear autovistoria para veículos acima do limite — ela é OPCIONAL e válida (antecipa R/F).
 
-Cobre `COT-20260516-094716657-965` e qualquer outro caso silenciosamente travado pelo mesmo bug.
-
-### 3. Sanity — etapas 7 e 8 do fluxo
-
-A função `useSolicitarDocumentos`, `useReprovarProposta` e `useAprovarPropostaCadastro` **não** mexem em `status_contratacao` por design — quem governa esse campo no fluxo sub-FIPE é a edge `finalizar-autovistoria-cotacao` (etapa 5) e a `aprovar-proposta` (etapa 6 → setta `aguardando_aprovacao_monitoramento`). Com o patch do item 1, a transição passa a ficar estável. Nenhuma mudança nesses hooks/edges é necessária.
-
-### 4. Memória
-
-Criar `mem://logic/quotation/recompute-cotacao-preserva-pos-autovistoria.md` com a invariante: "`recompute_cotacao_status_contratacao` preserva `aguardando_aprovacao_cadastro` / `aguardando_aprovacao_monitoramento` / `vistoria_concluida` quando o contrato não está cancelado — qualquer mudança em `associados.status` é segura".
-
-Adicionar entrada em `mem://index.md` Memories.
-
-### 5. Validação (executada após migration)
-
-- `SELECT numero, status_contratacao FROM cotacoes WHERE numero IN ('COT-20260516-094716657-965','COT-20260515-123812646-121')` → ambos devem voltar a `aguardando_aprovacao_cadastro` (se ainda elegíveis).
-- Conferir no painel "Cadastro › Propostas Pendentes" se `COT-...965` reaparece para Alessandra.
-- Browser no link público da cotação → deve sair de "1/6 Escolha do Plano" e mostrar a etapa de "Aguardando análise do Cadastro" / próxima etapa correta.
-- Smoke: manualmente alterar `associados.status` (em_analise → documentacao_pendente → em_analise) e confirmar que `cotacoes.status_contratacao` permanece `aguardando_aprovacao_cadastro`.
-
-## Arquivos / objetos tocados
-
-- `supabase/migrations/<novo>_recompute_cotacao_preserva_pos_autovistoria.sql` — `CREATE OR REPLACE FUNCTION recompute_cotacao_status_contratacao` + `UPDATE` de backfill + `INSERT` em `logs_auditoria`.
-- `mem://logic/quotation/recompute-cotacao-preserva-pos-autovistoria.md` (novo).
-- `mem://index.md` (1 linha em Memories).
-
-## Não escopo
-
-- Não alterar `useSolicitarDocumentos`, `useReprovarProposta`, `useAprovarPropostaCadastro`, `aprovar-proposta`, `finalizar-autovistoria-cotacao` ou qualquer trigger relacionada — o problema é exclusivamente da função SQL de recompute.
-- Não tocar em `trg_protege_cadastro_aprovado` (já cobre outro vetor).
-- Não criar tela nova; a UI atual de Cadastro/Monitoramento já está correta — só precisa que o estado persista.
+## Arquivos
+- `src/hooks/useCotacaoContratacao.ts` (`determinarEtapa`)
+- `src/pages/public/CotacaoContratacao.tsx` (forçar etapa Instalação após autovistoria aprovada + rastreador obrigatório; renderizar agendamento e não card de conclusão)
+- `supabase/functions/aprovar-proposta/index.ts` (refinar guard `sem_agendamento` para incluir caso "autovistoria sem instalação")
+- `supabase/migrations/<novo>_backfill_cot_101252395_551.sql`
+- `mem://logic/operations/autovistoria-dois-usos.md` (já criado)
+- `mem://index.md` (já atualizado)
