@@ -110,6 +110,7 @@ interface EtapaDadosPessoaisDocumentosProps {
   defaultValues?: Partial<DadosPessoaisForm>;
   readOnly?: boolean;
   placaEsperada?: string;
+  zeroKmFromCotacao?: boolean;
 }
 
 export function EtapaDadosPessoaisDocumentos({
@@ -119,6 +120,7 @@ export function EtapaDadosPessoaisDocumentos({
   defaultValues,
   readOnly = false,
   placaEsperada,
+  zeroKmFromCotacao = false,
 }: EtapaDadosPessoaisDocumentosProps) {
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   const [dadosExtraidos, setDadosExtraidos] = useState<DadosExtraidos>({});
