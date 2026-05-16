@@ -166,7 +166,7 @@ export function PendenciasDocumentosBell() {
           </p>
         </div>
 
-        <ScrollArea className="max-h-[60vh]">
+        <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
           <div className="p-3 space-y-2">
             {isLoading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
@@ -183,7 +183,7 @@ export function PendenciasDocumentosBell() {
               ))
             )}
           </div>
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );
