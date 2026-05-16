@@ -465,7 +465,22 @@ serve(async (req) => {
     // reutiliza a instalação existente. Isso elimina a janela em que a cotação
     // ficava com snapshot em `vistoria_completa_*` sem registro operacional real,
     // travando o caso entre Cadastro e Monitoramento.
-    if (dataAgendada) {
+    //
+    // GUARD CANÔNICO sub-FIPE: veículos que NÃO precisam de rastreador NÃO
+    // geram instalacao. O artefato canônico é o servico vistoria_entrada da
+    // autovistoria. Criar instalacao aqui causava duplicação na fila do
+    // Monitoramento (instalacao concluida + servico concluido) e pulava a
+    // etapa de atribuição. Ver mem://logic/operations/vistoria-sem-rastreador-flow.
+    let veiculoPrecisaRastreadorGuard = true;
+    try {
+      const { data: precisaRow } = await supabase
+        .rpc('fn_veiculo_precisa_rastreador', { _veiculo_id: veiculoIdFinal });
+      if (precisaRow === false) veiculoPrecisaRastreadorGuard = false;
+    } catch (_) { /* default true */ }
+    if (dataAgendada && !veiculoPrecisaRastreadorGuard) {
+      console.log(`[CriarInstalacaoPosPagamento] Veículo ${veiculoIdFinal} dispensa rastreador — pulando criação de instalação (artefato canônico = servico vistoria_entrada).`);
+    }
+    if (dataAgendada && veiculoPrecisaRastreadorGuard) {
       // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
       if (!endereco.latitude || !endereco.longitude) {
         console.warn('[CriarInstalacaoPosPagamento] ⚠️ Coordenadas ausentes! Tentando geocodificar...');
