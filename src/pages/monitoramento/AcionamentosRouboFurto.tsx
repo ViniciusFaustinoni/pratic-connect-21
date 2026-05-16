@@ -26,10 +26,14 @@ import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 
 type ItemTipo = 'analise' | 'ativacao';
+type AnaliseSub = 'instalacao' | 'vistoria_entrada' | null;
 
 interface ItemUnificado {
   id: string;
   tipo: ItemTipo;
+  sub_tipo?: AnaliseSub;
+  veiculo_id?: string;
+  associado_id?: string;
   associado_nome?: string;
   associado_cpf?: string;
   veiculo_placa?: string;
