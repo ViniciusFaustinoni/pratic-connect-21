@@ -1,96 +1,97 @@
-## 🎯 Problema confirmado
 
-O link público da cotação não acompanha a fase real do funil porque `cotacoes.status_contratacao` fica **travado em estados intermediários** (`aguardando_aprovacao_cadastro`, `vistoria_ok`, etc.) mesmo após o associado/contrato terem sido ativados. O Cadastro › Propostas Pendentes acerta porque deriva a etapa de várias tabelas (`contratos`, `associados`, `instalacoes`), mas o **link público depende exclusivamente** de `cotacoes.status_contratacao`.
+## Causa raiz (uma só, com 3 sintomas)
 
-## 📊 Casos detectados (varredura completa)
+A função-gatilho `public.sync_servico_on_vistoria_decisao` (disparada em todo `UPDATE` de `vistorias.status → aprovada/aprovada_ressalvas/reprovada/cancelada`) **não distingue entre `modalidade='autovistoria'` e vistoria presencial do técnico**. Quando uma autovistoria é aprovada (pelo botão do Monitoramento ou pelo bloco "AUTOVISTORIA ANTECIPADA" do `aprovar-proposta`), o trigger:
 
-3 cotações estão hoje no estado inconsistente "tudo concluído mas status_contratacao travado":
+1. Promove **qualquer `servicos` (incluindo `tipo='instalacao'`) vinculado à mesma cotação/contrato** para `status='concluida'`.
+2. Promove a `instalacoes` correspondente para `status='concluida'` mesmo com `rastreador_id IS NULL`.
+3. Em cadeia, `fn_reativar_cobertura_pos_instalacao` seta `veiculos.cobertura_total=true` (não checa rastreador) e abre caminho para `ativar-associado` promover associado/veículo/contrato a `ativo`.
 
-| Cotação | Cliente / Placa | status_contratacao | Realidade |
+### Sintomas observados
+
+| Caso | FIPE | Evidência DB | Efeito |
 |---|---|---|---|
-| `5115004f…b48a` | ANDRE COELHO · LUB5F76 | `aguardando_aprovacao_cadastro` | Associado ativo, contrato ativo, adesão paga, instalação concluída |
-| `2310279e…a832` | LEONARDO C. SILVA · LQM4E19 | `aguardando_aprovacao_cadastro` | Contrato assinado, adesão paga, instalação agendada (não concluída) |
-| `825a2dad…4269` | RICARDO A. T. SOARES · RKD2A94 | `vistoria_ok` | Associado ativo, contrato assinado, sem instalação registrada |
+| **André (LUB5F76)** | R$ 64.895 (rastreador obrigatório) | `instalacoes.status='concluida'` + `rastreador_id=NULL`; `veiculos.cobertura_total=true`; `status='ativo'`; criado 3s após `vistorias.analisado_em` | Veículo "ativo" sem rastreador físico — viola regra canônica |
+| **Leonardo (LQM4E19)** | R$ 36.472 (rastreador obrigatório, autovistoria opcional p/ R/F) | Tem `vistorias` autovistoria `aprovada` + `instalacoes` `agendada` paralela. `cadastro_aprovado=false`. `cobertura_roubo_furto=true` (vazou via trigger). `status_contratacao='vistoria_agendada'` | Cadastro mostra "Aprovar Proposta" genérico; link público travado |
+| **Audit** | ≥R$ 30k | **11 instalações** com `status=concluida` + `rastreador_id=NULL` (André + Romario + Luiz Cosme + Gilberto + Francisco + Peter + Cassio + Rodolfo + Luiz Felipe + Denilson + Leandro) | Todos com `cobertura_total=true` e `veiculo.status='ativo'` indevidamente |
 
-Total de cotações com associado/contrato já ativos: **76** — só **74** estão corretas em `status_contratacao='ativo'`.
+### Por que o label "Aprovar Proposta" persiste em Leonardo
 
-## 🗺️ Mapa de solução (3 frentes)
-
-### Frente 1 — Backend canônico: `recompute_cotacao_status_contratacao` passa a AVANÇAR
-
-Hoje a função preserva os estados pós-autovistoria (memória `recompute-cotacao-preserva-pos-autovistoria`). Vamos manter "não rebobina", **mas habilitar promoção para a frente** com base nos marcos reais:
-
-```text
-Se status_contratacao ∈ {aguardando_aprovacao_cadastro,
-                         aguardando_aprovacao_monitoramento,
-                         vistoria_concluida, vistoria_ok,
-                         contrato_assinado, autovistoria_ok}:
-
-  if associado.status='ativo' AND contrato.status ∈ {'assinado','ativo'}
-     → status_contratacao = 'ativo'
-  elif contrato.adesao_paga=true AND contrato.status ∈ {'assinado','ativo'}
-       AND EXISTS instalacao concluida/aprovada
-     → status_contratacao = 'pagamento_ok' (ou 'contrato_gerado' se preferir)
-  elif contrato.adesao_paga=true AND contrato.status ∈ {'assinado','ativo'}
-     → status_contratacao = 'pagamento_ok'
+Em `src/pages/cadastro/PropostaAnalise.tsx:99-102`:
+```ts
+const isAutovistoria = (vistoria?.modalidade === 'autovistoria' || ...) && !proposta?.instalacao_info;
 ```
+A simples existência de uma `instalacoes` agendada (criada pelo link público após o agendamento) zera `isAutovistoria`. Toda a sub-árvore de UI cai no caminho genérico "Aprovar Proposta", mesmo com autovistoria já aprovada e R/F já liberado.
 
-- Adicionar triggers que chamem o recompute **após mudança em `contratos.status`/`adesao_paga`, `associados.status`, `instalacoes.status`**. Hoje só dispara em mudanças de `cotacoes`.
-- Mantém a regra dura "nunca rebobina"; só promove para o nível canonicamente mais avançado.
+### Por que `status_contratacao` fica preso em `vistoria_agendada`
 
-### Frente 2 — Frontend defensivo no link público
+A função `recompute_cotacao_status_contratacao` não tem regra para promover ≥30k de `vistoria_agendada` → `autovistoria_ok`/`aguardando_aprovacao_cadastro` quando a autovistoria é aprovada antes da instalação técnica. O link público lê esse status e segue mostrando "etapa 1".
 
-Mesmo com o backend correto, o link público não deve depender só de `status_contratacao`:
+---
 
-- Adicionar query secundária pública em `useCotacaoContratacao` para puxar `contrato.status`, `adesao_paga`, `associado.status` e `instalacoes` da cotação.
-- Criar `src/lib/cotacaoEtapaPublica.ts` (puro, testável) que recebe esse snapshot e devolve o índice de etapa **e** uma flag `concluido` para o stepper.
-- Em `CotacaoContratacao.tsx`: novo estado **"concluido"** → todos os 6 steps marcados + badge "✅ Associado Ativo · em monitoramento".
-- Adicionar realtime: subscrever `contratos` (por id), `associados` (por id) e `instalacoes` (por cotacao_id) — invalidar a query no cache em cada evento.
-- Estados `aguardando_aprovacao_cadastro` / `aguardando_aprovacao_monitoramento` exibem badge "Em análise" no step de Vistoria (não voltam para Plano).
+## Plano de correção (5 frentes)
 
-### Frente 3 — Backfill controlado dos 3 casos travados
+### 1. Trigger blindada — `sync_servico_on_vistoria_decisao` (migration)
 
-Migration única e idempotente (não roda no Andre/Leonardo/Ricardo de forma especial — usa a **mesma regra** da Frente 1, aplicada uma vez a TODAS as cotações):
+Tornar a função consciente da modalidade:
 
-```sql
-UPDATE cotacoes c
-SET status_contratacao = 'ativo'
-FROM contratos ct JOIN associados a ON a.id = ct.associado_id
-WHERE ct.id = c.contrato_gerado_id
-  AND a.status = 'ativo'
-  AND ct.status IN ('assinado','ativo')
-  AND c.status_contratacao NOT IN ('ativo','contrato_gerado','cancelado');
+- Se `NEW.modalidade = 'autovistoria'`:
+  - **Nunca** tocar em `servicos.tipo='instalacao'`.
+  - **Nunca** tocar em `instalacoes`.
+  - Só fechar o `servicos.tipo='vistoria_entrada'` cuja `vistoria_origem_id = NEW.id` (1:1 direto, sem fallback por cotação).
+- Se `NEW.modalidade <> 'autovistoria'` (presencial): comportamento atual (já correto).
 
-UPDATE cotacoes c
-SET status_contratacao = 'pagamento_ok'
-FROM contratos ct
-WHERE ct.id = c.contrato_gerado_id
-  AND ct.adesao_paga = true
-  AND ct.status IN ('assinado','ativo')
-  AND c.status_contratacao NOT IN ('ativo','contrato_gerado','pagamento_ok','cancelado');
-```
+Reforço extra: `BEFORE UPDATE` em `instalacoes` para barrar `status='concluida'` quando `rastreador_id IS NULL` E o veículo exige rastreador (FIPE≥30k/9k ou Diesel). Erro claro: `instalacao_concluida_exige_rastreador`.
 
-- Logar no `cotacoes_historico` com `acao='backfill_status_contratacao'` para auditoria.
-- Executar **depois** que a Frente 1 estiver no ar (assim o backfill cobre histórico e o trigger cobre o futuro).
+### 2. `fn_reativar_cobertura_pos_instalacao` — checar rastreador (migration)
 
-## ✅ Validação
+Só setar `cobertura_total=true` quando `NEW.rastreador_id IS NOT NULL` **ou** o veículo dispensa rastreador (sub-FIPE com `dispensa_rastreador=true`).
 
-1. Reabrir link público dos 3 casos travados → stepper deve mostrar todos os passos verdes + badge "Associado Ativo" (ANDRE/RICARDO) e "Aguardando instalação" (LEONARDO).
-2. Rodar nova cotação completa em sandbox → checar que cada marco (assinatura, pagamento, instalação concluída, ativação) propaga `status_contratacao` em tempo real para o link público.
-3. Conferir Cadastro › Propostas Pendentes (sem regressão — ANDRE/RICARDO devem sair da fila; LEONARDO permanece em "Aguard. Instalação").
-4. Query de auditoria pós-deploy: nenhuma cotação com associado ativo deve ter `status_contratacao ≠ 'ativo'`.
+### 3. Cadastro UI — label e detecção robusta (frontend)
 
-## 📁 Arquivos previstos
+`src/pages/cadastro/PropostaAnalise.tsx`:
+- `isAutovistoria` passa a ser: `vistoria.modalidade==='autovistoria' && (totalFotos>=2 && temVideo360 || totalFotos>=minLegado)` — **não depende mais de `!instalacao_info`**.
+- Quando `isAutovistoria && planoTemRouboFurto && !cadastro_aprovado`: label do botão vira `"Aprovar Autovistoria · Liberar R/F"`.
 
-- **Migration**: ajuste em `recompute_cotacao_status_contratacao` + novos triggers em `contratos`, `associados`, `instalacoes` + backfill dos 3 casos com log de auditoria.
-- `src/hooks/useCotacaoContratacao.ts` — query secundária + realtime de contratos/associados/instalacoes.
-- `src/lib/cotacaoEtapaPublica.ts` (novo) — derivação pura de etapa+flag concluído.
-- `src/pages/public/CotacaoContratacao.tsx` — usar `derivarEtapaPublica`; renderizar estado terminal "Associado Ativo".
-- **Memória**: atualizar `mem://logic/quotation/recompute-cotacao-preserva-pos-autovistoria` para refletir "preserva nível, mas avança quando marcos posteriores confirmam"; criar `mem://logic/quotation/link-publico-deriva-de-marcos-reais`.
+`src/components/cadastro/proposta/PropostaApprovalStepper.tsx`: passar `liberarRfMode` para o CTA principal e ajustar copy/ícone.
 
-## ❓ Confirmações antes de executar
+### 4. Recompute autovistoria-aware (migration)
 
-1. **Backfill**: posso aplicar a regra `associado ativo + contrato assinado/ativo → status_contratacao='ativo'` em toda a base (não só nos 3 casos)? Isso é mais seguro que tratar caso a caso e fica auditado.
-2. **Estado terminal no stepper público**: o badge deve dizer **"Associado Ativo · em monitoramento"** ou prefere algo mais neutro como **"Contratação concluída"**?
+Adicionar à `recompute_cotacao_status_contratacao`:
+- Se existe `vistorias` autovistoria `aprovada` E `contratos.cadastro_aprovado=false` E veículo exige rastreador → `aguardando_aprovacao_cadastro` (rank acima de `vistoria_agendada`).
+- Se `cadastro_aprovado=true` + autovistoria aprovada + instalação ainda não concluída → `autovistoria_ok` (libera link público a mostrar "aguardando instalação técnica" no lugar de "agendar vistoria").
+- Adicionar trigger `AFTER UPDATE OF status ON vistorias` que chama o recompute.
 
-Se aprovar com "sim, backfill geral + badge Associado Ativo", começo pela migration (Frente 1 + Frente 3 juntas) e logo em seguida o frontend (Frente 2).
+### 5. Backfill controlado dos 11 casos contaminados
+
+Migration de saneamento (apresentar lista em comentário SQL para auditoria), por caso:
+
+- `instalacoes.status='concluida' + rastreador_id IS NULL + FIPE≥30k` → reabrir como `agendada` (data_agendada = hoje+2), zerar `concluida_em`.
+- `veiculos.cobertura_total=false`, manter `cobertura_roubo_furto=true` (autovistoria já validou R/F).
+- `veiculos.status='instalacao_pendente'`.
+- `contratos.status='assinado'` (rebaixar de `ativo`), preservando `cadastro_aprovado=true`.
+- `associados.status='aguardando_instalacao'`.
+- Registrar 1 linha em `associados_historico` por caso com `tipo='correcao_sistema'` explicando o saneamento.
+- **Não desfazer Hinova** — apenas marcar `sga_revisao_pendente=true` (já existe) para o Monitoramento revisar.
+
+Caso específico do Leonardo (cadastro_aprovado=false): só rodar o recompute — entra naturalmente na fila certa com o label correto após (3).
+
+### 6. Memória
+
+Salvar `mem://logic/operations/autovistoria-nao-conclui-instalacao` e atualizar Core com a regra "Autovistoria nunca fecha `instalacoes`/`servicos.tipo=instalacao`; só o serviço técnico presencial fecha instalação".
+
+---
+
+## Arquivos afetados
+
+- `supabase/migrations/*` — nova migration com (1), (2), (4), (5)
+- `src/pages/cadastro/PropostaAnalise.tsx` — (3)
+- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — (3)
+- `mem://...` — (6)
+
+## Riscos e mitigação
+
+- Backfill rebaixa 10 contratos hoje `ativo` para `assinado`. **Mitigação**: gerar CSV em `/mnt/documents/` antes da execução para revisão; cobertura R/F preservada (associados continuam protegidos contra roubo/furto).
+- Hinova fica dessincronizado momentaneamente. **Mitigação**: `sga_revisao_pendente=true` joga na fila de revisão existente, sem chamadas destrutivas.
+- Trigger nova bloqueia inserts legados. **Mitigação**: `BEFORE UPDATE` (não `INSERT`) e só dispara na transição `→ concluida`, com mensagem clara para o operador.
+
