@@ -1055,9 +1055,11 @@ serve(async (req) => {
       const documentosEntrada: DocumentoEntrada[] = [
         ...((docs || []) as any[]).map(d => ({
           id: d.id, tipo: d.tipo, nome_arquivo: d.nome_arquivo, arquivo_url: d.arquivo_url,
+          origem: 'contratos_documentos' as const, origem_id: d.id,
         })),
         ...((docsContrato || []) as any[]).map(d => ({
           id: d.id, tipo: d.tipo, nome_arquivo: d.arquivo_nome, arquivo_url: d.arquivo_url,
+          origem: 'contratos_documentos' as const, origem_id: d.id,
         })),
       ];
 
@@ -1067,11 +1069,14 @@ serve(async (req) => {
         (d) => (d.tipo || '').toLowerCase() === 'contrato_assinado'
       );
       if (!jaTemContrato && (contrato as any)?.pdf_assinado_url) {
+        const termoId = `termo-${(contrato as any).id ?? _aid}`;
         documentosEntrada.push({
-          id: `termo-${(contrato as any).id ?? _aid}`,
+          id: termoId,
           tipo: 'contrato_assinado',
           nome_arquivo: `Contrato ${contrato?.numero ?? _aid} - Assinado.pdf`,
           arquivo_url: (contrato as any).pdf_assinado_url,
+          origem: 'pdf_assinado',
+          origem_id: String((contrato as any).id ?? _aid),
         });
       }
 
@@ -1081,6 +1086,8 @@ serve(async (req) => {
           tipo: 'foto_associado',
           nome_arquivo: `avatar_${_aid}.jpg`,
           arquivo_url: associadoFoto.avatar_url,
+          origem: 'avatar',
+          origem_id: _aid,
         });
       }
 
@@ -1106,8 +1113,34 @@ serve(async (req) => {
             tipo: vf.tipo,
             nome_arquivo: `vistoria_${vf.tipo}_${vf.id}.jpg`,
             arquivo_url: vf.arquivo_url,
+            origem: 'vistoria_fotos',
+            origem_id: vf.id,
           });
         }
+      }
+
+      // ---- DEDUPE: filtra documentos já enviados ao SGA neste veículo ----
+      // Sem este filtro, cada execução do sync re-enviava todas as fotos, gerando
+      // duplicatas no SGA (ex.: KOU6D37 com 6 fotos enviadas 2x = 12 registros).
+      // `force_resync_media` no body permite operador ignorar este filtro.
+      let jaEnviadosKeys = new Set<string>();
+      if (!req_body.force_resync_media) {
+        const { data: jaEnviadosRows } = await supabase
+          .from('sga_fotos_enviadas')
+          .select('origem, origem_id')
+          .eq('veiculo_id', _vid);
+        jaEnviadosKeys = new Set(
+          (jaEnviadosRows || []).map((r: any) => `${r.origem}:${r.origem_id}`)
+        );
+      }
+      const documentosNovos = documentosEntrada.filter(
+        (d) => !jaEnviadosKeys.has(`${d.origem || 'desconhecida'}:${d.origem_id || d.id}`)
+      );
+      const documentosFiltrados = documentosEntrada.length - documentosNovos.length;
+      if (documentosFiltrados > 0) {
+        await logSync(_vid, _aid, 'dedupe_fotos_ja_enviadas', 'info',
+          { total: documentosEntrada.length, ja_enviadas: documentosFiltrados, restantes: documentosNovos.length },
+          null);
       }
 
       const { fotos, descartadasSemLink, descartadasSemTipo, descartadasVideo } = buildFotosPayload(
