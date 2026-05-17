@@ -29,7 +29,7 @@ export function useInstalacoesAguardandoAprovacao() {
           observacoes,
           decisao_instalador,
           profissional:profissional_id(nome),
-          veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
+          veiculo:veiculo_id(placa, marca, modelo, ano_modelo, combustivel, valor_fipe, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(nome, telefone, email, cpf, status),
           instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)),
           vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))
