@@ -86,6 +86,68 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'missing_required_fields', fields: ['associado_id', 'source'] }, 400);
     }
 
+    // ----- 0) Guard: cobertura total exige rastreador físico em veículos que exigem -----
+    // Regra de negócio: Diesel, carro FIPE ≥ R$ 30k, moto FIPE ≥ R$ 9k => rastreador OBRIGATÓRIO.
+    // Sem rastreador vinculado em `rastreadores.veiculo_id`, NUNCA promover cobertura_total
+    // nem `veiculos.status='ativo'`. Bloqueia o caminho que ativou André/Leonardo via autovistoria.
+    if (veiculo_id && ativar_cobertura_total && !aguardar_instalacao) {
+      const { data: veic, error: veicReadErr } = await supabase
+        .from('veiculos')
+        .select('id, placa, marca, modelo, combustivel, valor_fipe')
+        .eq('id', veiculo_id)
+        .maybeSingle();
+      if (veicReadErr) {
+        return jsonResponse({ success: false, error: 'veiculo_read_failed', detail: veicReadErr.message }, 500);
+      }
+      if (veic) {
+        // Resolver tipo_veiculo (carro/moto) via marcas_modelos (case-insensitive)
+        const { data: mm } = await supabase
+          .from('marcas_modelos')
+          .select('tipo_veiculo, marca, modelo')
+          .ilike('marca', (veic.marca ?? '').trim())
+          .ilike('modelo', (veic.modelo ?? '').trim())
+          .limit(1)
+          .maybeSingle();
+
+        const motoRegex = /(cg |cb |cb250|cb300|cb500|cb650|cb1000|fan|titan|twister|hornet|xre|bros|biz|pop |fazer|ys |xtz|lander|tenere|crf|mt-|nmax|burgman|xj6|r1|r3|r6|gsx|hayabusa|gixxer|intruder|v-strom|katana|drz|rmz|kxf|husqvarna|harley|sportster|iron|forty|softail|street|virago|midnight|bandit|cbr|gsr|z400|z650|z800|z900|z1000|ninja|versys|ducati|monster|panigale)/i;
+        const tipoVeiculo: 'carro' | 'moto' =
+          (mm?.tipo_veiculo as 'carro' | 'moto' | undefined) ??
+          (motoRegex.test(veic.modelo ?? '') ? 'moto' : 'carro');
+
+        const combustivel = (veic.combustivel ?? '').toLowerCase();
+        const fipe = Number(veic.valor_fipe ?? 0);
+        const exigeRastreador =
+          combustivel.includes('diesel') ||
+          (tipoVeiculo === 'carro' && fipe >= 30000) ||
+          (tipoVeiculo === 'moto'  && fipe >=  9000);
+
+        if (exigeRastreador) {
+          const { count: rastCount, error: rastErr } = await supabase
+            .from('rastreadores')
+            .select('id', { count: 'exact', head: true })
+            .eq('veiculo_id', veiculo_id);
+          if (rastErr) {
+            console.warn('[ativar-associado] read rastreadores erro:', rastErr.message);
+          }
+          if (!rastCount || rastCount === 0) {
+            console.warn('[ativar-associado] bloqueio: cobertura_total sem rastreador físico', {
+              veiculo_id, placa: veic.placa, tipoVeiculo, fipe, combustivel, source,
+            });
+            return jsonResponse({
+              success: false,
+              error: 'requer_rastreador_fisico',
+              mensagem: 'Veículo exige rastreador físico instalado para ativar cobertura total (Proteção 360). Aguarde a vistoria do técnico com instalação.',
+              veiculo_id,
+              placa: veic.placa,
+              tipo_veiculo: tipoVeiculo,
+              valor_fipe: fipe,
+              combustivel: veic.combustivel,
+            }, 409);
+          }
+        }
+      }
+    }
+
     // ----- 1) Tentar adquirir advisory lock -----
     // Como Postgres advisory locks são por conexão e a Supabase JS reusa o pool,
     // emulamos o lock via UPDATE condicional + checagem do log recente.
