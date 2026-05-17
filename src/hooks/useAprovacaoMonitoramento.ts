@@ -76,9 +76,42 @@ export function useInstalacoesAguardandoAprovacao() {
         const isAuto = (s.modalidade || '').toLowerCase() === 'autovistoria';
         if (!isAuto && s.contrato_id) contratosComInstalacaoTecnica.add(s.contrato_id);
       }
+
+      // Buscar rastreadores vinculados para evitar listar autovistoria de veículo
+      // que ainda EXIGE instalação física de rastreador (FIPE≥30k carro / 9k moto / diesel).
+      // Nesses casos, Monitoramento não deve aprovar — fluxo correto é instalação técnica primeiro.
+      const veiculoIds = Array.from(new Set(aprovados.map((s: any) => s.veiculo_id).filter(Boolean)));
+      const veiculosComRastreador = new Set<string>();
+      if (veiculoIds.length > 0) {
+        const { data: rastreadoresVinc } = await supabase
+          .from('rastreadores')
+          .select('veiculo_id')
+          .in('veiculo_id', veiculoIds as string[])
+          .not('veiculo_id', 'is', null);
+        (rastreadoresVinc || []).forEach((r: any) => {
+          if (r.veiculo_id) veiculosComRastreador.add(r.veiculo_id);
+        });
+      }
+
+      const FIPE_MIN_CARRO = 30000;
+      const FIPE_MIN_MOTO = 9000;
+      const exigeRastreador = (v: any): boolean => {
+        if (!v) return false;
+        const comb = String(v.combustivel || '').toLowerCase();
+        if (comb.includes('diesel')) return true;
+        const fipe = Number(v.valor_fipe) || 0;
+        const isMoto = String(v.modelo || '').toLowerCase().includes('moto')
+          || String(v.marca || '').toLowerCase().match(/honda|yamaha|suzuki|kawasaki|bmw motorrad|harley/);
+        const limite = isMoto ? FIPE_MIN_MOTO : FIPE_MIN_CARRO;
+        return fipe >= limite;
+      };
+
       const pendentes = aprovados.filter((s: any) => {
         const isAuto = (s.modalidade || '').toLowerCase() === 'autovistoria';
         if (isAuto && s.contrato_id && contratosComInstalacaoTecnica.has(s.contrato_id)) return false;
+        // GUARD CANÔNICO: autovistoria de veículo que exige rastreador não promove ativação.
+        // Só entra na fila quando rastreador físico está vinculado (instalação concluída).
+        if (isAuto && exigeRastreador(s.veiculo) && !veiculosComRastreador.has(s.veiculo_id)) return false;
         return true;
       });
 
