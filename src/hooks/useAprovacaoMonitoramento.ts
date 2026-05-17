@@ -136,15 +136,42 @@ export function useAprovacaoMonitoramentoStats() {
       // Aguardando = servicos concluidos com veículo sem cobertura_total
       const { data: pendentes } = await (supabase as any)
         .from('servicos')
-        .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)), vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))')
+        .select('id, tipo, modalidade, veiculo_id, veiculo:veiculo_id(combustivel, valor_fipe, marca, modelo, cobertura_roubo_furto, cobertura_total), instalacao:instalacao_origem_id(contrato:contrato_id(cadastro_aprovado)), vistoria:vistoria_origem_id(contrato:contrato_id(cadastro_aprovado))')
         .in('tipo', ['instalacao', 'vistoria_entrada'])
         .eq('status', 'concluida');
 
-      const aguardando = (pendentes || []).filter((s: any) =>
+      const candidatos = (pendentes || []).filter((s: any) =>
         s.veiculo?.cobertura_total !== true &&
         (s.instalacao?.contrato?.cadastro_aprovado === true ||
          s.vistoria?.contrato?.cadastro_aprovado === true)
-      ).length;
+      );
+
+      // Mesmo guard do hook principal: autovistoria de veículo que exige rastreador
+      // sem rastreador vinculado não conta como aguardando.
+      const veiculoIds = Array.from(new Set(candidatos.map((s: any) => s.veiculo_id).filter(Boolean)));
+      const comRastreador = new Set<string>();
+      if (veiculoIds.length > 0) {
+        const { data: rs } = await supabase
+          .from('rastreadores')
+          .select('veiculo_id')
+          .in('veiculo_id', veiculoIds as string[])
+          .not('veiculo_id', 'is', null);
+        (rs || []).forEach((r: any) => r.veiculo_id && comRastreador.add(r.veiculo_id));
+      }
+      const exigeRast = (v: any): boolean => {
+        if (!v) return false;
+        const comb = String(v.combustivel || '').toLowerCase();
+        if (comb.includes('diesel')) return true;
+        const fipe = Number(v.valor_fipe) || 0;
+        const isMoto = String(v.modelo || '').toLowerCase().includes('moto')
+          || !!String(v.marca || '').toLowerCase().match(/honda|yamaha|suzuki|kawasaki|bmw motorrad|harley/);
+        return fipe >= (isMoto ? 9000 : 30000);
+      };
+      const aguardando = candidatos.filter((s: any) => {
+        const isAuto = String(s.modalidade || '').toLowerCase() === 'autovistoria';
+        if (isAuto && exigeRast(s.veiculo) && !comRastreador.has(s.veiculo_id)) return false;
+        return true;
+      }).length;
 
       // Aprovados hoje = histórico com tipo aprovação do monitoramento hoje
       const { count: aprovadosHoje } = await supabase
