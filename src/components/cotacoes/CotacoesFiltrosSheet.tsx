@@ -119,40 +119,52 @@ export function CotacoesFiltrosSheet(props: CotacoesFiltrosSheetProps) {
           )}
 
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Etapa do funil</label>
-            <Select value={etapaFunilFilter} onValueChange={setEtapaFunilFilter}>
-              <SelectTrigger className="w-full h-10">
-                <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
-                <SelectValue placeholder="Etapa do funil" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as etapas</SelectItem>
-                <SelectItem value="rascunho">Rascunho</SelectItem>
-                {([
-                  'cotacao_realizada',
-                  'escolhendo_plano',
-                  'enviando_documentos',
-                  'escolha_vistoria',
-                  'realizando_autovistoria',
-                  'assinando_contrato',
-                  'realizando_pagamento',
-                  'aguardando_vistoria',
-                  'vistoria_agendada',
-                  'instalacao_agendada',
-                  'realizando_vistoria',
-                  'vistoria_realizada',
-                  'em_analise',
-                  'associado_ativo',
-                  'veiculo_recusado',
-                  'cancelado',
-                ] as EtapaVenda[]).map((etapa) => (
-                  <SelectItem key={etapa} value={etapa}>
-                    {etapaVendaConfig[etapa].label}
-                  </SelectItem>
-                ))}
-                <SelectItem value="expirada">Expirada</SelectItem>
-              </SelectContent>
-            </Select>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Etapas do funil {etapaFunilFilter.length > 0 && `(${etapaFunilFilter.length})`}
+            </label>
+            {(() => {
+              const ETAPAS_OPTS: Array<{ value: string; label: string }> = [
+                { value: 'rascunho', label: 'Rascunho' },
+                ...([
+                  'cotacao_realizada','escolhendo_plano','enviando_documentos','escolha_vistoria',
+                  'realizando_autovistoria','assinando_contrato','realizando_pagamento','aguardando_vistoria',
+                  'vistoria_agendada','instalacao_agendada','realizando_vistoria','vistoria_realizada',
+                  'em_analise','associado_ativo','veiculo_recusado','cancelado',
+                ] as EtapaVenda[]).map((e) => ({ value: e, label: etapaVendaConfig[e].label })),
+                { value: 'expirada', label: 'Expirada' },
+              ];
+              const toggle = (v: string) =>
+                setEtapaFunilFilter(
+                  etapaFunilFilter.includes(v)
+                    ? etapaFunilFilter.filter((e) => e !== v)
+                    : [...etapaFunilFilter, v]
+                );
+              return (
+                <div className="rounded-md border max-h-[260px] overflow-y-auto">
+                  {ETAPAS_OPTS.map((opt) => {
+                    const checked = etapaFunilFilter.includes(opt.value);
+                    return (
+                      <label
+                        key={opt.value}
+                        className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60 border-b last:border-b-0"
+                      >
+                        <Checkbox checked={checked} onCheckedChange={() => toggle(opt.value)} />
+                        <span className="text-sm">{opt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+            {etapaFunilFilter.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setEtapaFunilFilter([])}
+                className="mt-1.5 text-xs text-primary hover:underline"
+              >
+                Limpar etapas
+              </button>
+            )}
           </div>
 
           <div>
