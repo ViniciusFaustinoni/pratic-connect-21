@@ -108,9 +108,9 @@ export default function Associados() {
   // State
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput, 350);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [planoFilter, setPlanoFilter] = useState<string>('all');
-  const [cidadeFilter, setCidadeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusAssociado[]>([]);
+  const [planoFilter, setPlanoFilter] = useState<string[]>([]);
+  const [cidadeFilter, setCidadeFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   
