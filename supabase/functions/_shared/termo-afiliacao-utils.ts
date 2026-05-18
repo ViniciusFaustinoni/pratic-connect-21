@@ -467,7 +467,11 @@ export function mapearDadosParaTemplate(
       alienado: contrato.veiculo_alienado || veiculo.veiculo_alienado || false,
       financeira: contrato.veiculo_financeira || veiculo.veiculo_financeira || "",
       procedencia: contrato.veiculo_procedencia || veiculo.veiculo_procedencia || "Usado de particular",
-      cambio: inferirCambio(contrato.veiculo_modelo || veiculo.veiculo_modelo),
+      cambio:
+        formatarCambio(contrato.veiculo_cambio)
+        ?? formatarCambio(veiculoDB?.cambio)
+        ?? formatarCambio(veiculo.veiculo_cambio)
+        ?? inferirCambio(contrato.veiculo_modelo || veiculo.veiculo_modelo),
       // Portas: SEM fallback. Lê do contrato → veículo (DB) → cotação. NULL se ausente.
       portas: contrato.veiculo_numero_portas
         ?? veiculoDB?.numero_portas
