@@ -55,6 +55,7 @@ import { usePlanos } from '@/hooks/usePlanos';
 import { useVendedores } from '@/hooks/useVendedores';
 
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
+import { MultiSelectFilter } from '@/components/cadastro/MultiSelectFilter';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
