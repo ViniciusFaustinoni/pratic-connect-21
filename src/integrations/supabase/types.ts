@@ -34837,6 +34837,10 @@ export type Database = {
           pagamento_id: string
         }[]
       }
+      fn_materializar_autovistoria_cotacao: {
+        Args: { p_cotacao_id: string }
+        Returns: string
+      }
       fn_parametro_comissao: { Args: { p_chave: string }; Returns: number }
       fn_placas_ativas_consultor: {
         Args: { p_vendedor_id: string }
