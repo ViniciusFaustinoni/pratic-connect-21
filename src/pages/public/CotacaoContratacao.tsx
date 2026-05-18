@@ -241,27 +241,76 @@ export default function CotacaoContratacao() {
   
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
+  // Função para verificar se uma etapa específica já foi concluída
+  // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
+  const isEtapaConcluida = useCallback((etapaIndex: number): boolean => {
+    if (!cotacao?.status_contratacao && !cotacao?.plano_escolhido_id) return false;
+
+    // `autovistoria_ok` é tratado como vistoria concluída — listar em todos
+    // os pontos pós-vistoria para não regredir a régua.
+    const statusConcluidos = {
+      plano: ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      documentos: ['dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      contrato: ['contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      vistoria: ['vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      pagamento: ['pagamento_ok', 'contrato_gerado', 'ativo'],
+    };
+
+    const status = cotacao?.status_contratacao || '';
+
+    switch (etapaIndex) {
+      case 0:
+        return !!cotacao.plano_escolhido_id || statusConcluidos.plano.includes(status);
+      case 1:
+        return statusConcluidos.documentos.includes(status);
+      case 2:
+        return statusConcluidos.contrato.includes(status);
+      case 3:
+        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
+      case 4:
+        return statusConcluidos.pagamento.includes(status);
+      case 5:
+        if (cotacao.tipo_vistoria !== 'autovistoria') return false;
+        return (
+          hasInstalacaoAgendada ||
+          hasAgendamentoBase ||
+          agendamentoConcluido ||
+          status === 'ativo'
+        );
+      default:
+        return false;
+    }
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, dispensaVistoriaTroca]);
+
   // Determinar etapa baseada no status para saber o que está concluído
   // IMPORTANTE: Se tipo_vistoria já está preenchido, considera vistoria como concluída (etapa 4+)
   const etapaDoStatus = useMemo(() => {
-    if (!cotacao?.status_contratacao) return 0;
-
-    const etapaBase = determinarEtapa(cotacao.status_contratacao);
-
-    // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
-    // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
-    if (etapaBase === 3 && cotacao.tipo_vistoria) {
-      return 4;
+    // Sempre derivar a "etapa mínima alcançada" a partir dos sinais reais
+    // (plano_escolhido_id, tipo_vistoria, agendamentos, etc). Isso protege
+    // contra status_contratacao desconhecidos/regredidos que antes faziam a
+    // página voltar para a etapa 0.
+    let etapaPorSinais = 0;
+    for (let i = 5; i >= 0; i--) {
+      if (isEtapaConcluida(i)) {
+        etapaPorSinais = Math.min(i + 1, 5);
+        break;
+      }
     }
 
-    // AUTOVISTORIA ANTECIPADA + RASTREADOR OBRIGATÓRIO:
-    // Cliente fez autovistoria opcional (libera R/F), Cadastro já avaliou e o veículo
-    // exige instalação física do rastreador. Se ainda NÃO há instalação/agendamento,
-    // forçar a etapa Instalação (índice 5) para o cliente agendar a visita do técnico.
+    const etapaBase = cotacao?.status_contratacao
+      ? determinarEtapa(cotacao.status_contratacao)
+      : -1;
+
+    let etapaFinal = etapaBase >= 0 ? Math.max(etapaBase, etapaPorSinais) : etapaPorSinais;
+
+    if (etapaFinal === 3 && cotacao?.tipo_vistoria) {
+      etapaFinal = 4;
+    }
+
     if (
-      cotacao.tipo_vistoria === 'autovistoria' &&
-      ['aguardando_aprovacao_monitoramento', 'vistoria_concluida', 'pagamento_ok'].includes(
-        cotacao.status_contratacao
+      cotacao?.tipo_vistoria === 'autovistoria' &&
+      ['aguardando_aprovacao_monitoramento', 'vistoria_concluida', 'pagamento_ok', 'autovistoria_ok', 'cadastro_aprovado', 'monitoramento_aprovado'].includes(
+        cotacao.status_contratacao || ''
       )
     ) {
       const precisa = exigeRastreador({
@@ -278,21 +327,20 @@ export default function CotacaoContratacao() {
       }
     }
 
-    return etapaBase;
+    return etapaFinal;
   }, [
     cotacao?.status_contratacao,
     cotacao?.tipo_vistoria,
     cotacao?.vistoria_completa_data_agendada,
     determinarEtapa,
+    isEtapaConcluida,
     hasInstalacaoAgendada,
     hasAgendamentoBase,
     agendamentoConcluido,
     cotacao,
   ]);
 
-  // STEPS dinâmico:
-  //  - autovistoria => adiciona "Instalação" como 6ª etapa
-  // (Troca de titularidade segue a MESMA ordem da nova adesão — Pagamento sempre presente)
+  // STEPS dinâmico: autovistoria adiciona "Instalação" como 6ª etapa
   const STEPS = useMemo<Step[]>(() => {
     if (cotacao?.tipo_vistoria === 'autovistoria') {
       return [...STEPS_BASE, STEP_INSTALACAO];
@@ -300,47 +348,11 @@ export default function CotacaoContratacao() {
     return STEPS_BASE;
   }, [cotacao?.tipo_vistoria]);
 
-  // Ordem de navegação por índices INTERNOS (mesmos do determinarEtapa):
+  // Ordem de navegação por índices INTERNOS:
   // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
   const navOrder = useMemo<number[]>(() => [0, 1, 2, 3, 4, 5], []);
 
-  // Função para verificar se uma etapa específica já foi concluída
-  // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
-  const isEtapaConcluida = useCallback((etapaIndex: number): boolean => {
-    if (!cotacao?.status_contratacao) return false;
-    
-    const statusConcluidos = {
-      plano: ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      documentos: ['dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      contrato: ['contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      vistoria: ['vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      pagamento: ['pagamento_ok', 'contrato_gerado', 'ativo'],
-    };
-    
-    switch (etapaIndex) {
-      case 0: // Plano - concluído se plano_escolhido_id existe
-        return !!cotacao.plano_escolhido_id || statusConcluidos.plano.includes(cotacao.status_contratacao);
-      case 1: // Documentos - concluído se status >= dados_preenchidos
-        return statusConcluidos.documentos.includes(cotacao.status_contratacao);
-      case 2: // Contrato - concluído se status >= contrato_assinado
-        return statusConcluidos.contrato.includes(cotacao.status_contratacao);
-      case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
-              // OU troca de titularidade dentro da janela mesmo-dia (vistoria dispensada)
-        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
-      case 4: // Pagamento - concluído se status >= pagamento_ok
-        return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
-      case 5: // Instalação (apenas autovistoria) - só concluída quando há registro operacional real
-        if (cotacao.tipo_vistoria !== 'autovistoria') return false;
-        return (
-          hasInstalacaoAgendada ||
-          hasAgendamentoBase ||
-          agendamentoConcluido ||
-          cotacao.status_contratacao === 'ativo'
-        );
-      default:
-        return false;
-    }
-  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, dispensaVistoriaTroca]);
+
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação

@@ -323,6 +323,25 @@ export function useCotacaoContratacao(token: string | undefined) {
         (payload) => {
           console.log('[CotacaoContratacao] Realtime: instalacao atualizada:', payload);
           queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
+          queryClient.invalidateQueries({ queryKey: ['instalacao-existente', cotacao.id] });
+          queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao-instalacao'] });
+          refetch();
+        }
+      );
+
+      // 7. Subscrição para agendamentos_base (cliente termina agendamento → atualiza etapa)
+      channel = channel.on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'agendamentos_base',
+          filter: `cotacao_id=eq.${cotacao.id}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: agendamento_base atualizado:', payload);
+          queryClient.invalidateQueries({ queryKey: ['agendamento-base-existente', cotacao.id] });
+          queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
           refetch();
         }
       );
@@ -408,6 +427,8 @@ export function useCotacaoContratacao(token: string | undefined) {
   const determinarEtapa = useCallback((status: string | null) => {
     switch (status) {
       case 'aguardando':
+      case 'rascunho':
+      case 'enviada':
         return 0; // Escolha de plano
       case 'plano_escolhido':
         return 1; // Documentos e dados (unificado)
@@ -417,15 +438,17 @@ export function useCotacaoContratacao(token: string | undefined) {
       case 'contrato_assinado':
         return 3; // Vistoria (movido)
       case 'vistoria_agendada':
-        return 4; // Pagamento (vistoria já agendada na base)
       case 'vistoria_ok':
-        return 4; // Pagamento (movido)
+      case 'autovistoria_ok': // cliente terminou autovistoria — não regredir para etapa 0
+        return 4; // Pagamento (vistoria já agendada na base)
       // Estados pós-autovistoria: cliente já enviou autovistoria e está aguardando análise.
       // Mantém o avanço da régua até a etapa Vistoria (read-only com badge).
       // Quando rastreador é obrigatório e Cadastro aprovou, a página força a etapa
       // Instalação (índice 5) para o cliente agendar — ver CotacaoContratacao.tsx.
       case 'aguardando_aprovacao_cadastro':
       case 'aguardando_aprovacao_monitoramento':
+      case 'cadastro_aprovado':
+      case 'monitoramento_aprovado':
       case 'vistoria_concluida':
         return 4; // Pagamento/análise (a UI decide se mostra "Aguardando análise" ou Instalação)
       case 'pagamento_ok':
@@ -433,7 +456,9 @@ export function useCotacaoContratacao(token: string | undefined) {
       case 'ativo':
         return 5; // Conclusão
       default:
-        return 0;
+        // Status desconhecido: NÃO voltar para 0. Retorna -1 para que a UI use
+        // fallback baseado em sinais (plano_escolhido_id, tipo_vistoria, etc).
+        return -1;
     }
   }, []);
 
