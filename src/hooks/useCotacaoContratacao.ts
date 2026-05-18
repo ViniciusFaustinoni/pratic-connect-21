@@ -323,6 +323,25 @@ export function useCotacaoContratacao(token: string | undefined) {
         (payload) => {
           console.log('[CotacaoContratacao] Realtime: instalacao atualizada:', payload);
           queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
+          queryClient.invalidateQueries({ queryKey: ['instalacao-existente', cotacao.id] });
+          queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao-instalacao'] });
+          refetch();
+        }
+      );
+
+      // 7. Subscrição para agendamentos_base (cliente termina agendamento → atualiza etapa)
+      channel = channel.on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'agendamentos_base',
+          filter: `cotacao_id=eq.${cotacao.id}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: agendamento_base atualizado:', payload);
+          queryClient.invalidateQueries({ queryKey: ['agendamento-base-existente', cotacao.id] });
+          queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
           refetch();
         }
       );
