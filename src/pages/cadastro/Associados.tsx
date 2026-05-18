@@ -133,15 +133,22 @@ export default function Associados() {
     tipos_entrada?: string[];
   }>({});
 
-  // Construir filtros server-side
-  const serverStatusList = useMemo(() => {
+  // Construir filtros server-side (suporta multi-seleção)
+  const serverStatusList = useMemo<StatusAssociado[] | undefined>(() => {
     if (sheetFilters.status?.length) return sheetFilters.status;
-    if (statusFilter !== 'all') return [statusFilter as StatusAssociado];
+    if (statusFilter.length) return statusFilter;
     return undefined;
   }, [sheetFilters.status, statusFilter]);
 
-  const serverPlanoId = sheetFilters.plano_id || (planoFilter !== 'all' ? planoFilter : undefined);
-  const serverCidade = sheetFilters.cidade || (cidadeFilter !== 'all' ? cidadeFilter : undefined);
+  const serverPlanoId = useMemo<string | string[] | undefined>(() => {
+    if (sheetFilters.plano_id) return sheetFilters.plano_id;
+    return planoFilter.length ? planoFilter : undefined;
+  }, [sheetFilters.plano_id, planoFilter]);
+
+  const serverCidade = useMemo<string | string[] | undefined>(() => {
+    if (sheetFilters.cidade) return sheetFilters.cidade;
+    return cidadeFilter.length ? cidadeFilter : undefined;
+  }, [sheetFilters.cidade, cidadeFilter]);
 
   // Queries
   const { data, isLoading, isFetching } = useAssociados({
@@ -160,11 +167,13 @@ export default function Associados() {
   const associados = data?.associados;
   const serverTotal = data?.pagination.total ?? 0;
   const serverTotalPages = data?.pagination.totalPages ?? 1;
-  // Contagem reflete os MESMOS filtros server-side da listagem (KPIs coerentes com tabela)
+  // Contagem aceita string único; quando multi-selecionado, omitimos para não distorcer o KPI
+  const contagemPlanoId = typeof serverPlanoId === 'string' ? serverPlanoId : undefined;
+  const contagemCidade = typeof serverCidade === 'string' ? serverCidade : undefined;
   const { data: contagem } = useAssociadosContagem({
     search: search || undefined,
-    plano_id: serverPlanoId,
-    cidade: serverCidade,
+    plano_id: contagemPlanoId,
+    cidade: contagemCidade,
     data_adesao_inicio: sheetFilters.data_adesao_inicio,
     data_adesao_fim: sheetFilters.data_adesao_fim,
     vendedor_id: sheetFilters.vendedor_id,
