@@ -344,7 +344,7 @@ export function TrocaTitularidadeDialog({
 
 
           <div className="space-y-2">
-            <Label htmlFor="novo-titular-email">Email</Label>
+            <Label htmlFor="novo-titular-email">Email (opcional)</Label>
             <Input id="novo-titular-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
           </div>
 
