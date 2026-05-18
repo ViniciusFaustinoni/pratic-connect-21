@@ -212,14 +212,25 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
                 {solicitacao.cotacao ? (
-                  <div className="rounded border p-3 flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Termo de Filiação</h4>
-                      <p className="text-xs text-muted-foreground mt-1">Documento assinado pelo novo titular.</p>
+                  <div className="rounded border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Cotação / Termo de Filiação</h4>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {solicitacao.termo_cancelamento_assinado_em
+                            ? 'Link público liberado para o novo titular.'
+                            : 'Cotação criada. Link público bloqueado até a assinatura do termo de cancelamento.'}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => setActiveTab('termo')}>
+                        <ExternalLink className="h-3 w-3 mr-1" /> Ver termo
+                      </Button>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => setActiveTab('termo')}>
-                      <ExternalLink className="h-3 w-3 mr-1" /> Ver termo
-                    </Button>
+                    {!solicitacao.termo_cancelamento_assinado_em && (
+                      <Badge variant="outline" className="text-amber-700 border-amber-600 bg-amber-50">
+                        <AlertTriangle className="h-3 w-3 mr-1" /> Link público bloqueado — aguardando assinatura
+                      </Badge>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded border p-3 space-y-3 bg-muted/30">
