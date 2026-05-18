@@ -623,6 +623,34 @@ export default function CotacaoContratacao() {
     );
   }
 
+  // Troca de titularidade: bloqueia TODA a página pública enquanto o termo de
+  // cancelamento não estiver assinado pelo titular antigo. A cotação pode ter
+  // sido adiantada pelo consultor, mas o novo titular não pode iniciar nenhuma
+  // etapa até o cancelamento de fato ocorrer.
+  if (
+    isTrocaTitularidade &&
+    !!solicitacaoTroca &&
+    !solicitacaoTroca.termo_cancelamento_assinado_em &&
+    !trocaReprovada
+  ) {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <div className="max-w-lg w-full">
+          <TelaAnaliseTrocaTitularidade
+            status={(solicitacaoTroca?.status as any) || 'cotacao_em_andamento'}
+            motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
+            termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
+            aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
+            aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+            tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
+            expiradaEm={(solicitacaoTroca as any)?.expirada_em}
+          />
+        </div>
+      </div>
+    );
+  }
+
+
   return (
     <div className="dark min-h-screen public-premium-bg relative">
       {/* Ambient glow - simplified */}
