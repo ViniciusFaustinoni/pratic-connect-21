@@ -139,7 +139,12 @@ export default function Cotacoes() {
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
   const [filtroOrfas, setFiltroOrfas] = useState(false);
-  const [etapaFunilFilter, setEtapaFunilFilter] = useState<string>('all');
+  const [etapaFunilFilter, setEtapaFunilFilter] = useState<string[]>([]);
+  const toggleEtapaFunil = useCallback((etapa: string) => {
+    setEtapaFunilFilter((prev) =>
+      prev.includes(etapa) ? prev.filter((e) => e !== etapa) : [...prev, etapa]
+    );
+  }, []);
   
   // Seleção em lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
