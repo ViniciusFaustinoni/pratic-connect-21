@@ -227,32 +227,18 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                       <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Cotação</h4>
                       <p className="text-xs text-muted-foreground mt-1">
                         {solicitacao.termo_cancelamento_assinado_em
-                          ? 'Termo de cancelamento assinado. Clique abaixo para gerar a cotação do novo titular (consulta FIPE atualizada).'
-                          : 'A cotação será gerada manualmente assim que o titular antigo assinar o termo de cancelamento.'}
+                          ? 'Termo de cancelamento assinado. Gere a cotação do novo titular (consulta FIPE atualizada).'
+                          : 'Você pode adiantar a cotação agora. O link público só será liberado para o novo titular após a assinatura do termo de cancelamento pelo titular anterior.'}
                       </p>
                     </div>
-                    {(() => {
-                      const podeGerar = !!solicitacao.termo_cancelamento_assinado_em;
-                      const btn = (
-                        <Button
-                          onClick={handleRealizarCotacao}
-                          disabled={!podeGerar || criandoCotacao}
-                          className="w-full sm:w-auto"
-                        >
-                          {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-                          Realizar Cotação
-                        </Button>
-                      );
-                      if (podeGerar) return btn;
-                      return (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild><span tabIndex={0}>{btn}</span></TooltipTrigger>
-                            <TooltipContent>Aguardando assinatura do termo de cancelamento pelo titular antigo.</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      );
-                    })()}
+                    <Button
+                      onClick={handleRealizarCotacao}
+                      disabled={criandoCotacao}
+                      className="w-full sm:w-auto"
+                    >
+                      {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                      Realizar Cotação
+                    </Button>
                   </div>
                 )}
               </TabsContent>
