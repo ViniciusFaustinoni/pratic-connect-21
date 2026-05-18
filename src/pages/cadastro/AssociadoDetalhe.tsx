@@ -47,6 +47,7 @@ import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { SuspenderAssociadoDialog } from '@/components/associados/SuspenderAssociadoDialog';
 import { AssociadoSuspensoAlert } from '@/components/associados/AssociadoSuspensoAlert';
 import { RastreadorVinculadoModal } from '@/components/cadastro/RastreadorVinculadoModal';
+import { BadgeCobertura } from '@/components/veiculos/BadgeCobertura';
 import { CancelarAssociadoDialog } from '@/components/cadastro/CancelarAssociadoDialog';
 import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro/ExcluirAssociadoDialog';
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
