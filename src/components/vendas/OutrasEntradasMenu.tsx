@@ -612,6 +612,19 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
               ) : (
                 // === Other types: associado search ===
                 <>
+                  {selectedTipo === 'troca_titularidade' && (
+                    <div className="px-3 pt-3">
+                      <Alert className="border-warning/40 bg-warning/10">
+                        <Info className="h-4 w-4 text-warning" />
+                        <AlertTitle className="text-xs font-bold uppercase tracking-wide text-warning">
+                          Inclua o CPF do associado anterior
+                        </AlertTitle>
+                        <AlertDescription className="text-xs leading-relaxed">
+                          Busque pelo CPF do <strong>dono atual</strong> (quem está vendendo o veículo) para localizar o cadastro a ser transferido.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
                   <div className="p-3 border-b">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
