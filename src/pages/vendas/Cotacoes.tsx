@@ -1379,7 +1379,7 @@ export default function Cotacoes() {
               setDataFilter(undefined);
               setConsultorFilter('all');
               setFiltroOrfas(false);
-              setEtapaFunilFilter('all');
+              setEtapaFunilFilter([]);
               setSearchInput('');
               toast.success('Cotação salva! Exibindo em "Em Andamento".');
             }}
