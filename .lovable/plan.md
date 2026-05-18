@@ -1,37 +1,34 @@
-## Diagnóstico — CINTHYA / LPE3902 (Renault Logan 2008, FIPE R$ 17.116 — sub-FIPE)
+## Liberação manual de R/F — PHILLIP DE SOUZA VIEIRA (QXT9H99)
 
-Estado atual (todos errados para sub-FIPE):
+Aplicar a Opção B (atalho operacional): liberar Roubo/Furto agora, sem esperar o vídeo 360° nem o técnico. Instalação do rastreador continua agendada normalmente — esta ação só destrava a cobertura R/F antecipada.
 
-| Entidade | Campo | Valor | Esperado |
-|---|---|---|---|
-| `associados` (`9d224455`) | `status` | `ativo` | `em_analise` |
-|  | `codigo_hinova` | `30031` (no SGA) | — |
-| `contratos` (`176a17c4`) | `status` | `ativo` | `assinado` |
-|  | `cadastro_aprovado` | `true` (20/04 18:56) | `false` |
-|  | `data_ativacao` | `2026-04-20` | `NULL` |
-| `veiculos` (`31f320c3`) | `status` | `ativo` | `instalacao_pendente` (na prática: sub-FIPE não tem instalação, mas continua não-ativo até Cadastro+Monitoramento aprovarem) |
-|  | `cobertura_roubo_furto` | `true` | `false` (Cadastro libera) |
-|  | `cobertura_total` / `cobertura_suspensa` | `false` / `false` | mantém |
-|  | `codigo_hinova` | `35792` (no SGA) | — |
-| `vistorias` (`13a1033a`) | autovistoria pendente, 3 fotos | — | mantém |
-| `servicos` (`25c63b3e`) | `vistoria_entrada` `agendada`, criado hoje 15:55, sem profissional, sem origem (**fantasma do reprocesso de hoje**) | — | reclassificar para `em_analise` com `origem='autovistoria'`, sem profissional, mesma vistoria — assim entra na fila Cadastro |
-| `instalacoes` / `rastreadores` | nenhum | — | correto (sub-FIPE não exige) |
+### Mudanças
 
-A ativação aconteceu em **20/04 18:56** — um mês atrás — pela mesma brecha do KZK1I95 (sub-FIPE + autovistoria enxuta de 3 fotos pulando o Cadastro e indo direto para `ativo`). O reprocesso de hoje 15:55 ainda criou em cima disso um `servicos vistoria_entrada agendada` fantasma.
+1. **`veiculos`** (`14c2e181-285c-46f2-8b64-0fe96f79fcdd`)
+   - `cobertura_roubo_furto = true`
+   - `updated_at = now()`
+   - Mantém `status='instalacao_pendente'` (instalação técnica continua pendente)
 
-## Correção (sem mexer em código)
+2. **`vistorias`** (`3d23689a-996f-4c14-b75d-16f8396a795f`, autovistoria pendente)
+   - `status = 'aprovada'`
+   - `analisado_em = now()`
 
-1. `UPDATE associados SET status='em_analise' WHERE id='9d224455...'`
-2. `UPDATE contratos SET status='assinado', cadastro_aprovado=false, aprovado_em=NULL, aprovado_por=NULL, data_ativacao=NULL WHERE id='176a17c4...'`
-3. `UPDATE veiculos SET status='instalacao_pendente', cobertura_roubo_furto=false WHERE id='31f320c3...'`
-4. `UPDATE servicos SET status='em_analise', modalidade='autovistoria', origem='autovistoria_publica', vistoria_origem_id='13a1033a-af40-4be6-8f79-5f11e1bfecfe' WHERE id='25c63b3e...'` (alinha o serviço fantasma à vistoria existente para parar de aparecer como agendamento sem profissional)
+3. **`servicos`** (`cffe1b70-bd7c-4820-8c05-47d604b2b096`, vistoria_entrada autovistoria)
+   - `status = 'aprovada'` (terminal, sai da fila)
+   - `concluida_em = null`
+   - `analisado_em = now()`
+   - `observacoes_analise = 'Liberação manual de R/F pelo Monitoramento — fotos validadas; vídeo 360° dispensado. Instalação técnica segue no agendamento.'`
 
-Resultado: CINTHYA volta a aparecer em **Cadastro › Propostas/Análise** com a autovistoria enxuta pendente; quando o Cadastro aprovar, R/F é liberado e Monitoramento decide se exige vistoria presencial.
+4. **`associados_historico`** — registrar:
+   - tipo `status_alterado`
+   - descrição: "Cobertura Roubo/Furto liberada manualmente pelo Monitoramento (veículo QXT9H99). Instalação do rastreador segue no agendamento já marcado."
 
-## Avisos importantes (preciso da sua orientação antes de aplicar)
+### O que NÃO muda
+- `contratos`: continua `assinado`, `cadastro_aprovado=true` (correto)
+- `associados`: continua `aguardando_instalacao` (correto)
+- `instalacoes` / `servicos instalacao` agendados: intactos — técnico ainda vai
+- `cobertura_total`: continua `false` (só libera com rastreador instalado)
+- SGA Hinova: nada enviado (sistema nunca envia ATIVO; promoção é manual no painel)
 
-- **SGA Hinova**: associado=30031 e veículo=35792 já foram promovidos a ATIVO no painel desde 20/04. Quer que eu rebaixe para PENDENTE (3) via `alterar-situacao-para` para alinhar?
-- **Mensalidades / faturamento**: o contrato está ativo há ~30 dias, com `dia_vencimento=30`. Qualquer mensalidade já emitida/paga neste período permanece como está — esta correção só rebobina o fluxo operacional. Quer que eu liste o que existe em `boletos`/`cobrancas` antes de mexer?
-- **Causa raiz**: já apareceu nos 3 casos (KZK1I95, e agora LPE3902). Posso investigar `finalizar-autovistoria-cotacao` para fechar a brecha que deixa sub-FIPE com 3 fotos pular o Cadastro?
-
-Responda "aplica" para rodar a correção do LPE3902, e diga se quer SGA / lista de cobranças / causa raiz junto.
+### Confirmação
+Responda **"aplica"** que eu executo a migration única com todos os 4 UPDATEs/INSERT acima.
