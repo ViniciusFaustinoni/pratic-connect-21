@@ -307,35 +307,39 @@ export default function CotacaoContratacao() {
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
   const isEtapaConcluida = useCallback((etapaIndex: number): boolean => {
-    if (!cotacao?.status_contratacao) return false;
-    
+    if (!cotacao?.status_contratacao && !cotacao?.plano_escolhido_id) return false;
+
+    // `autovistoria_ok` é tratado como vistoria concluída — listar em todos
+    // os pontos pós-vistoria para não regredir a régua.
     const statusConcluidos = {
-      plano: ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      documentos: ['dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      contrato: ['contrato_assinado', 'vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      vistoria: ['vistoria_ok', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      plano: ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      documentos: ['dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      contrato: ['contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      vistoria: ['vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
       pagamento: ['pagamento_ok', 'contrato_gerado', 'ativo'],
     };
-    
+
+    const status = cotacao?.status_contratacao || '';
+
     switch (etapaIndex) {
       case 0: // Plano - concluído se plano_escolhido_id existe
-        return !!cotacao.plano_escolhido_id || statusConcluidos.plano.includes(cotacao.status_contratacao);
+        return !!cotacao.plano_escolhido_id || statusConcluidos.plano.includes(status);
       case 1: // Documentos - concluído se status >= dados_preenchidos
-        return statusConcluidos.documentos.includes(cotacao.status_contratacao);
+        return statusConcluidos.documentos.includes(status);
       case 2: // Contrato - concluído se status >= contrato_assinado
-        return statusConcluidos.contrato.includes(cotacao.status_contratacao);
+        return statusConcluidos.contrato.includes(status);
       case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
               // OU troca de titularidade dentro da janela mesmo-dia (vistoria dispensada)
-        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
+        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
       case 4: // Pagamento - concluído se status >= pagamento_ok
-        return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
+        return statusConcluidos.pagamento.includes(status);
       case 5: // Instalação (apenas autovistoria) - só concluída quando há registro operacional real
         if (cotacao.tipo_vistoria !== 'autovistoria') return false;
         return (
           hasInstalacaoAgendada ||
           hasAgendamentoBase ||
           agendamentoConcluido ||
-          cotacao.status_contratacao === 'ativo'
+          status === 'ativo'
         );
       default:
         return false;
