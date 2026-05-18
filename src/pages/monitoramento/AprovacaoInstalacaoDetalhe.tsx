@@ -54,7 +54,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         .select(`
           *,
           profissional:profissional_id(id, nome),
-          veiculo:veiculo_id(id, placa, marca, modelo, ano_modelo, cor, valor_fipe, combustivel, cobertura_roubo_furto, cobertura_total),
+          veiculo:veiculo_id(id, placa, chassi, marca, modelo, ano_modelo, cor, valor_fipe, combustivel, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(id, nome, cpf, telefone, email, whatsapp, status)
         `)
         .eq('id', servicoId)
@@ -524,10 +524,14 @@ export default function AprovacaoInstalacaoDetalhe() {
             Veículo
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <CardContent className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
           <div>
             <span className="text-muted-foreground text-xs">Placa</span>
             <p className="font-mono font-bold text-foreground">{veiculo?.placa || '---'}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground text-xs">Chassi</span>
+            <p className="font-mono font-medium text-foreground break-all">{veiculo?.chassi || '---'}</p>
           </div>
           <div>
             <span className="text-muted-foreground text-xs">Veículo</span>
