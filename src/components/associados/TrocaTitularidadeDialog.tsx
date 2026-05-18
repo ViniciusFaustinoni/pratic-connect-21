@@ -216,8 +216,8 @@ export function TrocaTitularidadeDialog({
   }, [open, cpfAntigo, semCodigoHinova, semEspelhoLocal, sga.isLoading, sincronizando]);
 
   const handleSubmit = async () => {
-    if (!nome.trim() || !cpf.trim() || !veiculoId) {
-      toast.error('Preencha nome, CPF e selecione o veículo');
+    if (!nome.trim() || !veiculoId) {
+      toast.error('Preencha o nome do novo titular e selecione o veículo');
       return;
     }
     try {
