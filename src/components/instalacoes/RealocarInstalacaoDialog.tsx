@@ -66,6 +66,21 @@ export function RealocarInstalacaoDialog({
   const [motivoBase, setMotivoBase] = useState('');
   const [notificarBase, setNotificarBase] = useState(true);
 
+  // Expediente reduzido aos sábados: 09:00–13:00 (sem turno da tarde)
+  const isSabado = (s: string) => {
+    if (!s) return false;
+    const d = new Date(`${s}T12:00:00`);
+    return d.getDay() === 6;
+  };
+  const sabadoRota = isSabado(data);
+  const sabadoBase = isSabado(dataBase);
+  useEffect(() => {
+    if (sabadoRota && periodoRota === 'tarde') setPeriodoRota('manha');
+  }, [sabadoRota, periodoRota]);
+  useEffect(() => {
+    if (sabadoBase && periodoBase === 'tarde') setPeriodoBase('manha');
+  }, [sabadoBase, periodoBase]);
+
   const { data: instaladores = [] } = useInstaladores();
   const { data: bases = [] } = useBasesPratic();
   const { data: manualAtiva = false } = useConfigAtribuicaoManual();
