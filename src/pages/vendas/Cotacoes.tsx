@@ -177,7 +177,7 @@ export default function Cotacoes() {
   // só "vê" a página atual e parece quebrado. Quando algum desses filtros
   // está ativo, desligamos a paginação server-side e trazemos até 1000 linhas.
   const hasClientSideFilter =
-    etapaFunilFilter !== 'all' ||
+    etapaFunilFilter.length > 0 ||
     statusFilter !== 'all' ||
     mesFilter !== 'all' ||
     !!dataFilter ||
