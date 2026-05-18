@@ -709,9 +709,19 @@ export default function Associados() {
                       <TableCell onClick={() => handleAssociadoClick(associado)}>
                         {associado.veiculos && associado.veiculos.length > 0 ? (
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded border border-border">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const placa = associado.veiculos[0].placa;
+                                navigator.clipboard.writeText(placa);
+                                toast.success(`Placa ${placa} copiada`);
+                              }}
+                              title="Clique para copiar"
+                              className="font-mono text-xs bg-muted px-2 py-0.5 rounded border border-border hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                            >
                               {associado.veiculos[0].placa}
-                            </span>
+                            </button>
                             <span className="text-xs text-muted-foreground truncate max-w-[100px]">
                               {associado.veiculos[0].modelo}
                             </span>
