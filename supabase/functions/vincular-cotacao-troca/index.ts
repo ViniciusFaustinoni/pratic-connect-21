@@ -51,12 +51,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!sol.termo_cancelamento_assinado_em) {
-      return new Response(JSON.stringify({
-        error: 'Termo de cancelamento ainda não foi assinado pelo titular antigo.',
-        code: 'TERMO_NAO_ASSINADO',
-      }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
+    // (Removido) Gate de termo assinado: agora a cotação pode ser criada em paralelo
+    // ao envio do termo de cancelamento. O LINK PÚBLICO (acesso à rota /cotacao/p/:token)
+    // segue gated no frontend pela ausência de `termo_cancelamento_assinado_em`.
 
     // Idempotente: se já está vinculada à mesma cotação, ok
     if (sol.cotacao_id && sol.cotacao_id === cotacao_id) {

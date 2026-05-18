@@ -94,12 +94,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
   const handleRealizarCotacao = () => {
     if (!solicitacao) return;
-    if (!solicitacao.termo_cancelamento_assinado_em) {
-      toast.error('Aguardando assinatura do termo de cancelamento pelo titular antigo.');
-      return;
-    }
-    // Abre o modal padrão de cotação pré-preenchido. A cotação só será criada
-    // (e vinculada à solicitação via `vincular-cotacao-troca`) ao salvar.
+    // A cotação pode ser feita em paralelo ao envio do termo de cancelamento.
+    // O LINK PÚBLICO só é liberado para o novo titular após a assinatura do termo
+    // (gate aplicado na rota /cotacao/p/:token).
     setFormCotacaoOpen(true);
   };
 
@@ -179,9 +176,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 ? 'Aguardando assinatura do termo pelo titular antigo'
                 : 'Aguardando processamento';
               const descricao = !termoEnviado
-                ? `O Cadastro precisa abrir a aba "Termo" e enviar o Termo de Cancelamento via Autentique para ${solicitacao.associado_antigo?.nome || 'o titular antigo'}. Assim que ele assinar (biometria facial), a solicitação cai automaticamente em "Aguardando Cadastro" e o botão Aprovar libera neste mesmo drawer.`
+                ? `O Cadastro precisa abrir a aba "Termo" e enviar o Termo de Cancelamento via Autentique para ${solicitacao.associado_antigo?.nome || 'o titular antigo'}. Você já pode adiantar a cotação do novo titular agora — o LINK PÚBLICO só será liberado para ele após a assinatura do termo.`
                 : !termoAssinado
-                ? `Termo enviado em ${solicitacao.termo_cancelamento_enviado_em ? new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR') : '-'}. Após a assinatura por biometria facial, a solicitação migra para "Aguardando Cadastro" e o botão Aprovar libera automaticamente.`
+                ? `Termo enviado em ${solicitacao.termo_cancelamento_enviado_em ? new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR') : '-'}. A cotação pode ser montada agora; o LINK PÚBLICO ao novo titular só abre após a assinatura por biometria facial.`
                 : 'Aguardando o webhook do Autentique migrar a solicitação para Aguardando Cadastro.';
               return (
                 <Alert>
@@ -215,14 +212,25 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
                 {solicitacao.cotacao ? (
-                  <div className="rounded border p-3 flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Termo de Filiação</h4>
-                      <p className="text-xs text-muted-foreground mt-1">Documento assinado pelo novo titular.</p>
+                  <div className="rounded border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Cotação / Termo de Filiação</h4>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {solicitacao.termo_cancelamento_assinado_em
+                            ? 'Link público liberado para o novo titular.'
+                            : 'Cotação criada. Link público bloqueado até a assinatura do termo de cancelamento.'}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => setActiveTab('termo')}>
+                        <ExternalLink className="h-3 w-3 mr-1" /> Ver termo
+                      </Button>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => setActiveTab('termo')}>
-                      <ExternalLink className="h-3 w-3 mr-1" /> Ver termo
-                    </Button>
+                    {!solicitacao.termo_cancelamento_assinado_em && (
+                      <Badge variant="outline" className="text-amber-700 border-amber-600 bg-amber-50">
+                        <AlertTriangle className="h-3 w-3 mr-1" /> Link público bloqueado — aguardando assinatura
+                      </Badge>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded border p-3 space-y-3 bg-muted/30">
@@ -230,32 +238,18 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                       <h4 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Cotação</h4>
                       <p className="text-xs text-muted-foreground mt-1">
                         {solicitacao.termo_cancelamento_assinado_em
-                          ? 'Termo de cancelamento assinado. Clique abaixo para gerar a cotação do novo titular (consulta FIPE atualizada).'
-                          : 'A cotação será gerada manualmente assim que o titular antigo assinar o termo de cancelamento.'}
+                          ? 'Termo de cancelamento assinado. Gere a cotação do novo titular (consulta FIPE atualizada).'
+                          : 'Você pode adiantar a cotação agora. O link público só será liberado para o novo titular após a assinatura do termo de cancelamento pelo titular anterior.'}
                       </p>
                     </div>
-                    {(() => {
-                      const podeGerar = !!solicitacao.termo_cancelamento_assinado_em;
-                      const btn = (
-                        <Button
-                          onClick={handleRealizarCotacao}
-                          disabled={!podeGerar || criandoCotacao}
-                          className="w-full sm:w-auto"
-                        >
-                          {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-                          Realizar Cotação
-                        </Button>
-                      );
-                      if (podeGerar) return btn;
-                      return (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild><span tabIndex={0}>{btn}</span></TooltipTrigger>
-                            <TooltipContent>Aguardando assinatura do termo de cancelamento pelo titular antigo.</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      );
-                    })()}
+                    <Button
+                      onClick={handleRealizarCotacao}
+                      disabled={criandoCotacao}
+                      className="w-full sm:w-auto"
+                    >
+                      {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                      Realizar Cotação
+                    </Button>
                   </div>
                 )}
               </TabsContent>
