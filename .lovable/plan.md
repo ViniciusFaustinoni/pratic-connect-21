@@ -1,31 +1,37 @@
-## Diagnóstico — DOUGLAS / KZK1I95 (sub-FIPE)
+## Diagnóstico — CINTHYA / LPE3902 (Renault Logan 2008, FIPE R$ 17.116 — sub-FIPE)
 
-Estado atual no banco (diferente do que a migration anterior pretendia — os flags voltaram para "aprovado"):
+Estado atual (todos errados para sub-FIPE):
 
-| Entidade | Campo | Valor atual | Esperado (sub-FIPE em Cadastro) |
+| Entidade | Campo | Valor | Esperado |
 |---|---|---|---|
-| `associados` | `status` | `aguardando_aprovacao_monitoramento` | `em_analise` |
-| `contratos` (`ae3b10af`) | `cadastro_aprovado` | `true` | `false` |
-| `contratos` | `aprovado_em` / `aprovado_por` | preenchidos | `NULL` |
-| `veiculos` | `cobertura_roubo_furto` | `true` (R/F já liberado) | `false` (Cadastro libera) |
-| `veiculos` | `cobertura_suspensa` | `true` | `true` (mantém) |
-| `vistorias` (`0b97ef06`) | `status='pendente'`, `modalidade='autovistoria'`, 3 fotos (enxuta) | — | mantém como autovistoria pendente para análise |
-| `servicos` `vistoria_entrada` (`fc91afa8`) | `status='em_analise'`, sem profissional | — | mantém |
+| `associados` (`9d224455`) | `status` | `ativo` | `em_analise` |
+|  | `codigo_hinova` | `30031` (no SGA) | — |
+| `contratos` (`176a17c4`) | `status` | `ativo` | `assinado` |
+|  | `cadastro_aprovado` | `true` (20/04 18:56) | `false` |
+|  | `data_ativacao` | `2026-04-20` | `NULL` |
+| `veiculos` (`31f320c3`) | `status` | `ativo` | `instalacao_pendente` (na prática: sub-FIPE não tem instalação, mas continua não-ativo até Cadastro+Monitoramento aprovarem) |
+|  | `cobertura_roubo_furto` | `true` | `false` (Cadastro libera) |
+|  | `cobertura_total` / `cobertura_suspensa` | `false` / `false` | mantém |
+|  | `codigo_hinova` | `35792` (no SGA) | — |
+| `vistorias` (`13a1033a`) | autovistoria pendente, 3 fotos | — | mantém |
+| `servicos` (`25c63b3e`) | `vistoria_entrada` `agendada`, criado hoje 15:55, sem profissional, sem origem (**fantasma do reprocesso de hoje**) | — | reclassificar para `em_analise` com `origem='autovistoria'`, sem profissional, mesma vistoria — assim entra na fila Cadastro |
+| `instalacoes` / `rastreadores` | nenhum | — | correto (sub-FIPE não exige) |
 
-Resultado: ele pulou Cadastro, foi direto pro Monitoramento com R/F já liberado e cobertura ativa via fluxo enxuta — exatamente o cenário que o sub-FIPE deve impedir.
+A ativação aconteceu em **20/04 18:56** — um mês atrás — pela mesma brecha do KZK1I95 (sub-FIPE + autovistoria enxuta de 3 fotos pulando o Cadastro e indo direto para `ativo`). O reprocesso de hoje 15:55 ainda criou em cima disso um `servicos vistoria_entrada agendada` fantasma.
 
-## Correção (somente este caso — sem mexer em código)
+## Correção (sem mexer em código)
 
-1. `UPDATE associados SET status='em_analise' WHERE id='e1823797-eaf9-4e97-8f20-dd1e7276f485'`
-2. `UPDATE contratos SET cadastro_aprovado=false, aprovado_em=NULL, aprovado_por=NULL WHERE id='ae3b10af-100a-462d-8394-6be39a54d801'`
-3. `UPDATE veiculos SET cobertura_roubo_furto=false, cobertura_total=false, cobertura_suspensa=true WHERE placa='KZK1I95'`
-4. Nota de auditoria nas 3 tabelas: `[2026-05-18] Sub-FIPE: devolvido ao Cadastro — autovistoria enxuta (3 fotos) será reavaliada; Monitoramento decide depois se exige vistoria presencial.`
+1. `UPDATE associados SET status='em_analise' WHERE id='9d224455...'`
+2. `UPDATE contratos SET status='assinado', cadastro_aprovado=false, aprovado_em=NULL, aprovado_por=NULL, data_ativacao=NULL WHERE id='176a17c4...'`
+3. `UPDATE veiculos SET status='instalacao_pendente', cobertura_roubo_furto=false WHERE id='31f320c3...'`
+4. `UPDATE servicos SET status='em_analise', modalidade='autovistoria', origem='autovistoria_publica', vistoria_origem_id='13a1033a-af40-4be6-8f79-5f11e1bfecfe' WHERE id='25c63b3e...'` (alinha o serviço fantasma à vistoria existente para parar de aparecer como agendamento sem profissional)
 
-Após isso, DOUGLAS aparece em **Cadastro › Propostas/Análise** com a autovistoria pendente. Quando o Cadastro aprovar manualmente, R/F é liberado e o veículo segue para o Monitoramento como o fluxo canônico sub-FIPE.
+Resultado: CINTHYA volta a aparecer em **Cadastro › Propostas/Análise** com a autovistoria enxuta pendente; quando o Cadastro aprovar, R/F é liberado e Monitoramento decide se exige vistoria presencial.
 
-## O que NÃO está no escopo deste plano (pergunto antes de seguir)
+## Avisos importantes (preciso da sua orientação antes de aplicar)
 
-- **SGA Hinova**: o veículo já foi promovido a ATIVO manualmente no painel. Quer que eu rebaixe (`alterar-situacao-para 3 = PENDENTE`) para associado e veículo?
-- **Causa raiz no link público** (gate da autovistoria enxuta passando em sub-FIPE): quer que eu investigue/feche a brecha em `finalizar-autovistoria-cotacao` para impedir que se repita?
+- **SGA Hinova**: associado=30031 e veículo=35792 já foram promovidos a ATIVO no painel desde 20/04. Quer que eu rebaixe para PENDENTE (3) via `alterar-situacao-para` para alinhar?
+- **Mensalidades / faturamento**: o contrato está ativo há ~30 dias, com `dia_vencimento=30`. Qualquer mensalidade já emitida/paga neste período permanece como está — esta correção só rebobina o fluxo operacional. Quer que eu liste o que existe em `boletos`/`cobrancas` antes de mexer?
+- **Causa raiz**: já apareceu nos 3 casos (KZK1I95, e agora LPE3902). Posso investigar `finalizar-autovistoria-cotacao` para fechar a brecha que deixa sub-FIPE com 3 fotos pular o Cadastro?
 
-Responda "aplica" para rodar a correção do DOUGLAS, e diga se quer que eu inclua SGA e/ou causa raiz.
+Responda "aplica" para rodar a correção do LPE3902, e diga se quer SGA / lista de cobranças / causa raiz junto.
