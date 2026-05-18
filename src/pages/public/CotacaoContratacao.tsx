@@ -340,6 +340,20 @@ export default function CotacaoContratacao() {
     cotacao,
   ]);
 
+  // STEPS dinâmico: autovistoria adiciona "Instalação" como 6ª etapa
+  const STEPS = useMemo<Step[]>(() => {
+    if (cotacao?.tipo_vistoria === 'autovistoria') {
+      return [...STEPS_BASE, STEP_INSTALACAO];
+    }
+    return STEPS_BASE;
+  }, [cotacao?.tipo_vistoria]);
+
+  // Ordem de navegação por índices INTERNOS:
+  // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
+  const navOrder = useMemo<number[]>(() => [0, 1, 2, 3, 4, 5], []);
+
+
+
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
 
