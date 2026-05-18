@@ -54,7 +54,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         .select(`
           *,
           profissional:profissional_id(id, nome),
-          veiculo:veiculo_id(id, placa, marca, modelo, ano_modelo, cor, valor_fipe, combustivel, cobertura_roubo_furto, cobertura_total),
+          veiculo:veiculo_id(id, placa, chassi, marca, modelo, ano_modelo, cor, valor_fipe, combustivel, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(id, nome, cpf, telefone, email, whatsapp, status)
         `)
         .eq('id', servicoId)
