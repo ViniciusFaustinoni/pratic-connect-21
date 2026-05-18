@@ -313,15 +313,13 @@ export default function Cotacoes() {
       }
 
       let matchesEtapa = true;
-      if (etapaFunilFilter !== 'all') {
-        if (etapaFunilFilter === 'rascunho') {
-          // Rascunho puro = sem etapa derivada
-          matchesEtapa = cotacao.status === 'rascunho' && getEtapaVenda(cotacao) === null;
-        } else if (etapaFunilFilter === 'expirada') {
-          matchesEtapa = cotacao.status === 'expirada';
-        } else {
-          matchesEtapa = getEtapaVenda(cotacao) === (etapaFunilFilter as EtapaVenda);
-        }
+      if (etapaFunilFilter.length > 0) {
+        const etapaAtual = getEtapaVenda(cotacao);
+        matchesEtapa = etapaFunilFilter.some((sel) => {
+          if (sel === 'rascunho') return cotacao.status === 'rascunho' && etapaAtual === null;
+          if (sel === 'expirada') return cotacao.status === 'expirada';
+          return etapaAtual === (sel as EtapaVenda);
+        });
       }
 
       return matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
