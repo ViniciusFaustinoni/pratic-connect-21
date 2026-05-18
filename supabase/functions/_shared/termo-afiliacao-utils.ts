@@ -360,6 +360,20 @@ function inferirCambio(modelo: string | null | undefined): string {
 }
 
 /**
+ * Converte o valor canônico do banco ('manual'/'automatico') na forma exibida no termo.
+ * Aceita também sinônimos textuais ("AUT", "CVT", "MEC"...) caso o snapshot venha cru.
+ * Retorna null quando não há informação útil — o caller cai para `inferirCambio`.
+ */
+function formatarCambio(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim().toUpperCase();
+  if (!s) return null;
+  if (/(MANUAL|^MEC|MECANICO|MECÂNICO|^MT$)/.test(s)) return 'Manual';
+  if (/(AUTOMATIC|^AUT|AT$|CVT|EASYTRONIC|DCT|TIPTRONIC|S-?TRONIC|MULTIDRIVE|DUALOGIC|I-?MOTION|AUTOMATIZAD|POWERSHIFT|DSG|PDK|EDC|XTRONIC|LINEARTRONIC|SKYACTIV-?DRIVE|MULTITRONIC|STEPTRONIC|E-?CVT|DIRECT-?SHIFT)/.test(s)) return 'Automático';
+  return null;
+}
+
+/**
  * Resolve a CATEGORIA do CRLV (Particular/Aluguel) a partir dos dados disponíveis.
  * Regra acordada com o usuário:
  *  - uso_aplicativo = true  → "Aluguel"  (Uber/99/táxi/uso comercial via app)
