@@ -360,8 +360,10 @@ export function ExportAssociadosDialog({
                     ))
                   ) : null}
                   {planoNome && <Badge variant="secondary">Plano: {planoNome}</Badge>}
-                  {screenFilters.cidade && <Badge variant="secondary">Cidade: {screenFilters.cidade}</Badge>}
-                  {!screenFilters.status?.length && !planoNome && !screenFilters.cidade && (
+                  {screenFilters.cidade && (Array.isArray(screenFilters.cidade) ? screenFilters.cidade.length > 0 : true) && (
+                    <Badge variant="secondary">Cidade: {Array.isArray(screenFilters.cidade) ? screenFilters.cidade.join(', ') : screenFilters.cidade}</Badge>
+                  )}
+                  {!screenFilters.status?.length && !planoNome && !(screenFilters.cidade && (Array.isArray(screenFilters.cidade) ? screenFilters.cidade.length > 0 : true)) && (
                     <p className="text-xs text-muted-foreground">Nenhum filtro ativo na tela.</p>
                   )}
                 </div>
