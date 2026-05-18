@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CpfInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
+import { TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { Loader2, Users, Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -36,7 +36,7 @@ export function TrocaTitularidadeDialog({
 }: TrocaTitularidadeDialogProps) {
   const navigate = useNavigate();
   const [nome, setNome] = useState('');
-  const [cpf, setCpf] = useState('');
+  // CPF do novo titular é capturado depois via OCR da CNH no link público
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [veiculoId, setVeiculoId] = useState<string | null>(null);
@@ -120,7 +120,7 @@ export function TrocaTitularidadeDialog({
   useEffect(() => {
     if (!open) {
       setVeiculoId(null);
-      setNome(''); setCpf(''); setEmail(''); setTelefone('');
+      setNome(''); setEmail(''); setTelefone('');
       setSyncErro(null);
       setSincronizando(false);
     }
@@ -216,8 +216,8 @@ export function TrocaTitularidadeDialog({
   }, [open, cpfAntigo, semCodigoHinova, semEspelhoLocal, sga.isLoading, sincronizando]);
 
   const handleSubmit = async () => {
-    if (!nome.trim() || !cpf.trim() || !veiculoId) {
-      toast.error('Preencha nome, CPF e selecione o veículo');
+    if (!nome.trim() || !veiculoId) {
+      toast.error('Preencha o nome do novo titular e selecione o veículo');
       return;
     }
     try {
@@ -230,7 +230,7 @@ export function TrocaTitularidadeDialog({
         associado_antigo_id: associadoId,
         veiculo_id: veiculoId,
         veiculo_placa: placaFallback || undefined,
-        novo_titular: { nome: nome.trim(), cpf: cpf.trim(), email: email.trim() || undefined, telefone: telefone.trim() || undefined },
+        novo_titular: { nome: nome.trim(), email: email.trim() || undefined, telefone: telefone.trim() || undefined },
       });
       if ((result as any)?.termo_enviado_automaticamente === false) {
         toast.warning('Solicitação criada, mas o envio automático do termo de cancelamento falhou. Reenvie pelo modal de detalhes da solicitação.');
@@ -342,10 +342,6 @@ export function TrocaTitularidadeDialog({
             <Input id="novo-titular-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="novo-titular-cpf">CPF do novo titular *</Label>
-            <CpfInput value={cpf} onChange={setCpf} id="novo-titular-cpf" />
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="novo-titular-email">Email</Label>

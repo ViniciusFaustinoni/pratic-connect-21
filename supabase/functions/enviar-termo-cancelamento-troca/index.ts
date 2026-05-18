@@ -158,7 +158,10 @@ Deno.serve(async (req) => {
     const yyyy = hoje.getFullYear();
     const dataAtualBr = `${dd}/${mm}/${yyyy}`;
     const dataExtenso = hoje.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const motivoTxt = `Troca de titularidade para ${novoTitular?.nome || '___'} (CPF ${formatCPF(novoTitular?.cpf)}).`;
+    const cpfNovoLimpo = (novoTitular?.cpf || '').replace(/\D/g, '');
+    const motivoTxt = cpfNovoLimpo.length === 11
+      ? `Troca de titularidade para ${novoTitular?.nome || '___'} (CPF ${formatCPF(novoTitular?.cpf)}).`
+      : `Troca de titularidade para ${novoTitular?.nome || '___'}.`;
 
     const variaveis: Record<string, string> = {
       'associado.nome': associadoAntigo.nome || '___',

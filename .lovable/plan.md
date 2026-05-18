@@ -1,59 +1,48 @@
-# Reprocessamento — LMF8I79 (Fiat Siena Tetrafuel / contrato 8455c419…)
+## Objetivo
 
-## Contexto confirmado no banco
+Remover o campo **CPF do novo titular** do modal de Troca de Titularidade. A solicitação nasce só com **nome + e-mail + telefone** do novo titular. O CPF é capturado automaticamente quando o novo titular acessa o link público e envia a CNH (mesmo padrão do fluxo **Inclusão automática por CNH**).
 
-- **Veículo** `34051e8c…` — `instalacao_pendente` (carro, FIPE **R$ 31.935 ≥ 30k → exige rastreador**)
-- **Contrato** `8455c419…` — `assinado`, `cadastro_aprovado=true`, `cobertura_suspensa=false`
-- **Cotação** `306dd82b…`
-- **Instalação antiga** `42f3ea62…` (28/04) — `nao_compareceu`, sem rastreador
-- **Serviço antigo** `ce71a651…` (instalacao 28/04) — `nao_compareceu`
-- **Reagendamento atual**: **não existe** registro vivo em `instalacoes`/`servicos` (apenas o histórico de 28/04). O técnico instalou hoje sem materialização prévia.
-- **Rastreador 865209074423352** (Softruck): não existia no nosso DB — **acabou de ser importado** via `softruck-buscar-dispositivo` → `6845fe77-8875-429a-bd5f-eec0539d6344`, status `estoque`, sem vínculo.
+Não há mudança no banco — `novo_titular_dados.cpf` já é um JSON livre e os consumidores downstream já têm caminhos para CPF ausente (apenas precisam ser ajustados para não bloquear).
 
-## Estratégia (idêntica ao reprocessamento do KOA4D63)
+---
 
-Manter o histórico do `nao_compareceu` intacto e materializar a instalação de hoje numa nova linha + serviço, depois empurrar para a fila canônica do Monitoramento.
+## Alterações
 
-### Etapa 1 — Vincular rastreador
+### 1. Frontend — `src/components/associados/TrocaTitularidadeDialog.tsx`
+- Remover o estado `cpf`, o `<Label>` e o `<CpfInput>` (linhas 39, 346-348).
+- Remover o `cpf` da validação do `handleSubmit` (linha 219): exigir apenas nome + veículo.
+- No payload de `criar.mutateAsync` (linha 233): enviar `cpf: ''` (string vazia) — o backend tornará isso aceitável.
+- Remover o import `CpfInput` se não for mais usado.
 
-`UPDATE rastreadores 6845fe77…`:
-- `veiculo_id = 34051e8c…`
-- `associado_id = 7840efc0…`
-- `status = 'instalado'`
-- `dados_extras += { reprocessamento_manual: { em, motivo, placa, contrato_id } }`
+### 2. Frontend — `src/hooks/useSolicitacoesTroca.ts`
+- Linha 159: tipar `novo_titular: { nome: string; cpf?: string; ... }` (cpf opcional).
 
-Guard: aborta se já estiver em outro veículo.
+### 3. Backend — `supabase/functions/criar-solicitacao-troca-titularidade/index.ts`
+- Linha 56: remover `|| !novo_titular?.cpf` da validação de obrigatoriedade. Manter apenas `nome` como obrigatório.
+- Normalizar `novo_titular.cpf` para `null`/`""` antes de gravar (não bloquear).
 
-### Etapa 2 — Materializar instalação concluída de hoje
+### 4. Backend — `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
+- Linha 161: quando CPF do novo titular estiver vazio, gerar texto sem o trecho "(CPF xxx)" — algo como `Troca de titularidade para FULANO.` em vez de `Troca de titularidade para FULANO (CPF ___).`.
 
-`INSERT INTO instalacoes`:
-- `contrato_id`, `cotacao_id`, `veiculo_id`, `associado_id`, `rastreador_id`, `imei_rastreador='865209074423352'`
-- `data_agendada = CURRENT_DATE`, `periodo = 'tarde'`
-- `status = 'concluida'`, `iniciada_em = concluida_em = now()`
-- `historico_datas = '[]'::jsonb`, `dispensa_rastreador = false`
-- `observacoes` = "Reprocessamento manual 18/05/2026 — instalação física confirmada com rastreador Softruck IMEI 865209074423352."
+### 5. Backend — `supabase/functions/analisar-novo-titular-troca/index.ts`
+- Já trata CPF ausente graciosamente (linhas 80-82). **Sem alteração.** A análise prévia rodará vazia inicialmente e será reaproveitada/re-executada quando o link público preencher o CPF via CNH.
 
-`INSERT INTO servicos` (vistoria_entrada já concluida, idêntico ao padrão do prestador):
-- `tipo='vistoria_entrada'`, `status='concluida'`, `modalidade='presencial'`, `local_vistoria='cliente'`, `periodo='tarde'`
-- `rastreador_id`, `imei_rastreador`, `iniciada_em = concluida_em = now()`
-- `instalacao_origem_id` = id da instalação criada na etapa anterior
+### 6. UI de detalhes — `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+- Linha 214: o template `CPF: ${formatCPF(...)}` já lida com vazio (mostra traço). Apenas verificar visualmente que fica aceitável; sem mudança de código necessária.
 
-Guard de DB `trg_guard_instalacao_concluida_exige_rastreador` passa porque o rastreador já está vinculado.
+---
 
-### Etapa 3 — Acionar Softruck
+## Não-objetivos
 
-Chamar `softruck-ativar-dispositivo` com `{imei: '865209074423352', veiculoId, associadoId}` para garantir vínculo device↔veículo na Softruck (idempotente).
+- Não mudar schema do banco (`novo_titular_dados` continua jsonb livre).
+- Não alterar `efetivar-troca-titularidade` — ele já resolve o CPF a partir do `novo_associado_id` criado pelo link público (CNH → associado), não depende de `novo_titular_dados.cpf` para essa etapa.
+- Não mexer na lógica de bloqueio anti-sequestro (comparação por nome continua valendo).
 
-### Etapa 4 — Aprovação manual no Monitoramento
+---
 
-Não auto-ativar. Veículo continuará `instalacao_pendente` (cobertura nunca foi suspensa). O caso passa a aparecer em **Monitoramento › Aprovações › Aprovação de Associados** pelo serviço/instalação concluídos hoje. Operador clica **Aprovar** → `ativar-associado` promove para `ativo` (lock + CAS + log + guard rastreador-físico).
+## Validação manual depois
 
-## Riscos e validação
-
-- **Duplicação na fila** — não há autovistoria nem outra vistoria pendente, então só aparece este caso.
-- **Cron `reconciliar-contratos-pos-monitoramento`** — pode tentar promover; guard `trg_guard_veiculo_ativo_exige_rastreador` exige rastreador, que já estará vinculado. Sem risco.
-- **Softruck offline / IMEI em outro cliente** — `softruck-ativar-dispositivo` retorna erro; rollback manual se necessário. Conforme `softruck-buscar-dispositivo`, o IMEI está livre no Softruck (sem cliente/veículo vinculado lá).
-
-## Confirmação que peço
-
-A instalação física foi de fato **hoje 18/05/2026** com este IMEI? Se sim, executo as 3 etapas (UPDATE rastreador + INSERT instalação + serviço + chamada softruck-ativar) e te entrego para clicar Aprovar na fila.
+1. Abrir Troca de Titularidade pelo modal → o campo CPF não aparece mais.
+2. Criar solicitação só com nome + telefone → cotação criada com sucesso.
+3. Termo de cancelamento WhatsApp/Autentique chega no titular antigo sem "(CPF ___)" feio.
+4. Fluxo Cadastro → Monitoramento → link público OCR CNH preenche CPF e segue normalmente até efetivar.

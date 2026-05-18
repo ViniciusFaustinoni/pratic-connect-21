@@ -9,7 +9,7 @@ const corsHeaders = {
 
 interface NovoTitularDados {
   nome: string;
-  cpf: string;
+  cpf?: string; // opcional — capturado depois via OCR da CNH no link público
   email?: string;
   telefone?: string;
 }
@@ -53,11 +53,17 @@ Deno.serve(async (req) => {
     const body: RequestBody = await req.json();
     const { associado_antigo_id, veiculo_id, veiculo_placa, novo_titular } = body;
 
-    if (!associado_antigo_id || (!veiculo_id && !veiculo_placa) || !novo_titular?.nome || !novo_titular?.cpf) {
+    if (!associado_antigo_id || (!veiculo_id && !veiculo_placa) || !novo_titular?.nome) {
       return new Response(JSON.stringify({ error: 'Dados incompletos' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // CPF do novo titular é capturado depois via OCR da CNH no link público —
+    // normaliza para string vazia para não quebrar consumidores downstream.
+    if (novo_titular) {
+      novo_titular.cpf = (novo_titular.cpf || '').replace(/\D/g, '');
     }
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
