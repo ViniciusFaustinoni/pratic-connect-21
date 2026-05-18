@@ -33,6 +33,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +55,7 @@ import { usePlanos } from '@/hooks/usePlanos';
 import { useVendedores } from '@/hooks/useVendedores';
 
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
+import { MultiSelectFilter } from '@/components/cadastro/MultiSelectFilter';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -105,9 +109,9 @@ export default function Associados() {
   // State
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput, 350);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [planoFilter, setPlanoFilter] = useState<string>('all');
-  const [cidadeFilter, setCidadeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusAssociado[]>([]);
+  const [planoFilter, setPlanoFilter] = useState<string[]>([]);
+  const [cidadeFilter, setCidadeFilter] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   
@@ -130,15 +134,22 @@ export default function Associados() {
     tipos_entrada?: string[];
   }>({});
 
-  // Construir filtros server-side
-  const serverStatusList = useMemo(() => {
+  // Construir filtros server-side (suporta multi-seleção)
+  const serverStatusList = useMemo<StatusAssociado[] | undefined>(() => {
     if (sheetFilters.status?.length) return sheetFilters.status;
-    if (statusFilter !== 'all') return [statusFilter as StatusAssociado];
+    if (statusFilter.length) return statusFilter;
     return undefined;
   }, [sheetFilters.status, statusFilter]);
 
-  const serverPlanoId = sheetFilters.plano_id || (planoFilter !== 'all' ? planoFilter : undefined);
-  const serverCidade = sheetFilters.cidade || (cidadeFilter !== 'all' ? cidadeFilter : undefined);
+  const serverPlanoId = useMemo<string | string[] | undefined>(() => {
+    if (sheetFilters.plano_id) return sheetFilters.plano_id;
+    return planoFilter.length ? planoFilter : undefined;
+  }, [sheetFilters.plano_id, planoFilter]);
+
+  const serverCidade = useMemo<string | string[] | undefined>(() => {
+    if (sheetFilters.cidade) return sheetFilters.cidade;
+    return cidadeFilter.length ? cidadeFilter : undefined;
+  }, [sheetFilters.cidade, cidadeFilter]);
 
   // Queries
   const { data, isLoading, isFetching } = useAssociados({
@@ -157,11 +168,13 @@ export default function Associados() {
   const associados = data?.associados;
   const serverTotal = data?.pagination.total ?? 0;
   const serverTotalPages = data?.pagination.totalPages ?? 1;
-  // Contagem reflete os MESMOS filtros server-side da listagem (KPIs coerentes com tabela)
+  // Contagem aceita string único; quando multi-selecionado, omitimos para não distorcer o KPI
+  const contagemPlanoId = typeof serverPlanoId === 'string' ? serverPlanoId : undefined;
+  const contagemCidade = typeof serverCidade === 'string' ? serverCidade : undefined;
   const { data: contagem } = useAssociadosContagem({
     search: search || undefined,
-    plano_id: serverPlanoId,
-    cidade: serverCidade,
+    plano_id: contagemPlanoId,
+    cidade: contagemCidade,
     data_adesao_inicio: sheetFilters.data_adesao_inicio,
     data_adesao_fim: sheetFilters.data_adesao_fim,
     vendedor_id: sheetFilters.vendedor_id,
@@ -179,13 +192,13 @@ export default function Associados() {
   }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade, sheetFilters.data_adesao_inicio, sheetFilters.data_adesao_fim, sheetFilters.vendedor_id, sheetFilters.tipos_entrada]);
 
   // Check if any filter is active
-  const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
+  const hasFilters = !!search || statusFilter.length > 0 || planoFilter.length > 0 || cidadeFilter.length > 0 || Object.keys(sheetFilters).length > 0;
 
   // Count active filters
   const activeFilterCount = [
-    statusFilter !== 'all',
-    planoFilter !== 'all',
-    cidadeFilter !== 'all',
+    statusFilter.length > 0,
+    planoFilter.length > 0,
+    cidadeFilter.length > 0,
     ...(sheetFilters.status?.length ? [true] : []),
     sheetFilters.plano_id ? true : false,
     sheetFilters.cidade ? true : false,
@@ -203,31 +216,42 @@ export default function Associados() {
   const startIndex = serverTotal === 0 ? 0 : (page - 1) * pageSize + 1;
   const endIndex = Math.min(page * pageSize, serverTotal);
 
-  // Reset page when filters change
-  const handleFilterChange = (setter: (value: string) => void, value: string) => {
-    setter(value);
+  // Helpers multi-seleção
+  const toggleInArray = <T extends string>(arr: T[], value: T): T[] =>
+    arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+
+  const toggleStatus = (value: StatusAssociado) => {
+    setStatusFilter((prev) => toggleInArray(prev, value));
+    setPage(1);
+  };
+  const togglePlano = (value: string) => {
+    setPlanoFilter((prev) => toggleInArray(prev, value));
+    setPage(1);
+  };
+  const toggleCidade = (value: string) => {
+    setCidadeFilter((prev) => toggleInArray(prev, value));
     setPage(1);
   };
 
   const clearFilters = () => {
     setSearchInput('');
-    setStatusFilter('all');
-    setPlanoFilter('all');
-    setCidadeFilter('all');
+    setStatusFilter([]);
+    setPlanoFilter([]);
+    setCidadeFilter([]);
     setSheetFilters({});
     setPage(1);
   };
 
   const handleApplySheetFilters = (filters: typeof sheetFilters) => {
     setSheetFilters(filters);
-    if (filters.status?.length === 1) {
-      setStatusFilter(filters.status[0]);
+    if (filters.status?.length) {
+      setStatusFilter(filters.status);
     }
     if (filters.plano_id) {
-      setPlanoFilter(filters.plano_id);
+      setPlanoFilter([filters.plano_id]);
     }
     if (filters.cidade) {
-      setCidadeFilter(filters.cidade);
+      setCidadeFilter([filters.cidade]);
     }
     setPage(1);
   };
@@ -493,7 +517,9 @@ export default function Associados() {
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {metricsCards.map((card, index) => {
             const Icon = card.icon;
-            const isSelected = (card.key === 'all' && statusFilter === 'all') || statusFilter === card.key;
+            const isSelected =
+              (card.key === 'all' && statusFilter.length === 0) ||
+              (card.key !== 'all' && statusFilter.includes(card.key as StatusAssociado));
             return (
               <motion.div
                 key={card.key}
@@ -507,10 +533,11 @@ export default function Associados() {
                   }`}
                   onClick={() => {
                     if (card.key === 'all') {
-                      setStatusFilter('all');
+                      setStatusFilter([]);
                       setSheetFilters({});
                     } else {
-                      setStatusFilter(statusFilter === card.key ? 'all' : card.key);
+                      toggleStatus(card.key as StatusAssociado);
+                      return;
                     }
                     setPage(1);
                   }}
@@ -555,41 +582,36 @@ export default function Associados() {
           </div>
           
           <div className="hidden md:flex flex-wrap items-center gap-2">
-            <Select value={statusFilter} onValueChange={(v) => handleFilterChange(setStatusFilter, v)}>
-              <SelectTrigger className="w-[150px] h-9 text-xs bg-card">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                {Object.entries(STATUS_ASSOCIADO_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="status"
+              placeholderAll="Todos os status"
+              selected={statusFilter}
+              options={Object.entries(STATUS_ASSOCIADO_LABELS).map(([value, label]) => ({ value, label }))}
+              onToggle={(v) => toggleStatus(v as StatusAssociado)}
+              onClear={() => { setStatusFilter([]); setPage(1); }}
+              width="w-[150px]"
+            />
 
-            <Select value={planoFilter} onValueChange={(v) => handleFilterChange(setPlanoFilter, v)}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-card">
-                <SelectValue placeholder="Plano" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os planos</SelectItem>
-                {planos?.map((plano) => (
-                  <SelectItem key={plano.id} value={plano.id}>{plano.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="plano"
+              placeholderAll="Todos os planos"
+              selected={planoFilter}
+              options={(planos ?? []).map((p) => ({ value: p.id, label: p.nome }))}
+              onToggle={togglePlano}
+              onClear={() => { setPlanoFilter([]); setPage(1); }}
+              width="w-[160px]"
+            />
 
-            <Select value={cidadeFilter} onValueChange={(v) => handleFilterChange(setCidadeFilter, v)}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-card">
-                <SelectValue placeholder="Cidade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as cidades</SelectItem>
-                {cidades?.map((cidade) => (
-                  <SelectItem key={cidade} value={cidade}>{cidade}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="cidade"
+              placeholderAll="Todas as cidades"
+              selected={cidadeFilter}
+              options={(cidades ?? []).map((c) => ({ value: c, label: c }))}
+              onToggle={toggleCidade}
+              onClear={() => { setCidadeFilter([]); setPage(1); }}
+              width="w-[160px]"
+              searchable
+            />
 
             {hasFilters && (
               <Button variant="ghost" onClick={clearFilters} size="sm" className="h-9 text-xs text-destructive hover:text-destructive">

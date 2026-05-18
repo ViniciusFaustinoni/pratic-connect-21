@@ -24,8 +24,8 @@ import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database'
 
 interface ScreenFilters {
   status?: StatusAssociado[];
-  plano_id?: string;
-  cidade?: string;
+  plano_id?: string | string[];
+  cidade?: string | string[];
   data_adesao_inicio?: string;
   data_adesao_fim?: string;
 }
@@ -114,8 +114,13 @@ export function ExportAssociadosDialog({
   }, [open, screenFilters.data_adesao_inicio, screenFilters.data_adesao_fim]);
 
   const planoNome = useMemo(() => {
-    if (!screenFilters.plano_id) return null;
-    return planos?.find(p => p.id === screenFilters.plano_id)?.nome ?? screenFilters.plano_id;
+    const pid = screenFilters.plano_id;
+    if (!pid) return null;
+    if (Array.isArray(pid)) {
+      if (pid.length === 0) return null;
+      return pid.map(id => planos?.find(p => p.id === id)?.nome ?? id).join(', ');
+    }
+    return planos?.find(p => p.id === pid)?.nome ?? pid;
   }, [screenFilters.plano_id, planos]);
 
   const aplicarAtalho = (tipo: 'hoje' | '7dias' | 'mes_atual' | 'mes_passado' | '3meses' | 'ano' | 'tudo') => {
@@ -179,8 +184,20 @@ export function ExportAssociadosDialog({
 
         if (usarFiltrosTela) {
           if (screenFilters.status?.length) q = q.in('status', screenFilters.status);
-          if (screenFilters.plano_id) q = q.eq('plano_id', screenFilters.plano_id);
-          if (screenFilters.cidade) q = q.eq('cidade', screenFilters.cidade);
+          if (screenFilters.plano_id) {
+            if (Array.isArray(screenFilters.plano_id)) {
+              if (screenFilters.plano_id.length) q = q.in('plano_id', screenFilters.plano_id);
+            } else {
+              q = q.eq('plano_id', screenFilters.plano_id);
+            }
+          }
+          if (screenFilters.cidade) {
+            if (Array.isArray(screenFilters.cidade)) {
+              if (screenFilters.cidade.length) q = q.in('cidade', screenFilters.cidade);
+            } else {
+              q = q.eq('cidade', screenFilters.cidade);
+            }
+          }
         }
         return q.order('created_at', { ascending: false });
       };
@@ -343,8 +360,10 @@ export function ExportAssociadosDialog({
                     ))
                   ) : null}
                   {planoNome && <Badge variant="secondary">Plano: {planoNome}</Badge>}
-                  {screenFilters.cidade && <Badge variant="secondary">Cidade: {screenFilters.cidade}</Badge>}
-                  {!screenFilters.status?.length && !planoNome && !screenFilters.cidade && (
+                  {screenFilters.cidade && (Array.isArray(screenFilters.cidade) ? screenFilters.cidade.length > 0 : true) && (
+                    <Badge variant="secondary">Cidade: {Array.isArray(screenFilters.cidade) ? screenFilters.cidade.join(', ') : screenFilters.cidade}</Badge>
+                  )}
+                  {!screenFilters.status?.length && !planoNome && !(screenFilters.cidade && (Array.isArray(screenFilters.cidade) ? screenFilters.cidade.length > 0 : true)) && (
                     <p className="text-xs text-muted-foreground">Nenhum filtro ativo na tela.</p>
                   )}
                 </div>
