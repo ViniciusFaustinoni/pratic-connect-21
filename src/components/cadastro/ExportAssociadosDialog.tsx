@@ -114,8 +114,13 @@ export function ExportAssociadosDialog({
   }, [open, screenFilters.data_adesao_inicio, screenFilters.data_adesao_fim]);
 
   const planoNome = useMemo(() => {
-    if (!screenFilters.plano_id) return null;
-    return planos?.find(p => p.id === screenFilters.plano_id)?.nome ?? screenFilters.plano_id;
+    const pid = screenFilters.plano_id;
+    if (!pid) return null;
+    if (Array.isArray(pid)) {
+      if (pid.length === 0) return null;
+      return pid.map(id => planos?.find(p => p.id === id)?.nome ?? id).join(', ');
+    }
+    return planos?.find(p => p.id === pid)?.nome ?? pid;
   }, [screenFilters.plano_id, planos]);
 
   const aplicarAtalho = (tipo: 'hoje' | '7dias' | 'mes_atual' | 'mes_passado' | '3meses' | 'ano' | 'tudo') => {
