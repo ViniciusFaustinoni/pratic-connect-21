@@ -36,7 +36,7 @@ export function TrocaTitularidadeDialog({
 }: TrocaTitularidadeDialogProps) {
   const navigate = useNavigate();
   const [nome, setNome] = useState('');
-  const [cpf, setCpf] = useState('');
+  // CPF do novo titular é capturado depois via OCR da CNH no link público
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [veiculoId, setVeiculoId] = useState<string | null>(null);
