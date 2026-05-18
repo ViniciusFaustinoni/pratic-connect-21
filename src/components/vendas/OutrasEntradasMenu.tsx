@@ -208,12 +208,20 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     const map = new Map<string, AssociadoSearchResult>();
     // Prioriza resultado por placa (SGA) no topo
     (placaResults || []).forEach(p => {
+      const codigoHinovaNum = Number(p.associadoId);
       map.set(p.associadoId, {
         id: p.associadoId,
         nome: p.associadoNome,
         cpf: p.associadoCpf,
         telefone: null,
         status: p.associadoStatus,
+        // Resultado de busca por placa vem do SGA — precisa importar para obter
+        // o UUID local antes de abrir o dialog de Troca de Titularidade, senão
+        // `associadoId` fica como código Hinova numérico e o dialog não consegue
+        // listar veículos (causa do "Nenhum veículo encontrado").
+        origem_sga: true,
+        codigo_associado: Number.isFinite(codigoHinovaNum) ? codigoHinovaNum : undefined,
+        codigo_hinova: Number.isFinite(codigoHinovaNum) ? codigoHinovaNum : null,
       });
     });
     (associadoResults || []).forEach(a => {
