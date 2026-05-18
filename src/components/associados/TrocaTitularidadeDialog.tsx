@@ -230,7 +230,7 @@ export function TrocaTitularidadeDialog({
         associado_antigo_id: associadoId,
         veiculo_id: veiculoId,
         veiculo_placa: placaFallback || undefined,
-        novo_titular: { nome: nome.trim(), cpf: cpf.trim(), email: email.trim() || undefined, telefone: telefone.trim() || undefined },
+        novo_titular: { nome: nome.trim(), email: email.trim() || undefined, telefone: telefone.trim() || undefined },
       });
       if ((result as any)?.termo_enviado_automaticamente === false) {
         toast.warning('Solicitação criada, mas o envio automático do termo de cancelamento falhou. Reenvie pelo modal de detalhes da solicitação.');
