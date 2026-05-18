@@ -164,14 +164,22 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
         }
       }
 
-      // Filtro por plano
+      // Filtro por plano (pode ser array)
       if (filters?.plano_id) {
-        query = query.eq('plano_id', filters.plano_id);
+        if (Array.isArray(filters.plano_id)) {
+          if (filters.plano_id.length > 0) query = query.in('plano_id', filters.plano_id);
+        } else {
+          query = query.eq('plano_id', filters.plano_id);
+        }
       }
 
-      // Filtro por cidade
+      // Filtro por cidade (pode ser array)
       if (filters?.cidade) {
-        query = query.eq('cidade', filters.cidade);
+        if (Array.isArray(filters.cidade)) {
+          if (filters.cidade.length > 0) query = query.in('cidade', filters.cidade);
+        } else {
+          query = query.eq('cidade', filters.cidade);
+        }
       }
 
       // Filtro por estado
