@@ -244,14 +244,31 @@ export default function CotacaoContratacao() {
   // Determinar etapa baseada no status para saber o que está concluído
   // IMPORTANTE: Se tipo_vistoria já está preenchido, considera vistoria como concluída (etapa 4+)
   const etapaDoStatus = useMemo(() => {
-    if (!cotacao?.status_contratacao) return 0;
+    // Sempre derivar a "etapa mínima alcançada" a partir dos sinais reais
+    // (plano_escolhido_id, tipo_vistoria, agendamentos, etc). Isso protege
+    // contra status_contratacao desconhecidos/regredidos que antes faziam a
+    // página voltar para a etapa 0.
+    let etapaPorSinais = 0;
+    for (let i = 5; i >= 0; i--) {
+      if (isEtapaConcluida(i)) {
+        // Se etapa i está concluída, a etapa "atual" é no mínimo i+1 (limitado a 5)
+        etapaPorSinais = Math.min(i + 1, 5);
+        break;
+      }
+    }
 
-    const etapaBase = determinarEtapa(cotacao.status_contratacao);
+    const etapaBase = cotacao?.status_contratacao
+      ? determinarEtapa(cotacao.status_contratacao)
+      : -1;
+
+    // Quando determinarEtapa retorna -1 (status desconhecido) usa fallback por sinais.
+    // Quando retorna valor menor que o derivado por sinais, usa o maior (não regredir).
+    let etapaFinal = etapaBase >= 0 ? Math.max(etapaBase, etapaPorSinais) : etapaPorSinais;
 
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
-    if (etapaBase === 3 && cotacao.tipo_vistoria) {
-      return 4;
+    if (etapaFinal === 3 && cotacao?.tipo_vistoria) {
+      etapaFinal = 4;
     }
 
     // AUTOVISTORIA ANTECIPADA + RASTREADOR OBRIGATÓRIO:
@@ -259,9 +276,9 @@ export default function CotacaoContratacao() {
     // exige instalação física do rastreador. Se ainda NÃO há instalação/agendamento,
     // forçar a etapa Instalação (índice 5) para o cliente agendar a visita do técnico.
     if (
-      cotacao.tipo_vistoria === 'autovistoria' &&
-      ['aguardando_aprovacao_monitoramento', 'vistoria_concluida', 'pagamento_ok'].includes(
-        cotacao.status_contratacao
+      cotacao?.tipo_vistoria === 'autovistoria' &&
+      ['aguardando_aprovacao_monitoramento', 'vistoria_concluida', 'pagamento_ok', 'autovistoria_ok', 'cadastro_aprovado', 'monitoramento_aprovado'].includes(
+        cotacao.status_contratacao || ''
       )
     ) {
       const precisa = exigeRastreador({
@@ -278,12 +295,13 @@ export default function CotacaoContratacao() {
       }
     }
 
-    return etapaBase;
+    return etapaFinal;
   }, [
     cotacao?.status_contratacao,
     cotacao?.tipo_vistoria,
     cotacao?.vistoria_completa_data_agendada,
     determinarEtapa,
+    isEtapaConcluida,
     hasInstalacaoAgendada,
     hasAgendamentoBase,
     agendamentoConcluido,
