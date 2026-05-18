@@ -120,7 +120,7 @@ export function TrocaTitularidadeDialog({
   useEffect(() => {
     if (!open) {
       setVeiculoId(null);
-      setNome(''); setCpf(''); setEmail(''); setTelefone('');
+      setNome(''); setEmail(''); setTelefone('');
       setSyncErro(null);
       setSincronizando(false);
     }
