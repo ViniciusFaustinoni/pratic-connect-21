@@ -24,8 +24,8 @@ import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database'
 
 interface ScreenFilters {
   status?: StatusAssociado[];
-  plano_id?: string;
-  cidade?: string;
+  plano_id?: string | string[];
+  cidade?: string | string[];
   data_adesao_inicio?: string;
   data_adesao_fim?: string;
 }
