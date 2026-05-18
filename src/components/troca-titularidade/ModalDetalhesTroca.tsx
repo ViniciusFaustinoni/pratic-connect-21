@@ -94,12 +94,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
   const handleRealizarCotacao = () => {
     if (!solicitacao) return;
-    if (!solicitacao.termo_cancelamento_assinado_em) {
-      toast.error('Aguardando assinatura do termo de cancelamento pelo titular antigo.');
-      return;
-    }
-    // Abre o modal padrão de cotação pré-preenchido. A cotação só será criada
-    // (e vinculada à solicitação via `vincular-cotacao-troca`) ao salvar.
+    // A cotação pode ser feita em paralelo ao envio do termo de cancelamento.
+    // O LINK PÚBLICO só é liberado para o novo titular após a assinatura do termo
+    // (gate aplicado na rota /cotacao/p/:token).
     setFormCotacaoOpen(true);
   };
 
