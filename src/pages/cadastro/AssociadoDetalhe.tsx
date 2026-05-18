@@ -880,14 +880,15 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                                   </Badge>
                                 );
                               }
-                              if (v.status === 'ativo') {
-                                return (
-                                  <Badge className="text-[10px] bg-emerald-500/10 text-emerald-700 border-0">
-                                    <ShieldCheck className="h-3 w-3 mr-1" /> Cobertura Ativa
-                                  </Badge>
-                                );
-                              }
-                              return null;
+                              return (
+                                <BadgeCobertura
+                                  coberturaTotal={(v as any).cobertura_total}
+                                  coberturaRouboFurto={(v as any).cobertura_roubo_furto}
+                                  coberturaSuspensa={(v as any).cobertura_suspensa}
+                                  coberturaSuspensaMotivo={(v as any).cobertura_suspensa_motivo}
+                                  className="text-[10px]"
+                                />
+                              );
                             })()}
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
