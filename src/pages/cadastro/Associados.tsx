@@ -191,13 +191,13 @@ export default function Associados() {
   }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade, sheetFilters.data_adesao_inicio, sheetFilters.data_adesao_fim, sheetFilters.vendedor_id, sheetFilters.tipos_entrada]);
 
   // Check if any filter is active
-  const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
+  const hasFilters = !!search || statusFilter.length > 0 || planoFilter.length > 0 || cidadeFilter.length > 0 || Object.keys(sheetFilters).length > 0;
 
   // Count active filters
   const activeFilterCount = [
-    statusFilter !== 'all',
-    planoFilter !== 'all',
-    cidadeFilter !== 'all',
+    statusFilter.length > 0,
+    planoFilter.length > 0,
+    cidadeFilter.length > 0,
     ...(sheetFilters.status?.length ? [true] : []),
     sheetFilters.plano_id ? true : false,
     sheetFilters.cidade ? true : false,
@@ -215,31 +215,42 @@ export default function Associados() {
   const startIndex = serverTotal === 0 ? 0 : (page - 1) * pageSize + 1;
   const endIndex = Math.min(page * pageSize, serverTotal);
 
-  // Reset page when filters change
-  const handleFilterChange = (setter: (value: string) => void, value: string) => {
-    setter(value);
+  // Helpers multi-seleção
+  const toggleInArray = <T extends string>(arr: T[], value: T): T[] =>
+    arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+
+  const toggleStatus = (value: StatusAssociado) => {
+    setStatusFilter((prev) => toggleInArray(prev, value));
+    setPage(1);
+  };
+  const togglePlano = (value: string) => {
+    setPlanoFilter((prev) => toggleInArray(prev, value));
+    setPage(1);
+  };
+  const toggleCidade = (value: string) => {
+    setCidadeFilter((prev) => toggleInArray(prev, value));
     setPage(1);
   };
 
   const clearFilters = () => {
     setSearchInput('');
-    setStatusFilter('all');
-    setPlanoFilter('all');
-    setCidadeFilter('all');
+    setStatusFilter([]);
+    setPlanoFilter([]);
+    setCidadeFilter([]);
     setSheetFilters({});
     setPage(1);
   };
 
   const handleApplySheetFilters = (filters: typeof sheetFilters) => {
     setSheetFilters(filters);
-    if (filters.status?.length === 1) {
-      setStatusFilter(filters.status[0]);
+    if (filters.status?.length) {
+      setStatusFilter(filters.status);
     }
     if (filters.plano_id) {
-      setPlanoFilter(filters.plano_id);
+      setPlanoFilter([filters.plano_id]);
     }
     if (filters.cidade) {
-      setCidadeFilter(filters.cidade);
+      setCidadeFilter([filters.cidade]);
     }
     setPage(1);
   };
