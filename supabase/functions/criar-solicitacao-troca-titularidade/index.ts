@@ -9,7 +9,7 @@ const corsHeaders = {
 
 interface NovoTitularDados {
   nome: string;
-  cpf: string;
+  cpf?: string; // opcional — capturado depois via OCR da CNH no link público
   email?: string;
   telefone?: string;
 }
