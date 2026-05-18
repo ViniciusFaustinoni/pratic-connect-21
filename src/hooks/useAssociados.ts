@@ -61,8 +61,8 @@ export interface VeiculoComRelacoes extends Tables<'veiculos'> {
 export interface AssociadoFilters {
   search?: string;
   status?: StatusAssociado | StatusAssociado[];
-  plano_id?: string;
-  cidade?: string;
+  plano_id?: string | string[];
+  cidade?: string | string[];
   estado?: string;
   data_adesao_inicio?: string;
   data_adesao_fim?: string;
