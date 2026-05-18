@@ -287,8 +287,26 @@ serve(async (req) => {
         const n = Number(portasRaw);
         return Number.isFinite(n) && n > 0 ? n : '';
       })(),
+      // Câmbio bruto da API de placa (mantém compat para quem lê isso direto)
       cambio: veiculo.caixa_cambio || veiculo.cambio || '',
     };
+
+    // ===== Câmbio NORMALIZADO (canônico: 'manual' | 'automatico' | null) =====
+    // Combina duas fontes, na ordem: (1) caixa_cambio da API, (2) tokens na
+    // descrição da FIPE escolhida. Usado por toda a cadeia (cotação → contrato
+    // → termo) para imprimir "Câmbio: Manual/Automático".
+    function normalizarCambio(raw: string | null | undefined): 'manual' | 'automatico' | null {
+      if (!raw) return null;
+      const s = String(raw).toUpperCase();
+      if (/\b(MANUAL|MEC(ANICO|ÂNICO)?|MT)\b/.test(s)) return 'manual';
+      if (/(AUT|AUTOMAT|CVT|EASYTRONIC|DCT|TIPTRONIC|S-?TRONIC|MULTIDRIVE|DUALOGIC|I-?MOTION|AUTOMATIZAD|POWERSHIFT|DSG|PDK|EDC|XTRONIC|LINEARTRONIC|SKYACTIV-?DRIVE|MULTITRONIC|STEPTRONIC|E-?CVT|DIRECT-?SHIFT)/.test(s)) return 'automatico';
+      return null;
+    }
+
+    const descFipeEscolhida = melhorIdx >= 0 ? descricaoFipe(fipesArray[melhorIdx]) : '';
+    const cambioNormalizado =
+      normalizarCambio(vehicleData.cambio) ?? normalizarCambio(descFipeEscolhida);
+    (vehicleData as any).cambio_normalizado = cambioNormalizado; // 'manual'|'automatico'|null
 
     // FIPE escolhida pela heurística
     const fipeEscolhida = melhorIdx >= 0 ? fipesArray[melhorIdx] : null;
