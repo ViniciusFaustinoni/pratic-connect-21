@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -65,6 +65,21 @@ export function RealocarInstalacaoDialog({
   const [periodoBase, setPeriodoBase] = useState<'manha' | 'tarde'>('manha');
   const [motivoBase, setMotivoBase] = useState('');
   const [notificarBase, setNotificarBase] = useState(true);
+
+  // Expediente reduzido aos sábados: 09:00–13:00 (sem turno da tarde)
+  const isSabado = (s: string) => {
+    if (!s) return false;
+    const d = new Date(`${s}T12:00:00`);
+    return d.getDay() === 6;
+  };
+  const sabadoRota = isSabado(data);
+  const sabadoBase = isSabado(dataBase);
+  useEffect(() => {
+    if (sabadoRota && periodoRota === 'tarde') setPeriodoRota('manha');
+  }, [sabadoRota, periodoRota]);
+  useEffect(() => {
+    if (sabadoBase && periodoBase === 'tarde') setPeriodoBase('manha');
+  }, [sabadoBase, periodoBase]);
 
   const { data: instaladores = [] } = useInstaladores();
   const { data: bases = [] } = useBasesPratic();
@@ -227,9 +242,14 @@ export function RealocarInstalacaoDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="manha">Manhã (08:00 – 12:00)</SelectItem>
-                    <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                    <SelectItem value="manha">
+                      {sabadoRota ? 'Manhã (09:00 – 13:00)' : 'Manhã (08:00 – 12:00)'}
+                    </SelectItem>
+                    {!sabadoRota && (
+                      <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                    )}
                   </SelectContent>
+
                 </Select>
               </div>
             </div>
@@ -376,9 +396,14 @@ export function RealocarInstalacaoDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="manha">Manhã (08:00 – 12:00)</SelectItem>
-                    <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                    <SelectItem value="manha">
+                      {sabadoBase ? 'Manhã (09:00 – 13:00)' : 'Manhã (08:00 – 12:00)'}
+                    </SelectItem>
+                    {!sabadoBase && (
+                      <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                    )}
                   </SelectContent>
+
                 </Select>
               </div>
             </div>
