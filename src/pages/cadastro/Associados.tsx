@@ -581,41 +581,36 @@ export default function Associados() {
           </div>
           
           <div className="hidden md:flex flex-wrap items-center gap-2">
-            <Select value={statusFilter} onValueChange={(v) => handleFilterChange(setStatusFilter, v)}>
-              <SelectTrigger className="w-[150px] h-9 text-xs bg-card">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                {Object.entries(STATUS_ASSOCIADO_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="status"
+              placeholderAll="Todos os status"
+              selected={statusFilter}
+              options={Object.entries(STATUS_ASSOCIADO_LABELS).map(([value, label]) => ({ value, label }))}
+              onToggle={(v) => toggleStatus(v as StatusAssociado)}
+              onClear={() => { setStatusFilter([]); setPage(1); }}
+              width="w-[150px]"
+            />
 
-            <Select value={planoFilter} onValueChange={(v) => handleFilterChange(setPlanoFilter, v)}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-card">
-                <SelectValue placeholder="Plano" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os planos</SelectItem>
-                {planos?.map((plano) => (
-                  <SelectItem key={plano.id} value={plano.id}>{plano.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="plano"
+              placeholderAll="Todos os planos"
+              selected={planoFilter}
+              options={(planos ?? []).map((p) => ({ value: p.id, label: p.nome }))}
+              onToggle={togglePlano}
+              onClear={() => { setPlanoFilter([]); setPage(1); }}
+              width="w-[160px]"
+            />
 
-            <Select value={cidadeFilter} onValueChange={(v) => handleFilterChange(setCidadeFilter, v)}>
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-card">
-                <SelectValue placeholder="Cidade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as cidades</SelectItem>
-                {cidades?.map((cidade) => (
-                  <SelectItem key={cidade} value={cidade}>{cidade}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              label="cidade"
+              placeholderAll="Todas as cidades"
+              selected={cidadeFilter}
+              options={(cidades ?? []).map((c) => ({ value: c, label: c }))}
+              onToggle={toggleCidade}
+              onClear={() => { setCidadeFilter([]); setPage(1); }}
+              width="w-[160px]"
+              searchable
+            />
 
             {hasFilters && (
               <Button variant="ghost" onClick={clearFilters} size="sm" className="h-9 text-xs text-destructive hover:text-destructive">
