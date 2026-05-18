@@ -524,10 +524,14 @@ export default function AprovacaoInstalacaoDetalhe() {
             Veículo
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <CardContent className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
           <div>
             <span className="text-muted-foreground text-xs">Placa</span>
             <p className="font-mono font-bold text-foreground">{veiculo?.placa || '---'}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground text-xs">Chassi</span>
+            <p className="font-mono font-medium text-foreground break-all">{veiculo?.chassi || '---'}</p>
           </div>
           <div>
             <span className="text-muted-foreground text-xs">Veículo</span>
