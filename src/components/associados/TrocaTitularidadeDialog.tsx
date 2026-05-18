@@ -342,10 +342,6 @@ export function TrocaTitularidadeDialog({
             <Input id="novo-titular-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="novo-titular-cpf">CPF do novo titular *</Label>
-            <CpfInput value={cpf} onChange={setCpf} id="novo-titular-cpf" />
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="novo-titular-email">Email</Label>
