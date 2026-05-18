@@ -21,6 +21,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCotacoes, useCotacoesPaginadas, useCotacoesFunilCounts, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
@@ -139,7 +140,12 @@ export default function Cotacoes() {
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
   const [filtroOrfas, setFiltroOrfas] = useState(false);
-  const [etapaFunilFilter, setEtapaFunilFilter] = useState<string>('all');
+  const [etapaFunilFilter, setEtapaFunilFilter] = useState<string[]>([]);
+  const toggleEtapaFunil = useCallback((etapa: string) => {
+    setEtapaFunilFilter((prev) =>
+      prev.includes(etapa) ? prev.filter((e) => e !== etapa) : [...prev, etapa]
+    );
+  }, []);
   
   // Seleção em lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -172,7 +178,7 @@ export default function Cotacoes() {
   // só "vê" a página atual e parece quebrado. Quando algum desses filtros
   // está ativo, desligamos a paginação server-side e trazemos até 1000 linhas.
   const hasClientSideFilter =
-    etapaFunilFilter !== 'all' ||
+    etapaFunilFilter.length > 0 ||
     statusFilter !== 'all' ||
     mesFilter !== 'all' ||
     !!dataFilter ||
@@ -308,15 +314,13 @@ export default function Cotacoes() {
       }
 
       let matchesEtapa = true;
-      if (etapaFunilFilter !== 'all') {
-        if (etapaFunilFilter === 'rascunho') {
-          // Rascunho puro = sem etapa derivada
-          matchesEtapa = cotacao.status === 'rascunho' && getEtapaVenda(cotacao) === null;
-        } else if (etapaFunilFilter === 'expirada') {
-          matchesEtapa = cotacao.status === 'expirada';
-        } else {
-          matchesEtapa = getEtapaVenda(cotacao) === (etapaFunilFilter as EtapaVenda);
-        }
+      if (etapaFunilFilter.length > 0) {
+        const etapaAtual = getEtapaVenda(cotacao);
+        matchesEtapa = etapaFunilFilter.some((sel) => {
+          if (sel === 'rascunho') return cotacao.status === 'rascunho' && etapaAtual === null;
+          if (sel === 'expirada') return cotacao.status === 'expirada';
+          return etapaAtual === (sel as EtapaVenda);
+        });
       }
 
       return matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
@@ -726,11 +730,11 @@ export default function Cotacoes() {
     setDataFilter(undefined);
     setConsultorFilter('all');
     setFiltroOrfas(false);
-    setEtapaFunilFilter('all');
+    setEtapaFunilFilter([]);
     setSelectedIds(new Set());
   };
 
-  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas || etapaFunilFilter !== 'all';
+  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas || etapaFunilFilter.length > 0;
 
   // Stats - 9 status do fluxo de cotação. Quando temos contagens server-side
   // (funilCounts), usamos elas para refletir a base inteira; senão caímos no
@@ -917,7 +921,7 @@ export default function Cotacoes() {
             showStatusEPeriodo={activeTab === 'em_andamento'}
             showConsultor={permissions.cotacao.viewScope !== 'own'}
             showOrfas={activeTab === 'em_andamento' && (permissions.cotacao.canDelete || !!permissions.userId)}
-            activeCount={[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter !== 'all'].filter(Boolean).length}
+            activeCount={[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter.length > 0].filter(Boolean).length}
             onClear={clearFilters}
           />
         </div>
@@ -939,7 +943,7 @@ export default function Cotacoes() {
             onClearMes={() => setMesFilter('all')}
             onClearData={() => setDataFilter(undefined)}
             onClearConsultor={() => setConsultorFilter('all')}
-            onClearEtapa={() => setEtapaFunilFilter('all')}
+            onClearEtapa={(etapa) => setEtapaFunilFilter(etapa ? etapaFunilFilter.filter((e) => e !== etapa) : [])}
             onClearOrfas={() => setFiltroOrfas(false)}
           />
         </div>
@@ -986,39 +990,68 @@ export default function Cotacoes() {
             </>
           )}
 
-          <Select value={etapaFunilFilter} onValueChange={setEtapaFunilFilter}>
-            <SelectTrigger className="w-[220px] h-9 border-0 bg-background/80 shadow-sm">
-              <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
-              <SelectValue placeholder="Etapa do funil" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as etapas</SelectItem>
-              <SelectItem value="rascunho">Rascunho</SelectItem>
-              {([
-                'cotacao_realizada',
-                'escolhendo_plano',
-                'enviando_documentos',
-                'escolha_vistoria',
-                'realizando_autovistoria',
-                'assinando_contrato',
-                'realizando_pagamento',
-                'aguardando_vistoria',
-                'vistoria_agendada',
-                'instalacao_agendada',
-                'realizando_vistoria',
-                'vistoria_realizada',
-                'em_analise',
-                'associado_ativo',
-                'veiculo_recusado',
-                'cancelado',
-              ] as EtapaVenda[]).map((etapa) => (
-                <SelectItem key={etapa} value={etapa}>
-                  {etapaVendaConfig[etapa].label}
-                </SelectItem>
-              ))}
-              <SelectItem value="expirada">Expirada</SelectItem>
-            </SelectContent>
-          </Select>
+          {(() => {
+            const ETAPAS_OPTS: Array<{ value: string; label: string }> = [
+              { value: 'rascunho', label: 'Rascunho' },
+              ...([
+                'cotacao_realizada','escolhendo_plano','enviando_documentos','escolha_vistoria',
+                'realizando_autovistoria','assinando_contrato','realizando_pagamento','aguardando_vistoria',
+                'vistoria_agendada','instalacao_agendada','realizando_vistoria','vistoria_realizada',
+                'em_analise','associado_ativo','veiculo_recusado','cancelado',
+              ] as EtapaVenda[]).map((e) => ({ value: e, label: etapaVendaConfig[e].label })),
+              { value: 'expirada', label: 'Expirada' },
+            ];
+            const count = etapaFunilFilter.length;
+            const triggerLabel = count === 0
+              ? 'Todas as etapas'
+              : count === 1
+                ? (ETAPAS_OPTS.find(o => o.value === etapaFunilFilter[0])?.label ?? '1 etapa')
+                : `${count} etapas`;
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-[220px] h-9 border-0 bg-background/80 shadow-sm justify-start font-normal">
+                    <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                    <span className="truncate flex-1 text-left">{triggerLabel}</span>
+                    {count > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">{count}</Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0" align="start">
+                  <div className="flex items-center justify-between px-3 py-2 border-b">
+                    <span className="text-xs font-medium text-muted-foreground">Etapas do funil</span>
+                    {count > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setEtapaFunilFilter([])}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto py-1">
+                    {ETAPAS_OPTS.map((opt) => {
+                      const checked = etapaFunilFilter.includes(opt.value);
+                      return (
+                        <label
+                          key={opt.value}
+                          className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleEtapaFunil(opt.value)}
+                          />
+                          <span className="text-sm">{opt.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            );
+          })()}
 
           <Popover>
             <PopoverTrigger asChild>
@@ -1100,7 +1133,7 @@ export default function Cotacoes() {
               <RefreshCw className="h-3.5 w-3.5 mr-1" />
               Limpar
               <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
-                {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter !== 'all'].filter(Boolean).length}
+                {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter.length > 0].filter(Boolean).length}
               </Badge>
             </Button>
           )}
@@ -1346,7 +1379,7 @@ export default function Cotacoes() {
               setDataFilter(undefined);
               setConsultorFilter('all');
               setFiltroOrfas(false);
-              setEtapaFunilFilter('all');
+              setEtapaFunilFilter([]);
               setSearchInput('');
               toast.success('Cotação salva! Exibindo em "Em Andamento".');
             }}

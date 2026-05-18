@@ -23,7 +23,7 @@ export interface CotacoesActiveFiltersChipsProps {
   mesFilter: string;
   dataFilter: Date | undefined;
   consultorFilter: string;
-  etapaFunilFilter: string;
+  etapaFunilFilter: string[];
   filtroOrfas: boolean;
   vendedores?: Array<{ user_id: string; nome: string }>;
   formatMesLabel: (m: string) => string;
@@ -32,7 +32,7 @@ export interface CotacoesActiveFiltersChipsProps {
   onClearMes: () => void;
   onClearData: () => void;
   onClearConsultor: () => void;
-  onClearEtapa: () => void;
+  onClearEtapa: (etapa?: string) => void;
   onClearOrfas: () => void;
 }
 
@@ -47,7 +47,9 @@ export function CotacoesActiveFiltersChips(props: CotacoesActiveFiltersChipsProp
 
   if (search) chips.push({ key: 'search', label: `Busca: ${search}`, onRemove: onClearSearch });
   if (statusFilter !== 'all') chips.push({ key: 'status', label: `Status: ${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: onClearStatus });
-  if (etapaFunilFilter !== 'all') chips.push({ key: 'etapa', label: `Etapa: ${ETAPA_LABELS[etapaFunilFilter] ?? etapaFunilFilter}`, onRemove: onClearEtapa });
+  etapaFunilFilter.forEach((e) => {
+    chips.push({ key: `etapa-${e}`, label: `Etapa: ${ETAPA_LABELS[e] ?? e}`, onRemove: () => onClearEtapa(e) });
+  });
   if (mesFilter !== 'all') chips.push({ key: 'mes', label: `Mês: ${formatMesLabel(mesFilter)}`, onRemove: onClearMes });
   if (dataFilter) chips.push({ key: 'data', label: `Data: ${format(dataFilter, 'dd/MM/yyyy')}`, onRemove: onClearData });
   if (consultorFilter !== 'all') {
