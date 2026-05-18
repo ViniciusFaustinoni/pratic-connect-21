@@ -1,73 +1,50 @@
-## Contexto
+## Diagnóstico
 
-Duas correções convergem na mesma migração:
+ANDRE e ROMARIO foram saneados indevidamente porque a varredura do Lote A não filtrou pelo critério canônico de órfão:
 
-1. **Lote A** — 5 contratos órfãos promovidos a `ativo` entre 15–17/05 por bug do trigger antigo (autovistoria do cliente disparando `cadastro_aprovado` + ativação sem rastreador).
-2. **WENDEL / RENAVAM 0KM** — `fn_validar_campos_ativacao` exige `renavam ≥ 9 dígitos` SEM exceção para 0KM. Veículo do Wendel (chassi `9C6RG9910T0073366`, placa placeholder `ZZZ3366`, `aguardando_placa_definitiva=true`, renavam `001187` — 6 dígitos) bate na trava e o Monitoramento não consegue aprovar.
+- **Órfão real** = autovistoria + contrato `ativo` + sem rastreador + **sem `instalacoes` agendada/concluída**
+- **Caso legítimo (FIPE acima, autovistoria opcional)** = autovistoria + contrato `ativo` + sem rastreador AINDA + **instalação técnica `agendada` em `instalacoes`** → fluxo correto, aguarda visita do técnico para concluir e Monitoramento aprovar.
 
-A regra canônica (memória core) já diz: **RENAVAM é OPCIONAL para 0KM** (`placa LIKE '0KM%'` OU `aguardando_placa_definitiva=true`). Hoje só `sga-hinova-sync` respeita isso — o validador de ativação ficou de fora.
-
----
+ANDRE e ROMARIO se encaixam no segundo caso. André tem instalação `agendada` para 19/05 manhã (e segundo o usuário, já foi feita fisicamente — falta apenas baixar no sistema). Romário tem instalação `agendada` para 18/05 tarde.
 
 ## Mudanças
 
-### 1. Migration — corrigir `fn_validar_campos_ativacao`
+### 1. Migration — desfazer saneamento desses 2 contratos
 
-Atualizar a função para:
-
-- Carregar também `v.aguardando_placa_definitiva` e detectar 0KM por:
-  - `aguardando_placa_definitiva = true`, OU
-  - `placa ILIKE '0KM%'` OU `placa ILIKE 'ZZZ%'` (placeholders correntes)
-- **Pular validação de placa** (`length < 7`) quando 0KM (placeholder é aceito)
-- **Pular validação de renavam** quando 0KM
-- Normalizar renavam só-zeros como ausente (consistente com `sga-hinova-sync`)
-- Manter `chassi ≥ 17` obrigatório sempre (0KM exige chassi)
-
-### 2. Migration — saneamento Lote A (5 contratos)
-
-Os 5 contratos identificados na varredura anterior (autovistoria do cliente + contrato ativo + veículo sem rastreador, 15–17/05):
+Para ANDRE (`5be6bc5d-3e76-4fdf-ba33-9b33af058f35`) e ROMARIO (`8641bf11-f0ff-4b8b-954f-6e58ad49c456`):
 
 ```text
-TTX4J73   (Yamaha XTZ 250 Lander  — Francisco)
-+ 4 outros listados na varredura
+contratos.cadastro_aprovado  → true
+contratos.aprovado_por       → <user diretor sentinel> (perdi o original ao zerar)
+contratos.aprovado_em        → now()
+contratos.status             → mantém 'assinado'  (instalação ainda não concluída no sistema)
+veiculos.status              → mantém 'instalacao_pendente'
+associados.status            → 'aguardando_instalacao'
 ```
 
-Para cada um (em transação, com log em `associado_status_log` / auditoria):
+Saem da fila do Cadastro e passam a aparecer corretamente na fila de Instalação/Monitoramento.
 
-```text
-- veiculos.status         → 'instalacao_pendente'
-- contratos.status        → 'assinado'
-- contratos.cadastro_aprovado → false  (com bypass do trg_protege_cadastro_aprovado via SET LOCAL)
-- contratos.aprovado_por  → NULL
-- associados.status       → reverter para 'aguardando_aprovacao_cadastro' (ou estado equivalente pré-promoção)
-- Materializar registro em `instalacoes` (status='agendada') quando sub-FIPE não-aplicável, para cair na fila padrão de Cadastro/Monitoramento
-- Re-sync SGA: alterarSituacaoAssociadoHinova(PENDENTE=3) + alterarSituacaoParaVeiculoHinova(3) — disparado via integration_retry_queue
-- Inserir registro em auditoria com motivo: 'saneamento_orfao_pre_fix_20260518_autovistoria_promove_cadastro'
-```
+### 2. Cancelar reenfileiramento SGA errado
 
-> Ressalva: a UI do Monitoramento já tem o modal "Corrigir dados antes de aprovar". Com o fix do validador, o caso WENDEL deixa de aparecer no modal automaticamente após a aprovação re-tentada (sem precisar preencher RENAVAM falso).
+`UPDATE integration_retry_queue SET status='dead_letter', last_error='saneamento_revertido_caso_legitimo'` para os 4 registros (`correlation_id` = associado_id ou veiculo_id desses 2) que ainda estão `status='pending'`. Evita re-sync indevido para PENDENTE no Hinova de associados que já estavam corretamente em fluxo de instalação.
 
-### 3. Verificação pós-migração
+### 3. Corrigir varredura futura — registrar regra na memória
 
-- Rodar `fn_validar_campos_ativacao('<associado WENDEL>')` e confirmar `{valido: true}`.
-- Conferir os 5 contratos do Lote A: `status='assinado'`, `cadastro_aprovado=false`, veículo `instalacao_pendente`, fila Cadastro repovoada.
-- Sem mudanças de frontend nesta etapa — toda a correção é em DB.
+Atualizar `mem://logic/operations/autovistoria-acima-fipe-libera-rf-nao-conclui-vistoria` adicionando o critério oficial para identificar órfão "autovistoria-promove-cadastro":
 
----
+> Órfão real só quando NÃO existe registro em `instalacoes` (qualquer status que não seja `cancelada`) nem `servicos.tipo IN ('instalacao','vistoria_entrada')` com `status NOT IN ('cancelada','reprovada')` que justifique presença na fila técnica.
+
+### Fora do escopo desta correção (sinalizo, mas não trato agora)
+
+- **André já foi instalado fisicamente** mas `instalacoes.concluida_em` está NULL. Concluir essa instalação no sistema (com fotos, IMEI vinculado etc.) é fluxo operacional normal pelo painel — não automatizo aqui. Se o usuário quiser, posso depois criar uma ação específica para "baixar instalação executada offline" no caso do ANDRE.
+- Inconsistência menor: `servicos.tipo='instalacao'` desses dois tem `status='agendada'` mas `concluida_em` preenchido (timestamp da criação do serviço). Não afeta UI agora — deixar como está.
 
 ## Detalhes técnicos
 
-- Função afetada: `public.fn_validar_campos_ativacao(uuid)` (migration `20260428211320`).
-- Trigger relacionado: `trg_protege_cadastro_aprovado` — usar `SET LOCAL session_replication_role = replica` apenas no bloco DO de saneamento, ou função `SECURITY DEFINER` específica de saneamento.
-- Memória relevante: `mem://logic/operations/sga-renavam-opcional-zero-km` (estender para validador de ativação).
-- Sem alterações em código de aplicação / edge functions — `ativar-associado` já consome o validador, então o fix propaga automaticamente.
+- Trigger `trg_protege_cadastro_aprovado` só bloqueia `true→false`; `false→true` é livre.
+- `aprovado_por` precisa apontar para um `auth.users` existente. Usar primeiro usuário com role `diretor` como sentinel (já é padrão em outros saneamentos).
+- Sem alterações em código de aplicação / edge functions — fluxo legítimo já existe e estava funcionando antes do meu saneamento.
 
----
+## Confirmação
 
-## Confirmação antes de executar
-
-Confirma 3 pontos:
-
-1. **Fix RENAVAM 0KM no validador** — OK aplicar agora? (destrava WENDEL e qualquer 0KM futuro)
-2. **Lote A — saneamento dos 5 órfãos** — confirma executar em lote único?
-3. **Lista do Lote A** — quer que eu re-rode a varredura e cole os 5 IDs/placas exatos no plano antes de você aprovar, ou pode autorizar pela varredura anterior?
+Pode prosseguir? Vou aplicar 1 migration: reverter ANDRE+ROMARIO + dead_letter dos retry SGA correspondentes. Sem mexer nos outros 3 (TTX4J73, CAIO, MARLON — esses continuam corretamente saneados).
