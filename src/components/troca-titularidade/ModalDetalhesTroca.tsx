@@ -176,9 +176,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 ? 'Aguardando assinatura do termo pelo titular antigo'
                 : 'Aguardando processamento';
               const descricao = !termoEnviado
-                ? `O Cadastro precisa abrir a aba "Termo" e enviar o Termo de Cancelamento via Autentique para ${solicitacao.associado_antigo?.nome || 'o titular antigo'}. Assim que ele assinar (biometria facial), a solicitação cai automaticamente em "Aguardando Cadastro" e o botão Aprovar libera neste mesmo drawer.`
+                ? `O Cadastro precisa abrir a aba "Termo" e enviar o Termo de Cancelamento via Autentique para ${solicitacao.associado_antigo?.nome || 'o titular antigo'}. Você já pode adiantar a cotação do novo titular agora — o LINK PÚBLICO só será liberado para ele após a assinatura do termo.`
                 : !termoAssinado
-                ? `Termo enviado em ${solicitacao.termo_cancelamento_enviado_em ? new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR') : '-'}. Após a assinatura por biometria facial, a solicitação migra para "Aguardando Cadastro" e o botão Aprovar libera automaticamente.`
+                ? `Termo enviado em ${solicitacao.termo_cancelamento_enviado_em ? new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR') : '-'}. A cotação pode ser montada agora; o LINK PÚBLICO ao novo titular só abre após a assinatura por biometria facial.`
                 : 'Aguardando o webhook do Autentique migrar a solicitação para Aguardando Cadastro.';
               return (
                 <Alert>
