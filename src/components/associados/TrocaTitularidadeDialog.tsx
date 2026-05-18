@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CpfInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
+import { TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { Loader2, Users, Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
