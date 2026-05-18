@@ -943,7 +943,7 @@ export default function Cotacoes() {
             onClearMes={() => setMesFilter('all')}
             onClearData={() => setDataFilter(undefined)}
             onClearConsultor={() => setConsultorFilter('all')}
-            onClearEtapa={() => setEtapaFunilFilter('all')}
+            onClearEtapa={(etapa) => setEtapaFunilFilter(etapa ? etapaFunilFilter.filter((e) => e !== etapa) : [])}
             onClearOrfas={() => setFiltroOrfas(false)}
           />
         </div>
