@@ -729,11 +729,11 @@ export default function Cotacoes() {
     setDataFilter(undefined);
     setConsultorFilter('all');
     setFiltroOrfas(false);
-    setEtapaFunilFilter('all');
+    setEtapaFunilFilter([]);
     setSelectedIds(new Set());
   };
 
-  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas || etapaFunilFilter !== 'all';
+  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas || etapaFunilFilter.length > 0;
 
   // Stats - 9 status do fluxo de cotação. Quando temos contagens server-side
   // (funilCounts), usamos elas para refletir a base inteira; senão caímos no
