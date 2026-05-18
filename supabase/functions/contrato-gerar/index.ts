@@ -1156,6 +1156,7 @@ serve(async (req) => {
             veiculo_valor_fipe: cotacao.valor_fipe,
             veiculo_cor: cotacao.veiculo_cor,
             veiculo_combustivel: cotacao.veiculo_combustivel || null,
+            veiculo_cambio: (cotacao as any).veiculo_cambio || null,
             veiculo_ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano || null,
             
             // Campos para Termo de Afiliação (Autentique)
