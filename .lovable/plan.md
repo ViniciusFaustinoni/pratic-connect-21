@@ -1,97 +1,77 @@
+## Causa raiz
 
-## Causa raiz (uma só, com 3 sintomas)
+**Trigger `trg_servico_promove_cadastro`** (em `public.servicos`, criado pela migration `20260515140337`) promove `contratos.cadastro_aprovado=true` **automaticamente, sem aprovador humano**, sempre que um `servicos.tipo='vistoria_entrada'` muda para `status='aprovada'`. O trigger **não distingue `modalidade='autovistoria'` (autovistoria do cliente) de vistoria presencial técnica**.
 
-A função-gatilho `public.sync_servico_on_vistoria_decisao` (disparada em todo `UPDATE` de `vistorias.status → aprovada/aprovada_ressalvas/reprovada/cancelada`) **não distingue entre `modalidade='autovistoria'` e vistoria presencial do técnico**. Quando uma autovistoria é aprovada (pelo botão do Monitoramento ou pelo bloco "AUTOVISTORIA ANTECIPADA" do `aprovar-proposta`), o trigger:
+### Cronologia do caso ANDREIA (cotação 68e0ede7…)
 
-1. Promove **qualquer `servicos` (incluindo `tipo='instalacao'`) vinculado à mesma cotação/contrato** para `status='concluida'`.
-2. Promove a `instalacoes` correspondente para `status='concluida'` mesmo com `rastreador_id IS NULL`.
-3. Em cadeia, `fn_reativar_cobertura_pos_instalacao` seta `veiculos.cobertura_total=true` (não checa rastreador) e abre caminho para `ativar-associado` promover associado/veículo/contrato a `ativo`.
+| Tempo | Evento | Efeito DB |
+|---|---|---|
+| 14/05 19:14 | Cotação criada (FIPE R$ 40.539 → exige rastreador; `tipo_vistoria=autovistoria` opcional) | `cotacoes.status_contratacao=pagamento_ok` |
+| 14/05 20:13 | Termo assinado | `contratos.status=assinado`, `cadastro_aprovado=false` |
+| 15/05 13:36 | Cliente conclui autovistoria no link público | `vistorias` (`modalidade=autovistoria, status=pendente`) + `servicos` (`tipo=vistoria_entrada, modalidade=autovistoria`) |
+| 15/05 ~13:36 | `aprovar-proposta` (bloco "AUTOVISTORIA ANTECIPADA acima da FIPE") marca o servico como `status='aprovada'` (terminal, fora da fila) | `servicos.status=aprovada` |
+| 15/05 14:03:33 | **Trigger `trg_servico_promove_cadastro` dispara** e chama `fn_auto_promover_cadastro_pos_operacao` | `contratos.cadastro_aprovado=true`, `aprovado_em=now()`, **`aprovado_por=NULL`** (fingerprint do auto-promove) |
 
-### Sintomas observados
+**Fingerprint confirmado**: `contratos.aprovado_por IS NULL AND cadastro_aprovado=true`. Auditoria do banco mostra **3 contratos contaminados**: Andreia, Larissa Inácio (FIPE 21k sub-FIPE), João Victor (já cancelado).
 
-| Caso | FIPE | Evidência DB | Efeito |
-|---|---|---|---|
-| **André (LUB5F76)** | R$ 64.895 (rastreador obrigatório) | `instalacoes.status='concluida'` + `rastreador_id=NULL`; `veiculos.cobertura_total=true`; `status='ativo'`; criado 3s após `vistorias.analisado_em` | Veículo "ativo" sem rastreador físico — viola regra canônica |
-| **Leonardo (LQM4E19)** | R$ 36.472 (rastreador obrigatório, autovistoria opcional p/ R/F) | Tem `vistorias` autovistoria `aprovada` + `instalacoes` `agendada` paralela. `cadastro_aprovado=false`. `cobertura_roubo_furto=true` (vazou via trigger). `status_contratacao='vistoria_agendada'` | Cadastro mostra "Aprovar Proposta" genérico; link público travado |
-| **Audit** | ≥R$ 30k | **11 instalações** com `status=concluida` + `rastreador_id=NULL` (André + Romario + Luiz Cosme + Gilberto + Francisco + Peter + Cassio + Rodolfo + Luiz Felipe + Denilson + Leandro) | Todos com `cobertura_total=true` e `veiculo.status='ativo'` indevidamente |
+### Por que o usuário vê "foi para Associados como ativo"
 
-### Por que o label "Aprovar Proposta" persiste em Leonardo
+- `associados.status='pendente_vistoria'` (não 'ativo' literal) — os guards de Etapas 1-4 anteriores impediram a ativação real.
+- Mas a **lista "Propostas Pendentes" do Cadastro filtra por `cadastro_aprovado=false`** (memória `propostas-pendentes-saida-por-vistoria`). Como o trigger setou `true`, a Andreia **saiu da fila do Cadastro** e passou a aparecer apenas em Associados, **sem nenhum analista ter visto os documentos**. Visualmente é "pulou o Cadastro".
 
-Em `src/pages/cadastro/PropostaAnalise.tsx:99-102`:
-```ts
-const isAutovistoria = (vistoria?.modalidade === 'autovistoria' || ...) && !proposta?.instalacao_info;
-```
-A simples existência de uma `instalacoes` agendada (criada pelo link público após o agendamento) zera `isAutovistoria`. Toda a sub-árvore de UI cai no caminho genérico "Aprovar Proposta", mesmo com autovistoria já aprovada e R/F já liberado.
+### Violações de invariantes canônicas
 
-### Por que `status_contratacao` fica preso em `vistoria_agendada`
-
-A função `recompute_cotacao_status_contratacao` não tem regra para promover ≥30k de `vistoria_agendada` → `autovistoria_ok`/`aguardando_aprovacao_cadastro` quando a autovistoria é aprovada antes da instalação técnica. O link público lê esse status e segue mostrando "etapa 1".
+1. Core: "Cadastro NUNCA recebe contrato com `cadastro_aprovado=true`" — quebrado pelo trigger.
+2. Core: "Aprovação de autovistoria NUNCA fecha `instalacoes`/`servicos.tipo='instalacao'` … Triggers de pós-instalação NÃO ativam cobertura nem promovem veículo a 'ativo'" — espírito quebrado (promove o cadastro sem análise documental).
+3. Manual: a autovistoria acima da FIPE é **opcional, só antecipa R/F**, e **nunca dispensa análise do Cadastro**.
 
 ---
 
-## Plano de correção (5 frentes)
+## Plano de correção definitiva (3 frentes)
 
-### 1. Trigger blindada — `sync_servico_on_vistoria_decisao` (migration)
+### Frente 1 — Trigger blindada (migration)
 
-Tornar a função consciente da modalidade:
+Reescrever `fn_trg_servico_promove_cadastro` para **ignorar serviços de autovistoria** e exigir um insumo presencial verificável:
 
-- Se `NEW.modalidade = 'autovistoria'`:
-  - **Nunca** tocar em `servicos.tipo='instalacao'`.
-  - **Nunca** tocar em `instalacoes`.
-  - Só fechar o `servicos.tipo='vistoria_entrada'` cuja `vistoria_origem_id = NEW.id` (1:1 direto, sem fallback por cotação).
-- Se `NEW.modalidade <> 'autovistoria'` (presencial): comportamento atual (já correto).
+- Se `NEW.modalidade = 'autovistoria'` → `RETURN NEW` sem promover.
+- Se o serviço veio de uma vistoria cuja `vistorias.modalidade='autovistoria'` (via `vistoria_origem_id`) → `RETURN NEW` sem promover.
+- Manter promoção apenas quando:
+  - `NEW.tipo='instalacao'` e `status` terminal, **ou**
+  - `NEW.tipo='vistoria_entrada'` com `modalidade<>'autovistoria'` (vistoria presencial) e `status` terminal.
 
-Reforço extra: `BEFORE UPDATE` em `instalacoes` para barrar `status='concluida'` quando `rastreador_id IS NULL` E o veículo exige rastreador (FIPE≥30k/9k ou Diesel). Erro claro: `instalacao_concluida_exige_rastreador`.
+Aplicar a mesma blindagem em `fn_trg_agendamento_base_promove_cadastro` quando o agendamento vier de fluxo de autovistoria (mais seguro: só promover se existir `instalacao`/`servico` presencial concluído na cadeia).
 
-### 2. `fn_reativar_cobertura_pos_instalacao` — checar rastreador (migration)
+### Frente 2 — Saneamento dos contratos contaminados (migration de dados)
 
-Só setar `cobertura_total=true` quando `NEW.rastreador_id IS NOT NULL` **ou** o veículo dispensa rastreador (sub-FIPE com `dispensa_rastreador=true`).
+Para cada contrato com fingerprint `cadastro_aprovado=true AND aprovado_por IS NULL` cuja única "evidência" é um servico/vistoria de autovistoria sem instalação física concluída:
 
-### 3. Cadastro UI — label e detecção robusta (frontend)
+- `UPDATE contratos SET cadastro_aprovado=false, aprovado_em=NULL, aprovado_por=NULL, updated_at=now()` (formato exigido pelo `trg_protege_cadastro_aprovado`).
+- Re-rodar `recompute_cotacao_status_contratacao` para a cotação voltar a posição correta da fila (`aguardando_aprovacao_cadastro`).
+- Inserir `logs_auditoria` (`acao='editar'`, `modulo='contratos'`, descrição `saneamento_cadastro_auto_promovido_indevidamente`).
+- Casos afetados (audit já levantada): Andreia (FIPE 40k, exige rastreador), Larissa Inácio (FIPE 21k sub-FIPE, mas sem documentação revisada pelo Cadastro), João Victor (cancelado — pular ou apenas auditar).
 
-`src/pages/cadastro/PropostaAnalise.tsx`:
-- `isAutovistoria` passa a ser: `vistoria.modalidade==='autovistoria' && (totalFotos>=2 && temVideo360 || totalFotos>=minLegado)` — **não depende mais de `!instalacao_info`**.
-- Quando `isAutovistoria && planoTemRouboFurto && !cadastro_aprovado`: label do botão vira `"Aprovar Autovistoria · Liberar R/F"`.
+Andreia volta para a fila de Cadastro com a autovistoria já aprovada — assim que o analista aprovar manualmente, o caminho normal libera R/F e segue para agendamento de instalação técnica (R$ 40k exige rastreador).
 
-`src/components/cadastro/proposta/PropostaApprovalStepper.tsx`: passar `liberarRfMode` para o CTA principal e ajustar copy/ícone.
+### Frente 3 — Memória/regra (sem código)
 
-### 4. Recompute autovistoria-aware (migration)
-
-Adicionar à `recompute_cotacao_status_contratacao`:
-- Se existe `vistorias` autovistoria `aprovada` E `contratos.cadastro_aprovado=false` E veículo exige rastreador → `aguardando_aprovacao_cadastro` (rank acima de `vistoria_agendada`).
-- Se `cadastro_aprovado=true` + autovistoria aprovada + instalação ainda não concluída → `autovistoria_ok` (libera link público a mostrar "aguardando instalação técnica" no lugar de "agendar vistoria").
-- Adicionar trigger `AFTER UPDATE OF status ON vistorias` que chama o recompute.
-
-### 5. Backfill controlado dos 11 casos contaminados
-
-Migration de saneamento (apresentar lista em comentário SQL para auditoria), por caso:
-
-- `instalacoes.status='concluida' + rastreador_id IS NULL + FIPE≥30k` → reabrir como `agendada` (data_agendada = hoje+2), zerar `concluida_em`.
-- `veiculos.cobertura_total=false`, manter `cobertura_roubo_furto=true` (autovistoria já validou R/F).
-- `veiculos.status='instalacao_pendente'`.
-- `contratos.status='assinado'` (rebaixar de `ativo`), preservando `cadastro_aprovado=true`.
-- `associados.status='aguardando_instalacao'`.
-- Registrar 1 linha em `associados_historico` por caso com `tipo='correcao_sistema'` explicando o saneamento.
-- **Não desfazer Hinova** — apenas marcar `sga_revisao_pendente=true` (já existe) para o Monitoramento revisar.
-
-Caso específico do Leonardo (cadastro_aprovado=false): só rodar o recompute — entra naturalmente na fila certa com o label correto após (3).
-
-### 6. Memória
-
-Salvar `mem://logic/operations/autovistoria-nao-conclui-instalacao` e atualizar Core com a regra "Autovistoria nunca fecha `instalacoes`/`servicos.tipo=instalacao`; só o serviço técnico presencial fecha instalação".
+- Atualizar `mem://logic/operations/autovistoria-nao-conclui-instalacao` adicionando: "Servico `vistoria_entrada` com `modalidade='autovistoria'` JAMAIS dispara auto-promoção de `cadastro_aprovado`. Trigger `trg_servico_promove_cadastro` filtra por modalidade."
+- Adicionar linha no Core: "Auto-promoção de `cadastro_aprovado=true` (fingerprint `aprovado_por=NULL`) é EXCLUSIVA de vistoria presencial técnica concluída. Autovistoria do cliente nunca promove Cadastro."
 
 ---
 
 ## Arquivos afetados
 
-- `supabase/migrations/*` — nova migration com (1), (2), (4), (5)
-- `src/pages/cadastro/PropostaAnalise.tsx` — (3)
-- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — (3)
-- `mem://...` — (6)
+- `supabase/migrations/<nova>_fix_autopromote_cadastro_autovistoria.sql` — Frentes 1 + 2 em uma migration
+- `mem://logic/operations/autovistoria-nao-conclui-instalacao` + `mem://index.md` — Frente 3
 
 ## Riscos e mitigação
 
-- Backfill rebaixa 10 contratos hoje `ativo` para `assinado`. **Mitigação**: gerar CSV em `/mnt/documents/` antes da execução para revisão; cobertura R/F preservada (associados continuam protegidos contra roubo/furto).
-- Hinova fica dessincronizado momentaneamente. **Mitigação**: `sga_revisao_pendente=true` joga na fila de revisão existente, sem chamadas destrutivas.
-- Trigger nova bloqueia inserts legados. **Mitigação**: `BEFORE UPDATE` (não `INSERT`) e só dispara na transição `→ concluida`, com mensagem clara para o operador.
+- **Risco**: contratos legítimos (vistoria presencial real) também caem no auto-promove e podem ser afetados se o filtro for amplo demais. **Mitigação**: filtro estrito por `modalidade='autovistoria'` (não toca presencial).
+- **Risco**: saneamento reabrir contrato já em workflow do Monitoramento. **Mitigação**: query do saneamento exige `qtd_instalacoes=0` E `s.tipo='vistoria_entrada' AND s.modalidade='autovistoria'` — só pega quem nunca teve instalação técnica.
+- **Risco**: Andreia já sincronizada com Hinova como ativa. **Mitigação**: `associados.status='pendente_vistoria'` (não foi para Hinova como ativo); apenas saiu da tela do Cadastro. Saneamento devolve para a fila certa.
 
+## Verificação pós-deploy
+
+1. `SELECT count(*) FROM contratos WHERE cadastro_aprovado=true AND aprovado_por IS NULL AND aprovado_em > now() - INTERVAL '7 days'` deve retornar 0 (após saneamento).
+2. Andreia aparece em **Cadastro › Propostas Pendentes** com badge "Autovistoria aprovada · Liberar R/F".
+3. Forçar UPDATE de teste em um servico autovistoria já aprovado não muda `cadastro_aprovado` de outro contrato.
