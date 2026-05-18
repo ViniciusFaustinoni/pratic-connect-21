@@ -715,7 +715,7 @@ export default function Associados() {
                                 e.stopPropagation();
                                 const placa = associado.veiculos[0].placa;
                                 navigator.clipboard.writeText(placa);
-                                toast.success(`Placa ${placa} copiada`);
+                                toast({ title: `Placa ${placa} copiada` });
                               }}
                               title="Clique para copiar"
                               className="font-mono text-xs bg-muted px-2 py-0.5 rounded border border-border hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
