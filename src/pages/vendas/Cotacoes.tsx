@@ -990,39 +990,68 @@ export default function Cotacoes() {
             </>
           )}
 
-          <Select value={etapaFunilFilter} onValueChange={setEtapaFunilFilter}>
-            <SelectTrigger className="w-[220px] h-9 border-0 bg-background/80 shadow-sm">
-              <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
-              <SelectValue placeholder="Etapa do funil" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as etapas</SelectItem>
-              <SelectItem value="rascunho">Rascunho</SelectItem>
-              {([
-                'cotacao_realizada',
-                'escolhendo_plano',
-                'enviando_documentos',
-                'escolha_vistoria',
-                'realizando_autovistoria',
-                'assinando_contrato',
-                'realizando_pagamento',
-                'aguardando_vistoria',
-                'vistoria_agendada',
-                'instalacao_agendada',
-                'realizando_vistoria',
-                'vistoria_realizada',
-                'em_analise',
-                'associado_ativo',
-                'veiculo_recusado',
-                'cancelado',
-              ] as EtapaVenda[]).map((etapa) => (
-                <SelectItem key={etapa} value={etapa}>
-                  {etapaVendaConfig[etapa].label}
-                </SelectItem>
-              ))}
-              <SelectItem value="expirada">Expirada</SelectItem>
-            </SelectContent>
-          </Select>
+          {(() => {
+            const ETAPAS_OPTS: Array<{ value: string; label: string }> = [
+              { value: 'rascunho', label: 'Rascunho' },
+              ...([
+                'cotacao_realizada','escolhendo_plano','enviando_documentos','escolha_vistoria',
+                'realizando_autovistoria','assinando_contrato','realizando_pagamento','aguardando_vistoria',
+                'vistoria_agendada','instalacao_agendada','realizando_vistoria','vistoria_realizada',
+                'em_analise','associado_ativo','veiculo_recusado','cancelado',
+              ] as EtapaVenda[]).map((e) => ({ value: e, label: etapaVendaConfig[e].label })),
+              { value: 'expirada', label: 'Expirada' },
+            ];
+            const count = etapaFunilFilter.length;
+            const triggerLabel = count === 0
+              ? 'Todas as etapas'
+              : count === 1
+                ? (ETAPAS_OPTS.find(o => o.value === etapaFunilFilter[0])?.label ?? '1 etapa')
+                : `${count} etapas`;
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-[220px] h-9 border-0 bg-background/80 shadow-sm justify-start font-normal">
+                    <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                    <span className="truncate flex-1 text-left">{triggerLabel}</span>
+                    {count > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">{count}</Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0" align="start">
+                  <div className="flex items-center justify-between px-3 py-2 border-b">
+                    <span className="text-xs font-medium text-muted-foreground">Etapas do funil</span>
+                    {count > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setEtapaFunilFilter([])}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto py-1">
+                    {ETAPAS_OPTS.map((opt) => {
+                      const checked = etapaFunilFilter.includes(opt.value);
+                      return (
+                        <label
+                          key={opt.value}
+                          className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleEtapaFunil(opt.value)}
+                          />
+                          <span className="text-sm">{opt.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            );
+          })()}
 
           <Popover>
             <PopoverTrigger asChild>
