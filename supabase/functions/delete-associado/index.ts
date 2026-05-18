@@ -458,6 +458,7 @@ Deno.serve(async (req) => {
     }
 
     // 5. Delete cobrancas (independent of contract)
+    await supabaseAdmin.from("cobranca_csv_boletos").delete().eq("associado_id", associadoId);
     await supabaseAdmin.from("cobrancas").delete().eq("associado_id", associadoId);
 
     // 6. Delete negativacoes
