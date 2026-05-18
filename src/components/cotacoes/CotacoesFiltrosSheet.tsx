@@ -33,8 +33,8 @@ export interface CotacoesFiltrosSheetProps {
   setDataFilter: (v: Date | undefined) => void;
   consultorFilter: string;
   setConsultorFilter: (v: string) => void;
-  etapaFunilFilter: string;
-  setEtapaFunilFilter: (v: string) => void;
+  etapaFunilFilter: string[];
+  setEtapaFunilFilter: (v: string[]) => void;
   filtroOrfas: boolean;
   setFiltroOrfas: (v: boolean) => void;
   // dados auxiliares
