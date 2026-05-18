@@ -1,53 +1,81 @@
+# Reprocessamento — KOA4D63 (Honda CG 150 / JUAN DOMINGOS CHAGAS)
 
-## Diagnóstico — caso JUAN DOMINGOS CHAGAS / KOA4D63 (Honda CG 150 Titan, FIPE R$ 11.053)
+## Contexto atual confirmado no banco
 
-Veículo `23a2bfb7…`, contrato `1dca5199…` (cadastro_aprovado=true), cotação `9b199c6f…` (status `aceita / pagamento_ok`), instalação `6f6cbb8f…` (status `nao_compareceu`).
+- **Veículo** `23a2bfb7…` — `instalacao_pendente` (moto, FIPE R$ 11.053 ≥ 9k → exige rastreador)
+- **Contrato** `1dca5199…` — `assinado`, `cadastro_aprovado=true`
+- **Cotação** `9b199c6f…` — `status_contratacao=pagamento_ok`, autovistoria já materializada
+- **Instalação antiga** `6f6cbb8f…` (24/04) — `nao_compareceu`, sem rastreador
+- **Serviço antigo** `285b49a8…` (instalacao 24/04) — `nao_compareceu`
+- **Serviço novo** `4ae1c7ab…` (`vistoria_entrada`, agendada hoje 18/05) — **único artefato vivo do reagendamento; não existe `instalacoes` correspondente**
+- **Rastreador** `0e3e192e…` (IMEI 868018075119845, Softruck) — em `estoque`, sem vínculo
 
-Estado real no banco:
-- `cotacoes_vistoria_fotos` → **3 fotos** (chassi, motor, video_360) — é a autovistoria enxuta acima do mínimo.
-- `vistorias` (por `veiculo_id` ou `cotacao_id`) → **0 registros**.
-- `vistoria_fotos` → 0.
-- `servicos` → 1 linha tipo `instalacao` (presencial, `nao_compareceu`).
+A instalação física aconteceu hoje no campo, mas nada foi escrito porque o fluxo do prestador não fechou pelo link / app. Precisamos materializar o resultado e empurrar para a fila canônica de aprovação.
 
-Por isso a tela de **Instalações** mostra as 2 fotos (Chassi + Motor): aquela tela lê direto de `cotacoes_vistoria_fotos` via cotação. Já o drawer de **Cadastro / Veículos** usa `useFotosVistoriaPorVeiculo` (`src/hooks/useVeiculoDetalhes.ts`), que parte de `vistorias.veiculo_id` → `vistoria_fotos`. Como não existe `vistorias` para esse veículo, o resultado é "Nenhuma foto".
+## Estratégia
 
-## Causa raiz
+Seguir a sequência canônica (memórias `single-source-activation`, `veiculo-novo-aguarda-instalacao`, `sincronizacao-status-pos-instalacao`), sem atalhos diretos para `status='ativo'`. Toda promoção a ativo continua exclusiva da edge `ativar-associado`, acionada manualmente na fila do Monitoramento após o reprocessamento.
 
-A edge `finalizar-autovistoria-cotacao` é a única peça que materializa `cotacoes_vistoria_fotos` em `vistorias` + `vistoria_fotos` (regra de memória "Autovistoria materializada"). Ela só é chamada pelo hook `useFinalizarVistoriaCotacao` no branch `tipoVistoria === 'autovistoria'`.
+### Etapa 1 — Vincular rastreador ao veículo
 
-No caminho **"FIPE acima do mínimo + autovistoria opcional"**, o cliente:
-1. Agenda a instalação presencial → o hook entra no branch `tipoVistoria === 'agendada'` e chama `agendar-vistoria-presencial` (cria `instalacoes` + `servicos` tipo `instalacao`).
-2. Em paralelo/depois envia fotos de chassi/motor/vídeo no link público → caem em `cotacoes_vistoria_fotos`.
-3. Como o branch `autovistoria` nunca executa, **`finalizar-autovistoria-cotacao` nunca é invocado**, e nada é copiado para `vistorias`/`vistoria_fotos`.
+Atualizar `rastreadores 0e3e192e…`:
+- `veiculo_id = 23a2bfb7…`
+- `associado_id = 72ca27f8…`
+- `status = 'instalado'`
+- `local_instalacao`, `descricao_instalacao` (texto padrão "Reprocessamento manual 18/05 — instalação confirmada em campo")
 
-Resultado: divergência permanente — Instalações enxerga as fotos (via cotação), Cadastro/Veículos não enxerga (via vistoria). Isso afeta **todo associado que escolheu vistoria presencial e mesmo assim mandou autovistoria opcional**, não só o Juan.
+Disparar `softruck-ativar-dispositivo` para garantir vínculo do device no Softruck (idempotente; se já estiver, retorna ok). Memória `softruck-placa-zero-km` não se aplica (placa real).
 
-## Plano para resolver de vez
+### Etapa 2 — Materializar a instalação concluída
 
-### 1. Sempre materializar autovistoria opcional, mesmo no fluxo presencial
+Como o reagendamento criou só `servicos.vistoria_entrada` (sem `instalacoes`), criar **nova linha** em `instalacoes` espelhando o serviço 4ae1c7ab e o contrato:
+- `contrato_id = 1dca5199…`
+- `veiculo_id = 23a2bfb7…`
+- `rastreador_id = 0e3e192e…`
+- `data_agendada = 2026-05-18`
+- `status = 'concluida'`
+- `iniciada_em = now()`, `concluida_em = now()`
+- `concluida_por = NULL` (reprocessamento administrativo, registrar em `dados_extras`/observação)
 
-`supabase/functions/agendar-vistoria-presencial/index.ts`: depois de criar `instalacoes`/`servicos`, verificar se existem linhas em `cotacoes_vistoria_fotos` para a cotação; se sim, invocar `finalizar-autovistoria-cotacao` (já é idempotente por `cotacao_id`) com flag indicando origem opcional para que o serviço materializado nasça já `concluida/aprovada` (não como `em_analise`, pois o fluxo principal segue a instalação presencial).
+Fechar o serviço `4ae1c7ab` em paralelo:
+- `status = 'concluida'`
+- `rastreador_id = 0e3e192e…`
+- `iniciada_em`, `concluida_em = now()`
 
-`supabase/functions/finalizar-autovistoria-cotacao/index.ts`: aceitar um parâmetro `origem: 'opcional_acima_fipe'` e, quando presente, pular a criação do `servico` (já existe um serviço de instalação presencial — ver memória "Base não duplica instalação") e gerar a `vistoria` com `tipo='entrada'`, `status='aprovada'`, `modalidade='autovistoria'` apenas para fins de fonte de verdade das fotos.
+Memória `vistoria-entrada-equivale-instalacao` autoriza tratar os dois como o mesmo evento. Guard `trg_guard_instalacao_concluida_exige_rastreador` passa porque o rastreador já está vinculado.
 
-`src/hooks/useCotacaoVistoria.ts`: no `useUploadFotoCotacaoVistoria.onSuccess` (ou no fim do upload da 3ª foto / vídeo final), disparar `finalizar-autovistoria-cotacao` em modo opcional quando o veículo está acima do mínimo e o fluxo escolhido é presencial — fecha o ciclo no upload, sem depender de uma ação "Finalizar".
+### Etapa 3 — Religar cobertura e entrar na fila
 
-### 2. Backfill histórico (migration de dados)
+Triggers automáticos esperados após Etapa 2:
+- `fn_reativar_cobertura_pos_instalacao` → reativa coberturas suspensas, promove veículo `instalacao_pendente → aguardando_aprovacao_monitoramento`
+- `trg_sync_agendamento_base_on_servico_terminal` → fecha agendamentos pendentes do serviço
+- O caso passa a aparecer em **Monitoramento › Aprovações › Aprovação de Associados**
 
-Migration que, para cada `cotacoes_vistoria_fotos` órfão (cotação com fotos e sem `vistorias` correspondente), cria a `vistorias` canônica e copia as fotos para `vistoria_fotos`. Trazer junto `veiculo_id`, `contrato_id` e `associado_id` resolvidos via `contratos.cotacao_id`. Idempotente: usa `NOT EXISTS` em `vistorias.cotacao_id`. Cobre o caso do Juan e todos os irmãos históricos.
+Validar via SELECT que o veículo saiu de `instalacao_pendente` e o contrato está pronto para o passo final.
 
-### 3. Fallback de leitura defensivo
+### Etapa 4 — Aprovação Monitoramento + ativação canônica
 
-`src/hooks/useVeiculoDetalhes.ts › useFotosVistoriaPorVeiculo`: quando `vistorias` retornar vazio, fazer um segundo lookup por `contratos.veiculo_id` → `cotacao_id` → `cotacoes_vistoria_fotos`, normalizando o shape para `FotoVistoriaVeiculo` (com `vistoria_status: 'autovistoria_pendente_materializacao'`). É uma rede de segurança para qualquer regressão futura — não substitui a materialização, mas garante que nunca mais haverá "tela vazia" enquanto as fotos existem no banco.
+Não fazer auto-ativação. Devolver o caso para a fila e ativar pelo caminho único:
+- Operador clica "Aprovar" na fila → invoca `ativar-associado` com `instalacao_id` da nova linha, rastreador vinculado, `actor` = usuário logado
+- `ativar-associado` faz lock + CAS, valida guard `trg_guard_veiculo_ativo_exige_rastreador`, promove contrato/veículo para `ativo`, grava em `ativacao_status_log`
+- SGA Hinova: cadastro força PENDENTE; promoção a ATIVO é manual no painel SGA (memórias `sga-hinova` aplicam)
 
-### 4. Verificação
+## Entregáveis deste reprocessamento
 
-- Após a migration, rodar SELECT confirmando que existe `vistorias` + `vistoria_fotos` para a cotação `9b199c6f-ead5-4efd-967c-8d3e07533c4e` e que o drawer de Veículos passa a exibir as 3 fotos.
-- Reproduzir o fluxo presencial + autovistoria opcional em ambiente de teste (login `admin@teste.com`) e confirmar que o novo caso materializa sozinho.
+1. Migration **idempotente** com `UPDATE rastreadores` + `INSERT instalacoes` + `UPDATE servicos`, envelopados em transação. Guards de DB são respeitados; nada é inserido se algum invariante falhar.
+2. Chamada manual `softruck-ativar-dispositivo` (curl/edge invoke) após a migration.
+3. SELECT de verificação confirmando: rastreador `instalado` + veículo fora de `instalacao_pendente` + caso visível na fila do Monitoramento.
+4. Instrução para o operador concluir a ativação clicando em **Aprovar** na fila — para garantir o log de quem ativou e respeitar o `single-source-activation`.
 
-## Detalhes técnicos
+## Riscos e mitigação
 
-- Tabelas: `vistorias`, `vistoria_fotos`, `cotacoes_vistoria_fotos`, `contratos`, `veiculos`, `servicos`, `instalacoes`.
-- Edges alteradas: `finalizar-autovistoria-cotacao`, `agendar-vistoria-presencial`.
-- Hooks alterados: `src/hooks/useCotacaoVistoria.ts`, `src/hooks/useVeiculoDetalhes.ts`.
-- Sem mudanças de UI; só backend + hook de leitura. Respeita as memórias "Autovistoria materializada", "Base não duplica instalação", "Vistoria nunca órfã" e "Autovistoria não conclui instalação".
+- **Cron `reconciliar-contratos-pos-monitoramento`** (a cada 15 min) pode tentar promover sozinho — ok, ele só destrava casos parados em `assinado`, e o guard exige rastreador, que já estará vinculado.
+- **Trigger reverter ativo→aguardando** (visto no OOV8C87) — não ocorre aqui porque o rastreador estará linkado antes de qualquer promoção.
+- **Softruck offline / IMEI já em outro veículo** — `softruck-ativar-dispositivo` retorna erro; nesse caso aborta a Etapa 2 (não materializa instalação) para não gerar inconsistência.
+- **Cobertura 48h** — religada automaticamente; sem ação manual.
+
+## Confirmações pedidas antes de executar
+
+1. Confirmar que a instalação física foi **hoje 18/05** (data a usar em `concluida_em`/`iniciada_em`).
+2. Confirmar local da instalação (oficina/endereço) para gravar em `rastreadores.local_instalacao`.
+3. Confirmar que o operador (você ou outro usuário) fará o clique final de **Aprovar** na fila do Monitoramento, mantendo `ativar-associado` como única porta de entrada para `ativo`.
