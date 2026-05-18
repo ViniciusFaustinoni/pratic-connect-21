@@ -1,64 +1,73 @@
-## Diagnóstico
+## Contexto
 
-O botão `Criar Solicitação` em `TrocaTitularidadeDialog.tsx` (linha 359) tem 3 gates:
+Duas correções convergem na mesma migração:
 
-```ts
-disabled={criar.isPending || !veiculoId || sgaTransitorioVisivel}
-```
+1. **Lote A** — 5 contratos órfãos promovidos a `ativo` entre 15–17/05 por bug do trigger antigo (autovistoria do cliente disparando `cadastro_aprovado` + ativação sem rastreador).
+2. **WENDEL / RENAVAM 0KM** — `fn_validar_campos_ativacao` exige `renavam ≥ 9 dígitos` SEM exceção para 0KM. Veículo do Wendel (chassi `9C6RG9910T0073366`, placa placeholder `ZZZ3366`, `aguardando_placa_definitiva=true`, renavam `001187` — 6 dígitos) bate na trava e o Monitoramento não consegue aprovar.
 
-Você confirmou: **veículos aparecem, você escolhe, o texto muda, mas o botão segue desabilitado, sem erro no console.**
+A regra canônica (memória core) já diz: **RENAVAM é OPCIONAL para 0KM** (`placa LIKE '0KM%'` OU `aguardando_placa_definitiva=true`). Hoje só `sga-hinova-sync` respeita isso — o validador de ativação ficou de fora.
 
-Como `criar.isPending` só fica `true` durante o POST e o texto do `<select>` muda (logo o `onChange` está disparando), o gate culpado é o terceiro: **`sgaTransitorioVisivel`**.
-
-### Como isso acontece mesmo "tendo veículos do SGA"
-
-A query `useBoletosSgaPorAssociado` tem `staleTime: 30s` e refaz background fetch (foco da janela, retry interno). Quando o refetch retorna `erro_transitorio: true` (timeout/auth do Hinova), o payload é sobrescrito por um vazio com a flag transitória, e a UI cai no **fallback local** (`veiculosFallback` da nossa base, que é espelho do SGA — por isso "parece SGA"). O dropdown segue listando veículos, mas a flag `sgaTransitorioVisivel` permanece `true`, mantendo o botão bloqueado.
-
-A correção anterior (`!usandoFallback`) cobre parcialmente, mas só funciona se a query tiver realmente caído pro fallback antes do clique. Em janelas de instabilidade rápida (SGA volta a responder antes do fallback materializar), a flag ainda trava.
-
-### Por que esse gate nem deveria existir
-
-O backend `criar-solicitacao-troca-titularidade` NÃO precisa do SGA online — ele recebe `veiculo_id` (UUID local) e cria a solicitação direto no nosso banco. O SGA é só auxílio visual para listar quais veículos do associado existem. Logo, basta ter um `veiculo_id` válido escolhido para submeter.
+---
 
 ## Mudanças
 
-### 1) `src/components/associados/TrocaTitularidadeDialog.tsx`
+### 1. Migration — corrigir `fn_validar_campos_ativacao`
 
-**Remover `sgaTransitorioVisivel` do disable do botão.** Mantém apenas:
+Atualizar a função para:
 
-```ts
-disabled={criar.isPending || !veiculoId || !nome.trim()}
+- Carregar também `v.aguardando_placa_definitiva` e detectar 0KM por:
+  - `aguardando_placa_definitiva = true`, OU
+  - `placa ILIKE '0KM%'` OU `placa ILIKE 'ZZZ%'` (placeholders correntes)
+- **Pular validação de placa** (`length < 7`) quando 0KM (placeholder é aceito)
+- **Pular validação de renavam** quando 0KM
+- Normalizar renavam só-zeros como ausente (consistente com `sga-hinova-sync`)
+- Manter `chassi ≥ 17` obrigatório sempre (0KM exige chassi)
+
+### 2. Migration — saneamento Lote A (5 contratos)
+
+Os 5 contratos identificados na varredura anterior (autovistoria do cliente + contrato ativo + veículo sem rastreador, 15–17/05):
+
+```text
+TTX4J73   (Yamaha XTZ 250 Lander  — Francisco)
++ 4 outros listados na varredura
 ```
 
-Justificativa: `veiculoId` só pode estar setado se algum dropdown renderizou opções válidas (SGA fresco OU fallback local). Em qualquer dos dois casos, a criação da solicitação é válida.
+Para cada um (em transação, com log em `associado_status_log` / auditoria):
 
-### 2) Feedback de motivo no botão desabilitado
+```text
+- veiculos.status         → 'instalacao_pendente'
+- contratos.status        → 'assinado'
+- contratos.cadastro_aprovado → false  (com bypass do trg_protege_cadastro_aprovado via SET LOCAL)
+- contratos.aprovado_por  → NULL
+- associados.status       → reverter para 'aguardando_aprovacao_cadastro' (ou estado equivalente pré-promoção)
+- Materializar registro em `instalacoes` (status='agendada') quando sub-FIPE não-aplicável, para cair na fila padrão de Cadastro/Monitoramento
+- Re-sync SGA: alterarSituacaoAssociadoHinova(PENDENTE=3) + alterarSituacaoParaVeiculoHinova(3) — disparado via integration_retry_queue
+- Inserir registro em auditoria com motivo: 'saneamento_orfao_pre_fix_20260518_autovistoria_promove_cadastro'
+```
 
-Envolver o botão num `<Tooltip>` (`@/components/ui/tooltip`) que mostra a razão exata quando estiver disabled:
-- `criar.isPending` → "Enviando…"
-- `!veiculoId` → "Selecione o veículo a transferir"
-- `!nome.trim()` → "Informe o nome do novo titular"
+> Ressalva: a UI do Monitoramento já tem o modal "Corrigir dados antes de aprovar". Com o fix do validador, o caso WENDEL deixa de aparecer no modal automaticamente após a aprovação re-tentada (sem precisar preencher RENAVAM falso).
 
-Isso evita futuras situações de "botão bloqueado sem motivo claro".
+### 3. Verificação pós-migração
 
-### 3) Salvaguarda no `handleSubmit`
+- Rodar `fn_validar_campos_ativacao('<associado WENDEL>')` e confirmar `{valido: true}`.
+- Conferir os 5 contratos do Lote A: `status='assinado'`, `cadastro_aprovado=false`, veículo `instalacao_pendente`, fila Cadastro repovoada.
+- Sem mudanças de frontend nesta etapa — toda a correção é em DB.
 
-O `handleSubmit` já valida `nome` e `veiculoId` (linha 219). Manter — funciona como segunda linha de defesa.
+---
 
-## Arquivos afetados
+## Detalhes técnicos
 
-- `src/components/associados/TrocaTitularidadeDialog.tsx` (apenas o rodapé do dialog: ~15 linhas)
+- Função afetada: `public.fn_validar_campos_ativacao(uuid)` (migration `20260428211320`).
+- Trigger relacionado: `trg_protege_cadastro_aprovado` — usar `SET LOCAL session_replication_role = replica` apenas no bloco DO de saneamento, ou função `SECURITY DEFINER` específica de saneamento.
+- Memória relevante: `mem://logic/operations/sga-renavam-opcional-zero-km` (estender para validador de ativação).
+- Sem alterações em código de aplicação / edge functions — `ativar-associado` já consome o validador, então o fix propaga automaticamente.
 
-## Validação pós-implementação
+---
 
-1. Abrir o modal de Troca de Titularidade.
-2. Esperar SGA carregar veículos.
-3. Escolher um veículo + preencher nome.
-4. Conferir que `Criar Solicitação` habilita imediatamente.
-5. Hover no botão (quando faltar campo) mostra o motivo correto.
+## Confirmação antes de executar
 
-## Fora do escopo
+Confirma 3 pontos:
 
-- Não mexer no fluxo backend (`criar-solicitacao-troca-titularidade`).
-- Não mexer nas queries SGA / fallback — comportamento de exibição continua igual.
-- Não tocar nos demais gates do fluxo (assinatura termo, geração de link público, etc.).
+1. **Fix RENAVAM 0KM no validador** — OK aplicar agora? (destrava WENDEL e qualquer 0KM futuro)
+2. **Lote A — saneamento dos 5 órfãos** — confirma executar em lote único?
+3. **Lista do Lote A** — quer que eu re-rode a varredura e cole os 5 IDs/placas exatos no plano antes de você aprovar, ou pode autorizar pela varredura anterior?
