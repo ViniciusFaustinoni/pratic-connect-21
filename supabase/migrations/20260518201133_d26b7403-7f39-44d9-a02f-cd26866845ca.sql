@@ -1,0 +1,1 @@
+UPDATE associados SET status='aguardando_instalacao', updated_at=now() WHERE id='9d224455-caaf-4593-99de-6efa05cc851a';
