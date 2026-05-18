@@ -1,46 +1,38 @@
-## Diagnóstico
+## Diagnóstico — LENIZIA / KXV3F40 (FIPE R$ 21.262 — sub-FIPE)
 
-ANDREIA (KZH6F38, FIPE R$ 40.539 — acima do mínimo) fez autovistoria opcional (já aprovada). Para sair da fila do Cadastro e liberar R/F adiantado, falta apenas o Cadastro aprovar — mas a edge `aprovar-proposta` bloqueia com `409 sem_agendamento` porque **não existe** `instalacoes`, nem `servicos.tipo='instalacao'`, nem `agendamentos_base` para essa cotação.
+### Estado atual
+- **Associado / Contrato / Veículo**: todos `ativo`, `cadastro_aprovado=true` desde **24/04** (sincronizado SGA, sem rastreador — sub-FIPE não exige).
+- **Sem `instalacoes`, sem rastreador** (correto).
 
-O agendamento "19/05 tarde com encaixe" que você relatou foi combinado fora do sistema; nunca foi materializado.
+### O que apareceu hoje na fila
+Em **18/05 15:55** (mesmo timestamp do reprocesso/saneamento de hoje), foram materializados dois registros artificiais:
 
-## Correção
+| Tabela | ID | Status | Observação |
+|---|---|---|---|
+| `vistorias` | `4726f120` | `pendente` (autovistoria) | sem fotos próprias, sem `analisado_em` |
+| `servicos` | `e5aa546d` | `agendada`, `tipo='vistoria_entrada'`, `modalidade='presencial'`, sem `profissional_id` | aponta `vistoria_origem_id=4726f120` |
 
-### 1. Materializar a instalação técnica (atendendo ao guard)
+O serviço espelha uma vistoria que **nasceu pendente** depois que o veículo já estava ativo há 24 dias. Como `profissional_id IS NULL`, o card aparece na fila **Monitoramento › Atribuição de Serviços**. É um fantasma do reprocesso de hoje (mesmo lote que atingiu LIDIA, DOUGLAS e outros).
 
-`INSERT` em `instalacoes` para o contrato `0aefdc1f-…`:
+### Correção (Parte 1 — só este caso)
+
+```sql
+-- Cancela o serviço fantasma
+UPDATE servicos
+SET status='cancelada', updated_at=now(),
+    observacoes = coalesce(observacoes,'') || E'\n[2026-05-18] Cancelado: ativação já concluída em 24/04, serviço materializado artificialmente pelo reprocesso de hoje.'
+WHERE id='e5aa546d-9f62-4586-a622-d85679da2f1b';
+
+-- Marca a vistoria pendente como cancelada
+UPDATE vistorias
+SET status='cancelada', updated_at=now(),
+    observacoes = coalesce(observacoes,'') || E'\n[2026-05-18] Cancelada: ativação concluída em 24/04 sem necessidade desta vistoria (sub-FIPE).'
+WHERE id='4726f120-d6a3-4942-a753-58df1b738fbd';
 ```
-data_agendada = 2026-05-19
-periodo       = 'tarde'
-status        = 'agendada'
-encaixe       = true    (campo padrão de encaixe, se existir na tabela)
-endereco_*    = herdado da cotacao.vistoria_endereco_*
-```
-Espelhar com um `INSERT` em `servicos` (`tipo='instalacao'`, mesma data/periodo, `status='agendada'`) — segue o padrão da `criar-instalacao-pos-pagamento`.
 
-### 2. Aprovar Cadastro
+Sem mudanças em código nem trigger neste momento — só limpa o fantasma. Veículo permanece `ativo`, contrato `ativo`, SGA inalterado.
 
-Atualizar contrato:
-```
-cadastro_aprovado = true
-aprovado_por      = <profile.id do Diretor>
-aprovado_em       = now()
-```
-Isso tira da fila Cadastro, libera R/F adiantado (autovistoria já aprovada), e o veículo segue `instalacao_pendente` aguardando a visita do técnico em 19/05 tarde.
+### Pergunta (precisa antes de aplicar)
+Suspeita: o reprocesso de hoje 15:55 deve ter criado fantasmas em **vários** veículos sub-FIPE já ativos. Quer que eu rode primeiro uma varredura listando todos os casos análogos (vistoria/servico criados em 18/05 15:55 com `contratos.status='ativo'` há > 7 dias) para você decidir limpar em lote, ou prefere corrigir só o KXV3F40 agora?
 
-### 3. Sem alterações de código
-
-Edge function, RLS, triggers — nada muda. É correção pontual de dados, não de fluxo.
-
-### Confirmação necessária
-
-Confirma os dois pontos antes de eu aplicar?
-
-- **Data e período**: 19/05/2026, tarde, com encaixe → OK?
-- **Endereço da instalação**: usar o mesmo endereço da autovistoria (`cotacao.vistoria_endereco_*`)? Ou outro endereço foi combinado?
-
-Após confirmação, aplico via 1 migration (INSERT instalacoes + INSERT servicos + UPDATE contratos).
-
-## Observação — origem do problema
-
-Esse caso é diferente do ANDRE/ROMARIO (que tinham `instalacoes` agendadas corretamente). Andreia caiu numa lacuna do fluxo "autovistoria acima FIPE": o cliente provavelmente saiu do link público antes de agendar a instalação técnica, ou agendou e o registro não foi gravado. Posso, se você quiser, abrir uma segunda tarefa depois para investigar a causa-raiz e adicionar um guard que force o cliente a completar o agendamento antes de finalizar a autovistoria opcional — mas isso é fora do escopo desta correção pontual.
+Aguardo "só KXV3F40" ou "lista geral primeiro" para prosseguir.
