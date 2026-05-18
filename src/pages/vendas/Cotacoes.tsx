@@ -921,7 +921,7 @@ export default function Cotacoes() {
             showStatusEPeriodo={activeTab === 'em_andamento'}
             showConsultor={permissions.cotacao.viewScope !== 'own'}
             showOrfas={activeTab === 'em_andamento' && (permissions.cotacao.canDelete || !!permissions.userId)}
-            activeCount={[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter !== 'all'].filter(Boolean).length}
+            activeCount={[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter.length > 0].filter(Boolean).length}
             onClear={clearFilters}
           />
         </div>
