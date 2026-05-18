@@ -239,22 +239,36 @@ export function useUploadVistoriaFoto() {
 
   return useMutation({
     mutationFn: async (data: { vistoria_id: string; tipo: string; file: File }) => {
+      // GUARD: vistoria precisa existir ANTES de enviar arquivo ao storage.
+      // Sem este check, IDs "otimistas" geram arquivos órfãos (caso KNO3F78 18/05/2026).
+      const { data: vistoriaExiste, error: vistoriaCheckError } = await supabase
+        .from('vistorias')
+        .select('id')
+        .eq('id', data.vistoria_id)
+        .maybeSingle();
+
+      if (vistoriaCheckError || !vistoriaExiste) {
+        console.error('[useUploadVistoriaFoto] Vistoria inexistente — upload abortado.', {
+          vistoria_id: data.vistoria_id,
+          tipo: data.tipo,
+          error: vistoriaCheckError,
+        });
+        throw new Error('Vistoria não materializada. Recarregue a tela e tente novamente.');
+      }
+
       const fileExt = data.file.name.split('.').pop();
       const fileName = `${data.vistoria_id}/${data.tipo}_${Date.now()}.${fileExt}`;
 
-      // Upload para o storage
       const { error: uploadError } = await supabase.storage
         .from('vistoria-fotos')
         .upload(fileName, data.file);
 
       if (uploadError) throw uploadError;
 
-      // Obter URL pública
       const { data: publicUrl } = supabase.storage
         .from('vistoria-fotos')
         .getPublicUrl(fileName);
 
-      // Inserir registro na tabela
       const { data: result, error } = await supabase
         .from('vistoria_fotos')
         .insert({
@@ -265,18 +279,30 @@ export function useUploadVistoriaFoto() {
         .select()
         .single();
 
-      if (error) throw error;
-      
-      // Chassi sempre é preenchido manualmente — nenhum OCR é executado em fotos de chassi.
-      
+      if (error) {
+        // FK violation 23503: arquivo virou órfão. Loga com contexto suficiente para o
+        // saneamento (`reconciliar-fotos-vistoria-orfas`) e propaga erro destrutivo.
+        console.error('[useUploadVistoriaFoto] INSERT vistoria_fotos falhou — POSSÍVEL ÓRFÃO:', {
+          code: error.code,
+          message: error.message,
+          vistoria_id: data.vistoria_id,
+          tipo: data.tipo,
+          storage_path: fileName,
+        });
+        throw error;
+      }
+
       return result;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vistoria', variables.vistoria_id] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao fazer upload:', error);
-      toast.error('Erro ao enviar foto');
+      toast.error(error?.message || 'Erro ao enviar foto', {
+        description: 'A foto pode não ter sido salva. Não saia da tela antes de reenviá-la.',
+        duration: 8000,
+      });
     },
   });
 }
