@@ -516,7 +516,9 @@ export default function Associados() {
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {metricsCards.map((card, index) => {
             const Icon = card.icon;
-            const isSelected = (card.key === 'all' && statusFilter === 'all') || statusFilter === card.key;
+            const isSelected =
+              (card.key === 'all' && statusFilter.length === 0) ||
+              (card.key !== 'all' && statusFilter.includes(card.key as StatusAssociado));
             return (
               <motion.div
                 key={card.key}
@@ -530,10 +532,11 @@ export default function Associados() {
                   }`}
                   onClick={() => {
                     if (card.key === 'all') {
-                      setStatusFilter('all');
+                      setStatusFilter([]);
                       setSheetFilters({});
                     } else {
-                      setStatusFilter(statusFilter === card.key ? 'all' : card.key);
+                      toggleStatus(card.key as StatusAssociado);
+                      return;
                     }
                     setPage(1);
                   }}
