@@ -242,9 +242,14 @@ export function RealocarInstalacaoDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="manha">Manhã (08:00 – 12:00)</SelectItem>
-                    <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                    <SelectItem value="manha">
+                      {sabadoRota ? 'Manhã (09:00 – 13:00)' : 'Manhã (08:00 – 12:00)'}
+                    </SelectItem>
+                    {!sabadoRota && (
+                      <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                    )}
                   </SelectContent>
+
                 </Select>
               </div>
             </div>
