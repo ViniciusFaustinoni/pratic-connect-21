@@ -1613,6 +1613,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Combustível e tipo de uso
         combustivel: combustivelSelecionado || null,
         veiculo_combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || null,
+        // Câmbio (canônico 'manual'|'automatico') extraído pelo plate-lookup —
+        // usado no termo de afiliação. Ver mem: campo veiculo_cambio.
+        veiculo_cambio: (veiculoEncontrado?.vehicleData as any)?.cambio_normalizado || null,
         veiculo_tipo_uso: usoVeiculo || null,
         // Indicação
         indicador_id: indicadorId || null,

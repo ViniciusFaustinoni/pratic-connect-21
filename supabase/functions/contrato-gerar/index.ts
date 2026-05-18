@@ -661,6 +661,7 @@ serve(async (req) => {
             ano_modelo: cotacao.veiculo_ano,
             cor: cotacao.veiculo_cor || null,
             combustivel: cotacao.veiculo_combustivel || null,
+            cambio: (cotacao as any).veiculo_cambio || null,
             valor_fipe: cotacao.valor_fipe || null,
             codigo_fipe: cotacao.codigo_fipe || null,
             chassi: cotacao.veiculo_chassi || null,
@@ -796,6 +797,7 @@ serve(async (req) => {
               ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
               ano_modelo: cotacao.veiculo_ano,
               cor: cotacao.veiculo_cor || null,
+            cambio: (cotacao as any).veiculo_cambio || null,
               combustivel: cotacao.veiculo_combustivel || null,
               valor_fipe: cotacao.valor_fipe || null,
               codigo_fipe: cotacao.codigo_fipe || null,
@@ -929,6 +931,7 @@ serve(async (req) => {
             modelo: cotacao.veiculo_modelo,
             ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
             ano_modelo: cotacao.veiculo_ano,
+            cambio: (cotacao as any).veiculo_cambio || null,
             cor: cotacao.veiculo_cor || null,
             combustivel: cotacao.veiculo_combustivel || null,
             valor_fipe: cotacao.valor_fipe || null,
@@ -1156,6 +1159,7 @@ serve(async (req) => {
             veiculo_valor_fipe: cotacao.valor_fipe,
             veiculo_cor: cotacao.veiculo_cor,
             veiculo_combustivel: cotacao.veiculo_combustivel || null,
+            veiculo_cambio: (cotacao as any).veiculo_cambio || null,
             veiculo_ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano || null,
             
             // Campos para Termo de Afiliação (Autentique)

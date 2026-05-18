@@ -9116,6 +9116,7 @@ export type Database = {
           veiculo_alienado: boolean | null
           veiculo_ano: number | null
           veiculo_ano_fabricacao: number | null
+          veiculo_cambio: string | null
           veiculo_categoria: string | null
           veiculo_chassi: string | null
           veiculo_combustivel: string | null
@@ -9244,6 +9245,7 @@ export type Database = {
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_cambio?: string | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
@@ -9372,6 +9374,7 @@ export type Database = {
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_cambio?: string | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
@@ -10158,6 +10161,7 @@ export type Database = {
           veiculo_ano_fabricacao: number | null
           veiculo_ano_modelo: number | null
           veiculo_blindado: boolean | null
+          veiculo_cambio: string | null
           veiculo_categoria: string | null
           veiculo_chassi: string | null
           veiculo_combustivel: string | null
@@ -10295,6 +10299,7 @@ export type Database = {
           veiculo_ano_fabricacao?: number | null
           veiculo_ano_modelo?: number | null
           veiculo_blindado?: boolean | null
+          veiculo_cambio?: string | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
@@ -10432,6 +10437,7 @@ export type Database = {
           veiculo_ano_fabricacao?: number | null
           veiculo_ano_modelo?: number | null
           veiculo_blindado?: boolean | null
+          veiculo_cambio?: string | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
@@ -31356,6 +31362,7 @@ export type Database = {
           associado_id: string
           ativo: boolean
           blindado: boolean | null
+          cambio: string | null
           chassi: string | null
           cobertura_assistencia: boolean | null
           cobertura_roubo_furto: boolean | null
@@ -31426,6 +31433,7 @@ export type Database = {
           associado_id: string
           ativo?: boolean
           blindado?: boolean | null
+          cambio?: string | null
           chassi?: string | null
           cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
@@ -31496,6 +31504,7 @@ export type Database = {
           associado_id?: string
           ativo?: boolean
           blindado?: boolean | null
+          cambio?: string | null
           chassi?: string | null
           cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
