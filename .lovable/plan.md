@@ -1,93 +1,27 @@
-## Estado real do FVW6H66 (Eduardo Fernando)
+## Exclusão definitiva — Marcos Vinicius Dativo Machado & Marcus Vinicius Faustinoni
 
-| Entidade | Estado | Observação |
-|---|---|---|
-| `instalacoes` | **concluida** 16/05 12:05 | Rastreador `356430073984725` instalado |
-| `servicos` (instalacao) | **aprovada** | Decisão do instalador OK |
-| `vistorias` (entrada, presencial) | **em_analise** | ⚠️ **aguardando Monitoramento aprovar** |
-| `contratos.cadastro_aprovado` | `true` | Cadastro aprovou em 15/05 |
-| `contratos.status` | `assinado` | Será promovido a `ativo` quando Monitoramento aprovar |
-| `associados.status` | `em_analise` | Idem |
-| `veiculos.status` | `ativo` | ⚠️ promovido **prematuramente** por trigger pós-instalação |
-| `veiculos.cobertura_total` / `roubo_furto` / `suspensa` | **false / false / false** | Coberturas só são religadas no `ativar-associado` |
+### Registros encontrados
 
-**Resumo**: a instalação física + vistoria foram feitas (as 36 fotos provam), mas o caso **ainda não passou pela aprovação final do Monitoramento**, que é quem chama `ativar-associado`. Esse é o único motivo das coberturas estarem todas `false`. O fluxo está correto — falta apenas o operador do Monitoramento aprovar.
+| Nome | ID | CPF | Status | Hinova | Veículos |
+|---|---|---|---|---|---|
+| MARCUS VINICIUS FAUSTINONI DE FREITAS | `988dbfa9-372f-4706-a84d-9275e647e00a` | 12493649737 | ativo | — (não sincronizado) | LTB4J74 (Corolla), KOU6D37 (Fiesta) |
+| MARCOS VINICIUS DATIVO MACHADO | `76831a73-71c2-4164-b678-00f4cda225d1` | 14194896742 | ativo | 25645 | QOO5C17 (Voyage) |
 
-## A divergência visual tem causa diferente
+### Plano
 
-Dois componentes leem fontes diferentes:
+1. **Desvincular rastreadores** vinculados a esses associados/veículos (rastreadores → `veiculo_id=null`, `associado_id=null`, `status='estoque'`). Mantém o equipamento físico no estoque.
+2. **Excluir veículos** dos dois associados (`DELETE FROM veiculos WHERE associado_id IN (...)`). Cascata do banco limpa: contratos, cotações, cobranças, instalações, vistorias, fotos, serviços, agendamentos, documentos, sinistros, substituições, etc. vinculados pelo `veiculo_id`/`associado_id` quando configurados com `ON DELETE CASCADE`.
+3. **Excluir os associados** (`DELETE FROM associados WHERE id IN (...)`). Cascata remove qualquer registro residual ligado ao associado.
+4. **Hinova/SGA:** o Marcos tem `codigo_hinova=25645`. A exclusão é **somente local** — não dispara cancelamento no Hinova. Se for preciso baixar lá, fica a critério do operador no painel SGA (regra: nunca mandamos cancelamento automático).
 
-- **Drawer do associado** (`AssociadoDetalhe.tsx:882-887`) renderiza **"Cobertura Ativa"** baseado **apenas em `v.status === 'ativo'`** → ignora as flags reais de cobertura. Por isso pinta verde falso.
-- **Listagem `/cadastro/associados`** usa `BadgeCoberturaCompact` (`BadgeCobertura.tsx:93-166`) que lê `cobertura_total/roubo_furto/suspensa` → mostra "Sem Cobertura" (correto).
+Este é o mesmo padrão usado em `useDeleteBaseAntiga` para limpeza de base — já validado em produção.
 
-## Plano de correção
+### Confirmação necessária
 
-### Frente A — Concluir o caso FVW6H66 (operacional, sem código)
+Quero que você confirme antes de eu rodar a migração de DELETE:
 
-1. Operador abre **Monitoramento › Aprovações › Aprovação de Associados**.
-2. Localiza Eduardo Fernando (FVW6H66) — ele estará lá porque `vistoria.status='em_analise'`.
-3. Aprova. A edge `ativar-associado` é chamada e:
-   - Promove `associados/contratos/veiculos` para `ativo` de forma sincronizada.
-   - Religa `cobertura_total` (instalação concluída + rastreador presente).
-4. As 36 fotos já estão materializadas — nada a fazer no storage.
+- (a) Excluir **ambos** os associados + 3 veículos + todos os registros vinculados em cascata?
+- (b) Quer que eu mantenha algum histórico (ex.: cotações antigas) ou pode apagar tudo?
+- (c) Confirma que NÃO precisa baixar nada no Hinova/SGA (Marcos tem código 25645 lá)?
 
-> Nenhuma migração de saneamento é necessária para esse caso. O dado está coerente com "aguardando Monitoramento".
-
-### Frente B — Corrigir o badge falso do drawer (código)
-
-Substituir o IIFE em `src/pages/cadastro/AssociadoDetalhe.tsx` (linhas 873-890) por um único componente canônico que lê as flags reais.
-
-Comportamento alvo (mesma matriz do `BadgeCoberturaCompact`):
-
-| Condição | Badge |
-|---|---|
-| `veiculosInadimplentes` contém o veículo | "Cobertura Suspensa (Nd)" — vermelho (mantém) |
-| `cobertura_suspensa = true` | "Suspensa" — vermelho |
-| `cobertura_total = true` | "Proteção 360º" — verde |
-| `cobertura_roubo_furto = true` | "Roubo/Furto" — amarelo |
-| nenhuma das anteriores | "Sem Cobertura" — cinza |
-
-Reaproveita o `<BadgeCobertura>` (versão com label) já existente. Some o ramo `status === 'ativo' → "Cobertura Ativa"`, que é a fonte do falso positivo.
-
-### Frente C — Garantir consistência semântica (opcional, baixa prioridade)
-
-`veiculos.status='ativo'` enquanto `associado=em_analise` e `cobertura_total=false` é um estado conceitualmente inconsistente, mesmo que momentâneo. Avaliar (sem mudar agora):
-
-- Por que o trigger pós-instalação está promovendo `veiculos.status` para `ativo` antes do Monitoramento? Memória diz que **não deveria** ("Triggers de pós-instalação NÃO ativam cobertura nem promovem veículo a 'ativo'"). Pode haver regressão em alguma trigger/função recente.
-- Se for regressão real, abrir item separado para investigar a função/trigger responsável.
-
-Não bloqueia este pedido. A Frente B já resolve o que o usuário vê.
-
-## Detalhes técnicos (Frente B)
-
-Arquivo único: `src/pages/cadastro/AssociadoDetalhe.tsx`
-
-```tsx
-// antes (linhas 873-890): IIFE com ramo falso "Cobertura Ativa"
-// depois: delegar a um único componente
-{(() => {
-  const veicInad = situacao.veiculosInadimplentes.find(vi => vi.veiculoId === v.id);
-  if (veicInad) {
-    return (
-      <Badge variant="destructive" className="text-[10px]">
-        <ShieldOff className="h-3 w-3 mr-1" /> Cobertura Suspensa ({veicInad.diasAtraso}d)
-      </Badge>
-    );
-  }
-  return (
-    <BadgeCobertura
-      coberturaTotal={(v as any).cobertura_total}
-      coberturaRouboFurto={(v as any).cobertura_roubo_furto}
-      coberturaSuspensa={(v as any).cobertura_suspensa}
-      coberturaSuspensaMotivo={(v as any).cobertura_suspensa_motivo}
-      className="text-[10px]"
-    />
-  );
-})()}
-```
-
-Garantir que o hook que carrega `veiculos` no drawer (`useAssociadoDetalhe` ou similar) inclui as colunas `cobertura_total, cobertura_roubo_furto, cobertura_suspensa, cobertura_suspensa_motivo` no `.select()` — verificar e adicionar se ausentes.
-
-## Confirmação antes de aplicar
-
-Aplico a **Frente B** (correção do badge) agora? A **Frente A** é operacional — basta o operador aprovar no Monitoramento que tudo se resolve sozinho.
+Aprovando, executo via `supabase--migration` em uma única transação.
