@@ -184,8 +184,20 @@ export function ExportAssociadosDialog({
 
         if (usarFiltrosTela) {
           if (screenFilters.status?.length) q = q.in('status', screenFilters.status);
-          if (screenFilters.plano_id) q = q.eq('plano_id', screenFilters.plano_id);
-          if (screenFilters.cidade) q = q.eq('cidade', screenFilters.cidade);
+          if (screenFilters.plano_id) {
+            if (Array.isArray(screenFilters.plano_id)) {
+              if (screenFilters.plano_id.length) q = q.in('plano_id', screenFilters.plano_id);
+            } else {
+              q = q.eq('plano_id', screenFilters.plano_id);
+            }
+          }
+          if (screenFilters.cidade) {
+            if (Array.isArray(screenFilters.cidade)) {
+              if (screenFilters.cidade.length) q = q.in('cidade', screenFilters.cidade);
+            } else {
+              q = q.eq('cidade', screenFilters.cidade);
+            }
+          }
         }
         return q.order('created_at', { ascending: false });
       };
