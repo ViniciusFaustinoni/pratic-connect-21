@@ -317,14 +317,19 @@ serve(async (req) => {
           // só entra na fila do Cadastro quando a cotação canônica vinculada
           // atingir `aguardando_aprovacao_cadastro` (trigger
           // trg_troca_promove_cadastro_via_cotacao). Não usar 'aguardando_cadastro' aqui.
-          await supabase
+          const { count: updTrocaCount, error: updTrocaErr } = await supabase
             .from('solicitacoes_troca_titularidade')
             .update({
               termo_cancelamento_assinado_em: payload.event?.data?.signed || new Date().toISOString(),
               status: 'cotacao_em_andamento',
               updated_at: new Date().toISOString(),
-            })
+            }, { count: 'exact' })
             .eq('id', solTroca.id);
+          if (updTrocaErr || !updTrocaCount) {
+            console.warn(
+              `[autentique-webhook][ALERTA] update da troca não afetou linhas — documentId=${documentId} solId=${solTroca.id} err=${updTrocaErr?.message || 'n/a'}`
+            );
+          }
 
           // ── DESVÍNCULO LÓGICO DA PLACA (anti-sequestro de placa) ──
           // Marca o veículo como em troca de titularidade. O bloqueio anti-sequestro
