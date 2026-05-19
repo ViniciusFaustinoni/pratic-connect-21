@@ -853,7 +853,7 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                {isTrocaTitularidade && !trocaLiberada ? (
+                {trocaEmAnalise ? (
                   <TelaAnaliseTrocaTitularidade
                     status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
                     motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
@@ -898,7 +898,7 @@ export default function CotacaoContratacao() {
                     } : undefined}
                   />
                 )}
-                  {!(isTrocaTitularidade && !trocaLiberada) && (
+                  {!(trocaEmAnalise) && (
                     <NavegacaoEtapas
                       etapaAtual={etapaAtual}
                       etapaMaxima={etapaDoStatus}
@@ -1066,7 +1066,7 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                {isTrocaTitularidade && !trocaLiberada ? (
+                {trocaEmAnalise ? (
                   <TelaAnaliseTrocaTitularidade
                     status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
                     motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
