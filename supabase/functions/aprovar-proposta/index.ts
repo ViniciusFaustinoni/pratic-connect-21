@@ -593,10 +593,10 @@ serve(async (req) => {
           }
         }
       } else if (!veiculoPrecisaRastreador) {
-        // SUB-FIPE: Cadastro está aprovando após a autovistoria. Promove o servico
-        // vistoria_entrada (em_analise → concluida) para entrar na fila do Monitoramento,
-        // e libera Roubo/Furto no veículo. A ativação final continua sendo do Monitoramento
-        // (via aprovar-vistoria-monitoramento → ativar-associado).
+        // SUB-FIPE: Cadastro APENAS aprova documentos e promove o servico
+        // vistoria_entrada (em_analise → concluida) para a fila do Monitoramento.
+        // REGRA CANÔNICA: Cadastro NÃO avalia as fotos (31/15) nem libera R/F —
+        // Monitoramento decide. mem://logic/operations/cadastro-escopo-canonico
         try {
           const { data: vistAuto } = await supabase
             .from('vistorias')
