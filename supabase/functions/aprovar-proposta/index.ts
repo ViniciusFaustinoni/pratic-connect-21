@@ -623,11 +623,11 @@ serve(async (req) => {
               else console.log(`[aprovar-proposta] Sub-FIPE: servico vistoria_entrada promovido a concluida (cotação ${contrato.cotacao_id}).`);
             }
 
-            // Liberar Roubo/Furto no veículo
-            await supabase
-              .from('veiculos')
-              .update({ cobertura_roubo_furto: true })
-              .eq('id', veiculoId);
+            // REGRA CANÔNICA: Sub-FIPE — Cadastro NÃO libera R/F.
+            // A análise das fotos (31 carros / 15 motos + vídeo) é responsabilidade
+            // do Monitoramento, que decide R/F e aprovação final.
+            // Memória: mem://logic/operations/cadastro-escopo-canonico
+
 
             // Atualizar status_contratacao da cotação
             if (contrato.cotacao_id) {
