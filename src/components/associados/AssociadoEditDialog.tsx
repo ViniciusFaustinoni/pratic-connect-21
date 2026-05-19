@@ -77,6 +77,9 @@ const formSchema = z.object({
   uf: z.string().optional(),
   plano_id: z.string().optional(),
   dia_vencimento: z.number().min(1).max(28).optional(),
+  data_adesao: z.string().optional(),
+  data_cadastro_sga: z.string().optional(),
+  codigo_hinova: z.union([z.number(), z.nan()]).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
