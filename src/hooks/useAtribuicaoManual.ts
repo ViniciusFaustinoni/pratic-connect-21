@@ -104,7 +104,7 @@ export function useServicosParaAtribuir() {
       // Fetch base inspections without technician assigned
       const { data: baseItems, error: baseError } = await supabase
         .from('agendamentos_base')
-        .select('id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes, oficina_id')
+        .select('id, instalacao_id, vistoria_id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes, oficina_id')
         .is('atendido_por', null)
         .in('status', ['agendado', 'pendente'])
         .gte('data_agendada', hoje)
@@ -113,8 +113,29 @@ export function useServicosParaAtribuir() {
 
       if (baseError) console.error('Erro ao buscar agendamentos_base:', baseError);
 
+      // Dedupe: se o agendamento_base já tem servico vinculado (instalacao ou
+      // vistoria) presente na lista de servicosFiltrados, NÃO mostrar o
+      // agendamento_base separado — vira card duplicado.
+      // Ver mem://logic/operations/vistoria-entrada-equivale-instalacao
+      const instalacoesNaFila = new Set(
+        (servicosFiltrados || [])
+          .map((s: any) => s.instalacao_origem_id)
+          .filter(Boolean)
+      );
+      const vistoriasNaFila = new Set(
+        (servicosFiltrados || [])
+          .map((s: any) => s.vistoria_origem_id)
+          .filter(Boolean)
+      );
+
+      const baseSemDup = (baseItems || []).filter((b: any) => {
+        if (b.instalacao_id && instalacoesNaFila.has(b.instalacao_id)) return false;
+        if (b.vistoria_id && vistoriasNaFila.has(b.vistoria_id)) return false;
+        return true;
+      });
+
       // Normalize base items to match service format
-      const baseNormalized = (baseItems || []).map(b => ({
+      const baseNormalized = baseSemDup.map(b => ({
         id: b.id,
         tipo: 'vistoria_base',
         data_agendada: b.data_agendada,
