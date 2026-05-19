@@ -1,92 +1,88 @@
-## Diagnóstico — caso ALEXANDRE GUTTI (KRN9E64 / CPF 134.915.737-69 / codigo_hinova 21020)
+## Causa raiz — Tarefa duplicada do Alexandre Gutti (KRN9E64)
 
-Confirmei nos logs e nos `sga_situacao_check` por que o gate mostra "OK" mesmo o associado tendo boletos em aberto no SGA.
+Cotação `d244312f` (Ford Ka, FIPE R$36.469 → **acima do mínimo**, autovistoria é OPCIONAL e instalação técnica é OBRIGATÓRIA).
 
-### O que a verificação enxergou
+Timeline auditado (`logs_auditoria` + `contratos_historico`):
 
-O check mais recente (19/05 16:47 / 16:29 / 16:19) trouxe sempre o mesmo payload da edge `sga-listar-boletos-associado`:
-
-```json
-{
-  "encontrado": true,
-  "codigo_associado": 21020,
-  "veiculos": [
-    { "placa": "KRN9E64", "codigo_veiculo": 24662,
-      "boletos_abertos": [], "situacao_financeira": null }
-  ],
-  "tem_debito": false
-}
+```
+17:43  contrato criado, termo enviado/assinado
+17:55  finalizar-autovistoria-cotacao roda
+       → cria vistoria a3353a69 (modalidade=autovistoria, origem=autovistoria_publica)
+       → cria servico 31009ff6 (tipo=vistoria_entrada, vistoria_origem_id=a3353a69)
+18:12  status_contratacao=aguardando_aprovacao_cadastro (autovistoria concluída)
+18:14  cliente escolhe Vistoria Base no link público
+       → cria agendamento_base 5f96e7ca (data=19, horario=13:00, oficina_id)
+       → tipo_vistoria=agendada_base, status_contratacao=vistoria_agendada
 ```
 
-Logs do Hinova confirmam:
+Por isso a fila mostra **dois cards** para o mesmo Alexandre:
+- `Vistoria de Entrada (Instalação) — 09:00` ← servico 31009ff6 (origem autovistoria)
+- `Vistoria Base — 13:00` ← agendamento_base 5f96e7ca (origem Vistoria Base na oficina)
 
-- `GET /buscar/situacao-financeira-veiculo/24662` → **null** (veículo novo, ainda sem situação calculada).
-- `[sga-listar-boletos-associado] situacao_financeira indisponivel para todos os veiculos … placas: ["KRN9E64"]`.
+Dois bugs combinados produzem a duplicação:
 
-### Por que isso é falso-OK
+1. **Servico de autovistoria não é fechado quando o cliente agenda Vistoria Base depois**
+   Não existe gatilho que, ao inserir `agendamentos_base` para uma cotação que JÁ tem `servicos.vistoria_origem_id` apontando para uma vistoria de modalidade `autovistoria`, marque esse servico como terminal. Resultado: ele continua `pendente` e aparece na fila.
 
-`sga-listar-boletos-associado` enumera os veículos chamando `GET /associado/buscar/{cpf}/cpf` no Hinova. **Para esse CPF, o Hinova devolveu apenas o veículo da cotação atual (KRN9E64 / código 24662 — o que acabou de ser sincronizado)** — provavelmente porque o endpoint retorna só os veículos da matrícula "viva" mais recente. Os boletos vencidos do Alexandre estão em **outros veículos/matrículas anteriores** do mesmo CPF, que esse endpoint não devolve. Resultado:
+2. **`fn_materializar_servico_vistoria_sub_fipe` não se aplica (veículo precisa rastreador)** e a única chance de "esvaziar" o servico de autovistoria seria via `aprovar-proposta` (memória `autovistoria-acima-fipe-libera-rf-nao-conclui-vistoria`). Mas como o Cadastro **ainda não aprovou** (`cadastro_aprovado=false`), o servico permanece visível. E mesmo após a aprovação, o filtro de dedup precisa enxergar a marca de "autovistoria" no servico (no banco a coluna `modalidade` deste registro veio `presencial` — divergência sobre a qual o filtro tropeça).
 
-- Vetor de boletos = vazio → `qtd_boletos_abertos = 0`.
-- `situacao_financeira` do único veículo enumerado = `null` (KRN9E64 é novo, nunca teve cobrança).
-- O gate decide `tem_debito=false` → libera o Cadastro como "Situação financeira OK".
-
-Some-se a isso: o caminho atual **trata `situacao_financeira=null` em todos os veículos como ADIMPLENTE por omissão**. Mesmo se a enumeração estivesse completa, a ausência total de sinal SGA estaria sendo lida como "tudo certo", o que vai contra a regra canônica do `mem://logic/operations/sga-inadimplencia-veiculo-canonica` ("só boletos não basta — flag INADIMPLENTE no veículo é canônica").
+> ⚠️ Note que **não é** um problema do `dedupe_agendamentos_base_on_insert` (esse só dedup entre agendamentos_base). Também **não é** um problema do `criar-instalacao-pos-pagamento` (esse já tem guards e nem chegou a rodar). É o vácuo entre "autovistoria opcional" e "agendamento de vistoria presencial" feito pelo mesmo cliente.
 
 ---
 
-## Plano de correção (focado, sem mudar UI fora do gate)
+## Plano
 
-### Parte 1 — Saneamento do caso Alexandre (imediato)
+### Parte 1 — Sanear o caso do Alexandre (migration)
 
-- Invalidar o `sga_situacao_check` mais recente do contrato `ee5f5aa3-…` inserindo um registro `origem_resultado='inconclusivo'` com `tem_debito=true`, `motivo='enumeracao_incompleta_sga'` e payload de auditoria explicando que o gate detectou apenas 1 veículo e nenhum sinal `situacao_financeira`.
-- Histórico em `associados_historico` registrando: "Gate SGA tratado como inconclusivo. Cadastro só pode prosseguir após verificação manual dos boletos do CPF 134.915.737-69 no painel SGA ou bypass auditado por Diretor."
-- Resultado UI esperado: o `SituacaoFinanceiraGate` passa a renderizar o card de bloqueio (vermelho) ao invés do verde, exigindo "Consultar SGA novamente" ou "Ignorar e Prosseguir" (com motivo).
+- `UPDATE servicos SET status='aprovada', modalidade='autovistoria', analisado_em=now(), observacoes=observacoes || ' [Saneado: cliente também agendou Vistoria Base 19/05 13:00 — autovistoria fica como aprovada terminal, fora da fila]' WHERE id='31009ff6-8627-4aae-a237-db5ac07ac336';`
+- `UPDATE vistorias SET modalidade='autovistoria' WHERE id='a3353a69-557b-4294-a598-110387d8eab0';` (idempotente)
+- Insert em `contratos_historico` documentando a deduplicação manual.
 
-### Parte 2 — Correção sistêmica do gate
+Resultado: apenas o card **Vistoria Base 13:00** continua visível na fila.
 
-**2a. Edge `sga-listar-boletos-associado`** — endurecer a enumeração de veículos para cobrir o CPF inteiro:
+### Parte 2 — Fix sistêmico (trigger DB)
 
-1. Após `buscarAssociadoComVeiculosPorCpf`, complementar a lista com:
-   - Veículos espelhados localmente em `public.veiculos` para o mesmo `associado_id` ou mesmo `cliente_cpf` (incluindo `status` cancelado/inadimplente).
-   - Resultado da tabela de auditoria `sga_situacao_check.payload` mais recente para o CPF, juntando todos os `codigo_veiculo` já vistos.
-   - De-duplicar por `codigo_veiculo`.
-2. Rodar `listarBoletosVeiculo` + `buscarSituacaoFinanceiraVeiculo` em cada `codigo_veiculo` agregado, não só nos retornados pelo `/associado/buscar/cpf`.
-3. Marcar veículos de origem "local-only" com flag `origem_enumeracao: 'local'` no payload (auditoria).
+Criar `fn_dedup_autovistoria_ao_agendar_base` em `agendamentos_base` (AFTER INSERT):
 
-**2b. Edge `verificar-situacao-financeira-cadastro`** — endurecer a classificação:
+```sql
+-- Quando entra um agendamento_base para uma cotação cuja autovistoria
+-- materializada gerou servico vistoria_entrada pendente, fecha esse servico
+-- como 'aprovada' terminal (a autovistoria do cliente vira insumo, não tarefa).
+UPDATE servicos s
+   SET status='aprovada',
+       modalidade='autovistoria',
+       analisado_em=now(),
+       observacoes = COALESCE(observacoes,'') ||
+         E'\n[' || to_char(now() AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD HH24:MI') ||
+         '] Fechada automaticamente: cliente agendou Vistoria Base (agendamento '||NEW.id::text||').'
+  FROM vistorias v
+ WHERE s.vistoria_origem_id = v.id
+   AND v.cotacao_id = NEW.cotacao_id
+   AND v.modalidade = 'autovistoria'
+   AND s.status NOT IN ('aprovada','reprovada','aprovada_ressalvas','concluida','cancelada');
+```
 
-- Substituir a regra "tem_debito = qtd>0 || placasInadimplentes>0" por uma classificação em 3 estados:
-  - `OK` → existe pelo menos 1 veículo retornado pelo SGA E todos com `situacao_financeira='ADIMPLENTE'` E `qtd_boletos_vencidos=0`.
-  - `INADIMPLENTE` → qualquer boleto vencido OU qualquer `situacao_financeira='INADIMPLENTE'`.
-  - `INCONCLUSIVO` (novo `origem_resultado='inconclusivo'`) → SGA respondeu mas TODOS os veículos vieram com `situacao_financeira=null` E nenhum boleto vencido. Hoje isso é lido como OK; passará a bloquear o gate com mensagem "Sinal SGA insuficiente, verifique manualmente ou faça bypass auditado".
-- `liberado=true` apenas em `OK` e `bypass`/`transitorio`/`associado_inexistente_sga` (mantidos).
+### Parte 3 — Garantir gravação consistente em `finalizar-autovistoria-cotacao`
 
-**2c. Componente `SituacaoFinanceiraGate.tsx`** — adicionar branch para `origem_resultado='inconclusivo'`:
+Auditar o servico do Alexandre mostrou `modalidade='presencial'` apesar do código gravar `'autovistoria'` (provavelmente um caminho antigo). Adicionar guard no edge: após o `INSERT`/`UPDATE` em `servicos`, fazer `UPDATE servicos SET modalidade='autovistoria', origem='autovistoria_publica' WHERE id=:id AND (modalidade IS DISTINCT FROM 'autovistoria' OR origem IS DISTINCT FROM 'autovistoria_publica')` para fechar a brecha.
 
-- Card amarelo (não vermelho, porque não temos certeza de débito), com texto "Verificação financeira inconclusiva — o SGA retornou veículo sem sinal de situação financeira. Confira boletos manualmente no painel SGA antes de aprovar." Botões: "Consultar SGA novamente" + "Ignorar e Prosseguir" (bypass auditado).
-- Continua bloqueando avanço do Cadastro (mesmo comportamento do estado inadimplente, mas visualmente diferente).
+### Parte 4 — Memória
 
-### Parte 3 — Auditoria de outros casos (somente consulta, sem alteração)
-
-Listar contratos em `aguardando_aprovacao_cadastro` cujo último `sga_situacao_check` tenha `origem_resultado='sga'`, `tem_debito=false`, `qtd_boletos_abertos=0` E todos os `payload.veiculos[*].situacao_financeira` null. Esses casos provavelmente foram falsamente liberados pelo mesmo bug — relatório no chat para o usuário decidir.
-
----
-
-## Detalhes técnicos
-
-- Arquivos tocados: `supabase/functions/sga-listar-boletos-associado/index.ts`, `supabase/functions/verificar-situacao-financeira-cadastro/index.ts`, `src/components/cadastro/SituacaoFinanceiraGate.tsx`. Sem mudança de schema.
-- Saneamento do Alexandre via 1 INSERT em `sga_situacao_check` + 1 INSERT em `associados_historico` (sem migration de schema).
-- Compatível com o cache de 10 min: o INSERT do saneamento será o registro mais recente, então o gate da UI passa a refletir imediatamente.
-- Nova memória `mem://logic/operations/gate-financeiro-cadastro-inconclusivo` documentando que `situacao_financeira=null` em TODOS os veículos = inconclusivo (não OK).
+Atualizar `mem://logic/operations/autovistoria-acima-fipe-libera-rf-nao-conclui-vistoria` adicionando a regra: **"Quando o cliente faz autovistoria opcional E DEPOIS escolhe Vistoria Base, o servico de autovistoria é fechado automaticamente como 'aprovada' terminal (trigger `trg_dedup_autovistoria_ao_agendar_base`) — não espera aprovação do Cadastro."**
 
 ---
 
-## Checklist de execução
+## Validação após aplicar
 
-1. Inserir registro de saneamento `inconclusivo` para o contrato `ee5f5aa3-…` + histórico.
-2. Editar `sga-listar-boletos-associado/index.ts` para enumerar também por `veiculos` local + `sga_situacao_check.payload` históricos.
-3. Editar `verificar-situacao-financeira-cadastro/index.ts` para classificar 3 estados (OK / INADIMPLENTE / INCONCLUSIVO).
-4. Editar `SituacaoFinanceiraGate.tsx` adicionando branch `inconclusivo` (card amarelo bloqueador + bypass).
-5. Rodar consulta de auditoria pós-deploy listando contratos potencialmente afetados pelo mesmo bug.
-6. Criar memória `mem://logic/operations/gate-financeiro-cadastro-inconclusivo` e referenciá-la no índice.
+```sql
+-- Fila do Alexandre deve mostrar SÓ a Vistoria Base 13:00
+SELECT 'servico' src, id, tipo, status, modalidade, data_agendada, hora_agendada
+  FROM servicos WHERE vistoria_origem_id='a3353a69-557b-4294-a598-110387d8eab0'
+UNION ALL
+SELECT 'agendamento_base', id, status, NULL, NULL, data_agendada, horario
+  FROM agendamentos_base WHERE cotacao_id='d244312f-a2a1-4423-bb5c-e2064032eb7e';
+```
+
+Esperado: servico = `aprovada` (terminal, fora da fila), agendamento_base = `agendado` (único card visível).
+
+Arquivos: 1 migration (Partes 1+2), `supabase/functions/finalizar-autovistoria-cotacao/index.ts` (Parte 3), memória (Parte 4).

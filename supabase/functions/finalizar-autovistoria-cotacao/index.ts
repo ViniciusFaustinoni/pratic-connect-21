@@ -280,6 +280,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 6.1 Guard: garantir que o servico está marcado como autovistoria.
+    // Caminhos antigos podiam deixar modalidade='presencial' ou origem nula,
+    // o que quebra o dedup da fila quando o cliente também agenda Vistoria Base
+    // (caso Alexandre Gutti / KRN9E64). Idempotente.
+    if (servicoId) {
+      await supabase
+        .from('servicos')
+        .update({ modalidade: 'autovistoria', origem: 'autovistoria_publica' })
+        .eq('id', servicoId)
+        .or('modalidade.is.null,modalidade.neq.autovistoria,origem.is.null,origem.neq.autovistoria_publica');
+    }
+
     // 7. Atualizar cotação + contrato com referências
     await supabase
       .from('cotacoes')
