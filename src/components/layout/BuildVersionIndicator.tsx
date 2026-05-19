@@ -9,8 +9,9 @@ import { toast } from 'sonner';
  * Clique copia o hash para o clipboard (útil para suporte comparar entre usuários).
  */
 export function BuildVersionIndicator() {
-  const { current, isStale } = useBuildVersion();
+  const { current, latest, isStale } = useBuildVersion();
   const short = (current || 'dev').slice(0, 7);
+  const isChecking = latest === null;
 
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -41,7 +42,11 @@ export function BuildVersionIndicator() {
       <span
         className={cn(
           'h-1.5 w-1.5 rounded-full',
-          isStale ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
+          isChecking
+            ? 'bg-muted-foreground/40'
+            : isStale
+            ? 'bg-amber-500 animate-pulse'
+            : 'bg-emerald-500'
         )}
         aria-hidden
       />

@@ -18,27 +18,45 @@ const gitSha = (() => {
   }
 })();
 
+// Cascata determinística — sem fallback por data (que gerava IDs "fantasma"
+// diferentes a cada execução). "dev" é o último recurso e é constante.
 const BUILD_ID =
   process.env.BUILD_ID ||
   process.env.VERCEL_GIT_COMMIT_SHA ||
   process.env.COMMIT_REF ||
   gitSha ||
-  new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 12);
+  "dev";
 
-// Plugin que escreve public/version.json com o BUILD_ID atual
+const VERSION_PAYLOAD = () =>
+  JSON.stringify({ buildId: BUILD_ID, builtAt: new Date().toISOString() });
+
+// Plugin que escreve public/version.json no build e serve /version.json
+// dinamicamente em dev/preview — garantindo que o valor servido seja
+// SEMPRE o mesmo BUILD_ID injetado no bundle via __BUILD_ID__.
 const writeVersionJson = () => ({
   name: "write-version-json",
   buildStart() {
     try {
       const dir = path.resolve(__dirname, "public");
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(
-        path.join(dir, "version.json"),
-        JSON.stringify({ buildId: BUILD_ID, builtAt: new Date().toISOString() })
-      );
+      fs.writeFileSync(path.join(dir, "version.json"), VERSION_PAYLOAD());
     } catch (e) {
       console.warn("[write-version-json] falhou:", e);
     }
+  },
+  configureServer(server: any) {
+    server.middlewares.use("/version.json", (_req: any, res: any) => {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(VERSION_PAYLOAD());
+    });
+  },
+  configurePreviewServer(server: any) {
+    server.middlewares.use("/version.json", (_req: any, res: any) => {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(VERSION_PAYLOAD());
+    });
   },
 });
 
