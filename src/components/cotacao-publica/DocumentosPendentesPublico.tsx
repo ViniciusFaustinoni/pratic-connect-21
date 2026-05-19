@@ -174,6 +174,72 @@ export function DocumentosPendentesPublico({
         .from('cotacoes-docs')
         .getPublicUrl(fileName);
 
+      // 2.0 BRANCH ESPECIAL: vídeo 360° — atualiza vistoria diretamente, sem OCR
+      if (isTipoVideo(doc.tipo_documento)) {
+        // Localizar vistoria ativa do associado (mais recente)
+        const { data: vistoria, error: vistoriaErr } = await publicSupabase
+          .from('vistorias')
+          .select('id')
+          .eq('associado_id', associadoId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (vistoriaErr) console.warn('[reenvio video_360] erro busca vistoria:', vistoriaErr);
+
+        if (vistoria?.id) {
+          const vistoriaId = vistoria.id;
+
+          // Arquivar vídeo anterior em vistoria_fotos (renomear tipo)
+          const { data: anteriores } = await publicSupabase
+            .from('vistoria_fotos')
+            .select('id')
+            .eq('vistoria_id', vistoriaId)
+            .eq('tipo', 'video_360');
+
+          if (anteriores && anteriores.length > 0) {
+            const ts = Date.now();
+            for (const a of anteriores) {
+              await publicSupabase
+                .from('vistoria_fotos')
+                .update({ tipo: `video_360_historico_${ts}` } as any)
+                .eq('id', a.id);
+            }
+          }
+
+          // Inserir novo registro
+          await publicSupabase
+            .from('vistoria_fotos')
+            .insert({ vistoria_id: vistoriaId, tipo: 'video_360', arquivo_url: publicUrl } as any);
+
+          // Atualizar campo canônico
+          await publicSupabase
+            .from('vistorias')
+            .update({ video_360_url: publicUrl } as any)
+            .eq('id', vistoriaId);
+        }
+
+        // Marcar documento_solicitado como enviado (sem criar linha em documentos)
+        const { error: updErr } = await publicSupabase
+          .from('documentos_solicitados')
+          .update({
+            status: 'enviado',
+            enviado_em: new Date().toISOString(),
+            observacao_cliente: state.observacao || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', doc.id);
+        if (updErr) throw updErr;
+
+        setUploadStates(prev => ({
+          ...prev,
+          [doc.id]: { ...prev[doc.id], uploading: false, enviado: true },
+        }));
+        return true;
+      }
+
+
+
       // 2.1 Rodar OCR com timeout (90s) e até 2 tentativas em falhas de rede.
       // Não bloqueia o usuário: se OCR falhar de vez, documento é gravado sem dados.
       let ocrTipoDetectado: string | null = null;
