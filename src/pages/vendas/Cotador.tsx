@@ -706,7 +706,7 @@ export default function CotadorPage() {
       
       if (placaDuplicada) {
         // Verifica se é do mesmo vendedor ou de outro
-        if (placaDuplicada.vendedorId !== profile?.id) {
+        if (placaDuplicada.vendedorUserId !== user?.id) {
           // Placa é de OUTRO vendedor - BLOQUEAR
           setPlacaDuplicadaInfo(placaDuplicada);
           setShowPlacaDuplicadaModal(true);
