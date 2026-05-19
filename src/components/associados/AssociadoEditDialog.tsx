@@ -77,6 +77,9 @@ const formSchema = z.object({
   uf: z.string().optional(),
   plano_id: z.string().optional(),
   dia_vencimento: z.number().min(1).max(28).optional(),
+  data_adesao: z.string().optional(),
+  data_cadastro_sga: z.string().optional(),
+  codigo_hinova: z.union([z.number(), z.nan()]).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -106,6 +109,9 @@ const FIELD_LABELS: Record<keyof FormData, string> = {
   uf: 'UF',
   plano_id: 'Plano',
   dia_vencimento: 'Dia de vencimento',
+  data_adesao: 'Data de adesão',
+  data_cadastro_sga: 'Cadastro SGA',
+  codigo_hinova: 'Código Hinova',
 };
 
 interface AssociadoEditDialogProps {
@@ -156,6 +162,9 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
       uf: '',
       plano_id: '',
       dia_vencimento: 10,
+      data_adesao: '',
+      data_cadastro_sga: '',
+      codigo_hinova: undefined,
     },
   });
 
@@ -187,6 +196,9 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
         uf: associado.uf || '',
         plano_id: associado.plano_id || '',
         dia_vencimento: associado.dia_vencimento || 10,
+        data_adesao: associado.data_adesao || '',
+        data_cadastro_sga: associado.data_cadastro_sga || '',
+        codigo_hinova: associado.codigo_hinova ?? undefined,
       };
       form.reset(initial);
       setSnapshot(initial);
@@ -502,6 +514,25 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
                     min={1}
                     max={28}
                     {...form.register('dia_vencimento', { valueAsNumber: true })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="data_adesao">Data de Adesão</Label>
+                  <Input id="data_adesao" type="date" {...form.register('data_adesao')} />
+                </div>
+
+                <div>
+                  <Label htmlFor="data_cadastro_sga">Cadastro SGA</Label>
+                  <Input id="data_cadastro_sga" type="date" {...form.register('data_cadastro_sga')} />
+                </div>
+
+                <div>
+                  <Label htmlFor="codigo_hinova">Código Hinova</Label>
+                  <Input
+                    id="codigo_hinova"
+                    type="number"
+                    {...form.register('codigo_hinova', { valueAsNumber: true })}
                   />
                 </div>
               </div>
