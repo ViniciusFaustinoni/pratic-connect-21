@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Save, X, AlertTriangle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { Pencil, Save, X, AlertTriangle, CheckCircle2, Loader2, Sparkles, Sparkle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,8 @@ import {
   type OcrFieldDef,
   type OcrSchemaTipo,
 } from './ocr-fields-schema';
+import { validarNomeOCR, normalizarNomeComparacao } from '@/lib/ocr/nomePlausibilidade';
+import { useNomeCanonicoPorCpf } from '@/hooks/useNomeCanonicoPorCpf';
 
 export interface OcrDadosEditorProps {
   /** Dados extraídos pelo OCR (chave/valor). */
@@ -39,6 +41,16 @@ export interface OcrDadosEditorProps {
   forceEdit?: boolean;
   /** Esconde o título (útil quando o card pai já tem cabeçalho). */
   hideHeader?: boolean;
+  /**
+   * Quando true (CNH/RG), exige confirmação explícita antes do pai avançar:
+   * - O card abre em modo edição.
+   * - O botão "Salvar" vira "Confirmar dados".
+   * - Validações de plausibilidade do nome bloqueiam a confirmação.
+   * - Cross-check com SGA sugere o nome canônico do CPF informado.
+   */
+  confirmacaoObrigatoria?: boolean;
+  /** Notifica o pai quando o usuário confirma (ou desconfirma) os dados. */
+  onConfirmedChange?: (confirmado: boolean) => void;
   /** Classes extras. */
   className?: string;
 }
@@ -59,10 +71,13 @@ export function OcrDadosEditor({
   onSave,
   forceEdit = false,
   hideHeader = false,
+  confirmacaoObrigatoria = false,
+  onConfirmedChange,
   className,
 }: OcrDadosEditorProps) {
   const schema = useMemo(() => getSchemaForTipo(tipoDocumento), [tipoDocumento]);
   const tipoLabel = tipoDocumento ? (OCR_TIPO_LABEL[tipoDocumento as OcrSchemaTipo] || 'Documento') : 'Documento';
+  const ehCnhOuRg = tipoDocumento === 'cnh' || tipoDocumento === 'rg';
 
   // Considera o OCR bem-sucedido quando todos os campos importantes do schema
   // foram extraídos — independentemente de `legivel`/`sugestao`, que muitas
@@ -101,17 +116,42 @@ export function OcrDadosEditor({
   }, [dados, schema]);
 
   const [values, setValues] = useState<Record<string, string>>(initialValues);
-  const [editing, setEditing] = useState<boolean>(forceEdit || ocrFalhou);
+  const [editing, setEditing] = useState<boolean>(forceEdit || ocrFalhou || confirmacaoObrigatoria);
   const [saving, setSaving] = useState(false);
+  const [confirmado, setConfirmado] = useState<boolean>(false);
 
   // Re-sincroniza quando dados/schema mudam externamente
   useEffect(() => {
     setValues(initialValues);
-  }, [initialValues]);
+    // Novos dados vindos do pai invalidam confirmação anterior
+    if (confirmacaoObrigatoria) setConfirmado(false);
+  }, [initialValues, confirmacaoObrigatoria]);
 
   useEffect(() => {
-    if (forceEdit || ocrFalhou) setEditing(true);
-  }, [forceEdit, ocrFalhou]);
+    if (forceEdit || ocrFalhou || confirmacaoObrigatoria) setEditing(true);
+  }, [forceEdit, ocrFalhou, confirmacaoObrigatoria]);
+
+  useEffect(() => {
+    onConfirmedChange?.(confirmado);
+  }, [confirmado, onConfirmedChange]);
+
+  // ---- Validação de plausibilidade do nome (CNH/RG) ----
+  const nomeAtual = ehCnhOuRg ? (values.nome || '').trim() : '';
+  const validacaoNome = useMemo(
+    () => (ehCnhOuRg && nomeAtual ? validarNomeOCR(nomeAtual) : { ok: true as const }),
+    [ehCnhOuRg, nomeAtual],
+  );
+
+  // ---- Cross-check com SGA por CPF ----
+  const cpfAtual = ehCnhOuRg ? (values.cpf || '') : '';
+  const { data: nomeCanonico } = useNomeCanonicoPorCpf(ehCnhOuRg ? cpfAtual : null);
+  const sugestaoNome = useMemo(() => {
+    if (!ehCnhOuRg || !nomeCanonico?.nome) return null;
+    const atualNorm = normalizarNomeComparacao(nomeAtual);
+    const sugNorm = normalizarNomeComparacao(nomeCanonico.nome);
+    if (!atualNorm || atualNorm === sugNorm) return null;
+    return nomeCanonico;
+  }, [ehCnhOuRg, nomeCanonico, nomeAtual]);
 
   if (schema.length === 0) {
     // Tipo sem schema — nada para editar
@@ -120,6 +160,14 @@ export function OcrDadosEditor({
 
   const handleChange = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
+    // Qualquer edição manual invalida confirmação anterior
+    if (confirmacaoObrigatoria && confirmado) setConfirmado(false);
+  };
+
+  const handleUsarNomeSugerido = () => {
+    if (!sugestaoNome) return;
+    handleChange('nome', sugestaoNome.nome);
+    toast.success('Nome substituído pelo cadastro existente');
   };
 
   const handleCancel = () => {
@@ -127,7 +175,13 @@ export function OcrDadosEditor({
     setEditing(false);
   };
 
+  const podeConfirmar = !ehCnhOuRg || validacaoNome.ok;
+
   const handleSave = async () => {
+    if (confirmacaoObrigatoria && !podeConfirmar) {
+      toast.error(validacaoNome.motivo || 'Revise os dados antes de confirmar');
+      return;
+    }
     setSaving(true);
     try {
       // Trim em todos os campos
@@ -136,13 +190,19 @@ export function OcrDadosEditor({
         cleaned[k] = typeof v === 'string' ? v.trim() : v;
       }
       await onSave(cleaned);
-      setEditing(false);
-      toast.success('Dados atualizados');
+      if (confirmacaoObrigatoria) {
+        setConfirmado(true);
+        toast.success('Dados confirmados');
+      } else {
+        setEditing(false);
+        toast.success('Dados atualizados');
+      }
     } catch (err) {
       console.error('[OcrDadosEditor] erro ao salvar:', err);
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar dados');
     } finally {
       setSaving(false);
+
     }
   };
 
@@ -220,6 +280,7 @@ export function OcrDadosEditor({
       );
     }
 
+    const nomeComProblema = ehCnhOuRg && field.key === 'nome' && !validacaoNome.ok;
     return (
       <Input
         {...commonProps}
@@ -227,6 +288,7 @@ export function OcrDadosEditor({
         value={value}
         onChange={(e) => handleChange(field.key, e.target.value)}
         placeholder={field.placeholder}
+        className={cn(nomeComProblema && 'border-destructive focus-visible:ring-destructive')}
       />
     );
   };
@@ -318,6 +380,38 @@ export function OcrDadosEditor({
           <p className="text-xs text-destructive">
             Não conseguimos ler o documento automaticamente. Preencha os campos manualmente abaixo.
           </p>
+        )}
+
+        {ehCnhOuRg && !validacaoNome.ok && nomeAtual && (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+            <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+            <p className="text-xs text-destructive">{validacaoNome.motivo}</p>
+          </div>
+        )}
+
+        {ehCnhOuRg && sugestaoNome && (
+          <div className="flex items-start justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
+            <div className="flex items-start gap-2">
+              <Sparkle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs">
+                Cadastro existente para este CPF:{' '}
+                <span className="font-semibold">{sugestaoNome.nome}</span>
+                <span className="text-muted-foreground"> — {sugestaoNome.fonte === 'sga' ? 'SGA' : 'base local'}</span>
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={handleUsarNomeSugerido}>
+              Usar este nome
+            </Button>
+          </div>
+        )}
+
+        {confirmacaoObrigatoria && confirmado && (
+          <div className="flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+              Dados confirmados — pode prosseguir
+            </p>
+          </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

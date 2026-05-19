@@ -1,61 +1,55 @@
-# Plano — Confirmação de dados extraídos da CNH antes de seguir
+# Plano — Confirmação obrigatória de CNH + cross-check com SGA (opção B)
 
-## Objetivo
-Impedir que erros do OCR (ex.: `LOPWS` em vez de `LOPES`) cheguem ao contrato Autentique e ao cadastro do associado. Toda extração de CNH passa a exigir uma etapa de **revisão e confirmação humana** com os campos editáveis, lado a lado com a imagem enviada.
+## Por que esse escopo
+Já existe `src/components/ocr/OcrDadosEditor.tsx` editando todos os campos da CNH com badge de confiança e modo de edição forçada. O problema do caso "EDER LOPWS SOARES" é que:
 
-## Onde isso entra no fluxo
-A etapa é inserida **imediatamente após o retorno do OCR**, antes de qualquer:
-- gravação em `associados` / `contratos`,
-- chamada à `contrato-gerar`,
-- avanço de step no link público.
+1. O editor **não bloqueia o avanço** — só abre sozinho quando campos essenciais vieram vazios; se o nome veio "preenchido" (mesmo errado), o usuário passa direto.
+2. Não há **heurística de plausibilidade** no nome para forçar revisão de combinações improváveis em PT-BR (`PW`, `WX`, etc.).
+3. Não há **cross-check com SGA**: quando o CPF já existe em `associados`, deveríamos sugerir o nome canônico com 1 clique.
 
-Vale para os dois pontos de entrada de CNH:
-1. **Link público** (cotação nova, inclusão, troca de titularidade) — etapa de documentos pessoais.
-2. **Modal interno** (Cadastro / Vendedor lançando manualmente) — mesmo passo dentro do `CotacaoFormDialog` / fluxos correlatos.
+Esta proposta resolve exatamente esses três pontos, reaproveitando o editor que já existe — sem migration nova, sem nova edge function.
 
-## Comportamento da tela
-- Layout em duas colunas:
-  - **Esquerda:** preview da foto da CNH enviada (frente + verso quando houver), com zoom.
-  - **Direita:** formulário editável com os campos extraídos pelo OCR — **Nome, CPF, RG, Data de nascimento, CNH (número), Categoria, Validade, Nome da mãe** (quando vier).
-- Cada campo mostra um pequeno indicador de "confiança" do OCR (quando o provedor retorna `confidence`):
-  - alto (≥0.9): borda neutra,
-  - médio (0.7–0.9): borda âmbar + tooltip "Revise",
-  - baixo (<0.7) ou caractere improvável detectado: borda vermelha + foco automático.
-- Heurística de "caractere improvável" no nome: regex que sinaliza combinações praticamente inexistentes em PT-BR (`PW`, `WX`, `KQ`, `ZX`, dois consoantes raras seguidas, etc.) e força revisão.
-- Validações antes de habilitar "Confirmar":
-  - Nome: mínimo 2 palavras, só letras/espaços/acentos/hífen/apóstrofo.
-  - CPF: dígito verificador válido.
-  - Data nasc: idade entre 18 e 100.
-  - CNH: 11 dígitos; validade ≥ hoje.
-- Botões: **Voltar** (re-tirar foto / re-upload) e **Confirmar e continuar**.
+## Mudanças
 
-## Cross-check com SGA (complemento barato)
-Quando o CPF informado já existir no SGA / `associados`, o nome canônico do SGA é exibido como sugestão acima do campo Nome ("Cadastro existente: EDER LOPES SOARES — usar este"). Um clique substitui. Reduz drasticamente o erro nos fluxos de inclusão/troca.
+### 1. Heurística de plausibilidade no nome (frontend puro)
+Novo utilitário `src/lib/ocr/nomePlausibilidade.ts`:
+- Função `temCombinacaoImprovavel(nome)` que detecta bigramas raríssimos em PT-BR: `PW`, `WX`, `KQ`, `QZ`, `ZX`, `XJ`, dois `W` no interior, `Y` em meio de palavra fora de "Y final", etc.
+- Função `validarNomeOCR(nome)` retornando `{ ok, motivo }` com regras: ≥2 palavras, só letras/acentos/hífen/apóstrofo/espaço, sem combinação improvável.
 
-## Auditoria
-Nova tabela leve `ocr_revisoes` (ou coluna JSONB em `contratos_documentos.metadata`) gravando:
-- `valores_ocr` (bruto retornado),
-- `valores_confirmados` (o que o usuário salvou),
-- `campos_alterados` (diff),
-- `revisado_por`, `revisado_em`, `origem` (link_publico / interno).
+### 2. Ajustes no `OcrDadosEditor.tsx`
+- Aceita novo prop opcional `confirmacaoObrigatoria?: boolean` (default `false`).
+- Quando `tipoDocumento === 'cnh'` **e** `confirmacaoObrigatoria=true`:
+  - Card abre já em modo edição.
+  - Mostra estado `confirmado` (gerenciado internamente + reportado via novo prop `onConfirmedChange`).
+  - Botão "Salvar" vira "**Confirmar dados**"; ao salvar pela primeira vez vira "✓ Dados confirmados" e libera o pai a avançar.
+  - Se `validarNomeOCR(nome)` retornar `!ok`, destaca o campo nome com borda vermelha + mensagem "Revise: caractere atípico detectado" e desabilita "Confirmar" até o usuário editar.
+- Aceita novo prop opcional `nomeSugerido?: { nome: string; origem: string }` — se presente e diferente do valor atual, renderiza um aviso âmbar acima do campo Nome: *"Cadastro existente: **{nomeSugerido.nome}** — {origem}"* com botão "Usar este nome".
 
-Serve para medir taxa real de erro do OCR e priorizar melhorias futuras (pré-processamento de imagem, troca de provedor, etc.).
+### 3. Cross-check com SGA / associados
+Novo hook `src/hooks/useNomeCanonicoPorCpf.ts`:
+- Recebe CPF normalizado; se válido (11 dígitos + DV), faz `select nome from associados where cpf=? limit 1` (RLS já cobre).
+- Cache via react-query por 5 min, key `['nome-canonico-cpf', cpf]`.
+- Retorna `{ nome, fonte: 'associado_existente' } | null`.
 
-## Arquivos previstos
-- **Novo componente:** `src/components/ocr/ConfirmarDadosCNHDialog.tsx` (compartilhado entre link público e interno).
-- **Novo hook:** `src/hooks/useConfirmarDadosCNH.ts` (validações + diff + heurística de plausibilidade).
-- **Integração no link público:** ajustar o step de documentos pessoais (provavelmente em `src/pages/publico/...` — confirmar no momento da implementação) para abrir o dialog antes de avançar.
-- **Integração interna:** ajustar `CotacaoFormDialog.tsx` / fluxos de inclusão e troca para chamar o mesmo dialog após OCR.
-- **Edge function:** pequeno ajuste em `ocr-cnh` (ou equivalente) para devolver `confidence` por campo quando o provedor suportar.
-- **Migration:** criar `ocr_revisoes` com RLS (insert restrito a authenticated/anon do link público, select para Cadastro/Diretoria).
-- **Memória:** novo `mem://logic/operations/ocr-cnh-confirmacao-obrigatoria` documentando a regra.
+### 4. Wire-up nos consumidores que usam CNH
+Forçar `confirmacaoObrigatoria` + passar `nomeSugerido` apenas onde a CNH alimenta contrato/associado:
+- `src/components/cotacao-publica/DocumentosPendentesPublico.tsx` (link público — cotação nova/inclusão/troca).
+- `src/pages/public/CotacaoPublicaCompleta.tsx` (passo de docs pessoais).
+- `src/components/contratos/UnifiedDocumentUploader.tsx` e `DocumentUploader.tsx` (cadastro interno).
 
-## Fora de escopo (proposta para depois)
-- Pré-processamento de imagem (deskew, threshold) — melhoria de acurácia do OCR em si.
-- Troca/benchmark de provedor de OCR.
-- Confirmação equivalente para CRLV (pode vir num plano separado seguindo o mesmo padrão).
+O componente pai mantém um state `cnhConfirmada` e usa-o como pré-requisito para habilitar o botão "Avançar" / "Continuar" no respectivo step. Onde o avanço hoje já passa pelos validadores do step, basta acrescentar essa flag à condição.
+
+### 5. Memória
+Novo `mem://logic/operations/ocr-cnh-confirmacao-obrigatoria` registrando a regra: "Toda CNH lida por OCR exige confirmação explícita antes de gerar contrato; nome com bigrama improvável bloqueia; CPF existente puxa nome canônico do SGA/associados como sugestão."
+
+## Fora de escopo
+- Tabela de auditoria `ocr_revisoes` (fica para opção C, se necessário depois).
+- Edge function de OCR — sem mudanças.
+- Pré-processamento de imagem.
+- CRLV — mesma regra pode ser aplicada num próximo passo.
 
 ## Resultado esperado
-- Zero contrato gerado com nome corrompido por OCR.
-- Erros tipo `LOPWS` ficam visíveis e corrigíveis em segundos, com 1 clique quando o CPF já existe no SGA.
-- Histórico mensurável de qualidade do OCR para decidir próximos investimentos.
+- Impossível avançar no link público / cadastro com CNH sem confirmar explicitamente os dados.
+- Caso "LOPWS" sinalizado em vermelho automaticamente.
+- Quando o CPF já existe, 1 clique substitui o nome ruim pelo nome correto do SGA.
+- Zero migration, zero nova edge function.
