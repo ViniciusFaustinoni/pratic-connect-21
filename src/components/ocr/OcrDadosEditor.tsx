@@ -280,6 +280,7 @@ export function OcrDadosEditor({
       );
     }
 
+    const nomeComProblema = ehCnhOuRg && field.key === 'nome' && !validacaoNome.ok;
     return (
       <Input
         {...commonProps}
@@ -287,6 +288,7 @@ export function OcrDadosEditor({
         value={value}
         onChange={(e) => handleChange(field.key, e.target.value)}
         placeholder={field.placeholder}
+        className={cn(nomeComProblema && 'border-destructive focus-visible:ring-destructive')}
       />
     );
   };
