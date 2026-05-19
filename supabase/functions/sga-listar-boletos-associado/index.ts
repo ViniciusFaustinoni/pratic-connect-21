@@ -259,6 +259,7 @@ serve(async (req) => {
         ano: null,
         saldo_devedor: Math.round(saldo * 100) / 100,
         boletos_abertos: abertos.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')),
+        situacao_financeira: (resSituacao[i] as VeiculoSGA['situacao_financeira']) ?? null,
       };
     });
 
@@ -281,6 +282,7 @@ serve(async (req) => {
     }
 
     const saldoTotal = Math.round(veiculos.reduce((s, v) => s + v.saldo_devedor, 0) * 100) / 100;
+    const algumInadimplente = veiculos.some((v) => v.situacao_financeira === 'INADIMPLENTE');
 
     const resp: ResponsePayload = {
       encontrado: true,
@@ -288,7 +290,7 @@ serve(async (req) => {
       associado: metaAssociado,
       veiculos,
       saldo_devedor_total: saldoTotal,
-      tem_debito: saldoTotal > 0,
+      tem_debito: saldoTotal > 0 || algumInadimplente,
       origem_busca: 'cpf',
     };
     return json(200, resp);
