@@ -171,16 +171,27 @@ export function useServicosCampoUnificado(filters: ServicosCampoFilters = {}) {
     };
     const priorityOf = (s: Servico) => STATUS_PRIORITY[s.status] ?? 99;
 
-    // Agrupa
+    // Agrupa. Chave de origem (instalacao_origem_id/vistoria_origem_id) tem
+    // prioridade sobre (associado+veiculo+tipo) — assim instalacao e
+    // vistoria_entrada da MESMA visita física colapsam num único card,
+    // mesmo se o tipo textual diferir.
+    // Ver mem://logic/operations/vistoria-entrada-equivale-instalacao
+    const tipoCanonico = (t: string | null | undefined) =>
+      t === 'vistoria_entrada' ? 'instalacao' : (t || 'desconhecido');
+
     const grupos = new Map<string, Servico[]>();
     for (const s of servicos) {
-      // Sem associado_id ou veiculo_id, não há como deduplicar com segurança
-      if (!s.associado_id || !s.veiculo_id || !s.tipo) {
-        const k = `__loose_${s.id}`;
-        grupos.set(k, [s]);
-        continue;
+      const sa = s as any;
+      // 1) Origem materializada manda em tudo
+      let k: string | null = null;
+      if (sa.instalacao_origem_id) k = `inst:${sa.instalacao_origem_id}`;
+      else if (sa.vistoria_origem_id) k = `vist:${sa.vistoria_origem_id}`;
+      // 2) Fallback: associado+veiculo+tipo canônico (instalacao≡vistoria_entrada)
+      else if (s.associado_id && s.veiculo_id && s.tipo) {
+        k = `lg:${s.associado_id}|${s.veiculo_id}|${tipoCanonico(s.tipo)}`;
+      } else {
+        k = `__loose_${s.id}`;
       }
-      const k = `${s.associado_id}|${s.veiculo_id}|${s.tipo}`;
       const arr = grupos.get(k);
       if (arr) arr.push(s);
       else grupos.set(k, [s]);
