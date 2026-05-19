@@ -911,7 +911,69 @@ export function useUpdateAssociado() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: AssociadoUpdate & { id: string }) => {
+    mutationFn: async ({
+      id,
+      motivo,
+      dadosAnteriores,
+      camposAlteradosLabels,
+      ...updates
+    }: AssociadoUpdate & {
+      id: string;
+      motivo?: string;
+      dadosAnteriores?: Record<string, unknown>;
+      camposAlteradosLabels?: Record<string, string>;
+    }) => {
+      // 0. Registrar histórico ANTES do update, para garantir auditoria
+      //    mesmo se o UPDATE falhar parcialmente em alguma trigger.
+      if (motivo && dadosAnteriores && Object.keys(dadosAnteriores).length > 0) {
+        try {
+          const { data: authData } = await supabase.auth.getUser();
+          const authUserId = authData.user?.id || null;
+          let profileId: string | null = null;
+          if (authUserId) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('user_id', authUserId)
+              .maybeSingle();
+            profileId = profile?.id || null;
+          }
+
+          const camposAlterados = Object.keys(dadosAnteriores);
+          const labelList = camposAlterados
+            .map((c) => camposAlteradosLabels?.[c] || c)
+            .slice(0, 5)
+            .join(', ');
+          const extra = camposAlterados.length > 5 ? ` e mais ${camposAlterados.length - 5}` : '';
+
+          const dadosNovosFiltrados: Record<string, unknown> = {};
+          for (const k of camposAlterados) {
+            dadosNovosFiltrados[k] = (updates as any)[k];
+          }
+
+          await supabase.from('associados_historico').insert({
+            associado_id: id,
+            tipo: 'dados_atualizados',
+            acao: 'editar_dados_associado',
+            descricao: `Edição manual de cadastro: ${camposAlterados.length} ${camposAlterados.length === 1 ? 'campo alterado' : 'campos alterados'} (${labelList}${extra}). Motivo: ${motivo}`,
+            dados_anteriores: dadosAnteriores as any,
+            dados_novos: dadosNovosFiltrados as any,
+            motivo,
+            usuario_id: profileId,
+            executado_por: authUserId,
+            metadata: {
+              origem: 'cadastro_editar_dados',
+              campos: camposAlterados,
+              motivo,
+              user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+            } as any,
+          });
+        } catch (histErr) {
+          console.error('[useUpdateAssociado] Falha ao gravar histórico:', histErr);
+          throw new Error('Não foi possível registrar a alteração no histórico. Operação cancelada.');
+        }
+      }
+
       // 1. Atualizar banco local
       const { data, error } = await supabase
         .from('associados')
@@ -951,6 +1013,7 @@ export function useUpdateAssociado() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['associados'] });
       queryClient.invalidateQueries({ queryKey: ['associado', data.id] });
+      queryClient.invalidateQueries({ queryKey: ['associado-historico-completo', data.id] });
     },
   });
 }
