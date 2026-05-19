@@ -90,6 +90,7 @@ export function PropostaApprovalStepper({
   podeAprovar,
   cadastroAvaliaFotos = false,
   planoTemRouboFurto = true,
+  aguardandoMonitoramentoVistoria = false,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
