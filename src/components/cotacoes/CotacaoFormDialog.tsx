@@ -1700,6 +1700,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
             ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
             : {}),
+          ...(observacaoSga.trim() ? { observacao_sga: observacaoSga.trim() } : {}),
           // Marcação de origem para Troca de Titularidade (quando aplicável)
           ...(origemTroca ? {
             solicitacao_troca_id: origemTroca.solicitacaoId,
