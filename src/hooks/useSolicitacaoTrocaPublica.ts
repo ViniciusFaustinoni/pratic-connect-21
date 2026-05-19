@@ -17,30 +17,31 @@ export function useSolicitacaoTrocaPublicaPorCotacao(
 
       const baseQuery = () => (publicSupabase as any)
         .from('solicitacoes_troca_titularidade')
-        .select('id, cotacao_id, status, motivo_reprovacao, termo_cancelamento_assinado_em, aprovado_cadastro_em, aprovado_monitoramento_em, servico_vistoria_id, tipo_vistoria_troca, expirada_em, servico_manutencao_id');
+        .select('id, cotacao_id, status, motivo_reprovacao, termo_cancelamento_assinado_em, aprovado_cadastro_em, aprovado_monitoramento_em, servico_vistoria_id, tipo_vistoria_troca, expirada_em, servico_manutencao_id, created_at');
 
-      if (cotacaoId) {
-        // Pode existir mais de uma solicitação para a mesma cotação (histórico
-        // de canceladas + a ativa). Filtramos canceladas/expiradas e pegamos a
-        // mais recente — evita receber um array (que faria maybeSingle estourar)
-        // ou cair numa solicitação cancelada antiga.
+      // 1) PRIORIDADE: lookup determinístico por solicitacaoId
+      //    (vem de cotacoes.dados_extras.solicitacao_troca_id — é a referência canônica).
+      if (solicitacaoId) {
         const { data, error } = await baseQuery()
-          .eq('cotacao_id', cotacaoId)
-          .not('status', 'in', '(cancelada,expirada,reprovada)')
-          .order('created_at', { ascending: false })
-          .limit(1)
+          .eq('id', solicitacaoId)
           .maybeSingle();
         if (error) throw error;
         if (data) return data;
       }
 
-      if (!solicitacaoId) return null;
+      // 2) FALLBACK: busca por cotacao_id, filtrando estados terminais com valores
+      //    REAIS do enum status_troca_titularidade (não existe 'reprovada' simples).
+      if (cotacaoId) {
+        const { data, error } = await baseQuery()
+          .eq('cotacao_id', cotacaoId)
+          .not('status', 'in', '(cancelada,expirada,reprovada_cadastro,reprovada_monitoramento)')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (error) throw error;
+        if (data && data.length > 0) return data[0];
+      }
 
-      const { data, error } = await baseQuery()
-        .eq('id', solicitacaoId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      return null;
     },
     enabled: !!cotacaoId || !!solicitacaoId,
     // Polling agressivo enquanto o termo de cancelamento ainda não foi assinado

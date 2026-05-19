@@ -218,6 +218,27 @@ export default function CotacaoContratacao() {
   );
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
 
+  // FONTE DA VERDADE para "esconder o stepper e mostrar TelaAnaliseTroca":
+  // só vira true em status REAIS pós-contratação ou terminais. Enquanto a
+  // solicitação estiver em `cotacao_em_andamento` (com termo assinado), o
+  // novo titular precisa do stepper normal (Plano → Docs → Contrato → Pgto).
+  // Se a solicitação ainda nem carregou (loading) ou não foi encontrada,
+  // NÃO bloqueamos — a cotação isolada já é gated pelo termo no bloco mais abaixo.
+  const STATUS_TROCA_EM_ANALISE: ReadonlyArray<string> = [
+    'aguardando_cadastro',
+    'aguardando_monitoramento',
+    'aguardando_vistoria',
+    'aguardando_manutencao',
+    'reprovada_cadastro',
+    'reprovada_monitoramento',
+    'expirada',
+    'cancelada',
+    'efetivada',
+  ];
+  const trocaEmAnalise = isTrocaTitularidade
+    && !!solicitacaoTroca
+    && STATUS_TROCA_EM_ANALISE.includes(solicitacaoTroca.status as string);
+
   // Janela mesmo-dia: até 23:59:59.999 BRT do dia em que o termo de cancelamento
   // foi assinado, autovistoria/vistoria inicial é DISPENSADA — proteção do
   // titular antigo é estendida ao novo. Monitoramento avalia depois.
@@ -832,7 +853,7 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                {isTrocaTitularidade && !trocaLiberada ? (
+                {trocaEmAnalise ? (
                   <TelaAnaliseTrocaTitularidade
                     status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
                     motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
@@ -877,7 +898,7 @@ export default function CotacaoContratacao() {
                     } : undefined}
                   />
                 )}
-                  {!(isTrocaTitularidade && !trocaLiberada) && (
+                  {!(trocaEmAnalise) && (
                     <NavegacaoEtapas
                       etapaAtual={etapaAtual}
                       etapaMaxima={etapaDoStatus}
@@ -1045,7 +1066,7 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                {isTrocaTitularidade && !trocaLiberada ? (
+                {trocaEmAnalise ? (
                   <TelaAnaliseTrocaTitularidade
                     status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
                     motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
