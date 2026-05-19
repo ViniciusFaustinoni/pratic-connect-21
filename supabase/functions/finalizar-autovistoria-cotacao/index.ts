@@ -95,18 +95,25 @@ Deno.serve(async (req) => {
               .eq('ativo', true)
               .limit(1)
               .maybeSingle();
-            if (mm?.tipo_veiculo === 'moto') isMoto = true;
-            else if (mm?.tipo_veiculo === 'carro') isMoto = false;
-            else {
-              // fallback síncrono (keywords + marcas exclusivas de moto)
-              const MOTO_BRANDS = ['YAMAHA','HARLEY-DAVIDSON','DUCATI','TRIUMPH','KTM','APRILIA','MV AGUSTA','MOTO GUZZI','INDIAN','ROYAL ENFIELD','HUSQVARNA','BENELLI','DAFRA','KASINSKI','TRAXX','SHINERAY','HAOJUE','GARINNI','AVELLOZ','BAJAJ','HERO','HONDA MOTOS','KYMCO','SYM','PIAGGIO','VESPA','BETA','DAYANG','DAYUN','MALAGUTI','NIU','AMAZONAS'];
-              const marcaU = marca.toUpperCase();
-              if (MOTO_BRANDS.includes(marcaU)) isMoto = true;
-              else {
-                const ml = modelo.toLowerCase();
-                isMoto = /\b(moto|motocicleta|ciclomotor|triciclo|scooter|nxr|bros|cg|cb|cbr|pcx|biz|pop|titan|fan|xre|lander|tenere|crosser|crf|sahara|twister|hornet|elite|adv|sh|lead|xadv|x-adv|transalp|fazer|ybr|neo|fluo|factor|next|riva|xtz|xj6|crypton|nmax|xmax|aerox|tmax|mt-?0[3-9]|mt-?10|fz-?(15|25)|burgman|intruder|yes|gsr|v-?strom|gsx[r-]?|gixxer|bandit|hayabusa|boulevard|marauder|ninja|z(900|800|750|650|400|250)|versys|vulcan|citycom|maxsym|duke|apache|comet|rkv|tnt)\b/.test(ml);
+            // Override por keyword: marcas ambíguas (HONDA, SUZUKI, KAWASAKI, BMW)
+            // fabricam carros + motos. O catálogo pode classificar erroneamente
+            // motos como 'carro'. Sempre que catálogo NÃO disser 'moto', rodamos
+            // fallback de keyword/MOTO_BRANDS para detectar moto.
+            const MOTO_BRANDS = ['YAMAHA','HARLEY-DAVIDSON','HARLEY DAVIDSON','DUCATI','TRIUMPH','KTM','APRILIA','MV AGUSTA','MOTO GUZZI','INDIAN','ROYAL ENFIELD','HUSQVARNA','HUSABERG','BENELLI','CAGIVA','BIMOTA','BUELL','DAFRA','KASINSKI','TRAXX','SHINERAY','HAOJUE','GARINNI','AVELLOZ','BAJAJ','HERO','HONDA MOTOS','KYMCO','SYM','SANYANG','PIAGGIO','VESPA','GAS GAS','BETA','DAYANG','DAYUN','DERBI','MALAGUTI','NIU','AMAZONAS'];
+            const MOTO_REGEX = /\b(moto|motocicleta|ciclomotor|triciclo|scooter|nxr|bros|cg|cb|cbr|pcx|biz|pop|titan|fan|xre|lander|tenere|crosser|crf|sahara|twister|hornet|elite|adv|sh|lead|xadv|x-adv|transalp|fazer|ybr|neo|fluo|factor|next|riva|xtz|xj6|crypton|nmax|xmax|aerox|tmax|mt-?0[3-9]|mt-?10|fz-?(15|25)|burgman|intruder|yes|gsr|v-?strom|gsx[r-]?|gixxer|bandit|hayabusa|boulevard|marauder|ninja|z(900|800|750|650|400|250)|versys|vulcan|citycom|maxsym|duke|apache|comet|rkv|tnt)\b/i;
+            const marcaU = marca.toUpperCase();
+            const matchedByKeyword = MOTO_BRANDS.includes(marcaU) || (modelo && MOTO_REGEX.test(modelo));
+
+            if (mm?.tipo_veiculo === 'moto') {
+              isMoto = true;
+            } else {
+              // catálogo='carro' OU sem entrada — keyword decide
+              isMoto = !!matchedByKeyword;
+              if (mm?.tipo_veiculo === 'carro' && matchedByKeyword) {
+                console.warn('[finalizar-autovistoria] catalogo-divergente', { marca, modelo, catalogo: 'carro', resolvido: 'moto' });
               }
             }
+
           }
           const fipe = Number(veicRow.valor_fipe || 0);
           if (fipe > 0) {

@@ -1,0 +1,28 @@
+UPDATE cotacoes
+SET 
+  tipo_vistoria = NULL,
+  vistoria_data_agendada = COALESCE(vistoria_data_agendada, vistoria_completa_data_agendada),
+  vistoria_periodo = COALESCE(vistoria_periodo, vistoria_completa_periodo),
+  vistoria_horario_agendado = COALESCE(vistoria_horario_agendado, vistoria_completa_horario_agendado),
+  vistoria_endereco_cep = COALESCE(vistoria_endereco_cep, vistoria_completa_endereco_cep),
+  vistoria_endereco_logradouro = COALESCE(vistoria_endereco_logradouro, vistoria_completa_endereco_logradouro),
+  vistoria_endereco_numero = COALESCE(vistoria_endereco_numero, vistoria_completa_endereco_numero),
+  vistoria_endereco_bairro = COALESCE(vistoria_endereco_bairro, vistoria_completa_endereco_bairro),
+  vistoria_endereco_cidade = COALESCE(vistoria_endereco_cidade, vistoria_completa_endereco_cidade),
+  vistoria_endereco_estado = COALESCE(vistoria_endereco_estado, vistoria_completa_endereco_estado),
+  vistoria_responsavel_eu_mesmo = COALESCE(vistoria_responsavel_eu_mesmo, vistoria_completa_responsavel_eu_mesmo),
+  vistoria_responsavel_nome = COALESCE(vistoria_responsavel_nome, vistoria_completa_responsavel_nome),
+  vistoria_responsavel_telefone = COALESCE(vistoria_responsavel_telefone, vistoria_completa_responsavel_telefone),
+  vistoria_completa_data_agendada = NULL,
+  vistoria_completa_periodo = NULL,
+  vistoria_completa_horario_agendado = NULL,
+  vistoria_completa_endereco_cep = NULL,
+  vistoria_completa_endereco_logradouro = NULL,
+  vistoria_completa_endereco_numero = NULL,
+  vistoria_completa_endereco_bairro = NULL,
+  vistoria_completa_endereco_cidade = NULL,
+  vistoria_completa_endereco_estado = NULL,
+  vistoria_completa_responsavel_eu_mesmo = NULL,
+  vistoria_completa_responsavel_nome = NULL,
+  vistoria_completa_responsavel_telefone = NULL
+WHERE id = 'b50180dc-e4f0-420f-8f08-a07175ef0212';
