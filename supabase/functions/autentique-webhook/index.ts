@@ -362,6 +362,60 @@ serve(async (req) => {
           // não exige mais que o antigo esteja adimplente. Apenas a existência do
           // associado é checada — sem consulta financeira/SGA aqui.
 
+          // ── AUTO-VÍNCULO COTAÇÃO ↔ SOLICITAÇÃO (raiz da regressão KOU6D37) ──
+          // No fluxo "cotação on-demand", a solicitação pode ter sido criada
+          // SEM cotacao_id (a cotação canônica nasce depois, via
+          // vincular-cotacao-troca). O hook público `useSolicitacaoTrocaPublicaPorCotacao`
+          // filtra por cotacao_id, então sem esse vínculo o link do novo titular
+          // jamais sai de "Aguardando o titular anterior assinar".
+          //
+          // Quando o termo é assinado, tentamos achar a cotação canônica para
+          // esta troca (mesmo veículo de origem, ativa, marcada com
+          // origem_troca_titularidade=true) e amarrar nos dois lados.
+          if (!solTroca.cotacao_id && solTroca.veiculo_id) {
+            try {
+              const { data: cotacaoAlvo } = await supabase
+                .from('cotacoes')
+                .select('id, dados_extras, status_contratacao')
+                .eq('origem_troca_titularidade', true)
+                .contains('dados_extras', { veiculo_origem_id: solTroca.veiculo_id })
+                .not('status_contratacao', 'in', '("cancelada","expirada")')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (cotacaoAlvo) {
+                await supabase
+                  .from('solicitacoes_troca_titularidade')
+                  .update({ cotacao_id: cotacaoAlvo.id })
+                  .eq('id', solTroca.id);
+
+                const extrasAtuais =
+                  (cotacaoAlvo.dados_extras as Record<string, unknown> | null) ?? {};
+                const novosExtras = {
+                  ...extrasAtuais,
+                  solicitacao_troca_id: solTroca.id,
+                };
+                await supabase
+                  .from('cotacoes')
+                  .update({ dados_extras: novosExtras })
+                  .eq('id', cotacaoAlvo.id);
+
+                console.log(
+                  `[autentique-webhook] ✓ Auto-vinculou cotação ${cotacaoAlvo.id} ` +
+                  `à solicitação assinada ${solTroca.id} (veículo ${solTroca.veiculo_id})`
+                );
+              } else {
+                console.log(
+                  `[autentique-webhook] ⚠ Solicitação ${solTroca.id} assinada sem cotação canônica ` +
+                  `para o veículo ${solTroca.veiculo_id}. Será vinculada quando o operador rodar Realizar Cotação.`
+                );
+              }
+            } catch (linkErr) {
+              console.warn('[autentique-webhook] auto-vincular cotacao_id falhou:', linkErr);
+            }
+          }
+
           console.log('[autentique-webhook] ✓ Termo de cancelamento de troca assinado para solicitação', solTroca.id);
         }
         return new Response(JSON.stringify({ received: true, troca_titularidade: solTroca.id }), {
