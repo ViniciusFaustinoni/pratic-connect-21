@@ -105,7 +105,7 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
   // INCONCLUSIVO — SGA respondeu mas não trouxe sinal suficiente (todos os
   // veículos com situacao_financeira=null e sem boletos vencidos). Hoje o
   // sistema tratava isso como "OK"; agora bloqueia para verificação manual.
-  if (check.origem_resultado === 'inconclusivo') {
+  if ((check.origem_resultado as string) === 'inconclusivo') {
     return (
       <>
         <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
