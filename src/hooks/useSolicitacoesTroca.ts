@@ -286,3 +286,24 @@ export function useEnviarTermoCancelamento() {
     onError: (e: Error) => toast.error(e.message),
   });
 }
+
+export function useCancelarTrocaTitularidade() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { solicitacao_id: string; motivo?: string }) => {
+      const { data, error } = await supabase.functions.invoke('cancelar-troca-titularidade', { body: params });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data as { success: boolean; already_terminal?: boolean; status?: string };
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+      qc.invalidateQueries({ queryKey: ['solicitacao-troca'] });
+      qc.invalidateQueries({ queryKey: ['outros-processos'] });
+      toast.success(data?.already_terminal
+        ? 'Solicitação já estava finalizada'
+        : 'Troca de titularidade cancelada');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
