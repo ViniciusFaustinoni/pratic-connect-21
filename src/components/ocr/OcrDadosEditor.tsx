@@ -71,10 +71,13 @@ export function OcrDadosEditor({
   onSave,
   forceEdit = false,
   hideHeader = false,
+  confirmacaoObrigatoria = false,
+  onConfirmedChange,
   className,
 }: OcrDadosEditorProps) {
   const schema = useMemo(() => getSchemaForTipo(tipoDocumento), [tipoDocumento]);
   const tipoLabel = tipoDocumento ? (OCR_TIPO_LABEL[tipoDocumento as OcrSchemaTipo] || 'Documento') : 'Documento';
+  const ehCnhOuRg = tipoDocumento === 'cnh' || tipoDocumento === 'rg';
 
   // Considera o OCR bem-sucedido quando todos os campos importantes do schema
   // foram extraídos — independentemente de `legivel`/`sugestao`, que muitas
