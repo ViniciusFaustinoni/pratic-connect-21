@@ -697,6 +697,7 @@ export default function PropostaAnalise() {
           podeAprovar={podeAprovar}
           cadastroAvaliaFotos={cadastroAvaliaFotos}
           planoTemRouboFurto={planoTemRouboFurto}
+          aguardandoMonitoramentoVistoria={aguardandoMonitoramentoVistoria}
         />
       </div>
 
