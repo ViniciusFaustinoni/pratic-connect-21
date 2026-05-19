@@ -920,6 +920,12 @@ export function detectarTipoVeiculo(
     if (CARRO_BRANDS.has(marcaNorm)) {
       return 'automovel';
     }
+    // Marca exclusivamente de moto encerra a decisão (cobre YAMAHA, DAFRA,
+    // HONDA MOTOS, KASINSKI etc.). Não inclui marcas ambíguas como HONDA/SUZUKI
+    // que fabricam carros — essas continuam para o keyword match abaixo.
+    if (MOTO_BRANDS.has(marcaNorm)) {
+      return 'moto';
+    }
   }
 
   if (modelo && MOTO_REGEX.test(modelo)) {
