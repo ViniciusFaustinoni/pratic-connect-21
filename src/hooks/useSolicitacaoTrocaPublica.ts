@@ -36,7 +36,13 @@ export function useSolicitacaoTrocaPublicaPorCotacao(
       return data;
     },
     enabled: !!cotacaoId || !!solicitacaoId,
-    refetchInterval: 15000,
+    // Polling agressivo enquanto o termo de cancelamento ainda não foi assinado
+    // (5s). Após a assinatura, cai para 15s — o realtime cobre o resto.
+    refetchInterval: (q) => {
+      const data = q.state.data as { termo_cancelamento_assinado_em?: string | null } | null | undefined;
+      return data?.termo_cancelamento_assinado_em ? 15000 : 5000;
+    },
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
