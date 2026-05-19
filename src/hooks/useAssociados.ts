@@ -955,7 +955,7 @@ export function useUpdateAssociado() {
             associado_id: id,
             tipo: 'dados_atualizados',
             acao: 'editar_dados_associado',
-            descricao: `Edição manual de cadastro: ${camposAlterados.length} ${camposAlterados.length === 1 ? 'campo alterado' : 'campos alterados'} (${labelList}${extra})`,
+            descricao: `Edição manual de cadastro: ${camposAlterados.length} ${camposAlterados.length === 1 ? 'campo alterado' : 'campos alterados'} (${labelList}${extra}). Motivo: ${motivo}`,
             dados_anteriores: dadosAnteriores as any,
             dados_novos: dadosNovosFiltrados as any,
             motivo,
