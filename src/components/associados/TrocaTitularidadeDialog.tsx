@@ -232,8 +232,11 @@ export function TrocaTitularidadeDialog({
         veiculo_placa: placaFallback || undefined,
         novo_titular: { nome: nome.trim(), email: email.trim() || undefined, telefone: telefone.trim() || undefined },
       });
-      if ((result as any)?.termo_enviado_automaticamente === false) {
+      const termoFlag = (result as any)?.termo_enviado_automaticamente;
+      if (termoFlag === false) {
         toast.warning('Solicitação criada, mas o envio automático do termo de cancelamento falhou. Reenvie pelo modal de detalhes da solicitação.');
+      } else if (termoFlag === 'agendado') {
+        toast.success('Solicitação criada. O termo de cancelamento será enviado em instantes.');
       } else {
         toast.success('Solicitação criada! Termo de cancelamento enviado ao titular antigo.');
       }
