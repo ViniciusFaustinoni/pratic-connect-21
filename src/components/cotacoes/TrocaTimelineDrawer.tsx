@@ -36,6 +36,11 @@ function buildSteps(item: OutroProcessoItem): Step[] {
   const reachedVist = t === 'aguardando_vistoria' || ['liberada_para_assinatura','efetivada'].includes(t || '');
   const efetivada = !!item.efetivada_em || t === 'efetivada';
 
+  // "Link público concluído" = novo titular terminou Docs/Contrato/Vistoria.
+  // Sinal canônico: solicitação saiu de 'cotacao_em_andamento' (trigger
+  // trg_troca_promove_cadastro_via_cotacao promoveu via cotação).
+  const linkPublicoConcluido = !!t && t !== 'cotacao_em_andamento' && !!item.termo_assinado_em;
+
   const mark = (cond: boolean, isCurrent: boolean): Step['state'] =>
     cond ? 'done' : isCurrent ? 'current' : 'pending';
 
@@ -44,6 +49,8 @@ function buildSteps(item: OutroProcessoItem): Step[] {
       state: item.termo_enviado_em ? 'done' : (failed ? 'failed' : 'current') },
     { key: 'assinado', label: 'Termo assinado (reconhecimento facial)', date: item.termo_assinado_em,
       state: item.termo_assinado_em ? 'done' : mark(false, !!item.termo_enviado_em && !failed) },
+    { key: 'link_publico', label: 'Novo titular completando link público', date: null,
+      state: linkPublicoConcluido ? 'done' : (t === 'cotacao_em_andamento' ? 'current' : (failed ? 'failed' : 'pending')) },
     { key: 'cadastro', label: 'Aprovado pelo Cadastro', date: item.aprovado_cadastro_em,
       state: failed && t === 'reprovada_cadastro' ? 'failed' : mark(reachedCadastro, t === 'aguardando_cadastro') },
     { key: 'monitoramento', label: 'Aprovado pelo Monitoramento', date: item.aprovado_monitoramento_em,
