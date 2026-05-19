@@ -438,55 +438,13 @@ serve(async (req) => {
       throw new Error('Nome é obrigatório para gerar o contrato. Complete os dados antes de continuar.');
     }
 
-    // 6.1 GATE DE DÉBITOS — para INCLUSÃO de novo veículo, verificar SGA antes de gerar contrato
-    // Evita bypass (URL direta) do gate da UI. Hard fail se houver boletos abertos.
-    const _tipoEntradaPre = (cotacao as any).tipo_entrada
-      || ((cotacao as any).dados_extras?.tipo_entrada)
-      || 'adesao';
-    if (_tipoEntradaPre === 'inclusao') {
-      try {
-        const { data: bloqueioCfg } = await supabase
-          .from('configuracoes')
-          .select('valor')
-          .eq('chave', 'inclusao_bloqueio_debito_ativo')
-          .maybeSingle();
-        const bloqueioAtivo = bloqueioCfg?.valor !== 'false' && bloqueioCfg?.valor !== '0';
+    // 6.1 GATE DE DÉBITOS — REMOVIDO (15/05 + reimplementação)
+    // O campo "Tipo da Cotação" do modal é informativo. Inadimplência NÃO trava
+    // a criação do contrato/cotação — é decidida apenas no Cadastro
+    // (verificar-situacao-financeira-cadastro) e na regra de Substituição do mesmo veículo.
+    // Bypass auditado: motivo do "Ignorar e prosseguir" + tipo de cotação + observação livre
+    // viajam para o SGA via sga-hinova-sync (campo `observacao` do veículo).
 
-        if (bloqueioAtivo) {
-          const sgaResp = await fetch(`${supabaseUrl}/functions/v1/sga-buscar-associado-completo`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({ cpf: cpfLimpo }),
-          });
-          if (sgaResp.ok) {
-            const sgaData = await sgaResp.json();
-            const veiculosSga: any[] = Array.isArray(sgaData?.veiculos) ? sgaData.veiculos : [];
-            const debitos = veiculosSga.flatMap((v) => Array.isArray(v?.boletos_abertos) ? v.boletos_abertos : []);
-            const saldoTotal = veiculosSga.reduce((acc, v) => acc + (Number(v?.saldo_devedor) || 0), 0);
-            if (debitos.length > 0) {
-              console.warn(`[CONTRATO-GERAR] BLOQUEIO INCLUSÃO por débitos SGA: cpf=${cpfLimpo} cotacao=${cotacao_id} boletos=${debitos.length} saldo=${saldoTotal}`);
-              return new Response(JSON.stringify({
-                success: false,
-                code: 'DEBITO_PENDENTE',
-                error: 'Associado possui débitos em aberto. Inclusão bloqueada.',
-                saldo_total: saldoTotal,
-                qtd_boletos: debitos.length,
-              }), {
-                status: 409,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              });
-            }
-          } else {
-            console.warn(`[CONTRATO-GERAR] sga-buscar-associado-completo falhou (status=${sgaResp.status}) — seguindo sem bloquear (gate front já validou)`);
-          }
-        }
-      } catch (gateErr) {
-        console.warn('[CONTRATO-GERAR] Erro no gate de débitos (não bloqueante):', gateErr);
-      }
-    }
 
     // 7. Criar ou encontrar associado
     let associadoId = null;

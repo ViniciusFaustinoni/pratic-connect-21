@@ -223,6 +223,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Tipo da cotação (informativo) — enviado no campo observação do veículo no SGA
   const [tipoCotacao, setTipoCotacao] = useState<string>(origemTroca ? 'troca_titularidade' : 'adesao');
   const [tipoCotacaoOutro, setTipoCotacaoOutro] = useState<string>('');
+  // Observação livre que viaja junto ao tipo no campo `observacao` do veículo no SGA
+  const [observacaoSga, setObservacaoSga] = useState<string>('');
   
   // Estado para combustível detectado/selecionado
   const [combustivelSelecionado, setCombustivelSelecionado] = useState<string>('');
@@ -1698,6 +1700,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
             ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
             : {}),
+          ...(observacaoSga.trim() ? { observacao_sga: observacaoSga.trim() } : {}),
           // Marcação de origem para Troca de Titularidade (quando aplicável)
           ...(origemTroca ? {
             solicitacao_troca_id: origemTroca.solicitacaoId,
@@ -2757,6 +2760,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               <p className="text-xs text-muted-foreground">
                 Campo informativo. Será enviado no campo <strong>observação</strong> do veículo no SGA junto ao histórico de avisos.
               </p>
+
+              {/* Observação livre — também vai para o SGA */}
+              <div className="space-y-2 pt-2">
+                <Label htmlFor="observacao-sga" className="text-sm font-medium">
+                  Observação (vai para o SGA)
+                </Label>
+                <Textarea
+                  id="observacao-sga"
+                  placeholder="Ex.: Cliente preferencial, atendimento em domicílio, débitos do veículo anterior já regularizados, etc."
+                  value={observacaoSga}
+                  onChange={(e) => setObservacaoSga(e.target.value.slice(0, 500))}
+                  rows={3}
+                  maxLength={500}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Texto livre (até 500 caracteres). É anexado ao campo <strong>observação</strong> do veículo no SGA Hinova junto com o tipo da cotação e o histórico de avisos.
+                </p>
+              </div>
             </div>
 
             <Separator />
