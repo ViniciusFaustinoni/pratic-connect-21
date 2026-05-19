@@ -477,17 +477,50 @@ export async function buscarVeiculoPorPlaca(
   return { found: null, debug: lastDebug };
 }
 
-/** GET /buscar/situacao-financeira-veiculo/{codigo}
+/** GET /buscar/situacao-financeira-veiculo/{codigo_ou_placa}
+ *  Endpoint ÚNICO e canônico (confirmado na doc oficial Hinova v2).
+ *  Aceita código numérico OU placa. O exemplo oficial usa placa
+ *  formatada com hífen (`AAA-1111`).
+ *
  *  Retorna 'ADIMPLENTE' | 'INADIMPLENTE' | null.
- *  Tenta endpoints alternativos quando o canônico retornar 404 (a Hinova
- *  exibe a coluna "Situação" no painel SGA via endpoint diferente em
- *  algumas instalações). */
-export async function buscarSituacaoFinanceiraVeiculo(s: HinovaSession, codigoVeiculo: number | string): Promise<string | null> {
-  const endpoints = [
-    `/buscar/situacao-financeira-veiculo/${codigoVeiculo}`,
-    `/veiculo/situacao-financeira/${codigoVeiculo}`,
-    `/veiculo/buscar/situacao-financeira/${codigoVeiculo}`,
-  ];
+ *
+ *  Ordem de tentativa:
+ *    1) código numérico (quando truthy)
+ *    2) placa com hífen `AAA-1111`
+ *    3) placa sem hífen `AAA1111`
+ *
+ *  Pré-requisito: o token SGA precisa ter este endpoint liberado em
+ *  Área Cliente › APIs › Gerenciar APIs. Sem permissão a Hinova devolve 404.
+ */
+export async function buscarSituacaoFinanceiraVeiculo(
+  s: HinovaSession,
+  arg: number | string | { codigoVeiculo?: number | string | null; placa?: string | null },
+): Promise<string | null> {
+  // Compat: chamadas antigas passam só o código.
+  const codigoVeiculo =
+    typeof arg === 'object' && arg !== null ? arg.codigoVeiculo ?? null : (arg as number | string | null);
+  const placaIn = typeof arg === 'object' && arg !== null ? arg.placa ?? null : null;
+
+  const params: string[] = [];
+  const codNum = typeof codigoVeiculo === 'string' ? Number(codigoVeiculo) : codigoVeiculo;
+  if (codNum && Number.isFinite(codNum as number) && (codNum as number) > 0) {
+    params.push(String(codNum));
+  }
+  if (placaIn) {
+    const placaUp = String(placaIn).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (placaUp.length === 7) {
+      const comHifen = `${placaUp.slice(0, 3)}-${placaUp.slice(3)}`;
+      params.push(comHifen);
+      params.push(placaUp);
+    } else if (placaUp.length > 0) {
+      params.push(placaUp);
+    }
+  }
+
+  if (params.length === 0) {
+    console.warn('[situacao-financeira] sem código nem placa — pulando');
+    return null;
+  }
 
   const normaliza = (raw: string): string | null => {
     const t = (raw || '').trim();
@@ -508,7 +541,8 @@ export async function buscarSituacaoFinanceiraVeiculo(s: HinovaSession, codigoVe
   };
 
   let last404Sample = '';
-  for (const path of endpoints) {
+  for (const p of params) {
+    const path = `/buscar/situacao-financeira-veiculo/${encodeURIComponent(p)}`;
     let r: Response;
     try {
       r = await fetch(`${s.apiUrl}${path}`, { method: 'GET', headers: authHeaders(s) });
@@ -519,19 +553,29 @@ export async function buscarSituacaoFinanceiraVeiculo(s: HinovaSession, codigoVe
       });
     }
     const txt = await r.text();
+    if (r.status === 401 || r.status === 403) {
+      // Token sem permissão para este endpoint — sinalizar como transient
+      // para o caller decidir como tratar (logs claros + possível bloqueio defensivo).
+      throw new HinovaTransientError(
+        `[situacao-financeira] ${r.status} ${path} — token SGA sem permissão para este endpoint. Liberar em Área Cliente › APIs › Gerenciar APIs.`,
+        { httpStatus: r.status, reason: 'permission' as any },
+      );
+    }
     if (r.status === 404) {
-      last404Sample = txt.slice(0, 120);
-      console.log(`[situacao-financeira] 404 ${path} cod=${codigoVeiculo} sample=${last404Sample}`);
-      continue; // tenta próximo endpoint
+      last404Sample = txt.slice(0, 160);
+      console.log(`[situacao-financeira] 404 ${path} param=${p} sample=${last404Sample}`);
+      continue;
     }
     if (!r.ok) {
       throwHttpError(r.status, txt, `buscarSituacaoFinanceiraVeiculo ${path}`);
     }
     const out = normaliza(txt);
-    console.log(`[situacao-financeira] ok ${path} cod=${codigoVeiculo} -> ${out} sample=${txt.slice(0, 120)}`);
+    console.log(`[situacao-financeira] ok ${path} param=${p} -> ${out} sample=${txt.slice(0, 160)}`);
     return out;
   }
-  console.warn(`[situacao-financeira] todos endpoints 404 para cod=${codigoVeiculo}`);
+  console.warn(
+    `[situacao-financeira] 404 em todas as tentativas (cod=${codigoVeiculo} placa=${placaIn}). Verifique se o endpoint está liberado no token SGA.`,
+  );
   return null;
 }
 
