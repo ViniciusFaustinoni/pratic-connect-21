@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
 export interface SolicitarVistoriaTecnicoParams {
   servicoId: string;       // serviço atual em análise no monitoramento
