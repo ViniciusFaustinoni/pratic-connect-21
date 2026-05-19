@@ -522,6 +522,37 @@ serve(async (req) => {
                 .select('id', { count: 'exact', head: true })
                 .eq('vistoria_id', vistAutoRf.id);
 
+              // DEFESA: vistorias.video_360_url pode estar nulo se o vídeo chegou
+              // depois das fotos em uploads separados (bug histórico do trigger
+              // fn_materializar_autovistoria_cotacao — já corrigido, mas mantemos
+              // fallback consultando vistoria_fotos por tipo video_360/video).
+              let temVideo360 = !!vistAutoRf.video_360_url;
+              if (!temVideo360) {
+                const { count: nVid } = await supabase
+                  .from('vistoria_fotos')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('vistoria_id', vistAutoRf.id)
+                  .in('tipo', ['video_360', 'video']);
+                temVideo360 = (nVid ?? 0) > 0;
+                if (temVideo360) {
+                  // Self-heal: sincroniza o header da vistoria com o vídeo já existente.
+                  const { data: vidRow } = await supabase
+                    .from('vistoria_fotos')
+                    .select('arquivo_url')
+                    .eq('vistoria_id', vistAutoRf.id)
+                    .in('tipo', ['video_360', 'video'])
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  if (vidRow?.arquivo_url) {
+                    await supabase
+                      .from('vistorias')
+                      .update({ video_360_url: vidRow.arquivo_url })
+                      .eq('id', vistAutoRf.id);
+                  }
+                }
+              }
+
               // REGRA CANÔNICA: Cadastro só libera R/F via autovistoria ENXUTA
               // (2 fotos motor+chassi + vídeo 360°) acima da FIPE mínima.
               // Roteiro completo (31/15) é sub-FIPE → Monitoramento decide R/F,
@@ -531,7 +562,7 @@ serve(async (req) => {
               const temFotosEnxuta =
                 (nFotos ?? 0) >= 2 &&
                 (nFotos ?? 0) < minCompleta &&
-                !!vistAutoRf.video_360_url;
+                temVideo360;
               const temFotosLegado = false; // Desativado por regra canônica.
 
               if (temFotosEnxuta || temFotosLegado) {
