@@ -68,7 +68,7 @@ import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
 
-import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
+import { useRegistrarCienciaFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
 import { useCriarSolicitacaoFipeLimite, useAprovacaoFipeLimitePorCotacao } from '@/hooks/useAprovacoesFipeLimite';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
