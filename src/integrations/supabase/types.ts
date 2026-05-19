@@ -15689,6 +15689,7 @@ export type Database = {
           chegada_em: string | null
           concluida_em: string | null
           created_at: string | null
+          dispensa_rastreador: boolean
           em_rota_em: string | null
           expires_at: string
           foto_comprovante_url: string | null
@@ -15701,6 +15702,7 @@ export type Database = {
           longitude: number | null
           precisao_metros: number | null
           prestador_id: string
+          rastreador_imei: string | null
           recusa_motivo: string | null
           recusado_em: string | null
           status: string
@@ -15716,6 +15718,7 @@ export type Database = {
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
+          dispensa_rastreador?: boolean
           em_rota_em?: string | null
           expires_at?: string
           foto_comprovante_url?: string | null
@@ -15728,6 +15731,7 @@ export type Database = {
           longitude?: number | null
           precisao_metros?: number | null
           prestador_id: string
+          rastreador_imei?: string | null
           recusa_motivo?: string | null
           recusado_em?: string | null
           status?: string
@@ -15743,6 +15747,7 @@ export type Database = {
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
+          dispensa_rastreador?: boolean
           em_rota_em?: string | null
           expires_at?: string
           foto_comprovante_url?: string | null
@@ -15755,6 +15760,7 @@ export type Database = {
           longitude?: number | null
           precisao_metros?: number | null
           prestador_id?: string
+          rastreador_imei?: string | null
           recusa_motivo?: string | null
           recusado_em?: string | null
           status?: string
