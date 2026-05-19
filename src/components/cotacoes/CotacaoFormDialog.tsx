@@ -1029,7 +1029,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         const placaDuplicada = await verificarPlacaDuplicada.mutateAsync({ placa, ignorarIds: ignorarPlacaDuplicadaIds });
 
         if (placaDuplicada) {
-          if (placaDuplicada.vendedorId !== profile?.id) {
+          if (placaDuplicada.vendedorUserId !== user?.id) {
             if (!bypassPlacaDuplicada.has(placaKey)) {
               setPlacaDuplicadaInfo(placaDuplicada);
               setShowPlacaDuplicadaModal(true);
