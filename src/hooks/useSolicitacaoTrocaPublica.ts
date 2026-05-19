@@ -20,8 +20,15 @@ export function useSolicitacaoTrocaPublicaPorCotacao(
         .select('id, cotacao_id, status, motivo_reprovacao, termo_cancelamento_assinado_em, aprovado_cadastro_em, aprovado_monitoramento_em, servico_vistoria_id, tipo_vistoria_troca, expirada_em, servico_manutencao_id');
 
       if (cotacaoId) {
+        // Pode existir mais de uma solicitação para a mesma cotação (histórico
+        // de canceladas + a ativa). Filtramos canceladas/expiradas e pegamos a
+        // mais recente — evita receber um array (que faria maybeSingle estourar)
+        // ou cair numa solicitação cancelada antiga.
         const { data, error } = await baseQuery()
           .eq('cotacao_id', cotacaoId)
+          .not('status', 'in', '(cancelada,expirada,reprovada)')
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
         if (error) throw error;
         if (data) return data;
