@@ -201,10 +201,13 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
           {podeRealizarCotacao && (
             <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <FileText className="h-4 w-4 text-primary" /> Pronto para gerar a cotação
+                <FileText className="h-4 w-4 text-primary" />
+                {termoAssinado ? 'Pronto para gerar a cotação' : 'Adiantar cotação do novo titular'}
               </div>
               <p className="text-xs text-muted-foreground">
-                O termo de cancelamento foi assinado. Clique para gerar a cotação do novo titular (consulta FIPE atualizada).
+                {termoAssinado
+                  ? 'O termo de cancelamento foi assinado. Clique para gerar a cotação do novo titular (consulta FIPE atualizada).'
+                  : 'Você pode criar a cotação agora para adiantar plano e valores. O link público do novo titular só ficará acessível após o titular antigo assinar o termo de cancelamento.'}
               </p>
               <Button size="sm" className="w-full" disabled={criandoCotacao} onClick={handleRealizarCotacao}>
                 {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
