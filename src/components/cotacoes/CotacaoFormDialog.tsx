@@ -562,19 +562,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return mod?.nome || '';
   }, [veiculoEncontrado, modeloSelecionado, modelos]);
 
-  // Hook de planos calculados dinamicamente do banco
-  const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
-    valorFipe,
-    valorAdicional,
-    regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
-    combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
-    categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : undefined,
-    anoVeiculo: anoNumerico,
-    tipoVeiculo: tipoVeiculoDetectado,
-    usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
-    marca: marcaResolvida || undefined,
-    modelo: modeloResolvido || undefined,
-  });
+  // Hook de planos calculados dinamicamente do banco — movido para depois de
+  // fipeMenorInfo para podermos repassar a faixa reduzida quando a Regra do 1%
+  // estiver elegível (ver definição logo após fipeMenorInfo).
+
 
   // Buscar todas as faixas de preço (LEGADO — apenas fallback p/ catálogo antigo)
   const { data: todasFaixas = [] } = useTabelasPreco();
@@ -755,6 +746,30 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
   }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
+
+  // === Regra do 1% (FIPE Menor): quando elegível, os cards de plano abaixo
+  // precisam refletir os preços da FAIXA INFERIOR — caso contrário a tela
+  // mostra valores da faixa cheia mesmo após anunciar a redução.
+  const aplicarFipeMenor =
+    !!(fipeMenorAtivo && fipeMenorInfo?.elegivel && !fipeMenorInfo?.bloqueado);
+  const valorFipeParaPlanos = aplicarFipeMenor
+    ? (fipeMenorInfo?.faixaInferior?.max ?? fipeMenorInfo?.valorReduzido ?? valorFipe)
+    : valorFipe;
+
+  // Hook de planos calculados dinamicamente do banco
+  const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
+    valorFipe: valorFipeParaPlanos,
+    valorAdicional,
+    regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
+    combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
+    categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : undefined,
+    anoVeiculo: anoNumerico,
+    tipoVeiculo: tipoVeiculoDetectado,
+    usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
+    marca: marcaResolvida || undefined,
+    modelo: modeloResolvido || undefined,
+  });
+
 
   // Faixa de preço atual onde o FIPE se enquadra
   // FONTE: entity_eligibility_rules (motor moderno). Fallback: tabelas_preco_mensalidade (legado)
@@ -2476,11 +2491,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   </FormItem>
                 )}
               />
-              {valorFipe > 0 && faixaAtualFipe && (
+              {valorFipe > 0 && aplicarFipeMenor && fipeMenorInfo?.faixaInferior ? (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Faixa enquadrada (com Regra do 1%): {formatCurrency(fipeMenorInfo.faixaInferior.min)} – {formatCurrency(fipeMenorInfo.faixaInferior.max)}
+                </p>
+              ) : valorFipe > 0 && faixaAtualFipe && (
                 <p className="text-xs text-muted-foreground mt-1.5">
                   Faixa enquadrada: {formatCurrency(faixaAtualFipe.min)} – {formatCurrency(faixaAtualFipe.max)}
                 </p>
               )}
+
 
               {/* ===== Painel Redução de Cota (Regra do 1% / FIPE Menor) =====
                   - Aplicação AUTOMÁTICA quando elegível (sem checkbox, sem justificativa, sem trava).
