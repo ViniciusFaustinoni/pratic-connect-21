@@ -223,6 +223,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Tipo da cotação (informativo) — enviado no campo observação do veículo no SGA
   const [tipoCotacao, setTipoCotacao] = useState<string>(origemTroca ? 'troca_titularidade' : 'adesao');
   const [tipoCotacaoOutro, setTipoCotacaoOutro] = useState<string>('');
+  // Observação livre que viaja junto ao tipo no campo `observacao` do veículo no SGA
+  const [observacaoSga, setObservacaoSga] = useState<string>('');
   
   // Estado para combustível detectado/selecionado
   const [combustivelSelecionado, setCombustivelSelecionado] = useState<string>('');
