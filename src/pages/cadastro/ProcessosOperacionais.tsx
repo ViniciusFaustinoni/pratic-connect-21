@@ -501,7 +501,33 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
                   const assoc = associadosMap[c.dados_extras?.associado_id || ''];
                   return (
                     <TableRow key={c.id} className="hover:bg-muted/50">
-                      <TableCell className="font-mono text-xs">{c.numero || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span>{c.numero || '—'}</span>
+                          {(() => {
+                            const obs = (c.dados_extras?.observacao_sga as string | undefined)?.trim();
+                            const mot = (c.dados_extras?.motivo_ignorar_aviso as string | undefined)?.trim();
+                            if (!obs && !mot) return null;
+                            const previewSrc = obs || mot || '';
+                            const preview = previewSrc.length > 140 ? previewSrc.slice(0, 137) + '…' : previewSrc;
+                            return (
+                              <TooltipProvider delayDuration={150}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className={mot ? 'text-destructive' : 'text-primary'}>
+                                      <MessageSquareWarning className="h-3.5 w-3.5" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-xs whitespace-pre-wrap">
+                                    {mot && <div className="font-semibold text-destructive mb-1">Aviso SGA ignorado</div>}
+                                    {preview}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            );
+                          })()}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="text-sm font-medium">{assoc?.nome || '—'}</div>
                         {assoc?.cpf && <div className="text-xs text-muted-foreground">{assoc.cpf}</div>}
