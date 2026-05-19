@@ -48,6 +48,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useVistoriaCompletaAnalise, FotoVistoriaItem } from '@/hooks/useVistoriaCompletaAnalise';
 import { StatusCoberturaCard } from '@/components/cadastro/StatusCoberturaCard';
+import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
 import { formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 
 // ============================================
@@ -340,6 +341,14 @@ export default function VistoriaCompletaAnalise() {
           {instalacao.status === 'concluida' ? 'Instalação Concluída' : instalacao.status}
         </Badge>
       </div>
+
+      {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA */}
+      <ObservacoesCotacaoCard
+        cotacaoId={(instalacao as any)?.cotacao_id ?? null}
+        contratoId={(instalacao as any)?.contrato_id ?? null}
+        cpf={(associados as any)?.cpf ?? null}
+        placa={(veiculos as any)?.placa ?? null}
+      />
 
       {/* ============================================ */}
       {/* BANNER DE RECUSA */}

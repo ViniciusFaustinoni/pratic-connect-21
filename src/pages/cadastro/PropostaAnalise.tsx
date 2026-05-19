@@ -50,6 +50,7 @@ import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocume
 import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
+import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
 import {
   PropostaHeroHeader,
   PropostaDetalhesTabs,
@@ -440,6 +441,14 @@ export default function PropostaAnalise() {
         proposta={proposta}
         onVoltar={() => navigate('/cadastro/propostas')}
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
+      />
+
+      {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA */}
+      <ObservacoesCotacaoCard
+        cotacaoId={(proposta as any)?.cotacao_id ?? null}
+        contratoId={proposta?.id ?? null}
+        cpf={(proposta as any)?.cliente_cpf ?? null}
+        placa={(proposta as any)?.veiculo_placa ?? null}
       />
 
       {/* Banner de estado final (proposta já aprovada / reprovada / cancelada) */}

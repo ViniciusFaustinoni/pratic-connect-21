@@ -76,6 +76,7 @@ import { useSolicitarDocumentos } from '@/hooks/usePropostasPendentes';
 import { useDocumentosSolicitadosPendentes } from '@/hooks/useDocumentosSolicitados';
 import { useQueryClient } from '@tanstack/react-query';
 import { MediaViewerModal, type MediaItem } from '@/components/cadastro/MediaViewerModal';
+import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
 
 // ============================================
 // UTILITÁRIOS
@@ -569,6 +570,18 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         isReativando={isReativando}
         isSincronizando={sincronizarStatusMutation.isPending}
       />
+
+      {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA (compacto) */}
+      {contrato?.id && (
+        <ObservacoesCotacaoCard
+          cotacaoId={cotacaoId ?? null}
+          contratoId={contrato.id}
+          cpf={(associado as any)?.cpf ?? null}
+          compact
+        />
+      )}
+
+
 
       {/* Tab Nav */}
       <AssociadoTabNav

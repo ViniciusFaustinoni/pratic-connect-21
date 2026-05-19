@@ -1,44 +1,51 @@
-## Causa raiz
+## Objetivo
 
-Dois gates de débito permaneceram no backend mesmo depois da introdução do campo "Tipo da Cotação" (15/05), que era para ser apenas informativo:
+Tornar visíveis ao analista do Cadastro — antes de qualquer decisão — três informações que hoje só viajam para o SGA e ficam escondidas em `cotacoes.dados_extras`:
 
-1. **`contrato-gerar/index.ts`** — bloco "GATE DE DÉBITOS" (~linha 468) devolve `409 DEBITO_PENDENTE` quando há boletos abertos, independente do tipo de cotação escolhido pelo operador.
-2. **`criar-cotacao*` / `criar-substituicao*`** — também possuem checagens de débito que disparam `DEBITO_PENDENTE`.
-3. A flag de configuração `inclusao_bloqueio_debito_ativo` não existe na tabela `configuracoes`, então o fallback default ativa bloqueio.
-4. O valor de `tipoCotacao` selecionado no modal hoje é persistido em `cotacoes.tipo_entrada` / extra, mas **não é propagado** como `observacao` para o payload do `sga-hinova-sync` (campo `observacoes` do veículo no SGA).
+1. **Observação livre** do operador (`observacao_sga`)
+2. **Tipo da Cotação** (`tipoCotacao`: nova adesão, inclusão, substituição, troca)
+3. **Histórico de avisos SGA / motivo do “Ignorar e Prosseguir”** (`cotacao_avisos_sga`, `motivo_ignorar_aviso`)
 
-Resultado: o operador escolhe "Cotação nova (adesão)" / "Ignorar e prosseguir", o sistema avisa visualmente que é só informativo, mas o backend continua barrando — exatamente o cenário que a feature de 15/05 removeu.
+Mudança puramente de **leitura/UI** — nenhuma regra de negócio, edge function ou migração é tocada.
 
-## Solução definitiva
+## Diagnóstico
 
-### 1. Remover gates de débito do fluxo de cotação
-- `supabase/functions/contrato-gerar/index.ts`: remover o bloco "GATE DE DÉBITOS" inteiro. Inadimplência passa a ser tratada apenas no **Cadastro** (gate canônico já existente em `verificar-situacao-financeira-cadastro`), nunca na criação da cotação.
-- `supabase/functions/criar-cotacao*/index.ts` e `criar-substituicao*/index.ts`: remover quaisquer retornos `409 DEBITO_PENDENTE`. Manter apenas o aviso visual no front (modal "Veículo já cadastrado / Ignorar e prosseguir").
-- Manter a regra canônica de substituição com débito do **mesmo veículo** (memory `mem://logic/operations/sga-inadimplencia-veiculo-canonica`) — esta continua bloqueando, pois é regra de negócio absoluta. Apenas débitos genéricos do CPF deixam de travar a criação.
+Varredura nas telas do Cadastro (`PropostaAnalise.tsx`, `VistoriaCompletaAnalise.tsx`, `ProcessosOperacionais.tsx`, `AssociadoDetalhe.tsx`, `DocumentosSolicitadosCard.tsx`) confirma: **nenhuma** lê `cotacao.dados_extras.observacao_sga`, `tipoCotacao` ou `cotacao_avisos_sga`. O analista aprova sem ver o contexto que o operador deixou.
 
-### 2. Tornar "Tipo da Cotação" realmente informativo + sincronizar com SGA
-- Adicionar coluna `observacao_sga TEXT` em `cotacoes` (e espelhar em `contratos` / `veiculos.observacoes_sga`) via migration.
-- `CotacaoFormDialog.tsx`: adicionar **campo de texto livre "Observação (vai para o SGA)"** logo abaixo do select "Tipo da Cotação". O valor final enviado ao SGA será: `[{label do tipoCotacao}] {texto livre opcional} | {motivo do "Ignorar e prosseguir" quando aplicável}`.
-- `contrato-gerar` e `criar-cotacao*`: persistir esse texto consolidado em `cotacoes.observacao_sga` e propagar para `contratos.observacao_sga` / `veiculos.observacoes_sga`.
-- `sga-hinova-sync`: ler `veiculos.observacoes_sga` (com fallback para o consolidado do contrato/cotação) e enviar no campo `observacoes` do payload de cadastro/atualização do veículo no Hinova. Append-only — nunca sobrescrever observações já existentes no SGA.
+## Escopo
 
-### 3. Saneamento e auditoria
-- Backfill simples: copiar `tipo_entrada` legível para `observacao_sga` em cotações criadas após 15/05 que ainda não têm valor, para não perder o histórico.
-- Log estruturado em `logs_sistema` com `evento='cotacao_observacao_sga_enviada'` contendo `cotacao_id`, `veiculo_id`, texto enviado e resposta do SGA.
+### 1. Componente novo `ObservacoesCotacaoCard`
 
-## Arquivos afetados
+`src/components/cadastro/ObservacoesCotacaoCard.tsx`
 
-- `supabase/functions/contrato-gerar/index.ts` — remover gate de débitos, gravar `observacao_sga`.
-- `supabase/functions/criar-cotacao-publica/index.ts`, `criar-cotacao-interna/index.ts`, `criar-substituicao*` — remover `DEBITO_PENDENTE`, persistir `observacao_sga`.
-- `supabase/functions/sga-hinova-sync/index.ts` — incluir `observacoes` no payload do veículo.
-- `src/components/cotacao/CotacaoFormDialog.tsx` — adicionar input "Observação (SGA)" + consolidar string final.
-- `src/components/cotacao/VeiculoJaCadastradoDialog.tsx` (modal da screenshot) — capturar o motivo do "Ignorar e prosseguir" e injetar na observação consolidada.
-- Migration: `cotacoes.observacao_sga`, `contratos.observacao_sga`, `veiculos.observacoes_sga` (se não existir).
+Card de destaque (borda `border-primary/40`, fundo `bg-primary/5`, ícone `MessageSquareWarning`) com três blocos:
+
+- **Tipo da Cotação** — badge colorido com label legível (mapa `tipoCotacao` → texto).
+- **Observação do operador** — bloco com fonte maior, `whitespace-pre-wrap`, ícone destacado. Se `motivo_ignorar_aviso` existir, mostrado abaixo em variante `destructive`.
+- **Histórico de avisos SGA** — lista colapsável (`Collapsible`) a partir de `cotacao_avisos_sga` com data, tipo do aviso e motivo.
+
+Quando nenhum dos três existe, o card não é renderizado (sem ruído visual). Props: `cotacao` (objeto com `dados_extras`) e `compact?: boolean` para uso em listas.
+
+### 2. Pontos de uso
+
+- **`PropostaAnalise.tsx`** — card no topo da coluna principal, acima do bloco de documentos. Essa é a tela onde a decisão acontece, então a informação precisa estar acima da dobra.
+- **`VistoriaCompletaAnalise.tsx`** — mesmo card, no header da análise da autovistoria.
+- **`AssociadoDetalhe.tsx`** — versão compacta na aba da cotação/contrato, para auditoria posterior.
+- **`ProcessosOperacionais.tsx` (lista da fila)** — ícone `MessageSquareWarning` ao lado do número da proposta quando houver observação/motivo; tooltip mostra prévia (primeiros ~120 chars). Sinaliza sem poluir a listagem.
+
+### 3. Tipos
+
+Atualizar a tipagem de `dados_extras` (em `src/types/cotacao.ts` ou local equivalente) para incluir, opcionais, `observacao_sga`, `tipoCotacao`, `motivo_ignorar_aviso` e `cotacao_avisos_sga[]`. Sem alterar nada do que já está lá.
+
+## Fora de escopo
+
+- Não alterar `contrato-gerar`, `sga-hinova-sync`, `CotacaoFormDialog` — já gravam e propagam corretamente.
+- Sem nova coluna, sem migração — os dados já existem em `cotacoes.dados_extras`.
+- Sem mudança em regras de aprovação, bloqueio ou inadimplência.
 
 ## Validação
 
-1. Cotação para CPF com boleto aberto + tipo "Cotação nova (adesão)" → cria normalmente, NÃO retorna `DEBITO_PENDENTE`.
-2. Inadimplência continua barrando no **Cadastro** (gate canônico preservado).
-3. Substituição com débito **do próprio veículo** continua barrando (regra de negócio).
-4. Conferir no SGA que o campo `observacoes` do veículo recebeu o texto consolidado (tipo + observação livre + motivo do ignorar).
-5. Replay do caso ALEXANDRE GUTTI: a cotação deve ser criada; o bloqueio aparece apenas quando o Cadastro abrir a proposta.
+- Cotação criada com observação preenchida → card visível no topo de `PropostaAnalise` com observação, tipo e (se houver) histórico de avisos.
+- Cotação sem observação → card omitido, tela inalterada.
+- Lista de processos operacionais → ícone-indicador aparece somente nas linhas com observação/motivo; tooltip mostra prévia.
+- Texto exibido no Cadastro = exatamente o texto que segue para o campo `observacao` do veículo no SGA.
