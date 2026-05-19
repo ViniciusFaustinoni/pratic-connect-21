@@ -177,11 +177,8 @@ export default function PropostaAnalise() {
   // Autovistoria completa = sub-FIPE (sem rastreador) → fotos vão para Monitoramento.
   const isAutovistoriaCompletaSubFipe = isAutovistoria && autovistoriaCompleta;
 
-  // Autovistoria enxuta acima FIPE = único caso em que Cadastro avalia fotos.
-  const cadastroAvaliaApenasEnxuta =
-    isAutovistoria && !autovistoriaCompleta === false
-      ? false
-      : isAutovistoria && !isAutovistoriaCompletaSubFipe;
+
+
 
   // Cadastro avalia fotos APENAS na autovistoria enxuta acima FIPE
   // (2 fotos + vídeo 360° opcional para liberar R/F antes do técnico).
