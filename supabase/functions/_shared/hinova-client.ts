@@ -477,33 +477,62 @@ export async function buscarVeiculoPorPlaca(
   return { found: null, debug: lastDebug };
 }
 
-/** GET /buscar/situacao-financeira-veiculo/{codigo} */
+/** GET /buscar/situacao-financeira-veiculo/{codigo}
+ *  Retorna 'ADIMPLENTE' | 'INADIMPLENTE' | null.
+ *  Tenta endpoints alternativos quando o canônico retornar 404 (a Hinova
+ *  exibe a coluna "Situação" no painel SGA via endpoint diferente em
+ *  algumas instalações). */
 export async function buscarSituacaoFinanceiraVeiculo(s: HinovaSession, codigoVeiculo: number | string): Promise<string | null> {
-  let r: Response;
-  try {
-    r = await fetch(`${s.apiUrl}/buscar/situacao-financeira-veiculo/${codigoVeiculo}`, {
-      method: 'GET',
-      headers: authHeaders(s),
-    });
-  } catch (e: any) {
-    throw new HinovaTransientError(`[situacao-financeira] rede: ${String(e?.message || e)}`, {
-      httpStatus: 0,
-      reason: 'network',
-    });
+  const endpoints = [
+    `/buscar/situacao-financeira-veiculo/${codigoVeiculo}`,
+    `/veiculo/situacao-financeira/${codigoVeiculo}`,
+    `/veiculo/buscar/situacao-financeira/${codigoVeiculo}`,
+  ];
+
+  const normaliza = (raw: string): string | null => {
+    const t = (raw || '').trim();
+    if (!t) return null;
+    try {
+      const j = JSON.parse(t);
+      const v = (j?.situacao_financeira ?? j?.situacao ?? j?.status ?? (typeof j === 'string' ? j : null)) as any;
+      if (v == null) return null;
+      const up = String(v).trim().toUpperCase();
+      if (up === 'ADIMPLENTE' || up === 'INADIMPLENTE') return up;
+      return null;
+    } catch {
+      const up = t.toUpperCase();
+      if (up.includes('INADIMPLENTE')) return 'INADIMPLENTE';
+      if (up.includes('ADIMPLENTE')) return 'ADIMPLENTE';
+      return null;
+    }
+  };
+
+  let last404Sample = '';
+  for (const path of endpoints) {
+    let r: Response;
+    try {
+      r = await fetch(`${s.apiUrl}${path}`, { method: 'GET', headers: authHeaders(s) });
+    } catch (e: any) {
+      throw new HinovaTransientError(`[situacao-financeira] rede ${path}: ${String(e?.message || e)}`, {
+        httpStatus: 0,
+        reason: 'network',
+      });
+    }
+    const txt = await r.text();
+    if (r.status === 404) {
+      last404Sample = txt.slice(0, 120);
+      console.log(`[situacao-financeira] 404 ${path} cod=${codigoVeiculo} sample=${last404Sample}`);
+      continue; // tenta próximo endpoint
+    }
+    if (!r.ok) {
+      throwHttpError(r.status, txt, `buscarSituacaoFinanceiraVeiculo ${path}`);
+    }
+    const out = normaliza(txt);
+    console.log(`[situacao-financeira] ok ${path} cod=${codigoVeiculo} -> ${out} sample=${txt.slice(0, 120)}`);
+    return out;
   }
-  const txt = await r.text();
-  if (r.status === 404) return null; // veículo sem situação financeira registrada — tolerável
-  if (!r.ok) {
-    throwHttpError(r.status, txt, 'buscarSituacaoFinanceiraVeiculo');
-  }
-  try {
-    const j = JSON.parse(txt);
-    return (j?.situacao_financeira ?? j?.situacao ?? j?.status ?? (typeof j === 'string' ? j : null)) as string | null;
-  } catch {
-    const t = txt.trim().toUpperCase();
-    if (t === 'ADIMPLENTE' || t === 'INADIMPLENTE') return t;
-    return null;
-  }
+  console.warn(`[situacao-financeira] todos endpoints 404 para cod=${codigoVeiculo}`);
+  return null;
 }
 
 /**

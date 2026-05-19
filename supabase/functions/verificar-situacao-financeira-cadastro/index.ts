@@ -193,11 +193,15 @@ serve(async (req) => {
     sgaResp = { motivo: 'fetch_falhou', detail: String(e?.message || e) };
   }
 
-  // 5) Determinar inadimplência
+  // 5) Determinar inadimplência (DUAS dimensões):
+  //    a) boletos vencidos somados por veículo
+  //    b) situação financeira do veículo no SGA = 'INADIMPLENTE'
+  //       (canônico — boletos podem ter sido baixados manualmente)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let saldo = 0;
   let qtd = 0;
+  const placasInadimplentes: string[] = [];
   if (sgaResp && Array.isArray(sgaResp.veiculos)) {
     for (const v of sgaResp.veiculos) {
       for (const b of (v.boletos_abertos || [])) {
@@ -209,14 +213,20 @@ serve(async (req) => {
           qtd += 1;
         }
       }
+      if (String(v?.situacao_financeira || '').toUpperCase() === 'INADIMPLENTE') {
+        if (v?.placa) placasInadimplentes.push(String(v.placa));
+      }
     }
   }
-  const temDebito = qtd > 0;
+  const temDebito = qtd > 0 || placasInadimplentes.length > 0;
 
   let origem = 'sga';
   let motivo: string | null = null;
   if (transitorio) { origem = 'transitorio'; motivo = sgaResp?.motivo ?? 'sga_transitorio'; }
   else if (sgaResp && sgaResp.encontrado === false) { origem = 'associado_inexistente_sga'; motivo = sgaResp?.motivo ?? 'nao_encontrado'; }
+  else if (qtd === 0 && placasInadimplentes.length > 0) {
+    motivo = `veiculo_inadimplente_sga: ${placasInadimplentes.join(', ')}`;
+  }
 
   const { data: inserted, error: insErr } = await admin.from('sga_situacao_check').insert({
     contrato_id: ctx.contrato_id,

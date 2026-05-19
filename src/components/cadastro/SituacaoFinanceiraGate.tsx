@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldAlert, ShieldCheck, RefreshCw, AlertTriangle, Loader2, KeyRound } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, RefreshCw, AlertTriangle, Loader2, KeyRound, Copy } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -150,6 +150,19 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
     })
     .sort((a: any, b: any) => (a.data_vencimento || '').localeCompare(b.data_vencimento || ''));
 
+  // Veículos com situação INADIMPLENTE direto no SGA (independente de boletos detalhados)
+  const veiculosInadimplentes: any[] = (check.payload?.veiculos || [])
+    .filter((v: any) => String(v?.situacao_financeira || '').toUpperCase() === 'INADIMPLENTE');
+
+  const copiar = async (texto: string, label = 'Linha digitável') => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success(`${label} copiada`);
+    } catch {
+      toast.error('Falha ao copiar');
+    }
+  };
+
   return (
     <>
       <Card className="border-destructive/50 bg-destructive/5">
@@ -161,10 +174,19 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
                 <p className="text-sm font-semibold text-destructive">
                   Pendência financeira no SGA
                 </p>
-                <Badge variant="destructive">{check.qtd_boletos_abertos} boleto(s) vencido(s)</Badge>
-                <Badge variant="outline" className="border-destructive/40 text-destructive">
-                  Saldo: {formatBRL(check.saldo_devedor)}
-                </Badge>
+                {check.qtd_boletos_abertos > 0 && (
+                  <Badge variant="destructive">{check.qtd_boletos_abertos} boleto(s) vencido(s)</Badge>
+                )}
+                {check.saldo_devedor > 0 && (
+                  <Badge variant="outline" className="border-destructive/40 text-destructive">
+                    Saldo: {formatBRL(check.saldo_devedor)}
+                  </Badge>
+                )}
+                {veiculosInadimplentes.length > 0 && (
+                  <Badge variant="destructive">
+                    {veiculosInadimplentes.length} veículo(s) INADIMPLENTE(S) no SGA
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 A análise documental fica bloqueada até o associado regularizar.
@@ -173,9 +195,44 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
             </div>
           </div>
 
-          {boletos.length > 0 && (
+          {/* Veículos INADIMPLENTES sem boletos detalhados retornados */}
+          {veiculosInadimplentes.length > 0 && boletos.length === 0 && (
             <div className="rounded border border-destructive/30 bg-background overflow-hidden">
               <div className="max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-3 py-1.5">Placa</th>
+                      <th className="text-left px-3 py-1.5">Marca/Modelo</th>
+                      <th className="text-left px-3 py-1.5">Situação SGA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {veiculosInadimplentes.map((v, i) => (
+                      <tr key={i} className="border-t border-border/50">
+                        <td className="px-3 py-1.5 font-mono">{v.placa || '—'}</td>
+                        <td className="px-3 py-1.5">
+                          {[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <Badge variant="destructive" className="text-[10px]">
+                            {v.situacao_financeira}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-foreground px-3 py-2 border-t border-border/50">
+                O SGA não retornou os boletos individuais — o associado precisa abrir os boletos diretamente no SGA / app do associado para regularizar.
+              </p>
+            </div>
+          )}
+
+          {boletos.length > 0 && (
+            <div className="rounded border border-destructive/30 bg-background overflow-hidden">
+              <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/50">
                     <tr>
@@ -183,15 +240,29 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
                       <th className="text-left px-3 py-1.5">Vencimento</th>
                       <th className="text-right px-3 py-1.5">Valor</th>
                       <th className="text-left px-3 py-1.5">Situação</th>
+                      <th className="text-left px-3 py-1.5">Linha digitável</th>
                     </tr>
                   </thead>
                   <tbody>
                     {boletos.slice(0, 20).map((b, i) => (
                       <tr key={i} className="border-t border-border/50">
-                        <td className="px-3 py-1.5">{b.placa || '—'}</td>
+                        <td className="px-3 py-1.5 font-mono">{b.placa || '—'}</td>
                         <td className="px-3 py-1.5">{formatDate(b.data_vencimento)}</td>
                         <td className="px-3 py-1.5 text-right">{formatBRL(Number(b.valor) || 0)}</td>
                         <td className="px-3 py-1.5">{b.situacao_label || '—'}</td>
+                        <td className="px-3 py-1.5">
+                          {b.linha_digitavel ? (
+                            <button
+                              type="button"
+                              onClick={() => copiar(String(b.linha_digitavel))}
+                              className="inline-flex items-center gap-1 font-mono text-[11px] hover:text-foreground text-muted-foreground"
+                              title="Copiar linha digitável"
+                            >
+                              <Copy className="h-3 w-3" />
+                              {String(b.linha_digitavel).slice(0, 14)}…
+                            </button>
+                          ) : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

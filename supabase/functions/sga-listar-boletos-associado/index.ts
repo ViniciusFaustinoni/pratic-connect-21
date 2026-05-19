@@ -15,6 +15,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   getHinovaSession,
   buscarAssociadoComVeiculosPorCpf,
+  buscarSituacaoFinanceiraVeiculo,
   listarBoletosVeiculo,
   mapStatusBoleto,
   parseDataHinova,
@@ -59,6 +60,7 @@ interface VeiculoSGA {
   ano: string | null;
   saldo_devedor: number;
   boletos_abertos: BoletoAberto[];
+  situacao_financeira: 'ADIMPLENTE' | 'INADIMPLENTE' | null;
 }
 
 interface ResponsePayload {
@@ -185,6 +187,7 @@ serve(async (req) => {
     );
 
     const resBoletos: any[][] = [];
+    const resSituacao: (string | null)[] = [];
     for (const v of veiculosSGA) {
       try {
         const boletos = await withHinovaAuthRetry(supabase, async (session) =>
@@ -203,6 +206,25 @@ serve(async (req) => {
         );
         if (err instanceof HinovaTransientError) throw err;
         resBoletos.push([]);
+      }
+
+      // Consulta situação financeira do VEÍCULO (ADIMPLENTE/INADIMPLENTE).
+      // Esta é a flag canônica do SGA — boletos podem ter sido baixados
+      // manualmente e ainda assim o veículo permanecer INADIMPLENTE.
+      try {
+        const sit = await withHinovaAuthRetry(supabase, async (session) =>
+          buscarSituacaoFinanceiraVeiculo(session, v.codigo_veiculo),
+        );
+        const norm = sit ? String(sit).trim().toUpperCase() : null;
+        resSituacao.push(norm === 'ADIMPLENTE' || norm === 'INADIMPLENTE' ? norm : null);
+      } catch (err: any) {
+        console.warn(
+          '[sga-listar-boletos-associado] situacao_financeira falhou veiculo',
+          v.codigo_veiculo,
+          err?.message,
+        );
+        if (err instanceof HinovaTransientError) throw err;
+        resSituacao.push(null);
       }
     }
 
@@ -237,6 +259,7 @@ serve(async (req) => {
         ano: null,
         saldo_devedor: Math.round(saldo * 100) / 100,
         boletos_abertos: abertos.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')),
+        situacao_financeira: (resSituacao[i] as VeiculoSGA['situacao_financeira']) ?? null,
       };
     });
 
@@ -259,6 +282,7 @@ serve(async (req) => {
     }
 
     const saldoTotal = Math.round(veiculos.reduce((s, v) => s + v.saldo_devedor, 0) * 100) / 100;
+    const algumInadimplente = veiculos.some((v) => v.situacao_financeira === 'INADIMPLENTE');
 
     const resp: ResponsePayload = {
       encontrado: true,
@@ -266,7 +290,7 @@ serve(async (req) => {
       associado: metaAssociado,
       veiculos,
       saldo_devedor_total: saldoTotal,
-      tem_debito: saldoTotal > 0,
+      tem_debito: saldoTotal > 0 || algumInadimplente,
       origem_busca: 'cpf',
     };
     return json(200, resp);
