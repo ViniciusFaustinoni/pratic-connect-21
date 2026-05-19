@@ -61,6 +61,7 @@ interface VeiculoSGA {
   saldo_devedor: number;
   boletos_abertos: BoletoAberto[];
   situacao_financeira: 'ADIMPLENTE' | 'INADIMPLENTE' | null;
+  origem_enumeracao?: 'sga' | 'local' | 'historico';
 }
 
 interface ResponsePayload {
