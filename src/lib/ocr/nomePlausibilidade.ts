@@ -69,15 +69,10 @@ export interface ValidacaoNomeOCR {
  */
 export function detectarCombinacaoImprovavel(nome: string): string | null {
   if (!nome) return null;
-  for (const { pattern, motivo } of PADROES_IMPROVAVEISWithBoundary(nome)) {
+  for (const { pattern, motivo } of PADROES_IMPROVAVEIS) {
     if (pattern.test(nome)) return motivo;
   }
   return null;
-}
-
-// Helper para iterar com closure consistente
-function* PADROES_IMPROVAVEISWithBoundary(_nome: string) {
-  for (const item of PADROES_IMPROVAVEIS) yield item;
 }
 
 /**
