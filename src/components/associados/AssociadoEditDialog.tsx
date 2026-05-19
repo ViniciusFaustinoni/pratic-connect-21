@@ -196,6 +196,9 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
         uf: associado.uf || '',
         plano_id: associado.plano_id || '',
         dia_vencimento: associado.dia_vencimento || 10,
+        data_adesao: associado.data_adesao || '',
+        data_cadastro_sga: associado.data_cadastro_sga || '',
+        codigo_hinova: associado.codigo_hinova ?? undefined,
       };
       form.reset(initial);
       setSnapshot(initial);
