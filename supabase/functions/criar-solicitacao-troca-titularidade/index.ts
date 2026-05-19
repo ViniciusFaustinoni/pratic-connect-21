@@ -291,25 +291,29 @@ Deno.serve(async (req) => {
       console.warn('[criar-solicitacao-troca] envio troca_titularidade_solicitada falhou (não bloqueante):', waErr);
     }
 
-    // Disparo automático do termo de cancelamento (best-effort, NÃO bloqueia criação).
-    // Reaproveita 100% a edge `enviar-termo-cancelamento-troca`. Timeout de 12s
-    // para não travar a UI caso Autentique/WhatsApp estejam lentos.
-    let termo_enviado_automaticamente = false;
-    let termo_envio_erro: string | null = null;
+    // Disparo automático do termo de cancelamento — FIRE-AND-FORGET.
+    // Antes era awaitado e estourava o timeout de 25s do cliente quando
+    // Autentique/WhatsApp ficavam lentos. Agora o envio acontece em background
+    // via EdgeRuntime.waitUntil (com fallback) e o cliente recebe 'agendado'.
+    const dispararTermo = (async () => {
+      try {
+        const resp = await admin.functions.invoke('enviar-termo-cancelamento-troca', {
+          body: { solicitacao_id: solicitacao.id },
+        });
+        if (resp.error) throw resp.error;
+        if ((resp.data as any)?.error) throw new Error((resp.data as any).error);
+      } catch (envErr) {
+        console.error('[criar-solicitacao-troca] envio automático do termo falhou (background):',
+          envErr instanceof Error ? envErr.message : envErr);
+      }
+    })();
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 12000);
-      const resp = await admin.functions.invoke('enviar-termo-cancelamento-troca', {
-        body: { solicitacao_id: solicitacao.id },
-      });
-      clearTimeout(t);
-      if (resp.error) throw resp.error;
-      if ((resp.data as any)?.error) throw new Error((resp.data as any).error);
-      termo_enviado_automaticamente = true;
-    } catch (envErr) {
-      termo_envio_erro = envErr instanceof Error ? envErr.message : 'Falha desconhecida';
-      console.error('[criar-solicitacao-troca] envio automático do termo falhou:', termo_envio_erro);
-    }
+      // @ts-ignore — EdgeRuntime existe em runtime Supabase Functions
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(dispararTermo);
+      }
+    } catch { /* ignore */ }
 
     return new Response(
       JSON.stringify({
@@ -318,8 +322,8 @@ Deno.serve(async (req) => {
         cotacao_id: null,
         cotacao_token: null,
         solicitacao_token: solicitacao.token_publico,
-        termo_enviado_automaticamente,
-        termo_envio_erro,
+        termo_enviado_automaticamente: 'agendado',
+        termo_envio_erro: null,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

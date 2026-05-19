@@ -1,17 +1,22 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, Clock, Send, Eye, FileText, MessageCircle, AlertTriangle, Ban, ExternalLink, Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { CheckCircle2, Clock, Send, Eye, FileText, MessageCircle, AlertTriangle, Ban, ExternalLink, Loader2, XCircle } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import type { OutroProcessoItem } from '@/hooks/useOutrosProcessos';
-import { useSolicitacaoTroca } from '@/hooks/useSolicitacoesTroca';
+import { useSolicitacaoTroca, useCancelarTrocaTitularidade } from '@/hooks/useSolicitacoesTroca';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 import { cn } from '@/lib/utils';
 
@@ -70,6 +75,9 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelMotivo, setCancelMotivo] = useState('');
+  const cancelar = useCancelarTrocaTitularidade();
 
   // Carrega a solicitação completa para montar o cotacaoBase do formulário padrão
   const { data: solicitacao } = useSolicitacaoTroca(item?.solicitacao_troca_id || undefined);
@@ -104,10 +112,17 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
   const podeReenviar = item.tipo === 'troca_titularidade' && item.solicitacao_troca_id &&
     !item.termo_assinado_em && !!item.termo_enviado_em && !semEmail;
 
+  // Liberado ANTES da assinatura: consultor adianta a cotação enquanto o titular
+  // antigo ainda não assinou. O link público continua bloqueado até a assinatura.
   const podeRealizarCotacao = item.tipo === 'troca_titularidade'
     && !!item.solicitacao_troca_id
-    && !item.cotacao_id
-    && !!item.termo_assinado_em;
+    && !item.cotacao_id;
+  const termoAssinado = !!item.termo_assinado_em;
+
+  const TERMINAIS = ['efetivada','cancelada','expirada','reprovada_cadastro','reprovada_monitoramento'];
+  const podeCancelar = item.tipo === 'troca_titularidade'
+    && !!item.solicitacao_troca_id
+    && !TERMINAIS.includes(item.troca_status || '');
 
   const handleRealizarCotacao = () => {
     if (!item.solicitacao_troca_id) return;
@@ -186,10 +201,13 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
           {podeRealizarCotacao && (
             <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <FileText className="h-4 w-4 text-primary" /> Pronto para gerar a cotação
+                <FileText className="h-4 w-4 text-primary" />
+                {termoAssinado ? 'Pronto para gerar a cotação' : 'Adiantar cotação do novo titular'}
               </div>
               <p className="text-xs text-muted-foreground">
-                O termo de cancelamento foi assinado. Clique para gerar a cotação do novo titular (consulta FIPE atualizada).
+                {termoAssinado
+                  ? 'O termo de cancelamento foi assinado. Clique para gerar a cotação do novo titular (consulta FIPE atualizada).'
+                  : 'Você pode criar a cotação agora para adiantar plano e valores. O link público do novo titular só ficará acessível após o titular antigo assinar o termo de cancelamento.'}
               </p>
               <Button size="sm" className="w-full" disabled={criandoCotacao} onClick={handleRealizarCotacao}>
                 {criandoCotacao ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
@@ -249,8 +267,68 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
               </div>
             </>
           )}
+
+          {podeCancelar && (
+            <>
+              <Separator />
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-300"
+                onClick={() => setCancelOpen(true)}
+                disabled={cancelar.isPending}
+              >
+                <XCircle className="h-4 w-4 mr-1.5" /> Cancelar Troca de Titularidade
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
+
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar troca de titularidade?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A solicitação será marcada como <strong>cancelada</strong> e o veículo voltará ao estado anterior.
+              O titular antigo será notificado por WhatsApp. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Motivo (opcional)</label>
+            <Textarea
+              value={cancelMotivo}
+              onChange={(e) => setCancelMotivo(e.target.value)}
+              placeholder="Ex.: associado desistiu, dados incorretos, etc."
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelar.isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelar.isPending}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!item.solicitacao_troca_id) return;
+                try {
+                  await cancelar.mutateAsync({
+                    solicitacao_id: item.solicitacao_troca_id,
+                    motivo: cancelMotivo.trim() || undefined,
+                  });
+                  setCancelOpen(false);
+                  setCancelMotivo('');
+                  onOpenChange(false);
+                } catch { /* toast tratado no hook */ }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Confirmar cancelamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       {/* Modal padrão de cotação para Troca de Titularidade — só persiste cotação ao salvar plano */}
       {item && solicitacao && cotacaoBaseTroca && (
