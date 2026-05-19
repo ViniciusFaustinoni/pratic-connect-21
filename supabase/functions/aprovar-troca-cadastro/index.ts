@@ -60,6 +60,22 @@ Deno.serve(async (req) => {
       );
     }
 
+    // 2a) GATE: novo titular ainda não concluiu o link público.
+    // Régua canônica: a fila do Cadastro só recebe a troca quando a cotação
+    // canônica atingir `aguardando_aprovacao_cadastro` (trigger
+    // trg_troca_promove_cadastro_via_cotacao promove o status para
+    // 'aguardando_cadastro'). Se ainda está em 'cotacao_em_andamento', o
+    // novo titular não terminou Docs/Contrato/Vistoria.
+    if (sol.status === 'cotacao_em_andamento') {
+      return new Response(
+        JSON.stringify({
+          error: 'link_publico_incompleto',
+          message: 'Novo titular ainda não concluiu o link público (documentos, contrato e vistoria).',
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // (Removido) Trava por débito do antigo: a troca não exige mais adimplência.
 
     // 2b) GATE: Situação Financeira (SGA) — exige check liberador ≤ 24h
