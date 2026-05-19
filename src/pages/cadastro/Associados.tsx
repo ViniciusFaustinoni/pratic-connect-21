@@ -124,6 +124,7 @@ export default function Associados() {
   } | null>(null);
   const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [editarDialog, setEditarDialog] = useState<{ open: boolean; id: string | null; nome?: string }>({ open: false, id: null });
   
   const [sheetFilters, setSheetFilters] = useState<{
     status?: StatusAssociado[];
