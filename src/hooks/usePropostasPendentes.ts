@@ -1496,7 +1496,15 @@ export function useProposta(contratoId: string | undefined) {
       }
 
       // Determinar estágio para o analista (mesma lógica da listagem)
-      const temAutovistoriaProp = vistoria && vistoria.fotos && vistoria.fotos.length > 0;
+      // Mesma regra do gate principal: autovistoria precisa estar COMPLETA (2 fotos + vídeo 360°).
+      const autovistoriaCompletaProp =
+        !!vistoria &&
+        (vistoria as any).modalidade === 'autovistoria' &&
+        ((vistoria as any).fotos?.length ?? 0) >= 2 &&
+        !!(vistoria as any).video_360_url;
+      const temVistoriaPresencialMaterializadaProp =
+        !!vistoria && (vistoria as any).modalidade !== 'autovistoria' && ((vistoria as any).fotos?.length ?? 0) > 0;
+      const temAutovistoriaProp = autovistoriaCompletaProp || temVistoriaPresencialMaterializadaProp;
       const temVistoriaBaseRealizadaProp = vistoriaBaseInfo?.status === 'realizado';
       let tipoEtapaAnaliseSingle: TipoEtapaAnalise | null = null;
       if (instalacaoInfo) {
