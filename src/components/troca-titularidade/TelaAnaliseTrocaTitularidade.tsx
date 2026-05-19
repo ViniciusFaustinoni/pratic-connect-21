@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, CheckCircle2, Clock, XCircle, FileSignature, ShieldCheck, ClipboardCheck, Wrench, Camera, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, CheckCircle2, Clock, XCircle, FileSignature, ShieldCheck, ClipboardCheck, Wrench, Camera, AlertTriangle, ArrowRight } from 'lucide-react';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import type { StatusTroca, TipoVistoriaTroca } from '@/hooks/useSolicitacoesTroca';
 
