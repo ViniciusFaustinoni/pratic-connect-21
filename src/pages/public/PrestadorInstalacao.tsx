@@ -66,6 +66,7 @@ export default function PrestadorInstalacao() {
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [uploadingSig, setUploadingSig] = useState(false);
+  const [imeiRastreador, setImeiRastreador] = useState<string>('');
 
   const fotosEnviadasArray = useMemo(
     () => Object.entries(fotosMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url })),
@@ -345,8 +346,9 @@ export default function PrestadorInstalacao() {
     [todasFotos, fotosMap]
   );
   const fotosMinimoAtingido = fotosPreenchidas >= Math.min(fotosObrigatoriasCount, 10);
+  const imeiOk = /^\d{14,16}$/.test(imeiRastreador.replace(/\D/g, ''));
 
-  const canFinalize = checklistComplete && fotosMinimoAtingido && !!assinaturaUrl;
+  const canFinalize = checklistComplete && fotosMinimoAtingido && !!assinaturaUrl && imeiOk;
 
   const handleConfirmConcluir = useCallback(async () => {
     if (!token) return;
@@ -358,6 +360,7 @@ export default function PrestadorInstalacao() {
           checklist_data: checklist,
           fotos_vistoria: fotosMap,
           assinatura_url: assinaturaUrl,
+          rastreador_imei: imeiRastreador.replace(/\D/g, ''),
         },
       });
       if (error) throw error;
@@ -370,7 +373,7 @@ export default function PrestadorInstalacao() {
       setConcluding(false);
       setShowConfirmDialog(false);
     }
-  }, [token, checklist, fotosMap, assinaturaUrl, queryClient]);
+  }, [token, checklist, fotosMap, assinaturaUrl, imeiRastreador, queryClient]);
 
   // ════════════════════════════════════
   // RENDERING
@@ -659,9 +662,31 @@ export default function PrestadorInstalacao() {
                 )}
               </CardContent>
             </Card>
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-slate-800 flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-blue-600" />
+                  IMEI do Rastreador Instalado
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="Digite os 15 dígitos do IMEI"
+                  value={imeiRastreador}
+                  onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                  className="w-full h-11 px-3 border border-slate-300 rounded-md text-base font-mono"
+                />
+                <p className="text-xs text-slate-500">
+                  Informe o IMEI do equipamento físico que você acabou de instalar. Sem isso a instalação não pode ser concluída.
+                </p>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
+
 
       {/* Botão fixo */}
       {link.status === 'em_execucao' && (
@@ -683,7 +708,8 @@ export default function PrestadorInstalacao() {
               <p className="text-xs text-slate-400 text-center mt-2">
                 {!checklistComplete && 'Complete o checklist • '}
                 {!fotosMinimoAtingido && `Envie ao menos ${Math.min(fotosObrigatoriasCount, 10)} fotos • `}
-                {!assinaturaUrl && 'Capture a assinatura'}
+                {!assinaturaUrl && 'Capture a assinatura • '}
+                {!imeiOk && 'Informe o IMEI do rastreador'}
               </p>
             )}
           </div>
