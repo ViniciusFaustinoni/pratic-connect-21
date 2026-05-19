@@ -66,6 +66,7 @@ export default function PrestadorInstalacao() {
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [uploadingSig, setUploadingSig] = useState(false);
+  const [imeiRastreador, setImeiRastreador] = useState<string>('');
 
   const fotosEnviadasArray = useMemo(
     () => Object.entries(fotosMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url })),

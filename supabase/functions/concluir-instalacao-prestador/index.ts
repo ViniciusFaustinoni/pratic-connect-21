@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { token, checklist_data, fotos_vistoria, assinatura_url } = await req.json()
+    const { token, checklist_data, fotos_vistoria, assinatura_url, rastreador_imei } = await req.json()
 
     if (!token) {
       return new Response(
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
     const { data: link, error: linkErr } = await supabase
       .from('instalacao_prestador_links')
-      .select('id, instalacao_id, prestador_id, valor, atribuido_por, status')
+      .select('id, instalacao_id, prestador_id, valor, atribuido_por, status, dispensa_rastreador')
       .eq('token', token)
       .in('status', ['aguardando', 'aceito', 'em_rota', 'em_execucao'])
       .maybeSingle()
@@ -44,11 +44,80 @@ Deno.serve(async (req) => {
       ? Object.values(fotos_vistoria as Record<string, string>)[0]
       : null
 
-    // ── AÇÃO 1: Atualizar instalação ──
+    // ── PRÉ-AÇÃO: validar/vincular IMEI do rastreador físico ──
+    // Por que: o link do prestador é o ÚNICO ponto onde o equipamento
+    // físico realmente instalado é informado. Sem vincular aqui,
+    // instalacoes.rastreador_id fica NULL e o veículo aparece como
+    // "instalação fantasma" em saneamentos por FIPE (vide caso CASSIO / LMX5A90).
+    let rastreadorVinculado: { id: string; imei: string; plataforma: string | null } | null = null
+    const imeiLimpo = typeof rastreador_imei === 'string' ? rastreador_imei.replace(/\D/g, '') : ''
+
+    // Buscar dados do veículo para decidir se exige rastreador
+    const { data: instVeic } = await supabase
+      .from('instalacoes')
+      .select('veiculo_id, associado_id, contrato_id, veiculos:veiculo_id(valor_fipe, combustivel, marca, modelo)')
+      .eq('id', link.instalacao_id)
+      .maybeSingle()
+
+    const veic = (instVeic?.veiculos as any) || {}
+    const isDiesel = String(veic.combustivel || '').toLowerCase().includes('diesel')
+    const isMoto = /(honda|yamaha|suzuki|kawasaki|harley|bmw motorrad|royal enfield|dafra|haojue|shineray|kasinski|triumph|husqvarna|ducati|mv agusta|cf moto|sym|piaggio|vespa|traxx|sundown|garinni|kymco)/i.test(String(veic.marca || ''))
+      || /(cb |cg |titan|biz|nmax|xre|fazer|bros|pop |xtz|hornet|cbr|gixxer|burgman|ybr|fan |factor)/i.test(String(veic.modelo || ''))
+    const fipe = Number(veic.valor_fipe || 0)
+    const exigeRastreador = isDiesel || (isMoto ? fipe >= 9000 : fipe >= 30000)
+
+    if (exigeRastreador && !link.dispensa_rastreador && !imeiLimpo) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'IMEI do rastreador é obrigatório para concluir esta instalação.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (imeiLimpo) {
+      const { data: rast } = await supabase
+        .from('rastreadores')
+        .select('id, imei, plataforma, status, veiculo_id')
+        .eq('imei', imeiLimpo)
+        .maybeSingle()
+      if (!rast) {
+        return new Response(
+          JSON.stringify({ success: false, error: `Rastreador IMEI ${imeiLimpo} não encontrado no estoque.` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if (rast.veiculo_id && rast.veiculo_id !== instVeic?.veiculo_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: `Rastreador IMEI ${imeiLimpo} já está vinculado a outro veículo.` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      rastreadorVinculado = { id: rast.id, imei: rast.imei, plataforma: rast.plataforma }
+    }
+
+    // ── AÇÃO 1: Atualizar instalação (já com rastreador físico vinculado) ──
     await supabase
       .from('instalacoes')
-      .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
+      .update({
+        status: 'concluida',
+        concluida_em: agora,
+        rastreador_id: rastreadorVinculado?.id ?? null,
+        imei_rastreador: rastreadorVinculado?.imei ?? null,
+        updated_at: agora,
+      })
       .eq('id', link.instalacao_id)
+
+    // Vincular rastreador → veículo/associado no DB (Softruck é chamado mais abaixo)
+    if (rastreadorVinculado && instVeic?.veiculo_id) {
+      await supabase
+        .from('rastreadores')
+        .update({
+          veiculo_id: instVeic.veiculo_id,
+          associado_id: instVeic.associado_id,
+          status: 'instalado',
+          updated_at: agora,
+        })
+        .eq('id', rastreadorVinculado.id)
+    }
 
     // ── AÇÃO 2: Atualizar link ──
     const { error: linkUpdateErr } = await supabase
@@ -60,6 +129,7 @@ Deno.serve(async (req) => {
         fotos_vistoria,
         assinatura_url,
         foto_comprovante_url: fotoComprovante,
+        rastreador_imei: rastreadorVinculado?.imei ?? null,
         updated_at: agora,
       })
       .eq('id', link.id)
