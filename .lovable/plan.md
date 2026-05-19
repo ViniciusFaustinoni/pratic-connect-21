@@ -1,73 +1,79 @@
-## Objetivo
 
-Transformar a "Regra do 1% / FIPE Menor" de uma **aprovação bloqueante** (com checkbox + justificativa + supervisor aprovar/recusar) em uma **aplicação automática** que apenas alimenta uma fila de **ciência** para os supervisores.
+## O que aconteceu (raiz do bug)
 
-## Comportamento esperado
+A cotação **existe sim** no banco:
 
-### No modal de cotação (`CotacaoFormDialog.tsx`)
+- `id`: `c46ba7dc-24cc-425b-a88c-389a3d3f04e6`
+- `numero`: `COT-20260519-095712313-060`
+- `status`: `rascunho`, `status_contratacao`: `aguardando`
+- `vendedor_id`: `283907ed-9b43-4ecb-aa21-54a93fe787a5` → **auth.users.id** da **THAÍS DE SOUZA FIGUEIREDO** (profile `107b60dc-…`)
+- `nome_solicitante`: `Leandro`, `veiculo_placa`: `PYL9A01`
 
-- Quando o veículo é **elegível** à Regra do 1% e a Diretoria mantém `fipe_menor_ativo = true`:
-  - Card "Redução de Cota" aparece **informativo** (verde), mostrando FIPE atual, FIPE−1% e faixa reduzida.
-  - **Não há checkbox** "Solicitar FIPE Menor" nem campo de justificativa.
-  - Os planos são listados e precificados **já na faixa reduzida** automaticamente — o vendedor enxerga o preço final.
-- Quando o veículo **não é elegível** (faixa R$30k–R$35k com rastreador obrigatório, blindado, acima do teto do tipo, abaixo do mínimo, ou Diretoria desligou): **card some por completo**; planos seguem na faixa cheia. Sem amber, sem aviso.
+Ou seja: **não é "invisível"** — é uma rascunho legítima da Thaís, criada há minutos. O que confunde é o conjunto de bugs abaixo, todos pela mesma causa: **`cotacoes.vendedor_id` guarda `auth.users.id`** (convenção histórica — 100% dos 80 maiores `vendedor_id` da tabela batem com `profiles.user_id`, **0 batem com `profiles.id`**), mas vários consumidores comparam contra `profiles.id`.
 
-### Persistência ao salvar a cotação
+### Bug 1 — Nome do consultor some no modal
 
-- Cotação elegível salva direto com `fipe_menor_aprovado = true`, `fipe_faixa_cobranca_min/max` na faixa reduzida e `solicitar_fipe_menor = true` (auto).
-- Sistema cria um registro em `aprovacoes_fipe_menor` com `status = 'ciente_pendente'` apenas para alimentar a fila. **Não trava o fluxo da cotação.**
-- O toggle global `fipe_menor_ativo` desligado afeta só **novas** cotações; cotações existentes preservam a redução já aplicada.
+`src/hooks/useVerificarPlaca.ts` (linha 88):
+```ts
+.eq('id', cotacao.vendedor_id)  // ❌ deveria ser .eq('user_id', …)
+```
+Não encontra o perfil → cai no fallback `Consultor (283907ed)` que aparece no print. Por isso parece que o dono é desconhecido / órfão.
 
-### Tela `/vendas/aprovacoes-fipe` → aba renomeada "Redução de Cota"
+### Bug 2 — Mesmo dono é tratado como "outro consultor"
 
-- Sub-abas: **Pendentes** (não vistos), **Cientes** (já marcados), **Todas**.
-- Card de cada solicitação mostra: veículo, FIPE real, faixa original × faixa reduzida, mensalidade original × reduzida, vendedor, data.
-- Botão único: **"Marcar como Ciente"** (com opcional caixa de observação). Não existe "Recusar" — supervisor não pode reverter o preço.
-- Ao marcar ciente: registra `status = 'ciente'`, `supervisor_id`, `respondido_em`. Cotação não é tocada.
+`Cotador.tsx:709` e `CotacaoFormDialog.tsx:1032`:
+```ts
+if (placaDuplicada.vendedorId !== profile?.id) { … abre modal "outro consultor" … }
+else { toast.info("Você já possui…") }
+```
+Como `vendedorId` é `auth.users.id` e `profile?.id` é o id da tabela `profiles`, **nunca** são iguais. Resultado: até a própria Thaís, se reabrisse a cotação rápida pela placa dela, levaria o modal "Placa Já em Atendimento" e seria empurrada para "outro consultor".
 
-### Migração do histórico
+### Bug 3 — Sem saída para placa presa
 
-- Todos os registros atuais em `pendente` / `aprovado` / `recusado` viram `ciente` (data preservada). Fila começa zerada de pendências históricas; nova lógica passa a valer para cotações criadas a partir da virada.
+O `PlacaDuplicadaModal` aceita `onIgnorarEProsseguir` (bypass de diretor), mas o `Cotador.tsx` (linha 2203) **não passa esse callback** — só o `CotacaoFormDialog` passa. Por isso o print só mostra "Entendido". Além disso, o modal não tem:
 
-## Mudanças técnicas
+- Botão "Abrir cotação" para navegar até ela.
+- Botão "Cancelar rascunho e liberar a placa" (para gestor/diretor).
 
-### 1. Banco (`supabase--migration`)
+### Bug 4 — Visibilidade na lista
 
-- `aprovacoes_fipe_menor.status`: ampliar enum/text para aceitar `'ciente_pendente'` e `'ciente'`. Manter `'pendente'/'aprovado'/'recusado'` por compatibilidade de leitura.
-- Backfill: `UPDATE aprovacoes_fipe_menor SET status = 'ciente' WHERE status IN ('pendente','aprovado','recusado')`.
-- Campos `justificativa` e `observacao_supervisor` passam a ser **opcionais** (drop NOT NULL onde houver).
+A cotação aparece para quem está com `viewScope = 'team'/'all'` (gestor/diretor) ao filtrar por `PYL9A01`. Para um consultor com `viewScope='own'` cujo `userId` é diferente do da Thaís, ela é filtrada server-side em `useCotacoes` (`vendedor_id = effectiveVendedorId`) — daí a sensação de "invisível" quando outro vendedor abre o cotador rápido e recebe o bloqueio sem ter como ver a cotação.
 
-### 2. Frontend modal (`src/components/cotacoes/CotacaoFormDialog.tsx`)
+---
 
-- Remover checkbox "Solicitar FIPE Menor" e Textarea de justificativa.
-- Card "Redução de Cota" exibido apenas no estado **elegível-informativo** (verde, sem ação).
-- Quando inelegível → card não renderiza (remover ramo amber).
-- No `onSubmit`/salvar cotação: se elegível, gravar `fipe_menor_aprovado=true` + faixa reduzida direto em `cotacoes`, e disparar `useRegistrarCienciaFipeMenor` (novo hook) para criar `aprovacoes_fipe_menor` com `status='ciente_pendente'`.
-- Pricing engine: garantir que os planos listem valor usando `fipe_faixa_cobranca_min/max` quando `fipe_menor_aprovado=true` — já é o comportamento atual após aprovação, agora vale desde o salvamento.
+## Plano de correção (somente UI/hooks, sem mudar schema)
 
-### 3. Hook (`src/hooks/useAprovacoesFipeMenor.ts`)
+### 1. `src/hooks/useVerificarPlaca.ts`
+- Trocar `.from('profiles').select('nome, email').eq('id', vendedor_id)` por `.eq('user_id', vendedor_id)`.
+- Retornar também `vendedorUserId` (auth) no `PlacaDuplicadaInfo` — separado de `vendedorId` (id da cotação, que vai virar alias `vendedorUserId` para ficar explícito).
+- Já que o campo `vendedorId` no objeto retornado representa o `auth.users.id`, renomear no tipo para deixar isso claro (`vendedorUserId`) e ajustar os dois callers.
 
-- Renomear/adicionar:
-  - `useCriarSolicitacaoFipeMenor` → `useRegistrarCienciaFipeMenor` (insert com `status='ciente_pendente'`, sem mexer em `solicitar_fipe_menor` como flag de pendência).
-  - Adicionar `useMarcarCienteFipeMenor({ id, observacao })` que faz `UPDATE status='ciente', supervisor_id, respondido_em`.
-  - Manter `useAprovacoesFipeMenor(statusFilter)` (já filtra por status).
-- Remover `useAprovarFipeMenor` e `useRecusarFipeMenor` (ou marcar deprecated e parar de usar).
+### 2. Callers do modal — comparar com `user?.id` (auth), não `profile?.id`
+Arquivos:
+- `src/pages/vendas/Cotador.tsx:709`
+- `src/components/cotacoes/CotacaoFormDialog.tsx:1032`
 
-### 4. Tela `/vendas/aprovacoes-fipe` (`src/pages/vendas/AprovacoesFipe*.tsx`)
+Trocar `placaDuplicada.vendedorId !== profile?.id` por `placaDuplicada.vendedorUserId !== user?.id` (usando o `user` já disponível via `useAuth`).
 
-- Renomear aba "FIPE Menor" → "Redução de Cota". Trocar ícone se quiser (manter `TrendingDown` está ok).
-- Sub-abas: Pendentes (`status='ciente_pendente'`), Cientes (`status='ciente'`), Todas.
-- Card: substituir botões "Aprovar/Recusar" por único botão "Marcar como Ciente" (com Dialog opcional para observação).
-- Manter aba "Elegibilidade" intocada.
+### 3. `PlacaDuplicadaModal` — saídas para a placa presa
+Adicionar dois botões ao lado de "Entendido":
 
-### 5. Verificações finais
+- **"Abrir cotação"** — sempre visível. `navigate(`/vendas/cotacoes?cotacaoId=${info.cotacaoId}`)` (ou rota equivalente que já abre o drawer da cotação). Permite ao gestor/diretor ver de quem é e tomar ação na tela completa.
+- **"Cancelar rascunho e liberar"** — visível apenas para perfis com `permissions.cotacao.viewScope !== 'own'` (gestor/coord/diretor). Faz `UPDATE cotacoes SET status='recusada', motivo_cancelamento='Liberação manual de placa', cancelada_em=now() WHERE id = info.cotacaoId AND status='rascunho'`, invalida queries e fecha o modal. Confirmação inline (segundo clique) para evitar acidente.
 
-- `useAprovacaoFipeLimitePorCotacao` e `useAprovacaoFipeDiretoriaPorCotacao` continuam funcionando — são **fluxos diferentes** (alto valor FIPE / dupla aprovação). Não confundir.
-- Buscar referências a `useAprovarFipeMenor`/`useRecusarFipeMenor` no projeto e limpar.
-- Toast no salvar cotação elegível: "Redução de cota aplicada (Regra do 1%) — supervisor será notificado para ciência".
+### 4. `Cotador.tsx` — passar `onIgnorarEProsseguir`
+Mesma lógica que já existe no `CotacaoFormDialog`: se o usuário tem permissão de bypass (diretor), passar o callback para o modal mostrar "Ignorar e Prosseguir" (usa o fluxo de `IgnorarAvisoSGADialog` já implementado).
 
-## Pontos fora do escopo
+### 5. Lista de Cotações — facilitar achar rascunho de outro
+Em `src/pages/vendas/Cotacoes.tsx`, quando o usuário tem `viewScope !== 'own'` e há `searchTerm` que parece placa, garantir que o filtro de status default inclua `rascunho` (já inclui via `em_andamento`, mas confirmar que `filtroOrfas`/aba padrão não esconde rascunhos sem `nome_solicitante` completo). Só ajuste cosmético se precisar.
 
-- Notificação por e-mail/in-app ao supervisor (pode ser próxima iteração).
-- Mexer no fluxo de "Autorização FIPE Alto" (dupla aprovação) — esse continua bloqueante.
-- Mudar as regras de elegibilidade da Regra do 1% (limites, blindados, faixa rastreador) — permanecem como hoje.
+### 6. Limpeza pontual deste caso
+Após deploy, marcar a rascunho `c46ba7dc-…` como `recusada` com `motivo_cancelamento='Liberação manual — fluxo de teste'` para destravar a placa `PYL9A01` agora (via migration única de UPDATE, ou pelo novo botão depois que estiver no ar).
+
+---
+
+## Fora do escopo
+
+- Não vamos mudar a convenção de `cotacoes.vendedor_id` (continua `auth.users.id`) — isso afetaria comissões/relatórios. Só padronizamos a leitura.
+- Sem alterar RLS, schema ou regras de 48h.
+- Sem mexer em `useCotacao` (já usa `user_id` corretamente).
