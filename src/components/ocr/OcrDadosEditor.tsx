@@ -382,6 +382,38 @@ export function OcrDadosEditor({
           </p>
         )}
 
+        {ehCnhOuRg && !validacaoNome.ok && nomeAtual && (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2">
+            <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+            <p className="text-xs text-destructive">{validacaoNome.motivo}</p>
+          </div>
+        )}
+
+        {ehCnhOuRg && sugestaoNome && (
+          <div className="flex items-start justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
+            <div className="flex items-start gap-2">
+              <Sparkle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs">
+                Cadastro existente para este CPF:{' '}
+                <span className="font-semibold">{sugestaoNome.nome}</span>
+                <span className="text-muted-foreground"> — {sugestaoNome.fonte === 'sga' ? 'SGA' : 'base local'}</span>
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={handleUsarNomeSugerido}>
+              Usar este nome
+            </Button>
+          </div>
+        )}
+
+        {confirmacaoObrigatoria && confirmado && (
+          <div className="flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+              Dados confirmados — pode prosseguir
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {schema.map((field) => (
             <div key={field.key} className="space-y-1">
