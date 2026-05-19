@@ -562,19 +562,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return mod?.nome || '';
   }, [veiculoEncontrado, modeloSelecionado, modelos]);
 
-  // Hook de planos calculados dinamicamente do banco
-  const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
-    valorFipe: valorFipeParaPlanos,
-    valorAdicional,
-    regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
-    combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
-    categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : undefined,
-    anoVeiculo: anoNumerico,
-    tipoVeiculo: tipoVeiculoDetectado,
-    usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
-    marca: marcaResolvida || undefined,
-    modelo: modeloResolvido || undefined,
-  });
+  // Hook de planos calculados dinamicamente do banco — movido para depois de
+  // fipeMenorInfo para podermos repassar a faixa reduzida quando a Regra do 1%
+  // estiver elegível (ver definição logo após fipeMenorInfo).
+
 
   // Buscar todas as faixas de preço (LEGADO — apenas fallback p/ catálogo antigo)
   const { data: todasFaixas = [] } = useTabelasPreco();
