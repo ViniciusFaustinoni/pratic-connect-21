@@ -1,69 +1,67 @@
-## Problema
+## Reset da autovistoria do Marllon (KRF8B74)
 
-A fila do Cadastro está mostrando propostas com caminho **incompleto**. Caso Marllon (KRF8B74): autovistoria iniciada com **1 foto e sem vídeo 360°** já apareceu como "Aceita / Escolha de Vistoria" para o Cadastro.
+Operação one-shot via migração SQL para limpar os artefatos parciais e devolver o link público ao estado de "Escolha de Vistoria".
 
-Causa raiz em `src/hooks/usePropostasPendentes.ts`:
+**IDs envolvidos:**
+- contrato: `226eacc0-1938-4b5e-9ae1-fa9c209875d8`
+- cotação: `b50180dc-e4f0-420f-8f08-a07175ef0212`
+- vistoria parcial: `a9329637-aae6-4c5f-8fdc-6701c5a8b1b6` (1 foto, sem vídeo)
+- serviço vistoria_entrada agendado: `526b7da0-a2c3-43bb-86e7-96eb363215b3`
 
-```ts
-// linha 762 — qualquer mídia conta como autovistoria entregue
-const temAutovistoria = !!(vistoria && vistoria.fotos && vistoria.fotos.length > 0);
+### Migração SQL
+
+```sql
+-- 1) Apaga fotos da vistoria parcial (canônicas)
+DELETE FROM vistoria_fotos WHERE vistoria_id = 'a9329637-aae6-4c5f-8fdc-6701c5a8b1b6';
+
+-- 2) Apaga a vistoria parcial (libera trigger de materialização para nova autovistoria)
+DELETE FROM vistorias WHERE id = 'a9329637-aae6-4c5f-8fdc-6701c5a8b1b6';
+
+-- 3) Apaga fotos legadas em cotacoes_vistoria_fotos (evita rematerialização do mesmo estado)
+DELETE FROM cotacoes_vistoria_fotos WHERE cotacao_id = 'b50180dc-e4f0-420f-8f08-a07175ef0212';
+
+-- 4) Cancela o servico vistoria_entrada agendado (libera atribuição)
+UPDATE servicos
+SET status = 'cancelada',
+    observacoes_internas = COALESCE(observacoes_internas,'') || E'\n[RESET ' || now()::text || '] Autovistoria parcial cancelada manualmente — cliente vai escolher novo caminho.'
+WHERE id = '526b7da0-a2c3-43bb-86e7-96eb363215b3' AND status NOT IN ('concluida','aprovada','reprovada');
+
+-- 5) Reseta tipo_vistoria na cotação para forçar tela de "Escolha de Vistoria" no link público
+UPDATE cotacoes
+SET tipo_vistoria = NULL,
+    vistoria_data_agendada = NULL,
+    vistoria_horario_agendado = NULL,
+    vistoria_periodo = NULL,
+    vistoria_completa_data_agendada = NULL,
+    vistoria_completa_horario_agendado = NULL,
+    vistoria_completa_periodo = NULL
+WHERE id = 'b50180dc-e4f0-420f-8f08-a07175ef0212';
+
+-- 6) Garante que contrato segue 'assinado' e cadastro_aprovado=false (estado pré-vistoria)
+UPDATE contratos
+SET cadastro_aprovado = false
+WHERE id = '226eacc0-1938-4b5e-9ae1-fa9c209875d8' AND cadastro_aprovado IS DISTINCT FROM false;
 ```
 
-Esse `>= 1 foto` é o gate atual. Não exige vídeo 360°, não exige roteiro mínimo. Por isso uma autovistoria começada e abandonada (ou em andamento) entra na fila do Cadastro.
+### Verificação pós-migração
 
-## Correção
-
-### 1. Ajustar gate de "etapa concluída" em `src/hooks/usePropostasPendentes.ts`
-
-Substituir o teste atual por **autovistoria completa** seguindo a regra canônica (`mem://logic/operations/autovistoria-2-fotos-video-360`):
-
-- **Mínimo universal:** `fotos >= 2 && !!video_360_url` (cobre enxuta acima FIPE — caso o cliente complete a enxuta também atinge sub-FIPE pelo mesmo bloco).
-- Carro/moto não muda o teste — sub-FIPE completa naturalmente atinge `>=2 + vídeo`.
-
-```ts
-const autovistoriaCompleta =
-  !!vistoria &&
-  vistoria.modalidade === 'autovistoria' &&
-  (vistoria.fotos?.length ?? 0) >= 2 &&
-  !!vistoria.video_360_url;
-
-// Vistorias presenciais (modalidade !== 'autovistoria') já vêm de
-// agendamentos/instalações materializados — mantém o boolean atual.
-const temVistoriaPresencialMaterializada =
-  !!vistoria && vistoria.modalidade !== 'autovistoria' && (vistoria.fotos?.length ?? 0) > 0;
-
-const temAutovistoria = autovistoriaCompleta || temVistoriaPresencialMaterializada;
+```sql
+SELECT
+  (SELECT count(*) FROM vistorias v WHERE v.contrato_id = '226eacc0-1938-4b5e-9ae1-fa9c209875d8') AS vistorias,
+  (SELECT count(*) FROM vistoria_fotos f JOIN vistorias v ON v.id = f.vistoria_id WHERE v.contrato_id = '226eacc0-1938-4b5e-9ae1-fa9c209875d8') AS fotos,
+  (SELECT count(*) FROM cotacoes_vistoria_fotos WHERE cotacao_id = 'b50180dc-e4f0-420f-8f08-a07175ef0212') AS fotos_legado,
+  (SELECT status FROM servicos WHERE id = '526b7da0-a2c3-43bb-86e7-96eb363215b3') AS servico_status,
+  (SELECT tipo_vistoria FROM cotacoes WHERE id = 'b50180dc-e4f0-420f-8f08-a07175ef0212') AS tipo_vistoria_cot;
 ```
 
-E também recalcular `temAutovistoriaProp` na linha 1485 (mesma lógica, dentro do `realtimeRefetcher`/segundo bloco) para manter paridade.
+Esperado: `vistorias=0, fotos=0, fotos_legado=0, servico_status='cancelada', tipo_vistoria_cot=NULL`.
 
-### 2. Manter o restante do gate intacto
+### Resultado esperado para o cliente
 
-`temVistoriaBaseAgendada`, `temVistoriaBaseRealizada`, `temInstalacaoAgendada`, `instalacaoInfo` permanecem como estão — cada um representa um caminho efetivamente escolhido e materializado pelo cliente. Cobrem:
+1. Link público do contrato `CTR-...5W2XYL` reabre na etapa **"Escolha de Vistoria"** (autovistoria opcional / agendar instalação domiciliar / vistoria base).
+2. Proposta **não aparece** na fila do Cadastro (gate novo + sem caminho concluído).
+3. Marllon decide livremente o próximo caminho — quando completar (2 fotos+vídeo, ou agendar instalação/base), a proposta entra naturalmente na fila do Cadastro.
 
-- Cliente foi pela **vistoria base** (agendamento criado) → entra.
-- Cliente foi pela **instalação domiciliar** (instalação agendada via `criar-instalacao-pos-pagamento`) → entra.
-- Cliente foi pela **autovistoria** → entra somente quando 2 fotos + vídeo enviados.
+### Sem mudanças de código
 
-Se o cliente escolheu autovistoria, parou no meio e depois mudou para instalação (ou vice-versa), o gate de `temInstalacaoAgendada` / `temVistoriaBaseAgendada` capta naturalmente a nova escolha.
-
-### 3. Paridade automática do badge
-
-`usePropostasPendentesCount` apenas conta `data.length` do hook, então corrige sozinho. `usePropostasMetricas` precisa ser verificado — se ele duplica a query, aplico o mesmo critério lá; se reusa o hook, nada a fazer.
-
-### 4. Sem mudança de banco
-
-Nenhuma migração. Sem mudança de fluxo backend. A regra "autovistoria sem 2 fotos + vídeo NÃO promove cadastro" já está garantida em backend (`escopoAnaliseCadastro.ts` + edge `aprovar-proposta`). A correção é puramente na **visibilidade da fila**.
-
-## Verificação
-
-1. Recarregar `/cadastro/propostas` — a proposta KOU... do Marllon (autovistoria 1 foto, sem vídeo) deve **sumir** da fila.
-2. Subir o número de fotos para 2 + setar `video_360_url` em uma vistoria de teste → proposta reaparece.
-3. Conferir badge da sidebar bate com a quantidade da lista.
-4. Cotação com instalação agendada (caminho instalação) continua aparecendo — não é regressão.
-
-## Memória
-
-Atualizar `mem://logic/operations/propostas-pendentes-saida-por-vistoria` (ou criar uma nova `mem://logic/operations/propostas-pendentes-entrada-caminho-completo`) registrando:
-
-> Proposta SÓ entra na fila do Cadastro quando o caminho escolhido pelo cliente está **completo**: autovistoria = 2 fotos + vídeo 360°; instalação domiciliar = agendamento materializado; vistoria base = agendamento criado. Autovistoria com mídia parcial é invisível ao Cadastro.
+Apenas a migração one-shot acima. Nenhum arquivo de frontend/edge altera.
