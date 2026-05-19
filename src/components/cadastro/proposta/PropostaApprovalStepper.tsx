@@ -334,7 +334,7 @@ export function PropostaApprovalStepper({
             {/* Summary checklist */}
             <Card className="border-border">
               <CardContent className="p-5 space-y-4">
-                <h3 className="text-base font-bold text-foreground">Resumo da Análise</h3>
+                <h3 className="text-base font-bold text-foreground">Resumo do Cadastro</h3>
                 
                 <div className="space-y-3">
                   {/* Doc check */}
