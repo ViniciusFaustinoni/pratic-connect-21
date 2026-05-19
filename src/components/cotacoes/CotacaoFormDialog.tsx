@@ -1729,14 +1729,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           ...cotacaoData,
           // Guard: indicador_id é UUID; nunca enviar matrícula/string vazia
           indicador_id: isUuid(cotacaoData.indicador_id) ? cotacaoData.indicador_id : null,
-          solicitar_fipe_menor: solicitarFipeMenor,
+          // Regra do 1% automática: marca flag se elegível (o registro de ciência abaixo confirma).
+          solicitar_fipe_menor: !!(fipeMenorAtivo && fipeMenorInfo?.elegivel && fipeMenorInfo?.faixaInferior),
           status: 'rascunho',
           vendedor_id: vendedorIdFinal,
         });
-        
-        // Se solicitou FIPE menor, criar registro de aprovação
-        if (solicitarFipeMenor && fipeMenorInfo?.elegivel && novaCotacao?.id) {
-          await criarSolicitacaoFipeMenor.mutateAsync({
+
+        // Redução de Cota (Regra do 1%): aplicação AUTOMÁTICA quando elegível.
+        // - Cotação já é gravada com faixa reduzida e fipe_menor_aprovado=true via o hook.
+        // - Supervisor só precisa "marcar como ciente" depois (sem trava).
+        if (fipeMenorAtivo && fipeMenorInfo?.elegivel && fipeMenorInfo?.faixaAtual && fipeMenorInfo?.faixaInferior && novaCotacao?.id) {
+          await registrarCienciaFipeMenor.mutateAsync({
             cotacao_id: novaCotacao.id,
             fipe_real: valorFipe,
             fipe_faixa_original_min: fipeMenorInfo.faixaAtual.min,
@@ -1745,7 +1748,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             fipe_faixa_solicitada_max: fipeMenorInfo.faixaInferior.max,
             valor_mensal_original: fipeMenorInfo.faixaAtual.mensal,
             valor_mensal_reduzido: fipeMenorInfo.faixaInferior.mensal,
-            justificativa: justificativaFipeMenor,
           });
         }
         
