@@ -1,47 +1,74 @@
-# Por que as fotos do LMX5A90 não aparecem em todos os menus
+# Ajuste: Cadastro avalia somente documentos + autovistoria enxuta (acima FIPE)
 
-## Diagnóstico
+## Regra canônica (confirmada)
 
-Veículo `LMX5A90` (id `3a05032d-…`, contrato `3388240f-…`, cotação `7d3040a5-…`).
+Cadastro **apenas**:
+1. **Documentos** (sempre).
+2. **Autovistoria ENXUTA** (acima FIPE, opcional, 2 fotos + vídeo 360°) — quando o cliente faz, libera R/F antecipado.
 
-Existe **1 vistoria** (`5efff1eb-adcc-4ac0-8fb6-0f0d965e89c9`, presencial, status `concluida`) com **31 fotos** em `vistoria_fotos`. Porém:
+Cadastro **NÃO avalia**:
+- Vistoria presencial técnica (base, rota, prestador, fit) — Monitoramento decide.
+- **Autovistoria COMPLETA sub-FIPE** (31 fotos carros / 15 motos + vídeo) — vai direto ao Monitoramento avaliar e aprovar.
 
+Em todos os casos não-cobertos, Cadastro aprova apenas a documentação; aprovação final é do Monitoramento (com auto-promoção via trigger para vistoria presencial concluída).
+
+## Caso RJK2I25 (Tiago Moreira Miranda)
+- Vistoria presencial **na base** com 31 fotos + vídeo já enviados.
+- Stepper atual mostra "Fotos & Vistoria" + botão "Aprovar Proposta" — incorreto.
+- Esperado: stepper só com "Documentos → Aprovação Final" (banner: aguardando técnico finalizar; aprovação do Monitoramento).
+
+## Mudanças (técnico)
+
+### 1. `src/pages/cadastro/PropostaAnalise.tsx`
+
+Derivar flags novas:
+```ts
+const isVistoriaPresencialTecnica =
+  !isAutovistoria && proposta?.vistoria?.modalidade === 'presencial';
+
+const isAutovistoriaCompletaSubFipe =
+  isAutovistoria && autovistoriaCompleta; // sub-FIPE = autovistoria completa
+
+const cadastroAvaliaApenasEnxuta =
+  isAutovistoria && !autovistoriaCompleta; // enxuta acima FIPE
 ```
-vistorias.veiculo_id = NULL
-vistorias.contrato_id = 3388240f-…   ✓
-vistorias.cotacao_id  = 7d3040a5-…   ✓
-vistorias.instalacao_id = 3ae909be-… ✓ (instalacoes.veiculo_id = 3a05032d-… ✓)
+
+Ajustar `cadastroAvaliaFotos` para incluir SÓ enxuta acima FIPE:
+```ts
+const cadastroAvaliaFotos =
+  planoTemRouboFurto &&
+  temFotosOuVideo &&
+  cadastroAvaliaApenasEnxuta;
 ```
 
-O hook canônico **`useFotosVistoriaPorVeiculo`** (`src/hooks/useVeiculoDetalhes.ts`) filtra estritamente por `vistorias.veiculo_id`. Como o campo está NULL nessa vistoria, o drawer **Detalhes do Veículo → aba Fotos/Docs** mostra "Nenhuma foto de vistoria", mesmo com 31 fotos no banco.
+Estender `aprovarApenasDocumentos` para cobrir presencial técnica E sub-FIPE completa:
+```ts
+const aprovarApenasDocumentos =
+  !planoTemRouboFurto ||
+  isVistoriaAgendadaSemFotos ||
+  isVistoriaPresencialTecnica ||
+  isAutovistoriaCompletaSubFipe;
+```
 
-Telas que leem por `contrato_id` / `cotacao_id` / `vistoria_id` (Cadastro, Monitoramento, Análise) exibem as fotos normalmente — por isso a propagação fica parcial.
+Passar `aguardandoMonitoramentoVistoria={isVistoriaPresencialTecnica || isAutovistoriaCompletaSubFipe}` ao stepper.
 
-Causa: a vistoria foi materializada antes da regra "vistoria nunca órfã" garantir `veiculo_id`. A memória atual (`mem://logic/operations/vistoria-vinculos-obrigatorios`) cita autopreenchimento de `contrato_id/cotacao_id/associado_id`, mas **não** garante `veiculo_id`.
+### 2. `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`
 
-## Plano
+- Aceitar prop `aguardandoMonitoramentoVistoria?: boolean`.
+- Quando true e step1 (docs) aprovado: substituir botão "Aprovar Proposta" por banner verde "Documentos aprovados. Aprovação final é do Monitoramento."
+- Step "Fotos & Vistoria" oculto neste modo (já garantido por `cadastroAvaliaFotos=false`).
 
-### 1. Migration — backfill + reforço do trigger
+### 3. Backend
+Sem mudanças — triggers `trg_servico_promove_cadastro` (presencial técnica) e fluxo sub-FIPE (Monitoramento) já cuidam da promoção.
 
-`supabase/migrations/<ts>_vistorias_veiculo_id_canonico.sql`:
+## Verificação
+- RJK2I25 (presencial base + 31 fotos): stepper "Documentos → Aprovação Final", sem botão de aprovar fotos.
+- Sub-FIPE com autovistoria completa: idem — Cadastro só docs, fotos vão p/ Monitoramento.
+- Autovistoria enxuta acima FIPE: Cadastro continua avaliando fotos (libera R/F).
+- Plano sem R/F: inalterado (só docs).
 
-- **Backfill** em duas etapas (idempotente):
-  1. `UPDATE vistorias v SET veiculo_id = i.veiculo_id FROM instalacoes i WHERE v.instalacao_id = i.id AND v.veiculo_id IS NULL AND i.veiculo_id IS NOT NULL;`
-  2. Fallback para vistorias sem `instalacao_id`: derivar via `contratos → veiculos` (último veículo ativo do contrato).
-- **Atualizar `fn_vistoria_autopreencher_vinculos`** (trigger BEFORE INSERT/UPDATE) para também resolver `NEW.veiculo_id` quando NULL, na ordem: `instalacoes.veiculo_id` → `contratos→veiculos` (1 único veículo ativo) → mantém NULL se ambíguo.
-- Log de saneamento na tabela de auditoria habitual.
+## Fora de escopo
+- Edge functions, triggers, tela de Monitoramento, fluxo de titularidade.
 
-### 2. Verificação
-
-Após aplicar:
-- `SELECT count(*) FROM vistorias WHERE veiculo_id IS NULL AND instalacao_id IS NOT NULL` → 0.
-- Recarregar drawer do LMX5A90 → aba **Fotos/Docs** mostra as 31 fotos.
-
-### 3. Memória
-
-Atualizar `mem://logic/operations/vistoria-vinculos-obrigatorios` para incluir `veiculo_id` no autopreenchimento e citar o saneamento histórico.
-
-## Fora do escopo
-
-- Não mexer no front (hook canônico já está correto).
-- Não tocar em fluxo de criação de vistoria nas edges — o trigger DB cobre todos os caminhos.
+## Memória a atualizar (após aprovação)
+`mem://logic/operations/vistoria-sem-rastreador-flow` — refletir que sub-FIPE não passa por avaliação de fotos no Cadastro (só docs); Monitoramento avalia fotos + aprova.
