@@ -216,6 +216,13 @@ export const TIPOS_DOCUMENTO_CONFIG: Record<TipoDocumento, TipoDocumentoConfig> 
     icone: FileText,
     descricao: 'PDF do Termo de Filiação assinado via Autentique',
   },
+  video_360: {
+    label: 'Vídeo 360° do Veículo',
+    obrigatorio: false,
+    categoria: 'veiculo',
+    icone: Camera,
+    descricao: 'Vídeo 360° terminando no painel ligado com motor funcionando',
+  },
 };
 
 interface DocumentUploaderProps {
