@@ -1045,7 +1045,7 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                {isTrocaTitularidade && !trocaPagamentoLiberado ? (
+                {isTrocaTitularidade && !trocaLiberada ? (
                   <TelaAnaliseTrocaTitularidade
                     status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
                     motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
