@@ -759,7 +759,21 @@ export function usePropostasPendentes() {
           };
         }
 
-        const temAutovistoria = !!(vistoria && vistoria.fotos && vistoria.fotos.length > 0);
+        // Gate de "caminho concluído": autovistoria só conta como etapa entregue
+        // quando o cliente finalizou o roteiro mínimo (2 fotos motor+chassi + vídeo 360°).
+        // Mídia parcial NÃO promove a proposta para a fila do Cadastro — o cliente
+        // precisa terminar o caminho escolhido (autovistoria completa, agendar
+        // instalação ou agendar vistoria base) antes de aparecer aqui.
+        // Vistorias presenciais (modalidade !== 'autovistoria') já vêm de
+        // agendamentos/instalações materializados, então qualquer foto basta.
+        const autovistoriaCompleta =
+          !!vistoria &&
+          vistoria.modalidade === 'autovistoria' &&
+          (vistoria.fotos?.length ?? 0) >= 2 &&
+          !!vistoria.video_360_url;
+        const temVistoriaPresencialMaterializada =
+          !!vistoria && vistoria.modalidade !== 'autovistoria' && (vistoria.fotos?.length ?? 0) > 0;
+        const temAutovistoria = autovistoriaCompleta || temVistoriaPresencialMaterializada;
 
         // Agendamento base
         let vistoriaBaseInfo: VistoriaBaseInfo | null = null;
