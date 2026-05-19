@@ -44,6 +44,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
+import { resolverEscopoAnaliseCadastro } from '@/lib/cadastro/escopoAnaliseCadastro';
 import { useGerarVistoriaLink } from '@/hooks/useVistoriaLinkPublica';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
