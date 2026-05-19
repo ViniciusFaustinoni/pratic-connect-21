@@ -7,6 +7,13 @@ import { supabase } from '@/integrations/supabase/client';
 export interface PlacaDuplicadaInfo {
   cotacaoId: string;
   numero: string;
+  /**
+   * auth.users.id do vendedor dono da cotação (é isso que `cotacoes.vendedor_id`
+   * armazena historicamente — NÃO é `profiles.id`). Use este campo para
+   * comparar com `user?.id` (auth) e nunca com `profile?.id`.
+   */
+  vendedorUserId: string;
+  /** @deprecated use `vendedorUserId`. Mantido temporariamente por compat. */
   vendedorId: string;
   vendedorNome: string;
   createdAt: string;
@@ -81,13 +88,15 @@ export function useVerificarPlacaDuplicada() {
 
       const cotacao = filtradas[0];
       
-      // Buscar nome do vendedor separadamente
+      // Buscar nome do vendedor separadamente.
+      // IMPORTANTE: `cotacoes.vendedor_id` armazena `auth.users.id`, então o
+      // join correto em `profiles` é por `user_id` (NÃO por `id`).
       let vendedorNome = 'Consultor não identificado';
       if (cotacao.vendedor_id) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('nome, email')
-          .eq('id', cotacao.vendedor_id)
+          .eq('user_id', cotacao.vendedor_id)
           .maybeSingle();
         if (profile?.nome) {
           vendedorNome = profile.nome;
@@ -101,6 +110,7 @@ export function useVerificarPlacaDuplicada() {
       return {
         cotacaoId: cotacao.id,
         numero: cotacao.numero || '',
+        vendedorUserId: cotacao.vendedor_id || '',
         vendedorId: cotacao.vendedor_id || '',
         vendedorNome,
         createdAt: cotacao.created_at,

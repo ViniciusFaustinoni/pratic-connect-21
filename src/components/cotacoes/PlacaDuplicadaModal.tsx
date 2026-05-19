@@ -1,11 +1,20 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, User, FileText, Calendar, Info, Clock } from 'lucide-react';
+import {
+  AlertTriangle,
+  User,
+  FileText,
+  Calendar,
+  Info,
+  Clock,
+  ExternalLink,
+  XCircle,
+} from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -16,6 +25,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
 import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
+import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface PlacaDuplicadaModalProps {
   open: boolean;
@@ -39,8 +52,19 @@ export function PlacaDuplicadaModal({
   info,
   onIgnorarEProsseguir,
 }: PlacaDuplicadaModalProps) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const permissions = usePermissions();
   const [showBypass, setShowBypass] = useState(false);
+  const [confirmLiberar, setConfirmLiberar] = useState(false);
+  const [liberando, setLiberando] = useState(false);
+
   if (!info) return null;
+
+  // Gestor / Coordenador / Diretor (qualquer um com viewScope > 'own') pode
+  // liberar manualmente uma placa presa em rascunho de outro consultor.
+  const podeLiberar =
+    permissions.cotacao.viewScope !== 'own' && info.status === 'rascunho';
 
   const formatarData = (dataStr: string) => {
     try {
@@ -60,6 +84,39 @@ export function PlacaDuplicadaModal({
   };
 
   const statusInfo = STATUS_LABELS[info.status] || { label: info.status, variant: 'outline' as const };
+
+  const handleAbrirCotacao = () => {
+    onOpenChange(false);
+    navigate(`/vendas/cotacoes?cotacaoId=${info.cotacaoId}`);
+  };
+
+  const handleLiberar = async () => {
+    if (!confirmLiberar) {
+      setConfirmLiberar(true);
+      return;
+    }
+    try {
+      setLiberando(true);
+      const { error } = await supabase
+        .from('cotacoes')
+        .update({
+          status: 'recusada',
+          motivo_cancelamento: 'Liberação manual de placa (gestão)',
+          cancelada_em: new Date().toISOString(),
+        })
+        .eq('id', info.cotacaoId)
+        .eq('status', 'rascunho');
+      if (error) throw error;
+      toast.success(`Placa ${formatarPlaca(placa)} liberada.`);
+      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Não foi possível liberar a placa.');
+    } finally {
+      setLiberando(false);
+      setConfirmLiberar(false);
+    }
+  };
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -117,15 +174,45 @@ export function PlacaDuplicadaModal({
             </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="gap-2">
-          {onIgnorarEProsseguir && (
-            <Button variant="destructive" onClick={() => setShowBypass(true)}>
-              Ignorar e Prosseguir
+        <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+          <div className="flex flex-wrap gap-2 justify-end w-full">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAbrirCotacao}
+              className="gap-1.5"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Abrir cotação
             </Button>
-          )}
-          <AlertDialogAction onClick={() => onOpenChange(false)}>
-            Entendido
-          </AlertDialogAction>
+
+            {podeLiberar && (
+              <Button
+                variant={confirmLiberar ? 'destructive' : 'outline'}
+                size="sm"
+                onClick={handleLiberar}
+                disabled={liberando}
+                className="gap-1.5"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                {liberando
+                  ? 'Liberando...'
+                  : confirmLiberar
+                    ? 'Confirmar liberação'
+                    : 'Cancelar rascunho e liberar'}
+              </Button>
+            )}
+
+            {onIgnorarEProsseguir && (
+              <Button variant="destructive" size="sm" onClick={() => setShowBypass(true)}>
+                Ignorar e Prosseguir
+              </Button>
+            )}
+
+            <AlertDialogAction onClick={() => onOpenChange(false)}>
+              Entendido
+            </AlertDialogAction>
+          </div>
         </AlertDialogFooter>
       </AlertDialogContent>
 
