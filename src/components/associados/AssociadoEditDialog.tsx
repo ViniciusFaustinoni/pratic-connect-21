@@ -162,6 +162,9 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
       uf: '',
       plano_id: '',
       dia_vencimento: 10,
+      data_adesao: '',
+      data_cadastro_sga: '',
+      codigo_hinova: undefined,
     },
   });
 
