@@ -98,6 +98,7 @@ function buildCategorias(
           { id: 'painel_ligado', label: `Painel com ${tipoVeiculo === 'moto' ? 'a moto ligada' : 'o veículo ligado'}` },
         ],
       },
+      video,
       outros,
     ];
   }
