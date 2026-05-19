@@ -2482,37 +2482,28 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </p>
               )}
 
-              {/* ===== Painel Regra do 1% (FIPE Menor) =====
-                  Estágio A (preliminar): aparece assim que o FIPE carrega, antes de plano.
-                  Estágio B (detalhado): após escolher plano, mostra economia + checkbox.
-                  Bloqueado: amber com motivo (teto por tipo, zona R$30k–R$35k). */}
-              {fipeMenorAtivo && fipeMenorInfo && (() => {
-                const bloqueado = !!fipeMenorInfo.bloqueado;
-                const preliminar = !bloqueado && fipeMenorInfo.preliminar;
-                const completo = !bloqueado && !preliminar && fipeMenorInfo.elegivel && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior;
-                // Quando o motor de faixas não retornou dados nem preliminar nem bloqueio, não renderiza
-                if (!bloqueado && !preliminar && !completo) return null;
-
-                const skinClass = bloqueado
-                  ? 'border-amber-500/40 bg-amber-500/5'
-                  : 'border-green-500/40 bg-green-500/5';
-                const accentText = bloqueado
-                  ? 'text-amber-700 dark:text-amber-400'
-                  : 'text-green-700 dark:text-green-400';
+              {/* ===== Painel Redução de Cota (Regra do 1% / FIPE Menor) =====
+                  - Aplicação AUTOMÁTICA quando elegível (sem checkbox, sem justificativa, sem trava).
+                  - Quando inelegível, o card SOME por completo (não mostra amber).
+                  - Supervisores apenas "tomam ciência" depois em Vendas › Aprovações › Redução de Cota. */}
+              {fipeMenorAtivo && fipeMenorInfo && !fipeMenorInfo.bloqueado && fipeMenorInfo.elegivel && (() => {
+                const preliminar = !!fipeMenorInfo.preliminar;
+                const completo = !preliminar && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior;
+                if (!preliminar && !completo) return null;
 
                 return (
                   <div className="mt-3">
-                    <Card className={skinClass}>
+                    <Card className="border-green-500/40 bg-green-500/5">
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <TrendingDown className={`h-4 w-4 ${bloqueado ? 'text-amber-600' : 'text-green-600'}`} />
-                            <span className={`text-sm font-semibold ${accentText}`}>
-                              {bloqueado ? 'Regra do 1% indisponível' : 'Elegível à Regra do 1% (FIPE Menor)'}
+                            <TrendingDown className="h-4 w-4 text-green-600" />
+                            <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                              Redução de Cota aplicada (Regra do 1%)
                             </span>
                           </div>
-                          <Badge className={`${bloqueado ? 'bg-amber-600 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-600'} text-white border-0`}>
-                            {bloqueado ? 'Indisponível' : 'Elegível'}
+                          <Badge className="bg-green-600 hover:bg-green-600 text-white border-0">
+                            Automático
                           </Badge>
                         </div>
 
@@ -2528,15 +2519,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           {completo && (
                             <>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Faixa atual:</span>
-                                <span className="font-medium">{formatCurrency(fipeMenorInfo.faixaAtual!.mensal)}/mês</span>
+                                <span className="text-muted-foreground">Faixa cheia:</span>
+                                <span className="font-medium line-through opacity-70">{formatCurrency(fipeMenorInfo.faixaAtual!.mensal)}/mês</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Faixa reduzida:</span>
+                                <span className="text-muted-foreground">Faixa cobrada:</span>
                                 <span className="font-medium text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior!.mensal)}/mês</span>
                               </div>
                               <div className="flex justify-between sm:col-span-2 pt-1 border-t border-green-500/20">
-                                <span className="text-muted-foreground">Economia estimada:</span>
+                                <span className="text-muted-foreground">Economia mensal:</span>
                                 <span className="font-semibold text-green-700 dark:text-green-400">
                                   {formatCurrency(Math.max(0, fipeMenorInfo.economia))}/mês
                                 </span>
@@ -2545,52 +2536,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           )}
                         </div>
 
-                        {bloqueado && (
-                          <p className="text-xs text-amber-700 dark:text-amber-400 leading-snug">
-                            {fipeMenorInfo.bloqueado!.motivo}
-                          </p>
-                        )}
-
-                        {preliminar && (
-                          <p className="text-xs text-muted-foreground leading-snug">
-                            Selecione um plano para calcular a economia mensal e solicitar a redução.
-                          </p>
-                        )}
-
-                        {completo && (
-                          <>
-                            <div className="flex items-start gap-2 pt-1">
-                              <Checkbox
-                                id="solicitar-fipe-menor"
-                                checked={solicitarFipeMenor}
-                                onCheckedChange={(v) => setSolicitarFipeMenor(v === true)}
-                                className="mt-0.5"
-                              />
-                              <Label htmlFor="solicitar-fipe-menor" className="text-xs leading-snug cursor-pointer">
-                                Solicitar FIPE Menor
-                                <span className="block text-muted-foreground font-normal">
-                                  Sujeito a aprovação por e-mail em até 24h úteis.
-                                </span>
-                              </Label>
-                            </div>
-
-                            {solicitarFipeMenor && (
-                              <div className="space-y-1.5">
-                                <Label htmlFor="justif-fipe-menor" className="text-xs font-medium">
-                                  Justificativa <span className="text-destructive">*</span>
-                                </Label>
-                                <Textarea
-                                  id="justif-fipe-menor"
-                                  value={justificativaFipeMenor}
-                                  onChange={(e) => setJustificativaFipeMenor(e.target.value)}
-                                  placeholder="Explique o motivo da solicitação (mín. 5 caracteres)..."
-                                  rows={3}
-                                  className="text-xs"
-                                />
-                              </div>
-                            )}
-                          </>
-                        )}
+                        <p className="text-xs text-muted-foreground leading-snug">
+                          {preliminar
+                            ? 'Veículo elegível à redução de cota. Selecione um plano para ver a economia — a redução é aplicada automaticamente ao salvar.'
+                            : 'A redução já está sendo aplicada nos valores acima. Supervisão tomará ciência em Vendas › Aprovações › Redução de Cota (sem necessidade de aprovação).'}
+                        </p>
                       </CardContent>
                     </Card>
                   </div>
