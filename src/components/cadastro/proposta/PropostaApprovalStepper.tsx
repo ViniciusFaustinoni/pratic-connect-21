@@ -72,14 +72,24 @@ const STEP_FOTOS: StepConfig = {
   description: 'Revise as fotos e o vídeo da vistoria'
 };
 const STEP_FINAL_3: StepConfig = { 
-  id: 3, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  id: 3, label: 'Liberar para Monitoramento', shortLabel: 'Liberar',
   icon: <ShieldCheck className="h-4 w-4" />,
-  description: 'Confirme a liberação da cobertura'
+  description: 'Aprovar documentação e encaminhar ao Monitoramento'
 };
 const STEP_FINAL_2: StepConfig = { 
-  id: 2, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  id: 2, label: 'Liberar para Monitoramento', shortLabel: 'Liberar',
   icon: <ShieldCheck className="h-4 w-4" />,
-  description: 'Confirme a liberação da cobertura'
+  description: 'Aprovar documentação e encaminhar ao Monitoramento'
+};
+const STEP_LIBERAR_RF_3: StepConfig = {
+  id: 3, label: 'Liberar Cobertura R&F', shortLabel: 'R&F',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Autovistoria enxuta — libera Roubo & Furto'
+};
+const STEP_LIBERAR_RF_2: StepConfig = {
+  id: 2, label: 'Liberar Cobertura R&F', shortLabel: 'R&F',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Autovistoria enxuta — libera Roubo & Furto'
 };
 
 export function PropostaApprovalStepper({
