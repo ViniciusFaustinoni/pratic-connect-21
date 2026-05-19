@@ -81,19 +81,46 @@ Deno.serve(async (req) => {
       if (veicRow) {
         const combustivel = (veicRow.combustivel || '').toLowerCase();
         if (combustivel !== 'diesel') {
-          const cat = (veicRow.categoria || '').toLowerCase();
-          const modelo = (veicRow.modelo || '').toLowerCase();
-          const isMoto = cat.includes('moto') || cat.includes('ciclomotor') || /\b(moto|cg|cb|cbr|pcx|biz|nxr|bros|titan|fan|ybr|fazer|hornet|crosser|xre)\b/.test(modelo);
+          // Fonte canônica de tipo: catálogo marcas_modelos (tipo_veiculo).
+          // Fallback: regex no modelo (keywords ampliadas).
+          let isMoto = false;
+          const marca = String(veicRow.marca || '').trim();
+          const modelo = String(veicRow.modelo || '').trim();
+          if (marca || modelo) {
+            const { data: mm } = await supabase
+              .from('marcas_modelos')
+              .select('tipo_veiculo')
+              .ilike('marca', marca ? `${marca}%` : '%')
+              .ilike('modelo', modelo ? `%${modelo.split(' ')[0]}%` : '%')
+              .eq('ativo', true)
+              .limit(1)
+              .maybeSingle();
+            if (mm?.tipo_veiculo === 'moto') isMoto = true;
+            else if (mm?.tipo_veiculo === 'carro') isMoto = false;
+            else {
+              // fallback síncrono (keywords + marcas exclusivas de moto)
+              const MOTO_BRANDS = ['YAMAHA','HARLEY-DAVIDSON','DUCATI','TRIUMPH','KTM','APRILIA','MV AGUSTA','MOTO GUZZI','INDIAN','ROYAL ENFIELD','HUSQVARNA','BENELLI','DAFRA','KASINSKI','TRAXX','SHINERAY','HAOJUE','GARINNI','AVELLOZ','BAJAJ','HERO','HONDA MOTOS','KYMCO','SYM','PIAGGIO','VESPA','BETA','DAYANG','DAYUN','MALAGUTI','NIU','AMAZONAS'];
+              const marcaU = marca.toUpperCase();
+              if (MOTO_BRANDS.includes(marcaU)) isMoto = true;
+              else {
+                const ml = modelo.toLowerCase();
+                isMoto = /\b(moto|motocicleta|ciclomotor|triciclo|scooter|nxr|bros|cg|cb|cbr|pcx|biz|pop|titan|fan|xre|lander|tenere|crosser|crf|sahara|twister|hornet|elite|adv|sh|lead|xadv|x-adv|transalp|fazer|ybr|neo|fluo|factor|next|riva|xtz|xj6|crypton|nmax|xmax|aerox|tmax|mt-?0[3-9]|mt-?10|fz-?(15|25)|burgman|intruder|yes|gsr|v-?strom|gsx[r-]?|gixxer|bandit|hayabusa|boulevard|marauder|ninja|z(900|800|750|650|400|250)|versys|vulcan|citycom|maxsym|duke|apache|comet|rkv|tnt)\b/.test(ml);
+              }
+            }
+          }
           const fipe = Number(veicRow.valor_fipe || 0);
           if (fipe > 0) {
             veiculoSubFipe = isMoto ? fipe < fipeMinMoto : fipe < fipeMinCarro;
           }
+          console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} marca="${marca}" modelo="${modelo}" isMoto=${isMoto} fipe=${fipe} subFipe=${veiculoSubFipe}`);
         }
       }
-      console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} subFipe=${veiculoSubFipe}`);
     } catch (e) {
       console.warn('[finalizar-autovistoria] Falha detect sub-FIPE (segue como ≥30k):', e);
     }
+
+
+
 
     // 2. Contrato + veículo + associado (último não-cancelado)
     const { data: contrato } = await supabase

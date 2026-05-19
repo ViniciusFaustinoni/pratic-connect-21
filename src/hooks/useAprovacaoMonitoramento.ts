@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+
 
 // ==============================
 // Query: Instalações aguardando aprovação do monitoramento
@@ -100,11 +102,13 @@ export function useInstalacoesAguardandoAprovacao() {
         const comb = String(v.combustivel || '').toLowerCase();
         if (comb.includes('diesel')) return true;
         const fipe = Number(v.valor_fipe) || 0;
-        const isMoto = String(v.modelo || '').toLowerCase().includes('moto')
-          || String(v.marca || '').toLowerCase().match(/honda|yamaha|suzuki|kawasaki|bmw motorrad|harley/);
+        // Fonte canônica: detectarTipoVeiculo(marca, modelo) — usa MOTO_BRANDS
+        // + keywords, evita falso positivo de marca ambígua (HONDA Civic).
+        const isMoto = detectarTipoVeiculo(undefined, v.modelo ?? null, v.marca ?? null) === 'moto';
         const limite = isMoto ? FIPE_MIN_MOTO : FIPE_MIN_CARRO;
         return fipe >= limite;
       };
+
 
       const pendentes = aprovados.filter((s: any) => {
         const isAuto = (s.modalidade || '').toLowerCase() === 'autovistoria';
@@ -163,10 +167,10 @@ export function useAprovacaoMonitoramentoStats() {
         const comb = String(v.combustivel || '').toLowerCase();
         if (comb.includes('diesel')) return true;
         const fipe = Number(v.valor_fipe) || 0;
-        const isMoto = String(v.modelo || '').toLowerCase().includes('moto')
-          || !!String(v.marca || '').toLowerCase().match(/honda|yamaha|suzuki|kawasaki|bmw motorrad|harley/);
+        const isMoto = detectarTipoVeiculo(undefined, v.modelo ?? null, v.marca ?? null) === 'moto';
         return fipe >= (isMoto ? 9000 : 30000);
       };
+
       const aguardando = candidatos.filter((s: any) => {
         const isAuto = String(s.modalidade || '').toLowerCase() === 'autovistoria';
         if (isAuto && exigeRast(s.veiculo) && !comRastreador.has(s.veiculo_id)) return false;

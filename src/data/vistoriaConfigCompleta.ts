@@ -856,19 +856,41 @@ const CARRO_BRANDS = new Set([
   'JAGUAR', 'MINI', 'LEXUS', 'JAC', 'GWM', 'BYD', 'SMART', 'TROLLER', 'IVECO',
 ]);
 
+// Marcas exclusivamente de moto — se a marca bater aqui, é moto.
+// Marcas ambíguas (HONDA, SUZUKI, BMW, KAWASAKI fabricam carros + motos)
+// NÃO entram aqui — para essas usa-se keyword no modelo.
+const MOTO_BRANDS = new Set([
+  'YAMAHA', 'HARLEY-DAVIDSON', 'HARLEY DAVIDSON', 'DUCATI', 'TRIUMPH',
+  'KTM', 'APRILIA', 'MV AGUSTA', 'MOTO GUZZI', 'INDIAN', 'ROYAL ENFIELD',
+  'HUSQVARNA', 'HUSABERG', 'BENELLI', 'CAGIVA', 'BIMOTA', 'BUELL',
+  'DAFRA', 'KASINSKI', 'TRAXX', 'SHINERAY', 'HAOJUE', 'GARINNI', 'AVELLOZ',
+  'BAJAJ', 'HERO', 'HONDA MOTOS', 'KYMCO', 'SYM', 'SANYANG', 'PIAGGIO',
+  'VESPA', 'GAS GAS', 'BETA', 'DAYANG', 'DAYUN', 'DERBI', 'MALAGUTI',
+  'NIU', 'AMAZONAS',
+]);
+
 // Keywords que indicam motocicleta no modelo. Match feito por word boundary
 // (regex \b) para evitar falsos positivos como "10mt" casando com "mt".
 const MOTO_KEYWORDS = [
   'moto', 'motocicleta', 'ciclomotor', 'triciclo', 'scooter',
-  'nxr', 'bros', 'cg', 'cb', 'cbr', 'pcx', 'biz', 'pop',
-  'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr',
-  'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'factor',
-  'dl', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
-  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', 'riva',
-  'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
-  'elite', 'adv', 'sh', 'lead', 'xadv', 'x-adv', 'transalp',
-  'nmax', 'xtz', 'xj6', 'mt', 'crypton',
-  'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
+  // Honda
+  'nxr', 'bros', 'cg', 'cb', 'cbr', 'pcx', 'biz', 'pop', 'titan', 'fan',
+  'xre', 'lander', 'tenere', 'crosser', 'crf', 'sahara', 'twister', 'hornet',
+  'africa twin', 'transalp', 'elite', 'adv', 'sh', 'lead', 'xadv', 'x-adv',
+  // Yamaha (mesmo já sendo MOTO_BRAND, ajuda quando marca vier vazia)
+  'fazer', 'ybr', 'neo', 'fluo', 'factor', 'next', 'riva', 'xtz', 'xj6',
+  'crypton', 'nmax', 'xmax', 'aerox', 'tmax', 't-max', 'r3', 'r1', 'r6',
+  'mt-03', 'mt03', 'mt-07', 'mt07', 'mt-09', 'mt09', 'mt-10', 'mt10',
+  'fz15', 'fz25', 'fz-25', 'fz-15',
+  // Suzuki
+  'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'vstrom', 'gsxr',
+  'gsx', 'gsx-r', 'gsx-s', 'gixxer', 'bandit', 'hayabusa', 'boulevard',
+  'marauder', 'gn125', 'en125', 'sv650',
+  // Kawasaki
+  'ninja', 'z900', 'z800', 'z750', 'z650', 'z400', 'z250', 'versys', 'vulcan',
+  // Outras
+  'citycom', 'maxsym', 'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
+  'comet', 'rkv', 'tnt',
 ];
 
 const MOTO_REGEX = new RegExp(
@@ -897,6 +919,12 @@ export function detectarTipoVeiculo(
     const marcaNorm = marca.trim().toUpperCase();
     if (CARRO_BRANDS.has(marcaNorm)) {
       return 'automovel';
+    }
+    // Marca exclusivamente de moto encerra a decisão (cobre YAMAHA, DAFRA,
+    // HONDA MOTOS, KASINSKI etc.). Não inclui marcas ambíguas como HONDA/SUZUKI
+    // que fabricam carros — essas continuam para o keyword match abaixo.
+    if (MOTO_BRANDS.has(marcaNorm)) {
+      return 'moto';
     }
   }
 

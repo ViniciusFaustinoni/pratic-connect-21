@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
 export interface SolicitarVistoriaTecnicoParams {
   servicoId: string;       // serviço atual em análise no monitoramento
@@ -67,12 +68,26 @@ export function useSolicitarVistoriaTecnico() {
 
 /**
  * Veículo dispensa rastreador? (mesma regra de exigeRastreador).
+ * Detecta tipo (carro/moto) via marca+modelo usando `detectarTipoVeiculo`
+ * — a coluna `veiculos.categoria` NÃO existe; quem decide é o catálogo +
+ * keyword fallback.
  */
-export function veiculoSubFipe(veiculo: { valor_fipe?: number | null; combustivel?: string | null; categoria?: string | null }) {
+export function veiculoSubFipe(veiculo: {
+  valor_fipe?: number | null;
+  combustivel?: string | null;
+  categoria?: string | null;
+  marca?: string | null;
+  modelo?: string | null;
+}) {
   if (!veiculo) return false;
   if ((veiculo.combustivel || '').toLowerCase() === 'diesel') return false;
+  // 1) categoria explícita (raro — só algumas cotações legacy preenchem)
   const cat = (veiculo.categoria || '').toLowerCase();
-  const isMoto = cat.includes('moto') || cat.includes('ciclomotor');
+  let isMoto = cat.includes('moto') || cat.includes('ciclomotor');
+  // 2) fallback canônico: detectarTipoVeiculo(marca, modelo)
+  if (!isMoto && (veiculo.marca || veiculo.modelo)) {
+    isMoto = detectarTipoVeiculo(undefined, veiculo.modelo ?? null, veiculo.marca ?? null) === 'moto';
+  }
   const fipe = Number(veiculo.valor_fipe || 0);
   if (isMoto) return fipe > 0 && fipe < 9000;
   return fipe > 0 && fipe < 30000;
