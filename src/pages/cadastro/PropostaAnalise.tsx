@@ -633,6 +633,7 @@ export default function PropostaAnalise() {
           cadastroAvaliaFotos={cadastroAvaliaFotos}
           planoTemRouboFurto={planoTemRouboFurto}
           aguardandoMonitoramentoVistoria={aguardandoMonitoramentoVistoria}
+          aprovarApenasDocumentos={aprovarApenasDocumentos}
         />
       </div>
 

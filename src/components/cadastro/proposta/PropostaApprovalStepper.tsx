@@ -44,6 +44,12 @@ interface PropostaApprovalStepperProps {
    * e exibe banner informativo no lugar do botão "Aprovar Proposta".
    */
   aguardandoMonitoramentoVistoria?: boolean;
+  /**
+   * True quando o Cadastro avalia somente documentos (sem fotos). Reforça o
+   * banner "Cadastro avalia apenas a documentação; aprovação final é do
+   * Monitoramento" no resumo.
+   */
+  aprovarApenasDocumentos?: boolean;
 }
 
 
@@ -66,14 +72,24 @@ const STEP_FOTOS: StepConfig = {
   description: 'Revise as fotos e o vídeo da vistoria'
 };
 const STEP_FINAL_3: StepConfig = { 
-  id: 3, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  id: 3, label: 'Liberar para Monitoramento', shortLabel: 'Liberar',
   icon: <ShieldCheck className="h-4 w-4" />,
-  description: 'Confirme a liberação da cobertura'
+  description: 'Aprovar documentação e encaminhar ao Monitoramento'
 };
 const STEP_FINAL_2: StepConfig = { 
-  id: 2, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  id: 2, label: 'Liberar para Monitoramento', shortLabel: 'Liberar',
   icon: <ShieldCheck className="h-4 w-4" />,
-  description: 'Confirme a liberação da cobertura'
+  description: 'Aprovar documentação e encaminhar ao Monitoramento'
+};
+const STEP_LIBERAR_RF_3: StepConfig = {
+  id: 3, label: 'Liberar Cobertura R&F', shortLabel: 'R&F',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Autovistoria enxuta — libera Roubo & Furto'
+};
+const STEP_LIBERAR_RF_2: StepConfig = {
+  id: 2, label: 'Liberar Cobertura R&F', shortLabel: 'R&F',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Autovistoria enxuta — libera Roubo & Furto'
 };
 
 export function PropostaApprovalStepper({
@@ -91,17 +107,23 @@ export function PropostaApprovalStepper({
   cadastroAvaliaFotos = false,
   planoTemRouboFurto = true,
   aguardandoMonitoramentoVistoria = false,
+  aprovarApenasDocumentos = false,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
   const cancelarDocsMutation = useCancelarDocumentosSolicitados();
 
   // Quando o cadastro NÃO avalia fotos (plano sem R&F ou vistoria agendada
-  // ainda não realizada), o stepper fica com 2 etapas: Documentos + Aprovação.
+  // ainda não realizada), o stepper fica com 2 etapas: Documentos + Liberação.
   const ocultarEtapaFotos = !cadastroAvaliaFotos;
+  // Autovistoria enxuta acima FIPE → a aprovação do Cadastro de fato libera R&F.
+  // Caso contrário, o Cadastro apenas encaminha ao Monitoramento (que dá a aprovação final).
+  const liberaCoberturaRF = isAutovistoria && planoTemRouboFurto && cadastroAvaliaFotos;
+  const stepFinal2 = liberaCoberturaRF ? STEP_LIBERAR_RF_2 : STEP_FINAL_2;
+  const stepFinal3 = liberaCoberturaRF ? STEP_LIBERAR_RF_3 : STEP_FINAL_3;
   const steps: StepConfig[] = ocultarEtapaFotos
-    ? [STEP_DOCS, STEP_FINAL_2]
-    : [STEP_DOCS, STEP_FOTOS, STEP_FINAL_3];
+    ? [STEP_DOCS, stepFinal2]
+    : [STEP_DOCS, STEP_FOTOS, stepFinal3];
   const finalStepId = ocultarEtapaFotos ? 2 : 3;
 
   // Step 1 validation: all documents approved (or no documents)
@@ -312,7 +334,7 @@ export function PropostaApprovalStepper({
             {/* Summary checklist */}
             <Card className="border-border">
               <CardContent className="p-5 space-y-4">
-                <h3 className="text-base font-bold text-foreground">Resumo da Análise</h3>
+                <h3 className="text-base font-bold text-foreground">Resumo do Cadastro</h3>
                 
                 <div className="space-y-3">
                   {/* Doc check */}
@@ -449,7 +471,7 @@ export function PropostaApprovalStepper({
             </Card>
 
             {/* Banner informativo: aprovação final é do Monitoramento */}
-            {aguardandoMonitoramentoVistoria && (
+            {(aguardandoMonitoramentoVistoria || (aprovarApenasDocumentos && !liberaCoberturaRF)) && (
               <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
                 <ShieldCheck className="h-5 w-5 text-info shrink-0 mt-0.5" />
                 <div className="flex-1">
