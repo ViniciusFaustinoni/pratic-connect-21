@@ -801,7 +801,7 @@ export default function Associados() {
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver detalhes
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
+                              <DropdownMenuItem onClick={() => setEditarDialog({ open: true, id: associado.id, nome: associado.nome })}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar dados
                               </DropdownMenuItem>
