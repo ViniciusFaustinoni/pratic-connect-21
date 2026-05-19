@@ -58,6 +58,7 @@ import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { MultiSelectFilter } from '@/components/cadastro/MultiSelectFilter';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
+import { EditarDadosAssociadoDialog } from '@/components/cadastro/EditarDadosAssociadoDialog';
 import { useToast } from '@/hooks/use-toast';
 
 const statusColors: Record<StatusAssociado, string> = {
@@ -123,6 +124,7 @@ export default function Associados() {
   } | null>(null);
   const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [editarDialog, setEditarDialog] = useState<{ open: boolean; id: string | null; nome?: string }>({ open: false, id: null });
   
   const [sheetFilters, setSheetFilters] = useState<{
     status?: StatusAssociado[];
@@ -799,7 +801,7 @@ export default function Associados() {
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver detalhes
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
+                              <DropdownMenuItem onClick={() => setEditarDialog({ open: true, id: associado.id, nome: associado.nome })}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar dados
                               </DropdownMenuItem>
@@ -1106,6 +1108,14 @@ export default function Associados() {
             data_adesao_fim: sheetFilters.data_adesao_fim,
           }}
           planos={planos}
+        />
+
+        {/* Editar dados sensíveis com auditoria */}
+        <EditarDadosAssociadoDialog
+          open={editarDialog.open}
+          onOpenChange={(o) => setEditarDialog((s) => ({ ...s, open: o }))}
+          associadoId={editarDialog.id}
+          nomeAssociado={editarDialog.nome}
         />
 
         {/* Detalhe agora abre na rota /cadastro/associados/:id (sem Dialog aninhado para evitar conflito de portais) */}
