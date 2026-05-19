@@ -13,7 +13,9 @@ import {
 import {
   ArrowRightLeft, RefreshCw, Eye, Calendar, Search, ArrowRight,
   AlertTriangle, FileInput, FileSignature, Car, ExternalLink, PackagePlus,
+  MessageSquareWarning,
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MigracoesTab } from '@/pages/cadastro/SolicitacoesMigracao';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
