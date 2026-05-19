@@ -515,6 +515,7 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
                     max={28}
                     {...form.register('dia_vencimento', { valueAsNumber: true })}
                   />
+                </div>
 
                 <div>
                   <Label htmlFor="data_adesao">Data de Adesão</Label>
