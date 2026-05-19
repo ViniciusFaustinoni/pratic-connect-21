@@ -964,6 +964,7 @@ export function useUpdateAssociado() {
             metadata: {
               origem: 'cadastro_editar_dados',
               campos: camposAlterados,
+              motivo,
               user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
             } as any,
           });
