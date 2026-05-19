@@ -48,6 +48,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useVistoriaCompletaAnalise, FotoVistoriaItem } from '@/hooks/useVistoriaCompletaAnalise';
 import { StatusCoberturaCard } from '@/components/cadastro/StatusCoberturaCard';
+import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
 import { formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 
 // ============================================
