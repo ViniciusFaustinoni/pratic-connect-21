@@ -734,6 +734,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     if (faixaLegadaNaZonaRastreador) {
       return {
         elegivel: false,
+        preliminar: false,
         bloqueado: bloqueioRastreador,
         valorReduzido,
         faixaAtual: { min: faixaAtual.fipe_min, max: faixaAtual.fipe_max, mensal: faixaAtual.valor_mensal },
@@ -746,6 +747,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
     return {
       elegivel,
+      preliminar: false,
       bloqueado: null as null | { motivo: string },
       valorReduzido,
       faixaAtual: { min: faixaAtual.fipe_min, max: faixaAtual.fipe_max, mensal: faixaAtual.valor_mensal },
