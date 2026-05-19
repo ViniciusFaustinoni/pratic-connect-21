@@ -109,6 +109,9 @@ const FIELD_LABELS: Record<keyof FormData, string> = {
   uf: 'UF',
   plano_id: 'Plano',
   dia_vencimento: 'Dia de vencimento',
+  data_adesao: 'Data de adesão',
+  data_cadastro_sga: 'Cadastro SGA',
+  codigo_hinova: 'Código Hinova',
 };
 
 interface AssociadoEditDialogProps {
