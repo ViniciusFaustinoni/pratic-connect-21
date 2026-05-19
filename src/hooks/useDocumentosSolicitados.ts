@@ -75,6 +75,7 @@ export function mapTipoSolicitadoParaEnum(tipoSolicitado: string): TipoDocumento
     'foto_lateral_direita': 'foto_lateral_direita',
     'foto_painel': 'foto_painel',
     'foto_hodometro': 'foto_hodometro',
+    'video_360': 'video_360',
     'outro': 'outro',
   };
   return mapping[tipoSolicitado] || 'outro';
