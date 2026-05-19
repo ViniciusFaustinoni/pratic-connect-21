@@ -1,89 +1,73 @@
-## Diagnóstico raiz
+## Problema
 
-O threshold por tipo já existe (`exigeRastreador`: carro ≥ 30k, moto ≥ 9k, diesel sempre). A regra está correta, mas em vários pontos do código a **detecção de "isMoto" é frágil ou usa um campo que não existe**. Quando ela falha, a moto é tratada como carro e cai na rota errada (ex.: moto Honda CG 12k é detectada como carro 12k → "carro abaixo de 30k" → autovistoria COMPLETA 31 fotos, em vez de enxuta + instalação).
+Hoje, no fluxo de Troca de Titularidade, assim que o titular antigo assina o termo de cancelamento, o webhook `autentique-webhook` muda direto `solicitacoes_troca_titularidade.status` para **`aguardando_cadastro`**. Resultado: a solicitação aparece na fila do Cadastro antes do novo titular ter completado o link público (documentos, contrato, autovistoria), e o link mostra "Em análise pelo Cadastro" antes da hora — o que se vê no print do KOU6D37.
 
-### Pontos com detecção inconsistente que afetam motos
+## Regra canônica desejada
 
-1. **`src/hooks/useSolicitarVistoriaTecnico.ts:71` (`veiculoSubFipe`)** — só olha `veiculo.categoria`. A tabela `veiculos` **não tem coluna `categoria`** (verificado via `information_schema`). Resultado: `isMoto = false` sempre. Para qualquer moto < 30k a função retorna `true` (sub-FIPE). Usado na tela `monitoramento/AprovacaoInstalacaoDetalhe.tsx:914` para decidir o caminho da aprovação.
-
-2. **`supabase/functions/finalizar-autovistoria-cotacao/index.ts:75-89`** — lê `veiculos.categoria` (inexistente) com fallback regex curta no modelo (`cg|cb|cbr|pcx|biz|nxr|bros|titan|fan|ybr|fazer|hornet|crosser|xre`). Modelos comuns ficam de fora (AEROX, ADV, NMAX, ELITE, NEO, BURGMAN, FACTOR, HORNET 2024 com sufixo, etc.) e a moto vira "carro sub-FIPE" no servidor que materializa a vistoria.
-
-3. **`src/hooks/useAprovacaoMonitoramento.ts:103-104 e 166-167`** — considera moto se a marca casar `/honda|yamaha|suzuki|kawasaki|bmw motorrad|harley/`. Honda/Suzuki/Kawasaki/BMW também fabricam carros → falso positivo no sentido oposto (Honda Civic vira moto, exige 9k em vez de 30k).
-
-4. **`src/pages/public/CotacaoContratacao.tsx:37 (`detectarTipoVeiculoDaCotacao`)** — usa `cotacao.veiculo_categoria`. No banco esse campo está **NULL em 100% das cotações recentes** (verificado, motos Honda/Yamaha 12k–28k). Cai no fallback de `detectarTipoVeiculo` (keywords em `src/data/vistoriaConfigCompleta.ts`), que cobre bem mas perde casos como AEROX.
-
-### O fluxo das motos hoje
-- Moto detectada corretamente (ex.: CG 150 / 12.474) → `exige=true` → caminho "acima do mínimo" → enxuta opcional + instalação. **Funciona.**
-- Moto NÃO detectada (ex.: AEROX 19.912, ou qualquer veículo cuja categoria/keyword falhe) → tratada como carro → `12k < 30k` → sub-FIPE → **autovistoria COMPLETA de 15/31 fotos errada**.
-
-A causa raiz não é "moto vs carro abaixo de 30k", é **detecção de moto não-confiável**. Corrigindo a detecção, o threshold de 9k já existente passa a valer em todos os pontos.
-
-## Plano de correção (escopo: motos; carros intactos)
-
-### 1. Fonte única de verdade para tipo de veículo
-
-Criar `src/lib/veiculo/detectarTipoVeiculo.ts` (e gêmeo em `supabase/functions/_shared/detectar-tipo-veiculo.ts`) com prioridade:
-
-```text
-1. veiculo.tipo (se vier explícito de API placa: 'moto' | 'carro')
-2. cotacao.veiculo_categoria / contratos.veiculo_categoria, se preenchido
-3. marcas_modelos.categoria por (marca, modelo) — consulta ao catálogo do sistema
-4. configuracoes.marcas_exclusivas_moto (lista admin)
-5. fallback de keywords (atual MOTO_REGEX + lista ampliada: aerox, nmax, xmax, fazer, mt-03, mt-07, mt-09, gixxer, drag star, etc.)
-6. fallback final: 'carro'
+```
+1. Termo enviado ao titular antigo
+2. Termo assinado (reconhecimento facial)  ──► LIBERA link público para o novo titular
+3. Novo titular completa o link público inteiro
+   (Plano → Documentos → Contrato → Autovistoria / Agendamento)
+4. Cadastro analisa (mesma régua da nova adesão)
+5. Monitoramento decide vistoria / aprova
+6. Troca efetivada
 ```
 
-A função síncrona usa cache em memória do catálogo `marcas_modelos`; a versão edge usa SELECT por marca+modelo. Retorna `'carro' | 'moto'`.
+A solicitação só pode cair na fila do **Cadastro** quando a cotação canônica vinculada atingir o mesmo gatilho que hoje promove uma nova adesão: `cotacoes.status_contratacao = 'aguardando_aprovacao_cadastro'` (via `finalizar-autovistoria-cotacao` para o caminho enxuto, ou via agendamento de vistoria base no caminho técnico).
 
-### 2. Trocar todos os call-sites pela fonte única
+Carros seguem intactos — a mudança é só **quando** a troca entra no Cadastro, não no que o Cadastro faz.
 
-- `src/pages/public/CotacaoContratacao.tsx` → remover `detectarTipoVeiculoDaCotacao` local, usar o novo helper (a versão com hook se precisar de async catálogo).
-- `src/hooks/useSolicitarVistoriaTecnico.ts` → `veiculoSubFipe` passa a receber `marca` e `modelo` (não só `categoria`).
-- `src/hooks/useAprovacaoMonitoramento.ts` → remover regex de marca, usar o helper.
-- `supabase/functions/finalizar-autovistoria-cotacao/index.ts` → usar o helper compartilhado.
-- `supabase/functions/aprovar-proposta/index.ts`, `concluir-instalacao-prestador/index.ts`, `ativar-associado/index.ts` → mesma troca (todos hoje têm sua própria regex).
+## Mudanças
 
-### 3. Backfill defensivo do `cotacoes.veiculo_categoria`
+### 1. `autentique-webhook` — não pular etapas
 
-Migration única que preenche `veiculo_categoria='moto'` em cotações ativas (≤ 30 dias) cujo par (marca, modelo) seja moto segundo `marcas_modelos`. Isso corrige imediatamente cotações abertas como COT-20260519-122938890-252 (CB250F Twister), COT-…-094350410-530 (AEROX), etc., sem precisar refazer fluxo.
+`supabase/functions/autentique-webhook/index.ts` (bloco do termo de cancelamento, ~linhas 311-322):
 
-### 4. Saneamento das vistorias já materializadas erradas
+- Trocar `status: 'aguardando_cadastro'` por `status: 'cotacao_em_andamento'` (status já existente no enum).
+- Manter tudo o mais que já roda na assinatura: `termo_cancelamento_assinado_em`, marca de `em_troca_titularidade`/cobertura suspensa no veículo, auto-vínculo da cotação canônica.
+- Log: "Termo assinado — solicitação liberada para o novo titular completar o link público".
 
-Script (não destrutivo) que lista cotações ativas onde:
-- Tipo detectado = moto
-- `valor_fipe ≥ 9000`
-- `tipo_vistoria = 'autovistoria'` com ≥ 15 fotos
-- Sem `instalacao` agendada
+### 2. Trigger DB: promover solicitação ao Cadastro junto com a cotação
 
-Para cada uma: voltar `tipo_vistoria = NULL`, devolver `status_contratacao` para `contrato_assinado`/`pagamento_ok` conforme estado, manter mídia (não apagar), e permitir refazer no caminho enxuto + agendar instalação. **Roda só após aprovação explícita.**
+Criar trigger `AFTER UPDATE` em `cotacoes` (migration nova): quando `status_contratacao` muda para `aguardando_aprovacao_cadastro` E a cotação tem `origem_troca_titularidade=true`, atualizar a `solicitacoes_troca_titularidade` vinculada (via `dados_extras.solicitacao_troca_id` ou `solicitacoes_troca_titularidade.cotacao_id`) para `status='aguardando_cadastro'` — mas **só se** o status atual for `cotacao_em_andamento` (idempotente, não regride).
 
-### 5. Testes
+Isso garante que os dois caminhos canônicos da nova adesão (autovistoria enxuta concluída ou agendamento de vistoria base) promovam a troca automaticamente, sem duplicar regra.
 
-- `src/lib/veiculo/detectarTipoVeiculo.test.ts` cobrindo: AEROX, NMAX, XMAX, ELITE, ADV, CG, Honda Civic (carro), Honda Fit (carro), Yamaha (sem modelo), Diesel.
-- Teste do `escopoAnaliseCadastro` para garantir que motos ≥ 9k não caem em "sub-FIPE completa".
+### 3. `aprovar-troca-cadastro` — guarda extra
 
-### 6. Não-mexer (carros intactos)
+`supabase/functions/aprovar-troca-cadastro/index.ts`: rejeitar (HTTP 409 `link_publico_incompleto`) quando a solicitação ainda estiver em `cotacao_em_andamento`. Mensagem clara para o operador: "Novo titular ainda não concluiu o link público".
 
-- Threshold de 30k mantido em todos os pontos.
-- `CARRO_BRANDS` intocada.
-- Edge `concluir-instalacao-prestador` linha 67 (`fipe >= 30000` para carro) — assinatura não muda, só a fonte do `isMoto`.
+### 4. Link público — texto correto enquanto novo titular não terminou
 
-## Detalhes técnicos
+`src/pages/public/CotacaoContratacao.tsx`:
 
-Tabelas/colunas tocadas:
-- Leitura nova: `marcas_modelos(marca, modelo, categoria)` em runtime.
-- Update no backfill: `cotacoes.veiculo_categoria` apenas onde estiver NULL e o catálogo confirmar moto.
+- O bloco "Em análise pelo Cadastro" (visto no print) só pode renderizar quando `solicitacaoTroca.status === 'aguardando_cadastro'` (não mais com base apenas em `termo_cancelamento_assinado_em`).
+- Enquanto `status === 'cotacao_em_andamento'`, manter o stepper liberado para o novo titular avançar (Docs → Contrato → Vistoria), como já acontece para nova adesão.
+- Ajustar `trocaLiberada` para `liberada_para_assinatura | efetivada | (assinado && status !== 'aguardando_cadastro' && !pos-cadastro)` — manter avanço, mas não mostrar "em análise" antecipado.
 
-Compatibilidade: a função `exigeRastreador` em `src/types/termo-filiacao.ts` e `supabase/functions/_shared/template-utils.ts` **não muda** — continua recebendo `tipo`. Quem muda é só quem decide o `tipo` antes de chamá-la.
+### 5. Modal de detalhes da troca (`ModalDetalhesTroca`)
 
-Risco: queries extras em `marcas_modelos` por cotação no link público — mitigado com cache global (já existe padrão em `useConfiguracoesAll`).
+Renomear/ajustar o passo da timeline:
+- Hoje: "Aprovado pelo Cadastro" fica em curso assim que o termo é assinado.
+- Novo: passo intermediário "Novo titular completando link público" (em curso quando `status='cotacao_em_andamento'`), e só depois "Aprovado pelo Cadastro" (em curso quando `status='aguardando_cadastro'`).
 
-## Entregáveis
+### 6. Backfill leve (mesma migration do trigger)
 
-1. Helper síncrono + edge para detecção.
-2. Substituição de 6 call-sites.
-3. Migration de backfill em `cotacoes.veiculo_categoria`.
-4. Script de saneamento das autovistorias erradas (executar sob confirmação).
-5. Testes unitários.
+Para solicitações vivas hoje em `aguardando_cadastro` cuja cotação vinculada ainda não atingiu `aguardando_aprovacao_cadastro` (ou nem tem cotação): rebaixar para `cotacao_em_andamento`. Não tocar nas que já estão pós-cadastro (aprovadas, monitoramento, vistoria, efetivada).
 
-Carros: nada muda no caminho deles. Validação visual: rodar uma cotação Honda Civic 25k (carro, sub-FIPE → completa 31 fotos) e uma Yamaha AEROX 19k (moto ≥ 9k → enxuta opcional + instalação) após o ajuste.
+### 7. Memória do projeto
+
+Adicionar entrada `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica` documentando a regra: termo assinado → `cotacao_em_andamento`; só vira `aguardando_cadastro` quando a cotação atinge `status_contratacao='aguardando_aprovacao_cadastro'` (trigger). Atualizar `mem://index.md`.
+
+## Fora de escopo
+
+- Fluxo de carros / nova adesão: nada muda.
+- `efetivar-troca-titularidade`, `aprovar-troca-monitoramento`, regras de janela mesmo-dia, antibloqueio de placa, suspensão de cobertura — intactos.
+- Caso histórico KOU6D37 (já em `aguardando_cadastro` com cotação ainda inicial) será corrigido pelo backfill do passo 6.
+
+## Validação
+
+- Disparar nova troca em ambiente: assinar termo → conferir `status='cotacao_em_andamento'`, link público abre etapa Documentos, NÃO aparece na fila Cadastro/Processos.
+- Concluir docs + contrato + autovistoria pelo novo titular → cotação vira `aguardando_aprovacao_cadastro` → trigger promove solicitação para `aguardando_cadastro` → aparece na fila do Cadastro.
+- Cadastro aprova → segue para Monitoramento (sem mudanças nesse trecho).
