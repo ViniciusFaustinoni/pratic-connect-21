@@ -121,6 +121,7 @@ function buildCategorias(
         { id: 'motor', label: 'Motor (capô aberto)' },
       ],
     },
+    video,
     outros,
   ];
 }
