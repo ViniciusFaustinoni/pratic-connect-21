@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldAlert, ShieldCheck, RefreshCw, AlertTriangle, Loader2, KeyRound } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, RefreshCw, AlertTriangle, Loader2, KeyRound, Copy } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
