@@ -23,6 +23,7 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   'foto_lateral_direita': 'Foto do Veículo - Lateral Direita',
   'foto_painel': 'Foto do Painel',
   'foto_hodometro': 'Foto do Hodômetro',
+  'video_360': 'Vídeo 360° do Veículo',
   'outro': 'Documento Solicitado',
   // Novos tipos de vistoria
   'selfie_veiculo': 'Selfie com o Veículo',
