@@ -1,67 +1,51 @@
-## Diagnóstico (raiz do problema)
+## Diagnóstico
 
-A proposta de filiação (PDF gerado pelo Edge `contrato-gerar` → template `supabase/functions/_shared/termo-afiliacao-template.ts`) não imprime **Câmbio**, **Portas** nem **Tipo do veículo (Carro/Moto)** — apesar de os dados existirem em todo o pipeline.
+Contrato `0a6b82f1` (MARCOS VINICIUS — Ford Fiesta KOU6D37, FIPE R$ 30.835, plano Select Basic R$ 166,70):
 
-Rastreamento de ponta a ponta:
+- FIPE acima do mínimo (R$ 30k) → Cadastro avalia **apenas documentos** (não há autovistoria; instalação será presencial).
+- Banco confirma o fluxo canônico funcionando: `cadastro_aprovado=true` só é gravado quando o analista clica o botão; `aprovado_em` será preenchido pela edge `aprovar-proposta`; promoção a `status='ativo'` continua restrita ao `ativar-associado` pós‑Monitoramento.
+- A edge `aprovar-proposta` e o hook `resolverEscopoAnaliseCadastro` já estão corretos: retornam `aprovarApenasDocumentos=true` / `aguardandoMonitoramentoVistoria=true`, e o botão final do Cadastro já diz "Aprovar documentação e liberar para Monitoramento".
 
-| Camada | Câmbio | Portas | Tipo (carro/moto) |
-|---|---|---|---|
-| `plate-lookup` (CRLV) | `cambio` + `cambio_normalizado` | `numero_portas` | derivado de marca/modelo |
-| `CotacaoFormDialog` salva na cotação | `veiculo_cambio` ✅ | `numero_portas` ✅ | `veiculo_categoria` (mas confunde com categoria CRLV) |
-| `contrato-gerar` faz snapshot no contrato | `contratos.veiculo_cambio` ✅ | `contratos.veiculo_numero_portas` ✅ | `contratos.veiculo_categoria` ⚠️ |
-| `termo-afiliacao-utils.ts` monta `data.veiculo` | `cambio` ✅ (linha 470-474) | `portas` ✅ (linha 476-479) | `tipo_veiculo` ⚠️ (linha 463 — usa `veiculo_categoria`, conflita com "Categoria CRLV") |
-| `termo-afiliacao-template.ts` (HTML que vira PDF) | ❌ **nunca renderiza** | ❌ **nunca renderiza** | ❌ **nunca renderiza** |
-| `TermoFiliacaoTemplate.tsx` (preview React) | ❌ não tem | ❌ não tem | ❌ não tem |
+**Raiz do problema relatado pelo usuário é só de UI / rotulagem:**
 
-**Conclusão:** o dado chega até a função de montagem, mas o template HTML/React não tem as linhas. Para `tipo_veiculo` há um bug adicional: `termo-afiliacao-utils.ts` usa `contrato.veiculo_categoria` tanto para "Categoria CRLV (Particular/Aluguel)" quanto para "Tipo (carro/moto)" — fonte ambígua.
+No componente `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`:
 
----
+- Os passos `STEP_FINAL_2` e `STEP_FINAL_3` ainda chamam‑se **"Aprovação Final"** com descrição **"Confirme a liberação da cobertura"** (linhas 68‑77).
+- O título do resumo é **"Resumo da Análise"** (linha 315) — neutro, mas reforça a impressão de decisão final.
 
-## Plano de correção
+Isso confunde o analista de Cadastro e contradiz a regra canônica (`mem://logic/operations/cadastro-escopo-canonico`): Cadastro só avalia documentação + autovistoria enxuta acima FIPE. A aprovação **final** pertence ao Monitoramento.
 
-### 1. Resolver fonte canônica de `tipo_veiculo` (carro/moto)
-Em `supabase/functions/_shared/termo-afiliacao-utils.ts`, separar `tipo_veiculo` de `veiculo_categoria`:
-- Buscar `veiculos.tipo_veiculo` direto do registro do veículo (já carregado em `veiculoDB`), com fallback via `marcas_modelos.tipo_veiculo` por marca+modelo (consulta já usada no resto do sistema — ver `mem://logic/operations/vehicle-type-detection-source`).
-- Normalizar para rótulo amigável: `Carro` / `Moto` / `Caminhão` / `Utilitário`.
+Nenhuma mudança de fluxo, backend, banco ou edge function é necessária — o fluxo já está correto. Apenas o rótulo da etapa precisa refletir a regra.
 
-### 2. Renderizar os 3 campos no template HTML do PDF
-Em `supabase/functions/_shared/termo-afiliacao-template.ts`, dentro da seção **VEÍCULO PROTEGIDO** (após "Combustível/Categoria", linhas ~438-447), adicionar uma nova `field-row`:
+## Correção (UI somente)
 
-```text
-[ Tipo: Carro       ] [ Câmbio: Manual      ]
-[ Portas: 4         ] [ Categoria CRLV: ... ]  (reaproveita)
-```
+Arquivo único: `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`
 
-Estrutura concreta:
-- Linha nova: **Tipo** + **Câmbio**
-- Linha nova: **Portas** (oculta/`—` quando moto, já que `portas = 0`)
-- Manter linhas existentes intactas.
-
-Regras de exibição:
-- `Câmbio`: imprime valor formatado (`Manual` / `Automático`); `—` se `null`.
-- `Portas`: imprime número; oculta a linha inteira quando `tipo = moto` (não faz sentido).
-- `Tipo`: sempre imprime (`Carro` por default).
-
-### 3. Espelhar no preview React
-Em `src/components/cadastro/TermoFiliacaoTemplate.tsx` (após linha 251, bloco Combustível/Categoria) adicionar as mesmas 3 linhas usando os campos já existentes em `VeiculoData` (`tipo`, `combustivel`) e estendendo o type com `cambio?: string` e `portas?: number | null` em `src/types/termo-filiacao.ts`.
-
-### 4. Backfill leve (opcional, pode ficar para depois)
-Contratos antigos podem ter `veiculo_cambio = null` e `veiculo_numero_portas = null` por terem sido criados antes do snapshot. Como o template já trata `null → '—'`, **nenhuma migração é obrigatória** para o fix funcionar. Documentar isso na resposta final.
-
-### 5. Validação
-- Gerar proposta de teste para 1 carro com câmbio conhecido (ex: o Ford Fiesta do print) e 1 moto.
-- Conferir PDF: deve mostrar `Tipo: Carro`, `Câmbio: Manual`, `Portas: 4` para o Fiesta; e `Tipo: Moto` sem linha de Portas para a moto.
-
----
+1. Renomear `STEP_FINAL_2` e `STEP_FINAL_3`:
+  - `label`: **"Aprovação Final"** → **"Liberar para Monitoramento"**
+  - `shortLabel`: **"Aprovar"** → **"Liberar"**
+  - `description`: **"Confirme a liberação da cobertura"** → **"Aprovar documentação e encaminhar ao Monitoramento"**
+  - Exceção: quando `isAutovistoria && planoTemRouboFurto && cadastroAvaliaFotos` (autovistoria enxuta acima FIPE, que de fato libera R&F), manter rótulo **"Liberar Cobertura R&F"** — usar um terceiro preset `STEP_LIBERAR_RF` selecionado dinamicamente.
+2. Trocar título do bloco resumo (linha 315) de **"Resumo da Análise"** → **"Resumo do Cadastro"** para reforçar escopo.
+3. Reforçar banner informativo (`aguardandoMonitoramentoVistoria`, linha 452): mover para ser exibido **sempre** que `aprovarApenasDocumentos` for true (não só quando `aguardandoMonitoramentoVistoria`), garantindo que toda proposta acima FIPE sem autovistoria mostre "Cadastro avalia apenas a documentação. A aprovação final é do Monitoramento."
+  - Requer expor `aprovarApenasDocumentos` na prop (adicionar à interface) e passá‑la de `PropostaAnalise.tsx`.
 
 ## Detalhes técnicos
 
-**Arquivos a editar:**
-1. `supabase/functions/_shared/termo-afiliacao-utils.ts` — corrigir resolução de `tipo_veiculo` (separar de categoria CRLV) e formatar.
-2. `supabase/functions/_shared/termo-afiliacao-template.ts` — adicionar 3 campos na seção 2 (VEÍCULO PROTEGIDO).
-3. `src/components/cadastro/TermoFiliacaoTemplate.tsx` — espelhar no preview React.
-4. `src/types/termo-filiacao.ts` — adicionar `cambio?: string` e `portas?: number | null` em `VeiculoData`.
+- Interface `PropostaApprovalStepperProps`: adicionar `aprovarApenasDocumentos?: boolean`.
+- `PropostaAnalise.tsx` linha ~635: passar `aprovarApenasDocumentos={aprovarApenasDocumentos}` (já vem do `resolverEscopoAnaliseCadastro`).
+- Lógica de escolha do step final:
 
-**Sem migrations.** Sem mudanças em fluxo, RLS, triggers ou edge functions de negócio. Mudança puramente de apresentação + 1 correção de mapeamento.
+```ts
+const stepFinal = (isAutovistoria && planoTemRouboFurto && cadastroAvaliaFotos)
+  ? STEP_LIBERAR_RF
+  : STEP_LIBERAR_MONITORAMENTO;
+```
 
-**Riscos:** mínimos — campos opcionais, fallback `—` quando ausente, não quebra contratos antigos.
+- Botão (linhas 483‑489) já tem texto correto — manter como está.
+
+## Fora de escopo
+
+- Nenhuma mudança em `aprovar-proposta`, `ativar-associado`, triggers, escopo canônico, ou rotas.
+- Nenhuma migração.
+- Nenhum impacto em propostas sub‑FIPE, troca de titularidade ou substituição (o stepper já trata via flags existentes).
