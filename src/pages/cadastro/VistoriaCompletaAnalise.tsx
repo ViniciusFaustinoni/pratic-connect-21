@@ -342,6 +342,14 @@ export default function VistoriaCompletaAnalise() {
         </Badge>
       </div>
 
+      {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA */}
+      <ObservacoesCotacaoCard
+        cotacaoId={(instalacao as any)?.cotacao_id ?? null}
+        contratoId={(instalacao as any)?.contrato_id ?? null}
+        cpf={(associados as any)?.cpf ?? null}
+        placa={(veiculos as any)?.placa ?? null}
+      />
+
       {/* ============================================ */}
       {/* BANNER DE RECUSA */}
       {/* ============================================ */}
