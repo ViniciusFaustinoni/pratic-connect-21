@@ -41,6 +41,16 @@ export interface OcrDadosEditorProps {
   forceEdit?: boolean;
   /** Esconde o título (útil quando o card pai já tem cabeçalho). */
   hideHeader?: boolean;
+  /**
+   * Quando true (CNH/RG), exige confirmação explícita antes do pai avançar:
+   * - O card abre em modo edição.
+   * - O botão "Salvar" vira "Confirmar dados".
+   * - Validações de plausibilidade do nome bloqueiam a confirmação.
+   * - Cross-check com SGA sugere o nome canônico do CPF informado.
+   */
+  confirmacaoObrigatoria?: boolean;
+  /** Notifica o pai quando o usuário confirma (ou desconfirma) os dados. */
+  onConfirmedChange?: (confirmado: boolean) => void;
   /** Classes extras. */
   className?: string;
 }
