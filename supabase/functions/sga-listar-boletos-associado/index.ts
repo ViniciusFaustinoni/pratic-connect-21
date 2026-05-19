@@ -326,6 +326,7 @@ serve(async (req) => {
         saldo_devedor: Math.round(saldo * 100) / 100,
         boletos_abertos: abertos.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')),
         situacao_financeira: (resSituacao[i] as VeiculoSGA['situacao_financeira']) ?? null,
+        origem_enumeracao: (v as any).origem_enumeracao ?? 'sga',
       };
     });
 
