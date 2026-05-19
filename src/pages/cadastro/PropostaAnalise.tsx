@@ -443,6 +443,14 @@ export default function PropostaAnalise() {
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
       />
 
+      {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA */}
+      <ObservacoesCotacaoCard
+        cotacaoId={(proposta as any)?.cotacao_id ?? null}
+        contratoId={proposta?.id ?? null}
+        cpf={(proposta as any)?.cliente_cpf ?? null}
+        placa={(proposta as any)?.veiculo_placa ?? null}
+      />
+
       {/* Banner de estado final (proposta já aprovada / reprovada / cancelada) */}
       {isFinalizada && (
         <div
