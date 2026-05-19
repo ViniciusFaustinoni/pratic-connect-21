@@ -522,12 +522,19 @@ serve(async (req) => {
                 .select('id', { count: 'exact', head: true })
                 .eq('vistoria_id', vistAutoRf.id);
 
+              // REGRA CANÔNICA: Cadastro só libera R/F via autovistoria ENXUTA
+              // (2 fotos motor+chassi + vídeo 360°) acima da FIPE mínima.
+              // Roteiro completo (31/15) é sub-FIPE → Monitoramento decide R/F,
+              // NÃO o Cadastro. Memória: mem://logic/operations/cadastro-escopo-canonico
               const isMotoVeic = (tipoVeiculo || '').toLowerCase().includes('moto');
-              const minLegado = isMotoVeic ? 15 : 31;
-              const temFotosCanonicas = (nFotos ?? 0) >= 2 && !!vistAutoRf.video_360_url;
-              const temFotosLegado = (nFotos ?? 0) >= minLegado;
+              const minCompleta = isMotoVeic ? 15 : 31;
+              const temFotosEnxuta =
+                (nFotos ?? 0) >= 2 &&
+                (nFotos ?? 0) < minCompleta &&
+                !!vistAutoRf.video_360_url;
+              const temFotosLegado = false; // Desativado por regra canônica.
 
-              if (temFotosCanonicas || temFotosLegado) {
+              if (temFotosEnxuta || temFotosLegado) {
                 await supabase
                   .from('vistorias')
                   .update({
