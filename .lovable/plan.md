@@ -1,90 +1,144 @@
+# Plano para corrigir a raiz do fluxo de troca de titularidade
 
-## Fluxo correto da Troca de Titularidade (referência para validar)
+## Objetivo
 
-```text
-Operador interno
-   └─ cria solicitação + envia Termo de Cancelamento (Autentique, biometria) ao TITULAR ANTIGO
-        └─ titular antigo assina
-              └─ webhook autentique:
-                   • marca termo_cancelamento_assinado_em
-                   • veiculos.em_troca_titularidade = true + cobertura suspensa
-                   • libera link público do NOVO titular
-                        └─ NOVO titular percorre o MESMO stepper de nova adesão:
-                             1. Plano
-                             2. Documentos (CNH, comp. residência)
-                             3. ►► ASSINATURA DO TERMO DE FILIAÇÃO ◄◄   (Autentique, novo contrato)
-                             4. Vistoria — DISPENSADA na janela mesmo-dia
-                             5. Pagamento (se houver)
-                                  └─ cotacoes.status_contratacao = aguardando_aprovacao_cadastro
-                                       └─ trigger trg_troca_promove_cadastro_via_cotacao
-                                            → solicitacoes_troca_titularidade.status = aguardando_cadastro
-                                                 └─ Cadastro aprova (aprovar-troca-cadastro)
-                                                      → aguardando_monitoramento
-                                                           └─ Monitoramento aprova / pede vistoria / pede manutenção rastreador
-                                                                └─ efetivar-troca-titularidade
-                                                                     • transfere veículo
-                                                                     • novo contrato nasce cadastro_aprovado=true
-                                                                     • limpa cobertura_suspensa
-                                                                     • SGA sync
-```
+Fazer a troca seguir o fluxo canônico definido:  
+Plano → Documentos → Assinatura do novo contrato → (sem autovistoria por padrão; vistoria só se Monitoramento pedir) → Pagamento ( quando houver) → Cadastro → Monitoramento → Efetivação.
 
-A etapa 3 (assinatura do novo Termo de Filiação pelo novo titular) **existe** no código (`EtapaAssinaturaContrato`), mas o link público de `COT-20260519-181838041-120` está pulando direto para "Em análise pelo Cadastro" por causa do estado inconsistente da base (solicitações duplicadas no mesmo `cotacao_id` + fallback errado em `CotacaoContratacao.tsx`).
+## Raiz do problema
 
-## Plano
+Hoje o erro não está em um único ponto. Há uma divergência estrutural entre dois eixos de estado:
 
-### Etapa 1 — Reset dos dados de teste (migração)
+1. `solicitacoes_troca_titularidade.status`
+2. `cotacoes.status_contratacao`
 
-Vou rodar uma migração que **só toca em dados de troca** (NÃO altera schema, NÃO mexe em código). Em uma transação:
+A tela pública usa os dois para decidir o que renderizar, mas eles não evoluem com a mesma regra.
+Além disso, há múltiplos pontos escrevendo status no fluxo público, o que permite regressão visual ou promoção indevida.
 
-1. Identificar todos os `cotacao_id`/`contrato_id`/`veiculo_id`/`associado_id` envolvidos em qualquer linha de `solicitacoes_troca_titularidade`.
-2. **Cancelar termos pendentes no Autentique**: marcar `solicitacoes_troca_titularidade.termo_cancelamento_status = 'cancelado_reset'` e logar `autentique_documento_id` em uma tabela de auditoria (`troca_titularidade_reset_log`) para o operador cancelar manualmente no painel Autentique se quiser. (Não dá pra deletar remoto via SQL.)
-3. **Restaurar veículos afetados** (todos os `veiculos.em_troca_titularidade = true` ou referenciados em `solicitacoes_troca_titularidade.veiculo_id`):
-   - `em_troca_titularidade = false`
-   - `cobertura_suspensa = false`, `cobertura_suspensa_motivo = NULL`, `cobertura_suspensa_em = NULL`
-   - `status` volta para `'ativo'` se havia contrato ativo (preserva contrato do titular ANTIGO intacto)
-   - Mantém `associado_id` do titular ANTIGO (não toca em transferências já efetivadas)
-4. **Apagar cotações de teste** (`cotacoes` onde `tipo_entrada = 'troca_titularidade'` OU id referenciado em solicitações):
-   - Cascata: `cotacoes_vistoria_fotos`, `cotacoes_documentos`, `contratos_documentos` e `contratos` ainda em `status IN ('rascunho','aguardando_assinatura','assinado')` vinculados a essas cotações.
-   - **NÃO toca** em contratos `ativo` (são do titular antigo, intactos).
-5. **Apagar `solicitacoes_troca_titularidade`** (todas as linhas) + tabelas filhas (`solicitacoes_troca_titularidade_eventos`, `solicitacoes_troca_titularidade_documentos`, vínculos em `dados_extras`).
-6. **Limpar agendamentos órfãos**: `agendamentos_base`/`instalacoes`/`servicos` criados para essas cotações apagadas.
-7. **Limpar `associados`** que foram criados como "novo titular" e nunca chegaram a ter contrato ativo (anti-órfão).
+## O que será corrigido
 
-Resultado: base zerada para troca, veículo do Ford Fiesta (e qualquer outro) volta 100% ao titular antigo ativo, contratos históricos preservados.
+### Etapa 1 — Definir a fonte canônica por fase
 
-### Etapa 2 — Correção do link público (código)
+Separar claramente qual entidade manda em cada momento:
 
-Aplicar as duas correções que ficaram pendentes da rodada anterior, agora que a base está limpa:
+- **Antes do novo titular concluir o link**: manda `solicitacoes_troca_titularidade.status`
+- **Durante a contratação pública**: manda `cotacoes.status_contratacao`
+- **Depois que a cotação chegar em `aguardando_aprovacao_cadastro**`: a solicitação pode ser promovida para `aguardando_cadastro`
 
-1. **`src/hooks/useSolicitacaoTrocaPublica.ts`** — `useSolicitacaoTrocaPublicaPorCotacao`:
-   - Buscar por `solicitacao_troca_id` em `cotacoes.dados_extras` quando disponível (chave determinística).
-   - Fallback: `cotacao_id` com `.neq('status','cancelada')` + `.order('created_at',{ascending:false}).limit(1).maybeSingle()`.
+Resultado esperado:
 
-2. **`src/pages/cotacao/CotacaoContratacao.tsx`** — remover o fallback que mostra "Em análise pelo Cadastro" quando `solicitacaoTroca` é null/array. Comportamento correto:
-   - Se `cotacao.tipo_entrada === 'troca_titularidade'` e termo de cancelamento assinado → renderizar o stepper normal (Plano → Documentos → **EtapaAssinaturaContrato** → Pagamento), exatamente como nova adesão.
-   - Só renderizar `TelaAnaliseTrocaTitularidade` quando `cotacao.status_contratacao === 'aguardando_aprovacao_cadastro'` em diante.
+- termo antigo assinado não significa “ir para Cadastro”
+- solicitação em `cotacao_em_andamento` não pode derrubar a UI para “Em análise” se a cotação ainda está em docs/contrato
 
-3. **`TelaAnaliseTrocaTitularidade.tsx`** — garantir que essa tela só aparece pós-cadastro, nunca durante a contratação do novo titular.
+### Etapa 2 — Corrigir a busca e leitura da solicitação pública
 
-### Etapa 3 — Validação manual após implementação
+Ajustar `useSolicitacaoTrocaPublicaPorCotacao` para:
 
-1. Criar nova solicitação de troca via tela interna.
-2. Assinar termo de cancelamento (mock ou Autentique real).
-3. Abrir link público → confirmar que o stepper mostra Plano → Documentos → **Assinatura do Contrato** → (Vistoria dispensada) → Pagamento.
-4. Após pagar, conferir `cotacao.status_contratacao = aguardando_aprovacao_cadastro` e `solicitacao.status = aguardando_cadastro` na fila.
-5. Aprovar no Cadastro → Monitoramento → efetivar.
+- usar apenas status válidos do enum
+- localizar a solicitação ativa de forma determinística
+- priorizar o vínculo explícito por `dados_extras.solicitacao_troca_id`
+- usar `cotacao_id` só como fallback real
+- evitar falso negativo que faz a UI cair no estado órfão ou no fallback de análise
 
-## Detalhes técnicos (resumo de arquivos)
+Resultado esperado:
 
-- **Migração** (Etapa 1) — única, idempotente, com `BEGIN`/`COMMIT`, sem `DROP` de tabela.
-- **Frontend** (Etapa 2):
-  - `src/hooks/useSolicitacaoTrocaPublica.ts` (query)
-  - `src/pages/cotacao/CotacaoContratacao.tsx` (condicional de render)
-  - `src/components/troca-titularidade/TelaAnaliseTrocaTitularidade.tsx` (guard)
-- **Memória** — atualizar `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica` reforçando que o link público do novo titular usa o stepper de nova adesão e NUNCA pula a assinatura do Termo de Filiação.
+- a tela sempre encontra a solicitação correta da troca atual
+- não mistura solicitações antigas/canceladas com a vigente
+
+### Etapa 3 — Remover a mistura indevida de sinais na tela pública
+
+Refatorar `CotacaoContratacao.tsx` para que a decisão de renderização siga regras explícitas:
+
+- `TelaAnaliseTrocaTitularidade` só aparece em 3 situações:
+  - antes da assinatura do termo do titular antigo
+  - após a cotação atingir `aguardando_aprovacao_cadastro` e a solicitação já estar em `aguardando_cadastro` ou além
+  - quando a troca estiver reprovada/cancelada/expirada
+- nas etapas de documentos, contrato e pagamento, a tela não pode usar `solicitacao.status` para esconder o stepper enquanto a cotação ainda estiver em contratação
+- a progressão visual deve depender de `cotacoes.status_contratacao` durante o fluxo do novo titular
+
+Resultado esperado:
+
+- após envio de documentos, a etapa seguinte será assinatura do contrato
+- após assinatura, segue o fluxo contratado, sem salto visual para Cadastro
+
+### Etapa 4 — Corrigir o contrato/assinatura para não haver escritores concorrentes
+
+Consolidar a lógica de `EtapaAssinaturaContrato.tsx`, que hoje tem vários caminhos alterando `status_contratacao`:
+
+- reduzir atualizações duplicadas para `documentos_ok` e `contrato_assinado`
+- impedir que realtime, polling e inicialização escrevam estados diferentes para a mesma cotação sem critério
+- garantir que essa etapa apenas reflita:
+  - contrato inexistente → gerar
+  - contrato com link → aguardar assinatura
+  - contrato assinado → `contrato_assinado`
+
+Resultado esperado:
+
+- a cotação não entra em estado inconsistente entre contrato, UI e webhook
+
+### Etapa 5 — Corrigir respostas enganosas das edge functions
+
+Ajustar `vincular-cotacao-troca` para não retornar um status semântico errado (`aguardando_cadastro`) quando a regra real é apenas “vinculada / pronta para continuar”.
+
+Também vou revisar se mais alguma edge function da troca devolve payload que contradiz o banco e pode ser usado pela UI.
+
+Resultado esperado:
+
+- frontend não recebe um “estado narrativo” incorreto
+- payload das edges passa a espelhar o estado real
+
+### Etapa 6 — Blindar a promoção para Cadastro
+
+Manter a promoção para `aguardando_cadastro` exclusivamente quando a cotação realmente concluir a fase pública correta.
+
+Vou validar se o gatilho atual está coerente com o fluxo de troca sem autovistoria obrigatória e, se necessário, ajustar a condição de promoção para refletir a etapa correta da troca.
+
+Resultado esperado:
+
+- Cadastro só recebe o caso quando o novo titular tiver realmente concluído o link público combinado
+
+### Etapa 7 — Validação ponta a ponta
+
+Executar validação controlada do fluxo:
+
+1. criar nova troca
+2. assinar termo do titular antigo
+3. abrir link público do novo titular
+4. enviar documentos
+5. confirmar que a próxima etapa é assinatura do contrato
+6. assinar contrato
+7. confirmar que não cai em “Aguardando Cadastro” antes da hora
+8. concluir pagamento
+9. confirmar promoção correta para Cadastro
+10. aprovar no Cadastro e seguir para Monitoramento
+
+## Detalhes técnicos
+
+### Arquivos que devem entrar na correção
+
+- `src/hooks/useSolicitacaoTrocaPublica.ts`
+- `src/pages/public/CotacaoContratacao.tsx`
+- `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
+- `supabase/functions/vincular-cotacao-troca/index.ts`
+- possivelmente a trigger/migração da promoção de troca para cadastro, se a regra precisar ser refinada
+
+### Estratégia de implementação
+
+- primeiro alinhar a leitura de estado
+- depois remover decisões de UI baseadas em sinal errado
+- por fim consolidar quem pode escrever cada status
+
+## Critério de sucesso
+
+O problema estará resolvido quando:
+
+- documentos não levarem mais direto para Cadastro
+- contrato assinado não provocar fallback visual incorreto
+- a tela pública continuar no stepper até a conclusão real da fase pública
+- Cadastro só entrar no fluxo quando a cotação alcançar a etapa canônica definida
 
 ## Fora de escopo
 
-- Edge functions `autentique-webhook`, `aprovar-troca-cadastro`, `efetivar-troca-titularidade` — já estão corretas.
-- Triggers `trg_troca_promove_cadastro_via_cotacao` — já corretos.
-- Cancelar documentos remotos no Autentique — operador faz manual via log de auditoria (limitação de API).
+- redesenhar o fluxo completo de Monitoramento
+- refazer o processo comercial da criação da troca
+- mexer em efetivação final, exceto se a validação mostrar dependência direta com esta raiz
