@@ -116,17 +116,42 @@ export function OcrDadosEditor({
   }, [dados, schema]);
 
   const [values, setValues] = useState<Record<string, string>>(initialValues);
-  const [editing, setEditing] = useState<boolean>(forceEdit || ocrFalhou);
+  const [editing, setEditing] = useState<boolean>(forceEdit || ocrFalhou || confirmacaoObrigatoria);
   const [saving, setSaving] = useState(false);
+  const [confirmado, setConfirmado] = useState<boolean>(false);
 
   // Re-sincroniza quando dados/schema mudam externamente
   useEffect(() => {
     setValues(initialValues);
-  }, [initialValues]);
+    // Novos dados vindos do pai invalidam confirmação anterior
+    if (confirmacaoObrigatoria) setConfirmado(false);
+  }, [initialValues, confirmacaoObrigatoria]);
 
   useEffect(() => {
-    if (forceEdit || ocrFalhou) setEditing(true);
-  }, [forceEdit, ocrFalhou]);
+    if (forceEdit || ocrFalhou || confirmacaoObrigatoria) setEditing(true);
+  }, [forceEdit, ocrFalhou, confirmacaoObrigatoria]);
+
+  useEffect(() => {
+    onConfirmedChange?.(confirmado);
+  }, [confirmado, onConfirmedChange]);
+
+  // ---- Validação de plausibilidade do nome (CNH/RG) ----
+  const nomeAtual = ehCnhOuRg ? (values.nome || '').trim() : '';
+  const validacaoNome = useMemo(
+    () => (ehCnhOuRg && nomeAtual ? validarNomeOCR(nomeAtual) : { ok: true as const }),
+    [ehCnhOuRg, nomeAtual],
+  );
+
+  // ---- Cross-check com SGA por CPF ----
+  const cpfAtual = ehCnhOuRg ? (values.cpf || '') : '';
+  const { data: nomeCanonico } = useNomeCanonicoPorCpf(ehCnhOuRg ? cpfAtual : null);
+  const sugestaoNome = useMemo(() => {
+    if (!ehCnhOuRg || !nomeCanonico?.nome) return null;
+    const atualNorm = normalizarNomeComparacao(nomeAtual);
+    const sugNorm = normalizarNomeComparacao(nomeCanonico.nome);
+    if (!atualNorm || atualNorm === sugNorm) return null;
+    return nomeCanonico;
+  }, [ehCnhOuRg, nomeCanonico, nomeAtual]);
 
   if (schema.length === 0) {
     // Tipo sem schema — nada para editar
@@ -135,6 +160,14 @@ export function OcrDadosEditor({
 
   const handleChange = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
+    // Qualquer edição manual invalida confirmação anterior
+    if (confirmacaoObrigatoria && confirmado) setConfirmado(false);
+  };
+
+  const handleUsarNomeSugerido = () => {
+    if (!sugestaoNome) return;
+    handleChange('nome', sugestaoNome.nome);
+    toast.success('Nome substituído pelo cadastro existente');
   };
 
   const handleCancel = () => {
@@ -142,7 +175,13 @@ export function OcrDadosEditor({
     setEditing(false);
   };
 
+  const podeConfirmar = !ehCnhOuRg || validacaoNome.ok;
+
   const handleSave = async () => {
+    if (confirmacaoObrigatoria && !podeConfirmar) {
+      toast.error(validacaoNome.motivo || 'Revise os dados antes de confirmar');
+      return;
+    }
     setSaving(true);
     try {
       // Trim em todos os campos
@@ -151,13 +190,19 @@ export function OcrDadosEditor({
         cleaned[k] = typeof v === 'string' ? v.trim() : v;
       }
       await onSave(cleaned);
-      setEditing(false);
-      toast.success('Dados atualizados');
+      if (confirmacaoObrigatoria) {
+        setConfirmado(true);
+        toast.success('Dados confirmados');
+      } else {
+        setEditing(false);
+        toast.success('Dados atualizados');
+      }
     } catch (err) {
       console.error('[OcrDadosEditor] erro ao salvar:', err);
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar dados');
     } finally {
       setSaving(false);
+
     }
   };
 
