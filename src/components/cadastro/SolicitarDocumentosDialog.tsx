@@ -139,6 +139,7 @@ export function SolicitarDocumentosDialog({
   const [openCategories, setOpenCategories] = useState<string[]>([
     'pessoais',
     isAutovistoria ? 'autovistoria' : 'fotos_instalador',
+    'video',
   ]);
 
   const CATEGORIAS = useMemo(
