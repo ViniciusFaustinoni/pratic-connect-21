@@ -1533,11 +1533,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return;
     }
     
-    // Validar justificativa de FIPE menor
-    if (solicitarFipeMenor && justificativaFipeMenor.trim().length < 5) {
-      toast.error('Preencha a justificativa para solicitação de FIPE menor!');
-      return;
-    }
+    // Regra do 1% (Redução de Cota) agora é automática quando elegível —
+    // sem checkbox/justificativa, sem trava. Supervisores apenas tomam ciência depois.
 
     // Vendedor externo: validar cenário obrigatório
     if (!cenarioExterno) {
