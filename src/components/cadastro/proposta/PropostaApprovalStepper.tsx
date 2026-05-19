@@ -471,7 +471,7 @@ export function PropostaApprovalStepper({
             </Card>
 
             {/* Banner informativo: aprovação final é do Monitoramento */}
-            {aguardandoMonitoramentoVistoria && (
+            {(aguardandoMonitoramentoVistoria || (aprovarApenasDocumentos && !liberaCoberturaRF)) && (
               <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
                 <ShieldCheck className="h-5 w-5 text-info shrink-0 mt-0.5" />
                 <div className="flex-1">
