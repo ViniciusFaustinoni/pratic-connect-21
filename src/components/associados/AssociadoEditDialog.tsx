@@ -515,6 +515,24 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
                     max={28}
                     {...form.register('dia_vencimento', { valueAsNumber: true })}
                   />
+
+                <div>
+                  <Label htmlFor="data_adesao">Data de Adesão</Label>
+                  <Input id="data_adesao" type="date" {...form.register('data_adesao')} />
+                </div>
+
+                <div>
+                  <Label htmlFor="data_cadastro_sga">Cadastro SGA</Label>
+                  <Input id="data_cadastro_sga" type="date" {...form.register('data_cadastro_sga')} />
+                </div>
+
+                <div>
+                  <Label htmlFor="codigo_hinova">Código Hinova</Label>
+                  <Input
+                    id="codigo_hinova"
+                    type="number"
+                    {...form.register('codigo_hinova', { valueAsNumber: true })}
+                  />
                 </div>
               </div>
             </div>
