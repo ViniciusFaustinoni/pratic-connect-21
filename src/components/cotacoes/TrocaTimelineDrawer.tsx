@@ -75,6 +75,9 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelMotivo, setCancelMotivo] = useState('');
+  const cancelar = useCancelarTrocaTitularidade();
 
   // Carrega a solicitação completa para montar o cotacaoBase do formulário padrão
   const { data: solicitacao } = useSolicitacaoTroca(item?.solicitacao_troca_id || undefined);
