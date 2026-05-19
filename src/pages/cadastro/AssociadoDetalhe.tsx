@@ -571,6 +571,18 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         isSincronizando={sincronizarStatusMutation.isPending}
       />
 
+      {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA (compacto) */}
+      {contrato?.id && (
+        <ObservacoesCotacaoCard
+          cotacaoId={cotacaoId ?? null}
+          contratoId={contrato.id}
+          cpf={(associado as any)?.cpf ?? null}
+          compact
+        />
+      )}
+
+
+
       {/* Tab Nav */}
       <AssociadoTabNav
         activeTab={activeTab}
