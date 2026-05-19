@@ -115,6 +115,11 @@ Deno.serve(async (req) => {
           console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} marca="${marca}" modelo="${modelo}" isMoto=${isMoto} fipe=${fipe} subFipe=${veiculoSubFipe}`);
         }
       }
+    } catch (e) {
+      console.warn('[finalizar-autovistoria] Falha detect sub-FIPE (segue como ≥30k):', e);
+    }
+
+
 
 
     // 2. Contrato + veículo + associado (último não-cancelado)
