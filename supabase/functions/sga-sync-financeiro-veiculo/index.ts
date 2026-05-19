@@ -313,7 +313,7 @@ serve(async (req) => {
 
     let situacao: string | null = null;
     try {
-      situacao = await withReauthRetry(supabase, session!, (s) => buscarSituacaoFinanceiraVeiculo(s, codigoVeiculo!), (s) => { session = s; });
+      situacao = await withReauthRetry(supabase, session!, (s) => buscarSituacaoFinanceiraVeiculo(s, { codigoVeiculo: codigoVeiculo!, placa: veiculo.placa }), (s) => { session = s; });
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       // Erro não-transitório de situação não bloqueia listagem de boletos

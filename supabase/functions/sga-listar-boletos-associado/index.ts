@@ -213,7 +213,10 @@ serve(async (req) => {
       // manualmente e ainda assim o veículo permanecer INADIMPLENTE.
       try {
         const sit = await withHinovaAuthRetry(supabase, async (session) =>
-          buscarSituacaoFinanceiraVeiculo(session, v.codigo_veiculo),
+          buscarSituacaoFinanceiraVeiculo(session, {
+            codigoVeiculo: v.codigo_veiculo,
+            placa: v.placa,
+          }),
         );
         const norm = sit ? String(sit).trim().toUpperCase() : null;
         resSituacao.push(norm === 'ADIMPLENTE' || norm === 'INADIMPLENTE' ? norm : null);
@@ -221,11 +224,26 @@ serve(async (req) => {
         console.warn(
           '[sga-listar-boletos-associado] situacao_financeira falhou veiculo',
           v.codigo_veiculo,
+          v.placa,
           err?.message,
         );
         if (err instanceof HinovaTransientError) throw err;
         resSituacao.push(null);
       }
+    }
+
+    // Diagnóstico: se TODOS os veículos com placa válida retornaram null,
+    // provavelmente o endpoint /buscar/situacao-financeira-veiculo não está
+    // liberado no token SGA — gate de inadimplência fica cego nesse caso.
+    if (
+      veiculosSGA.length > 0 &&
+      veiculosSGA.some((v) => v.placa) &&
+      resSituacao.every((s) => s === null)
+    ) {
+      console.warn(
+        '[sga-listar-boletos-associado] situacao_financeira indisponivel para todos os veiculos — verificar permissao do token SGA para /buscar/situacao-financeira-veiculo',
+        { cpf, codigoAssociado, placas: veiculosSGA.map((v) => v.placa) },
+      );
     }
 
 

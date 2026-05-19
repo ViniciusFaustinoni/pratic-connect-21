@@ -1,74 +1,53 @@
-# Correção raiz — checagem SGA não detectou veículos INADIMPLENTES
+# Corrigir consulta de inadimplência por veículo (Hinova)
 
-## Diagnóstico
+## Contexto
 
-Caso Leonardo Nascimento dos Santos (codigo_hinova=1169, CPF 16007095754): o SGA tem 3 veículos sob esse CPF — FIA7E46 **ATIVO**, HHI7F74 **INADIMPLENTE** (Sandero), KXW9725 **INADIMPLENTE** (Ka+). Mesmo assim, os 2 últimos checks gravados em `sga_situacao_check` para o novo contrato (FIA7E46) retornaram `tem_debito=false, qtd_boletos_abertos=0, saldo_devedor=0` — `origem_resultado='sga'` (não foi erro transitório). A guarda do `aprovar-proposta` recebeu um "liberador" e deixou passar.
+A doc oficial confirma um **único** endpoint para a situação financeira do veículo:
 
-**Por quê:** a edge `sga-listar-boletos-associado` calcula débito SOMENTE somando boletos individuais retornados por `POST /listar/boleto-associado-veiculo` com status em `{pendente, vencido, aguardando_pagamento}` e valor > 0. No SGA Hinova, quando um veículo entra em situação **INADIMPLENTE**, é comum os boletos terem sido baixados/cancelados manualmente — a flag canônica fica em `situacao_financeira` do **veículo** (não do boleto).
-
-Já existe a helper `buscarSituacaoFinanceiraVeiculo(s, codigo)` em `supabase/functions/_shared/hinova-client.ts` (`GET /buscar/situacao-financeira-veiculo/{codigo}` → retorna `'ADIMPLENTE'` / `'INADIMPLENTE'`). Ela **não é chamada em lugar nenhum** — `rg` no projeto não acha consumidor. Esse é o gap exato.
-
-## O que muda
-
-UI de inadimplência (gate, bypass, mensagens), `aprovar-proposta` (guarda 409) e `sga_situacao_check` (auditoria) permanecem **intocados**. Mexe apenas em:
-
-1. `sga-listar-boletos-associado` — passa a consultar `situacao_financeira` por veículo.
-2. `verificar-situacao-financeira-cadastro` — agrega `INADIMPLENTE` de veículo no `tem_debito`.
-3. `SituacaoFinanceiraGate.tsx` — quando bloqueio vem por situação do veículo (sem boletos detalhados), lista placa/modelo/situação.
-4. Reverificação retroativa para Leonardo + varredura preventiva.
-
-## Plano
-
-### 1. `sga-listar-boletos-associado` — consultar situação por veículo
-
-Após enumerar veículos via `buscarAssociadoComVeiculosPorCpf`, fazer (sequencial, dentro de `withHinovaAuthRetry` como já se faz para boletos) chamada extra `buscarSituacaoFinanceiraVeiculo(session, codigo_veiculo)` para cada um. Adicionar ao tipo `VeiculoSGA`:
-
-```text
-situacao_financeira: 'ADIMPLENTE' | 'INADIMPLENTE' | null
+```
+GET /buscar/situacao-financeira-veiculo/{codigo_ou_placa}
+→ 200 { ..., "situacao_financeira": "ADIMPLENTE" | "INADIMPLENTE" }
 ```
 
-`tem_debito` final do response = `saldo_devedor_total > 0 OR veiculos.some(v => v.situacao_financeira === 'INADIMPLENTE')`.
+O exemplo oficial usa placa com hífen (`AAA-1111`). O parâmetro aceita código numérico **ou** placa.
 
-Falha 404/parse na situação por veículo → `null` (tolera; cai no comportamento atual). Falha transitória mantém o caminho `erro_transitorio` que já existe.
+Hoje, em `supabase/functions/_shared/hinova-client.ts`, a função `buscarSituacaoFinanceiraVeiculo`:
+- Inclui dois caminhos alternativos que **não existem** na API.
+- Só consulta por `codigo_veiculo` — sem fallback para placa.
+- Trata 404 silenciosamente sem distinguir "veículo não cadastrado" de "permissão do token".
 
-### 2. `verificar-situacao-financeira-cadastro` — agregar veículo inadimplente
+## Mudanças
 
-No bloco "5. Determinar inadimplência", além de somar boletos vencidos, contar `veiculos_inadimplentes`:
+### 1. `supabase/functions/_shared/hinova-client.ts`
+- Manter **apenas** o endpoint canônico `/buscar/situacao-financeira-veiculo/{param}`.
+- Mudar assinatura para aceitar `{ codigoVeiculo?, placa? }`. Ordem de tentativa:
+  1. `codigo_veiculo` quando truthy (>0).
+  2. Placa formatada `AAA-1111` (com hífen, conforme exemplo da doc) quando disponível.
+  3. Placa sem hífen como último recurso.
+- Em 404 após esgotar as tentativas, retornar `null` e logar `cod`, `placa`, e amostra da resposta (já existe — manter).
+- Em 401/403 lançar `HinovaTransientError` com `reason: 'permission'` para sinalizar que o token não tem o endpoint liberado.
 
-```text
-const inadimplentes = (sgaResp.veiculos || []).filter(v => v.situacao_financeira === 'INADIMPLENTE')
-const temDebito = qtd > 0 || inadimplentes.length > 0
-```
+### 2. `supabase/functions/sga-listar-boletos-associado/index.ts`
+- Passar tanto `codigo_veiculo` quanto `placa` ao chamar `buscarSituacaoFinanceiraVeiculo`.
+- Quando o resultado for `null` para todos os veículos do associado **mas existirem placas válidas**, logar warning `[sga-listar-boletos-associado] situacao_financeira indisponivel — verificar permissao do token SGA`.
 
-Persistir em `sga_situacao_check.motivo` algo legível quando o bloqueio vier por situação ('veiculo_inadimplente_sga: HHI7F74, KXW9725') — campo já existe na tabela, sem migration.
+### 3. Diagnóstico do caso Leonardo
+- Após deploy, rodar `verificar-situacao-financeira-cadastro` com `force=true` para o CPF `16007095754` e inspecionar os logs do edge function para confirmar:
+  - Se o endpoint retorna `INADIMPLENTE` agora (caso seja problema do parâmetro), **ou**
+  - Se persiste 404 — nesse caso a causa é permissão do token e precisamos liberar o endpoint no painel SGA (ação no cliente Hinova, fora do código).
 
-### 3. `SituacaoFinanceiraGate.tsx` — exibir veículos inadimplentes
-
-Quando `check.tem_debito=true` e a lista de boletos vencidos vier vazia (caso do Leonardo), renderizar tabela compacta com `payload.veiculos.filter(situacao_financeira==='INADIMPLENTE')` mostrando placa, marca/modelo, situação. Quando houver boletos, manter o atual + adicionar a coluna "Linha digitável" copiável (campo `linha_digitavel` já existe no payload). Não muda o fluxo de bypass nem o `aprovar-proposta`.
-
-### 4. Reverificação retroativa
-
-- **Leonardo** (contrato vinculado à cotação `c2951183`): forçar `verificar-situacao-financeira-cadastro` com `force=true` após o deploy. Como o contrato já está `ativo` (cotação `status_contratacao='ativo'`), **NÃO** reverter — apenas registrar o check correto em `sga_situacao_check` para auditoria e abrir aviso `cotacao_avisos_sga` notificando o Cadastro. Conforme pedido do usuário: "não modifique nada na cotação do anexo".
-- **Varredura preventiva** (read-only): `SELECT` listando últimos 90 dias de checks com `tem_debito=false, origem_resultado='sga'` cujo associado, ao recheckar, tenha `situacao_financeira='INADIMPLENTE'` em algum veículo. Relatar no chat para decisão caso a caso (não rebobinar automaticamente cotações ativas — risco de dano).
-
-### 5. Memória
-
-Atualizar `mem://logic/operations/sga-inadimplencia-veiculo-canonica` documentando:
-> Inadimplência no SGA tem DUAS dimensões: boletos vencidos (`POST /listar/boleto-associado-veiculo`) E situação do veículo (`GET /buscar/situacao-financeira-veiculo/{codigo}`). Ambas DEVEM ser consultadas no gate de Cadastro — boletos podem ter sido baixados manualmente mantendo o veículo em INADIMPLENTE.
+### 4. Documentação
+- Atualizar `mem://logic/operations/sga-inadimplencia-veiculo-canonica.md` com:
+  - URL canônica e única confirmada na doc.
+  - Aceita código OU placa (com hífen).
+  - Pré-requisito: endpoint liberado no token SGA.
 
 ## Fora de escopo
+- Frontend `SituacaoFinanceiraGate.tsx` (já tratado anteriormente).
+- Backfill retroativo de contratos antigos.
+- Mudanças em `aprovar-proposta`/`aprovar-troca-cadastro`.
 
-- Cotação `c2951183` (Leonardo, FIA7E46) — **não tocar**. Já está `ativo`. Só registrar check correto para auditoria.
-- `aprovar-proposta` (guarda 409 já correta — passou a falhar porque o insumo `sga_situacao_check` veio errado).
-- `aprovar-troca-cadastro` (mesma guarda já existe; será beneficiada automaticamente).
-- UI de bypass/Diretor.
-- Migrações de schema (`sga_situacao_check.motivo` já existe).
-
-## Detalhe técnico
-
-- `supabase/functions/sga-listar-boletos-associado/index.ts`: importar `buscarSituacaoFinanceiraVeiculo`, chamar dentro do loop sequencial atual (logo após `listarBoletosVeiculo` por veículo), preencher `VeiculoSGA.situacao_financeira`, recalcular `tem_debito`.
-- `supabase/functions/verificar-situacao-financeira-cadastro/index.ts`: novo agregador `inadimplentes`, ajustar `temDebito`, popular `motivo` quando vier por situação.
-- `src/components/cadastro/SituacaoFinanceiraGate.tsx`: novo bloco "Veículos inadimplentes no SGA" + coluna "Linha digitável" copiável na tabela de boletos.
-- Para o passo 4 (Leonardo): chamada one-shot via `supabase.functions.invoke('verificar-situacao-financeira-cadastro', {contrato_id, force:true})` após deploy + insert manual em `cotacao_avisos_sga`.
-
-Aprova para executar?
+## Validação
+1. Curl direto do edge function com o CPF do Leonardo e `force=true`.
+2. Inspecionar log: deve aparecer `[situacao-financeira] ok ... -> INADIMPLENTE` para pelo menos uma das placas (HHI7F74 / KXW9725).
+3. Se vier `null` ainda, abrir ticket de liberação do endpoint no token SGA Hinova.
