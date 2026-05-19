@@ -86,7 +86,15 @@ export function TelaAnaliseTrocaTitularidade({
           <div className="flex justify-center">{icon}</div>
           <h2 className="text-2xl font-bold">{title}</h2>
           <p className="text-muted-foreground">{description}</p>
-          {mostraSpinner && (
+          {showContinuarCTA && (
+            <div className="pt-2">
+              <Button onClick={() => window.location.reload()} className="gap-2">
+                Continuar contratação
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          {mostraSpinner && !showContinuarCTA && (
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-2">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Esta página atualiza automaticamente</span>
