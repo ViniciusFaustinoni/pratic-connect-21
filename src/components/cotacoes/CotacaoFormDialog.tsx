@@ -290,8 +290,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [solicitarFipeMenor, setSolicitarFipeMenor] = useState(false);
   const [justificativaFipeMenor, setJustificativaFipeMenor] = useState('');
   
-  // Hook para criar solicitação de FIPE menor
-  const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
+  // Hook para registrar a ciência da Regra do 1% (Redução de Cota) — automático, sem aprovação
+  const registrarCienciaFipeMenor = useRegistrarCienciaFipeMenor();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
 
   // Limites de FIPE para Regra do 1% (mínimo + máximo POR TIPO carro/moto)
