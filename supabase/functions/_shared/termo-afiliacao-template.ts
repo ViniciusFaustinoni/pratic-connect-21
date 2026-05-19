@@ -446,6 +446,30 @@ const generateSecao2 = (data: TermoAfiliacaoData): string => `
     </div>
   </div>
   
+  <div class="field-row">
+    <div class="field">
+      <span class="field-label">Tipo:</span> 
+      <span class="field-value">${data.veiculo.tipo_veiculo || 'Carro'}</span>
+    </div>
+    <div class="field">
+      <span class="field-label">Câmbio:</span> 
+      <span class="field-value">${data.veiculo.cambio || '—'}</span>
+    </div>
+  </div>
+  
+  ${(() => {
+    const tipo = (data.veiculo.tipo_veiculo || '').toLowerCase();
+    // Não imprime "Portas" para moto (não se aplica).
+    if (tipo === 'moto') return '';
+    const portas = data.veiculo.portas;
+    const portasStr = portas != null && Number(portas) > 0 ? String(portas) : '—';
+    return `
+  <div class="field-full">
+    <span class="field-label">Portas:</span> 
+    <span class="field-value">${portasStr}</span>
+  </div>`;
+  })()}
+  
   <div class="field-full">
     <span class="field-label">Tipo de Uso:</span> 
     <span class="field-value">${data.veiculo.tipo_uso || 'Particular'}</span>

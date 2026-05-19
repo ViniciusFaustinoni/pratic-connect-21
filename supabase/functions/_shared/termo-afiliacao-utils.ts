@@ -399,6 +399,24 @@ function ehLeilao(categoria: string | null | undefined, procedencia?: string | n
          p.includes('leilão') || p.includes('leilao');
 }
 
+/**
+ * Normaliza o tipo do veículo (carro/moto/caminhão/utilitário/ônibus) para
+ * exibição no termo de filiação. Aceita variações comuns vindas do banco
+ * (marcas_modelos.tipo_veiculo ou snapshots legados em veiculo_categoria).
+ */
+function formatarTipoVeiculo(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const s = String(raw).trim().toLowerCase();
+  if (!s) return '';
+  if (s.startsWith('moto')) return 'Moto';
+  if (s.startsWith('cami')) return 'Caminhão';
+  if (s.startsWith('onib') || s.startsWith('ônib')) return 'Ônibus';
+  if (s.startsWith('util')) return 'Utilitário';
+  if (s.startsWith('outr')) return '';
+  // carro / automovel / passeio / etc.
+  return 'Carro';
+}
+
 export function mapearDadosParaTemplate(
   contrato: any,
   plano: any,
@@ -459,8 +477,14 @@ export function mapearDadosParaTemplate(
         contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso,
         contrato.uso_aplicativo ?? veiculo.uso_aplicativo,
       ),
-      // Tipo de carroceria (carro/moto/utilitário) — campo separado, mantém o valor legado
-      tipo_veiculo: contrato.veiculo_categoria || veiculo.veiculo_categoria || "",
+      // Tipo de carroceria (Carro/Moto/Caminhão/Utilitário) — fonte canônica:
+      // veiculoDB.tipo_veiculo (derivado de marcas_modelos.tipo_veiculo pelo caller).
+      // Fallback legado: contrato/veiculo veiculo_categoria (snapshots antigos).
+      tipo_veiculo:
+        formatarTipoVeiculo(veiculoDB?.tipo_veiculo)
+        || formatarTipoVeiculo(contrato.veiculo_categoria)
+        || formatarTipoVeiculo(veiculo.veiculo_categoria)
+        || "",
       tipo_uso: contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso || "Particular",
       codigo_fipe: contrato.codigo_fipe || veiculo.codigo_fipe || "",
       valor_fipe: contrato.veiculo_valor_fipe || veiculo.veiculo_fipe || 0,

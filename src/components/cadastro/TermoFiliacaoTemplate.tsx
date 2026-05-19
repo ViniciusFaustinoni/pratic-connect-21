@@ -249,7 +249,22 @@ export function TermoFiliacaoTemplate({
             <span style={{ fontWeight: 'bold' }}>Categoria:</span> {veiculo.categoria || 'Automóvel'}
           </div>
         </div>
-        
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '6pt' }}>
+          <div style={{ marginRight: '20pt' }}>
+            <span style={{ fontWeight: 'bold' }}>Tipo:</span> {veiculo.tipo === 'moto' ? 'Moto' : 'Carro'}
+          </div>
+          <div>
+            <span style={{ fontWeight: 'bold' }}>Câmbio:</span> {veiculo.cambio || '—'}
+          </div>
+        </div>
+
+        {veiculo.tipo !== 'moto' && (
+          <div style={{ marginBottom: '6pt' }}>
+            <span style={{ fontWeight: 'bold' }}>Portas:</span> {veiculo.portas != null && Number(veiculo.portas) > 0 ? veiculo.portas : '—'}
+          </div>
+        )}
+
         <div style={{ marginBottom: '6pt' }}>
           <span style={{ fontWeight: 'bold' }}>Tipo de Uso:</span> {veiculo.tipoUso || 'Particular'}
         </div>

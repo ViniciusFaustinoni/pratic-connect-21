@@ -169,15 +169,40 @@ serve(async (req) => {
       buscarRegrasDepreciacao(supabase),
     ]);
 
-    // ============= BUSCAR VEÍCULO DO BANCO (FLAGS DE DEPRECIAÇÃO) =============
+    // ============= BUSCAR VEÍCULO DO BANCO (FLAGS DE DEPRECIAÇÃO + CÂMBIO/TIPO) =============
     let veiculoDB: any = null;
     if (contrato.veiculo_id) {
       const { data: veiculoData } = await supabase
         .from('veiculos')
-        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria, blindado, ano_fabricacao, ano_modelo')
+        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria, blindado, ano_fabricacao, ano_modelo, cambio, numero_motor')
         .eq('id', contrato.veiculo_id)
         .maybeSingle();
       veiculoDB = veiculoData;
+    }
+    // Tipo (carro/moto/...) derivado de marcas_modelos (fonte canônica)
+    {
+      const marcaTipo = (contrato as any).veiculo_marca;
+      const modeloTipo = (contrato as any).veiculo_modelo;
+      if (marcaTipo) {
+        const { data: mm } = await supabase
+          .from('marcas_modelos')
+          .select('tipo_veiculo')
+          .eq('marca', marcaTipo)
+          .eq('modelo', modeloTipo || '')
+          .eq('ativo', true)
+          .maybeSingle();
+        const tipoFromMM = mm?.tipo_veiculo
+          || (await supabase
+                .from('marcas_modelos')
+                .select('tipo_veiculo')
+                .eq('marca', marcaTipo)
+                .eq('ativo', true)
+                .not('tipo_veiculo', 'is', null)
+                .limit(1)
+                .maybeSingle()).data?.tipo_veiculo
+          || null;
+        veiculoDB = { ...(veiculoDB || {}), tipo_veiculo: tipoFromMM };
+      }
     }
 
     // Obter dados do cliente (associado tem prioridade, depois lead)

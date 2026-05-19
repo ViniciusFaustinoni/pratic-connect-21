@@ -40,6 +40,8 @@ export interface VeiculoData {
   renavam: string;
   chassi: string;
   combustivel: string;
+  cambio?: string;
+  portas?: number | null;
   valorFipe: number;
   codigoFipe: string;
   procedencia?: string;
