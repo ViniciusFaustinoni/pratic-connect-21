@@ -747,6 +747,30 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     };
   }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
 
+  // === Regra do 1% (FIPE Menor): quando elegível, os cards de plano abaixo
+  // precisam refletir os preços da FAIXA INFERIOR — caso contrário a tela
+  // mostra valores da faixa cheia mesmo após anunciar a redução.
+  const aplicarFipeMenor =
+    !!(fipeMenorAtivo && fipeMenorInfo?.elegivel && !fipeMenorInfo?.bloqueado);
+  const valorFipeParaPlanos = aplicarFipeMenor
+    ? (fipeMenorInfo?.faixaInferior?.max ?? fipeMenorInfo?.valorReduzido ?? valorFipe)
+    : valorFipe;
+
+  // Hook de planos calculados dinamicamente do banco
+  const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
+    valorFipe: valorFipeParaPlanos,
+    valorAdicional,
+    regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
+    combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
+    categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : undefined,
+    anoVeiculo: anoNumerico,
+    tipoVeiculo: tipoVeiculoDetectado,
+    usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
+    marca: marcaResolvida || undefined,
+    modelo: modeloResolvido || undefined,
+  });
+
+
   // Faixa de preço atual onde o FIPE se enquadra
   // FONTE: entity_eligibility_rules (motor moderno). Fallback: tabelas_preco_mensalidade (legado)
   const faixaAtualFipe = useMemo(() => {
