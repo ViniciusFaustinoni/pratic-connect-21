@@ -1,92 +1,121 @@
-## Objetivo
+## Diagnóstico
 
-Permitir que o time de Cadastro edite dados sensíveis do associado (nome, CPF, RG, e-mail, telefones, WhatsApp, data de nascimento, endereço completo, dados de CNH) direto em **Cadastro › Associados › ⋮ › Editar dados**, exigindo **motivo** e registrando **autor, data/hora, valores antes/depois** no histórico do associado.
+Estado atual no banco para placa `KRF8B74` (cotação `b50180dc-…`, contrato `226eacc0-…`, veículo `7719dcaa-…`, instalação `e31076b8-…`):
 
-Hoje o item "Editar dados" só faz `navigate(...)` para a página de detalhes — não há edição com auditoria.
+| Entidade | Campo | Valor atual | Valor esperado |
+|---|---|---|---|
+| `contratos` | `cadastro_aprovado` | `true` (aprovado_por=cefd786a, 19/05 18:12) | `false` |
+| `veiculos` | `cobertura_roubo_furto` | `true` | `false` |
+| `veiculos` | `status` | `instalacao_pendente` | `instalacao_pendente` (mantém) |
+| `vistorias` | `status` (autovistoria enxuta) | `aprovada` | `pendente` |
+| `servicos` (vistoria_entrada autovistoria) | `status` | `concluida` | `em_analise` |
+| `servicos` | `concluida_em` | 19/05 19:21 | `NULL` |
+| `instalacoes` (data_agendada 20/05) | `status` | `concluida` | `agendada` |
+| `cotacoes` | `status_contratacao` | `pagamento_ok` | `aguardando_aprovacao_cadastro` |
+| `associados` | `status` | `aguardando_instalacao` | `aguardando_aprovacao_cadastro` |
 
-## Escopo da edição
+A autovistoria enxuta acima FIPE (Honda CG 150, FIPE R$ 12.474 ≥ R$ 9k mínimo de moto) com 2 fotos + vídeo 360° entrega o caso à fila de **Cadastro › Propostas Pendentes** para a etapa **"Liberar Roubo & Furto"** do `PropostaApprovalStepper` (regra canônica `cadastro-escopo-canonico` — `cadastroAvaliaFotos=true`). Marllon nunca passou por essa etapa: a sanitação manual anterior gravou `cadastro_aprovado=true`, `vistorias.status='aprovada'`, `veiculos.cobertura_roubo_furto=true`, fechou o serviço de autovistoria como `concluida` e promoveu a instalação a `concluida` antes da hora — por isso a tela `/cadastro/instalacoes/.../ativar` está oferecendo Ativar diretamente, sem que a R/F tenha sido decidida no Cadastro.
 
-Campos liberados no dialog (agrupados em abas para não virar formulário gigante):
+## Causa raiz
 
-- **Identificação** — nome, CPF, RG, data_nascimento, sexo, estado_civil, profissão
-- **Contato** — email, telefone, telefone_secundario, whatsapp
-- **Endereço** — cep, logradouro, número, complemento, bairro, cidade, uf
-- **CNH** — cnh_numero, cnh_categoria, cnh_validade
+Duas camadas:
 
-Fora de escopo (continuam só em telas específicas): status, dia_vencimento, plano, coberturas, codigo_hinova, vendedor_original, flags de bloqueio/cancelamento. Foco é "corrigir dado cadastral", não mudar regra de negócio.
+1. **Sanitação manual anterior** (turno passado) foi além do necessário: além de sincronizar `vistorias.video_360_url` (correto), também liberou R/F, aprovou cadastro e fechou serviço + instalação. Isso pulou a fila canônica do Cadastro.
+2. **Sem trava no DB**: hoje é possível promover `instalacoes.status='concluida'` e `servicos.status='concluida'` (vistoria_entrada autovistoria) sem que `contratos.cadastro_aprovado=true` tenha sido obtido pelo caminho canônico. Não há guard que impeça reescrita manual avulsa.
 
-## UX do dialog
+## Plano de correção
 
-1. Aberto a partir do item "Editar dados" no `DropdownMenu` (linha 802–805 de `src/pages/cadastro/Associados.tsx`).
-2. Carrega o associado atual e mostra os campos pré-preenchidos.
-3. Campo obrigatório **Motivo da alteração** (textarea, mínimo 10 caracteres) no rodapé — sem ele o botão "Salvar" fica desabilitado.
-4. Ao salvar:
-   - Calcula o **diff** (só campos efetivamente alterados).
-   - Se nada mudou → toast "Nenhuma alteração" e fecha.
-   - Se mudou mas motivo vazio → erro inline.
-5. Exibe banner de aviso: "Alterações em dados cadastrais serão registradas no histórico do associado".
-6. Após salvar, toast de sucesso e invalida queries (`associados`, `associado-detalhes`, `associado-historico`).
+### 1. Rewind do Marllon (migração de saneamento)
 
-## Backend / auditoria
+Migração SQL transacional revertendo todas as colunas acima e gravando trilha:
 
-Tudo via **edge function nova** `editar-dados-associado` (não fazer UPDATE direto do client — garante validação, diff atômico e log inseparável):
+```sql
+BEGIN;
 
-Entrada: `{ associado_id, campos: {...}, motivo }`.
+UPDATE contratos
+   SET cadastro_aprovado = false, aprovado_por = NULL, aprovado_em = NULL
+ WHERE id = '226eacc0-1938-4b5e-9ae1-fa9c209875d8';
 
-Fluxo:
-1. Autentica usuário (`SUPABASE_ANON_KEY` + JWT do header) e resolve `profile.id`.
-2. Valida permissão: papel Cadastro, Coord. Cadastro, Diretoria ou Admin (igual aos botões de bloqueio).
-3. Valida motivo (≥10 chars) e schema dos campos com zod (CPF 11 dígitos, e-mail válido, UF 2 letras, CEP 8 dígitos, telefones só dígitos).
-4. SELECT do associado atual; monta diff `{antes, depois}` só com chaves alteradas.
-5. Se `cpf` mudou → checar unicidade (`SELECT ... WHERE cpf=$1 AND id<>$2`) e retornar 409 se colidir.
-6. UPDATE em `associados` apenas com as chaves do diff.
-7. INSERT em `associados_historico`:
-   ```
-   tipo='edicao_dados_cadastrais',
-   acao='editar_dados',
-   descricao='Edição de dados cadastrais pelo Cadastro',
-   dados_anteriores=<antes>,
-   dados_novos=<depois>,
-   motivo=<motivo>,
-   executado_por=<profile.id>,
-   usuario_id=<profile.id>,
-   metadata={ ip, user_agent, campos_alterados:[...] }
-   ```
-8. Retorna `{ ok:true, alteracoes: [...] }`.
+UPDATE veiculos
+   SET cobertura_roubo_furto = false
+ WHERE id = '7719dcaa-d842-483a-b8d4-b92e30880c70';
 
-Sem migração de schema: `associados_historico` já tem `dados_anteriores`, `dados_novos`, `motivo`, `executado_por`, `metadata`.
+UPDATE vistorias
+   SET status = 'pendente', analisado_em = NULL, analisado_por = NULL
+ WHERE id = '9cf4aafa-b870-4b01-99b7-4c1aaafe88b8';
 
-## Render no histórico
+UPDATE servicos
+   SET status = 'em_analise', concluida_em = NULL,
+       analisado_em = NULL, analisado_por = NULL,
+       observacoes_analise = NULL
+ WHERE id = 'a003b188-3867-4f8d-9c71-64afe6a9dd43';
 
-A aba "Histórico" do associado já consome `associados_historico`. Garantir que entradas com `tipo='edicao_dados_cadastrais'` apareçam com:
-- Título: "Dados cadastrais editados"
-- Subtítulo: nome do autor + data/hora
-- Corpo: lista "Campo X: `antes` → `depois`" + bloco com motivo
-- Ícone diferenciado (PencilLine) e cor neutra (não destrutiva)
+UPDATE instalacoes
+   SET status = 'agendada', concluida_em = NULL
+ WHERE id = 'e31076b8-fafd-489b-a015-57c17e4ffbef';
 
-Se o renderizador atual não conhecer esse `tipo`, adicionar branch em `src/components/associados/HistoricoAssociado*.tsx` (a explorar na implementação).
+UPDATE cotacoes
+   SET status_contratacao = 'aguardando_aprovacao_cadastro'
+ WHERE id = 'b50180dc-e4f0-420f-8f08-a07175ef0212';
 
-## Arquivos a criar/editar
+UPDATE associados
+   SET status = 'aguardando_aprovacao_cadastro'
+ WHERE id = 'd7b2d4c7-bf15-4c94-838f-0c6bb9db1463';
 
-- **Criar** `supabase/functions/editar-dados-associado/index.ts`
-- **Criar** `src/components/cadastro/EditarDadosAssociadoDialog.tsx`
-- **Editar** `src/pages/cadastro/Associados.tsx` — substituir `onClick` do item "Editar dados" para abrir o dialog (passa `associado.id` + nome)
-- **Editar** componente de histórico do associado para reconhecer `tipo='edicao_dados_cadastrais'` (a confirmar nome exato na implementação)
+INSERT INTO associados_historico (associado_id, contrato_id, tipo, descricao, metadata)
+VALUES ('d7b2d4c7-bf15-4c94-838f-0c6bb9db1463','226eacc0-1938-4b5e-9ae1-fa9c209875d8',
+        'rewind_manual',
+        'Caso devolvido à fila Cadastro › Propostas Pendentes para Aprovação de Roubo/Furto da autovistoria enxuta (regra canônica cadastro-escopo-canonico). Sanitação anterior havia liberado R/F sem decisão do Cadastro.',
+        jsonb_build_object('placa','KRF8B74','cotacao_id','b50180dc-e4f0-420f-8f08-a07175ef0212'));
 
-## Permissão
+COMMIT;
+```
 
-Reaproveitar a checagem usada por Bloquear/Suspender. Sem papel autorizado → item aparece desabilitado com tooltip "Sem permissão".
+Após o rewind, Marllon reaparece em **Cadastro › Propostas Pendentes** com a etapa "Liberar Roubo & Furto" pendente; um analista revisa fotos + vídeo e libera (ou recusa).
 
-## Validações importantes
+### 2. Correção na raiz — guards no DB
 
-- CPF: 11 dígitos, sem máscara salva; comparar com `cpfValido()` se já existir helper no projeto.
-- E-mail: zod `.email()`.
-- Telefones/whatsapp: só dígitos (10–13).
-- CEP: 8 dígitos.
-- Data de nascimento: ≥ 18 anos e < 100 anos.
-- CNH validade: data ≥ hoje (warning, não bloqueio).
+Para impedir que essa sequência se repita por sanitação manual ou bug futuro:
 
-## Fora de escopo desta entrega
+- **Trigger `trg_guard_instalacao_concluida_exige_cadastro_aprovado`** em `instalacoes BEFORE UPDATE`: se `NEW.status='concluida'` e o contrato vinculado tem `cadastro_aprovado=false`, levanta exceção `cadastro_nao_aprovado`.
+- **Trigger `trg_guard_servico_autovistoria_concluida`** em `servicos BEFORE UPDATE`: bloqueia transição para `concluida` quando `tipo='vistoria_entrada' AND modalidade='autovistoria'` sem `vistorias.status='aprovada'` correspondente. Estado terminal correto da autovistoria enxuta após Cadastro liberar R/F é `aprovada` (já é o que `aprovar-proposta` faz no caminho canônico).
+- **Trigger `trg_guard_cobertura_rf_exige_decisao_cadastro`** em `veiculos BEFORE UPDATE`: se `OLD.cobertura_roubo_furto=false` e `NEW.cobertura_roubo_furto=true`, exige que exista `vistorias.status='aprovada'` para o veículo OU que o contrato esteja `cadastro_aprovado=true`. Bloqueia atualizações avulsas.
 
-- Edição de veículos, placas ou plano (têm fluxos próprios).
-- Sincronização com Hinova/SGA dos campos alterados — fica como follow-up se necessário (registrar TODO no log do edge).
+Os três guards funcionam como rede de segurança — não alteram o caminho feliz (Cadastro libera via stepper → `aprovar-proposta` grava tudo na ordem certa), só impedem regressão por update direto.
+
+### 3. Saneamento histórico (opcional, mesmo turno)
+
+Query de auditoria para detectar outros casos com o mesmo perfil:
+
+```sql
+SELECT c.id, c.numero, v.placa, v.cobertura_roubo_furto, c.cadastro_aprovado
+  FROM contratos c
+  JOIN veiculos v ON v.id = c.veiculo_id
+  JOIN vistorias vi ON vi.contrato_id = c.id
+                   AND vi.modalidade = 'autovistoria'
+ WHERE v.cobertura_roubo_furto = true
+   AND vi.status <> 'aprovada';
+```
+
+Lista é apresentada para decisão (rewind em lote ou caso-a-caso) — fora do escopo desta correção automática.
+
+### 4. Memória
+
+Atualizar `mem://logic/operations/autovistoria-acima-fipe-libera-rf-nao-conclui-vistoria` com a nota: "R/F só pode ser liberado pelo Cadastro via stepper de Propostas Pendentes; sanitação manual NUNCA pode escrever `cobertura_roubo_furto=true` direto — os guards `trg_guard_*` bloqueiam".
+
+## Detalhes técnicos
+
+- A trigger guard `trg_protege_cadastro_aprovado` já existe contra regressão de `cadastro_aprovado=true→false`; precisamos permitir o UPDATE da sanitação. Solução: o UPDATE do passo 1 é executado como migration (admin / postgres role), e a trigger é ajustada para ignorar quando `current_setting('app.allow_rewind', true) = 'on'`, setado dentro da transação.
+- Nenhum dado de PII ou financeiro é alterado; só fluxo operacional.
+- Nenhuma mudança em frontend é necessária — `PropostasPendentes` já lê o filtro pelo estado revertido.
+
+## Arquivos / migrações
+
+- 1 migração SQL: rewind do Marllon + 3 triggers guard + ajuste em `trg_protege_cadastro_aprovado`.
+- 1 atualização em `mem://logic/operations/autovistoria-acima-fipe-libera-rf-nao-conclui-vistoria` + index.
+
+## Fora de escopo
+
+- Refactor do `aprovar-proposta` (caminho feliz já está correto).
+- UI nova de "Aprovação de R/F" separada — a etapa já existe dentro do `PropostaApprovalStepper`.
+- Rewind em lote de outros casos suspeitos (depende de revisão humana da query do passo 3).
