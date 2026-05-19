@@ -561,13 +561,22 @@ export function DocumentosPendentesPublico({
                         <div>
                           {(() => {
                             const ehFoto = isTipoFoto(doc.tipo_documento);
+                            const ehVideo = isTipoVideo(doc.tipo_documento);
+                            const accept = ehVideo
+                              ? 'video/*'
+                              : ehFoto
+                                ? 'image/*'
+                                : 'image/*,.pdf';
+                            const captureProps = (ehFoto || ehVideo)
+                              ? { capture: 'environment' as const }
+                              : {};
                             return (
                               <>
                                 <input
                                   ref={el => fileInputRefs.current[doc.id] = el}
                                   type="file"
-                                  accept={ehFoto ? 'image/*' : 'image/*,.pdf'}
-                                  {...(ehFoto ? { capture: 'environment' as const } : {})}
+                                  accept={accept}
+                                  {...captureProps}
                                   className="hidden"
                                   onChange={(e) => handleFileSelect(doc.id, e.target.files?.[0] || null)}
                                 />
@@ -581,6 +590,8 @@ export function DocumentosPendentesPublico({
                                 >
                                   {state.uploading ? (
                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : ehVideo ? (
+                                    <Video className="h-4 w-4 mr-2" />
                                   ) : ehFoto ? (
                                     <Camera className="h-4 w-4 mr-2" />
                                   ) : (
@@ -588,10 +599,17 @@ export function DocumentosPendentesPublico({
                                   )}
                                   {state.file
                                     ? state.file.name
-                                    : ehFoto
-                                      ? 'Tirar foto agora'
-                                      : 'Selecionar arquivo'}
+                                    : ehVideo
+                                      ? 'Gravar vídeo 360° agora'
+                                      : ehFoto
+                                        ? 'Tirar foto agora'
+                                        : 'Selecionar arquivo'}
                                 </Button>
+                                {ehVideo && !state.file && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    Faça uma volta completa ao redor do veículo e finalize gravando o painel com o motor ligado.
+                                  </p>
+                                )}
                                 {ehFoto && !state.file && (
                                   <p className="mt-1 text-[11px] text-muted-foreground">
                                     A foto deve ser feita ao vivo pela câmera. Não é permitido anexar imagens da galeria.
