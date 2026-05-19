@@ -1,85 +1,66 @@
+## Problema
 
-## Motivo (resposta direta)
+O indicador de versão compara dois valores que **não nascem da mesma fonte**:
 
-O card verde **"Redução de Cota aplicada (Regra do 1%)"** e a grade de **planos** abaixo dele são calculados de fontes diferentes:
+- **`__BUILD_ID__`** (embutido no bundle) é calculado em `vite.config.ts` a cada build, com fallback em cascata: `process.env.BUILD_ID` → `VERCEL_GIT_COMMIT_SHA` → `COMMIT_REF` → `git rev-parse` → **data atual `YYYYMMDDHHMM`**.
+- **`/version.json`** é gravado pelo plugin `writeVersionJson` em `buildStart`, e o arquivo `public/version.json` está **commitado no Git** (atualmente `e06fd39`, de um commit antigo).
 
-- **Card de redução** (`fipeMenorInfo`, linhas 606–757 de `CotacaoFormDialog.tsx`) usa internamente `valorFipe * 0.99` e mostra `faixaInferior.mensal` — por isso ele exibe corretamente o valor reduzido.
-- **Cards dos planos** (linhas 2824+) vêm de `planosCalculados`, que sai do hook `usePlanosCotacao({ valorFipe, ... })` na linha 566. Esse hook recebe o **FIPE original**, nunca o reduzido. Nada na UI repassa `fipeMenorInfo.valorReduzido` para `usePlanosCotacao`.
+Resultado prático nos screenshots:
+- Bundle que o usuário recebeu: `2026051` (fallback de data — `git` não estava disponível no momento daquele build).
+- `version.json` servido: `e06fd39` (versão antiga, congelada no repositório).
+- `useBuildVersion` deveria marcar como "stale" (âmbar), mas em alguns casos `latest` ainda não chegou (fica `null`) e mostra verde — falsa impressão de "atualizado".
 
-Resultado: o sistema reconhece a elegibilidade, mostra a "faixa cobrada" correta dentro do card verde, **mas continua renderizando os planos da faixa cheia** porque o hook nunca é re-executado com o valor reduzido.
+Além disso, em **dev/preview do Lovable** o Vite serve `public/version.json` direto do disco, sem rodar `buildStart`, então o arquivo nunca é atualizado — qualquer comparação fica permanentemente desalinhada.
 
-A redução só é gravada de fato no `submit` (linhas 1733–1750), via `registrarCienciaFipeMenor`, que grava a cotação na faixa inferior com `fipe_menor_aprovado=true`. Ou seja: a redução acontece no banco no momento do save, mas a tela nunca espelha isso antes.
+## Plano (apenas frontend / build)
 
----
+### 1. Tornar `BUILD_ID` determinístico e consistente entre bundle e `version.json`
 
-## Plano de correção (UI-only, sem backend)
+Em `vite.config.ts`:
 
-### 1. Derivar um `valorFipeParaPlanos` em `CotacaoFormDialog.tsx`
+- Remover o fallback por `new Date()`, que gera IDs diferentes a cada execução e cria a impressão de "versão nova" sem mudança real de código.
+- Nova cascata: `process.env.BUILD_ID` → `VERCEL_GIT_COMMIT_SHA` → `COMMIT_REF` → `git rev-parse --short=7 HEAD` → `"dev"` (constante, não data).
+- Garantir que **o mesmo valor** seja injetado em `__BUILD_ID__` e gravado em `version.json` (já é, mas reforçar com um único `const BUILD_ID` exportado do escopo do `defineConfig`).
 
-Logo após o `useMemo` de `fipeMenorInfo` (~linha 757), adicionar:
+### 2. Servir `/version.json` dinamicamente em dev e preview
 
-```ts
-const aplicarFipeMenor =
-  fipeMenorAtivo &&
-  !!fipeMenorInfo?.elegivel &&
-  !fipeMenorInfo?.bloqueado;
+Adicionar dois hooks no plugin `writeVersionJson`:
 
-// Quando a Regra do 1% é elegível, os planos precisam ser recalculados
-// na faixa inferior — caso contrário a UI mostra preços de uma faixa
-// que NÃO será cobrada.
-const valorFipeParaPlanos = aplicarFipeMenor
-  ? (fipeMenorInfo?.faixaInferior?.max ?? fipeMenorInfo?.valorReduzido ?? valorFipe)
-  : valorFipe;
-```
+- `configureServer(server)` → middleware que responde `GET /version.json` com `{ buildId: BUILD_ID, builtAt: <agora> }` e header `Cache-Control: no-store`.
+- `configurePreviewServer(server)` → mesmo middleware para `vite preview`.
 
-Usar `faixaInferior.max` é mais robusto que `valorFipe * 0.99` porque garante que o hook caia exatamente dentro da faixa imediatamente inferior, mesmo quando o `-1%` não atravessa a borda da faixa (estágio preliminar, sem plano selecionado, faixaInferior será `null` e cai no fallback `valorReduzido`).
+Assim, no preview do Lovable o `version.json` reflete o `BUILD_ID` real do processo em execução, não o arquivo congelado em disco.
 
-### 2. Passar esse valor para `usePlanosCotacao` (linha 566)
+### 3. Parar de versionar `public/version.json`
 
-```ts
-const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
-  valorFipe: valorFipeParaPlanos,   // ← antes: valorFipe
-  // ...resto igual
-});
-```
+- Apagar `public/version.json` do repositório (será sempre gerado pelo plugin).
+- Adicionar `public/version.json` ao `.gitignore`.
 
-### 3. Ajustar a label de "faixa enquadrada" (linha 2481)
+Com isso elimina-se a fonte de "fantasma" (`e06fd39` ficar pendurado para sempre porque foi commitado).
 
-Como agora a grade reflete a faixa reduzida, o texto `Faixa enquadrada: …` precisa indicar isso para não confundir o operador:
+### 4. Corrigir o estado inicial do indicador
 
-```tsx
-{aplicarFipeMenor && fipeMenorInfo?.faixaInferior ? (
-  <p className="text-xs text-muted-foreground mt-1.5">
-    Faixa enquadrada (com Regra do 1%):{' '}
-    {formatCurrency(fipeMenorInfo.faixaInferior.min)} – {formatCurrency(fipeMenorInfo.faixaInferior.max)}
-  </p>
-) : faixaAtualFipe && (
-  <p className="text-xs text-muted-foreground mt-1.5">
-    Faixa enquadrada: {formatCurrency(faixaAtualFipe.min)} – {formatCurrency(faixaAtualFipe.max)}
-  </p>
-)}
-```
+Em `src/hooks/useBuildVersion.ts`:
 
-### 4. Sanity-check no submit
+- Manter `isStale = !!latest && latest !== CURRENT` (correto).
+- Em `src/components/layout/BuildVersionIndicator.tsx`: enquanto `latest === null` (ainda carregando), renderizar o ponto em **cinza** (`bg-muted-foreground/40`) em vez de verde, para não dar falsa sensação de "atualizado" antes da resposta de `/version.json`.
 
-A lógica de gravação (linhas 1733–1750) já usa `fipeMenorInfo.faixaInferior.mensal` — continua válida. Só conferir que `planoSelecionado.valor_mensal` exibido nos cards bate com `faixaInferior.mensal` quando a redução está ativa (vai bater, porque o hook foi alimentado com a faixa inferior).
+### 5. Verificação
 
-### 5. Estágio preliminar (sem plano escolhido)
-
-Quando `fipeMenorInfo.preliminar === true`, `faixaInferior` é `null`. O fallback para `valorReduzido` (`valorFipe * 0.99`) cobre esse caso — pode acontecer de ainda cair na mesma faixa atual se o -1% não cruzar a borda, mas isso é aceitável: assim que o operador escolhe um plano, `faixaInferior` se materializa e os preços ajustam.
-
----
-
-## Fora do escopo
-
-- Nenhuma mudança em `usePlanosCotacao`, edge functions, banco, ou na lógica de cálculo de `fipeMenorInfo`.
-- Nenhuma mudança nas regras de elegibilidade (Regra do 1%, zona de rastreador R$30k–35k, limites por tipo).
-- Não mexer no fluxo de "ciência" do supervisor.
-
----
+- Recarregar a página em preview e em produção: o ponto deve aparecer cinza por um instante e em seguida verde com o **mesmo** hash exibido no rodapé do dropdown.
+- Confirmar que o hash exibido casa com `curl https://app.praticcar.org/version.json`.
+- Confirmar que, ao publicar uma nova versão, os usuários ainda na build anterior vêem o ponto âmbar com o botão "atualizar".
 
 ## Arquivos afetados
 
-- `src/components/cotacoes/CotacaoFormDialog.tsx` (apenas 3 trechos: derivação do valor, prop do hook, label da faixa).
+- `vite.config.ts` — cascata de `BUILD_ID` + hooks `configureServer`/`configurePreviewServer` no plugin.
+- `src/hooks/useBuildVersion.ts` — sem mudança de lógica (só comentário/garantias).
+- `src/components/layout/BuildVersionIndicator.tsx` — estado de carregamento cinza.
+- `.gitignore` — adicionar `public/version.json`.
+- `public/version.json` — remover do repositório.
 
-Sem migração, sem nova edge function, sem novo hook.
+## Fora do escopo
+
+- Backend, edge functions, banco de dados.
+- Mudança no fluxo de deploy/publish do Lovable (não temos acesso ao pipeline).
+- Notificação push de nova versão (continua sendo o polling de 5 min já existente).
