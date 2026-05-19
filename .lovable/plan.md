@@ -1,94 +1,74 @@
-# Correção raiz — moto Honda CG 150 Titan classificada como carro
+# Correção raiz — checagem SGA não detectou veículos INADIMPLENTES
 
 ## Diagnóstico
 
-Caso Marllon (cotação `b50180dc-e4f0-420f-8f08-a07175ef0212`, Honda CG 150 Titan EX, FIPE R$ 12.474) está com `tipo_vistoria='autovistoria'` (completa, 31 fotos) porque foi tratado como **carro abaixo de R$ 30k**, em vez de **moto acima de R$ 9k**.
+Caso Leonardo Nascimento dos Santos (codigo_hinova=1169, CPF 16007095754): o SGA tem 3 veículos sob esse CPF — FIA7E46 **ATIVO**, HHI7F74 **INADIMPLENTE** (Sandero), KXW9725 **INADIMPLENTE** (Ka+). Mesmo assim, os 2 últimos checks gravados em `sga_situacao_check` para o novo contrato (FIA7E46) retornaram `tem_debito=false, qtd_boletos_abertos=0, saldo_devedor=0` — `origem_resultado='sga'` (não foi erro transitório). A guarda do `aprovar-proposta` recebeu um "liberador" e deixou passar.
 
-A correção anterior (`MOTO_BRANDS`, `MOTO_KEYWORDS`, `detectarTipoVeiculo`) está correta no frontend e nos fallbacks — mas o **edge function** `finalizar-autovistoria-cotacao` honra como fonte canônica o campo `marcas_modelos.tipo_veiculo`, e **o catálogo está corrompido**:
+**Por quê:** a edge `sga-listar-boletos-associado` calcula débito SOMENTE somando boletos individuais retornados por `POST /listar/boleto-associado-veiculo` com status em `{pendente, vencido, aguardando_pagamento}` e valor > 0. No SGA Hinova, quando um veículo entra em situação **INADIMPLENTE**, é comum os boletos terem sido baixados/cancelados manualmente — a flag canônica fica em `situacao_financeira` do **veículo** (não do boleto).
 
-```text
-HONDA tipo_veiculo='carro' total=309
-  → 131 entradas são motos (cg, cb, cbr, pcx, biz, titan, xre, hornet, lead, elite, adv …)
-BMW  tipo_veiculo='carro' contém 83 motos (s 1000, f 750/850/900, r 1200/1250/1300, g 310, c 400 …)
-KAWASAKI / SUZUKI ok
-```
-
-A entrada `HONDA / CG 150 TITAN-EX MIX/FLEX` está com `tipo_veiculo='carro'`. O edge confia no catálogo, não cai no fallback de keywords, e classifica como carro <30k → autovistoria completa.
+Já existe a helper `buscarSituacaoFinanceiraVeiculo(s, codigo)` em `supabase/functions/_shared/hinova-client.ts` (`GET /buscar/situacao-financeira-veiculo/{codigo}` → retorna `'ADIMPLENTE'` / `'INADIMPLENTE'`). Ela **não é chamada em lugar nenhum** — `rg` no projeto não acha consumidor. Esse é o gap exato.
 
 ## O que muda
 
-Carros permanecem **intocados**. Mudanças apenas em:
-1. Dados do catálogo `marcas_modelos` (Honda + BMW)
-2. Defesa adicional no edge `finalizar-autovistoria-cotacao` (mesmo lendo `'carro'` do catálogo, sobrescreve para moto quando marca ambígua + keyword forte casa)
-3. Reclassificação cirúrgica da cotação do Marllon
+UI de inadimplência (gate, bypass, mensagens), `aprovar-proposta` (guarda 409) e `sga_situacao_check` (auditoria) permanecem **intocados**. Mexe apenas em:
+
+1. `sga-listar-boletos-associado` — passa a consultar `situacao_financeira` por veículo.
+2. `verificar-situacao-financeira-cadastro` — agrega `INADIMPLENTE` de veículo no `tem_debito`.
+3. `SituacaoFinanceiraGate.tsx` — quando bloqueio vem por situação do veículo (sem boletos detalhados), lista placa/modelo/situação.
+4. Reverificação retroativa para Leonardo + varredura preventiva.
 
 ## Plano
 
-### 1. Saneamento de `marcas_modelos` (migration)
+### 1. `sga-listar-boletos-associado` — consultar situação por veículo
 
-`UPDATE marcas_modelos SET tipo_veiculo='moto'` para entradas onde `tipo_veiculo='carro'` E:
+Após enumerar veículos via `buscarAssociadoComVeiculosPorCpf`, fazer (sequencial, dentro de `withHinovaAuthRetry` como já se faz para boletos) chamada extra `buscarSituacaoFinanceiraVeiculo(session, codigo_veiculo)` para cada um. Adicionar ao tipo `VeiculoSGA`:
 
-- `marca='HONDA'` E `modelo ~* '\m(cg|cb|cbr|pcx|biz|pop|titan|fan|nxr|bros|xre|lander|tenere|crosser|crf|sahara|twister|hornet|elite|adv|sh|lead|xadv|x-adv|transalp|cargo|nx|nighthawk|shadow|magna|africa twin)\M'`
-- `marca='BMW'` E `modelo ~* '\m(s 1000|f 650|f 700|f 750|f 800|f 850|f 900|r 1100|r 1150|r 1200|r 1250|r 1300|g 310|g 450|g 650|k 1200|k 1300|k 1600|c 400|c 600|c 650|c evolution|hp2|hp4|nine t)\M'`
-
-Idempotente. Auditoria: `INSERT INTO logs_auditoria` registrando IDs alterados antes do UPDATE.
-
-### 2. Defesa no edge `finalizar-autovistoria-cotacao`
-
-Atualmente:
 ```text
-if (mm?.tipo_veiculo === 'moto')  isMoto = true
-else if (mm?.tipo_veiculo === 'carro') isMoto = false      ← engole o erro
-else { ... fallback keywords ... }
+situacao_financeira: 'ADIMPLENTE' | 'INADIMPLENTE' | null
 ```
 
-Passa a:
+`tem_debito` final do response = `saldo_devedor_total > 0 OR veiculos.some(v => v.situacao_financeira === 'INADIMPLENTE')`.
+
+Falha 404/parse na situação por veículo → `null` (tolera; cai no comportamento atual). Falha transitória mantém o caminho `erro_transitorio` que já existe.
+
+### 2. `verificar-situacao-financeira-cadastro` — agregar veículo inadimplente
+
+No bloco "5. Determinar inadimplência", além de somar boletos vencidos, contar `veiculos_inadimplentes`:
+
 ```text
-if (mm?.tipo_veiculo === 'moto') isMoto = true
-else {
-  // Fallback de keywords roda SEMPRE que catálogo não disser 'moto'
-  // (ambíguo ou diz 'carro'). Se keyword bater, override para moto.
-  const matchedByKeyword = (MOTO_BRANDS.includes(marca) || MOTO_REGEX.test(modelo))
-  isMoto = matchedByKeyword
-  if (mm?.tipo_veiculo === 'carro' && matchedByKeyword) {
-    console.warn('[finalizar-autovistoria] catalogo-divergente', { marca, modelo, catalogo: 'carro', resolvido: 'moto' })
-  }
-}
+const inadimplentes = (sgaResp.veiculos || []).filter(v => v.situacao_financeira === 'INADIMPLENTE')
+const temDebito = qtd > 0 || inadimplentes.length > 0
 ```
 
-Isso protege o fluxo mesmo se aparecerem novas linhas ruins no catálogo no futuro.
+Persistir em `sga_situacao_check.motivo` algo legível quando o bloqueio vier por situação ('veiculo_inadimplente_sga: HHI7F74, KXW9725') — campo já existe na tabela, sem migration.
 
-### 3. Reclassificação da cotação do Marllon
+### 3. `SituacaoFinanceiraGate.tsx` — exibir veículos inadimplentes
 
-Honda CG 150 Titan, FIPE R$ 12.474 → moto acima de R$ 9k → caminho canônico:
-- `tipo_vistoria = NULL` (autovistoria deixa de ser exigida; vira opcional enxuta)
-- `tipo_instalacao` mantém (instalação obrigatória pelo técnico)
-- Limpar `vistoria_completa_*` se preenchidos
-- Manter `status_contratacao='pagamento_ok'` e `cliente_*` intactos
-- Se houver fotos parciais já materializadas em `cotacoes_vistoria_fotos`/`vistorias`, manter como histórico (não apagar) — Cadastro/Monitoramento decide.
+Quando `check.tem_debito=true` e a lista de boletos vencidos vier vazia (caso do Leonardo), renderizar tabela compacta com `payload.veiculos.filter(situacao_financeira==='INADIMPLENTE')` mostrando placa, marca/modelo, situação. Quando houver boletos, manter o atual + adicionar a coluna "Linha digitável" copiável (campo `linha_digitavel` já existe no payload). Não muda o fluxo de bypass nem o `aprovar-proposta`.
 
-UPDATE direcionado apenas por `id='b50180dc-e4f0-420f-8f08-a07175ef0212'`.
+### 4. Reverificação retroativa
 
-### 4. Varredura preventiva (read-only, sem ação automática)
-
-`SELECT` listando cotações ativas (`status_contratacao` não-terminal) com `marca` Honda/BMW + modelo que case keyword de moto + `valor_fipe BETWEEN 9000 AND 30000` + `tipo_vistoria='autovistoria'`. Relatório no chat; reclassificação manual caso a caso (mesma natureza do UPDATE do passo 3) — sem script em massa para evitar interferir em casos já em andamento.
+- **Leonardo** (contrato vinculado à cotação `c2951183`): forçar `verificar-situacao-financeira-cadastro` com `force=true` após o deploy. Como o contrato já está `ativo` (cotação `status_contratacao='ativo'`), **NÃO** reverter — apenas registrar o check correto em `sga_situacao_check` para auditoria e abrir aviso `cotacao_avisos_sga` notificando o Cadastro. Conforme pedido do usuário: "não modifique nada na cotação do anexo".
+- **Varredura preventiva** (read-only): `SELECT` listando últimos 90 dias de checks com `tem_debito=false, origem_resultado='sga'` cujo associado, ao recheckar, tenha `situacao_financeira='INADIMPLENTE'` em algum veículo. Relatar no chat para decisão caso a caso (não rebobinar automaticamente cotações ativas — risco de dano).
 
 ### 5. Memória
 
-Adicionar `mem://logic/operations/catalogo-marcas-modelos-divergente` documentando: catálogo é fonte canônica mas pode divergir → edge function aplica override por keyword quando marca é ambígua.
+Atualizar `mem://logic/operations/sga-inadimplencia-veiculo-canonica` documentando:
+> Inadimplência no SGA tem DUAS dimensões: boletos vencidos (`POST /listar/boleto-associado-veiculo`) E situação do veículo (`GET /buscar/situacao-financeira-veiculo/{codigo}`). Ambas DEVEM ser consultadas no gate de Cadastro — boletos podem ter sido baixados manualmente mantendo o veículo em INADIMPLENTE.
 
 ## Fora de escopo
 
-- Fluxo de carros (qualquer faixa FIPE) — intocado
-- `detectarTipoVeiculo` / `MOTO_BRANDS` / `MOTO_KEYWORDS` — já corretos
-- Reimportação FIPE completa
-- Backfill de `cotacoes.veiculo_categoria` (continua pendente como antes)
+- Cotação `c2951183` (Leonardo, FIA7E46) — **não tocar**. Já está `ativo`. Só registrar check correto para auditoria.
+- `aprovar-proposta` (guarda 409 já correta — passou a falhar porque o insumo `sga_situacao_check` veio errado).
+- `aprovar-troca-cadastro` (mesma guarda já existe; será beneficiada automaticamente).
+- UI de bypass/Diretor.
+- Migrações de schema (`sga_situacao_check.motivo` já existe).
 
 ## Detalhe técnico
 
-- Passo 1: migration SQL (mudança de dados via WHERE seguro com regex de keywords; idempotente).
-- Passo 2: edit pontual em `supabase/functions/finalizar-autovistoria-cotacao/index.ts`.
-- Passo 3: `UPDATE cotacoes SET tipo_vistoria=NULL, vistoria_completa_*=NULL WHERE id='b50180dc-…'`.
-- Passo 4: query exploratória no chat (sem efeito colateral).
+- `supabase/functions/sga-listar-boletos-associado/index.ts`: importar `buscarSituacaoFinanceiraVeiculo`, chamar dentro do loop sequencial atual (logo após `listarBoletosVeiculo` por veículo), preencher `VeiculoSGA.situacao_financeira`, recalcular `tem_debito`.
+- `supabase/functions/verificar-situacao-financeira-cadastro/index.ts`: novo agregador `inadimplentes`, ajustar `temDebito`, popular `motivo` quando vier por situação.
+- `src/components/cadastro/SituacaoFinanceiraGate.tsx`: novo bloco "Veículos inadimplentes no SGA" + coluna "Linha digitável" copiável na tabela de boletos.
+- Para o passo 4 (Leonardo): chamada one-shot via `supabase.functions.invoke('verificar-situacao-financeira-cadastro', {contrato_id, force:true})` após deploy + insert manual em `cotacao_avisos_sga`.
 
-Aprova para executar 1→4?
+Aprova para executar?
