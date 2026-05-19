@@ -448,6 +448,21 @@ export function PropostaApprovalStepper({
               </CardContent>
             </Card>
 
+            {/* Banner informativo: aprovação final é do Monitoramento */}
+            {aguardandoMonitoramentoVistoria && (
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
+                <ShieldCheck className="h-5 w-5 text-info shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-info">
+                    Cadastro avalia apenas a documentação
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    A análise das fotos e a <strong>aprovação final</strong> deste associado é responsabilidade do <strong>Monitoramento</strong>. Após aprovar os documentos, o caso seguirá automaticamente para a fila de Aprovação de Associados.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Action buttons (apenas quando elegível para aprovar) */}
             {podeAprovar && (
               <div className="space-y-3">
@@ -467,9 +482,11 @@ export function PropostaApprovalStepper({
                       <ShieldCheck className="mr-2 h-5 w-5" />
                       {isAutovistoria && !ocultarEtapaFotos && planoTemRouboFurto
                         ? 'Liberar Cobertura Roubo e Furto'
-                        : ocultarEtapaFotos
-                          ? 'Aprovar documentação e liberar para Monitoramento'
-                          : 'Aprovar Proposta'}
+                        : aguardandoMonitoramentoVistoria
+                          ? 'Aprovar documentação (Monitoramento finaliza)'
+                          : ocultarEtapaFotos
+                            ? 'Aprovar documentação e liberar para Monitoramento'
+                            : 'Aprovar Proposta'}
                     </>
                   )}
                 </Button>
@@ -494,6 +511,7 @@ export function PropostaApprovalStepper({
                 </div>
               </div>
             )}
+
 
             {/* Estado final: proposta já aprovada/reprovada/cancelada */}
             {!podeAprovar && (proposta.status === 'ativo' || proposta.status === 'reprovado' || proposta.status === 'cancelado') && (
