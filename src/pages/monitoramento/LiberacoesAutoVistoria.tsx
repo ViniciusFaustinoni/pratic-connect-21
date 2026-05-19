@@ -6,17 +6,27 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ShieldAlert, CheckCircle2, Phone, Car, Calendar } from 'lucide-react';
-import { useLiberacoesAutoVistoria, useLiberarAutoVistoria } from '@/hooks/useLiberacoesAutoVistoria';
+import { ShieldAlert, CheckCircle2, Phone, Car, Calendar, XCircle, AlertTriangle } from 'lucide-react';
+import {
+  useLiberacoesAutoVistoria,
+  useLiberarAutoVistoria,
+  useCancelarAdesaoNaoInstalada,
+} from '@/hooks/useLiberacoesAutoVistoria';
 import { format } from 'date-fns';
 
 export default function LiberacoesAutoVistoria() {
   const { data, isLoading } = useLiberacoesAutoVistoria();
   const liberar = useLiberarAutoVistoria();
+  const cancelar = useCancelarAdesaoNaoInstalada();
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [motivo, setMotivo] = useState('');
-  const [alvos, setAlvos] = useState<string[]>([]);
+
+  const [dialogLiberarOpen, setDialogLiberarOpen] = useState(false);
+  const [motivoLiberar, setMotivoLiberar] = useState('');
+  const [alvosLiberar, setAlvosLiberar] = useState<string[]>([]);
+
+  const [dialogCancelarOpen, setDialogCancelarOpen] = useState(false);
+  const [motivoCancelar, setMotivoCancelar] = useState('');
+  const [alvosCancelar, setAlvosCancelar] = useState<string[]>([]);
 
   const todos = useMemo(() => (data ?? []).map(d => d.contrato_id), [data]);
   const todosSelecionados = todos.length > 0 && todos.every(id => selecionados.has(id));
@@ -33,17 +43,32 @@ export default function LiberacoesAutoVistoria() {
     setSelecionados(todosSelecionados ? new Set() : new Set(todos));
   };
 
-  const abrirDialog = (ids: string[]) => {
-    setAlvos(ids);
-    setMotivo('');
-    setDialogOpen(true);
+  const abrirLiberar = (ids: string[]) => {
+    setAlvosLiberar(ids);
+    setMotivoLiberar('');
+    setDialogLiberarOpen(true);
   };
 
-  const confirmar = async () => {
-    await liberar.mutateAsync({ contrato_ids: alvos, motivo: motivo || undefined });
-    setSelecionados(new Set());
-    setDialogOpen(false);
+  const abrirCancelar = (ids: string[]) => {
+    setAlvosCancelar(ids);
+    setMotivoCancelar('');
+    setDialogCancelarOpen(true);
   };
+
+  const confirmarLiberar = async () => {
+    await liberar.mutateAsync({ contrato_ids: alvosLiberar, motivo: motivoLiberar || undefined });
+    setSelecionados(new Set());
+    setDialogLiberarOpen(false);
+  };
+
+  const confirmarCancelar = async () => {
+    await cancelar.mutateAsync({ contrato_ids: alvosCancelar, motivo: motivoCancelar });
+    setSelecionados(new Set());
+    setDialogCancelarOpen(false);
+  };
+
+  const motivoCancelarValido = motivoCancelar.trim().length >= 10;
+  const busy = liberar.isPending || cancelar.isPending;
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -54,23 +79,32 @@ export default function LiberacoesAutoVistoria() {
         </h1>
         <p className="text-muted-foreground">
           Associados com cobertura suspensa por não terem feito a instalação do rastreador no prazo após a auto-vistoria.
-          Libere para que possam reagendar a vistoria/instalação pelo link público.
+          Libere para que possam reagendar, ou cancele a adesão de quem não vai mais instalar.
         </p>
       </div>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">
-            {data?.length ?? 0} associado(s) aguardando liberação
+            {data?.length ?? 0} associado(s) aguardando decisão
           </CardTitle>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={toggleTodos} disabled={!data?.length}>
               {todosSelecionados ? 'Desmarcar todos' : 'Selecionar todos'}
             </Button>
             <Button
+              variant="destructive"
               size="sm"
-              disabled={selecionados.size === 0 || liberar.isPending}
-              onClick={() => abrirDialog([...selecionados])}
+              disabled={selecionados.size === 0 || busy}
+              onClick={() => abrirCancelar([...selecionados])}
+            >
+              <XCircle className="h-4 w-4 mr-1" />
+              Cancelar selecionados ({selecionados.size})
+            </Button>
+            <Button
+              size="sm"
+              disabled={selecionados.size === 0 || busy}
+              onClick={() => abrirLiberar([...selecionados])}
             >
               <CheckCircle2 className="h-4 w-4 mr-1" />
               Liberar selecionados ({selecionados.size})
@@ -106,9 +140,14 @@ export default function LiberacoesAutoVistoria() {
                       )}
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => abrirDialog([item.contrato_id])} disabled={liberar.isPending}>
-                    Liberar
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="destructive" onClick={() => abrirCancelar([item.contrato_id])} disabled={busy}>
+                      Cancelar
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => abrirLiberar([item.contrato_id])} disabled={busy}>
+                      Liberar
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))
@@ -116,20 +155,53 @@ export default function LiberacoesAutoVistoria() {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Liberar */}
+      <Dialog open={dialogLiberarOpen} onOpenChange={setDialogLiberarOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Liberar {alvos.length} associado(s)</DialogTitle>
+            <DialogTitle>Liberar {alvosLiberar.length} associado(s)</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             O associado receberá WhatsApp com o link para reagendar a vistoria/instalação.
             A cobertura de roubo/furto volta imediatamente; a Proteção 360 será ativada após a instalação concluída.
           </p>
-          <Textarea placeholder="Motivo (opcional)" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+          <Textarea placeholder="Motivo (opcional)" value={motivoLiberar} onChange={(e) => setMotivoLiberar(e.target.value)} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={confirmar} disabled={liberar.isPending}>
+            <Button variant="outline" onClick={() => setDialogLiberarOpen(false)}>Cancelar</Button>
+            <Button onClick={confirmarLiberar} disabled={liberar.isPending}>
               {liberar.isPending ? 'Liberando…' : 'Confirmar liberação'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancelar adesão */}
+      <Dialog open={dialogCancelarOpen} onOpenChange={setDialogCancelarOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Cancelar {alvosCancelar.length} adesão(ões)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p className="text-muted-foreground">
+              Esta ação <strong>encerra a adesão</strong> do(s) associado(s) que não instalou(aram) o rastreador no prazo.
+              O contrato será cancelado, a cotação encerrada e os serviços/agendamentos em aberto serão fechados.
+              O associado receberá um WhatsApp informando o cancelamento e o motivo.
+            </p>
+            <p className="text-destructive font-medium">Ação irreversível.</p>
+          </div>
+          <Textarea
+            placeholder="Motivo do cancelamento (obrigatório, mín. 10 caracteres)"
+            value={motivoCancelar}
+            onChange={(e) => setMotivoCancelar(e.target.value)}
+            rows={4}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogCancelarOpen(false)}>Voltar</Button>
+            <Button variant="destructive" onClick={confirmarCancelar} disabled={cancelar.isPending || !motivoCancelarValido}>
+              {cancelar.isPending ? 'Cancelando…' : 'Confirmar cancelamento'}
             </Button>
           </DialogFooter>
         </DialogContent>

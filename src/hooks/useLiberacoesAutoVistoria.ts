@@ -85,9 +85,32 @@ export function useLiberarAutoVistoria() {
     onSuccess: (data) => {
       toast.success(`${data?.liberados ?? 0} associado(s) liberado(s). WhatsApp enviado.`);
       qc.invalidateQueries({ queryKey: ['liberacoes-autovistoria'] });
+      qc.invalidateQueries({ queryKey: ['aprovacoes-monitoramento-breakdown'] });
     },
     onError: (e: any) => {
       toast.error(e?.message || 'Erro ao liberar');
     },
   });
 }
+
+export function useCancelarAdesaoNaoInstalada() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contrato_ids, motivo }: { contrato_ids: string[]; motivo: string }) => {
+      const { data, error } = await supabase.functions.invoke('cancelar-adesao-nao-instalada', {
+        body: { contrato_ids, motivo },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(`${data?.cancelados ?? 0} adesão(ões) cancelada(s). WhatsApp enviado.`);
+      qc.invalidateQueries({ queryKey: ['liberacoes-autovistoria'] });
+      qc.invalidateQueries({ queryKey: ['aprovacoes-monitoramento-breakdown'] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message || 'Erro ao cancelar adesão');
+    },
+  });
+}
+
