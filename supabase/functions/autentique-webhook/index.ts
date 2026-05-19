@@ -312,11 +312,16 @@ serve(async (req) => {
         const wasSigned = (eventType === 'signature.accepted') ||
           (eventType === 'signature.updated' && payload.event?.data?.signed);
         if (wasSigned && !solTroca.termo_cancelamento_assinado_em) {
+          // REGRA CANÔNICA: termo assinado SÓ libera o link público para o novo
+          // titular completar (Plano → Docs → Contrato → Vistoria). A solicitação
+          // só entra na fila do Cadastro quando a cotação canônica vinculada
+          // atingir `aguardando_aprovacao_cadastro` (trigger
+          // trg_troca_promove_cadastro_via_cotacao). Não usar 'aguardando_cadastro' aqui.
           await supabase
             .from('solicitacoes_troca_titularidade')
             .update({
               termo_cancelamento_assinado_em: payload.event?.data?.signed || new Date().toISOString(),
-              status: 'aguardando_cadastro',
+              status: 'cotacao_em_andamento',
               updated_at: new Date().toISOString(),
             })
             .eq('id', solTroca.id);
