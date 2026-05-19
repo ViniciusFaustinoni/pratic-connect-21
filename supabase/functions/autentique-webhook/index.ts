@@ -426,6 +426,55 @@ serve(async (req) => {
             }
           }
 
+          // ── NOTIFICAR NOVO TITULAR (link público liberado) ──
+          // Após a assinatura do termo de cancelamento, o novo titular precisa
+          // saber que pode retomar o link público (Plano → Docs → Contrato → ...).
+          try {
+            const { data: solComCot } = await supabase
+              .from('solicitacoes_troca_titularidade')
+              .select('cotacao_id, veiculo_id')
+              .eq('id', solTroca.id)
+              .maybeSingle();
+            const cotId = solComCot?.cotacao_id || solTroca.cotacao_id;
+            if (cotId) {
+              const { data: cot } = await supabase
+                .from('cotacoes')
+                .select('numero, token_publico, nome_solicitante, telefone1_solicitante, veiculo_placa')
+                .eq('id', cotId)
+                .maybeSingle();
+              const tel = (cot?.telefone1_solicitante || '').toString().replace(/\D/g, '');
+              if (tel && cot?.token_publico) {
+                const link = `https://app.praticcar.org/cotacao/${cot.token_publico}`;
+                const primeiroNome = (cot.nome_solicitante || 'Olá').trim().split(/\s+/)[0];
+                const placa = cot.veiculo_placa || 'do veículo';
+                await supabase.functions.invoke('whatsapp-send-text', {
+                  body: {
+                    telefone: tel,
+                    mensagem:
+                      `✅ *Troca de titularidade liberada*\n\n` +
+                      `${primeiroNome}, o titular anterior assinou o termo de cancelamento ` +
+                      `(${placa}). Agora é com você: continue sua contratação aqui:\n${link}`,
+                    template_name: 'sinistro_atualizado',
+                    template_params: [
+                      primeiroNome,
+                      `Cotação ${cot.numero || ''} liberada`,
+                      `Troca de titularidade: termo assinado pelo titular anterior. Continue a contratação: ${link}`,
+                    ],
+                  },
+                });
+                console.log(
+                  `[autentique-webhook] ✓ WhatsApp de liberação enviado ao novo titular (sol ${solTroca.id}, tel ***${tel.slice(-4)})`
+                );
+              } else {
+                console.log(
+                  `[autentique-webhook] ⚠ Sem telefone/token para notificar novo titular (sol ${solTroca.id})`
+                );
+              }
+            }
+          } catch (notifErr) {
+            console.warn('[autentique-webhook] notificar novo titular falhou:', notifErr);
+          }
+
           console.log('[autentique-webhook] ✓ Termo de cancelamento de troca assinado para solicitação', solTroca.id);
         }
         return new Response(JSON.stringify({ received: true, troca_titularidade: solTroca.id }), {
