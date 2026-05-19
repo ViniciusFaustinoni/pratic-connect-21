@@ -1110,6 +1110,14 @@ export default function Associados() {
           planos={planos}
         />
 
+        {/* Editar dados sensíveis com auditoria */}
+        <EditarDadosAssociadoDialog
+          open={editarDialog.open}
+          onOpenChange={(o) => setEditarDialog((s) => ({ ...s, open: o }))}
+          associadoId={editarDialog.id}
+          nomeAssociado={editarDialog.nome}
+        />
+
         {/* Detalhe agora abre na rota /cadastro/associados/:id (sem Dialog aninhado para evitar conflito de portais) */}
       </div>
     </TooltipProvider>
