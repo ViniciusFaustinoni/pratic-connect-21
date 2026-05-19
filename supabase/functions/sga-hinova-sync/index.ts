@@ -885,7 +885,9 @@ serve(async (req) => {
               .eq('id', contrato.cotacao_id)
               .maybeSingle();
             const tipoCanon = (cotTipo?.tipo_entrada as string | null) ?? null;
-            const desc = (cotTipo?.dados_extras as any)?.tipo_entrada_descricao as string | undefined;
+            const dx: any = (cotTipo?.dados_extras as any) ?? {};
+            const desc = dx?.tipo_entrada_descricao as string | undefined;
+            const obsLivre = typeof dx?.observacao_sga === 'string' ? dx.observacao_sga.trim() : '';
             const labels: Record<string, string> = {
               adesao: 'Cotação nova (adesão)',
               inclusao: 'Inclusão de veículo',
@@ -900,6 +902,9 @@ serve(async (req) => {
               const lbl = labels[tipoCanon] ?? tipoCanon;
               const sufixo = desc ? ` — ${desc}` : '';
               observacao = `Tipo: ${lbl}${sufixo}\n${observacao}`;
+            }
+            if (obsLivre) {
+              observacao = `Obs: ${obsLivre}\n${observacao}`;
             }
           }
         } catch (e) {
