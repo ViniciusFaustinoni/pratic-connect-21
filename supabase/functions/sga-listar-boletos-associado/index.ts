@@ -60,6 +60,7 @@ interface VeiculoSGA {
   ano: string | null;
   saldo_devedor: number;
   boletos_abertos: BoletoAberto[];
+  situacao_financeira: 'ADIMPLENTE' | 'INADIMPLENTE' | null;
 }
 
 interface ResponsePayload {
