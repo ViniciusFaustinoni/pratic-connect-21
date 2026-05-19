@@ -7,6 +7,13 @@ import { supabase } from '@/integrations/supabase/client';
 export interface PlacaDuplicadaInfo {
   cotacaoId: string;
   numero: string;
+  /**
+   * auth.users.id do vendedor dono da cotação (é isso que `cotacoes.vendedor_id`
+   * armazena historicamente — NÃO é `profiles.id`). Use este campo para
+   * comparar com `user?.id` (auth) e nunca com `profile?.id`.
+   */
+  vendedorUserId: string;
+  /** @deprecated use `vendedorUserId`. Mantido temporariamente por compat. */
   vendedorId: string;
   vendedorNome: string;
   createdAt: string;
