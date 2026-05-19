@@ -155,20 +155,56 @@ export default function PropostaAnalise() {
     ? ((totalFotosAuto >= 2 && temVideo360) || totalFotosAuto >= minFotosAutovistoria)
     : true;
 
-  // Cadastro avalia fotos quando:
-  //   1) o plano tem cobertura de Roubo/Furto E
-  //   2) já existem fotos/vídeo a revisar E
-  //   3) se for autovistoria, está COMPLETA (todas as fotos + vídeo 360°).
-  // Autovistoria parcial/abandonada NÃO libera R&F — cai no fluxo agendado.
+  // ============================================================
+  // REGRA CANÔNICA (confirmada): Cadastro avalia APENAS:
+  //   1) Documentos (sempre)
+  //   2) Autovistoria ENXUTA acima da FIPE (opcional, libera R/F antecipado)
+  // Cadastro NÃO avalia:
+  //   - Vistoria presencial técnica (base/rota/prestador) → Monitoramento decide
+  //   - Autovistoria COMPLETA sub-FIPE (31/15 fotos) → Monitoramento avalia fotos
+  // ============================================================
+
+  // Vistoria presencial técnica (qualquer modalidade != autovistoria, existindo
+  // registro de vistoria — agendada_base ou agendada no cliente).
+  const isVistoriaPresencialTecnica =
+    !isAutovistoria &&
+    (
+      proposta?.tipo_vistoria === 'agendada_base' ||
+      proposta?.tipo_vistoria === 'agendada' ||
+      (!!proposta?.vistoria && proposta?.vistoria?.modalidade !== 'autovistoria')
+    );
+
+  // Autovistoria completa = sub-FIPE (sem rastreador) → fotos vão para Monitoramento.
+  const isAutovistoriaCompletaSubFipe = isAutovistoria && autovistoriaCompleta;
+
+  // Autovistoria enxuta acima FIPE = único caso em que Cadastro avalia fotos.
+  const cadastroAvaliaApenasEnxuta =
+    isAutovistoria && !autovistoriaCompleta === false
+      ? false
+      : isAutovistoria && !isAutovistoriaCompletaSubFipe;
+
+  // Cadastro avalia fotos APENAS na autovistoria enxuta acima FIPE
+  // (2 fotos + vídeo 360° opcional para liberar R/F antes do técnico).
   const cadastroAvaliaFotos =
-    planoTemRouboFurto && temFotosOuVideo && (!isAutovistoria || autovistoriaCompleta);
+    planoTemRouboFurto &&
+    temFotosOuVideo &&
+    isAutovistoria &&
+    !isAutovistoriaCompletaSubFipe;
 
   // Aprovação documental basta quando:
-  //   - plano sem R&F (independente de fotos), OU
-  //   - vistoria agendada que ainda não foi realizada (sem fotos), OU
-  //   - autovistoria abandonada/incompleta (não libera R&F; aguarda técnico).
+  //   - plano sem R&F, OU
+  //   - vistoria agendada presencial técnica (Monitoramento decide), OU
+  //   - autovistoria completa sub-FIPE (Monitoramento avalia fotos), OU
+  //   - vistoria agendada sem fotos ainda (compat).
   const aprovarApenasDocumentos =
-    !planoTemRouboFurto || isVistoriaAgendadaSemFotos || (isAutovistoria && !autovistoriaCompleta);
+    !planoTemRouboFurto ||
+    isVistoriaAgendadaSemFotos ||
+    isVistoriaPresencialTecnica ||
+    isAutovistoriaCompletaSubFipe;
+
+  // Sinaliza ao stepper que aprovação final é do Monitoramento (presencial ou sub-FIPE).
+  const aguardandoMonitoramentoVistoria =
+    isVistoriaPresencialTecnica || isAutovistoriaCompletaSubFipe;
 
   const podeAprovar =
     proposta?.status === 'assinado' &&
