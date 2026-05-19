@@ -86,9 +86,6 @@ export function veiculoSubFipe(veiculo: {
   let isMoto = cat.includes('moto') || cat.includes('ciclomotor');
   // 2) fallback canônico: detectarTipoVeiculo(marca, modelo)
   if (!isMoto && (veiculo.marca || veiculo.modelo)) {
-    // import dinâmico para não criar ciclo
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { detectarTipoVeiculo } = require('@/data/vistoriaConfigCompleta');
     isMoto = detectarTipoVeiculo(undefined, veiculo.modelo ?? null, veiculo.marca ?? null) === 'moto';
   }
   const fipe = Number(veiculo.valor_fipe || 0);
