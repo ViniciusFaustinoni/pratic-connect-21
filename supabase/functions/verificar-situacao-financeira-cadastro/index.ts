@@ -167,7 +167,9 @@ serve(async (req) => {
     if (last) {
       const ageMs = Date.now() - new Date(last.verificado_em).getTime();
       if (ageMs < CACHE_MIN * 60 * 1000) {
-        const liberado = !last.tem_debito || last.bypass === true || last.origem_resultado === 'transitorio';
+        const liberado = last.origem_resultado === 'inconclusivo'
+          ? false
+          : (!last.tem_debito || last.bypass === true || last.origem_resultado === 'transitorio' || last.origem_resultado === 'associado_inexistente_sga');
         return json(200, { ok: true, check: last, liberado, cached: true });
       }
     }
@@ -193,17 +195,22 @@ serve(async (req) => {
     sgaResp = { motivo: 'fetch_falhou', detail: String(e?.message || e) };
   }
 
-  // 5) Determinar inadimplência (DUAS dimensões):
-  //    a) boletos vencidos somados por veículo
-  //    b) situação financeira do veículo no SGA = 'INADIMPLENTE'
-  //       (canônico — boletos podem ter sido baixados manualmente)
+  // 5) Determinar inadimplência (TRÊS estados):
+  //    OK            → todos os veículos com ADIMPLENTE e nenhum boleto vencido
+  //    INADIMPLENTE  → qualquer boleto vencido OU qualquer situacao_financeira=INADIMPLENTE
+  //    INCONCLUSIVO  → SGA respondeu mas TODOS os veículos vieram com
+  //                    situacao_financeira=null E nenhum boleto vencido.
+  //                    Hoje isso era lido como OK (falso-positivo) — passa a bloquear.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let saldo = 0;
   let qtd = 0;
   const placasInadimplentes: string[] = [];
+  let totalVeiculos = 0;
+  let veiculosComSinal = 0; // tem ADIMPLENTE ou INADIMPLENTE
   if (sgaResp && Array.isArray(sgaResp.veiculos)) {
     for (const v of sgaResp.veiculos) {
+      totalVeiculos += 1;
       for (const b of (v.boletos_abertos || [])) {
         if (!b?.data_vencimento) continue;
         const d = new Date(b.data_vencimento);
@@ -213,8 +220,12 @@ serve(async (req) => {
           qtd += 1;
         }
       }
-      if (String(v?.situacao_financeira || '').toUpperCase() === 'INADIMPLENTE') {
+      const sit = String(v?.situacao_financeira || '').toUpperCase();
+      if (sit === 'INADIMPLENTE') {
         if (v?.placa) placasInadimplentes.push(String(v.placa));
+        veiculosComSinal += 1;
+      } else if (sit === 'ADIMPLENTE') {
+        veiculosComSinal += 1;
       }
     }
   }
@@ -227,6 +238,18 @@ serve(async (req) => {
   else if (qtd === 0 && placasInadimplentes.length > 0) {
     motivo = `veiculo_inadimplente_sga: ${placasInadimplentes.join(', ')}`;
   }
+  // INCONCLUSIVO: SGA respondeu, encontrou veículos, mas TODOS sem sinal
+  // financeiro (situacao_financeira=null em todos) E sem boletos vencidos.
+  // Esse foi exatamente o falso-OK do caso ALEXANDRE GUTTI / KRN9E64.
+  if (
+    origem === 'sga' &&
+    !temDebito &&
+    totalVeiculos > 0 &&
+    veiculosComSinal === 0
+  ) {
+    origem = 'inconclusivo';
+    motivo = 'sga_sem_sinal_situacao_financeira_em_todos_veiculos';
+  }
 
   const { data: inserted, error: insErr } = await admin.from('sga_situacao_check').insert({
     contrato_id: ctx.contrato_id,
@@ -235,7 +258,7 @@ serve(async (req) => {
     cpf: ctx.cpf,
     codigo_hinova: ctx.codigo_hinova ?? sgaResp?.codigo_associado ?? null,
     verificado_por: userId,
-    tem_debito: origem === 'sga' ? temDebito : false,
+    tem_debito: origem === 'sga' ? temDebito : (origem === 'inconclusivo' ? true : false),
     saldo_devedor: Math.round(saldo * 100) / 100,
     qtd_boletos_abertos: qtd,
     origem_resultado: origem,
@@ -260,11 +283,14 @@ serve(async (req) => {
         saldo_devedor: saldo,
         qtd_boletos_abertos: qtd,
         origem,
+        total_veiculos: totalVeiculos,
+        veiculos_com_sinal: veiculosComSinal,
       },
       success: true,
     });
   } catch { /* tabela pode não existir; tolerar */ }
 
-  const liberado = origem !== 'sga' ? true : !temDebito;
+  // INCONCLUSIVO bloqueia (libera apenas via bypass auditado ou nova consulta com sinal)
+  const liberado = origem === 'sga' ? !temDebito : (origem === 'inconclusivo' ? false : true);
   return json(200, { ok: true, check: inserted, sga: sgaResp, liberado });
 });

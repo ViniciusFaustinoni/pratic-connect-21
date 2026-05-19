@@ -102,6 +102,107 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
     );
   }
 
+  // INCONCLUSIVO — SGA respondeu mas não trouxe sinal suficiente (todos os
+  // veículos com situacao_financeira=null e sem boletos vencidos). Hoje o
+  // sistema tratava isso como "OK"; agora bloqueia para verificação manual.
+  if ((check.origem_resultado as string) === 'inconclusivo') {
+    return (
+      <>
+        <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  Verificação financeira inconclusiva
+                </p>
+                <p className="text-xs text-amber-800/80 dark:text-amber-200/70 mt-1">
+                  O SGA respondeu, mas não trouxe sinal de situação financeira para os veículos
+                  enumerados ({check.motivo || 'sem detalhes'}). Confira manualmente os boletos
+                  do CPF no painel SGA antes de aprovar — boletos vencidos podem estar em outras
+                  matrículas que esta consulta não capturou. Verificado em {verificadoEm}.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => reconsultar.mutate(undefined, {
+                  onSuccess: (d) => {
+                    if (d.liberado) toast.success('Verificação atualizada — análise liberada');
+                    else toast.info('Ainda sem sinal financeiro suficiente no SGA');
+                  },
+                  onError: () => toast.error('Falha ao consultar SGA'),
+                })}
+                disabled={reconsultar.isPending}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
+                Consultar SGA novamente
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
+                <KeyRound className="h-4 w-4 mr-2" />
+                Ignorar e Prosseguir
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Bypass de verificação inconclusiva (auditado)</DialogTitle>
+              <DialogDescription>
+                Confirme que verificou manualmente os boletos do CPF no painel SGA.
+                Esta ação será registrada com seu nome.
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Ex.: verificado no SGA, sem boletos vencidos em nenhuma matrícula…"
+              rows={4}
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBypassOpen(false)}>Cancelar</Button>
+              <Button
+                disabled={motivo.trim().length < 5 || bypass.isPending}
+                onClick={() =>
+                  bypass.mutate(motivo.trim(), {
+                    onSuccess: async () => {
+                      try {
+                        await registrarAviso.mutateAsync({
+                          tipo: 'cadastro_situacao_financeira_pendente',
+                          titulo: 'Bypass de verificação inconclusiva no Cadastro',
+                          mensagem: 'Gate inconclusivo (SGA sem sinal). Verificado manualmente.',
+                          decisao: 'ignorado_prosseguiu',
+                          motivo: motivo.trim(),
+                          contrato_id: contratoId ?? null,
+                          cpf: data?.check?.cpf ?? null,
+                          detalhes: {
+                            origem_resultado: 'inconclusivo',
+                            solicitacao_troca_id: solicitacaoTrocaId ?? null,
+                          },
+                        });
+                      } catch (e) {
+                        console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
+                      }
+                      toast.success('Bypass registrado — análise liberada');
+                      setBypassOpen(false);
+                      setMotivo('');
+                    },
+                    onError: (e: any) => toast.error(e?.message || 'Falha ao registrar bypass'),
+                  })
+                }
+              >
+                Confirmar bypass
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
   // Bypass anterior já liberou
   if (check.bypass) {
     return (

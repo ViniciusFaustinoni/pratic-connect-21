@@ -61,6 +61,7 @@ interface VeiculoSGA {
   saldo_devedor: number;
   boletos_abertos: BoletoAberto[];
   situacao_financeira: 'ADIMPLENTE' | 'INADIMPLENTE' | null;
+  origem_enumeracao?: 'sga' | 'local' | 'historico';
 }
 
 interface ResponsePayload {
@@ -158,7 +159,7 @@ serve(async (req) => {
     // 1) Enumerar veículos do associado via CPF — usa supabase (hinovaFetch
     //    com auto-reauth em 401/403) ao invés de session direto.
     let codigoAssociado: number | null = codigoAssociadoIn;
-    let veiculosSGA: Array<{ placa: string; codigo_veiculo: number }> = [];
+    let veiculosSGA: Array<{ placa: string; codigo_veiculo: number; origem_enumeracao?: 'sga' | 'local' | 'historico' }> = [];
     try {
       const r = await buscarAssociadoComVeiculosPorCpf(supabase, cpf);
       if (r.codigo_associado && codigoAssociadoIn && r.codigo_associado !== codigoAssociadoIn) {
@@ -167,10 +168,57 @@ serve(async (req) => {
         });
       }
       codigoAssociado = codigoAssociadoIn || r.codigo_associado;
-      veiculosSGA = r.veiculos.map((v) => ({ placa: v.placa, codigo_veiculo: v.codigo_veiculo }));
+      veiculosSGA = r.veiculos.map((v) => ({ placa: v.placa, codigo_veiculo: v.codigo_veiculo, origem_enumeracao: 'sga' as const }));
     } catch (e) {
       if (e instanceof HinovaNotFoundError) return json(200, empty(codigoAssociadoIn));
       throw e;
+    }
+
+    // 1b) COMPLEMENTAR enumeração: o endpoint Hinova /associado/buscar/{cpf}/cpf
+    //     costuma devolver apenas a matrícula "viva" mais recente. Boletos vencidos
+    //     em matrículas/veículos anteriores ficam invisíveis.
+    //     Cobrimos isso unindo:
+    //       - veiculos espelhados localmente (mesmo cliente_cpf, qualquer status)
+    //       - codigo_veiculo já vistos em sga_situacao_check.payload anteriores
+    try {
+      const seen = new Map<number, { placa: string; codigo_veiculo: number; origem_enumeracao: 'sga' | 'local' | 'historico' }>();
+      for (const v of veiculosSGA) seen.set(v.codigo_veiculo, { ...v, origem_enumeracao: 'sga' });
+
+      // Veículos locais com mesmo CPF do solicitante (cobre matrículas extintas)
+      const { data: locais } = await supabase
+        .from('veiculos')
+        .select('placa, codigo_veiculo:codigo_hinova, contratos!inner(cliente_cpf)')
+        .eq('contratos.cliente_cpf', cpf);
+      for (const l of (locais || []) as any[]) {
+        const cod = Number(l?.codigo_veiculo || 0);
+        const placa = String(l?.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (cod > 0 && placa && !seen.has(cod)) {
+          seen.set(cod, { placa, codigo_veiculo: cod, origem_enumeracao: 'local' });
+        }
+      }
+
+      // Histórico de checks recentes para o mesmo CPF
+      const { data: prevChecks } = await supabase
+        .from('sga_situacao_check')
+        .select('payload')
+        .eq('cpf', cpf)
+        .order('verificado_em', { ascending: false })
+        .limit(20);
+      for (const row of (prevChecks || []) as any[]) {
+        const vs = row?.payload?.veiculos;
+        if (!Array.isArray(vs)) continue;
+        for (const v of vs) {
+          const cod = Number(v?.codigo_veiculo || 0);
+          const placa = String(v?.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (cod > 0 && placa && !seen.has(cod)) {
+            seen.set(cod, { placa, codigo_veiculo: cod, origem_enumeracao: 'historico' });
+          }
+        }
+      }
+
+      veiculosSGA = Array.from(seen.values());
+    } catch (enumErr: any) {
+      console.warn('[sga-listar-boletos-associado] enumeracao complementar falhou (continua com SGA apenas):', enumErr?.message);
     }
 
     if (!codigoAssociado || veiculosSGA.length === 0) {
@@ -278,6 +326,7 @@ serve(async (req) => {
         saldo_devedor: Math.round(saldo * 100) / 100,
         boletos_abertos: abertos.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')),
         situacao_financeira: (resSituacao[i] as VeiculoSGA['situacao_financeira']) ?? null,
+        origem_enumeracao: (v as any).origem_enumeracao ?? 'sga',
       };
     });
 
