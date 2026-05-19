@@ -564,7 +564,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Hook de planos calculados dinamicamente do banco
   const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
-    valorFipe,
+    valorFipe: valorFipeParaPlanos,
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
     combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
