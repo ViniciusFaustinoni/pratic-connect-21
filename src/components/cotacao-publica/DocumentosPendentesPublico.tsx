@@ -79,6 +79,10 @@ function isTipoFoto(tipo: string): boolean {
   return TIPOS_FOTO.has(tipo) || tipo.startsWith('foto_');
 }
 
+function isTipoVideo(tipo: string): boolean {
+  return tipo === 'video_360';
+}
+
 function isOcrTipoCompativel(tipoEsperado: string, tipoDetectado: string | null | undefined): boolean {
   if (!tipoDetectado) return false;
   if (tipoEsperado === tipoDetectado) return true;
