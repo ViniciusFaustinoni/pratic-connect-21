@@ -112,10 +112,17 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
   const podeReenviar = item.tipo === 'troca_titularidade' && item.solicitacao_troca_id &&
     !item.termo_assinado_em && !!item.termo_enviado_em && !semEmail;
 
+  // Liberado ANTES da assinatura: consultor adianta a cotação enquanto o titular
+  // antigo ainda não assinou. O link público continua bloqueado até a assinatura.
   const podeRealizarCotacao = item.tipo === 'troca_titularidade'
     && !!item.solicitacao_troca_id
-    && !item.cotacao_id
-    && !!item.termo_assinado_em;
+    && !item.cotacao_id;
+  const termoAssinado = !!item.termo_assinado_em;
+
+  const TERMINAIS = ['efetivada','cancelada','expirada','reprovada_cadastro','reprovada_monitoramento'];
+  const podeCancelar = item.tipo === 'troca_titularidade'
+    && !!item.solicitacao_troca_id
+    && !TERMINAIS.includes(item.troca_status || '');
 
   const handleRealizarCotacao = () => {
     if (!item.solicitacao_troca_id) return;
