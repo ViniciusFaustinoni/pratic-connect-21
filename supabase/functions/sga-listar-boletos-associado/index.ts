@@ -187,6 +187,7 @@ serve(async (req) => {
     );
 
     const resBoletos: any[][] = [];
+    const resSituacao: (string | null)[] = [];
     for (const v of veiculosSGA) {
       try {
         const boletos = await withHinovaAuthRetry(supabase, async (session) =>
@@ -205,6 +206,25 @@ serve(async (req) => {
         );
         if (err instanceof HinovaTransientError) throw err;
         resBoletos.push([]);
+      }
+
+      // Consulta situação financeira do VEÍCULO (ADIMPLENTE/INADIMPLENTE).
+      // Esta é a flag canônica do SGA — boletos podem ter sido baixados
+      // manualmente e ainda assim o veículo permanecer INADIMPLENTE.
+      try {
+        const sit = await withHinovaAuthRetry(supabase, async (session) =>
+          buscarSituacaoFinanceiraVeiculo(session, v.codigo_veiculo),
+        );
+        const norm = sit ? String(sit).trim().toUpperCase() : null;
+        resSituacao.push(norm === 'ADIMPLENTE' || norm === 'INADIMPLENTE' ? norm : null);
+      } catch (err: any) {
+        console.warn(
+          '[sga-listar-boletos-associado] situacao_financeira falhou veiculo',
+          v.codigo_veiculo,
+          err?.message,
+        );
+        if (err instanceof HinovaTransientError) throw err;
+        resSituacao.push(null);
       }
     }
 
