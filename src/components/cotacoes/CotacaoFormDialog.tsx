@@ -604,9 +604,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Calcular elegibilidade FIPE menor (usa entity_eligibility_rules, com fallback p/ tabela legada)
   const fipeMenorInfo = useMemo(() => {
-    if (!valorFipe || valorFipe <= 0 || planosSelecionados.length === 0) {
+    if (!valorFipe || valorFipe <= 0) {
       return null;
     }
+
+    const valorReduzido = valorFipe * 0.99;
 
     // Bloquear FIPE menor para veículos com FIPE <= mínimo do tipo (carro/moto)
     const minimoTipo = tipoVeiculoDetectado === 'moto' ? fipeMenorLimites.minimoMoto : fipeMenorLimites.minimoCarro;
@@ -620,22 +622,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     if (valorFipe > limiteTipo) {
       return {
         elegivel: false,
+        preliminar: false,
         bloqueado: {
           motivo: `Regra do 1% disponível apenas para ${tipoLabel} com FIPE até ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(limiteTipo)}.`,
         },
-        valorReduzido: valorFipe * 0.99,
+        valorReduzido,
         faixaAtual: null as null | { min: number; max: number; mensal: number },
         faixaInferior: null as null | { min: number; max: number; mensal: number },
         economia: 0,
       };
     }
-
-    const plano = planosSelecionados[0];
-    const valorReduzido = valorFipe * 0.99;
-
-    // === MOTOR MODERNO: derivar faixas das regras fipe_range ===
-    const faixaAtualRule = obterFaixaFipeAtual(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
-    const faixaInferiorRule = obterFaixaFipeAnterior(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
 
     // Faixa de obrigatoriedade do rastreador (R$ 30k–R$ 35k): nunca pode ser reduzida
     const FAIXA_RASTREADOR_MIN = 30000;
@@ -643,6 +639,39 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const bloqueioRastreador = {
       motivo: 'a faixa atual (R$ 30.000 – R$ 35.000) exige rastreador obrigatório. A redução não pode ser aplicada.',
     };
+
+    // Bloqueio preliminar pela zona de rastreador obrigatório (independe de plano)
+    if (valorFipe >= FAIXA_RASTREADOR_MIN && valorFipe < FAIXA_RASTREADOR_MAX) {
+      return {
+        elegivel: false,
+        preliminar: false,
+        bloqueado: bloqueioRastreador,
+        valorReduzido,
+        faixaAtual: null as null | { min: number; max: number; mensal: number },
+        faixaInferior: null as null | { min: number; max: number; mensal: number },
+        economia: 0,
+      };
+    }
+
+    // === ESTÁGIO A — Preliminar (sem plano selecionado) ===
+    // Mostra elegibilidade já no carregamento do FIPE; economia só sai no Estágio B.
+    if (planosSelecionados.length === 0) {
+      return {
+        elegivel: true,
+        preliminar: true,
+        bloqueado: null as null | { motivo: string },
+        valorReduzido,
+        faixaAtual: null as null | { min: number; max: number; mensal: number },
+        faixaInferior: null as null | { min: number; max: number; mensal: number },
+        economia: 0,
+      };
+    }
+
+    const plano = planosSelecionados[0];
+
+    // === MOTOR MODERNO: derivar faixas das regras fipe_range ===
+    const faixaAtualRule = obterFaixaFipeAtual(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
+    const faixaInferiorRule = obterFaixaFipeAnterior(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
 
     if (faixaAtualRule && faixaInferiorRule) {
       const mensalAtual = somarCoberturasPorValorFipe(plano.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
