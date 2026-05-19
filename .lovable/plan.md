@@ -1,96 +1,61 @@
+# Plano — Confirmação de dados extraídos da CNH antes de seguir
+
 ## Objetivo
+Impedir que erros do OCR (ex.: `LOPWS` em vez de `LOPES`) cheguem ao contrato Autentique e ao cadastro do associado. Toda extração de CNH passa a exigir uma etapa de **revisão e confirmação humana** com os campos editáveis, lado a lado com a imagem enviada.
 
-Permitir que o **Cadastro** edite **todos** os campos do associado em `Associados > lista > Editar dados`, exigindo uma tela de confirmação com **motivo obrigatório**, e gravando cada alteração em `associados_historico` com data, hora, autor, dados antes/depois e motivo.
+## Onde isso entra no fluxo
+A etapa é inserida **imediatamente após o retorno do OCR**, antes de qualquer:
+- gravação em `associados` / `contratos`,
+- chamada à `contrato-gerar`,
+- avanço de step no link público.
 
-## Diagnóstico do que já existe
+Vale para os dois pontos de entrada de CNH:
+1. **Link público** (cotação nova, inclusão, troca de titularidade) — etapa de documentos pessoais.
+2. **Modal interno** (Cadastro / Vendedor lançando manualmente) — mesmo passo dentro do `CotacaoFormDialog` / fluxos correlatos.
 
-- Dialog `AssociadoEditDialog.tsx` já edita um subconjunto de campos (pessoais, contato, endereço, plano, dia de vencimento).
-- Hook `useUpdateAssociado` (em `src/hooks/useAssociados.ts`) faz UPDATE direto em `associados` e sincroniza com Rede Veículos — **não registra histórico**.
-- Tabela `associados_historico` já existe com colunas perfeitas para o caso: `tipo`, `acao`, `descricao`, `dados_anteriores`, `dados_novos`, `motivo`, `executado_por` (e `usuario_id`), `created_at`, `metadata`.
-- Timeline do associado (`AssociadoTimeline.tsx` + `useAssociadoHistoricoCompleto`) já consome `associados_historico` — qualquer registro novo aparecerá automaticamente.
+## Comportamento da tela
+- Layout em duas colunas:
+  - **Esquerda:** preview da foto da CNH enviada (frente + verso quando houver), com zoom.
+  - **Direita:** formulário editável com os campos extraídos pelo OCR — **Nome, CPF, RG, Data de nascimento, CNH (número), Categoria, Validade, Nome da mãe** (quando vier).
+- Cada campo mostra um pequeno indicador de "confiança" do OCR (quando o provedor retorna `confidence`):
+  - alto (≥0.9): borda neutra,
+  - médio (0.7–0.9): borda âmbar + tooltip "Revise",
+  - baixo (<0.7) ou caractere improvável detectado: borda vermelha + foco automático.
+- Heurística de "caractere improvável" no nome: regex que sinaliza combinações praticamente inexistentes em PT-BR (`PW`, `WX`, `KQ`, `ZX`, dois consoantes raras seguidas, etc.) e força revisão.
+- Validações antes de habilitar "Confirmar":
+  - Nome: mínimo 2 palavras, só letras/espaços/acentos/hífen/apóstrofo.
+  - CPF: dígito verificador válido.
+  - Data nasc: idade entre 18 e 100.
+  - CNH: 11 dígitos; validade ≥ hoje.
+- Botões: **Voltar** (re-tirar foto / re-upload) e **Confirmar e continuar**.
 
-## Mudanças
+## Cross-check com SGA (complemento barato)
+Quando o CPF informado já existir no SGA / `associados`, o nome canônico do SGA é exibido como sugestão acima do campo Nome ("Cadastro existente: EDER LOPES SOARES — usar este"). Um clique substitui. Reduz drasticamente o erro nos fluxos de inclusão/troca.
 
-### 1. Ampliar campos editáveis no `AssociadoEditDialog`
+## Auditoria
+Nova tabela leve `ocr_revisoes` (ou coluna JSONB em `contratos_documentos.metadata`) gravando:
+- `valores_ocr` (bruto retornado),
+- `valores_confirmados` (o que o usuário salvou),
+- `campos_alterados` (diff),
+- `revisado_por`, `revisado_em`, `origem` (link_publico / interno).
 
-Acrescentar ao schema/form e à UI todos os campos hoje persistidos em `associados` que façam sentido editar manualmente — divididos em seções já existentes mais novas:
+Serve para medir taxa real de erro do OCR e priorizar melhorias futuras (pré-processamento de imagem, troca de provedor, etc.).
 
-- **Dados pessoais (novos):** `nome_mae`, `nome_pai`, `naturalidade`, `nacionalidade`, `escolaridade`, `renda_mensal`.
-- **Documentos:** `rg_orgao_emissor`, `rg_uf`, `cnh`, `cnh_categoria`, `cnh_validade`.
-- **Contato:** já cobre tudo.
-- **Endereço:** já cobre tudo (manter como está).
-- **Associação / financeiro:** `plano_id`, `dia_vencimento`, `vendedor_id`, `agencia_id`, `forma_pagamento_preferida`, `observacoes_internas`.
-- Os campos exatos serão validados contra `information_schema.columns` na hora da implementação (apenas campos da tabela `associados`, **sem mexer** em status, CPF formatado pelo SGA, ou flags operacionais como `em_troca_titularidade`).
+## Arquivos previstos
+- **Novo componente:** `src/components/ocr/ConfirmarDadosCNHDialog.tsx` (compartilhado entre link público e interno).
+- **Novo hook:** `src/hooks/useConfirmarDadosCNH.ts` (validações + diff + heurística de plausibilidade).
+- **Integração no link público:** ajustar o step de documentos pessoais (provavelmente em `src/pages/publico/...` — confirmar no momento da implementação) para abrir o dialog antes de avançar.
+- **Integração interna:** ajustar `CotacaoFormDialog.tsx` / fluxos de inclusão e troca para chamar o mesmo dialog após OCR.
+- **Edge function:** pequeno ajuste em `ocr-cnh` (ou equivalente) para devolver `confidence` por campo quando o provedor suportar.
+- **Migration:** criar `ocr_revisoes` com RLS (insert restrito a authenticated/anon do link público, select para Cadastro/Diretoria).
+- **Memória:** novo `mem://logic/operations/ocr-cnh-confirmacao-obrigatoria` documentando a regra.
 
-Manter validação Zod e máscaras.
+## Fora de escopo (proposta para depois)
+- Pré-processamento de imagem (deskew, threshold) — melhoria de acurácia do OCR em si.
+- Troca/benchmark de provedor de OCR.
+- Confirmação equivalente para CRLV (pode vir num plano separado seguindo o mesmo padrão).
 
-### 2. Tela de confirmação com motivo (etapa antes de salvar)
-
-Ao clicar **Salvar** no dialog atual:
-
-1. Calcular `diff` entre valores originais (snapshot guardado no `useEffect` do reset) e valores atuais do form. Se vazio → toast “Nenhuma alteração” e fecha.
-2. Abrir um segundo dialog `AssociadoEditConfirmDialog` mostrando:
-   - Lista de campos alterados em formato `Campo: antes → depois` (labels amigáveis).
-   - `Textarea` **Motivo da alteração*** (obrigatório, mínimo 5 caracteres).
-   - Botões **Voltar** e **Confirmar alterações** (loading state).
-3. Só ao confirmar com motivo válido é que o UPDATE acontece.
-
-### 3. Persistência + histórico (no hook)
-
-Refatorar `useUpdateAssociado` para receber `{ id, updates, motivo, dadosAnteriores }` e fazer numa única transação lógica:
-
-1. `UPDATE associados SET ...updates WHERE id = :id RETURNING *`.
-2. `INSERT INTO associados_historico` com:
-   - `associado_id = id`
-   - `tipo = 'edicao_dados'`
-   - `acao = 'editar_dados_associado'`
-   - `descricao = 'Edição manual de cadastro: <n campos> alterados (<lista curta>)'`
-   - `dados_anteriores = jsonb(somente campos alterados, valores antigos)`
-   - `dados_novos = jsonb(somente campos alterados, valores novos)`
-   - `motivo = <texto digitado>`
-   - `usuario_id = auth.uid()` e `executado_por = auth.uid()`
-   - `metadata = { origem: 'cadastro_editar_dados', user_agent, campos: [...] }`
-3. Manter a sync com Rede Veículos só quando os campos alterados são relevantes (nome, telefone, email, endereço) — sem mudança de comportamento existente.
-
-Para garantir atomicidade real, criar uma **edge function `atualizar-associado-com-historico`** (Service Role) que faz UPDATE + INSERT no histórico e dispara a sync com Rede Veículos como hoje. O hook passa a chamar essa função em vez de UPDATE direto. Em caso de falha no INSERT do histórico, a função reverte o UPDATE.
-
-### 4. Permissões
-
-- Garantir que o perfil **Cadastro** já tem permissão `associados.edit` em `app_roles_config`. Confirmar com SELECT na config e ajustar via migration apenas se faltar.
-- O botão **Editar dados** no menu de ações da lista de associados já está visível; manter visibilidade controlada por `permissions.associado.edit` (sem regredir restrições atuais).
-
-### 5. Visibilidade no histórico
-
-Nenhuma mudança de UI necessária: `AssociadoTimeline` já lê `associados_historico` ordenado por `created_at desc`. Adicionar apenas um ícone/label específico para `tipo='edicao_dados'` (Pencil, cor neutra) para diferenciar das outras entradas.
-
-## Técnico (resumo)
-
-```text
-UI flow
- ├─ AssociadoEditDialog (form ampliado)
- │    └─ Salvar → calcula diff (vs snapshot)
- │         └─ Abre AssociadoEditConfirmDialog
- │              ├─ Lista campo: antes → depois
- │              ├─ Textarea Motivo* (min 5 chars)
- │              └─ Confirmar
- │                   └─ useUpdateAssociado.mutate({ id, updates, motivo, dadosAnteriores })
- │                        └─ supabase.functions.invoke('atualizar-associado-com-historico')
- │                             ├─ UPDATE associados
- │                             ├─ INSERT associados_historico (tipo=edicao_dados, motivo, diff, executado_por)
- │                             └─ (opcional) sync Rede Veículos
- └─ AssociadoTimeline renderiza entrada nova automaticamente
-```
-
-Arquivos previstos:
-- `src/components/associados/AssociadoEditDialog.tsx` — ampliar form + integrar fluxo de confirmação.
-- `src/components/associados/AssociadoEditConfirmDialog.tsx` *(novo)* — diff + motivo.
-- `src/hooks/useAssociados.ts` — refatorar `useUpdateAssociado` para usar edge function e propagar motivo/diff.
-- `supabase/functions/atualizar-associado-com-historico/index.ts` *(novo)* — UPDATE + histórico atômico.
-- `src/components/associados/AssociadoTimeline.tsx` — ícone/label para `edicao_dados` (ajuste pequeno).
-- Migration eventual só se faltar permissão `associados.edit` para o perfil Cadastro.
-
-## Fora de escopo
-
-- Edição em massa.
-- Edição de status, CPF (já é chave), flags operacionais (`em_troca_titularidade`, `aguardando_placa_definitiva`, etc.) e relacionamentos automáticos (vínculo de veículo, contratos).
-- Aprovação multi-nível (a confirmação com motivo é suficiente — sem workflow extra de aprovação).
+## Resultado esperado
+- Zero contrato gerado com nome corrompido por OCR.
+- Erros tipo `LOPWS` ficam visíveis e corrigíveis em segundos, com 1 clique quando o CPF já existe no SGA.
+- Histórico mensurável de qualidade do OCR para decidir próximos investimentos.
