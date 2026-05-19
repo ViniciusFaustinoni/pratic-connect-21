@@ -17,7 +17,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { FileText, Send, Camera, Gauge, Car } from 'lucide-react';
+import { FileText, Send, Camera, Gauge, Car, Video } from 'lucide-react';
 
 interface SolicitarDocumentosDialogProps {
   open: boolean;
@@ -57,6 +57,18 @@ function buildCategorias(
     ],
   };
 
+  const video: CategoriaDocumentos = {
+    id: 'video',
+    categoria: 'Vídeo da Autovistoria',
+    icon: <Video className="h-4 w-4" />,
+    documentos: [
+      {
+        id: 'video_360',
+        label: 'Vídeo 360° do veículo (terminar no painel ligado com motor funcionando)',
+      },
+    ],
+  };
+
   const outros: CategoriaDocumentos = {
     id: 'outros',
     categoria: 'Outros',
@@ -86,6 +98,7 @@ function buildCategorias(
           { id: 'painel_ligado', label: `Painel com ${tipoVeiculo === 'moto' ? 'a moto ligada' : 'o veículo ligado'}` },
         ],
       },
+      video,
       outros,
     ];
   }
@@ -108,6 +121,7 @@ function buildCategorias(
         { id: 'motor', label: 'Motor (capô aberto)' },
       ],
     },
+    video,
     outros,
   ];
 }
@@ -125,6 +139,7 @@ export function SolicitarDocumentosDialog({
   const [openCategories, setOpenCategories] = useState<string[]>([
     'pessoais',
     isAutovistoria ? 'autovistoria' : 'fotos_instalador',
+    'video',
   ]);
 
   const CATEGORIAS = useMemo(

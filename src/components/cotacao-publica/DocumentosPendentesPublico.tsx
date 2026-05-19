@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock, Send, AlertCircle, Camera } from 'lucide-react';
+import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Clock, Send, AlertCircle, Camera, Video } from 'lucide-react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { motion } from 'framer-motion';
 import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
@@ -23,6 +23,7 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   'foto_lateral_direita': 'Foto do Veículo - Lateral Direita',
   'foto_painel': 'Foto do Painel',
   'foto_hodometro': 'Foto do Hodômetro',
+  'video_360': 'Vídeo 360° do Veículo',
   'outro': 'Documento Solicitado',
   // Novos tipos de vistoria
   'selfie_veiculo': 'Selfie com o Veículo',
@@ -76,6 +77,10 @@ const TIPOS_FOTO = new Set([
 
 function isTipoFoto(tipo: string): boolean {
   return TIPOS_FOTO.has(tipo) || tipo.startsWith('foto_');
+}
+
+function isTipoVideo(tipo: string): boolean {
+  return tipo === 'video_360';
 }
 
 function isOcrTipoCompativel(tipoEsperado: string, tipoDetectado: string | null | undefined): boolean {
@@ -168,6 +173,72 @@ export function DocumentosPendentesPublico({
       const { data: { publicUrl } } = publicSupabase.storage
         .from('cotacoes-docs')
         .getPublicUrl(fileName);
+
+      // 2.0 BRANCH ESPECIAL: vídeo 360° — atualiza vistoria diretamente, sem OCR
+      if (isTipoVideo(doc.tipo_documento)) {
+        // Localizar vistoria ativa do associado (mais recente)
+        const { data: vistoria, error: vistoriaErr } = await publicSupabase
+          .from('vistorias')
+          .select('id')
+          .eq('associado_id', associadoId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (vistoriaErr) console.warn('[reenvio video_360] erro busca vistoria:', vistoriaErr);
+
+        if (vistoria?.id) {
+          const vistoriaId = vistoria.id;
+
+          // Arquivar vídeo anterior em vistoria_fotos (renomear tipo)
+          const { data: anteriores } = await publicSupabase
+            .from('vistoria_fotos')
+            .select('id')
+            .eq('vistoria_id', vistoriaId)
+            .eq('tipo', 'video_360');
+
+          if (anteriores && anteriores.length > 0) {
+            const ts = Date.now();
+            for (const a of anteriores) {
+              await publicSupabase
+                .from('vistoria_fotos')
+                .update({ tipo: `video_360_historico_${ts}` } as any)
+                .eq('id', a.id);
+            }
+          }
+
+          // Inserir novo registro
+          await publicSupabase
+            .from('vistoria_fotos')
+            .insert({ vistoria_id: vistoriaId, tipo: 'video_360', arquivo_url: publicUrl } as any);
+
+          // Atualizar campo canônico
+          await publicSupabase
+            .from('vistorias')
+            .update({ video_360_url: publicUrl } as any)
+            .eq('id', vistoriaId);
+        }
+
+        // Marcar documento_solicitado como enviado (sem criar linha em documentos)
+        const { error: updErr } = await publicSupabase
+          .from('documentos_solicitados')
+          .update({
+            status: 'enviado',
+            enviado_em: new Date().toISOString(),
+            observacao_cliente: state.observacao || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', doc.id);
+        if (updErr) throw updErr;
+
+        setUploadStates(prev => ({
+          ...prev,
+          [doc.id]: { ...prev[doc.id], uploading: false, enviado: true },
+        }));
+        return true;
+      }
+
+
 
       // 2.1 Rodar OCR com timeout (90s) e até 2 tentativas em falhas de rede.
       // Não bloqueia o usuário: se OCR falhar de vez, documento é gravado sem dados.
@@ -490,13 +561,22 @@ export function DocumentosPendentesPublico({
                         <div>
                           {(() => {
                             const ehFoto = isTipoFoto(doc.tipo_documento);
+                            const ehVideo = isTipoVideo(doc.tipo_documento);
+                            const accept = ehVideo
+                              ? 'video/*'
+                              : ehFoto
+                                ? 'image/*'
+                                : 'image/*,.pdf';
+                            const captureProps = (ehFoto || ehVideo)
+                              ? { capture: 'environment' as const }
+                              : {};
                             return (
                               <>
                                 <input
                                   ref={el => fileInputRefs.current[doc.id] = el}
                                   type="file"
-                                  accept={ehFoto ? 'image/*' : 'image/*,.pdf'}
-                                  {...(ehFoto ? { capture: 'environment' as const } : {})}
+                                  accept={accept}
+                                  {...captureProps}
                                   className="hidden"
                                   onChange={(e) => handleFileSelect(doc.id, e.target.files?.[0] || null)}
                                 />
@@ -510,6 +590,8 @@ export function DocumentosPendentesPublico({
                                 >
                                   {state.uploading ? (
                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : ehVideo ? (
+                                    <Video className="h-4 w-4 mr-2" />
                                   ) : ehFoto ? (
                                     <Camera className="h-4 w-4 mr-2" />
                                   ) : (
@@ -517,10 +599,17 @@ export function DocumentosPendentesPublico({
                                   )}
                                   {state.file
                                     ? state.file.name
-                                    : ehFoto
-                                      ? 'Tirar foto agora'
-                                      : 'Selecionar arquivo'}
+                                    : ehVideo
+                                      ? 'Gravar vídeo 360° agora'
+                                      : ehFoto
+                                        ? 'Tirar foto agora'
+                                        : 'Selecionar arquivo'}
                                 </Button>
+                                {ehVideo && !state.file && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    Faça uma volta completa ao redor do veículo e finalize gravando o painel com o motor ligado.
+                                  </p>
+                                )}
                                 {ehFoto && !state.file && (
                                   <p className="mt-1 text-[11px] text-muted-foreground">
                                     A foto deve ser feita ao vivo pela câmera. Não é permitido anexar imagens da galeria.

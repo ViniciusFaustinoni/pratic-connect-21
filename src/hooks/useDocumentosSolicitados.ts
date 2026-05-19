@@ -33,20 +33,22 @@ export const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   'foto_lateral_direita': 'Foto do Veículo - Lateral Direita',
   'foto_painel': 'Foto do Painel',
   'foto_hodometro': 'Foto do Hodômetro',
+  'video_360': 'Vídeo 360° do Veículo',
   'outro': 'Outro Documento',
 };
 
 // Tipos válidos do enum (para validação)
-export type TipoDocumentoEnum = 
-  | 'cnh' 
-  | 'crlv' 
-  | 'comprovante_residencia' 
-  | 'foto_frontal_veiculo' 
-  | 'foto_traseira_veiculo' 
-  | 'foto_lateral_esquerda' 
-  | 'foto_lateral_direita' 
-  | 'foto_painel' 
-  | 'foto_hodometro' 
+export type TipoDocumentoEnum =
+  | 'cnh'
+  | 'crlv'
+  | 'comprovante_residencia'
+  | 'foto_frontal_veiculo'
+  | 'foto_traseira_veiculo'
+  | 'foto_lateral_esquerda'
+  | 'foto_lateral_direita'
+  | 'foto_painel'
+  | 'foto_hodometro'
+  | 'video_360'
   | 'outro';
 
 export function formatTipoDocumento(tipo: string): string {
@@ -73,6 +75,7 @@ export function mapTipoSolicitadoParaEnum(tipoSolicitado: string): TipoDocumento
     'foto_lateral_direita': 'foto_lateral_direita',
     'foto_painel': 'foto_painel',
     'foto_hodometro': 'foto_hodometro',
+    'video_360': 'video_360',
     'outro': 'outro',
   };
   return mapping[tipoSolicitado] || 'outro';
