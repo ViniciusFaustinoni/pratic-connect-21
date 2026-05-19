@@ -399,6 +399,24 @@ function ehLeilao(categoria: string | null | undefined, procedencia?: string | n
          p.includes('leilão') || p.includes('leilao');
 }
 
+/**
+ * Normaliza o tipo do veículo (carro/moto/caminhão/utilitário/ônibus) para
+ * exibição no termo de filiação. Aceita variações comuns vindas do banco
+ * (marcas_modelos.tipo_veiculo ou snapshots legados em veiculo_categoria).
+ */
+function formatarTipoVeiculo(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const s = String(raw).trim().toLowerCase();
+  if (!s) return '';
+  if (s.startsWith('moto')) return 'Moto';
+  if (s.startsWith('cami')) return 'Caminhão';
+  if (s.startsWith('onib') || s.startsWith('ônib')) return 'Ônibus';
+  if (s.startsWith('util')) return 'Utilitário';
+  if (s.startsWith('outr')) return '';
+  // carro / automovel / passeio / etc.
+  return 'Carro';
+}
+
 export function mapearDadosParaTemplate(
   contrato: any,
   plano: any,
