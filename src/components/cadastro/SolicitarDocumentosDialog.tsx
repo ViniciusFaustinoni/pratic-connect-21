@@ -57,6 +57,18 @@ function buildCategorias(
     ],
   };
 
+  const video: CategoriaDocumentos = {
+    id: 'video',
+    categoria: 'Vídeo da Autovistoria',
+    icon: <Video className="h-4 w-4" />,
+    documentos: [
+      {
+        id: 'video_360',
+        label: 'Vídeo 360° do veículo (terminar no painel ligado com motor funcionando)',
+      },
+    ],
+  };
+
   const outros: CategoriaDocumentos = {
     id: 'outros',
     categoria: 'Outros',
