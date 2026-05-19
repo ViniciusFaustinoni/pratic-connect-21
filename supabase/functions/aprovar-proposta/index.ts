@@ -522,12 +522,19 @@ serve(async (req) => {
                 .select('id', { count: 'exact', head: true })
                 .eq('vistoria_id', vistAutoRf.id);
 
+              // REGRA CANÔNICA: Cadastro só libera R/F via autovistoria ENXUTA
+              // (2 fotos motor+chassi + vídeo 360°) acima da FIPE mínima.
+              // Roteiro completo (31/15) é sub-FIPE → Monitoramento decide R/F,
+              // NÃO o Cadastro. Memória: mem://logic/operations/cadastro-escopo-canonico
               const isMotoVeic = (tipoVeiculo || '').toLowerCase().includes('moto');
-              const minLegado = isMotoVeic ? 15 : 31;
-              const temFotosCanonicas = (nFotos ?? 0) >= 2 && !!vistAutoRf.video_360_url;
-              const temFotosLegado = (nFotos ?? 0) >= minLegado;
+              const minCompleta = isMotoVeic ? 15 : 31;
+              const temFotosEnxuta =
+                (nFotos ?? 0) >= 2 &&
+                (nFotos ?? 0) < minCompleta &&
+                !!vistAutoRf.video_360_url;
+              const temFotosLegado = false; // Desativado por regra canônica.
 
-              if (temFotosCanonicas || temFotosLegado) {
+              if (temFotosEnxuta || temFotosLegado) {
                 await supabase
                   .from('vistorias')
                   .update({
@@ -586,10 +593,10 @@ serve(async (req) => {
           }
         }
       } else if (!veiculoPrecisaRastreador) {
-        // SUB-FIPE: Cadastro está aprovando após a autovistoria. Promove o servico
-        // vistoria_entrada (em_analise → concluida) para entrar na fila do Monitoramento,
-        // e libera Roubo/Furto no veículo. A ativação final continua sendo do Monitoramento
-        // (via aprovar-vistoria-monitoramento → ativar-associado).
+        // SUB-FIPE: Cadastro APENAS aprova documentos e promove o servico
+        // vistoria_entrada (em_analise → concluida) para a fila do Monitoramento.
+        // REGRA CANÔNICA: Cadastro NÃO avalia as fotos (31/15) nem libera R/F —
+        // Monitoramento decide. mem://logic/operations/cadastro-escopo-canonico
         try {
           const { data: vistAuto } = await supabase
             .from('vistorias')
@@ -616,11 +623,11 @@ serve(async (req) => {
               else console.log(`[aprovar-proposta] Sub-FIPE: servico vistoria_entrada promovido a concluida (cotação ${contrato.cotacao_id}).`);
             }
 
-            // Liberar Roubo/Furto no veículo
-            await supabase
-              .from('veiculos')
-              .update({ cobertura_roubo_furto: true })
-              .eq('id', veiculoId);
+            // REGRA CANÔNICA: Sub-FIPE — Cadastro NÃO libera R/F.
+            // A análise das fotos (31 carros / 15 motos + vídeo) é responsabilidade
+            // do Monitoramento, que decide R/F e aprovação final.
+            // Memória: mem://logic/operations/cadastro-escopo-canonico
+
 
             // Atualizar status_contratacao da cotação
             if (contrato.cotacao_id) {

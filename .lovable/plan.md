@@ -1,74 +1,72 @@
-# Ajuste: Cadastro avalia somente documentos + autovistoria enxuta (acima FIPE)
+# Tornar canônica a regra "Cadastro avalia só docs + autovistoria enxuta"
 
-## Regra canônica (confirmada)
+## Regra (canônica, definitiva)
 
-Cadastro **apenas**:
+Cadastro avalia exclusivamente:
 1. **Documentos** (sempre).
-2. **Autovistoria ENXUTA** (acima FIPE, opcional, 2 fotos + vídeo 360°) — quando o cliente faz, libera R/F antecipado.
+2. **Autovistoria ENXUTA acima FIPE** (opcional — 2 fotos `motor`+`chassi` + vídeo 360°) — único caso que libera R/F antecipado.
 
-Cadastro **NÃO avalia**:
-- Vistoria presencial técnica (base, rota, prestador, fit) — Monitoramento decide.
-- **Autovistoria COMPLETA sub-FIPE** (31 fotos carros / 15 motos + vídeo) — vai direto ao Monitoramento avaliar e aprovar.
+Cadastro **NUNCA** avalia fotos em:
+- Vistoria presencial técnica (base/rota/prestador/fit).
+- Autovistoria COMPLETA sub-FIPE (31/15 fotos).
+- Troca de titularidade (vistoria dispensada na janela).
 
-Em todos os casos não-cobertos, Cadastro aprova apenas a documentação; aprovação final é do Monitoramento (com auto-promoção via trigger para vistoria presencial concluída).
+Nesses casos: Cadastro aprova só docs → Monitoramento decide vistoria e aprova final.
 
-## Caso RJK2I25 (Tiago Moreira Miranda)
-- Vistoria presencial **na base** com 31 fotos + vídeo já enviados.
-- Stepper atual mostra "Fotos & Vistoria" + botão "Aprovar Proposta" — incorreto.
-- Esperado: stepper só com "Documentos → Aprovação Final" (banner: aguardando técnico finalizar; aprovação do Monitoramento).
+## Camadas de defesa (para garantir SEMPRE)
 
-## Mudanças (técnico)
-
-### 1. `src/pages/cadastro/PropostaAnalise.tsx`
-
-Derivar flags novas:
+### 1. Helper único — fonte da verdade (UI)
+Criar `src/lib/cadastro/escopoAnaliseCadastro.ts` com a função:
 ```ts
-const isVistoriaPresencialTecnica =
-  !isAutovistoria && proposta?.vistoria?.modalidade === 'presencial';
-
-const isAutovistoriaCompletaSubFipe =
-  isAutovistoria && autovistoriaCompleta; // sub-FIPE = autovistoria completa
-
-const cadastroAvaliaApenasEnxuta =
-  isAutovistoria && !autovistoriaCompleta; // enxuta acima FIPE
+export function resolverEscopoAnaliseCadastro(proposta): {
+  isAutovistoria: boolean;
+  isAutovistoriaEnxutaAcimaFipe: boolean;   // único caso que Cadastro avalia fotos
+  isAutovistoriaCompletaSubFipe: boolean;   // → Monitoramento
+  isVistoriaPresencialTecnica: boolean;     // → Monitoramento
+  cadastroAvaliaFotos: boolean;
+  aprovarApenasDocumentos: boolean;
+  aguardandoMonitoramentoVistoria: boolean;
+}
 ```
+Refatorar `PropostaAnalise.tsx` para consumir esse helper (remove a lógica inline). Qualquer outra tela do Cadastro (lista de pendentes, dashboards) que precisar dessa decisão importa do mesmo arquivo.
 
-Ajustar `cadastroAvaliaFotos` para incluir SÓ enxuta acima FIPE:
-```ts
-const cadastroAvaliaFotos =
-  planoTemRouboFurto &&
-  temFotosOuVideo &&
-  cadastroAvaliaApenasEnxuta;
-```
+### 2. Guarda de regressão no helper
+Adicionar testes (`escopoAnaliseCadastro.test.ts`) cobrindo os 5 cenários:
+- Autovistoria enxuta acima FIPE → `cadastroAvaliaFotos=true`
+- Autovistoria completa sub-FIPE → `aguardandoMonitoramentoVistoria=true`, fotos=false
+- Presencial base → idem
+- Presencial cliente → idem
+- Plano sem R/F → `aprovarApenasDocumentos=true`
 
-Estender `aprovarApenasDocumentos` para cobrir presencial técnica E sub-FIPE completa:
-```ts
-const aprovarApenasDocumentos =
-  !planoTemRouboFurto ||
-  isVistoriaAgendadaSemFotos ||
-  isVistoriaPresencialTecnica ||
-  isAutovistoriaCompletaSubFipe;
-```
+### 3. Guarda no edge `aprovar-proposta` (backend)
+Acrescentar ao início da edge:
+- Se `vistoria.modalidade='autovistoria'` E `fotos.count ≥ 15` (sub-FIPE) → não aceitar `liberar_roubo_furto=true`; só aprovar docs e marcar `cadastro_aprovado=true` (Monitoramento decide vistoria).
+- Se `vistoria.modalidade='presencial'` → idem (Cadastro nunca decide fotos).
 
-Passar `aguardandoMonitoramentoVistoria={isVistoriaPresencialTecnica || isAutovistoriaCompletaSubFipe}` ao stepper.
+(Não muda comportamento atual — só blinda contra chamadas manuais futuras que tentem pular a regra.)
 
-### 2. `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`
+### 4. Memória canônica
+Atualizar `mem://logic/operations/vistoria-sem-rastreador-flow` e criar nova:
+`mem://logic/operations/cadastro-escopo-canonico` — referenciada no Core do índice como rule one-liner:
 
-- Aceitar prop `aguardandoMonitoramentoVistoria?: boolean`.
-- Quando true e step1 (docs) aprovado: substituir botão "Aprovar Proposta" por banner verde "Documentos aprovados. Aprovação final é do Monitoramento."
-- Step "Fotos & Vistoria" oculto neste modo (já garantido por `cadastroAvaliaFotos=false`).
-
-### 3. Backend
-Sem mudanças — triggers `trg_servico_promove_cadastro` (presencial técnica) e fluxo sub-FIPE (Monitoramento) já cuidam da promoção.
+> Core: Cadastro avalia SÓ documentos + autovistoria ENXUTA acima FIPE. Fotos de autovistoria sub-FIPE/presencial técnica vão direto ao Monitoramento.
 
 ## Verificação
-- RJK2I25 (presencial base + 31 fotos): stepper "Documentos → Aprovação Final", sem botão de aprovar fotos.
-- Sub-FIPE com autovistoria completa: idem — Cadastro só docs, fotos vão p/ Monitoramento.
-- Autovistoria enxuta acima FIPE: Cadastro continua avaliando fotos (libera R/F).
-- Plano sem R/F: inalterado (só docs).
+- RJK2I25 (presencial base): stepper "Docs → Aprovação Final", banner azul, botão "Aprovar documentação (Monitoramento finaliza)".
+- LMX5A90 e demais sub-FIPE: idem.
+- Cotação acima FIPE com autovistoria enxuta: botão "Liberar Cobertura R/F" mantido.
+- Plano sem R/F: banner verde existente preservado.
 
 ## Fora de escopo
-- Edge functions, triggers, tela de Monitoramento, fluxo de titularidade.
+- Tela do Monitoramento, triggers de promoção, edges de SGA/Hinova, fluxos de instalação/prestador.
 
-## Memória a atualizar (após aprovação)
-`mem://logic/operations/vistoria-sem-rastreador-flow` — refletir que sub-FIPE não passa por avaliação de fotos no Cadastro (só docs); Monitoramento avalia fotos + aprova.
+## Técnico — arquivos tocados
+- `src/lib/cadastro/escopoAnaliseCadastro.ts` (novo)
+- `src/lib/cadastro/escopoAnaliseCadastro.test.ts` (novo)
+- `src/pages/cadastro/PropostaAnalise.tsx` (consumir helper)
+- `supabase/functions/aprovar-proposta/index.ts` (guarda backend)
+- `mem://logic/operations/cadastro-escopo-canonico` (nova memória) + atualizar índice + atualizar `vistoria-sem-rastreador-flow`
+
+## Memória a registrar (após aprovação)
+`mem://logic/operations/cadastro-escopo-canonico`:
+> Cadastro avalia APENAS: (1) documentos sempre, (2) autovistoria enxuta acima FIPE (opcional, libera R/F). NUNCA avalia: autovistoria completa sub-FIPE, vistoria presencial técnica (base/rota/prestador), troca de titularidade. Fonte única: `resolverEscopoAnaliseCadastro()`. Guarda backend em `aprovar-proposta` bloqueia liberação de R/F fora do caso enxuto.

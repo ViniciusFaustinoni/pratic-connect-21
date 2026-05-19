@@ -44,6 +44,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
+import { resolverEscopoAnaliseCadastro } from '@/lib/cadastro/escopoAnaliseCadastro';
 import { useGerarVistoriaLink } from '@/hooks/useVistoriaLinkPublica';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
@@ -116,92 +117,26 @@ export default function PropostaAnalise() {
   const aguardandoExecucao = proposta?.tipo_etapa_analise === 'agendamento_confirmado';
 
   // ============================================================
-  // REGRA DE NEGÓCIO — Análise do Cadastro por tipo de plano
-  // ============================================================
-  // Plano COM Roubo e Furto → Cadastro avalia FOTOS + DOCUMENTOS
-  //   (precisa validar estado físico do veículo para liberar a cobertura).
-  // Plano SEM Roubo e Furto → Cadastro avalia SOMENTE DOCUMENTAÇÃO
-  //   (assistência 24h, vidros, benefícios soltos — sem necessidade de
-  //    inspecionar o veículo). A etapa "Fotos & Vistoria" some.
+  // REGRA CANÔNICA — Escopo de análise do Cadastro
+  // Fonte única: src/lib/cadastro/escopoAnaliseCadastro.ts
+  // Memória: mem://logic/operations/cadastro-escopo-canonico
   // ------------------------------------------------------------
-  const planoTemRouboFurto = !!proposta?.plano_tem_roubo_furto;
-
-  const temFotosOuVideo =
-    (proposta?.vistoria?.fotos?.length || 0) > 0 ||
-    !!proposta?.vistoria?.video_360_url;
-
-  // Vistoria AGENDADA (base ou no cliente) que ainda NÃO foi executada e ainda
-  // NÃO possui fotos/vídeo do associado — registro fotográfico será feito pelo
-  // técnico no atendimento presencial.
-  const isVistoriaAgendadaSemFotos =
-    !isAutovistoria &&
-    !temFotosOuVideo &&
-    (
-      (proposta?.tipo_vistoria === 'agendada_base' &&
-        proposta?.vistoria_base_info?.status !== 'realizado') ||
-      (proposta?.tipo_vistoria === 'agendada' &&
-        proposta?.instalacao_info?.concluida_em == null)
-    );
-
-  // Autovistoria só é considerada COMPLETA (e portanto liberadora de R&F)
-  // quando entregou o roteiro obrigatório + vídeo 360°.
-  // Canônica nova: 2 fotos (motor + chassi) + vídeo 360°.
-  // Compat legado: roteiro antigo de 31 fotos (carro) / 15 (moto) também é aceito.
+  // Cadastro avalia APENAS: docs (sempre) + autovistoria ENXUTA acima FIPE.
+  // Demais casos (presencial técnica, sub-FIPE completa) → Monitoramento.
+  // ============================================================
   const isMoto = (tipoVeiculo || '').toLowerCase().includes('moto');
-  const minFotosAutovistoria = isMoto ? 15 : 31;
-  const totalFotosAuto = proposta?.vistoria?.fotos?.length || 0;
-  const temVideo360 = !!proposta?.vistoria?.video_360_url;
-  const autovistoriaCompleta = isAutovistoria
-    ? ((totalFotosAuto >= 2 && temVideo360) || totalFotosAuto >= minFotosAutovistoria)
-    : true;
+  const planoTemRouboFurto = !!proposta?.plano_tem_roubo_furto;
+  const {
+    temFotosOuVideo,
+    autovistoriaCompleta,
+    isVistoriaAgendadaSemFotos,
+    isVistoriaPresencialTecnica,
+    isAutovistoriaCompletaSubFipe,
+    cadastroAvaliaFotos,
+    aprovarApenasDocumentos,
+    aguardandoMonitoramentoVistoria,
+  } = resolverEscopoAnaliseCadastro(proposta as any, { isMoto });
 
-  // ============================================================
-  // REGRA CANÔNICA (confirmada): Cadastro avalia APENAS:
-  //   1) Documentos (sempre)
-  //   2) Autovistoria ENXUTA acima da FIPE (opcional, libera R/F antecipado)
-  // Cadastro NÃO avalia:
-  //   - Vistoria presencial técnica (base/rota/prestador) → Monitoramento decide
-  //   - Autovistoria COMPLETA sub-FIPE (31/15 fotos) → Monitoramento avalia fotos
-  // ============================================================
-
-  // Vistoria presencial técnica (qualquer modalidade != autovistoria, existindo
-  // registro de vistoria — agendada_base ou agendada no cliente).
-  const isVistoriaPresencialTecnica =
-    !isAutovistoria &&
-    (
-      proposta?.tipo_vistoria === 'agendada_base' ||
-      proposta?.tipo_vistoria === 'agendada' ||
-      (!!proposta?.vistoria && proposta?.vistoria?.modalidade !== 'autovistoria')
-    );
-
-  // Autovistoria completa = sub-FIPE (sem rastreador) → fotos vão para Monitoramento.
-  const isAutovistoriaCompletaSubFipe = isAutovistoria && autovistoriaCompleta;
-
-
-
-
-  // Cadastro avalia fotos APENAS na autovistoria enxuta acima FIPE
-  // (2 fotos + vídeo 360° opcional para liberar R/F antes do técnico).
-  const cadastroAvaliaFotos =
-    planoTemRouboFurto &&
-    temFotosOuVideo &&
-    isAutovistoria &&
-    !isAutovistoriaCompletaSubFipe;
-
-  // Aprovação documental basta quando:
-  //   - plano sem R&F, OU
-  //   - vistoria agendada presencial técnica (Monitoramento decide), OU
-  //   - autovistoria completa sub-FIPE (Monitoramento avalia fotos), OU
-  //   - vistoria agendada sem fotos ainda (compat).
-  const aprovarApenasDocumentos =
-    !planoTemRouboFurto ||
-    isVistoriaAgendadaSemFotos ||
-    isVistoriaPresencialTecnica ||
-    isAutovistoriaCompletaSubFipe;
-
-  // Sinaliza ao stepper que aprovação final é do Monitoramento (presencial ou sub-FIPE).
-  const aguardandoMonitoramentoVistoria =
-    isVistoriaPresencialTecnica || isAutovistoriaCompletaSubFipe;
 
   const podeAprovar =
     proposta?.status === 'assinado' &&
