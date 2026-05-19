@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Save, X, AlertTriangle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { Pencil, Save, X, AlertTriangle, CheckCircle2, Loader2, Sparkles, Sparkle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,8 @@ import {
   type OcrFieldDef,
   type OcrSchemaTipo,
 } from './ocr-fields-schema';
+import { validarNomeOCR, normalizarNomeComparacao } from '@/lib/ocr/nomePlausibilidade';
+import { useNomeCanonicoPorCpf } from '@/hooks/useNomeCanonicoPorCpf';
 
 export interface OcrDadosEditorProps {
   /** Dados extraídos pelo OCR (chave/valor). */
