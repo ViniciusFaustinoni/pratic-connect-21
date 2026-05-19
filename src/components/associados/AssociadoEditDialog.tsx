@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,6 +26,10 @@ import { useUpdateAssociado } from '@/hooks/useAssociados';
 import { buscarCep } from '@/lib/cep';
 import { Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  AssociadoEditConfirmDialog,
+  type CampoAlterado,
+} from './AssociadoEditConfirmDialog';
 
 const UF_OPTIONS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS',
@@ -47,6 +51,8 @@ const ESTADO_CIVIL_OPTIONS = [
   { value: 'uniao_estavel', label: 'União Estável' },
 ];
 
+const CNH_CATEGORIA_OPTIONS = ['A', 'B', 'AB', 'C', 'D', 'E', 'AC', 'AD', 'AE'];
+
 const formSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
   cpf: z.string().min(14, 'CPF inválido'),
@@ -59,6 +65,9 @@ const formSchema = z.object({
   telefone: z.string().min(14, 'Telefone inválido'),
   telefone_secundario: z.string().optional(),
   whatsapp: z.string().optional(),
+  cnh_numero: z.string().optional(),
+  cnh_categoria: z.string().optional(),
+  cnh_validade: z.string().optional(),
   cep: z.string().optional(),
   logradouro: z.string().optional(),
   numero: z.string().optional(),
@@ -72,6 +81,33 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+// Labels amigáveis usadas no diff/histórico
+const FIELD_LABELS: Record<keyof FormData, string> = {
+  nome: 'Nome completo',
+  cpf: 'CPF',
+  rg: 'RG',
+  data_nascimento: 'Data de nascimento',
+  sexo: 'Sexo',
+  estado_civil: 'Estado civil',
+  profissao: 'Profissão',
+  email: 'Email',
+  telefone: 'Telefone',
+  telefone_secundario: 'Telefone secundário',
+  whatsapp: 'WhatsApp',
+  cnh_numero: 'CNH (número)',
+  cnh_categoria: 'CNH (categoria)',
+  cnh_validade: 'CNH (validade)',
+  cep: 'CEP',
+  logradouro: 'Logradouro',
+  numero: 'Número',
+  complemento: 'Complemento',
+  bairro: 'Bairro',
+  cidade: 'Cidade',
+  uf: 'UF',
+  plano_id: 'Plano',
+  dia_vencimento: 'Dia de vencimento',
+};
+
 interface AssociadoEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -79,10 +115,20 @@ interface AssociadoEditDialogProps {
   onSuccess?: () => void;
 }
 
+const normalizeValue = (v: unknown): string => {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') return String(v);
+  return String(v).trim();
+};
+
 export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }: AssociadoEditDialogProps) {
   const { toast } = useToast();
   const { data: planos } = usePlanos();
   const updateAssociado = useUpdateAssociado();
+
+  const [snapshot, setSnapshot] = useState<FormData | null>(null);
+  const [pendingData, setPendingData] = useState<FormData | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -98,6 +144,9 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
       telefone: '',
       telefone_secundario: '',
       whatsapp: '',
+      cnh_numero: '',
+      cnh_categoria: '',
+      cnh_validade: '',
       cep: '',
       logradouro: '',
       numero: '',
@@ -114,7 +163,7 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
 
   useEffect(() => {
     if (associado && open) {
-      form.reset({
+      const initial: FormData = {
         nome: associado.nome || '',
         cpf: associado.cpf || '',
         rg: associado.rg || '',
@@ -126,6 +175,9 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
         telefone: associado.telefone || '',
         telefone_secundario: associado.telefone_secundario || '',
         whatsapp: associado.whatsapp || '',
+        cnh_numero: associado.cnh_numero || '',
+        cnh_categoria: associado.cnh_categoria || '',
+        cnh_validade: associado.cnh_validade || '',
         cep: associado.cep || '',
         logradouro: associado.logradouro || '',
         numero: associado.numero || '',
@@ -135,7 +187,14 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
         uf: associado.uf || '',
         plano_id: associado.plano_id || '',
         dia_vencimento: associado.dia_vencimento || 10,
-      });
+      };
+      form.reset(initial);
+      setSnapshot(initial);
+    }
+    if (!open) {
+      setSnapshot(null);
+      setPendingData(null);
+      setConfirmOpen(false);
     }
   }, [associado, open, form]);
 
@@ -151,34 +210,80 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
     } catch {}
   };
 
-  const handleSubmit = async (data: FormData) => {
+  const computarAlteracoes = (atual: FormData): CampoAlterado[] => {
+    if (!snapshot) return [];
+    const planoLookup = (id?: string) => planos?.find((p) => p.id === id)?.nome || id || '';
+    const formatValue = (campo: keyof FormData, raw: unknown): string => {
+      if (campo === 'plano_id') return planoLookup(raw as string);
+      return normalizeValue(raw);
+    };
+
+    const result: CampoAlterado[] = [];
+    (Object.keys(FIELD_LABELS) as (keyof FormData)[]).forEach((campo) => {
+      const antes = normalizeValue((snapshot as any)[campo]);
+      const depois = normalizeValue((atual as any)[campo]);
+      if (antes !== depois) {
+        result.push({
+          campo,
+          label: FIELD_LABELS[campo],
+          antes: formatValue(campo, (snapshot as any)[campo]),
+          depois: formatValue(campo, (atual as any)[campo]),
+        });
+      }
+    });
+    return result;
+  };
+
+  const alteracoesPendentes = useMemo(
+    () => (pendingData ? computarAlteracoes(pendingData) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pendingData, snapshot, planos]
+  );
+
+  const handleSubmit = (data: FormData) => {
+    const alteracoes = computarAlteracoes(data);
+    if (alteracoes.length === 0) {
+      toast({
+        title: 'Nenhuma alteração',
+        description: 'Os dados estão iguais aos atuais.',
+      });
+      return;
+    }
+    setPendingData(data);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirm = async (motivo: string) => {
+    if (!pendingData || !snapshot) return;
+    const alteracoes = computarAlteracoes(pendingData);
+
+    const dadosAnteriores: Record<string, unknown> = {};
+    const updatesParciais: Record<string, unknown> = {};
+    const labels: Record<string, string> = {};
+    for (const a of alteracoes) {
+      dadosAnteriores[a.campo] = (snapshot as any)[a.campo] ?? null;
+      let valor: any = (pendingData as any)[a.campo];
+      // Normaliza strings vazias → null para colunas opcionais
+      if (typeof valor === 'string' && valor.trim() === '') valor = null;
+      updatesParciais[a.campo] = valor;
+      labels[a.campo] = a.label;
+    }
+
     try {
       await updateAssociado.mutateAsync({
         id: associado.id,
-        ...data,
-        rg: data.rg || null,
-        data_nascimento: data.data_nascimento || null,
-        sexo: data.sexo || null,
-        estado_civil: data.estado_civil || null,
-        profissao: data.profissao || null,
-        telefone_secundario: data.telefone_secundario || null,
-        whatsapp: data.whatsapp || null,
-        cep: data.cep || null,
-        logradouro: data.logradouro || null,
-        numero: data.numero || null,
-        complemento: data.complemento || null,
-        bairro: data.bairro || null,
-        cidade: data.cidade || null,
-        uf: data.uf || null,
-        plano_id: data.plano_id || null,
-        dia_vencimento: data.dia_vencimento || null,
+        motivo,
+        dadosAnteriores,
+        camposAlteradosLabels: labels,
+        ...(updatesParciais as any),
       });
 
       toast({
         title: 'Dados atualizados!',
-        description: 'As informações do associado foram salvas.',
+        description: `${alteracoes.length} ${alteracoes.length === 1 ? 'campo alterado' : 'campos alterados'} e registrados no histórico.`,
       });
-
+      setConfirmOpen(false);
+      setPendingData(null);
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
@@ -191,6 +296,7 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh]">
         <DialogHeader>
@@ -256,6 +362,34 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
                 <div>
                   <Label htmlFor="profissao">Profissão</Label>
                   <Input id="profissao" {...form.register('profissao')} />
+                </div>
+              </div>
+            </div>
+
+            {/* CNH */}
+            <div>
+              <h3 className="font-medium mb-3">CNH</h3>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="cnh_numero">Número</Label>
+                  <Input id="cnh_numero" {...form.register('cnh_numero')} />
+                </div>
+                <div>
+                  <Label htmlFor="cnh_categoria">Categoria</Label>
+                  <Select value={watch('cnh_categoria') || ''} onValueChange={(v) => setValue('cnh_categoria', v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CNH_CATEGORIA_OPTIONS.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="cnh_validade">Validade</Label>
+                  <Input id="cnh_validade" type="date" {...form.register('cnh_validade')} />
                 </div>
               </div>
             </div>
@@ -386,5 +520,14 @@ export function AssociadoEditDialog({ open, onOpenChange, associado, onSuccess }
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AssociadoEditConfirmDialog
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      alteracoes={alteracoesPendentes}
+      isPending={updateAssociado.isPending}
+      onConfirm={handleConfirm}
+    />
+    </>
   );
 }
