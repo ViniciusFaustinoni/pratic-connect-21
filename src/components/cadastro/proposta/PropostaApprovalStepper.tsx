@@ -38,7 +38,12 @@ interface PropostaApprovalStepperProps {
   cadastroAvaliaFotos?: boolean;
   /** True quando o plano contratado tem cobertura de Roubo e/ou Furto. */
   planoTemRouboFurto?: boolean;
-}
+  /**
+   * True quando a aprovação final cabe ao Monitoramento (vistoria presencial
+   * técnica OU autovistoria completa sub-FIPE). Cadastro só aprova documentos
+   * e exibe banner informativo no lugar do botão "Aprovar Proposta".
+   */
+  aguardandoMonitoramentoVistoria?: boolean;
 
 interface StepConfig {
   id: number;
