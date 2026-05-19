@@ -44,6 +44,12 @@ interface PropostaApprovalStepperProps {
    * e exibe banner informativo no lugar do botão "Aprovar Proposta".
    */
   aguardandoMonitoramentoVistoria?: boolean;
+  /**
+   * True quando o Cadastro avalia somente documentos (sem fotos). Reforça o
+   * banner "Cadastro avalia apenas a documentação; aprovação final é do
+   * Monitoramento" no resumo.
+   */
+  aprovarApenasDocumentos?: boolean;
 }
 
 
