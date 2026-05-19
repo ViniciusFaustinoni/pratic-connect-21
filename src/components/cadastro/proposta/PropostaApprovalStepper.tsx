@@ -107,17 +107,23 @@ export function PropostaApprovalStepper({
   cadastroAvaliaFotos = false,
   planoTemRouboFurto = true,
   aguardandoMonitoramentoVistoria = false,
+  aprovarApenasDocumentos = false,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
   const cancelarDocsMutation = useCancelarDocumentosSolicitados();
 
   // Quando o cadastro NÃO avalia fotos (plano sem R&F ou vistoria agendada
-  // ainda não realizada), o stepper fica com 2 etapas: Documentos + Aprovação.
+  // ainda não realizada), o stepper fica com 2 etapas: Documentos + Liberação.
   const ocultarEtapaFotos = !cadastroAvaliaFotos;
+  // Autovistoria enxuta acima FIPE → a aprovação do Cadastro de fato libera R&F.
+  // Caso contrário, o Cadastro apenas encaminha ao Monitoramento (que dá a aprovação final).
+  const liberaCoberturaRF = isAutovistoria && planoTemRouboFurto && cadastroAvaliaFotos;
+  const stepFinal2 = liberaCoberturaRF ? STEP_LIBERAR_RF_2 : STEP_FINAL_2;
+  const stepFinal3 = liberaCoberturaRF ? STEP_LIBERAR_RF_3 : STEP_FINAL_3;
   const steps: StepConfig[] = ocultarEtapaFotos
-    ? [STEP_DOCS, STEP_FINAL_2]
-    : [STEP_DOCS, STEP_FOTOS, STEP_FINAL_3];
+    ? [STEP_DOCS, stepFinal2]
+    : [STEP_DOCS, STEP_FOTOS, stepFinal3];
   const finalStepId = ocultarEtapaFotos ? 2 : 3;
 
   // Step 1 validation: all documents approved (or no documents)
