@@ -2491,11 +2491,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   </FormItem>
                 )}
               />
-              {valorFipe > 0 && faixaAtualFipe && (
+              {valorFipe > 0 && aplicarFipeMenor && fipeMenorInfo?.faixaInferior ? (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Faixa enquadrada (com Regra do 1%): {formatCurrency(fipeMenorInfo.faixaInferior.min)} – {formatCurrency(fipeMenorInfo.faixaInferior.max)}
+                </p>
+              ) : valorFipe > 0 && faixaAtualFipe && (
                 <p className="text-xs text-muted-foreground mt-1.5">
                   Faixa enquadrada: {formatCurrency(faixaAtualFipe.min)} – {formatCurrency(faixaAtualFipe.max)}
                 </p>
               )}
+
 
               {/* ===== Painel Redução de Cota (Regra do 1% / FIPE Menor) =====
                   - Aplicação AUTOMÁTICA quando elegível (sem checkbox, sem justificativa, sem trava).
