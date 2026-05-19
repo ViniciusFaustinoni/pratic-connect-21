@@ -67,12 +67,20 @@ Deno.serve(async (req) => {
 
     const motivoFinal = (motivo && String(motivo).trim()) || 'Cancelada manualmente pelo operador';
 
+    // FK reprovado_por -> profiles.id (NÃO auth.users.id). Resolver profile do usuário.
+    const { data: prof } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const reprovadoPor = prof?.id ?? null;
+
     const { error: updErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         status: 'cancelada',
         motivo_reprovacao: motivoFinal,
-        reprovado_por: user.id,
+        reprovado_por: reprovadoPor,
         reprovado_em: new Date().toISOString(),
       })
       .eq('id', solicitacao_id);
