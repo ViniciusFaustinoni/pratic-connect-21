@@ -2483,19 +2483,38 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </p>
               )}
 
-              {/* ===== Painel Regra do 1% (FIPE Menor) — só aparece quando habilitado pelo diretor E veículo elegível ===== */}
-              {fipeMenorAtivo && fipeMenorInfo && !fipeMenorInfo.bloqueado && fipeMenorInfo.elegivel && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior && (
-                <div className="mt-3">
-                  <Card className="border-green-500/40 bg-green-500/5">
+              {/* ===== Painel Regra do 1% (FIPE Menor) =====
+                  Estágio A (preliminar): aparece assim que o FIPE carrega, antes de plano.
+                  Estágio B (detalhado): após escolher plano, mostra economia + checkbox.
+                  Bloqueado: amber com motivo (teto por tipo, zona R$30k–R$35k). */}
+              {fipeMenorAtivo && fipeMenorInfo && (() => {
+                const bloqueado = !!fipeMenorInfo.bloqueado;
+                const preliminar = !bloqueado && fipeMenorInfo.preliminar;
+                const completo = !bloqueado && !preliminar && fipeMenorInfo.elegivel && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior;
+                // Quando o motor de faixas não retornou dados nem preliminar nem bloqueio, não renderiza
+                if (!bloqueado && !preliminar && !completo) return null;
+
+                const skinClass = bloqueado
+                  ? 'border-amber-500/40 bg-amber-500/5'
+                  : 'border-green-500/40 bg-green-500/5';
+                const accentText = bloqueado
+                  ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-green-700 dark:text-green-400';
+
+                return (
+                  <div className="mt-3">
+                    <Card className={skinClass}>
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <TrendingDown className="h-4 w-4 text-green-600" />
-                            <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-                              Elegível à Regra do 1% (FIPE Menor)
+                            <TrendingDown className={`h-4 w-4 ${bloqueado ? 'text-amber-600' : 'text-green-600'}`} />
+                            <span className={`text-sm font-semibold ${accentText}`}>
+                              {bloqueado ? 'Regra do 1% indisponível' : 'Elegível à Regra do 1% (FIPE Menor)'}
                             </span>
                           </div>
-                          <Badge className="bg-green-600 hover:bg-green-600 text-white border-0">Elegível</Badge>
+                          <Badge className={`${bloqueado ? 'bg-amber-600 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-600'} text-white border-0`}>
+                            {bloqueado ? 'Indisponível' : 'Elegível'}
+                          </Badge>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
@@ -2507,56 +2526,77 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                             <span className="text-muted-foreground">FIPE − 1%:</span>
                             <span className="font-medium">{formatCurrency(fipeMenorInfo.valorReduzido)}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Faixa atual:</span>
-                            <span className="font-medium">{formatCurrency(fipeMenorInfo.faixaAtual.mensal)}/mês</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Faixa reduzida:</span>
-                            <span className="font-medium text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior.mensal)}/mês</span>
-                          </div>
-                          <div className="flex justify-between sm:col-span-2 pt-1 border-t border-green-500/20">
-                            <span className="text-muted-foreground">Economia estimada:</span>
-                            <span className="font-semibold text-green-700 dark:text-green-400">
-                              {formatCurrency(Math.max(0, fipeMenorInfo.economia))}/mês
-                            </span>
-                          </div>
+                          {completo && (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Faixa atual:</span>
+                                <span className="font-medium">{formatCurrency(fipeMenorInfo.faixaAtual!.mensal)}/mês</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Faixa reduzida:</span>
+                                <span className="font-medium text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior!.mensal)}/mês</span>
+                              </div>
+                              <div className="flex justify-between sm:col-span-2 pt-1 border-t border-green-500/20">
+                                <span className="text-muted-foreground">Economia estimada:</span>
+                                <span className="font-semibold text-green-700 dark:text-green-400">
+                                  {formatCurrency(Math.max(0, fipeMenorInfo.economia))}/mês
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </div>
 
-                        <div className="flex items-start gap-2 pt-1">
-                          <Checkbox
-                            id="solicitar-fipe-menor"
-                            checked={solicitarFipeMenor}
-                            onCheckedChange={(v) => setSolicitarFipeMenor(v === true)}
-                            className="mt-0.5"
-                          />
-                          <Label htmlFor="solicitar-fipe-menor" className="text-xs leading-snug cursor-pointer">
-                            Solicitar FIPE Menor
-                            <span className="block text-muted-foreground font-normal">
-                              Sujeito a aprovação por e-mail em até 24h úteis.
-                            </span>
-                          </Label>
-                        </div>
+                        {bloqueado && (
+                          <p className="text-xs text-amber-700 dark:text-amber-400 leading-snug">
+                            {fipeMenorInfo.bloqueado!.motivo}
+                          </p>
+                        )}
 
-                        {solicitarFipeMenor && (
-                          <div className="space-y-1.5">
-                            <Label htmlFor="justif-fipe-menor" className="text-xs font-medium">
-                              Justificativa <span className="text-destructive">*</span>
-                            </Label>
-                            <Textarea
-                              id="justif-fipe-menor"
-                              value={justificativaFipeMenor}
-                              onChange={(e) => setJustificativaFipeMenor(e.target.value)}
-                              placeholder="Explique o motivo da solicitação (mín. 5 caracteres)..."
-                              rows={3}
-                              className="text-xs"
-                            />
-                          </div>
+                        {preliminar && (
+                          <p className="text-xs text-muted-foreground leading-snug">
+                            Selecione um plano para calcular a economia mensal e solicitar a redução.
+                          </p>
+                        )}
+
+                        {completo && (
+                          <>
+                            <div className="flex items-start gap-2 pt-1">
+                              <Checkbox
+                                id="solicitar-fipe-menor"
+                                checked={solicitarFipeMenor}
+                                onCheckedChange={(v) => setSolicitarFipeMenor(v === true)}
+                                className="mt-0.5"
+                              />
+                              <Label htmlFor="solicitar-fipe-menor" className="text-xs leading-snug cursor-pointer">
+                                Solicitar FIPE Menor
+                                <span className="block text-muted-foreground font-normal">
+                                  Sujeito a aprovação por e-mail em até 24h úteis.
+                                </span>
+                              </Label>
+                            </div>
+
+                            {solicitarFipeMenor && (
+                              <div className="space-y-1.5">
+                                <Label htmlFor="justif-fipe-menor" className="text-xs font-medium">
+                                  Justificativa <span className="text-destructive">*</span>
+                                </Label>
+                                <Textarea
+                                  id="justif-fipe-menor"
+                                  value={justificativaFipeMenor}
+                                  onChange={(e) => setJustificativaFipeMenor(e.target.value)}
+                                  placeholder="Explique o motivo da solicitação (mín. 5 caracteres)..."
+                                  rows={3}
+                                  className="text-xs"
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
                       </CardContent>
-                  </Card>
-                </div>
-              )}
+                    </Card>
+                  </div>
+                );
+              })()}
 
               {/* Alerta FIPE acima do limite de autorização — só exibe se dupla aprovação ativa */}
               {(() => {
