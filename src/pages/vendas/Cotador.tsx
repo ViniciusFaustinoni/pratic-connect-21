@@ -388,7 +388,7 @@ export default function CotadorPage() {
   const verificarPlacaDuplicada = useVerificarPlacaDuplicada();
   
   // Auth para obter profile do usuário atual
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const { isVendedorExterno } = usePermissions();
 
   // Mínimo efetivo conforme tipo de instalação e role do consultor
