@@ -1472,7 +1472,7 @@ export type Database = {
           fipe_faixa_solicitada_min: number
           fipe_real: number
           id: string
-          justificativa: string
+          justificativa: string | null
           observacao_supervisor: string | null
           respondido_em: string | null
           solicitante_id: string
@@ -1491,7 +1491,7 @@ export type Database = {
           fipe_faixa_solicitada_min: number
           fipe_real: number
           id?: string
-          justificativa: string
+          justificativa?: string | null
           observacao_supervisor?: string | null
           respondido_em?: string | null
           solicitante_id: string
@@ -1510,7 +1510,7 @@ export type Database = {
           fipe_faixa_solicitada_min?: number
           fipe_real?: number
           id?: string
-          justificativa?: string
+          justificativa?: string | null
           observacao_supervisor?: string | null
           respondido_em?: string | null
           solicitante_id?: string

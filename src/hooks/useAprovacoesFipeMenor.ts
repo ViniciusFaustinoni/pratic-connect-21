@@ -14,13 +14,14 @@ export interface AprovacaoFipeMenor {
   fipe_faixa_solicitada_max: number;
   valor_mensal_original: number;
   valor_mensal_reduzido: number;
-  justificativa: string;
-  status: 'pendente' | 'aprovado' | 'recusado';
+  justificativa: string | null;
+  // Novo fluxo: 'ciente_pendente' aguardando supervisor marcar como visto; 'ciente' marcado.
+  // Valores legados ('pendente'/'aprovado'/'recusado') foram migrados para 'ciente'.
+  status: 'ciente_pendente' | 'ciente' | 'pendente' | 'aprovado' | 'recusado';
   observacao_supervisor: string | null;
   respondido_em: string | null;
   created_at: string;
   updated_at: string;
-  // Joins
   cotacao?: {
     id: string;
     numero: string;
@@ -39,13 +40,15 @@ export interface AprovacaoFipeMenor {
   } | null;
 }
 
+/**
+ * Lista solicitações de Redução de Cota (Regra do 1%).
+ * statusFilter aceita 'ciente_pendente' (não vistos) ou 'ciente' (já marcados);
+ * sem filtro retorna tudo.
+ */
 export function useAprovacoesFipeMenor(statusFilter?: string) {
   return useQuery({
     queryKey: ['aprovacoes-fipe-menor', statusFilter],
     queryFn: async () => {
-      // NOTA: `solicitante_id` aponta para `auth.users`, não para `profiles`,
-      // então não dá para usar embed `profiles!solicitante_id` (HTTP 400).
-      // Buscamos os profiles em uma segunda chamada por `user_id` e juntamos no client.
       let query = supabase
         .from('aprovacoes_fipe_menor')
         .select(`
@@ -66,7 +69,7 @@ export function useAprovacoesFipeMenor(statusFilter?: string) {
       const rows = (data || []) as any[];
 
       const userIds = Array.from(new Set(rows.map((r) => r.solicitante_id).filter(Boolean)));
-      let profilesMap = new Map<string, { nome: string; email: string }>();
+      const profilesMap = new Map<string, { nome: string; email: string }>();
       if (userIds.length) {
         const { data: profs } = await supabase
           .from('profiles')
@@ -85,119 +88,12 @@ export function useAprovacoesFipeMenor(statusFilter?: string) {
   });
 }
 
-export function useAprovarFipeMenor() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      id,
-      observacao,
-      cotacao_id,
-    }: {
-      id: string;
-      observacao?: string;
-      cotacao_id: string;
-    }) => {
-      // Get the aprovacao to know the approved bracket
-      const { data: aprovacao, error: fetchErr } = await supabase
-        .from('aprovacoes_fipe_menor')
-        .select('fipe_faixa_solicitada_min, fipe_faixa_solicitada_max')
-        .eq('id', id)
-        .single();
-
-      if (fetchErr) throw fetchErr;
-
-      const { data: currentUser } = await supabase.auth.getUser();
-
-      // Update aprovacao status
-      const { error: updateErr } = await supabase
-        .from('aprovacoes_fipe_menor')
-        .update({
-          status: 'aprovado',
-          observacao_supervisor: observacao || null,
-          supervisor_id: currentUser.user?.id || null,
-          respondido_em: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id);
-
-      if (updateErr) throw updateErr;
-
-      // Update cotacao with approved bracket
-      const { error: cotErr } = await supabase
-        .from('cotacoes')
-        .update({
-          fipe_menor_aprovado: true,
-          fipe_faixa_cobranca_min: aprovacao.fipe_faixa_solicitada_min,
-          fipe_faixa_cobranca_max: aprovacao.fipe_faixa_solicitada_max,
-        })
-        .eq('id', cotacao_id);
-
-      if (cotErr) throw cotErr;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['aprovacoes-fipe-menor'] });
-      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['acompanhamento'] });
-      toast.success('FIPE menor aprovada com sucesso!');
-    },
-    onError: () => {
-      toast.error('Erro ao aprovar solicitação');
-    },
-  });
-}
-
-export function useRecusarFipeMenor() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      id,
-      observacao,
-      cotacao_id,
-    }: {
-      id: string;
-      observacao?: string;
-      cotacao_id: string;
-    }) => {
-      const { data: currentUser } = await supabase.auth.getUser();
-
-      const { error: updateErr } = await supabase
-        .from('aprovacoes_fipe_menor')
-        .update({
-          status: 'recusado',
-          observacao_supervisor: observacao || null,
-          supervisor_id: currentUser.user?.id || null,
-          respondido_em: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id);
-
-      if (updateErr) throw updateErr;
-
-      // Mark cotacao as rejected
-      const { error: cotErr } = await supabase
-        .from('cotacoes')
-        .update({
-          fipe_menor_aprovado: false,
-        })
-        .eq('id', cotacao_id);
-
-      if (cotErr) throw cotErr;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['aprovacoes-fipe-menor'] });
-      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['acompanhamento'] });
-      toast.success('Solicitação de FIPE menor recusada');
-    },
-    onError: () => {
-      toast.error('Erro ao recusar solicitação');
-    },
-  });
-}
-
-export function useCriarSolicitacaoFipeMenor() {
+/**
+ * Registra automaticamente a aplicação da Regra do 1% numa cotação.
+ * Não pede aprovação — apenas alimenta a fila para o supervisor "tomar ciência".
+ * A cotação já é gravada com fipe_menor_aprovado=true + faixa reduzida desde o salvamento.
+ */
+export function useRegistrarCienciaFipeMenor() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -210,34 +106,74 @@ export function useCriarSolicitacaoFipeMenor() {
       fipe_faixa_solicitada_max: number;
       valor_mensal_original: number;
       valor_mensal_reduzido: number;
-      justificativa: string;
     }) => {
       const { data: currentUser } = await supabase.auth.getUser();
 
-      const { error } = await supabase
-        .from('aprovacoes_fipe_menor')
-        .insert({
-          ...data,
-          solicitante_id: currentUser.user?.id!,
-        });
-
+      const { error } = await supabase.from('aprovacoes_fipe_menor').insert({
+        ...data,
+        solicitante_id: currentUser.user?.id!,
+        status: 'ciente_pendente',
+        justificativa: null,
+      });
       if (error) throw error;
 
-      // Mark cotacao
+      // Cotação já aplica a redução: marca aprovada + faixa de cobrança reduzida
       const { error: cotErr } = await supabase
         .from('cotacoes')
-        .update({ solicitar_fipe_menor: true })
+        .update({
+          solicitar_fipe_menor: true,
+          fipe_menor_aprovado: true,
+          fipe_faixa_cobranca_min: data.fipe_faixa_solicitada_min,
+          fipe_faixa_cobranca_max: data.fipe_faixa_solicitada_max,
+        })
         .eq('id', data.cotacao_id);
-
       if (cotErr) throw cotErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['aprovacoes-fipe-menor'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-      toast.success('Solicitação de FIPE menor enviada ao supervisor!');
     },
-    onError: () => {
-      toast.error('Erro ao enviar solicitação');
+    onError: (err) => {
+      // Falha silenciosa — a cotação já foi salva; só não alimentou a fila.
+      console.error('[fipe-menor] falha ao registrar ciência:', err);
     },
   });
 }
+
+/**
+ * Supervisor marca como ciente (não bloqueia, não reverte preço).
+ */
+export function useMarcarCienteFipeMenor() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, observacao }: { id: string; observacao?: string }) => {
+      const { data: currentUser } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('aprovacoes_fipe_menor')
+        .update({
+          status: 'ciente',
+          observacao_supervisor: observacao || null,
+          supervisor_id: currentUser.user?.id || null,
+          respondido_em: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['aprovacoes-fipe-menor'] });
+      toast.success('Marcado como ciente');
+    },
+    onError: () => {
+      toast.error('Erro ao marcar como ciente');
+    },
+  });
+}
+
+/**
+ * @deprecated Use useRegistrarCienciaFipeMenor — Redução de Cota é automática.
+ * Mantido como alias para evitar quebra de imports legados.
+ */
+export const useCriarSolicitacaoFipeMenor = useRegistrarCienciaFipeMenor;
