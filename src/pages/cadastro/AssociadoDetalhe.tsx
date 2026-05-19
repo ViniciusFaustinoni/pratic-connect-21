@@ -76,6 +76,7 @@ import { useSolicitarDocumentos } from '@/hooks/usePropostasPendentes';
 import { useDocumentosSolicitadosPendentes } from '@/hooks/useDocumentosSolicitados';
 import { useQueryClient } from '@tanstack/react-query';
 import { MediaViewerModal, type MediaItem } from '@/components/cadastro/MediaViewerModal';
+import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
 
 // ============================================
 // UTILITÁRIOS
