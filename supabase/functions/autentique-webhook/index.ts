@@ -305,7 +305,7 @@ serve(async (req) => {
     if (!contrato) {
       const { data: solTroca } = await supabase
         .from('solicitacoes_troca_titularidade')
-        .select('id, status, termo_cancelamento_assinado_em')
+        .select('id, status, termo_cancelamento_assinado_em, cotacao_id, veiculo_id')
         .eq('termo_cancelamento_autentique_id', documentId)
         .maybeSingle();
       if (solTroca) {
