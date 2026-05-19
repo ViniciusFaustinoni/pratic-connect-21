@@ -167,7 +167,9 @@ serve(async (req) => {
     if (last) {
       const ageMs = Date.now() - new Date(last.verificado_em).getTime();
       if (ageMs < CACHE_MIN * 60 * 1000) {
-        const liberado = !last.tem_debito || last.bypass === true || last.origem_resultado === 'transitorio';
+        const liberado = last.origem_resultado === 'inconclusivo'
+          ? false
+          : (!last.tem_debito || last.bypass === true || last.origem_resultado === 'transitorio' || last.origem_resultado === 'associado_inexistente_sga');
         return json(200, { ok: true, check: last, liberado, cached: true });
       }
     }
