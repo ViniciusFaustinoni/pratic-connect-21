@@ -26,11 +26,17 @@ export function TelaAnaliseTrocaTitularidade({
   let icon = <Clock className="h-12 w-12 text-blue-600" />;
   let title = 'Aguardando análise';
   let description = 'Sua solicitação de troca de titularidade foi recebida. Aguarde a análise da nossa equipe.';
+  let showContinuarCTA = false;
 
   if (status === 'cotacao_em_andamento' && !termoAssinadoEm) {
     icon = <FileSignature className="h-12 w-12 text-amber-600" />;
     title = 'Aguardando o titular anterior assinar o termo de cancelamento';
     description = 'Sua cotação já foi montada pelo consultor. Você poderá continuar a contratação assim que o titular anterior assinar o termo de cancelamento (biometria facial). Você receberá um aviso por WhatsApp.';
+  } else if (status === 'cotacao_em_andamento' && termoAssinadoEm) {
+    icon = <CheckCircle2 className="h-12 w-12 text-green-600" />;
+    title = 'Link liberado — continue sua contratação';
+    description = 'O titular anterior assinou o termo de cancelamento. Agora é com você: escolha o plano, envie os documentos, assine o termo de filiação e finalize. Toque em Continuar para retomar de onde parou.';
+    showContinuarCTA = true;
   } else if (status === 'aguardando_cadastro') {
     icon = <ClipboardCheck className="h-12 w-12 text-blue-600" />;
     title = 'Em análise pelo Cadastro';
