@@ -113,10 +113,14 @@ Deno.serve(async (req) => {
       novo_titular_dados: (sol.novo_titular_dados as any) || null,
     });
 
+    // IMPORTANTE: devolvemos o status REAL da solicitação (geralmente
+    // `cotacao_em_andamento`). O frontend usa esse valor para decidir o que
+    // renderizar — retornar 'aguardando_cadastro' aqui derrubava o link
+    // público para a tela "Em análise" antes de Docs/Contrato/Pagamento.
     return new Response(JSON.stringify({
       success: true,
       cotacao_id,
-      status: 'aguardando_cadastro',
+      status: sol.status,
       cadastro_auto_aprovado: false,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
