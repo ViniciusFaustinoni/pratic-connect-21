@@ -44,6 +44,8 @@ interface PropostaApprovalStepperProps {
    * e exibe banner informativo no lugar do botão "Aprovar Proposta".
    */
   aguardandoMonitoramentoVistoria?: boolean;
+}
+
 
 interface StepConfig {
   id: number;
