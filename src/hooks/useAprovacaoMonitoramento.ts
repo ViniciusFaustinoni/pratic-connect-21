@@ -102,11 +102,13 @@ export function useInstalacoesAguardandoAprovacao() {
         const comb = String(v.combustivel || '').toLowerCase();
         if (comb.includes('diesel')) return true;
         const fipe = Number(v.valor_fipe) || 0;
-        const isMoto = String(v.modelo || '').toLowerCase().includes('moto')
-          || String(v.marca || '').toLowerCase().match(/honda|yamaha|suzuki|kawasaki|bmw motorrad|harley/);
+        // Fonte canônica: detectarTipoVeiculo(marca, modelo) — usa MOTO_BRANDS
+        // + keywords, evita falso positivo de marca ambígua (HONDA Civic).
+        const isMoto = detectarTipoVeiculo(undefined, v.modelo ?? null, v.marca ?? null) === 'moto';
         const limite = isMoto ? FIPE_MIN_MOTO : FIPE_MIN_CARRO;
         return fipe >= limite;
       };
+
 
       const pendentes = aprovados.filter((s: any) => {
         const isAuto = (s.modalidade || '').toLowerCase() === 'autovistoria';
