@@ -1141,8 +1141,18 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* PROTEÇÃO 360º ATIVADA - Tela de boas-vindas */}
-                  {cotacao?.status_contratacao === 'ativo' ? (
+                  {/* Troca de Titularidade pós-pagamento: cliente acompanha avaliação */}
+                  {isTrocaTitularidade && cotacao?.status_contratacao !== 'ativo' ? (
+                    <TelaAnaliseTrocaTitularidade
+                      status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
+                      motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
+                      termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
+                      aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
+                      aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+                      tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
+                      expiradaEm={(solicitacaoTroca as any)?.expirada_em}
+                    />
+                  ) : cotacao?.status_contratacao === 'ativo' ? (
                     <Card className="border-green-500/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
                         <motion.div 
