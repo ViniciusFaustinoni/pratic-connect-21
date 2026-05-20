@@ -1153,7 +1153,7 @@ serve(async (req) => {
           null);
       }
 
-      const { fotos, metas, descartadasSemLink, descartadasSemTipo, descartadasVideo } = buildFotosPayload(
+      const { fotos, metas, descartadasSemLink, descartadasSemTipo, descartadasVideo, tiposFallback15 } = buildFotosPayload(
         documentosNovos,
         (tipo) => getMap('tipo_foto', tipo),
       );
@@ -1165,13 +1165,16 @@ serve(async (req) => {
         porTipo[k] = (porTipo[k] || 0) + 1;
       }
 
-      if (descartadasSemLink.length || descartadasSemTipo.length || descartadasVideo.length) {
-        await logSync(_vid, _aid, 'enviar_fotos_descarte', 'info', {
+      if (descartadasSemLink.length || descartadasSemTipo.length || descartadasVideo.length || tiposFallback15.length) {
+        await logSync(_vid, _aid, 'enviar_fotos_resumo', 'info', {
           qtd_total: documentosNovos.length,
           qtd_validas: fotos.length,
           descartadas_sem_link: descartadasSemLink,
-          descartadas_sem_mapeamento: descartadasSemTipo,
-          descartadas_video: descartadasVideo, // Hinova não aceita vídeo — sempre filtrado
+          descartadas_sem_tipo: descartadasSemTipo, // só fotos com tipo vazio
+          descartadas_video: descartadasVideo, // Hinova não aceita vídeo
+          // Fotos cujo tipo não tem mapeamento explícito — enviadas como FOTO ADICIONAL (15).
+          // Servem como sinal para o operador adicionar mapeamento dedicado se quiser relatório por tipo.
+          tipos_fallback_15: tiposFallback15,
         }, null);
       }
 

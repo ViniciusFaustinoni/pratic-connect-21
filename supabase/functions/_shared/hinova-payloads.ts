@@ -276,6 +276,11 @@ export interface FotoMeta {
   nome_arquivo: string;
 }
 
+// Código Hinova de FOTO ADICIONAL (provisório, ver hinova_mapeamentos).
+// Usado como fallback quando o tipo da foto não tem mapeamento explícito —
+// evita que fotos da vistoria sumam silenciosamente no SGA (caso LTV3631).
+const HINOVA_TIPO_FOTO_ADICIONAL = 15;
+
 export function buildFotosPayload(
   documentos: DocumentoEntrada[],
   resolverCodigoTipo: (tipo: string) => number | null,
@@ -285,76 +290,15 @@ export function buildFotosPayload(
   descartadasSemLink: string[];
   descartadasSemTipo: Array<{ id: string; tipo: string }>;
   descartadasVideo: Array<{ id: string; arquivo_url: string }>;
+  tiposFallback15: Array<{ id: string; tipo: string }>;
 } {
   const fotos: FotoHinovaPayload[] = [];
   const metas: FotoMeta[] = [];
   const descartadasSemLink: string[] = [];
   const descartadasSemTipo: Array<{ id: string; tipo: string }> = [];
   const descartadasVideo: Array<{ id: string; arquivo_url: string }> = [];
-
-  // Hinova /veiculo/foto/cadastrar aceita apenas IMAGENS e PDFs.
-  // Vídeo é descartado defensivamente — extensões na URL ou tipo contendo "video"/"audio".
-  const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|avi|mkv|3gp|3g2|hevc|wmv|flv|ogv|mts|m2ts)(\?|#|$)/i;
-  const isVideoLike = (url: string, tipo: string | null): boolean => {
-    if (VIDEO_EXT_RE.test(url)) return true;
-    const t = (tipo || '').toLowerCase();
-    if (t.includes('video') || t.includes('vídeo') || t.includes('audio') || t.includes('áudio')) return true;
-    return false;
-  };
-
-  const aliasTipo = (t: string | null): string => {
-    const s = (t || '').toLowerCase().trim();
-    const aliases: Record<string, string> = {
-      // Fotos do veículo
-      chassi: 'foto_chassi',
-      motor: 'foto_motor',
-      frente: 'foto_frontal_veiculo',
-      frontal: 'foto_frontal_veiculo',
-      traseira: 'foto_traseira_veiculo',
-      lateral_esquerda: 'foto_lateral_esquerda',
-      lateral_direita: 'foto_lateral_direita',
-      odometro: 'foto_hodometro',
-      hodometro: 'foto_hodometro',
-      painel: 'foto_painel',
-      painel_completo: 'foto_painel',
-      painel_km: 'foto_hodometro',
-      km: 'foto_km',
-      foto_veiculo_frente: 'foto_frontal_veiculo',
-      foto_veiculo_traseira: 'foto_traseira_veiculo',
-      foto_veiculo_lateral_esquerda: 'foto_lateral_esquerda',
-      foto_veiculo_lateral_direita: 'foto_lateral_direita',
-      // Variantes vindas de vistoria_fotos
-      lateral_dianteira_esquerda: 'foto_lateral_esquerda',
-      lateral_dianteira_direita: 'foto_lateral_direita',
-      lateral_traseira_esquerda: 'foto_lateral_esquerda',
-      lateral_traseira_direita: 'foto_lateral_direita',
-      chassi_motor: 'foto_chassi',
-      numero_motor: 'foto_motor',
-      // Documentos do associado — enviados como fotos anexas ao veículo
-      foto_cnh: 'cnh',
-      cnh_frente: 'cnh',
-      cnh_verso: 'cnh',
-      cnh_aberta: 'cnh',
-      foto_crlv: 'crlv',
-      crlv_frente: 'crlv',
-      crlv_verso: 'crlv',
-      comprovante: 'comprovante_residencia',
-      comp_residencia: 'comprovante_residencia',
-      comprovante_endereco: 'comprovante_residencia',
-      foto_rg: 'rg',
-      rg_frente: 'rg',
-      rg_verso: 'rg',
-      foto_cpf: 'cpf',
-      // Termo de Filiação assinado (Autentique)
-      contrato: 'contrato_assinado',
-      termo: 'contrato_assinado',
-      termo_filiacao: 'contrato_assinado',
-      termo_afiliacao: 'contrato_assinado',
-      termo_assinado: 'contrato_assinado',
-    };
-    return aliases[s] || s;
-  };
-
+  const tiposFallback15: Array<{ id: string; tipo: string }> = [];
+...
   for (const doc of documentos) {
     if (!doc.arquivo_url) {
       descartadasSemLink.push(doc.id);
@@ -364,11 +308,19 @@ export function buildFotosPayload(
       descartadasVideo.push({ id: doc.id, arquivo_url: doc.arquivo_url });
       continue;
     }
-    const tipoNorm = aliasTipo(doc.tipo);
-    const codigoTipo = resolverCodigoTipo(tipoNorm);
-    if (!codigoTipo) {
+    const tipoBruto = (doc.tipo == null ? '' : String(doc.tipo)).trim();
+    if (!tipoBruto) {
+      // Sem nada para classificar — preservamos como descarte para análise.
       descartadasSemTipo.push({ id: doc.id, tipo: String(doc.tipo) });
       continue;
+    }
+    const tipoNorm = aliasTipo(tipoBruto);
+    let codigoTipo = resolverCodigoTipo(tipoNorm);
+    if (!codigoTipo) {
+      // Fallback: qualquer tipo desconhecido entra como FOTO ADICIONAL (15)
+      // em vez de ser descartado. Ver mem://logic/integrations/sga-fotos-codigo-15-adicional.
+      codigoTipo = HINOVA_TIPO_FOTO_ADICIONAL;
+      tiposFallback15.push({ id: doc.id, tipo: tipoBruto });
     }
     const nome = doc.nome_arquivo || `documento_${doc.id}.jpg`;
     fotos.push({
@@ -385,7 +337,7 @@ export function buildFotosPayload(
     });
   }
 
-  return { fotos, metas, descartadasSemLink, descartadasSemTipo, descartadasVideo };
+  return { fotos, metas, descartadasSemLink, descartadasSemTipo, descartadasVideo, tiposFallback15 };
 }
 
 export function chunk<T>(arr: T[], size: number): T[][] {
