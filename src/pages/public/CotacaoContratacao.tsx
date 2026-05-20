@@ -1143,15 +1143,30 @@ export default function CotacaoContratacao() {
                 >
                   {/* Troca de Titularidade pós-pagamento: cliente acompanha avaliação */}
                   {isTrocaTitularidade && cotacao?.status_contratacao !== 'ativo' ? (
-                    <TelaAnaliseTrocaTitularidade
-                      status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
-                      motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
-                      termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
-                      aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
-                      aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
-                      tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
-                      expiradaEm={(solicitacaoTroca as any)?.expirada_em}
-                    />
+                    (() => {
+                      // Override defensivo: se a cotação já avançou (pagamento_ok / contrato_gerado /
+                      // aguardando_aprovacao_monitoramento) mas a trigger DB ainda não promoveu a
+                      // solicitação, mostramos "Em análise pelo Cadastro" em vez do convite
+                      // "Link liberado — continue sua contratação".
+                      const solStatus = (solicitacaoTroca?.status as any) || 'aguardando_cadastro';
+                      const cotacaoAvancou = ['pagamento_ok','contrato_gerado','aguardando_aprovacao_monitoramento'].includes(
+                        cotacao?.status_contratacao || ''
+                      );
+                      const statusEfetivo = (solStatus === 'cotacao_em_andamento' && cotacaoAvancou)
+                        ? 'aguardando_cadastro'
+                        : solStatus;
+                      return (
+                        <TelaAnaliseTrocaTitularidade
+                          status={statusEfetivo}
+                          motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
+                          termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
+                          aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
+                          aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+                          tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
+                          expiradaEm={(solicitacaoTroca as any)?.expirada_em}
+                        />
+                      );
+                    })()
                   ) : cotacao?.status_contratacao === 'ativo' ? (
                     <Card className="border-green-500/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
