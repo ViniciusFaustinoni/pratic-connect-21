@@ -1543,6 +1543,7 @@ export function useProposta(contratoId: string | undefined) {
         tipo_vistoria: tipoVistoriaCotacao,
         veiculo_id: veiculoId,
         veiculo_cobertura_total: veiculoCoberturaTotal,
+        veiculo_cobertura_roubo_furto: veiculoCoberturaRouboFurto,
         contrato_link_token: (contrato as any).link_token || null,
         veiculo_renavam: veiculoRenavam,
         veiculo_chassi: veiculoChassi,
