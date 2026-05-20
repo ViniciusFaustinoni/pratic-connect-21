@@ -52,10 +52,10 @@ const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
 };
 
 const TROCA_FILTROS: Record<string, StatusTroca[]> = {
-  // Fila REAL de aprovação do Cadastro — só entra quando o trigger
-  // trg_troca_promove_cadastro_via_cotacao promove a solicitação porque a
-  // cotação canônica atingiu `aguardando_aprovacao_cadastro`.
-  pendentes: ['aguardando_cadastro'],
+  // REGRA CANÔNICA: `aguardando_cadastro` NÃO aparece em Processos.
+  // Quando o trigger trg_troca_promove_cadastro_via_cotacao promove a troca,
+  // ela vira proposta da fila do Cadastro e só aparece em
+  // `/cadastro/propostas` (Propostas Pendentes), com badge TROCA DE TITULARIDADE.
   // Pré-cadastro: termo pendente ou link público em andamento pelo novo titular.
   em_andamento: ['aguardando_termo_cancelamento', 'cotacao_em_andamento'],
   aguardando_monit: ['aguardando_monitoramento'],
