@@ -222,6 +222,84 @@ export function useEventosVeiculo(veiculoId: string | undefined) {
   });
 }
 
+/**
+ * Vídeos 360° de todas as vistorias de um veículo.
+ * Cobre tanto `vistorias.video_360_url` (canônico) quanto fotos com
+ * `tipo='video_360'` (formato legado / autovistoria pública).
+ */
+export interface Video360Item {
+  id: string;
+  vistoria_id: string;
+  url: string;
+  modalidade: string | null;
+  tipo: string | null;
+  created_at: string;
+  origem: 'vistoria' | 'foto';
+}
+
+export function useVideos360PorVeiculo(veiculoId: string | undefined) {
+  return useQuery({
+    queryKey: ['veiculo-videos-360', veiculoId],
+    queryFn: async (): Promise<Video360Item[]> => {
+      if (!veiculoId) return [];
+
+      const { data: vistorias } = await supabase
+        .from('vistorias')
+        .select('id, modalidade, tipo, created_at, video_360_url')
+        .eq('veiculo_id', veiculoId);
+
+      const vistoriaIds = (vistorias || []).map((v: any) => v.id);
+      const vistoriaMap = new Map((vistorias || []).map((v: any) => [v.id, v]));
+
+      // Fallback: fotos com tipo video_360 (autovistoria pública antiga)
+      let fotosVideo: any[] = [];
+      if (vistoriaIds.length > 0) {
+        const { data: fv } = await supabase
+          .from('vistoria_fotos')
+          .select('id, vistoria_id, arquivo_url, tipo, created_at')
+          .in('vistoria_id', vistoriaIds)
+          .like('tipo', 'video_360%');
+        fotosVideo = fv || [];
+      }
+
+      const result: Video360Item[] = [];
+
+      (vistorias || []).forEach((v: any) => {
+        if (v.video_360_url) {
+          result.push({
+            id: `v-${v.id}`,
+            vistoria_id: v.id,
+            url: v.video_360_url,
+            modalidade: v.modalidade,
+            tipo: v.tipo,
+            created_at: v.created_at,
+            origem: 'vistoria',
+          });
+        }
+      });
+
+      fotosVideo.forEach((f: any) => {
+        // Evita duplicar quando vistoria.video_360_url já trouxe o mesmo arquivo
+        const vist: any = vistoriaMap.get(f.vistoria_id);
+        if (vist?.video_360_url === f.arquivo_url) return;
+        result.push({
+          id: `f-${f.id}`,
+          vistoria_id: f.vistoria_id,
+          url: f.arquivo_url,
+          modalidade: vist?.modalidade || null,
+          tipo: vist?.tipo || null,
+          created_at: f.created_at,
+          origem: 'foto',
+        });
+      });
+
+      return result.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    },
+    enabled: !!veiculoId,
+  });
+}
+
+
 // Tipos de foto agrupados por categoria.
 // Cobre tanto o vocabulário do técnico interno quanto o do prestador
 // (`PrestadorInstalacao` envia chaves como `chave`, `bateria`, `estepe`,
