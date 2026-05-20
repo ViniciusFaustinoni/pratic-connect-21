@@ -385,7 +385,11 @@ export default function CotacaoContratacao() {
 
   // Ordem de navegação por índices INTERNOS:
   // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
-  const navOrder = useMemo<number[]>(() => [0, 1, 2, 3, 4, 5], []);
+  // Em troca dentro da janela mesmo-dia, vistoria é dispensada → remove índice 3.
+  const navOrder = useMemo<number[]>(
+    () => (dispensaVistoriaTroca ? [0, 1, 2, 4, 5] : [0, 1, 2, 3, 4, 5]),
+    [dispensaVistoriaTroca]
+  );
 
 
 
