@@ -1136,7 +1136,10 @@ export default function AprovacaoInstalacaoDetalhe() {
         onOpenChange={setDevolverOpen}
         isPending={devolverCadastro.isPending}
         onConfirm={(motivo) => {
-          if (!servico?.contrato_id) return;
+          if (!servico?.contrato_id) {
+            toast.error('Contrato não localizado para este serviço — recarregue a página.');
+            return;
+          }
           devolverCadastro.mutate(
             { contrato_id: servico.contrato_id, motivo },
             {
