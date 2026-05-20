@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type StatusTroca =
+  | 'aguardando_termo_cancelamento'
   | 'cotacao_em_andamento'
   | 'aguardando_cadastro'
   | 'aguardando_monitoramento'
