@@ -1,84 +1,97 @@
-## Diagnóstico — por que LLF7F07 não apareceu na Aprovação de Associados
+## Diagnóstico
 
-**Linha do tempo do contrato `9326ba5a` (placa LLF7F07, FIPE R$ 29.178 → sub-FIPE car <30k):**
+A cotação **COT-20260520-135559488-186** não foi promovida canonicamente para Cadastro no backend.
 
-```text
-04/05 17:54:59  contrato: pendente_vistoria → aguardando_instalacao (trigger DB)
-04/05 17:55:04  contrato: aguardando_instalacao → ATIVO
-                source = edge:ativar-associado <- edge:aprovar-proposta
-                payload: jaTemInstalacaoConcluida=false, planoTemRouboFurto=true
-18/05 15:55     fotos canônicas sub-FIPE materializadas (3: motor, chassi, video_360)
-                vistorias.status = pendente, modalidade=autovistoria
-20/05 15:51-15:58  técnico executa vistoria presencial completa (31 fotos + selfie + assinatura)
-                   instalacoes.status = concluida (dispensa_rastreador=true)
-                   cotacoes.status_contratacao já era 'ativo' desde 04/05
-```
+### Evidências da cotação
+- **cotação** `1366694f-5baa-4b2c-b306-28af6e80eeac`
+- **solicitação de troca** `637e3fea-7622-400a-b3da-a178e61e33e8`
+- `cotacoes.numero = COT-20260520-135559488-186`
+- `cotacoes.status = enviada`
+- `cotacoes.status_contratacao = aguardando`
+- `cotacoes.origem_troca_titularidade = true`
+- `solicitacoes_troca_titularidade.status = cotacao_em_andamento`
+- `solicitacoes_troca_titularidade.termo_cancelamento_assinado_em = 2026-05-20 15:26:45+00`
+- `solicitacoes_troca_titularidade.aprovado_cadastro_em = null`
+- `solicitacoes_troca_titularidade.aprovado_monitoramento_em = null`
+- `solicitacoes_troca_titularidade.autovistoria_concluida_em = null`
 
-**Causa raiz (não é bug atual, é resíduo histórico):**
+## Conclusão
 
-- O contrato foi promovido a `ativo` em **04/05/2026**, antes da blindagem `aprovar-proposta` que hoje (linha 815 do arquivo) força sub-FIPE / "ninguém precisa de rastreador" a aguardar Monitoramento.
-- Na época, `aprovar-proposta` chamava `ativar-associado` direto mesmo com `jaTemInstalacaoConcluida=false`, pulando a fila.
-- Quando as fotos chegaram em 20/05, **não havia mais nada para enfileirar**: o contrato já estava ativo há 16 dias. Por isso a aba Aprovação de Associados não mostra nada.
+O fluxo canônico **não quebrou no gatilho de promoção**. O problema é que a **UI de Cadastro está incluindo `cotacao_em_andamento` na fila “Aguardando Cadastro”**, mesmo quando a solicitação ainda não atingiu o ponto canônico.
 
-**Confirmação da guarda atual:** `aprovar-proposta` (linhas 811-851) já decide corretamente `deveAguardarInstalacao = !jaTemInstalacaoConcluida || !algumPrecisouRastreador` → contrato fica `assinado` + associado `aguardando_aprovacao_monitoramento`. Novos casos não vazam mais.
+### Por que isso prova que não foi promoção indevida
+A promoção canônica da troca para Cadastro depende do trigger:
+- `fn_troca_promove_cadastro_via_cotacao`
+- trigger `trg_troca_promove_cadastro_via_cotacao`
 
-**6 contratos irmãos na mesma situação** (todos com vistoria materializada em 18/05 15:55, status=pendente, contrato=ativo):
+Esse trigger só muda a solicitação para `aguardando_cadastro` quando:
+- `cotacoes.status_contratacao` vira `aguardando_aprovacao_cadastro`
+- e a cotação é `origem_troca_titularidade = true`
 
-| Placa    | FIPE      | Contrato |
-|----------|-----------|----------|
-| LLF7F07  | 29.178    | 9326ba5a |
-| KNO3F78  | 19.838    | ac1b293b |
-| LMF8I79  | 31.935    | 8455c419 |
-| PYN0C82  | 48.708    | bd6e5b00 |
-| LPE3902  | 17.116    | 176a17c4 |
-| KOA4D63  | 11.053    | 1dca5199 |
+Nesta cotação, o status atual é:
+- `status_contratacao = aguardando`
 
-> Observação: LMF8I79 (R$ 31.935) e PYN0C82 (R$ 48.708) estão **acima** do mínimo carro (30k). Eles caíram no mesmo job de materialização retroativa mas precisam de tratamento separado — neles a autovistoria é opcional/enxuta, não obrigatória.
+Ou seja: **o trigger nunca disparou** para este caso.
 
----
+## Gap encontrado
+
+### 1) Fila de Cadastro com filtro errado
+A tela de processos de Cadastro está tratando estes status como pendentes:
+- `aguardando_termo_cancelamento`
+- `aguardando_cadastro`
+- `cotacao_em_andamento`
+
+Locais encontrados:
+- `src/pages/cadastro/ProcessosOperacionais.tsx`
+- `src/hooks/useProcessosOperacionaisCount.ts`
+
+Na prática, isso faz a troca aparecer em uma aba rotulada como **Aguardando Cadastro** antes da hora, embora o registro continue corretamente em `cotacao_em_andamento`.
+
+### 2) Mensagem do modal está desatualizada
+Em `src/components/troca-titularidade/ModalDetalhesTroca.tsx`, o texto ainda diz que o botão Aprovar aparece quando o titular antigo assina o termo e a solicitação muda para **Aguardando Cadastro**.
+
+Isso está desalinhado com a regra atual, porque após a assinatura do termo a solicitação fica em:
+- `cotacao_em_andamento`
+
+E só deve ir para:
+- `aguardando_cadastro`
+
+quando a cotação atingir `aguardando_aprovacao_cadastro`.
+
+## O que não encontrei
+- Não há evidência de caminho duplicado promovendo esse caso para `aguardando_cadastro`
+- Não há evidência de chamada de `aprovar-troca-cadastro`
+- Não há evidência de `status_contratacao` avançando para `aguardando_aprovacao_cadastro`
+- Os logs consultados não mostram promoção indevida; o estado persistido continua `cotacao_em_andamento`
 
 ## Plano de correção
 
-### Parte 1 — Higienização auditada dos 4 sub-FIPE legítimos (LLF7F07, KNO3F78, LPE3902, KOA4D63)
+1. **Remover `cotacao_em_andamento` da fila/contadores de “Aguardando Cadastro”**
+   - ajustar filtros da tela e badges para que só `aguardando_cadastro` represente fila real do Cadastro
 
-Para cada um, em uma única migration auditada:
+2. **Criar separação visual correta para trocas “em andamento”**
+   - manter visibilidade operacional do caso, mas fora da fila de aprovação do Cadastro
+   - rotular como etapa pré-cadastro / link público em andamento
 
-1. Marcar `vistorias.status = 'aprovada'` (modalidade autovistoria) com `observacoes` prefixado por `[SANEAMENTO 20/05/2026] Vistoria presencial completa do técnico em <data> supre a aprovação retroativa — contrato já estava ativo desde <data_ativacao> por vazamento pré-blindagem sub-FIPE em aprovar-proposta.`
-2. Promover o `servico vistoria_entrada` órfão para `status = 'concluida'` (vinculando ao `instalacao_origem_id` da instalação que de fato fechou), preservando histórico no `observacoes`.
-3. Registrar evento em `logs_auditoria` apontando que a "aprovação de Monitoramento" foi suprida pela vistoria presencial executada em 20/05.
-4. **Não** mexer em SGA — o contrato já está sincronizado.
+3. **Corrigir textos explicativos do modal**
+   - alinhar mensagens ao fluxo canônico atual
+   - deixar explícito que termo assinado não manda mais para Cadastro automaticamente
 
-### Parte 2 — Tratamento dos 2 contratos acima-FIPE (LMF8I79, PYN0C82)
+4. **Validar com esta cotação como caso real**
+   - confirmar que **COT-20260520-135559488-186** deixa de aparecer como “Aguardando Cadastro”
+   - confirmar que só aparecerá nessa fila quando `status_contratacao` virar `aguardando_aprovacao_cadastro`
 
-Nesses casos a autovistoria era opcional e a presencial foi feita. Mesmo tratamento: marcar `vistorias.status='aprovada'` com `[SANEAMENTO]` e fechar o `servico vistoria_entrada` se ainda estiver vivo. Estes não pertencem ao fluxo sub-FIPE; o "vazamento" não os afetou diretamente porque acima-FIPE pode ativar com autovistoria opcional.
+## Detalhes técnicos
 
-### Parte 3 — Garantia anti-recorrência
-
-A guarda canônica em `aprovar-proposta` (linha 815) **já está ativa** — sub-FIPE não promove mais via `aprovar-proposta`. Nenhuma alteração de código é necessária.
-
-Adicionar um teste de regressão SQL ligeiro (view materializada ou query agendada de auditoria) que detecta:
-
-```sql
--- "Vazamento sub-FIPE": contrato ativo + vistoria autovistoria pendente
-SELECT v.id FROM vistorias v
-JOIN contratos c ON c.id = v.contrato_id
-WHERE v.modalidade='autovistoria' AND v.status='pendente' AND c.status='ativo';
+```text
+Fluxo canônico atual da troca:
+termo assinado -> solicitacao.status = cotacao_em_andamento
+novo titular conclui link público
+cotacao.status_contratacao = aguardando_aprovacao_cadastro
+trigger trg_troca_promove_cadastro_via_cotacao
+solicitacao.status = aguardando_cadastro
+cadastro aprova manualmente
+solicitacao.status = aguardando_monitoramento
 ```
 
-Disparar alerta (`ativacao_limbo_alertas`) quando o resultado for >0 fora dos 6 conhecidos.
-
-### Parte 4 — Validação final
-
-- Reconsultar a query da Parte 3 e confirmar 0 vazamentos pós-saneamento.
-- Reconsultar `ativacao_status_log` do LLF7F07 — sem nova promoção.
-- Confirmar que a aba "Aprovação de Associados" continua mostrando apenas casos ainda pendentes.
-
-### Fora do escopo
-
-- Reversão de status do contrato para "voltar para fila" — os 6 contratos já estão ativos há semanas, com cobertura efetiva e fotos completas; reverter quebraria SGA e a relação com o associado.
-- Mudança em `aprovar-proposta` — guarda atual está correta.
-- Backfill de fotos retroativo — todas as fotos já estão materializadas em `vistoria_fotos`.
-
-### Resposta direta à pergunta
-
-A regra canônica não está quebrada **hoje**. O LLF7F07 é um caso pré-blindagem: foi ativado em 04/05 quando `aprovar-proposta` ainda chamava `ativar-associado` direto para sub-FIPE. As fotos de 20/05 não chegaram a entrar na fila porque o contrato já estava `ativo` há 16 dias — não há nada para "aprovar". A higienização proposta apenas regulariza a auditoria dos 6 casos órfãos da época.
+Se você aprovar, eu implemento o ajuste dos filtros e da comunicação da UI para eliminar esse falso positivo.

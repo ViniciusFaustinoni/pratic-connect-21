@@ -52,7 +52,12 @@ const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
 };
 
 const TROCA_FILTROS: Record<string, StatusTroca[]> = {
-  pendentes: ['aguardando_termo_cancelamento', 'aguardando_cadastro', 'cotacao_em_andamento'],
+  // Fila REAL de aprovação do Cadastro — só entra quando o trigger
+  // trg_troca_promove_cadastro_via_cotacao promove a solicitação porque a
+  // cotação canônica atingiu `aguardando_aprovacao_cadastro`.
+  pendentes: ['aguardando_cadastro'],
+  // Pré-cadastro: termo pendente ou link público em andamento pelo novo titular.
+  em_andamento: ['aguardando_termo_cancelamento', 'cotacao_em_andamento'],
   aguardando_monit: ['aguardando_monitoramento'],
   em_vistoria: ['aguardando_vistoria'],
   aprovadas: ['liberada_para_assinatura', 'efetivada'],
@@ -87,8 +92,9 @@ function TrocaTitularidadeTab({
   return (
     <div className="space-y-4">
       <Tabs value={subAba} onValueChange={(v) => setSubAba(v as keyof typeof TROCA_FILTROS)}>
-        <TabsList className="w-full flex md:grid md:grid-cols-5 overflow-x-auto justify-start md:justify-center">
+        <TabsList className="w-full flex md:grid md:grid-cols-6 overflow-x-auto justify-start md:justify-center">
           <TabsTrigger value="pendentes" className="flex-shrink-0 text-xs md:text-sm">Aguardando Cadastro</TabsTrigger>
+          <TabsTrigger value="em_andamento" className="flex-shrink-0 text-xs md:text-sm">Em andamento</TabsTrigger>
           <TabsTrigger value="aguardando_monit" className="flex-shrink-0 text-xs md:text-sm">Aguardando Monit.</TabsTrigger>
           <TabsTrigger value="em_vistoria" className="flex-shrink-0 text-xs md:text-sm">Em Vistoria</TabsTrigger>
           <TabsTrigger value="aprovadas" className="flex-shrink-0 text-xs md:text-sm">Aprovadas</TabsTrigger>
@@ -594,10 +600,12 @@ function useProcessosCounts(scope?: { profileId?: string; authUserId?: string })
   return useQuery({
     queryKey: ['processos-counts', profileId, authUserId],
     queryFn: async () => {
+      // Fila REAL de Cadastro: só `aguardando_cadastro` (após o trigger
+      // trg_troca_promove_cadastro_via_cotacao promover via cotação canônica).
       let q1 = (supabase as any)
         .from('solicitacoes_troca_titularidade')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['aguardando_termo_cancelamento', 'aguardando_cadastro', 'cotacao_em_andamento']);
+        .eq('status', 'aguardando_cadastro');
       if (profileId) q1 = q1.eq('criado_por', profileId);
 
       let q2 = supabase
