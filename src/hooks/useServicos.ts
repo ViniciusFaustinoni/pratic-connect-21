@@ -280,6 +280,7 @@ export function useServicos(filters?: ServicoFilters) {
           cotacao:cotacoes(id, numero),
           contrato:contratos(id, numero)
         `)
+        .is('dedup_substituido_por', null)
         .order('data_agendada', { ascending: false, nullsFirst: false })
         .order('hora_agendada', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
