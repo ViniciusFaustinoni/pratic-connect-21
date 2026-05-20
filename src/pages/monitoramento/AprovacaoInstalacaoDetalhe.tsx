@@ -956,23 +956,39 @@ export default function AprovacaoInstalacaoDetalhe() {
                     {motivoBloqueio}
                   </p>
                   <p className="text-[11px] text-muted-foreground pt-1">
-                    Esse caso deve passar pelo Cadastro e, se necessário, por uma tarefa
-                    de instalação/vistoria técnica antes de chegar nesta fila.
+                    Devolva o caso ao Cadastro para o analista aprovar Roubo & Furto.
+                    A instalação técnica do rastreador continua agendada e o caso volta
+                    para esta fila após a conclusão pelo técnico.
                   </p>
                 </div>
               </div>
             )}
 
             <div className="flex flex-wrap gap-3 pb-2">
-              <Button
-                variant="destructive"
-                className="flex-1 min-w-[140px]"
-                onClick={() => setShowReprovar(true)}
-                disabled={aprovar.isPending || reprovar.isPending}
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Reprovar
-              </Button>
+              {bloqueado ? (
+                <Button
+                  className="flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white"
+                  onClick={() => setDevolverOpen(true)}
+                  disabled={devolverCadastro.isPending}
+                >
+                  {devolverCadastro.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Undo2 className="h-4 w-4 mr-2" />
+                  )}
+                  Devolver ao Cadastro (aprovar R&amp;F lá)
+                </Button>
+              ) : (
+                <Button
+                  variant="destructive"
+                  className="flex-1 min-w-[140px]"
+                  onClick={() => setShowReprovar(true)}
+                  disabled={aprovar.isPending || reprovar.isPending}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reprovar
+                </Button>
+              )}
               {subFipe && !bloqueado && (
                 <Button
                   variant="outline"
