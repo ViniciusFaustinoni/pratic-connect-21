@@ -186,12 +186,32 @@ export function PropostaDetalhesTabs({
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-3">
-            {/* Badge tipo de adesão */}
-            <div className="flex items-center gap-2 -mt-1">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Tipo de Adesão:</span>
-              <Badge variant="outline" className="text-primary border-primary/40 bg-primary/10 font-semibold">
-                {rotuloTipoEntrada(proposta.tipo_entrada)}
-              </Badge>
+            {/* Badges: tipo de adesão, consultor responsável, R&F */}
+            <div className="flex flex-wrap items-center gap-2 -mt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Tipo de Adesão:</span>
+                <Badge variant="outline" className="text-primary border-primary/40 bg-primary/10 font-semibold">
+                  {rotuloTipoEntrada(proposta.tipo_entrada)}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Consultor:</span>
+                <Badge variant="outline" className="text-foreground border-border bg-muted/60 font-medium">
+                  {proposta.vendedor?.nome || '— sem consultor —'}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Roubo &amp; Furto:</span>
+                {proposta.veiculo_cobertura_roubo_furto ? (
+                  <Badge className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20 font-semibold">
+                    Sim — optou
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground border-border font-medium">
+                    Não optou
+                  </Badge>
+                )}
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <FichaField icon={User} label="Nome Completo" value={proposta.cliente_nome || associado?.nome} highlight iconColor="text-primary" />

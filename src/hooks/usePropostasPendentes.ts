@@ -182,6 +182,7 @@ export interface PropostaPendente {
   cotacao_id: string | null;
   veiculo_id: string | null; // ID do veículo vinculado
   veiculo_cobertura_total: boolean | null; // Se veículo tem cobertura total ativada
+  veiculo_cobertura_roubo_furto: boolean | null; // Se veículo optou pela cobertura de Roubo e Furto
   contrato_link_token: string | null;
   associado: Associado | null;
   plano: { nome: string } | null;
@@ -370,7 +371,7 @@ export function usePropostasPendentes() {
           ? supabase.from('associados').select('*').in('id', associadoIds)
           : Promise.resolve({ data: [] as any[] }),
         veiculoIds.length
-          ? supabase.from('veiculos').select('id, status, cobertura_total, chassi, renavam, codigo_hinova, sincronizado_hinova').in('id', veiculoIds)
+          ? supabase.from('veiculos').select('id, status, cobertura_total, cobertura_roubo_furto, chassi, renavam, codigo_hinova, sincronizado_hinova').in('id', veiculoIds)
           : Promise.resolve({ data: [] as any[] }),
         planoIds.length
           ? supabase.from('planos').select('id, nome').in('id', planoIds)
@@ -844,6 +845,7 @@ export function usePropostasPendentes() {
           tipo_vistoria: tipoVistoriaCotacao,
           veiculo_id: (contrato as any).veiculo_id || null,
           veiculo_cobertura_total: veiculoContrato?.cobertura_total ?? null,
+          veiculo_cobertura_roubo_furto: veiculoContrato?.cobertura_roubo_furto ?? null,
           contrato_link_token: (contrato as any).link_token || null,
           veiculo_renavam: veiculoContrato?.renavam || null,
           veiculo_chassi: veiculoContrato?.chassi || null,
@@ -1440,13 +1442,14 @@ export function useProposta(contratoId: string | undefined) {
       // Priorizar contrato.veiculo_id (determinístico), fallback por associado_id
       let veiculoId: string | null = null;
       let veiculoCoberturaTotal: boolean | null = null;
+      let veiculoCoberturaRouboFurto: boolean | null = null;
       let veiculoRenavam: string | null = null;
       let veiculoChassi: string | null = null;
       
       const veiculoFilter = (contrato as any).veiculo_id 
-        ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('id', (contrato as any).veiculo_id).maybeSingle()
+        ? supabase.from('veiculos').select('id, cobertura_total, cobertura_roubo_furto, renavam, chassi').eq('id', (contrato as any).veiculo_id).maybeSingle()
         : contrato.associado_id 
-          ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('associado_id', contrato.associado_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+          ? supabase.from('veiculos').select('id, cobertura_total, cobertura_roubo_furto, renavam, chassi').eq('associado_id', contrato.associado_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
           : null;
       
       if (veiculoFilter) {
@@ -1454,6 +1457,7 @@ export function useProposta(contratoId: string | undefined) {
         if (veiculo) {
           veiculoId = veiculo.id;
           veiculoCoberturaTotal = veiculo.cobertura_total;
+          veiculoCoberturaRouboFurto = (veiculo as any).cobertura_roubo_furto ?? null;
           veiculoRenavam = veiculo.renavam;
           veiculoChassi = veiculo.chassi;
         }
@@ -1539,6 +1543,7 @@ export function useProposta(contratoId: string | undefined) {
         tipo_vistoria: tipoVistoriaCotacao,
         veiculo_id: veiculoId,
         veiculo_cobertura_total: veiculoCoberturaTotal,
+        veiculo_cobertura_roubo_furto: veiculoCoberturaRouboFurto,
         contrato_link_token: (contrato as any).link_token || null,
         veiculo_renavam: veiculoRenavam,
         veiculo_chassi: veiculoChassi,

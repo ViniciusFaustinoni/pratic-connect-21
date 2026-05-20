@@ -60,8 +60,13 @@ export function VisualizadorDocumentoModal({ documento, open, onClose, onAprovar
   if (!documento) return null;
 
   const isContrato = documento.tipo === 'contrato_assinado';
-  const isPdf = documento.arquivo_url?.toLowerCase().endsWith('.pdf');
-  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(documento.arquivo_url || '');
+  const cleanUrl = (documento.arquivo_url || '').toLowerCase().split('?')[0];
+  const isPdf =
+    cleanUrl.endsWith('.pdf') ||
+    /\/laudos?\//.test(cleanUrl) ||
+    documento.tipo === 'contrato_assinado' ||
+    documento.tipo === 'laudo_vistoria';
+  const isImage = !isPdf && /\.(jpg|jpeg|png|gif|webp)$/i.test(cleanUrl);
   const status = statusConfig[documento.status] || statusConfig.pendente;
 
   const podeAnalisar = (documento.status === 'pendente' || documento.status === 'em_analise') && (onAprovar || onReprovar);
@@ -170,17 +175,11 @@ export function VisualizadorDocumentoModal({ documento, open, onClose, onAprovar
         {/* Visualizador do documento */}
         <div className="flex-1 min-h-0 overflow-auto bg-muted/50 rounded-lg">
           {isPdf ? (
-            <object
-              data={documento.arquivo_url}
-              type="application/pdf"
-              className="w-full h-[500px] rounded-lg"
-            >
-              <iframe
-                src={`https://docs.google.com/gview?url=${encodeURIComponent(documento.arquivo_url)}&embedded=true`}
-                className="w-full h-[500px] rounded-lg border-0"
-                title={tipoLabels[documento.tipo] || 'Documento'}
-              />
-            </object>
+            <iframe
+              src={`${documento.arquivo_url}#toolbar=1&navpanes=0&view=FitH`}
+              className="w-full h-[600px] rounded-lg border-0 bg-background"
+              title={tipoLabels[documento.tipo] || 'Documento'}
+            />
           ) : isImage ? (
             <div className="flex items-center justify-center p-4">
               <img 

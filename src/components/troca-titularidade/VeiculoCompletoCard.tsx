@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import {
   useVeiculoCompleto,
   useFotosVistoriaPorVeiculo,
@@ -244,8 +245,15 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {todosDocumentos.map((d: any) => {
               const url = d.arquivo_url || d.url;
+              const mime = (d.mime_type || d.tipo_mime || '').toString().toLowerCase();
               const tipo = d.tipo_documento || d.tipo || 'documento';
-              const isPdf = typeof url === 'string' && url.toLowerCase().split('?')[0].endsWith('.pdf');
+              const cleanUrl = typeof url === 'string' ? url.toLowerCase().split('?')[0] : '';
+              const isPdf =
+                mime === 'application/pdf' ||
+                cleanUrl.endsWith('.pdf') ||
+                /\/laudos?\//.test(cleanUrl) ||
+                /contrato|laudo/.test(String(tipo).toLowerCase());
+              const isImage = !isPdf && /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(cleanUrl);
               return (
                 <button
                   key={d.id}
@@ -263,8 +271,13 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
                         <FileText className="h-8 w-8" />
                         <span className="text-[10px] mt-1">PDF</span>
                       </div>
-                    ) : (
+                    ) : isImage ? (
                       <img src={url} alt={tipo} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center text-muted-foreground">
+                        <FileText className="h-8 w-8" />
+                        <span className="text-[10px] mt-1">Arquivo</span>
+                      </div>
                     )}
                   </div>
                   <p className="text-xs font-medium truncate">{tipo}</p>
@@ -352,8 +365,8 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
 
       {/* PREVIEW DE DOCUMENTO (PDF/imagem) */}
       <Dialog open={!!docPreview} onOpenChange={(o) => { if (!o) setDocPreview(null); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0">
-          <DialogHeader className="px-4 py-3 border-b">
+        <DialogContent className="max-w-5xl max-h-[92vh] p-0 flex flex-col">
+          <DialogHeader className="px-4 py-3 border-b shrink-0">
             <DialogTitle className="flex items-center justify-between gap-2">
               <span className="truncate">{docPreview?.tipo || 'Documento'}</span>
               {docPreview?.url && (
@@ -363,24 +376,34 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
                   rel="noreferrer"
                   className="text-primary hover:underline text-xs flex items-center gap-1 shrink-0"
                 >
-                  Abrir <ExternalLink className="h-3 w-3" />
+                  Abrir em nova aba <ExternalLink className="h-3 w-3" />
                 </a>
               )}
             </DialogTitle>
           </DialogHeader>
           {docPreview && (() => {
-            const isPdf = docPreview.url.toLowerCase().split('?')[0].endsWith('.pdf');
+            const cleanUrl = docPreview.url.toLowerCase().split('?')[0];
+            const isPdf = cleanUrl.endsWith('.pdf') || /\/laudos?\//.test(cleanUrl) || /contrato|laudo/.test(String(docPreview.tipo).toLowerCase());
+            const isImage = !isPdf && /\.(jpe?g|png|gif|webp)$/i.test(cleanUrl);
             return isPdf ? (
-              <object data={docPreview.url} type="application/pdf" className="w-full h-[75vh]">
-                <iframe
-                  src={`https://docs.google.com/gview?url=${encodeURIComponent(docPreview.url)}&embedded=true`}
-                  className="w-full h-[75vh] border-0"
-                  title={docPreview.tipo}
-                />
-              </object>
-            ) : (
-              <div className="flex items-center justify-center bg-black/95 min-h-[60vh] max-h-[80vh]">
+              <iframe
+                src={`${docPreview.url}#toolbar=1&navpanes=0&view=FitH`}
+                className="w-full flex-1 min-h-[70vh] border-0 bg-background"
+                title={docPreview.tipo}
+              />
+            ) : isImage ? (
+              <div className="flex items-center justify-center bg-black/95 flex-1 min-h-[60vh] overflow-auto">
                 <img src={docPreview.url} alt={docPreview.tipo} className="max-h-[80vh] max-w-full object-contain" />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3 flex-1">
+                <FileText className="h-16 w-16 opacity-50" />
+                <p className="text-sm">Não é possível visualizar este tipo de arquivo no navegador.</p>
+                <Button asChild variant="outline" size="sm">
+                  <a href={docPreview.url} target="_blank" rel="noreferrer">
+                    Abrir em nova aba <ExternalLink className="h-3 w-3 ml-1" />
+                  </a>
+                </Button>
               </div>
             );
           })()}
