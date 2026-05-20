@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Loader2, Lock, CheckCircle, MapPin, Calendar, User, Car, Hash, Cpu,
-  Navigation as NavIcon, ThumbsUp, ThumbsDown, PlayCircle,
+  Navigation as NavIcon, ThumbsUp, ThumbsDown, PlayCircle, CloudUpload,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
+import { LowMemoryBanner } from '@/components/instalador/LowMemoryBanner';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -30,9 +31,9 @@ import {
   detectarTipoVeiculo,
   agruparFotosFiltradas,
   type TipoVeiculo,
-  type VistoriaFotoConfig,
 } from '@/data/vistoriaConfigCompleta';
-import { compressImage } from '@/lib/imageCompressor';
+import { useUploadPrestadorOffline } from '@/hooks/useUploadPrestadorOffline';
+import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 
 // ── Checklist items espelhando InstaladorChecklist ──
 const CHECKLIST_ITEMS = [
@@ -62,16 +63,11 @@ export default function PrestadorInstalacao() {
     }), {} as ChecklistState)
   );
 
-  const [fotosMap, setFotosMap] = useState<Record<string, string>>({});
-  const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
+  // Map de fotos JÁ enviadas ao Storage (slot -> url pública)
+  const [enviadasMap, setEnviadasMap] = useState<Record<string, string>>({});
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
   const [uploadingSig, setUploadingSig] = useState(false);
   const [imeiRastreador, setImeiRastreador] = useState<string>('');
-
-  const fotosEnviadasArray = useMemo(
-    () => Object.entries(fotosMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url })),
-    [fotosMap]
-  );
 
   // ── Token validation ──
   const { data: link, isLoading, error } = useQuery({
@@ -91,6 +87,41 @@ export default function PrestadorInstalacao() {
       return data as any;
     },
     enabled: !!token,
+  });
+
+  // ── Fila offline (IndexedDB) + worker de upload ──
+  const handleUploaded = useCallback((slot: string, url: string) => {
+    setEnviadasMap(prev => {
+      if (prev[slot] === url) return prev;
+      const next = { ...prev, [slot]: url };
+      // Persist incremental no servidor (best-effort) — usa read-modify-write.
+      // Não bloqueia o usuário; falha silenciosa apenas loga.
+      if (token) {
+        (async () => {
+          try {
+            const { data: cur } = await publicSupabase
+              .from('instalacao_prestador_links' as any)
+              .select('fotos_vistoria')
+              .eq('token', token)
+              .maybeSingle();
+            const merged = { ...((cur as any)?.fotos_vistoria || {}), ...next };
+            await publicSupabase
+              .from('instalacao_prestador_links' as any)
+              .update({ fotos_vistoria: merged, updated_at: new Date().toISOString() })
+              .eq('token', token);
+          } catch (err) {
+            console.warn('[PrestadorInstalacao] persist fotos_vistoria falhou:', err);
+          }
+        })();
+      }
+      return next;
+    });
+  }, [token]);
+
+  const upload = useUploadPrestadorOffline({
+    token,
+    linkId: link?.id,
+    onFotoUploaded: handleUploaded,
   });
 
   // ── Instalação data ──
@@ -138,7 +169,23 @@ export default function PrestadorInstalacao() {
   const fotosCategorias = useMemo(() => agruparFotosFiltradas(tipoVeiculo, false), [tipoVeiculo]);
   const todasFotos = useMemo(() => fotosCategorias.flatMap(c => c.fotos), [fotosCategorias]);
 
-  // ── Restore from saved state ──
+  // ── Telemetria: capacidade do dispositivo + recuperação após OOM ──
+  const capability = useDeviceCapability();
+  const restauradoToastRef = useRef(false);
+  useEffect(() => {
+    console.log(
+      `[Prestador] Capacidade do dispositivo: deviceMemory=${capability.deviceMemory ?? '?'}GB cores=${capability.hardwareConcurrency ?? '?'} lowEnd=${capability.lowEnd} heap=${capability.usedHeapMB ?? '?'}MB wasDiscarded=${capability.wasDiscarded}`
+    );
+    if (capability.wasDiscarded && !restauradoToastRef.current) {
+      restauradoToastRef.current = true;
+      toast.info('Continuamos de onde você parou.', {
+        description: 'O navegador recarregou por falta de memória, mas suas fotos e dados foram preservados.',
+        duration: 6000,
+      });
+    }
+  }, [capability]);
+
+  // ── Restore from saved state (server) ──
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!link || restoredRef.current) return;
@@ -147,39 +194,42 @@ export default function PrestadorInstalacao() {
       setChecklist(link.checklist_data as ChecklistState);
     }
     if (link.fotos_vistoria && typeof link.fotos_vistoria === 'object') {
-      setFotosMap(link.fotos_vistoria as Record<string, string>);
+      setEnviadasMap(link.fotos_vistoria as Record<string, string>);
     }
     if (link.assinatura_url) setAssinaturaUrl(link.assinatura_url);
   }, [link]);
 
-  // ── Geolocalização contínua ──
+  // ── Geolocalização: leve, só nas fases pré-execução ──
   useEffect(() => {
     if (!token || !link) return;
-    if (link.status === 'concluida' || link.status === 'cancelada') return;
+    if (!['aguardando', 'aceito', 'em_rota'].includes(link.status)) return;
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     let lastSent = 0;
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const now = Date.now();
-        if (now - lastSent < 25_000) return;
-        lastSent = now;
-        publicSupabase
-          .from('instalacao_prestador_links' as any)
-          .update({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            precisao_metros: pos.coords.accuracy,
-            localizacao_atualizada_em: new Date().toISOString(),
-          })
-          .eq('token', token)
-          .then(() => {});
-      },
-      (err) => console.warn('[PrestadorInstalacao] geolocation error', err),
-      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 20_000 }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
+    const tick = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const now = Date.now();
+          if (now - lastSent < 55_000) return;
+          lastSent = now;
+          publicSupabase
+            .from('instalacao_prestador_links' as any)
+            .update({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              precisao_metros: pos.coords.accuracy,
+              localizacao_atualizada_em: new Date().toISOString(),
+            })
+            .eq('token', token)
+            .then(() => {});
+        },
+        (err) => console.warn('[PrestadorInstalacao] geolocation error', err),
+        { enableHighAccuracy: false, maximumAge: 60_000, timeout: 20_000 }
+      );
+    };
+    tick();
+    const iv = setInterval(tick, 60_000);
+    return () => clearInterval(iv);
   }, [token, link?.status, link?.id]);
 
   // ── Status transitions ──
@@ -188,7 +238,6 @@ export default function PrestadorInstalacao() {
   ) => {
     if (!token) return;
 
-    // Refresh defensivo: detectar reatribuição/cancelamento antes de gravar
     const { data: fresh, error: freshErr } = await publicSupabase
       .from('instalacao_prestador_links' as any)
       .select('status')
@@ -256,9 +305,9 @@ export default function PrestadorInstalacao() {
     toast.success('Tarefa recusada');
   }, [token, recusaMotivo, queryClient]);
 
-  // ── Auto-save ──
+  // ── Auto-save checklist + assinatura (sem JSONB de fotos) ──
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const autoSave = useCallback((data: Partial<{ checklist_data: any; fotos_vistoria: any; assinatura_url: string }>) => {
+  const autoSaveLeve = useCallback((data: Partial<{ checklist_data: any; assinatura_url: string }>) => {
     if (!token) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -273,45 +322,19 @@ export default function PrestadorInstalacao() {
   const handleChecklistChange = useCallback((itemId: string, status: ChecklistStatus) => {
     setChecklist(prev => {
       const next = { ...prev, [itemId]: { ...prev[itemId], status } };
-      autoSave({ checklist_data: next });
+      autoSaveLeve({ checklist_data: next });
       return next;
     });
-  }, [autoSave]);
+  }, [autoSaveLeve]);
 
-  const handleFotoCapture = useCallback(async (fotoConfig: VistoriaFotoConfig, file: File) => {
-    if (!link) return;
-    setUploadingFoto(fotoConfig.id);
+  const handleFotoCapture = useCallback(async (fotoId: string, file: File) => {
     try {
-      let fileToUpload = file;
-      if (file.size > 500 * 1024) {
-        try {
-          fileToUpload = await compressImage(file);
-        } catch { /* use original */ }
-      }
-      const ext = fileToUpload.name.split('.').pop() || 'jpg';
-      const path = `${link.id}/${fotoConfig.id}_${Date.now()}.${ext}`;
-
-      const { error: uploadErr } = await publicSupabase.storage
-        .from('prestador-fotos')
-        .upload(path, fileToUpload, { upsert: true });
-      if (uploadErr) throw uploadErr;
-
-      const { data: urlData } = publicSupabase.storage
-        .from('prestador-fotos')
-        .getPublicUrl(path);
-
-      setFotosMap(prev => {
-        const next = { ...prev, [fotoConfig.id]: urlData.publicUrl };
-        autoSave({ fotos_vistoria: next });
-        return next;
-      });
+      await upload.enfileirarFoto(fotoId, file);
     } catch (err) {
-      console.error('[PrestadorInstalacao] Erro upload foto:', err);
-      toast.error('Erro ao enviar foto. Tente novamente.');
-    } finally {
-      setUploadingFoto(null);
+      console.error('[PrestadorInstalacao] Erro enfileirar foto:', err);
+      toast.error('Erro ao salvar foto no celular. Tente novamente.');
     }
-  }, [link, autoSave]);
+  }, [upload]);
 
   const handleAssinaturaSave = useCallback(async (blob: Blob) => {
     if (!link) return;
@@ -324,7 +347,7 @@ export default function PrestadorInstalacao() {
       if (upErr) throw upErr;
       const { data: urlData } = publicSupabase.storage.from('assinaturas').getPublicUrl(path);
       setAssinaturaUrl(urlData.publicUrl);
-      autoSave({ assinatura_url: urlData.publicUrl });
+      autoSaveLeve({ assinatura_url: urlData.publicUrl });
       toast.success('Assinatura registrada');
     } catch (err) {
       console.error('[PrestadorInstalacao] Erro assinatura:', err);
@@ -332,7 +355,20 @@ export default function PrestadorInstalacao() {
     } finally {
       setUploadingSig(false);
     }
-  }, [link, autoSave]);
+  }, [link, autoSaveLeve]);
+
+  // ── Map combinado: pendentes (Object URLs locais) + enviadas (URLs Storage) ──
+  // Pendentes têm precedência visual; após upload bem-sucedido, `enviadasMap`
+  // assume o slot.
+  const fotosCombinadasMap = useMemo<Record<string, string>>(() => ({
+    ...enviadasMap,
+    ...upload.previewsFotos,
+  }), [enviadasMap, upload.previewsFotos]);
+
+  const fotosEnviadasArray = useMemo(
+    () => Object.entries(fotosCombinadasMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url })),
+    [fotosCombinadasMap]
+  );
 
   // ── Completion checks ──
   const checklistComplete = useMemo(() =>
@@ -342,13 +378,14 @@ export default function PrestadorInstalacao() {
 
   const fotosObrigatoriasCount = todasFotos.length;
   const fotosPreenchidas = useMemo(() =>
-    todasFotos.filter(f => !!fotosMap[f.id]).length,
-    [todasFotos, fotosMap]
+    todasFotos.filter(f => !!fotosCombinadasMap[f.id]).length,
+    [todasFotos, fotosCombinadasMap]
   );
   const fotosMinimoAtingido = fotosPreenchidas >= Math.min(fotosObrigatoriasCount, 10);
   const imeiOk = /^\d{14,16}$/.test(imeiRastreador.replace(/\D/g, ''));
+  const todasUploadConcluidas = upload.totalPendentes === 0;
 
-  const canFinalize = checklistComplete && fotosMinimoAtingido && !!assinaturaUrl && imeiOk;
+  const canFinalize = checklistComplete && fotosMinimoAtingido && !!assinaturaUrl && imeiOk && todasUploadConcluidas;
 
   const handleConfirmConcluir = useCallback(async () => {
     if (!token) return;
@@ -358,7 +395,7 @@ export default function PrestadorInstalacao() {
         body: {
           token,
           checklist_data: checklist,
-          fotos_vistoria: fotosMap,
+          fotos_vistoria: enviadasMap,
           assinatura_url: assinaturaUrl,
           rastreador_imei: imeiRastreador.replace(/\D/g, ''),
         },
@@ -373,7 +410,7 @@ export default function PrestadorInstalacao() {
       setConcluding(false);
       setShowConfirmDialog(false);
     }
-  }, [token, checklist, fotosMap, assinaturaUrl, imeiRastreador, queryClient]);
+  }, [token, checklist, enviadasMap, assinaturaUrl, imeiRastreador, queryClient]);
 
   // ════════════════════════════════════
   // RENDERING
@@ -381,9 +418,9 @@ export default function PrestadorInstalacao() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600 mb-4" />
-        <p className="text-slate-600 text-sm">Validando acesso...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-6">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-400 mb-4" />
+        <p className="text-slate-300 text-sm">Validando acesso...</p>
       </div>
     );
   }
@@ -392,22 +429,22 @@ export default function PrestadorInstalacao() {
     const isReatribuida =
       link?.status === 'cancelada' && !(link as any)?.recusado_em;
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
-        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-6">
+        <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
           {link?.status === 'concluida' ? (
-            <CheckCircle className="h-8 w-8 text-green-600" />
+            <CheckCircle className="h-8 w-8 text-emerald-400" />
           ) : (
             <Lock className="h-8 w-8 text-slate-400" />
           )}
         </div>
-        <h1 className="text-xl font-bold text-slate-800 mb-2">
+        <h1 className="text-xl font-bold text-white mb-2">
           {link?.status === 'concluida'
             ? 'Instalação concluída'
             : isReatribuida
               ? 'Tarefa reatribuída'
               : 'Link inválido'}
         </h1>
-        <p className="text-slate-500 text-sm text-center max-w-xs">
+        <p className="text-slate-400 text-sm text-center max-w-xs">
           {link?.status === 'concluida'
             ? 'Obrigado! A equipe Praticcar foi notificada.'
             : isReatribuida
@@ -429,14 +466,14 @@ export default function PrestadorInstalacao() {
   ].filter(Boolean).join(', ');
 
   return (
-    <div className="min-h-screen bg-white pb-28">
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-3">
+      <div className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-slate-800">PraticCar</span>
+            <span className="text-lg font-bold text-white">PraticCar</span>
           </div>
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold">
+          <Badge variant="outline" className="bg-blue-950/60 text-blue-300 border-blue-800 text-xs font-semibold">
             INSTALAÇÃO EXTERNA
           </Badge>
         </div>
@@ -444,23 +481,26 @@ export default function PrestadorInstalacao() {
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-5">
 
+        {/* Banner de pouca memória */}
+        <LowMemoryBanner onLiberarMemoria={upload.liberarPreviews} />
+
         {/* Dados da instalação */}
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="border-slate-800 bg-slate-900 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base text-slate-800 flex items-center gap-2">
-              <Car className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-base text-white flex items-center gap-2">
+              <Car className="h-4 w-4 text-blue-400" />
               Dados da Instalação
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {veiculo && (
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Veículo</p>
-                <p className="font-medium text-slate-800">
+                <p className="text-xs text-slate-400 uppercase tracking-wider">Veículo</p>
+                <p className="font-medium text-white">
                   {[veiculo.marca, veiculo.modelo, veiculo.ano].filter(Boolean).join(' ')}
                 </p>
                 {veiculo.placa && (
-                  <span className="inline-block mt-1 px-3 py-1 bg-slate-900 text-white font-bold text-lg rounded tracking-widest">
+                  <span className="inline-block mt-1 px-3 py-1 bg-white text-slate-900 font-bold text-lg rounded tracking-widest">
                     {veiculo.placa}
                   </span>
                 )}
@@ -470,15 +510,15 @@ export default function PrestadorInstalacao() {
             <div className="flex items-start gap-2">
               <MapPin className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-sm text-slate-700">{endereco || 'Endereço não informado'}</p>
-                {instalacao?.cep && <p className="text-xs text-slate-400">CEP: {instalacao.cep}</p>}
+                <p className="text-sm text-slate-200">{endereco || 'Endereço não informado'}</p>
+                {instalacao?.cep && <p className="text-xs text-slate-500">CEP: {instalacao.cep}</p>}
               </div>
             </div>
 
             {instalacao?.data_agendada && (
               <div className="flex items-start gap-2">
                 <Calendar className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-slate-700">
+                <p className="text-sm text-slate-200">
                   {format(new Date(instalacao.data_agendada + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                   {instalacao.periodo && ` — ${instalacao.periodo === 'manha' ? 'Manhã' : instalacao.periodo === 'tarde' ? 'Tarde' : instalacao.periodo}`}
                 </p>
@@ -487,28 +527,28 @@ export default function PrestadorInstalacao() {
 
             <div className="flex items-start gap-2">
               <User className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-slate-700">{associado?.nome || '—'}</p>
+              <p className="text-sm text-slate-200">{associado?.nome || '—'}</p>
             </div>
           </CardContent>
         </Card>
 
         {/* Equipamentos */}
         {rastreador && (
-          <Card className="border-slate-200 shadow-sm">
+          <Card className="border-slate-800 bg-slate-900 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base text-slate-800 flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-base text-white flex items-center gap-2">
+                <Cpu className="h-4 w-4 text-blue-400" />
                 Equipamentos para instalação
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Hash className="h-5 w-5 text-blue-600" />
+              <div className="flex items-center gap-3 p-3 bg-slate-800/60 rounded-lg">
+                <div className="w-10 h-10 rounded-full bg-blue-950/60 flex items-center justify-center">
+                  <Hash className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
-                  <p className="font-medium text-slate-800 text-sm">{rastreador.codigo || 'Sem código'}</p>
-                  <p className="text-xs text-slate-500">{rastreador.modelo || 'Modelo não informado'}</p>
+                  <p className="font-medium text-white text-sm">{rastreador.codigo || 'Sem código'}</p>
+                  <p className="text-xs text-slate-400">{rastreador.modelo || 'Modelo não informado'}</p>
                 </div>
               </div>
             </CardContent>
@@ -517,19 +557,19 @@ export default function PrestadorInstalacao() {
 
         {/* Ciclo de vida */}
         {link.status === 'aguardando' && (
-          <Card className="border-amber-200 bg-amber-50 shadow-sm">
+          <Card className="border-amber-900 bg-amber-950/30 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base text-amber-900">Nova tarefa recebida</CardTitle>
+              <CardTitle className="text-base text-amber-200">Nova tarefa recebida</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-amber-800">
+              <p className="text-sm text-amber-300/90">
                 Você recebeu uma nova tarefa de instalação. Confirme se aceita realizá-la.
               </p>
               <div className="grid grid-cols-2 gap-2">
-                <Button className="h-12 bg-green-600 hover:bg-green-700 text-white" onClick={() => transicionarStatus('aceito')}>
+                <Button className="h-12 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => transicionarStatus('aceito')}>
                   <ThumbsUp className="h-4 w-4 mr-2" />Aceitar
                 </Button>
-                <Button variant="outline" className="h-12 border-red-300 text-red-700 hover:bg-red-50" onClick={() => setShowRecusarDialog(true)}>
+                <Button variant="outline" className="h-12 border-red-700 bg-red-950/30 text-red-300 hover:bg-red-900/40" onClick={() => setShowRecusarDialog(true)}>
                   <ThumbsDown className="h-4 w-4 mr-2" />Recusar
                 </Button>
               </div>
@@ -538,12 +578,12 @@ export default function PrestadorInstalacao() {
         )}
 
         {link.status === 'aceito' && (
-          <Card className="border-blue-200 bg-blue-50 shadow-sm">
+          <Card className="border-blue-900 bg-blue-950/30 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base text-blue-900">Tarefa aceita</CardTitle>
+              <CardTitle className="text-base text-blue-200">Tarefa aceita</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-blue-800">
+              <p className="text-sm text-blue-300/90">
                 Quando estiver a caminho, toque em "Iniciar Rota". Sua localização será compartilhada com o coordenador.
               </p>
               <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => transicionarStatus('em_rota')}>
@@ -554,12 +594,12 @@ export default function PrestadorInstalacao() {
         )}
 
         {link.status === 'em_rota' && (
-          <Card className="border-purple-200 bg-purple-50 shadow-sm">
+          <Card className="border-purple-900 bg-purple-950/30 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base text-purple-900">Em rota até o local</CardTitle>
+              <CardTitle className="text-base text-purple-200">Em rota até o local</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-purple-800">
+              <p className="text-sm text-purple-300/90">
                 Ao chegar no local, toque em "Cheguei / Iniciar Instalação" para liberar o checklist e as fotos.
               </p>
               <Button className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white" onClick={() => transicionarStatus('em_execucao')}>
@@ -572,14 +612,14 @@ export default function PrestadorInstalacao() {
         {/* Em execução: checklist + fotos + assinatura */}
         {link.status === 'em_execucao' && (
           <>
-            <Card className="border-slate-200 shadow-sm">
+            <Card className="border-slate-800 bg-slate-900 shadow-sm">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base text-slate-800">Checklist de Instalação</CardTitle>
+                  <CardTitle className="text-base text-white">Checklist de Instalação</CardTitle>
                   <Badge variant="outline" className={
                     checklistComplete
-                      ? 'bg-green-50 text-green-700 border-green-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
+                      : 'bg-amber-950/60 text-amber-300 border-amber-800'
                   }>
                     {Object.values(checklist).filter(c => c.status !== 'pendente').length}/{CHECKLIST_ITEMS.length}
                   </Badge>
@@ -596,7 +636,7 @@ export default function PrestadorInstalacao() {
                     onObservacaoChange={(value) => {
                       setChecklist(prev => {
                         const next = { ...prev, [item.id]: { ...prev[item.id], observacao: value } };
-                        autoSave({ checklist_data: next });
+                        autoSaveLeve({ checklist_data: next });
                         return next;
                       });
                     }}
@@ -605,40 +645,45 @@ export default function PrestadorInstalacao() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-sm">
+            <Card className="border-slate-800 bg-slate-900 shadow-sm">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base text-slate-800">Fotos da Instalação</CardTitle>
-                  <Badge variant="outline" className={
-                    fotosMinimoAtingido
-                      ? 'bg-green-50 text-green-700 border-green-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200'
-                  }>
-                    {fotosPreenchidas}/{fotosObrigatoriasCount}
-                  </Badge>
+                  <CardTitle className="text-base text-white">Fotos da Instalação</CardTitle>
+                  <div className="flex items-center gap-2">
+                    {upload.totalPendentes > 0 && (
+                      <Badge variant="outline" className="bg-blue-950/60 text-blue-300 border-blue-800 gap-1">
+                        <CloudUpload className="h-3 w-3 animate-pulse" />
+                        Enviando {upload.totalPendentes}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className={
+                      fotosMinimoAtingido
+                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
+                        : 'bg-amber-950/60 text-amber-300 border-amber-800'
+                    }>
+                      {fotosPreenchidas}/{fotosObrigatoriasCount}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <VistoriaFotoSequencial
                   fotos={todasFotos}
                   fotosEnviadas={fotosEnviadasArray}
-                  uploadingFoto={uploadingFoto}
-                  onUpload={(fotoId, file) => {
-                    const foto = todasFotos.find(f => f.id === fotoId);
-                    if (foto) handleFotoCapture(foto, file);
-                  }}
+                  uploadingFoto={null}
+                  onUpload={(fotoId, file) => handleFotoCapture(fotoId, file)}
                 />
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-sm">
+            <Card className="border-slate-800 bg-slate-900 shadow-sm">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base text-slate-800">Assinatura do Associado</CardTitle>
+                  <CardTitle className="text-base text-white">Assinatura do Associado</CardTitle>
                   <Badge variant="outline" className={
                     assinaturaUrl
-                      ? 'bg-green-50 text-green-700 border-green-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
+                      : 'bg-amber-950/60 text-amber-300 border-amber-800'
                   }>
                     {assinaturaUrl ? 'OK' : 'Pendente'}
                   </Badge>
@@ -647,10 +692,10 @@ export default function PrestadorInstalacao() {
               <CardContent>
                 {assinaturaUrl ? (
                   <div className="space-y-2">
-                    <img src={assinaturaUrl} alt="Assinatura" className="w-full border border-slate-200 rounded-lg bg-white" />
+                    <img src={assinaturaUrl} alt="Assinatura" className="w-full border border-slate-700 rounded-lg bg-white" />
                     <Button
                       variant="outline"
-                      className="w-full"
+                      className="w-full border-slate-700 text-slate-200 hover:bg-slate-800"
                       onClick={() => setAssinaturaUrl(null)}
                       disabled={uploadingSig}
                     >
@@ -662,10 +707,11 @@ export default function PrestadorInstalacao() {
                 )}
               </CardContent>
             </Card>
-            <Card className="border-slate-200 shadow-sm">
+
+            <Card className="border-slate-800 bg-slate-900 shadow-sm">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base text-slate-800 flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-blue-600" />
+                <CardTitle className="text-base text-white flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-blue-400" />
                   IMEI do Rastreador Instalado
                 </CardTitle>
               </CardHeader>
@@ -676,9 +722,9 @@ export default function PrestadorInstalacao() {
                   placeholder="Digite os 15 dígitos do IMEI"
                   value={imeiRastreador}
                   onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                  className="w-full h-11 px-3 border border-slate-300 rounded-md text-base font-mono"
+                  className="w-full h-11 px-3 bg-slate-950 border border-slate-700 rounded-md text-base font-mono text-white placeholder:text-slate-500"
                 />
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400">
                   Informe o IMEI do equipamento físico que você acabou de instalar. Sem isso a instalação não pode ser concluída.
                 </p>
               </CardContent>
@@ -690,10 +736,10 @@ export default function PrestadorInstalacao() {
 
       {/* Botão fixo */}
       {link.status === 'em_execucao' && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50">
+        <div className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur border-t border-slate-800 p-4 z-50">
           <div className="max-w-lg mx-auto">
             <Button
-              className="w-full h-14 text-base bg-green-600 hover:bg-green-700 text-white font-semibold"
+              className="w-full h-14 text-base bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50"
               disabled={!canFinalize || concluding}
               onClick={() => setShowConfirmDialog(true)}
             >
@@ -710,6 +756,8 @@ export default function PrestadorInstalacao() {
                 {!fotosMinimoAtingido && `Envie ao menos ${Math.min(fotosObrigatoriasCount, 10)} fotos • `}
                 {!assinaturaUrl && 'Capture a assinatura • '}
                 {!imeiOk && 'Informe o IMEI do rastreador'}
+                {checklistComplete && fotosMinimoAtingido && assinaturaUrl && imeiOk && !todasUploadConcluidas &&
+                  `Aguardando envio de ${upload.totalPendentes} foto(s)…`}
               </p>
             )}
           </div>
@@ -754,7 +802,7 @@ export default function PrestadorInstalacao() {
             <AlertDialogAction
               onClick={handleConfirmConcluir}
               disabled={concluding}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-emerald-600 hover:bg-emerald-700"
             >
               {concluding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Confirmar
