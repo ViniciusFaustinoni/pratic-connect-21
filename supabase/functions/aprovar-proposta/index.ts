@@ -248,9 +248,26 @@ serve(async (req) => {
     for (const veiculo of veiculos) {
       const veiculoId = veiculo.id;
       const valorFipe = (veiculo as any).valor_fipe || 0;
-      const tipoVeiculo = detectarTipoVeiculo((veiculo as any).marca, (veiculo as any).modelo, marcasExclusivasMoto);
 
-      const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto);
+      // CANÔNICO: usar RPC `fn_veiculo_precisa_rastreador` como fonte única de verdade.
+      // A heurística local (detectarTipoVeiculo + precisaRastreador) falhava em casos como
+      // Honda ADV 150 (catálogo marcas_modelos classificava como 'carro'), causando
+      // `dispensa_rastreador=true` indevido. A RPC centraliza: Diesel sempre exige; FIPE
+      // mínimo carro vs moto via configurações; detecção moto via marcas_exclusivas_moto
+      // + keywords de modelo. Mesma fonte usada por triggers e UI.
+      let veiculoPrecisaRastreador = true;
+      try {
+        const { data: precisa, error: rpcErr } = await supabase
+          .rpc('fn_veiculo_precisa_rastreador', { _veiculo_id: veiculoId });
+        if (rpcErr) throw rpcErr;
+        veiculoPrecisaRastreador = precisa !== false; // fail-safe: null/undefined → true
+      } catch (e) {
+        console.warn(`[aprovar-proposta] RPC fn_veiculo_precisa_rastreador falhou para ${veiculoId} (${(e as Error).message}); fallback fail-safe=true`);
+        veiculoPrecisaRastreador = true;
+      }
+      const tipoVeiculo: 'moto' | 'automovel' = detectarTipoVeiculo(
+        (veiculo as any).marca, (veiculo as any).modelo, marcasExclusivasMoto,
+      ); // mantido apenas para logging/contexto
 
       const instalacaoDesteVeiculo = jaTemInstalacaoConcluida && (instalacaoConcluida as any)?.veiculo_id === veiculoId;
       // REGRA CORE: ativação SEMPRE via edge `ativar-associado` (lock + CAS + log + SGA).
