@@ -68,6 +68,7 @@ serve(async (req) => {
       throw new Error('contrato_id e aprovado_por são obrigatórios');
     }
 
+    const authHeader = req.headers.get('Authorization');
     const agora = new Date().toISOString();
     console.log('[aprovar-proposta] Iniciando aprovação:', contrato_id);
 
@@ -75,7 +76,7 @@ serve(async (req) => {
     const { data: contrato, error: fetchError } = await supabase
       .from('contratos')
       .select(`
-        id, status, associado_id, veiculo_id, plano_id, valor_mensal, dia_vencimento, cotacao_id,
+        id, status, associado_id, veiculo_id, plano_id, valor_mensal, dia_vencimento, cotacao_id, tipo_entrada, cadastro_aprovado,
         associado:associados!fk_contratos_associado (
           id, nome, dia_vencimento, logradouro, numero, bairro, cidade, uf, cep
         )
@@ -85,6 +86,92 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
     if (!contrato?.associado_id) throw new Error('Associado não encontrado');
+
+    // ──────────────────────────────────────────────────────────────────────
+    // DESVIO: TROCA DE TITULARIDADE
+    // ──────────────────────────────────────────────────────────────────────
+    // Quando a proposta é uma troca de titularidade, a aprovação do Cadastro
+    // tem regras próprias (termo de cancelamento, janela mesmo-dia, SGA do
+    // antigo titular). Delegamos para `aprovar-troca-cadastro`, que avança a
+    // solicitação para `aguardando_monitoramento`. Aqui só marcamos
+    // `contratos.cadastro_aprovado=true` para sair da fila Propostas
+    // Pendentes — a efetivação real segue por `efetivar-troca-titularidade`
+    // após aprovação do Monitoramento. Não criamos instalação nem ativamos
+    // associado/veículo (troca tem caminho próprio).
+    if ((contrato as any).tipo_entrada === 'troca_titularidade') {
+      console.log('[aprovar-proposta] Detectada TROCA DE TITULARIDADE — delegando para aprovar-troca-cadastro');
+      if (!contrato.cotacao_id) {
+        return jsonResponse({ success: false, error: 'Cotação não vinculada à proposta de troca.' }, 400);
+      }
+      const { data: sol, error: solErr } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id, status')
+        .eq('cotacao_id', contrato.cotacao_id)
+        .maybeSingle();
+      if (solErr || !sol) {
+        return jsonResponse({ success: false, error: 'Solicitação de troca não encontrada para esta cotação.' }, 404);
+      }
+
+      // Idempotência: se contrato já tem cadastro_aprovado, é só retornar OK.
+      if ((contrato as any).cadastro_aprovado === true) {
+        return jsonResponse({
+          success: true,
+          jaAprovado: true,
+          mensagem: 'Troca já aprovada pelo Cadastro.',
+          contratoId: contrato_id,
+          associadoId: contrato.associado_id,
+        });
+      }
+
+      const trocaUrl = `${supabaseUrl}/functions/v1/aprovar-troca-cadastro`;
+      const trocaResp = await fetch(trocaUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // aprovar-troca-cadastro exige Authorization para resolver o aprovador.
+          Authorization: authHeader || `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ solicitacao_id: sol.id }),
+      });
+      const trocaJson: any = await trocaResp.json().catch(() => ({}));
+
+      if (!trocaResp.ok && !trocaJson?.already_advanced) {
+        // Repassar erros estruturados (link_publico_incompleto, inadimplencia_sga_pendente, JANELA_TROCA_EXPIRADA)
+        return new Response(JSON.stringify({
+          success: false,
+          error: trocaJson?.message || trocaJson?.error || 'Falha na aprovação da troca',
+          codigo: trocaJson?.code || trocaJson?.error,
+          mensagem: trocaJson?.message || trocaJson?.error || 'Falha na aprovação da troca',
+        }), {
+          status: trocaResp.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Marcar contrato como aprovado pelo Cadastro para sair da fila Propostas Pendentes.
+      await supabase
+        .from('contratos')
+        .update({ cadastro_aprovado: true, aprovado_por, aprovado_em: agora })
+        .eq('id', contrato_id);
+
+      try {
+        await supabase.from('associados_historico').insert({
+          associado_id: contrato.associado_id,
+          contrato_id: contrato_id,
+          tipo: 'status_alterado',
+          descricao: 'Troca de titularidade aprovada pelo Cadastro — enviada ao Monitoramento.',
+          usuario_id: aprovado_por,
+        });
+      } catch (_) { /* log opcional */ }
+
+      return jsonResponse({
+        success: true,
+        contratoId: contrato_id,
+        associadoId: contrato.associado_id,
+        mensagem: 'Troca de titularidade aprovada pelo Cadastro! Enviada ao Monitoramento.',
+      });
+    }
+    // ──────────────────────────────────────────────────────────────────────
 
     // 1b. Verificar se o plano contratado tem cobertura de Roubo/Furto.
     // Mesma heurística do frontend (regex /roubo|furto/i sobre coberturas.nome).

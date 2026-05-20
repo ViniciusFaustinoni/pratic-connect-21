@@ -77,10 +77,18 @@ function TrocaTitularidadeTab({
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
 
+  // REGRA CANÔNICA: aprovação documental da Troca migrou para a fila
+  // Cadastro › Propostas Pendentes (com badge roxo). A aba Processos vira
+  // read-only para o Cadastro — sem botões Aprovar/Reprovar, apenas
+  // acompanhamento da timeline, SGA, documentos, autovistoria e termo.
+  // Monitoramento mantém todos os botões intactos.
+  const modoEfetivo: 'cadastro' | 'monitoramento' | 'readonly' | 'auto' =
+    modoUsuario === 'cadastro' ? 'readonly' : modoUsuario;
+
   // Resolve modo do modal
   const solicitacaoSelecionada = data?.find(s => s.id === selecionada);
   const modoModal: 'cadastro' | 'monitoramento' | 'readonly' = (() => {
-    if (modoUsuario !== 'auto') return modoUsuario;
+    if (modoEfetivo !== 'auto') return modoEfetivo;
     if (!solicitacaoSelecionada) return 'cadastro';
     const st = solicitacaoSelecionada.status;
     if (st === 'aguardando_monitoramento' || st === 'aguardando_vistoria' || st === 'liberada_para_assinatura') {
@@ -89,8 +97,21 @@ function TrocaTitularidadeTab({
     return 'cadastro';
   })();
 
+  const mostrarBannerCadastroReadonly = modoUsuario === 'cadastro';
+
   return (
     <div className="space-y-4">
+      {mostrarBannerCadastroReadonly && (
+        <Alert className="border-blue-200 bg-blue-50 text-blue-900">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            A aprovação documental das trocas é feita em{' '}
+            <strong>Cadastro › Propostas Pendentes</strong> (procure pelo badge roxo{' '}
+            <span className="font-semibold">TROCA DE TITULARIDADE</span>). Esta aba é
+            somente para acompanhamento.
+          </AlertDescription>
+        </Alert>
+      )}
       <Tabs value={subAba} onValueChange={(v) => setSubAba(v as keyof typeof TROCA_FILTROS)}>
         <TabsList className="w-full flex md:grid md:grid-cols-6 overflow-x-auto justify-start md:justify-center">
           <TabsTrigger value="pendentes" className="flex-shrink-0 text-xs md:text-sm">Aguardando Cadastro</TabsTrigger>

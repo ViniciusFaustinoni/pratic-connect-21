@@ -871,6 +871,16 @@ export default function PropostasPendentes() {
                   </div>
                 </div>
 
+                {/* Badge especial — TROCA DE TITULARIDADE (acima da linha 2) */}
+                {proposta.tipo_entrada === 'troca_titularidade' && (
+                  <div className="mt-2 pl-0 sm:pl-11">
+                    <Badge className="bg-purple-600 hover:bg-purple-600 text-white text-[10px] sm:text-xs px-2 py-0.5 font-bold tracking-wide">
+                      <ArrowRight className="h-3 w-3 mr-1" />
+                      TROCA DE TITULARIDADE
+                    </Badge>
+                  </div>
+                )}
+
                 {/* Linha 2 — Badges e tempo */}
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-0 sm:pl-11">
                   {hasReanalise && (

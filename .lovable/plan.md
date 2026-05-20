@@ -1,68 +1,105 @@
-# 3 ajustes — PDF preview + consultor + tipo adesão/R&F
+## Decisão
 
-## #1 — PDF não abre preview na aprovação do Monitoramento
+Unificar a aprovação documental da Troca de Titularidade na fila **Cadastro › Propostas Pendentes**, com **badge roxo grande "TROCA DE TITULARIDADE"** no topo do card. Após o Cadastro aprovar pela Propostas Pendentes, a solicitação vai **direto para o Monitoramento** (sem reentrar na aba Processos). A aba **Processos › Troca de Titularidade** vira **read-only para o Cadastro** (acompanhamento, sem botões Aprovar/Reprovar) e segue intacta para Monitoramento.
 
-**Onde:** `src/components/troca-titularidade/VeiculoCompletoCard.tsx` (linhas 353–388), modal "Preview de documento" usado tanto na Troca de Titularidade quanto na Aprovação do Monitoramento.
+## Fluxo canônico revisado
 
-**Causa raiz:** o preview usa `<object data type="application/pdf">`. Em vários navegadores o `<object>` PDF dentro de um `<Dialog>` (com `overflow-hidden` e `max-w` no parent) carrega em branco — o Chrome às vezes não dispara o plugin nativo de PDF e o fallback `<iframe>` Google Docs também falha porque o usuário está autenticado em outra conta Google.
-
-**Correção:**
-- Trocar `<object>` por `<iframe src={url}#toolbar=1&navpanes=0>` (o Chromium e o Firefox renderizam PDF nativo direto em iframe, sem o problema do `<object>` em modal).
-- Remover o `overflow-hidden` do `DialogContent` que estava cortando a área de render.
-- Ajustar a detecção `isPdf` para também aceitar `mime` do contrato (`d.mime_type === 'application/pdf'`) e nomes sem extensão visível na URL (Supabase às vezes retorna sem `.pdf` quando vem de `documentos/`).
-- Manter o botão "Abrir em nova aba" como fallback explícito quando o iframe falhar.
-
-Aplicar o mesmo padrão em `src/components/cadastro/VisualizadorDocumentoModal.tsx` (linhas 172–183) — é o mesmo modal usado em outras telas de aprovação e tem o mesmo bug latente.
-
-## #2 — Cadastro › Veículos: coluna "Consultor responsável"
-
-**Onde:**
-- `src/hooks/useVeiculos.ts` → `useVeiculosPaginados` (linhas 71–112): incluir o consultor via contrato ativo do veículo.
-- `src/pages/cadastro/Veiculos.tsx`: nova coluna `Consultor` na tabela desktop e na linha do card mobile.
-
-**Como puxar o consultor (sem N+1):**
-Estender o `.select()` do `useVeiculosPaginados` com:
-```
-contratos:contratos(
-  id, vendedor_id, status, created_at,
-  vendedor:profiles!contratos_vendedor_id_fkey(id, nome)
-)
-```
-e, na linha da tabela, escolher o contrato mais recente do veículo (preferindo `status = 'ativo'`; senão o `created_at` mais novo). Mostra `vendedor.nome` ou `—` se não houver.
-
-Cabeçalho atualizado:
-```
-Veículo | Placa | Ano | Cor | Valor FIPE | Uso App | Associado | Consultor | Status
+```text
+Termo de cancelamento assinado (titular antigo)
+        │
+        ▼
+Link público do novo titular
+   → documentos
+   → termo de filiação assinado
+   → pagamento (quando houver — adesão)
+        │
+        ▼   (trigger trg_troca_promove_cadastro_via_cotacao já existe)
+Cadastro › Propostas Pendentes  ← AGORA mostra trocas (com badge roxo)
+        │  Analista clica "Aprovar proposta"
+        │  → aprovar-proposta detecta tipo_entrada='troca_titularidade'
+        │     e delega para aprovar-troca-cadastro
+        ▼
+Monitoramento › Aprovações Troca (fluxo existente, sem mudança)
+        │
+        ▼
+efetivar-troca-titularidade → SGA → Ativo
 ```
 
-## #3 — Cadastro › Aprovações Pendentes › aba Cliente
+A solicitação **nunca mais volta** para nenhuma fila do Cadastro depois de aprovada — nem na Propostas Pendentes (filtro `cadastro_aprovado=false` quebra), nem na Processos (que agora é só leitura para o Cadastro).
 
-**Onde:** `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`, dentro do `<TabsContent value="cliente">` (linhas 179–243).
+## Mudanças
 
-O **Tipo de Adesão já existe** na linha 190–195 — manter como está.
+### 1. Roteamento dentro de `aprovar-proposta` (edge)
 
-Adicionar duas informações novas logo abaixo do bloco do "Tipo de Adesão":
+**Arquivo:** `supabase/functions/aprovar-proposta/index.ts`
 
-1. **Consultor responsável** — `proposta.vendedor?.nome` (já vem do hook `usePropostasPendentes`, linha 190). Renderizar como `FichaField` com ícone `User` e label "Consultor responsável".
-2. **Cobertura de Roubo e Furto** — badge "Sim" (verde) / "Não" (cinza) com base em `proposta.veiculo?.cobertura_roubo_furto`.
+Depois de carregar o contrato, detectar `tipo_entrada === 'troca_titularidade'` e:
 
-**Hook:**
-`src/hooks/usePropostasPendentes.ts` hoje já busca `veiculo_*` no select do contrato, mas **não traz** `cobertura_roubo_furto`. Acrescentar `cobertura_roubo_furto` no `.select()` da consulta a `veiculos` (existe em duas branches: lista paginada e detalhe único) e expor como `proposta.veiculo_cobertura_roubo_furto: boolean | null` no tipo `PropostaPendente`.
+- Buscar `solicitacoes_troca_titularidade` por `cotacao_id`.
+- Reusar o miolo do `aprovar-troca-cadastro` (refatorar para `_shared/aprovar-troca-cadastro-core.ts`) com todos os gates herdados: termo de cancelamento assinado, situação financeira SGA ≤ 24h liberadora, autovistoria concluída OU janela mesmo-dia.
+- Marcar `contratos.cadastro_aprovado = true` e `aprovado_por = aprovador_profile_id` **só depois** que a solicitação avançar para `aguardando_monitoramento` (na mesma transação lógica), o que tira a troca da fila Propostas Pendentes.
+- **NÃO executar** "criar instalação", "promover serviço de vistoria" nem "ativar associado" — troca tem caminho próprio de efetivação via `efetivar-troca-titularidade`.
+- Devolver o mesmo formato `{ success, mensagem }` que o frontend já consome. Erros estruturados (`link_publico_incompleto`, `inadimplencia_sga_pendente`, `JANELA_TROCA_EXPIRADA`) viram toast no `useAprovarProposta`.
 
-Layout final da aba Cliente:
-```
-[ Tipo de Adesão: Reativação ]   [ Consultor: João da Silva ]   [ R&F: Sim ]
-Nome | CPF | Telefone | WhatsApp | Email | Endereço ...
-```
+### 2. UI da Propostas Pendentes — badge roxo de Troca
 
-## Fora de escopo
-- Backend / RLS — nenhuma mudança de schema é necessária; todos os campos já existem (`contratos.vendedor_id`, `veiculos.cobertura_roubo_furto`).
-- Edge functions intactas.
+**Arquivo:** `src/pages/cadastro/PropostasPendentes.tsx` (+ sub-card identificado na implementação).
 
-## Arquivos a editar
-- `src/components/troca-titularidade/VeiculoCompletoCard.tsx` (preview PDF)
-- `src/components/cadastro/VisualizadorDocumentoModal.tsx` (preview PDF — mesmo bug)
-- `src/hooks/useVeiculos.ts` (incluir vendedor no select)
-- `src/pages/cadastro/Veiculos.tsx` (coluna Consultor desktop + mobile)
-- `src/hooks/usePropostasPendentes.ts` (adicionar `cobertura_roubo_furto` ao select)
-- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` (Consultor + badge R&F na aba Cliente)
+Para cada card com `proposta.tipo_entrada === 'troca_titularidade'`:
+
+- Badge fixo no topo: fundo `bg-purple-600`, texto branco, mesmo tamanho do "INCLUSÃO DE VEÍCULO" já usado.
+- Texto: "TROCA DE TITULARIDADE — Titular anterior: {nome do associado antigo}".
+- Link discreto "Ver histórico" abre a aba Processos (read-only) com termo de cancelamento, SGA e timeline.
+
+Filtro "Troca de titularidade" no `tipoEntradaOptions` (linha 70) já existe — não mexer.
+
+### 3. Hook `usePropostasPendentes` — enriquecer dados da troca
+
+**Arquivo:** `src/hooks/usePropostasPendentes.ts`
+
+A query base (`status='assinado'`) já captura trocas. Acrescentar lookup em `solicitacoes_troca_titularidade` por `cotacao_id IN ...` quando houver contratos com `tipo_entrada='troca_titularidade'`, expondo:
+
+- `troca_solicitacao_id: string | null`
+- `troca_associado_antigo_nome: string | null`
+- `troca_termo_assinado_em: string | null`
+
+### 4. Aba Processos › Troca de Titularidade — read-only para Cadastro
+
+**Arquivos:** `src/pages/cadastro/ProcessosOperacionais.tsx`, `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+
+Quando `modoUsuario === 'cadastro'`:
+
+- Esconder botões "Aprovar" / "Reprovar" do Cadastro.
+- Manter: timeline, dados do antigo titular, dados do novo titular, situação SGA, documentos do termo, autovistoria, status do pagamento.
+- Banner azul: "A aprovação documental desta troca é feita em **Cadastro › Propostas Pendentes**."
+
+Monitoramento (`modoUsuario='monitoramento'`) e a tela `/monitoramento/aprovacoes-troca` permanecem inalterados.
+
+### 5. Reprovação
+
+A reprovação da Troca pelo Cadastro também migra para a Propostas Pendentes. Quando `tipo_entrada='troca_titularidade'`, o `aprovar-proposta` (lado reprovação, dentro do `ReprovarPropostaDialog`) chama `reprovar-troca-titularidade` (já existe) em vez do caminho padrão.
+
+### 6. Saneamento pontual da troca atual (COT-20260520-163938040-598)
+
+A solicitação `2ee5c642-...` já tem `aprovado_cadastro_em` e `aprovado_monitoramento_em` mas está presa em `aguardando_monitoramento`. Marcar `contratos.cadastro_aprovado=true` para tirar do badge enquanto a efetivação SGA é investigada à parte (fora do escopo).
+
+## Arquivos a editar/criar
+
+- `supabase/functions/aprovar-proposta/index.ts` — desvio para troca
+- `supabase/functions/_shared/aprovar-troca-cadastro-core.ts` (novo) — extrai miolo do `aprovar-troca-cadastro`
+- `supabase/functions/aprovar-troca-cadastro/index.ts` — passa a delegar para o core
+- `src/hooks/usePropostasPendentes.ts` — enriquecer dados de troca
+- `src/pages/cadastro/PropostasPendentes.tsx` (+ card) — badge roxo "TROCA DE TITULARIDADE"
+- `src/pages/cadastro/PropostaAnalise.tsx` — banner com link para histórico da troca
+- `src/pages/cadastro/ProcessosOperacionais.tsx` — `TrocaTitularidadeTab` em modo `readonly_cadastro`
+- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` — suportar `modo='readonly_cadastro'`
+- Atualizar memória `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e` refletindo o novo ponto de aprovação documental
+
+## Como validar
+
+1. Criar uma troca de ponta a ponta: termo de cancelamento → link público novo titular (docs + termo de filiação + pagamento, quando houver).
+2. Confirmar que aparece em **Cadastro › Propostas Pendentes** com badge roxo "TROCA DE TITULARIDADE".
+3. Conferir que **Cadastro › Processos › Troca** mostra o mesmo registro em modo read-only com banner explicativo.
+4. Clicar "Aprovar proposta" → toast de sucesso → o card some da fila → aparece em **Monitoramento › Aprovações Troca** como `aguardando_monitoramento`.
+5. Confirmar `contratos.cadastro_aprovado=true` e `solicitacoes_troca_titularidade.aprovado_cadastro_em IS NOT NULL`.
+6. Após aprovação do Monitoramento, `efetivar-troca-titularidade` segue inalterado.
