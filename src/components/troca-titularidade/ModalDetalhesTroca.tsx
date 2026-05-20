@@ -416,8 +416,11 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Aprovação ainda não disponível</AlertTitle>
                   <AlertDescription>
+                    {modo === 'cadastro' && solicitacao.status === 'aguardando_termo_cancelamento' && (
+                      <>Aguardando o titular antigo assinar o Termo de Cancelamento (biometria facial). Use a aba <strong>Termo</strong> para reenviar.</>
+                    )}
                     {modo === 'cadastro' && solicitacao.status === 'cotacao_em_andamento' && (
-                      <>O botão <strong>Aprovar</strong> aparece aqui assim que o titular antigo assinar o Termo de Cancelamento (a solicitação muda para <em>Aguardando Cadastro</em>). Use a aba <strong>Termo</strong> para enviar.</>
+                      <>Termo já assinado. Agora o <strong>novo titular</strong> precisa concluir o link público (Plano → Documentos → Contrato → Vistoria). A solicitação só entra na fila <em>Aguardando Cadastro</em> quando a cotação canônica atingir <em>aguardando aprovação do cadastro</em>.</>
                     )}
                     {modo === 'cadastro' && solicitacao.status !== 'cotacao_em_andamento' && solicitacao.status !== 'aguardando_cadastro' && (
                       <>Esta solicitação não está mais sob análise do Cadastro (status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>). Acompanhe pela Timeline.</>
