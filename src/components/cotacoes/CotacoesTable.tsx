@@ -286,6 +286,7 @@ export function CotacoesTable({
                         )}>
                           <ArrowRight className="h-2.5 w-2.5" />
                           {etapaInfo.label}
+                          <FlagTravada cotacao={cotacao} className="ml-1" />
                         </div>
                       )}
                       <TrocaTitularidadeBadge
