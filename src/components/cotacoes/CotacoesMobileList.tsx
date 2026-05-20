@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
+import { FlagTravada } from '@/components/cotacoes/FlagTravada';
 import {
   getEtapaVenda,
   statusConfig,
