@@ -172,6 +172,11 @@ const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect
         </div>
       </TableCell>
       <TableCell>
+        <span className={consultorNome ? 'text-sm' : 'text-sm text-muted-foreground'}>
+          {consultorNome || '—'}
+        </span>
+      </TableCell>
+      <TableCell>
         {tooltipContent ? (
           <TooltipProvider>
             <Tooltip>
