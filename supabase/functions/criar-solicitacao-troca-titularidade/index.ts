@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
         veiculo_id: veiculo.id,
         cotacao_id: null,
         novo_titular_dados: novo_titular,
-        status: 'cotacao_em_andamento',
+        status: 'aguardando_termo_cancelamento',
         criado_por: criadoPorProfileId,
       })
       .select('id, token_publico')
