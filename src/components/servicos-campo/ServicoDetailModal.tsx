@@ -183,7 +183,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 </Button>
               )}
 
-              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
+              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada', 'em_analise'].includes(servico.status) && (
                 <Button
                   variant={servico.status === 'cancelada' ? 'default' : 'outline'}
                   size="sm"
