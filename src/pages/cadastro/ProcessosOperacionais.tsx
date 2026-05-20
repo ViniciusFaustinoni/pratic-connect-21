@@ -52,7 +52,12 @@ const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
 };
 
 const TROCA_FILTROS: Record<string, StatusTroca[]> = {
-  pendentes: ['aguardando_termo_cancelamento', 'aguardando_cadastro', 'cotacao_em_andamento'],
+  // Fila REAL de aprovação do Cadastro — só entra quando o trigger
+  // trg_troca_promove_cadastro_via_cotacao promove a solicitação porque a
+  // cotação canônica atingiu `aguardando_aprovacao_cadastro`.
+  pendentes: ['aguardando_cadastro'],
+  // Pré-cadastro: termo pendente ou link público em andamento pelo novo titular.
+  em_andamento: ['aguardando_termo_cancelamento', 'cotacao_em_andamento'],
   aguardando_monit: ['aguardando_monitoramento'],
   em_vistoria: ['aguardando_vistoria'],
   aprovadas: ['liberada_para_assinatura', 'efetivada'],
