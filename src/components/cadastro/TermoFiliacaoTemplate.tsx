@@ -252,7 +252,7 @@ export function TermoFiliacaoTemplate({
 
         <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '6pt' }}>
           <div style={{ marginRight: '20pt' }}>
-            <span style={{ fontWeight: 'bold' }}>Tipo:</span> {veiculo.tipo === 'moto' ? 'Moto' : 'Carro'}
+            <span style={{ fontWeight: 'bold' }}>Tipo:</span> {veiculo.tipo === 'moto' ? 'Motocicleta' : 'Carro'}
           </div>
           <div>
             <span style={{ fontWeight: 'bold' }}>Câmbio:</span> {veiculo.cambio || '—'}

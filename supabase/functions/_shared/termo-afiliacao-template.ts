@@ -449,7 +449,11 @@ const generateSecao2 = (data: TermoAfiliacaoData): string => `
   <div class="field-row">
     <div class="field">
       <span class="field-label">Tipo:</span> 
-      <span class="field-value">${data.veiculo.tipo_veiculo || 'Carro'}</span>
+      <span class="field-value">${(() => {
+        const raw = (data.veiculo.tipo_veiculo || '').toString().trim().toLowerCase();
+        if (raw === 'moto' || raw === 'motocicleta' || raw === 'ciclomotor' || raw === 'triciclo') return 'Motocicleta';
+        return 'Carro';
+      })()}</span>
     </div>
     <div class="field">
       <span class="field-label">Câmbio:</span> 
