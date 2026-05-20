@@ -37,6 +37,7 @@ import { Info } from 'lucide-react';
 // ============================================
 
 const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
+  aguardando_termo_cancelamento: 'Aguardando termo de cancelamento',
   cotacao_em_andamento: 'Cotação em andamento',
   aguardando_cadastro: 'Aguardando Cadastro',
   aguardando_monitoramento: 'Aguardando Monitoramento',
