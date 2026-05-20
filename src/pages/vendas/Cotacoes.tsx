@@ -140,7 +140,14 @@ export default function Cotacoes() {
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
   const [filtroOrfas, setFiltroOrfas] = useState(false);
+  const [filtroTravadas, setFiltroTravadas] = useState(false);
   const [etapaFunilFilter, setEtapaFunilFilter] = useState<string[]>([]);
+  // Tick a cada 60s para reavaliar SLA pós-assinatura (flag pulsante).
+  const [agoraTick, setAgoraTick] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setAgoraTick(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   const toggleEtapaFunil = useCallback((etapa: string) => {
     setEtapaFunilFilter((prev) =>
       prev.includes(etapa) ? prev.filter((e) => e !== etapa) : [...prev, etapa]
