@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -334,6 +335,35 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
           .eq('id', servico.associado_id)
           .maybeSingle();
         enderecoCadastral = assoc || null;
+      }
+
+      // Backfill contrato_id quando o servico (ex.: autovistoria materializada)
+      // não carrega o vínculo direto — necessário para "Devolver ao Cadastro".
+      if (!servico.contrato_id) {
+        let resolvedContratoId: string | null = null;
+        if (servico.vistoria_origem_id) {
+          const { data: v } = await supabase
+            .from('vistorias')
+            .select('contrato_id')
+            .eq('id', servico.vistoria_origem_id)
+            .maybeSingle();
+          resolvedContratoId = (v as any)?.contrato_id || null;
+        }
+        if (!resolvedContratoId && servico.veiculo_id) {
+          const { data: c } = await supabase
+            .from('contratos')
+            .select('id')
+            .eq('veiculo_id', servico.veiculo_id)
+            .in('status', ['assinado', 'ativo'] as any)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          resolvedContratoId = (c as any)?.id || null;
+        }
+        if (resolvedContratoId) {
+          servico.contrato_id = resolvedContratoId;
+          console.log('[AprovacaoInstalacaoDetalhe] contrato_id resolvido via fallback', resolvedContratoId);
+        }
       }
 
       return {
@@ -1107,7 +1137,10 @@ export default function AprovacaoInstalacaoDetalhe() {
         onOpenChange={setDevolverOpen}
         isPending={devolverCadastro.isPending}
         onConfirm={(motivo) => {
-          if (!servico?.contrato_id) return;
+          if (!servico?.contrato_id) {
+            toast.error('Contrato não localizado para este serviço — recarregue a página.');
+            return;
+          }
           devolverCadastro.mutate(
             { contrato_id: servico.contrato_id, motivo },
             {
