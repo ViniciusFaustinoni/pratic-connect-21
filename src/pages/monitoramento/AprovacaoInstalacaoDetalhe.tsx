@@ -345,6 +345,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         enderecoCadastral,
         enderecoBase,
         isAtendimentoBase,
+        vistoriaModalidade,
       };
     },
     enabled: !!servicoId,
