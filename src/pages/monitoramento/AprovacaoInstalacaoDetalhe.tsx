@@ -377,6 +377,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const { data, isLoading, error, refetch, isFetching } = useServicoDetalheAprovacao(id);
   const aprovar = useAprovarInstalacaoMonitoramento();
   const reprovar = useReprovarInstalacaoMonitoramento();
+  const devolverCadastro = useDevolverAoCadastro();
 
   const [showReprovar, setShowReprovar] = useState(false);
   const [motivoReprovar, setMotivoReprovar] = useState('');
@@ -386,6 +387,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [corrigirOpen, setCorrigirOpen] = useState(false);
   const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
   const [solicitarVistoriaOpen, setSolicitarVistoriaOpen] = useState(false);
+  const [devolverOpen, setDevolverOpen] = useState(false);
 
   if (isLoading) {
     return (
