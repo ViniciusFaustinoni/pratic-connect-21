@@ -44,6 +44,7 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
+import { getCotacaoTravada } from '@/lib/cotacaoTravada';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacoesFiltrosSheet } from '@/components/cotacoes/CotacoesFiltrosSheet';
 import { CotacoesActiveFiltersChips } from '@/components/cotacoes/CotacoesActiveFiltersChips';
@@ -330,9 +331,14 @@ export default function Cotacoes() {
         });
       }
 
-      return matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
+      let matchesTravadas = true;
+      if (filtroTravadas) {
+        matchesTravadas = getCotacaoTravada(cotacao, agoraTick).travada;
+      }
+
+      return matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa && matchesTravadas;
     });
-  }, [cotacoes, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter]);
+  }, [cotacoes, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter, filtroTravadas, agoraTick]);
 
   // Ordenação cronológica — mais recentes primeiro
   const sortedCotacoes = useMemo(() => {
