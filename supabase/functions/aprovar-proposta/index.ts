@@ -614,6 +614,31 @@ serve(async (req) => {
                   usuario_id: aprovado_por || null,
                 });
 
+                // CANÔNICO: após o Cadastro liberar R/F via autovistoria enxuta acima FIPE,
+                // se NÃO houver instalação física agendada para o veículo, reabrir a etapa
+                // de agendamento no link público — `status_contratacao='aguardando_instalacao'`.
+                // Sem isso, a cotação fica em `pagamento_ok`, a etapa some, e o caso
+                // nunca chega à fila Serviços de Campo (caso Eder Lopes / RJX3E41).
+                try {
+                  const { data: instAgendada } = await supabase
+                    .from('instalacoes')
+                    .select('id')
+                    .eq('veiculo_id', veiculoId)
+                    .in('status', ['agendada', 'em_rota', 'em_andamento'])
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (!instAgendada?.id && contrato.cotacao_id) {
+                    await supabase
+                      .from('cotacoes')
+                      .update({ status_contratacao: 'aguardando_instalacao' })
+                      .eq('id', contrato.cotacao_id);
+                    console.log(`[aprovar-proposta] Cotação ${contrato.cotacao_id} reaberta para agendamento (sem instalação física agendada).`);
+                  }
+                } catch (e) {
+                  console.warn('[aprovar-proposta] Falha ao reabrir cotação para agendamento:', e);
+                }
+
                 console.log(`[aprovar-proposta] Autovistoria ${vistAutoRf.id} aprovada e R&F liberado para veículo ${veiculo.placa}.`);
               } else {
                 console.log(`[aprovar-proposta] Autovistoria ${vistAutoRf.id} incompleta (fotos=${nFotos}, video=${!!vistAutoRf.video_360_url}) — R&F não liberado.`);
