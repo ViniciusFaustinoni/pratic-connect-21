@@ -1,91 +1,95 @@
-## Estado atual KOU6D37 (banco local)
+## Diagnóstico — por que a Troca KOU6D37 (Marcus Vinicius) não apareceu
 
-| Campo | Valor |
-|---|---|
-| `veiculos.associado_id` | MARCOS DATIVO (`9c05d3c4…`) |
-| `veiculos.em_troca_titularidade` | `true` |
-| `veiculos.status` | `instalacao_pendente` |
-| `veiculos.codigo_hinova` | `36274` (já existiu no Hinova) |
-| `veiculos.sincronizado_hinova` | `true` (flag local) |
-| Solicitação troca `2ee5c642` | `aguardando_monitoramento`, `efetivada_em=NULL`, `sga_status=falha` |
+A cotação `COT-20260520-173700155-759` (contrato `71b21fd9…`) está **correta no banco**:
 
-Você reportou que **no SGA o veículo já não aparece mais sob o MARCOS DATIVO** (provavelmente removido manualmente no painel Hinova). Nosso lado local ainda tem MARCOS como dono e `codigo_hinova=36274` ativo — esse descasamento precisa ser corrigido.
+- `contratos.status = 'assinado'`
+- `contratos.cadastro_aprovado = false`
+- `contratos.tipo_entrada = 'troca_titularidade'`
+- `contratos.origem_troca_titularidade_id` preenchido
+- `veiculos.status = 'instalacao_pendente'` (não é 'ativo')
 
----
+Portanto ela **deveria** aparecer em `/cadastro/propostas`. Não aparece por causa de **um filtro do hook `usePropostasPendentes`** que assume fluxo de Nova Adesão:
 
-## Parte 1 — Limpeza da troca (KOU6D37 → MARCUS VINICIUS)
-
-Migration única em transação:
-
-```text
-1. UPDATE veiculos
-   SET em_troca_titularidade=false,
-       troca_titularidade_id=NULL,
-       troca_titularidade_iniciada_em=NULL,
-       cobertura_suspensa=false,
-       cobertura_suspensa_motivo=NULL,
-       cobertura_suspensa_em=NULL
-   WHERE id='d5181403-22c0-4f2a-b22e-b6e7d821376c';
-
-2. DELETE FROM solicitacoes_troca_titularidade
-   WHERE id='2ee5c642-a095-4423-9a9d-06dc1282ea9d';
-
-3. DELETE FROM contratos
-   WHERE id='e5a02908-b5e3-482c-a063-365a92477d71';
-
-4. DELETE FROM cotacoes
-   WHERE id='97f3142d-273b-4438-a1aa-47a129c102ce';
-
-5. DELETE FROM associados
-   WHERE id='5e83b57a-04b9-433c-9a0b-dcd0e2ab0f49';  -- MARCUS VINICIUS
+`src/hooks/usePropostasPendentes.ts:795-801`
+```ts
+const temQualquerEtapa =
+  instalacaoInfo ||
+  temAutovistoria ||
+  temVistoriaBaseRealizada ||
+  temVistoriaBaseAgendada ||
+  temInstalacaoAgendada;
+if (!temQualquerEtapa) return null;
 ```
 
-Resultado: MARCOS DATIVO continua dono local do KOU6D37, sem flag de troca, pronto para reteste.
+Esse gate exige autovistoria, vistoria de base (agendada/realizada) ou instalação (agendada/concluída) **antes** de admitir o item na fila do Cadastro.
+
+Pelo manual canônico, **Troca de Titularidade NÃO faz autovistoria** e o agendamento de vistoria (se houver) é decidido pelo **Monitoramento**, depois do Cadastro. Logo, no momento exato em que o novo titular termina o link público (escolher plano → docs → assinar termo), nenhuma dessas etapas existe — o item é descartado pelo `return null` e some da fila.
+
+Mesmo sintoma vale para qualquer troca futura: hoje só aparece no Cadastro se, por acaso, já existir vistoria/instalação anexada — o que não é o fluxo canônico.
 
 ---
 
-## Parte 2 — Reenviar KOU6D37 para o SGA sob MARCOS DATIVO
+## Correção
 
-Como o Hinova não tem mais o vínculo, o código antigo (`36274`) está obsoleto e o `buscar/veiculo` lá vai retornar 404. Precisamos forçar **recriação** no SGA.
+Ajustar o gate em `usePropostasPendentes.ts` para **dispensar `temQualquerEtapa` quando o contrato é Troca de Titularidade**, alinhado ao fluxo canônico.
 
-### Passos:
+### Mudança única (cirúrgica)
 
-1. **Zerar o snapshot Hinova local** (para que a sync trate como cadastro novo, não como update inexistente):
+`src/hooks/usePropostasPendentes.ts` ~ linha 795:
 
-```text
-UPDATE veiculos
-   SET codigo_hinova=NULL,
-       sincronizado_hinova=false,
-       sincronizado_hinova_em=NULL,
-       hinova_erro=NULL
- WHERE id='d5181403-22c0-4f2a-b22e-b6e7d821376c';
+```ts
+const isTroca =
+  contrato.tipo_entrada === 'troca_titularidade' ||
+  !!(contrato as any).origem_troca_titularidade_id;
+
+const temQualquerEtapa =
+  instalacaoInfo ||
+  temAutovistoria ||
+  temVistoriaBaseRealizada ||
+  temVistoriaBaseAgendada ||
+  temInstalacaoAgendada;
+
+// Troca de titularidade entra no Cadastro logo após a assinatura do termo,
+// sem depender de vistoria/instalação (essas etapas são decididas pelo
+// Monitoramento, DEPOIS do Cadastro). Para os demais fluxos mantemos o
+// gate de "alguma etapa executada" para evitar lixo de rascunho.
+if (!isTroca && !temQualquerEtapa) return null;
 ```
 
-2. **Disparar a edge `sga-hinova-sync`** com `{ veiculo_id: 'd5181403-22c0-4f2a-b22e-b6e7d821376c', forcar: true }` (ou o action equivalente `sincronizar_veiculo`).
+E definir `tipoEtapaAnalise` para troca sem etapa:
 
-3. **Validar**:
-   - Resposta da edge com `codigo` novo gerado no Hinova.
-   - `veiculos.codigo_hinova` repopulado, `sincronizado_hinova=true`.
-   - Confirmação no painel Hinova de que KOU6D37 voltou a aparecer sob a matrícula do MARCOS DATIVO.
-   - Forçar situação PENDENTE (3) via `alterarSituacaoParaVeiculoHinova` logo após o cadastro (regra canônica — nunca enviar ATIVO).
+```ts
+let tipoEtapaAnalise: TipoEtapaAnalise;
+if (instalacaoInfo) tipoEtapaAnalise = 'instalacao_concluida';
+else if (temAutovistoria || temVistoriaBaseRealizada) tipoEtapaAnalise = 'vistoria_concluida';
+else if (isTroca) tipoEtapaAnalise = 'agendamento_confirmado'; // será reavaliada após Cadastro/Monitoramento
+else tipoEtapaAnalise = 'agendamento_confirmado';
+```
 
-### Observações importantes
+(O badge "TROCA DE TITULARIDADE" já existe via `proposta.tipo_entrada === 'troca_titularidade'` na linha 875.)
 
-- O contrato ativo atual do MARCOS para o KOU6D37 (status `ativo`, com `valor_mensal` e `dia_vencimento`) será a base do payload da sync.
-- Se o contrato dele estiver com `dia_vencimento` ausente, a sync vai falhar (regra canônica SGA dia_vencimento). Antes de disparar, eu confirmo o `dia_vencimento` do contrato vivo do MARCOS.
-- Saneamento pontual — **não** trocar nada no fluxo da edge `sga-hinova-sync`.
+### Espelhar no contador
+
+`src/hooks/usePropostasPendentesCount.ts` já reaproveita `usePropostasPendentes`, então o badge da sidebar passa a contar a troca automaticamente — sem mudança.
+
+### Saneamento (one-off)
+
+Após o deploy, a cotação `COT-20260520-173700155-759` (Marcus Vinicius) aparecerá automaticamente em `/cadastro/propostas` na aba **Aguardando**, com o pill roxo "TROCA DE TITULARIDADE". Nenhum dado precisa ser corrigido manualmente — apenas refetch.
 
 ---
 
-## Parte 3 — Plano da efetivação (próxima troca cancelar veículo do antigo)
+## Por que isso é seguro
 
-Para a próxima troca já cancelar o veículo do titular antigo no SGA automaticamente, manter como **trabalho separado** (já planejado anteriormente: extrair o trecho `alterarSituacaoVeiculoHinova(cod, 3)` que hoje só existe no caminho `retry_sga` para também rodar no fluxo principal). Não executar nesta rodada — primeiro limpa e reenvia, depois trata.
+- Não altera o gate de saída (`cadastro_aprovado=true` continua sendo a única forma de sair da fila do Cadastro).
+- Não cria caminho alternativo para o fluxo de Nova Adesão — só dispensa o pré-requisito de "etapa executada" exclusivamente para `tipo_entrada='troca_titularidade'`.
+- Mantém o veto duplo (veículo `ativo` ou `cadastro_aprovado=true` ⇒ `return null`).
+- Próximas trocas seguirão o caminho correto: assinou termo → cai no Cadastro → Cadastro aprova → Monitoramento decide vistoria/aprovação → SGA, conforme o manual.
 
 ---
 
-## Ordem de execução
+## Detalhes técnicos
 
-1. Migration da Parte 1 (limpeza) — **bloqueia** se algo der errado, sem risco para o MARCOS.
-2. UPDATE de zerar snapshot Hinova + invocar `sga-hinova-sync` da Parte 2.
-3. Confirmar no Hinova que o KOU6D37 voltou e está PENDENTE sob o MARCOS.
-4. Você refaz a troca de titularidade do zero para reteste.
+- Arquivo único: `src/hooks/usePropostasPendentes.ts` (≈ 4 linhas alteradas)
+- Sem migração de DB
+- Sem alteração em edge functions
+- Memória `mem://logic/operations/propostas-pendentes-entrada-caminho-completo` precisa ser **atualizada** acrescentando: "Troca de titularidade é exceção — entra na fila do Cadastro assim que o termo é assinado, sem exigir vistoria/instalação. As demais etapas (vistoria/instalação) são decididas pelo Monitoramento DEPOIS."
