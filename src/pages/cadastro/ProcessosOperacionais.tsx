@@ -101,6 +101,17 @@ function TrocaTitularidadeTab({
 
   return (
     <div className="space-y-4">
+      {mostrarBannerCadastroReadonly && (
+        <Alert className="border-blue-200 bg-blue-50 text-blue-900">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            A aprovação documental das trocas é feita em{' '}
+            <strong>Cadastro › Propostas Pendentes</strong> (procure pelo badge roxo{' '}
+            <span className="font-semibold">TROCA DE TITULARIDADE</span>). Esta aba é
+            somente para acompanhamento.
+          </AlertDescription>
+        </Alert>
+      )}
       <Tabs value={subAba} onValueChange={(v) => setSubAba(v as keyof typeof TROCA_FILTROS)}>
         <TabsList className="w-full flex md:grid md:grid-cols-6 overflow-x-auto justify-start md:justify-center">
           <TabsTrigger value="pendentes" className="flex-shrink-0 text-xs md:text-sm">Aguardando Cadastro</TabsTrigger>
