@@ -1945,8 +1945,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             toast.error(
               baseMsg + (rollbackOk
                 ? ' A cotação foi descartada — tente novamente em instantes.'
-                : ' Atenção: a cotação NÃO pôde ser descartada automaticamente. Use a ação "Excluir cotação órfã" no painel de Outros Processos ou contate o suporte.'),
-              { duration: 8000 }
+                : ' Atenção: a cotação NÃO pôde ser descartada automaticamente. Use a ação "Excluir cotação órfã" no painel de Outros Processos ou contate o suporte.')
+                + (code ? ` [cod: ${code}${e?.status ? ' / HTTP ' + e.status : ''}]` : ''),
+              { duration: 10000 }
             );
             // Bloquear navegação: usuário fica no dialog para tentar de novo
             return;
