@@ -792,13 +792,21 @@ export function usePropostasPendentes() {
         const temVistoriaBaseAgendada = vistoriaBaseInfo?.status === 'agendado';
         const temInstalacaoAgendada = !!instalacaoAgendada;
 
+        // Troca de titularidade entra no Cadastro logo após a assinatura do termo,
+        // sem depender de vistoria/instalação (essas etapas são decididas pelo
+        // Monitoramento, DEPOIS do Cadastro). Para os demais fluxos mantemos o
+        // gate de "alguma etapa executada" para evitar lixo de rascunho.
+        const isTroca =
+          (contrato as any).tipo_entrada === 'troca_titularidade' ||
+          !!(contrato as any).origem_troca_titularidade_id;
+
         const temQualquerEtapa =
           instalacaoInfo ||
           temAutovistoria ||
           temVistoriaBaseRealizada ||
           temVistoriaBaseAgendada ||
           temInstalacaoAgendada;
-        if (!temQualquerEtapa) return null;
+        if (!isTroca && !temQualquerEtapa) return null;
 
         let tipoEtapaAnalise: TipoEtapaAnalise;
         if (instalacaoInfo) tipoEtapaAnalise = 'instalacao_concluida';
