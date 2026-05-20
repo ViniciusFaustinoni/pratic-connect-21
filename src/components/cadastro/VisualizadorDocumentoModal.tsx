@@ -175,17 +175,11 @@ export function VisualizadorDocumentoModal({ documento, open, onClose, onAprovar
         {/* Visualizador do documento */}
         <div className="flex-1 min-h-0 overflow-auto bg-muted/50 rounded-lg">
           {isPdf ? (
-            <object
-              data={documento.arquivo_url}
-              type="application/pdf"
-              className="w-full h-[500px] rounded-lg"
-            >
-              <iframe
-                src={`https://docs.google.com/gview?url=${encodeURIComponent(documento.arquivo_url)}&embedded=true`}
-                className="w-full h-[500px] rounded-lg border-0"
-                title={tipoLabels[documento.tipo] || 'Documento'}
-              />
-            </object>
+            <iframe
+              src={`${documento.arquivo_url}#toolbar=1&navpanes=0&view=FitH`}
+              className="w-full h-[600px] rounded-lg border-0 bg-background"
+              title={tipoLabels[documento.tipo] || 'Documento'}
+            />
           ) : isImage ? (
             <div className="flex items-center justify-center p-4">
               <img 
