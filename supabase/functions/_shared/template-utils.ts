@@ -181,12 +181,11 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     // Tipo de carroceria (carro/moto/utilitário) — normalizado para rótulo de exibição
     'veiculo.tipo': (() => {
       const raw = ((dados.veiculo as any).tipo_veiculo || '').toString().trim().toLowerCase();
-      if (raw === 'moto' || raw === 'motocicleta') return 'Motocicleta';
+      if (raw === 'moto' || raw === 'motocicleta' || raw === 'ciclomotor' || raw === 'triciclo') return 'Motocicleta';
       if (raw === 'utilitario' || raw === 'utilitário') return 'Utilitário';
       if (raw === 'caminhao' || raw === 'caminhão') return 'Caminhão';
-      if (raw === 'carro' || raw === 'automovel' || raw === 'automóvel' || raw === '') return 'Automóvel';
-      // Já formatado (ex.: "Automóvel") — devolve com primeira maiúscula
-      return raw.charAt(0).toUpperCase() + raw.slice(1);
+      // 'carro', 'automovel', 'automóvel', 'passeio', vazio → Carro
+      return 'Carro';
     })(),
     'veiculo.tipo_uso': dados.veiculo.tipo_uso || 'Particular',
     'veiculo.codigo_fipe': dados.veiculo.codigo_fipe || '—',
