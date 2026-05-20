@@ -635,12 +635,12 @@ function useProcessosCounts(scope?: { profileId?: string; authUserId?: string })
   return useQuery({
     queryKey: ['processos-counts', profileId, authUserId],
     queryFn: async () => {
-      // Fila REAL de Cadastro: só `aguardando_cadastro` (após o trigger
-      // trg_troca_promove_cadastro_via_cotacao promover via cotação canônica).
+      // `aguardando_cadastro` é fila do Cadastro › Propostas Pendentes — NÃO conta aqui.
+      // Em Processos contamos as fases pré-cadastro (termo / link público em andamento).
       let q1 = (supabase as any)
         .from('solicitacoes_troca_titularidade')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'aguardando_cadastro');
+        .in('status', ['aguardando_termo_cancelamento', 'cotacao_em_andamento']);
       if (profileId) q1 = q1.eq('criado_por', profileId);
 
       let q2 = supabase
