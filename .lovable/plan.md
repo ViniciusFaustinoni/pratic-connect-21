@@ -1,76 +1,81 @@
-## Diagnóstico
+## 🔎 Diagnóstico — TIB8F32 (GUSTAVO AFONSO DE CARVALHO)
 
-**Caso real (screenshots):** Moto G / Android low-end, link público do prestador (`app.praticcar.org/prestador/<token>`), página `PrestadorInstalacao.tsx`, mensagem do Android Chrome: *"Devido à insuficiência de memória, não foi possível concluir a operação anterior"*. A aba foi descartada pelo Chrome (memory pressure → `document.wasDiscarded`), o estado em memória se perdeu e o checklist voltou para 1/31 / 0/30.
+**Dados no banco**
+- Contrato `5ca55b9f…` criado **19/05 15:25** com `cadastro_aprovado=true` (assinado antes das migrações D1 do dia 20/05).
+- FIPE R$ 107.271 → **acima do mínimo**, rastreador obrigatório.
+- Vistoria `5f9c56b0…` `modalidade='autovistoria'`, `status='aprovada'` (autovistoria opcional enxuta).
+- Instalação `79613c9a…` `status='agendada'` para 20/05 → instalação técnica **ainda não aconteceu**.
+- Serviço `8a6f3676…` `tipo='instalacao'` `status='agendada'`, `modalidade='presencial'`.
+- Veículo `instalacao_pendente`, associado `aguardando_instalacao`. **Nenhum rastreador vinculado.**
 
-**Por que o link do prestador morre nesses dispositivos (≠ instalador interno):**
+**Como caiu contaminado (root cause histórica)**
+1. Pré-D1, `aprovar-proposta` da autovistoria opcional acima-FIPE chamava `cadastro_aprovado=true` no contrato (efeito colateral que a memória `autovistoria-nao-promove-cadastro` agora proíbe via filtro `modalidade='autovistoria'` nos triggers).
+2. TIB8F32 é exatamente um dos 5 fantasmas (KNO3F78, KZK1I95, LLF7F07, TIB8F32, KOA4D63) que a diretoria decidiu **não sanear** no banco.
 
-| Proteção | Instalador interno (`ExecutarVistoriaCompleta`) | Vistoria pública do cliente (`VistoriaPublica`) | **Prestador (`PrestadorInstalacao`) — hoje** |
-|---|---|---|---|
-| `useDeviceCapability` (perfil low/mid/high + log) | ✅ | ✅ (via AutovistoriaCotacao) | ❌ |
-| Toast de retomada após OOM (`wasDiscarded`) | ✅ | ✅ | ❌ |
-| `LowMemoryBanner` (libera previews ao apertar) | ✅ | — | ❌ |
-| Fila IndexedDB (Dexie) p/ foto/vídeo | `useUploadVistoriaOffline` | `useUploadVistoriaPublicaOffline` + `useSyncQueuePublica` | ❌ (upload direto pro Storage, estado só em RAM) |
-| Persistência local da captura (sobrevive a discard) | ✅ Dexie | ✅ Dexie | ❌ Só estado React + JSONB no servidor |
-| Compressão adaptativa (`compressImage` com perfil low) | ✅ sem override | ✅ sem override | ✅ (já usa) |
-| Persistência incremental no servidor | rascunho com `salvarRascunho` | enqueue offline | autoSave de **todo** o blob `fotos_vistoria` JSONB a cada upload |
+**Por que o botão aparece**
+- As filas (`useInstalacoesAguardandoAprovacao`, `useInstalacoesAguardandoAtivacao`) exigem `status='concluida'`. TIB8F32 **não aparece nas listas**.
+- Mas a rota `/monitoramento/aprovacao-associados/:id` (componente `AprovacaoInstalacaoDetalhe.tsx`) é alcançável por link direto/breadcrumb/histórico e **não tem nenhum guard**: ela sempre exibe "Aprovar — Ativar Proteção 360", mesmo quando:
+  - O serviço/instalação ainda está `agendada` (instalação física não ocorreu);
+  - Não há rastreador vinculado em veículo que exige rastreador;
+  - A única evidência é autovistoria opcional acima-FIPE (que não substitui a instalação técnica).
 
-**O que está realmente errado no Prestador:**
-1. Cada foto vai direto pro Storage e o `fotosMap` é mantido em memória **e** persistido em JSONB inteiro na coluna `instalacao_prestador_links.fotos_vistoria` a cada mudança (autoSave 1,5 s). Quando o Chrome descarta a aba, a foto já está no Storage, mas o React perde o estado e ao reabrir só restaura o que veio da query — e o `useEffect` de restauração tem guard `restoredRef.current` que pode rodar antes do refetch e travar a hidratação.
-2. Não há `useDeviceCapability` nem aviso/recuperação após OOM — usuário só vê "memória insuficiente" e abandona.
-3. `VistoriaFotoSequencial` é um componente dark (slate-800, text-white), mas a página envolve em `bg-white` com `Card` claro → leitura ruim (screenshot #2) e contraste quebrado entre cards.
-4. Geolocalização `watchPosition` com `enableHighAccuracy: true` rodando continuamente também pesa em low-end (descartável após o checklist começar).
+---
 
-## Plano
+## 🎯 Objetivo
 
-### Passo 1 — Memória e persistência (prioridade alta)
+Bloquear, na UI, qualquer aprovação prematura por essa rota — sem mexer nos 5 fantasmas e sem regredir o D1. Casos novos já caem corretos; o que falta é a porta dos fundos.
 
-Adotar o mesmo padrão da vistoria pública do cliente, sem mudar contratos da edge function `concluir-instalacao-prestador`.
+---
 
-1. **Criar `useUploadPrestadorOffline(token)`** espelhando `useUploadVistoriaPublicaOffline`:
-   - `enfileirarFoto(slot, file)` grava em IndexedDB (Dexie, origem `'publico'`, `token` = token do link).
-   - Reusa o `useSyncQueuePublica` existente — só precisa garantir que ele aceite o bucket alvo. Se hoje só fala com `vistoria-fotos`, adicionar suporte ao bucket `prestador-fotos` (parâmetro de destino na enfileirarMidia ou um seletor por `origem+token`).
-   - Retorna `previewsFotos` (Object URLs gerenciados, sem vazamento) + `pendentes`.
-2. **Trocar o handler `handleFotoCapture`** para chamar `enfileirarFoto` em vez de fazer upload síncrono. A foto fica visível imediatamente (preview do blob local) e o uploader em background sobe pro Storage e atualiza `fotos_vistoria` na linha do link.
-3. **Auto-save mais leve:** ao invés de regravar o JSONB inteiro de `fotos_vistoria` a cada mudança, só persistir o **slot afetado** (merge no servidor via RPC simples, ou via patch parcial usando o JSONB jsonb_set). Manter `checklist_data` como está (é pequeno).
-4. **Adicionar `useDeviceCapability` + toast de retomada após `wasDiscarded`** (mesmo bloco que `ExecutarVistoriaCompleta` linhas 112-126).
-5. **Adicionar `<LowMemoryBanner />`** no topo da página em execução, com handler que libera os Object URLs cacheados.
-6. **Desligar `watchPosition` quando entrar em `em_execucao`** — manter só `getCurrentPosition` em intervalos maiores (60 s) ou só na transição de status; `enableHighAccuracy: true` contínuo é caro no Moto G.
-7. **Hidratação robusta:** remover o guard `restoredRef.current` antes do refetch — usar `useEffect` que reage a `link?.id` + `link?.fotos_vistoria` e mescla com os pendentes do Dexie (Dexie ganha quando há blob local mais novo).
-8. **Logar capacidade** no console igual ao instalador interno (deviceMemory, cores, lowEnd, heap, wasDiscarded) para diagnóstico futuro nos logs do navegador que o usuário compartilha.
+## 🛠️ Mudanças propostas (frontend-only)
 
-### Passo 2 — Layout no padrão do instalador interno
+### 1. Hard guard em `AprovacaoInstalacaoDetalhe.tsx` (bloco de Ações, linhas 912-971)
 
-Manter **todo** o ciclo de vida (aguardando → aceito → em_rota → em_execucao → conclusão), a edge function, os campos do link e o IMEI obrigatório. Só refazer o chrome visual da página para casar com `ExecutarVistoriaCompleta`:
+Bloquear render do botão **"Aprovar — Ativar Proteção 360"** e exibir banner explicativo quando qualquer uma destas condições for verdadeira:
 
-1. **Tema escuro** no shell da página (`bg-slate-950` / texto claro) — `VistoriaFotoSequencial` foi desenhado para fundo escuro; isso elimina o contraste quebrado da screenshot #2.
-2. **Reorganizar a seção `em_execucao`** no mesmo ritmo do interno:
-   - Cabeçalho compacto com placa, modelo, IMEI buscado, status do rastreador.
-   - Bloco "Conferência rápida do veículo" (placa/chassi/modelo/cor) igual `ExecutarVistoriaCompleta`.
-   - Checklist com `ChecklistItem` (já é igual).
-   - **Fotos** dentro de um card escuro `bg-slate-900` com o `VistoriaFotoSequencial` (já é o mesmo componente do interno — só estava com fundo errado).
-   - Assinatura + IMEI agrupados num único card "Finalização".
-3. **Barra fixa inferior** com o botão *Finalizar Instalação* + chips do que falta — mesmo padrão do interno (já existe, só ajustar cores p/ tema escuro).
-4. **Sem mudanças** em: cards das etapas pré-execução (aguardando/aceito/em rota), dialogs de recusa e confirmação, geolocalização, validação de token, `concluir-instalacao-prestador`.
+| Condição | Mensagem |
+|---|---|
+| `servico.status !== 'concluida'` (ainda `agendada`/`em_execucao`) | "Aguardando conclusão da instalação técnica. A aprovação só será liberada após o técnico fechar a vistoria presencial." |
+| Veículo exige rastreador (FIPE≥30k carro / ≥9k moto / diesel) **E** não há `rastreadores` com `veiculo_id = veiculo.id` | "Veículo exige rastreador físico e nenhum está vinculado. Conclua a instalação técnica antes de aprovar." |
+| Única evidência é vistoria com `modalidade='autovistoria'` (sem `servicos` técnico concluído) **E** veículo está acima da FIPE mínima | "Esta autovistoria é opcional e libera apenas Roubo & Furto. A aprovação final acontece após a instalação técnica do rastreador." |
 
-### Passo 3 — Validação
+O botão **Reprovar** continua disponível em todos os cenários (operação precisa poder devolver casos contaminados ao fluxo). O dialog "Solicitar Vistoria de Técnico" permanece só para sub-FIPE como hoje.
 
-- Abrir o link num dispositivo "low-end emulado" (DevTools → Performance → CPU 4× slowdown + Memory profile) e verificar:
-  - Console mostra `[Prestador] Capacidade do dispositivo: ... lowEnd=true profile=low`.
-  - 31 fotos consecutivas com peak de heap < 250 MB.
-  - Forçar `document.wasDiscarded` (DevTools → Application → Frames → Discard) e reabrir: fotos previamente capturadas reaparecem do Dexie + toast "Continuamos de onde você parou".
-- Testar concluir instalação com fila parcialmente pendente (offline → online): edge function recebe `fotos_vistoria` completo.
-- Conferir log da edge `concluir-instalacao-prestador` após a primeira instalação real.
+### 2. Reutilizar `veiculoSubFipe` + nova helper `exigeInstalacaoTecnica(veiculo)`
 
-### Não-objetivos (não vamos mexer)
+Centralizar a regra (carro ≥ 30k, moto ≥ 9k, diesel sempre) em uma única função para casar com a memória `[Tracker eligibility]` e o trigger `trg_guard_veiculo_ativo_exige_rastreador`. Já existe `veiculoSubFipe` em `useSolicitarVistoriaTecnico` — adicionar contraparte ou exportar inversa.
 
-- Edge function `concluir-instalacao-prestador` — payload de entrada e fluxo de IMEI/Softruck/Rede ficam intactos.
-- Tabela `instalacao_prestador_links` — schema atual mantido.
-- WhatsApp / template de notificação do link.
-- Fluxo do instalador interno (já está saudável).
+### 3. Carregar rastreador vinculado na query do detalhe
 
-### Detalhes técnicos
+`useServicoDetalheAprovacao` (linha 45) hoje não traz rastreadores. Adicionar `.from('rastreadores').select('id').eq('veiculo_id', veiculo.id).limit(1)` paralelo para alimentar o guard.
 
-- Novo arquivo: `src/hooks/useUploadPrestadorOffline.ts` (≈130 linhas, espelho do `useUploadVistoriaPublicaOffline`).
-- Ajuste em `src/hooks/useSyncQueuePublica.ts`: aceitar `origem='publico'` com bucket alvo derivado do registro (foto do prestador → `prestador-fotos`; vistoria pública do cliente → `vistoria-fotos`).
-- `src/pages/public/PrestadorInstalacao.tsx`: reescrita do shell visual + troca do handler de fotos + integração `useDeviceCapability` / `LowMemoryBanner`. Mesma estrutura de estados e mesmas chamadas a `publicSupabase` e `functions.invoke('concluir-instalacao-prestador')`.
-- Memória nova (`mem://logic/operations/prestador-link-memoria-e-layout`) registrando: paridade com fluxo interno, fila Dexie, perfil adaptativo, tema escuro obrigatório para `VistoriaFotoSequencial`.
+### 4. Nada de mudanças em DB / edge / triggers
+
+- **Não** rodar migration sobre os 5 fantasmas (decisão da diretoria mantida).
+- **Não** alterar triggers nem `aprovar-proposta` (D1 já cobre casos novos).
+- **Não** mexer nas filas — elas já filtram corretamente.
+
+---
+
+## 📦 Arquivos a editar
+
+- `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` — query de rastreador + bloco de ações com guards e banners.
+- `src/hooks/useSolicitarVistoriaTecnico.ts` (ou novo `src/lib/veiculo/exigeInstalacaoTecnica.ts`) — exportar helper `exigeInstalacaoTecnica(veiculo)` casando com a regra canônica.
+- `mem://logic/operations/monitoramento-guard-aprovacao-sem-instalacao.md` — registrar a guarda de UI e por que existe (fantasmas pré-D1 + porta dos fundos via URL).
+- `mem://index.md` — referência ao novo memo.
+
+## ✅ Critério de aceite
+
+Para **TIB8F32** (e os outros 4 fantasmas, se alguém abrir a URL):
+- Tela carrega com banner amber explicando que a instalação técnica está pendente.
+- Botão "Aprovar — Ativar Proteção 360" não aparece (ou fica `disabled` com tooltip).
+- Botão "Reprovar" continua disponível.
+- Após a instalação física concluir (`servicos.status='concluida'` + rastreador vinculado), o caso volta a ser aprovável normalmente — sem retrabalho operacional.
+
+Para **casos novos** acima-FIPE com autovistoria opcional:
+- Continuam aparecendo na fila apenas após instalação técnica concluída (comportamento atual mantido).
+- Se alguém forçar a URL antes disso, o mesmo guard impede aprovação prematura.
+
+## ❓ Antes de implementar
+
+Confirma que esse é o caminho? Em particular: você quer **bloquear o botão completamente** (some) ou **disabled com tooltip** explicando o motivo? Eu sugiro bloquear + banner amber bem visível, mas a sua preferência manda.
