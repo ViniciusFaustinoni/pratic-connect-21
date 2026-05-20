@@ -44,6 +44,7 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
+import { getCotacaoTravada } from '@/lib/cotacaoTravada';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacoesFiltrosSheet } from '@/components/cotacoes/CotacoesFiltrosSheet';
 import { CotacoesActiveFiltersChips } from '@/components/cotacoes/CotacoesActiveFiltersChips';
@@ -140,7 +141,14 @@ export default function Cotacoes() {
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
   const [filtroOrfas, setFiltroOrfas] = useState(false);
+  const [filtroTravadas, setFiltroTravadas] = useState(false);
   const [etapaFunilFilter, setEtapaFunilFilter] = useState<string[]>([]);
+  // Tick a cada 60s para reavaliar SLA pós-assinatura (flag pulsante).
+  const [agoraTick, setAgoraTick] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setAgoraTick(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   const toggleEtapaFunil = useCallback((etapa: string) => {
     setEtapaFunilFilter((prev) =>
       prev.includes(etapa) ? prev.filter((e) => e !== etapa) : [...prev, etapa]
@@ -323,9 +331,14 @@ export default function Cotacoes() {
         });
       }
 
-      return matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
+      let matchesTravadas = true;
+      if (filtroTravadas) {
+        matchesTravadas = getCotacaoTravada(cotacao, agoraTick).travada;
+      }
+
+      return matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa && matchesTravadas;
     });
-  }, [cotacoes, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter]);
+  }, [cotacoes, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter, filtroTravadas, agoraTick]);
 
   // Ordenação cronológica — mais recentes primeiro
   const sortedCotacoes = useMemo(() => {
@@ -962,6 +975,35 @@ export default function Cotacoes() {
               onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
+          {(() => {
+            const travadasCount = (cotacoes || []).reduce(
+              (acc, c) => (getCotacaoTravada(c, agoraTick).travada ? acc + 1 : acc),
+              0,
+            );
+            if (travadasCount === 0 && !filtroTravadas) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => setFiltroTravadas((v) => !v)}
+                className={cn(
+                  'h-9 px-3 inline-flex items-center gap-2 rounded-md text-xs font-medium border transition-colors',
+                  filtroTravadas
+                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
+                    : 'bg-background/80 text-foreground border-border hover:bg-amber-500/10',
+                )}
+                title="Filtrar cotações travadas pós-assinatura"
+              >
+                <span className="relative inline-flex h-2 w-2">
+                  <span className="absolute inset-0 rounded-full bg-amber-500 opacity-75 motion-safe:animate-ping" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                </span>
+                Travadas
+                <span className="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-semibold">
+                  {travadasCount}
+                </span>
+              </button>
+            );
+          })()}
           {activeTab === 'em_andamento' && (
             <>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
