@@ -73,7 +73,7 @@ function TrocaTitularidadeTab({
   modoUsuario: 'cadastro' | 'monitoramento' | 'readonly' | 'auto';
   podeVerSaudeSga: boolean;
 }) {
-  const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('pendentes');
+  const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('em_andamento');
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
 
