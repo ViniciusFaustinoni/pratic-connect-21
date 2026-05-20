@@ -34,6 +34,7 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<StatusTroca, { label: string; variant: 'default'|'secondary'|'destructive'|'outline' }> = {
+  aguardando_termo_cancelamento: { label: 'Aguardando termo de cancelamento', variant: 'outline' },
   cotacao_em_andamento: { label: 'Cotação em andamento', variant: 'outline' },
   aguardando_cadastro: { label: 'Aguardando Cadastro', variant: 'secondary' },
   aguardando_monitoramento: { label: 'Aguardando Monitoramento', variant: 'secondary' },
