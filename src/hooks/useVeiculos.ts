@@ -77,7 +77,7 @@ export function useVeiculosPaginados(opts: UseVeiculosPaginadosOptions = {}) {
       let q = supabase
         .from('veiculos')
         .select(
-          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, cobertura_suspensa, cobertura_suspensa_em, cobertura_suspensa_motivo, associado:associados(id, nome, cpf), instalacoes:instalacoes(id, status)',
+          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, cobertura_suspensa, cobertura_suspensa_em, cobertura_suspensa_motivo, associado:associados(id, nome, cpf), instalacoes:instalacoes(id, status), contratos:contratos(id, status, created_at, vendedor:profiles!contratos_vendedor_id_fkey(id, nome))',
           { count: 'exact' }
         )
         .order('created_at', { ascending: false });
