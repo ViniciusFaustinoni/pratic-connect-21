@@ -25678,6 +25678,7 @@ export type Database = {
           debitos_conferidos_em: string | null
           debitos_conferidos_por: string | null
           decisao_instalador: string | null
+          dedup_substituido_por: string | null
           em_rota_em: string | null
           encaixe_executado: boolean | null
           etapa_atual: number | null
@@ -25800,6 +25801,7 @@ export type Database = {
           debitos_conferidos_em?: string | null
           debitos_conferidos_por?: string | null
           decisao_instalador?: string | null
+          dedup_substituido_por?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           etapa_atual?: number | null
@@ -25922,6 +25924,7 @@ export type Database = {
           debitos_conferidos_em?: string | null
           debitos_conferidos_por?: string | null
           decisao_instalador?: string | null
+          dedup_substituido_por?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           etapa_atual?: number | null
@@ -26139,6 +26142,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["cotacao_id"]
+          },
+          {
+            foreignKeyName: "servicos_dedup_substituido_por_fkey"
+            columns: ["dedup_substituido_por"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_dedup_substituido_por_fkey"
+            columns: ["dedup_substituido_por"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "servicos_dedup_substituido_por_fkey"
+            columns: ["dedup_substituido_por"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_instalacao_relacionado"]
+          },
+          {
+            foreignKeyName: "servicos_dedup_substituido_por_fkey"
+            columns: ["dedup_substituido_por"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_vistoria_id"]
           },
           {
             foreignKeyName: "servicos_instalacao_origem_id_fkey"

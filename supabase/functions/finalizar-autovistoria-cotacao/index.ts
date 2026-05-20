@@ -214,14 +214,32 @@ Deno.serve(async (req) => {
     }
 
     // 6. Criar/garantir servico vistoria_entrada concluida → entra na fila do Monitoramento
-    const { data: servicoExistente } = await supabase
-      .from('servicos')
-      .select('id, status')
-      .eq('cotacao_id', cotacaoId)
-      .eq('tipo', 'vistoria_entrada')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Idempotência: prioriza match por vistoria_origem_id (mais estrito); fallback por cotacao_id+tipo.
+    let servicoExistente: { id: string; status: string } | null = null;
+    {
+      const { data: porVistoria } = await supabase
+        .from('servicos')
+        .select('id, status')
+        .eq('vistoria_origem_id', vistoriaId)
+        .is('dedup_substituido_por', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (porVistoria) {
+        servicoExistente = porVistoria as any;
+      } else {
+        const { data: porCotacao } = await supabase
+          .from('servicos')
+          .select('id, status')
+          .eq('cotacao_id', cotacaoId)
+          .eq('tipo', 'vistoria_entrada')
+          .is('dedup_substituido_por', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        servicoExistente = (porCotacao as any) ?? null;
+      }
+    }
 
     let servicoId = servicoExistente?.id ?? null;
     let createdServico = false;
