@@ -351,6 +351,16 @@ export default function CotacaoContratacao() {
       }
     }
 
+    // Troca de Titularidade: após pagamento, não há "etapa de instalação" para
+    // o cliente — o destino é a tela de acompanhamento. Empurra para 5 para
+    // que o render condicional caia em TelaAnaliseTrocaTitularidade.
+    if (
+      isTrocaTitularidade &&
+      ['pagamento_ok', 'contrato_gerado', 'ativo'].includes(cotacao?.status_contratacao || '')
+    ) {
+      return 5;
+    }
+
     return etapaFinal;
   }, [
     cotacao?.status_contratacao,
