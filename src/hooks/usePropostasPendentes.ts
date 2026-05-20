@@ -845,6 +845,7 @@ export function usePropostasPendentes() {
           tipo_vistoria: tipoVistoriaCotacao,
           veiculo_id: (contrato as any).veiculo_id || null,
           veiculo_cobertura_total: veiculoContrato?.cobertura_total ?? null,
+          veiculo_cobertura_roubo_furto: veiculoContrato?.cobertura_roubo_furto ?? null,
           contrato_link_token: (contrato as any).link_token || null,
           veiculo_renavam: veiculoContrato?.renavam || null,
           veiculo_chassi: veiculoContrato?.chassi || null,
