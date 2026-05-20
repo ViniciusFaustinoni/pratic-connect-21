@@ -295,7 +295,12 @@ serve(async (req) => {
     .select('sincronizado_hinova, codigo_hinova, status_sga')
     .eq('id', veiculo_id).single();
 
-  if (!req_body.force_resync_media && vCheck?.sincronizado_hinova && vCheck?.codigo_hinova
+  // `resync_media_only_new`: pula este guard, mas mantém dedupe via
+  // sga_fotos_enviadas — usado para enviar SOMENTE fotos novas que ganharam
+  // mapeamento em hinova_mapeamentos depois do sync original (sem duplicar
+  // as já aceitas pela Hinova).
+  if (!req_body.force_resync_media && !req_body.resync_media_only_new
+      && vCheck?.sincronizado_hinova && vCheck?.codigo_hinova
       && (statusDestino !== 'ativo' || vCheck?.status_sga === 'ativado_sga')) {
     await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped',
       { status_sga_destino: statusDestino }, { codigo_hinova: vCheck.codigo_hinova });
