@@ -92,3 +92,35 @@ export function veiculoSubFipe(veiculo: {
   if (isMoto) return fipe > 0 && fipe < 9000;
   return fipe > 0 && fipe < 30000;
 }
+
+/**
+ * Veículo EXIGE instalação técnica de rastreador?
+ * Inverso robusto de `veiculoSubFipe`:
+ *   - Diesel → sempre exige;
+ *   - Carro FIPE ≥ R$ 30.000 → exige;
+ *   - Moto FIPE ≥ R$ 9.000 → exige;
+ *   - FIPE 0/desconhecido → false (não bloqueia por falta de dado).
+ *
+ * Canônico: casa com a memória `[Tracker eligibility]` e o trigger DB
+ * `trg_guard_veiculo_ativo_exige_rastreador`. Usado como guard de UI
+ * em Monitoramento para impedir aprovação prematura.
+ */
+export function exigeInstalacaoTecnica(veiculo: {
+  valor_fipe?: number | null;
+  combustivel?: string | null;
+  categoria?: string | null;
+  marca?: string | null;
+  modelo?: string | null;
+}) {
+  if (!veiculo) return false;
+  if ((veiculo.combustivel || '').toLowerCase() === 'diesel') return true;
+  const fipe = Number(veiculo.valor_fipe || 0);
+  if (fipe <= 0) return false;
+  const cat = (veiculo.categoria || '').toLowerCase();
+  let isMoto = cat.includes('moto') || cat.includes('ciclomotor');
+  if (!isMoto && (veiculo.marca || veiculo.modelo)) {
+    isMoto = detectarTipoVeiculo(undefined, veiculo.modelo ?? null, veiculo.marca ?? null) === 'moto';
+  }
+  if (isMoto) return fipe >= 9000;
+  return fipe >= 30000;
+}
