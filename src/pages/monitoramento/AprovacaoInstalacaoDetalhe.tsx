@@ -32,14 +32,17 @@ import {
   ExternalLink,
   Expand,
   UserSearch,
+  Undo2,
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
   useReprovarInstalacaoMonitoramento,
 } from '@/hooks/useAprovacaoMonitoramento';
 import { veiculoSubFipe, exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
+import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
+import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
 
 // Hook para buscar detalhes completos do serviço
 function useServicoDetalheAprovacao(servicoId: string | undefined) {
@@ -374,6 +377,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const { data, isLoading, error, refetch, isFetching } = useServicoDetalheAprovacao(id);
   const aprovar = useAprovarInstalacaoMonitoramento();
   const reprovar = useReprovarInstalacaoMonitoramento();
+  const devolverCadastro = useDevolverAoCadastro();
 
   const [showReprovar, setShowReprovar] = useState(false);
   const [motivoReprovar, setMotivoReprovar] = useState('');
@@ -383,6 +387,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [corrigirOpen, setCorrigirOpen] = useState(false);
   const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
   const [solicitarVistoriaOpen, setSolicitarVistoriaOpen] = useState(false);
+  const [devolverOpen, setDevolverOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -951,23 +956,39 @@ export default function AprovacaoInstalacaoDetalhe() {
                     {motivoBloqueio}
                   </p>
                   <p className="text-[11px] text-muted-foreground pt-1">
-                    Esse caso deve passar pelo Cadastro e, se necessário, por uma tarefa
-                    de instalação/vistoria técnica antes de chegar nesta fila.
+                    Devolva o caso ao Cadastro para o analista aprovar Roubo & Furto.
+                    A instalação técnica do rastreador continua agendada e o caso volta
+                    para esta fila após a conclusão pelo técnico.
                   </p>
                 </div>
               </div>
             )}
 
             <div className="flex flex-wrap gap-3 pb-2">
-              <Button
-                variant="destructive"
-                className="flex-1 min-w-[140px]"
-                onClick={() => setShowReprovar(true)}
-                disabled={aprovar.isPending || reprovar.isPending}
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Reprovar
-              </Button>
+              {bloqueado ? (
+                <Button
+                  className="flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white"
+                  onClick={() => setDevolverOpen(true)}
+                  disabled={devolverCadastro.isPending}
+                >
+                  {devolverCadastro.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Undo2 className="h-4 w-4 mr-2" />
+                  )}
+                  Devolver ao Cadastro (aprovar R&amp;F lá)
+                </Button>
+              ) : (
+                <Button
+                  variant="destructive"
+                  className="flex-1 min-w-[140px]"
+                  onClick={() => setShowReprovar(true)}
+                  disabled={aprovar.isPending || reprovar.isPending}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reprovar
+                </Button>
+              )}
               {subFipe && !bloqueado && (
                 <Button
                   variant="outline"
@@ -1077,6 +1098,25 @@ export default function AprovacaoInstalacaoDetalhe() {
         onSaved={() => {
           // re-tenta aprovação automaticamente após correção
           tentarAprovar();
+        }}
+      />
+
+      {/* Devolver ao Cadastro — usado pelo guard de aprovação prematura */}
+      <ConfirmarDevolverCadastroDialog
+        open={devolverOpen}
+        onOpenChange={setDevolverOpen}
+        isPending={devolverCadastro.isPending}
+        onConfirm={(motivo) => {
+          if (!servico?.contrato_id) return;
+          devolverCadastro.mutate(
+            { contrato_id: servico.contrato_id, motivo },
+            {
+              onSuccess: () => {
+                setDevolverOpen(false);
+                navigate('/monitoramento/aprovacao-associados');
+              },
+            }
+          );
         }}
       />
     </div>
