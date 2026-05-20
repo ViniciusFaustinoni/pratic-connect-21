@@ -37,7 +37,7 @@ import {
   useAprovarInstalacaoMonitoramento,
   useReprovarInstalacaoMonitoramento,
 } from '@/hooks/useAprovacaoMonitoramento';
-import { veiculoSubFipe } from '@/hooks/useSolicitarVistoriaTecnico';
+import { veiculoSubFipe, exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 
