@@ -1,80 +1,68 @@
-# LTV3631 — Fotos não chegaram ao SGA: diagnóstico e correção definitiva
+# 3 ajustes — PDF preview + consultor + tipo adesão/R&F
 
-## Diagnóstico (LTV3631 / contrato `f0eb8495…`)
+## #1 — PDF não abre preview na aprovação do Monitoramento
 
-A vistoria presencial gravou **31 fotos**. No SGA Hinova foram aceitas apenas as 12 fotos canônicas (chassi, motor, frente, traseira, lateral esquerda, lateral direita, painel/odômetro). As outras **~19 fotos** (bateria, chave, capô aberto, banco motorista/passageiro/traseiro, forração das portas, pneus, parabrisa, mala aberta, estepe, frente/traseira lateral, vistoriador selfie, chave roda macaco) foram silenciosamente descartadas pela edge `sga-hinova-sync` e depois carimbadas como “já enviadas” por uma migration de backfill — o que **bloqueou todo e qualquer reenvio futuro**.
+**Onde:** `src/components/troca-titularidade/VeiculoCompletoCard.tsx` (linhas 353–388), modal "Preview de documento" usado tanto na Troca de Titularidade quanto na Aprovação do Monitoramento.
 
-Duas causas reais:
+**Causa raiz:** o preview usa `<object data type="application/pdf">`. Em vários navegadores o `<object>` PDF dentro de um `<Dialog>` (com `overflow-hidden` e `max-w` no parent) carrega em branco — o Chrome às vezes não dispara o plugin nativo de PDF e o fallback `<iframe>` Google Docs também falha porque o usuário está autenticado em outra conta Google.
 
-1. **`buildFotosPayload` (`supabase/functions/_shared/hinova-payloads.ts`)** descarta qualquer foto cujo `tipo` não esteja em `hinova_mapeamentos`. A memória `sga-fotos-codigo-15-adicional` define que tipos sem equivalente oficial Hinova devem ir para **código 15 (FOTO ADICIONAL)**, mas o código atual joga fora.
-2. **Migration `20260516133056`** inseriu em `sga_fotos_enviadas` todas as fotos pré-existentes com `codigo_tipo=0, hinova_response={"backfill":true}` — incluindo as que nunca tinham sido enviadas (como as ~19 do LTV3631). A partir daí o dedupe da edge as trata como “já enviadas” e nunca mais tenta.
+**Correção:**
+- Trocar `<object>` por `<iframe src={url}#toolbar=1&navpanes=0>` (o Chromium e o Firefox renderizam PDF nativo direto em iframe, sem o problema do `<object>` em modal).
+- Remover o `overflow-hidden` do `DialogContent` que estava cortando a área de render.
+- Ajustar a detecção `isPdf` para também aceitar `mime` do contrato (`d.mime_type === 'application/pdf'`) e nomes sem extensão visível na URL (Supabase às vezes retorna sem `.pdf` quando vem de `documentos/`).
+- Manter o botão "Abrir em nova aba" como fallback explícito quando o iframe falhar.
 
-Para LTV3631 existem hoje **33 linhas** em `sga_fotos_enviadas` com `codigo_tipo=0, hinova_response.backfill=true`, exatamente o conjunto que precisamos reabrir.
+Aplicar o mesmo padrão em `src/components/cadastro/VisualizadorDocumentoModal.tsx` (linhas 172–183) — é o mesmo modal usado em outras telas de aprovação e tem o mesmo bug latente.
 
-## Correção da raiz
+## #2 — Cadastro › Veículos: coluna "Consultor responsável"
 
-### 1) Edge function — fallback automático para código 15
-`supabase/functions/_shared/hinova-payloads.ts` → função `buildFotosPayload`:
+**Onde:**
+- `src/hooks/useVeiculos.ts` → `useVeiculosPaginados` (linhas 71–112): incluir o consultor via contrato ativo do veículo.
+- `src/pages/cadastro/Veiculos.tsx`: nova coluna `Consultor` na tabela desktop e na linha do card mobile.
 
-- Quando `resolverCodigoTipo(tipoNorm)` retornar `null`, **não descartar**. Usar `codigoTipo = 15` (FOTO ADICIONAL) e registrar o tipo original em um novo array `tiposFallback15` apenas para diagnóstico.
-- Manter `descartadasSemTipo` somente para casos em que o `tipo` é vazio/nulo (sem nada para classificar).
-- `descartadasVideo` e `descartadasSemLink` continuam como hoje.
-
-`supabase/functions/sga-hinova-sync/index.ts`:
-
-- Passar a logar `tipos_fallback_15` em `enviar_fotos_descarte` (renomeado para `enviar_fotos_resumo`) para auditoria.
-
-Efeito: qualquer foto nova com `tipo` não previsto entra automaticamente como FOTO ADICIONAL no SGA, em vez de sumir.
-
-### 2) Cobertura completa do conjunto canônico de vistoria (carros 31 + motos 15)
-Migration nova `hinova_mapeamentos` — `INSERT … ON CONFLICT DO NOTHING` para todos os tipos da vistoria presencial completa que hoje não têm linha, todos com `codigo_hinova=15`:
-
+**Como puxar o consultor (sem N+1):**
+Estender o `.select()` do `useVeiculosPaginados` com:
 ```
-bateria, capo_aberto_placa, chave, chave_roda_macaco, estepe,
-banco_motorista, banco_passageiro, banco_traseiro,
-forracao_porta_dianteira_direita, forracao_porta_dianteira_esquerda,
-forracao_porta_traseira_direita, forracao_porta_traseira_esquerda,
-frente_lateral_direita, frente_lateral_esquerda,
-traseira_lateral_direita, traseira_lateral_esquerda,
-mala_aberta, parabrisa,
-pneu_dianteiro_direito, pneu_dianteiro_esquerdo,
-pneu_traseiro_direito, pneu_traseiro_esquerdo,
-odometro_painel, vistoriador_selfie
+contratos:contratos(
+  id, vendedor_id, status, created_at,
+  vendedor:profiles!contratos_vendedor_id_fkey(id, nome)
+)
+```
+e, na linha da tabela, escolher o contrato mais recente do veículo (preferindo `status = 'ativo'`; senão o `created_at` mais novo). Mostra `vendedor.nome` ou `—` se não houver.
+
+Cabeçalho atualizado:
+```
+Veículo | Placa | Ano | Cor | Valor FIPE | Uso App | Associado | Consultor | Status
 ```
 
-Mesmo com o fallback (1), o mapeamento explícito mantém o histórico limpo e facilita relatório por tipo.
+## #3 — Cadastro › Aprovações Pendentes › aba Cliente
 
-### 3) Reabrir os “fantasmas” da migration de 16/05
-Migration nova (`UPDATE/DELETE` em `sga_fotos_enviadas`):
+**Onde:** `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`, dentro do `<TabsContent value="cliente">` (linhas 179–243).
 
-```sql
-DELETE FROM public.sga_fotos_enviadas
-WHERE codigo_tipo = 0
-  AND hinova_response ? 'backfill'
-  AND (hinova_response->>'backfill')::boolean = true;
+O **Tipo de Adesão já existe** na linha 190–195 — manter como está.
+
+Adicionar duas informações novas logo abaixo do bloco do "Tipo de Adesão":
+
+1. **Consultor responsável** — `proposta.vendedor?.nome` (já vem do hook `usePropostasPendentes`, linha 190). Renderizar como `FichaField` com ícone `User` e label "Consultor responsável".
+2. **Cobertura de Roubo e Furto** — badge "Sim" (verde) / "Não" (cinza) com base em `proposta.veiculo?.cobertura_roubo_furto`.
+
+**Hook:**
+`src/hooks/usePropostasPendentes.ts` hoje já busca `veiculo_*` no select do contrato, mas **não traz** `cobertura_roubo_furto`. Acrescentar `cobertura_roubo_furto` no `.select()` da consulta a `veiculos` (existe em duas branches: lista paginada e detalhe único) e expor como `proposta.veiculo_cobertura_roubo_furto: boolean | null` no tipo `PropostaPendente`.
+
+Layout final da aba Cliente:
+```
+[ Tipo de Adesão: Reativação ]   [ Consultor: João da Silva ]   [ R&F: Sim ]
+Nome | CPF | Telefone | WhatsApp | Email | Endereço ...
 ```
 
-Isso destrava o reenvio de todos os veículos afetados — não só LTV3631.
+## Fora de escopo
+- Backend / RLS — nenhuma mudança de schema é necessária; todos os campos já existem (`contratos.vendedor_id`, `veiculos.cobertura_roubo_furto`).
+- Edge functions intactas.
 
-### 4) Reenvio para LTV3631 (e ressync em massa)
-Chamar `sga-hinova-sync` com `{ veiculo_id: '8f7a7ce8-d214-46df-8b28-87f2b886cdb3', force_resync_media: true }` (esse veículo específico) e disparar a fila normal — os outros veículos serão re-processados na próxima rodada da fila SGA já com o fallback ativo.
-
-## Garantias para o futuro
-
-- Edge: nenhuma foto com `tipo` preenchido será mais descartada — pior caso vira código 15.
-- Catálogo: tipos da vistoria presencial passam a ter mapeamento explícito.
-- Banco: removido o carimbo de “já enviado” para tudo que veio do backfill cego.
-- Memória `mem://logic/integrations/sga-fotos-codigo-15-adicional` será atualizada para registrar que o fallback de tipo desconhecido → 15 é agora aplicado no código, não só por mapeamento.
-
-## Arquivos / migrations
-
-- `supabase/functions/_shared/hinova-payloads.ts` (fallback 15 + retorno `tiposFallback15`)
-- `supabase/functions/sga-hinova-sync/index.ts` (log do fallback)
-- Migration: `INSERT` dos ~24 tipos faltantes em `hinova_mapeamentos`
-- Migration: `DELETE` das linhas `backfill=true, codigo_tipo=0` em `sga_fotos_enviadas`
-- Atualização de `mem://logic/integrations/sga-fotos-codigo-15-adicional`
-
-## Fora de escopo (intencional)
-
-- Não mexer no fluxo de vídeo 360° (continua filtrado — Hinova não aceita).
-- Não alterar dedupe normal por `(origem, origem_id)` — ele continua válido para fotos realmente enviadas.
+## Arquivos a editar
+- `src/components/troca-titularidade/VeiculoCompletoCard.tsx` (preview PDF)
+- `src/components/cadastro/VisualizadorDocumentoModal.tsx` (preview PDF — mesmo bug)
+- `src/hooks/useVeiculos.ts` (incluir vendedor no select)
+- `src/pages/cadastro/Veiculos.tsx` (coluna Consultor desktop + mobile)
+- `src/hooks/usePropostasPendentes.ts` (adicionar `cobertura_roubo_furto` ao select)
+- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` (Consultor + badge R&F na aba Cliente)
