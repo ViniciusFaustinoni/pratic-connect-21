@@ -182,6 +182,7 @@ export interface PropostaPendente {
   cotacao_id: string | null;
   veiculo_id: string | null; // ID do veículo vinculado
   veiculo_cobertura_total: boolean | null; // Se veículo tem cobertura total ativada
+  veiculo_cobertura_roubo_furto: boolean | null; // Se veículo optou pela cobertura de Roubo e Furto
   contrato_link_token: string | null;
   associado: Associado | null;
   plano: { nome: string } | null;
