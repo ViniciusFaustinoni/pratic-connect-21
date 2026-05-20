@@ -1442,13 +1442,14 @@ export function useProposta(contratoId: string | undefined) {
       // Priorizar contrato.veiculo_id (determinístico), fallback por associado_id
       let veiculoId: string | null = null;
       let veiculoCoberturaTotal: boolean | null = null;
+      let veiculoCoberturaRouboFurto: boolean | null = null;
       let veiculoRenavam: string | null = null;
       let veiculoChassi: string | null = null;
       
       const veiculoFilter = (contrato as any).veiculo_id 
-        ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('id', (contrato as any).veiculo_id).maybeSingle()
+        ? supabase.from('veiculos').select('id, cobertura_total, cobertura_roubo_furto, renavam, chassi').eq('id', (contrato as any).veiculo_id).maybeSingle()
         : contrato.associado_id 
-          ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('associado_id', contrato.associado_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+          ? supabase.from('veiculos').select('id, cobertura_total, cobertura_roubo_furto, renavam, chassi').eq('associado_id', contrato.associado_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
           : null;
       
       if (veiculoFilter) {
@@ -1456,6 +1457,7 @@ export function useProposta(contratoId: string | undefined) {
         if (veiculo) {
           veiculoId = veiculo.id;
           veiculoCoberturaTotal = veiculo.cobertura_total;
+          veiculoCoberturaRouboFurto = (veiculo as any).cobertura_roubo_furto ?? null;
           veiculoRenavam = veiculo.renavam;
           veiculoChassi = veiculo.chassi;
         }
