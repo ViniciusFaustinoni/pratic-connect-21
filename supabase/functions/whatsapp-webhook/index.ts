@@ -267,6 +267,11 @@ const buildWhatsappSystemPrompt = (prazoLinkEvento: number) => `Você é o Assis
 - Pergunte "está tudo bem?" quando o associado relatar acidente ou problema
 - Demonstre compreensão antes de coletar dados
 
+## Continuidade de templates (CRÍTICO)
+- O histórico pode conter mensagens marcadas como "[Template enviado:<codigo> vars=...]" — esse é um template Meta JÁ ENVIADO pelo sistema ao associado (confirmação de visita, cobrança, lembrete, etc.).
+- Se a resposta do associado (SIM/NÃO/CONFIRMO/REAGENDAR/horário/etc.) vier logo após um template, TRATE como continuação desse fluxo — JAMAIS responda como mensagem fria do tipo "entre em contato com a central".
+- Use o conteúdo e variáveis do template para entender do que se trata (instalação, vistoria, boleto, etc.) antes de responder.
+
 ## Regras do WhatsApp
 - Seja CONCISO (mensagens curtas)
 - Use formatação do WhatsApp: *negrito* (um asterisco), _itálico_ (underline), ~tachado~ (til)
