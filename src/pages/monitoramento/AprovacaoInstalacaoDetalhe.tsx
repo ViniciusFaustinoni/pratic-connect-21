@@ -913,9 +913,51 @@ export default function AprovacaoInstalacaoDetalhe() {
       {/* Ações */}
       {(() => {
         const subFipe = veiculoSubFipe(veiculo || {});
+        const exigeTecnica = exigeInstalacaoTecnica(veiculo || {});
         const isMoto = ((veiculo?.categoria || '') as string).toLowerCase().includes('moto');
+
+        // Guards canônicos contra aprovação prematura via URL direta
+        const isAutovistoriaSemTecnica =
+          (vistoriaModalidade || '').toLowerCase() === 'autovistoria' &&
+          (servico.status !== 'concluida' || (exigeTecnica && !rastreador));
+        const servicoNaoConcluido = servico.status !== 'concluida';
+        const faltaRastreadorFisico = exigeTecnica && !rastreador;
+
+        const bloqueado =
+          servicoNaoConcluido || faltaRastreadorFisico || isAutovistoriaSemTecnica;
+
+        let motivoBloqueio: string | null = null;
+        if (isAutovistoriaSemTecnica) {
+          motivoBloqueio =
+            'Esta autovistoria é opcional e libera apenas Roubo & Furto. A aprovação final só acontece após a instalação técnica do rastreador ser concluída pelo técnico em campo.';
+        } else if (faltaRastreadorFisico) {
+          motivoBloqueio =
+            'Veículo exige rastreador físico (Diesel / Carro FIPE ≥ R$ 30.000 / Moto FIPE ≥ R$ 9.000) e nenhum está vinculado. Conclua a instalação técnica antes de aprovar.';
+        } else if (servicoNaoConcluido) {
+          motivoBloqueio =
+            'Aguardando conclusão da instalação técnica. A aprovação só será liberada após o técnico fechar a vistoria presencial.';
+        }
+
         return (
           <>
+            {bloqueado && motivoBloqueio && (
+              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 flex gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                    Aprovação ainda não liberada
+                  </p>
+                  <p className="text-xs text-amber-700/90 dark:text-amber-200/90 leading-relaxed">
+                    {motivoBloqueio}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground pt-1">
+                    Esse caso deve passar pelo Cadastro e, se necessário, por uma tarefa
+                    de instalação/vistoria técnica antes de chegar nesta fila.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-3 pb-2">
               <Button
                 variant="destructive"
@@ -926,7 +968,7 @@ export default function AprovacaoInstalacaoDetalhe() {
                 <XCircle className="h-4 w-4 mr-2" />
                 Reprovar
               </Button>
-              {subFipe && (
+              {subFipe && !bloqueado && (
                 <Button
                   variant="outline"
                   className="flex-1 min-w-[200px] border-amber-500/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
@@ -937,20 +979,22 @@ export default function AprovacaoInstalacaoDetalhe() {
                   Solicitar Vistoria de Técnico
                 </Button>
               )}
-              <Button
-                className="flex-1 min-w-[200px] bg-success hover:bg-success/90 text-success-foreground"
-                onClick={handleAprovar}
-                disabled={aprovar.isPending || reprovar.isPending}
-              >
-                {aprovar.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                )}
-                Aprovar — Ativar Proteção 360
-              </Button>
+              {!bloqueado && (
+                <Button
+                  className="flex-1 min-w-[200px] bg-success hover:bg-success/90 text-success-foreground"
+                  onClick={handleAprovar}
+                  disabled={aprovar.isPending || reprovar.isPending}
+                >
+                  {aprovar.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Aprovar — Ativar Proteção 360
+                </Button>
+              )}
             </div>
-            {subFipe && (
+            {subFipe && !bloqueado && (
               <p className="text-xs text-muted-foreground pb-6">
                 Veículo abaixo do limite FIPE — dispensa rastreador. Você pode aprovar direto, reprovar
                 ou solicitar uma nova vistoria presencial pelo técnico (sem instalação,
