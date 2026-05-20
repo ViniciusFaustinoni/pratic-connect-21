@@ -76,7 +76,7 @@ serve(async (req) => {
     const { data: contrato, error: fetchError } = await supabase
       .from('contratos')
       .select(`
-        id, status, associado_id, veiculo_id, plano_id, valor_mensal, dia_vencimento, cotacao_id, tipo_entrada, cadastro_aprovado,
+        id, status, associado_id, veiculo_id, plano_id, valor_mensal, dia_vencimento, cotacao_id, tipo_entrada, origem_troca_titularidade_id, cadastro_aprovado,
         associado:associados!fk_contratos_associado (
           id, nome, dia_vencimento, logradouro, numero, bairro, cidade, uf, cep
         )
@@ -98,17 +98,37 @@ serve(async (req) => {
     // Pendentes — a efetivação real segue por `efetivar-troca-titularidade`
     // após aprovação do Monitoramento. Não criamos instalação nem ativamos
     // associado/veículo (troca tem caminho próprio).
-    if ((contrato as any).tipo_entrada === 'troca_titularidade') {
-      console.log('[aprovar-proposta] Detectada TROCA DE TITULARIDADE — delegando para aprovar-troca-cadastro');
-      if (!contrato.cotacao_id) {
-        return jsonResponse({ success: false, error: 'Cotação não vinculada à proposta de troca.' }, 400);
-      }
-      const { data: sol, error: solErr } = await supabase
+    let solicitacaoTroca: { id: string; status: string | null } | null = null;
+    if ((contrato as any).origem_troca_titularidade_id) {
+      const { data: solPorOrigem, error: solPorOrigemErr } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id, status')
+        .eq('id', (contrato as any).origem_troca_titularidade_id)
+        .maybeSingle();
+      if (solPorOrigemErr) throw solPorOrigemErr;
+      solicitacaoTroca = solPorOrigem;
+    }
+    if (!solicitacaoTroca && contrato.cotacao_id) {
+      const { data: solPorCotacao, error: solPorCotacaoErr } = await supabase
         .from('solicitacoes_troca_titularidade')
         .select('id, status')
         .eq('cotacao_id', contrato.cotacao_id)
         .maybeSingle();
-      if (solErr || !sol) {
+      if (solPorCotacaoErr) throw solPorCotacaoErr;
+      solicitacaoTroca = solPorCotacao;
+    }
+
+    const isTrocaTitularidade =
+      (contrato as any).tipo_entrada === 'troca_titularidade' ||
+      !!(contrato as any).origem_troca_titularidade_id ||
+      !!solicitacaoTroca;
+
+    if (isTrocaTitularidade) {
+      console.log('[aprovar-proposta] Detectada TROCA DE TITULARIDADE — delegando para aprovar-troca-cadastro');
+      if (!contrato.cotacao_id) {
+        return jsonResponse({ success: false, error: 'Cotação não vinculada à proposta de troca.' }, 400);
+      }
+      if (!solicitacaoTroca) {
         return jsonResponse({ success: false, error: 'Solicitação de troca não encontrada para esta cotação.' }, 404);
       }
 
@@ -131,7 +151,7 @@ serve(async (req) => {
           // aprovar-troca-cadastro exige Authorization para resolver o aprovador.
           Authorization: authHeader || `Bearer ${supabaseServiceKey}`,
         },
-        body: JSON.stringify({ solicitacao_id: sol.id }),
+        body: JSON.stringify({ solicitacao_id: solicitacaoTroca.id }),
       });
       const trocaJson: any = await trocaResp.json().catch(() => ({}));
 
