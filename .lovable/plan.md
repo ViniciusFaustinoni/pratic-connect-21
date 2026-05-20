@@ -1,96 +1,48 @@
-## Diagnóstico
+## Problema
 
-A tela em anexo ("Link liberado — continue sua contratação") é o **estado de boas-vindas** do `TelaAnaliseTrocaTitularidade.tsx` (linhas 35-39):
+Na fila `Cadastro › Processos › Troca de Titularidade › Aguardando Cadastro`, a solicitação MARCOS DATIVO → MARCUS FAUSTINONI (Ford Fiesta KOU6D37) aparece com o badge laranja **"Aguardando autovistoria"**, mas como o termo de cancelamento foi assinado hoje (20/05/2026, 15:09 BRT), ela está dentro da **janela mesmo-dia** — autovistoria é dispensada por regra (memória `mem://logic/operations/troca-titularidade-janela-mesmo-dia`).
+
+A lógica do badge em `src/pages/cadastro/ProcessosOperacionais.tsx` (linhas 134-168) só conhece três caminhos:
+1. `autovistoria_concluida_em` → "Autovistoria concluída" (verde)
+2. `tipo_vistoria === 'agendada_base'` ou agendamento → "Vistoria base agendada/Aguardando vistoria base" (azul)
+3. Default → "Aguardando autovistoria" (âmbar) ← caindo aqui indevidamente
+
+Falta o caminho 4: **dentro da janela mesmo-dia BRT** = vistoria dispensada.
+
+## Correção
+
+Em `src/pages/cadastro/ProcessosOperacionais.tsx`, antes do default âmbar, adicionar verificação espelhando o helper já existente em `CotacaoContratacao.tsx` (linhas 245-255):
 
 ```ts
-} else if (status === 'cotacao_em_andamento' && termoAssinadoEm) {
-  title = 'Link liberado — continue sua contratação';
-  showContinuarCTA = true;  // botão recarrega a página
+// Caminho 3: janela mesmo-dia (termo assinado ainda hoje BRT) → vistoria dispensada
+if (s.termo_cancelamento_assinado_em) {
+  const a = new Date(s.termo_cancelamento_assinado_em);
+  const fimDiaBRTemUTC = new Date(Date.UTC(
+    a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+    26, 59, 59, 999  // 23:59:59.999 BRT = 02:59 UTC do dia seguinte
+  ));
+  if (new Date() <= fimDiaBRTemUTC) {
+    return (
+      <Badge variant="outline" className="text-green-600 border-green-600">
+        Vistoria dispensada (mesmo dia)
+      </Badge>
+    );
+  }
 }
 ```
 
-Ela só faz sentido **antes** do novo titular começar — convidando-o a entrar no link público para escolher plano, enviar docs, etc.
+Esse trecho roda **depois** do check de `autovistoria_concluida_em` e do check de vistoria base agendada (para não sobrescrever caminhos que o cliente já escolheu), e **antes** do default. Cobre exatamente o caso da imagem.
 
-### Por que a COT‑20260520-151115073-803 cai aqui
+## Sem mudanças adicionais
 
-Estado real no banco:
-- `cotacoes.status_contratacao = 'pagamento_ok'`
-- `cotacoes.plano_escolhido_id` preenchido
-- `contratos.status = 'assinado'`
-- `solicitacoes_troca_titularidade.status = 'cotacao_em_andamento'` ← **deveria ser `aguardando_cadastro`**
-- `termo_cancelamento_assinado_em` preenchido
+- Não tocar em backend, edge function, trigger ou solicitação no banco.
+- Não tocar em `CotacaoContratacao.tsx` — a regra do link público já está correta.
+- Não alterar a aba destino (continua em "Aguardando Cadastro"); só o badge muda.
 
-O usuário **fez tudo**: plano, docs, contrato, pagamento. Mas a solicitação nunca migrou para `aguardando_cadastro` porque a trigger `fn_troca_promove_cadastro_via_cotacao` (`AFTER UPDATE OF status_contratacao ON cotacoes`) só dispara quando o status_contratacao vira **exatamente** `aguardando_aprovacao_cadastro`:
+## Pós-implementação
 
-```sql
-IF NEW.status_contratacao IS DISTINCT FROM 'aguardando_aprovacao_cadastro' THEN
-  RETURN NEW;
-END IF;
-```
-
-No fluxo dessa cotação (FIPE acima, sem autovistoria opcional, sem instalação ainda agendada após pagamento), o `recompute_cotacao_status_contratacao` saltou direto para `pagamento_ok`/`contrato_gerado` sem passar por `aguardando_aprovacao_cadastro`. Resultado: a trigger nunca rodou; a solicitação ficou eternamente em `cotacao_em_andamento`; o componente renderiza o convite "Link liberado" com botão `Continuar contratação` que recarrega a página em loop.
-
-## Correção (3 frentes)
-
-### 1. Trigger DB — promover em qualquer status pós-fluxo do cliente
-
-Migration recriando `fn_troca_promove_cadastro_via_cotacao` para promover quando `status_contratacao` ∈ {`aguardando_aprovacao_cadastro`, `pagamento_ok`, `contrato_gerado`, `aguardando_aprovacao_monitoramento`}. Mantém idempotência (`WHERE status = 'cotacao_em_andamento'`) e o gate `origem_troca_titularidade = true`.
-
-```sql
-IF NEW.status_contratacao IS NULL
-   OR NEW.status_contratacao NOT IN (
-     'aguardando_aprovacao_cadastro',
-     'pagamento_ok',
-     'contrato_gerado',
-     'aguardando_aprovacao_monitoramento'
-   ) THEN
-  RETURN NEW;
-END IF;
-IF OLD.status_contratacao IS NOT DISTINCT FROM NEW.status_contratacao THEN
-  RETURN NEW;
-END IF;
-```
-
-### 2. Backfill da solicitação travada
-
-```sql
-UPDATE solicitacoes_troca_titularidade
-SET status = 'aguardando_cadastro', updated_at = now()
-WHERE id = 'da35dfbd-5dc5-4df6-95aa-dac017d40546'
-  AND status = 'cotacao_em_andamento';
-```
-
-Junto, varrer todas as solicitações no mesmo limbo (cotação vinculada já em `pagamento_ok`/`contrato_gerado` e solicitação em `cotacao_em_andamento`) para corrigir outros casos.
-
-### 3. UI defensiva (presentation)
-
-Em `src/pages/public/CotacaoContratacao.tsx`, no branch novo da etapa 5 (Troca), aplicar **override** ao status passado para `TelaAnaliseTrocaTitularidade` enquanto a trigger não rodou:
-
-```ts
-const statusEfetivoTroca =
-  (solicitacaoTroca?.status === 'cotacao_em_andamento' &&
-   ['pagamento_ok','contrato_gerado','aguardando_aprovacao_monitoramento'].includes(
-     cotacao?.status_contratacao || ''
-   ))
-    ? 'aguardando_cadastro'
-    : (solicitacaoTroca?.status as any) || 'aguardando_cadastro';
-```
-
-Assim, mesmo se a trigger atrasar ou um caso novo escapar, o cliente vê **"Em análise pelo Cadastro"** em vez do convite "Link liberado".
-
-## Validação
-
-1. Recarregar a COT‑20260520-151115073-803 → tela "Em análise pelo Cadastro" (não mais "Link liberado").
-2. SQL: `SELECT status FROM solicitacoes_troca_titularidade WHERE id='da35dfbd-…';` → `aguardando_cadastro`.
-3. Nova troca completa: fluxo termina em `pagamento_ok` → trigger promove → cliente vê acompanhamento.
-4. Fila do Cadastro → solicitação aparece pronta para análise manual.
-5. Cotação comum (não-troca) → trigger ignora (gate `origem_troca_titularidade=true`).
+- Memória `mem://logic/operations/troca-titularidade-janela-mesmo-dia` permanece válida; nada a atualizar.
 
 ## Arquivos
 
-- **Nova migration** em `supabase/migrations/` — recria `fn_troca_promove_cadastro_via_cotacao` + UPDATE de backfill.
-- `src/pages/public/CotacaoContratacao.tsx` — override defensivo do `status` passado para `TelaAnaliseTrocaTitularidade`.
-
-## Memória a atualizar
-
-`mem://logic/operations/troca-titularidade-promocao-cadastro-canonica` — registrar que a promoção `cotacao_em_andamento → aguardando_cadastro` agora acontece em qualquer transição pós-fluxo do cliente (`aguardando_aprovacao_cadastro`, `pagamento_ok`, `contrato_gerado`, `aguardando_aprovacao_monitoramento`), e que a UI tem fallback defensivo se a trigger atrasar.
+- `src/pages/cadastro/ProcessosOperacionais.tsx` (1 inserção entre as linhas 161 e 162)

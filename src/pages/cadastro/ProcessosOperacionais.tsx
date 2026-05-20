@@ -159,6 +159,21 @@ function TrocaTitularidadeTab({
                                 </Badge>
                               );
                             }
+                            // Caminho 3: janela mesmo-dia (termo assinado ainda hoje BRT) → vistoria dispensada
+                            if (s.termo_cancelamento_assinado_em) {
+                              const a = new Date(s.termo_cancelamento_assinado_em);
+                              const fimDiaBRTemUTC = new Date(Date.UTC(
+                                a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
+                                26, 59, 59, 999
+                              ));
+                              if (new Date() <= fimDiaBRTemUTC) {
+                                return (
+                                  <Badge variant="outline" className="text-green-600 border-green-600">
+                                    Vistoria dispensada (mesmo dia)
+                                  </Badge>
+                                );
+                              }
+                            }
                             // Default: caminho autovistoria pendente
                             return (
                               <Badge variant="outline" className="text-amber-600 border-amber-600">
