@@ -1,0 +1,1 @@
+ALTER TYPE status_troca_titularidade ADD VALUE IF NOT EXISTS 'aguardando_termo_cancelamento' BEFORE 'cotacao_em_andamento';
