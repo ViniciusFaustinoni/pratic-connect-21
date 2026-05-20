@@ -371,7 +371,7 @@ export function usePropostasPendentes() {
           ? supabase.from('associados').select('*').in('id', associadoIds)
           : Promise.resolve({ data: [] as any[] }),
         veiculoIds.length
-          ? supabase.from('veiculos').select('id, status, cobertura_total, chassi, renavam, codigo_hinova, sincronizado_hinova').in('id', veiculoIds)
+          ? supabase.from('veiculos').select('id, status, cobertura_total, cobertura_roubo_furto, chassi, renavam, codigo_hinova, sincronizado_hinova').in('id', veiculoIds)
           : Promise.resolve({ data: [] as any[] }),
         planoIds.length
           ? supabase.from('planos').select('id, nome').in('id', planoIds)
