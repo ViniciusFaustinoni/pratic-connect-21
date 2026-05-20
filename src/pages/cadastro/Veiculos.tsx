@@ -431,6 +431,7 @@ export default function Veiculos() {
                   <TableHead>Valor FIPE</TableHead>
                   <TableHead>Uso App</TableHead>
                   <TableHead>Associado</TableHead>
+                  <TableHead>Consultor</TableHead>
                   <TableHead>Status</TableHead>
                   {canDeleteVeiculo && <TableHead className="w-12"></TableHead>}
                 </TableRow>
