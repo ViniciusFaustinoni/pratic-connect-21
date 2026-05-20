@@ -92,8 +92,9 @@ function TrocaTitularidadeTab({
   return (
     <div className="space-y-4">
       <Tabs value={subAba} onValueChange={(v) => setSubAba(v as keyof typeof TROCA_FILTROS)}>
-        <TabsList className="w-full flex md:grid md:grid-cols-5 overflow-x-auto justify-start md:justify-center">
+        <TabsList className="w-full flex md:grid md:grid-cols-6 overflow-x-auto justify-start md:justify-center">
           <TabsTrigger value="pendentes" className="flex-shrink-0 text-xs md:text-sm">Aguardando Cadastro</TabsTrigger>
+          <TabsTrigger value="em_andamento" className="flex-shrink-0 text-xs md:text-sm">Em andamento</TabsTrigger>
           <TabsTrigger value="aguardando_monit" className="flex-shrink-0 text-xs md:text-sm">Aguardando Monit.</TabsTrigger>
           <TabsTrigger value="em_vistoria" className="flex-shrink-0 text-xs md:text-sm">Em Vistoria</TabsTrigger>
           <TabsTrigger value="aprovadas" className="flex-shrink-0 text-xs md:text-sm">Aprovadas</TabsTrigger>
