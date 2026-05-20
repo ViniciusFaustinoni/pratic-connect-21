@@ -113,6 +113,12 @@ const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect
   const temInstalacaoAtiva = instalacoes.some((i) =>
     ['pendente', 'agendada', 'em_execucao', 'concluida'].includes(i.status)
   );
+  // Consultor responsável: contrato ativo > contrato mais recente
+  const contratos = (veiculo.contratos as Array<{ id: string; status: string; created_at: string; vendedor: { id: string; nome: string } | null }> | undefined) || [];
+  const contratoEscolhido =
+    contratos.find((c) => c.status === 'ativo' && c.vendedor) ||
+    [...contratos].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  const consultorNome = contratoEscolhido?.vendedor?.nome || null;
   // Prioridade: cobertura suspensa > instalação sem agendamento > status cru.
   const isSuspenso = veiculo.cobertura_suspensa === true;
   const labelOverride = isSuspenso
