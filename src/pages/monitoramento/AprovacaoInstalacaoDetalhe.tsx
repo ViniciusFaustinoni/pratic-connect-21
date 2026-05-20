@@ -336,6 +336,35 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         enderecoCadastral = assoc || null;
       }
 
+      // Backfill contrato_id quando o servico (ex.: autovistoria materializada)
+      // não carrega o vínculo direto — necessário para "Devolver ao Cadastro".
+      if (!servico.contrato_id) {
+        let resolvedContratoId: string | null = null;
+        if (servico.vistoria_origem_id) {
+          const { data: v } = await supabase
+            .from('vistorias')
+            .select('contrato_id')
+            .eq('id', servico.vistoria_origem_id)
+            .maybeSingle();
+          resolvedContratoId = (v as any)?.contrato_id || null;
+        }
+        if (!resolvedContratoId && servico.veiculo_id) {
+          const { data: c } = await supabase
+            .from('contratos')
+            .select('id')
+            .eq('veiculo_id', servico.veiculo_id)
+            .in('status', ['assinado', 'ativo'] as any)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          resolvedContratoId = (c as any)?.id || null;
+        }
+        if (resolvedContratoId) {
+          servico.contrato_id = resolvedContratoId;
+          console.log('[AprovacaoInstalacaoDetalhe] contrato_id resolvido via fallback', resolvedContratoId);
+        }
+      }
+
       return {
         servico,
         fotos: [...fotos, ...vistoriaFotos],
