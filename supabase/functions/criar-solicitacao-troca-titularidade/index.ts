@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
       const { data: bloqueantes } = await admin
         .from('solicitacoes_troca_titularidade')
         .select('id, status, created_at, novo_titular_dados, veiculo_id')
-        .in('status', ['cotacao_em_andamento','aguardando_cadastro','aguardando_monitoramento','aguardando_vistoria','liberada_para_assinatura'])
+        .in('status', ['aguardando_termo_cancelamento','cotacao_em_andamento','aguardando_cadastro','aguardando_monitoramento','aguardando_vistoria','liberada_para_assinatura'])
         .order('created_at', { ascending: false });
 
       const conflito = (bloqueantes || []).find((s: any) => {
@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
         veiculo_id: veiculo.id,
         cotacao_id: null,
         novo_titular_dados: novo_titular,
-        status: 'cotacao_em_andamento',
+        status: 'aguardando_termo_cancelamento',
         criado_por: criadoPorProfileId,
       })
       .select('id, token_publico')

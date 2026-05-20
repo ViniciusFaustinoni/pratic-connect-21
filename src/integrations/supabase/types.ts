@@ -35425,6 +35425,7 @@ export type Database = {
         | "aguardando_pagamento"
         | "pecas_em_cotacao"
       status_troca_titularidade:
+        | "aguardando_termo_cancelamento"
         | "cotacao_em_andamento"
         | "aguardando_cadastro"
         | "aguardando_monitoramento"
@@ -35895,6 +35896,7 @@ export const Constants = {
         "pecas_em_cotacao",
       ],
       status_troca_titularidade: [
+        "aguardando_termo_cancelamento",
         "cotacao_em_andamento",
         "aguardando_cadastro",
         "aguardando_monitoramento",
