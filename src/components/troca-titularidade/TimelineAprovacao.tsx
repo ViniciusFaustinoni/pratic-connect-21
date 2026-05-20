@@ -22,8 +22,9 @@ const ETAPAS: { key: string; label: string }[] = [
 
 function statusToStep(status: StatusTroca): number {
   switch (status) {
-    case 'aguardando_cadastro': return 0;
-    case 'cotacao_em_andamento': return 2;
+    case 'aguardando_termo_cancelamento': return 0;
+    case 'cotacao_em_andamento': return 1;
+    case 'aguardando_cadastro': return 2;
     case 'liberada_para_assinatura': return 3;
     case 'aguardando_vistoria': return 4;
     case 'aguardando_monitoramento': return 5;

@@ -17,7 +17,7 @@ export function useProcessosOperacionaisCount() {
       const q1 = (supabase as any)
         .from('solicitacoes_troca_titularidade')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['aguardando_cadastro', 'cotacao_em_andamento']);
+        .in('status', ['aguardando_termo_cancelamento', 'aguardando_cadastro', 'cotacao_em_andamento']);
 
       const q2 = supabase
         .from('substituicoes_veiculo')

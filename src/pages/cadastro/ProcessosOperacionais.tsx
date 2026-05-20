@@ -52,7 +52,7 @@ const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
 };
 
 const TROCA_FILTROS: Record<string, StatusTroca[]> = {
-  pendentes: ['aguardando_cadastro', 'cotacao_em_andamento'],
+  pendentes: ['aguardando_termo_cancelamento', 'aguardando_cadastro', 'cotacao_em_andamento'],
   aguardando_monit: ['aguardando_monitoramento'],
   em_vistoria: ['aguardando_vistoria'],
   aprovadas: ['liberada_para_assinatura', 'efetivada'],
@@ -597,7 +597,7 @@ function useProcessosCounts(scope?: { profileId?: string; authUserId?: string })
       let q1 = (supabase as any)
         .from('solicitacoes_troca_titularidade')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['aguardando_cadastro', 'cotacao_em_andamento']);
+        .in('status', ['aguardando_termo_cancelamento', 'aguardando_cadastro', 'cotacao_em_andamento']);
       if (profileId) q1 = q1.eq('criado_por', profileId);
 
       let q2 = supabase
