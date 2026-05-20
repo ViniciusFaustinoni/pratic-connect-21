@@ -60,8 +60,13 @@ export function VisualizadorDocumentoModal({ documento, open, onClose, onAprovar
   if (!documento) return null;
 
   const isContrato = documento.tipo === 'contrato_assinado';
-  const isPdf = documento.arquivo_url?.toLowerCase().endsWith('.pdf');
-  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(documento.arquivo_url || '');
+  const cleanUrl = (documento.arquivo_url || '').toLowerCase().split('?')[0];
+  const isPdf =
+    cleanUrl.endsWith('.pdf') ||
+    /\/laudos?\//.test(cleanUrl) ||
+    documento.tipo === 'contrato_assinado' ||
+    documento.tipo === 'laudo_vistoria';
+  const isImage = !isPdf && /\.(jpg|jpeg|png|gif|webp)$/i.test(cleanUrl);
   const status = statusConfig[documento.status] || statusConfig.pendente;
 
   const podeAnalisar = (documento.status === 'pendente' || documento.status === 'em_analise') && (onAprovar || onReprovar);
