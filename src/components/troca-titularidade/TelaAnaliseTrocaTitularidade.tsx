@@ -28,7 +28,7 @@ export function TelaAnaliseTrocaTitularidade({
   let description = 'Sua solicitação de troca de titularidade foi recebida. Aguarde a análise da nossa equipe.';
   let showContinuarCTA = false;
 
-  if (status === 'cotacao_em_andamento' && !termoAssinadoEm) {
+  if (status === 'aguardando_termo_cancelamento' || (status === 'cotacao_em_andamento' && !termoAssinadoEm)) {
     icon = <FileSignature className="h-12 w-12 text-amber-600" />;
     title = 'Aguardando o titular anterior assinar o termo de cancelamento';
     description = 'Sua cotação já foi montada pelo consultor. Você poderá continuar a contratação assim que o titular anterior assinar o termo de cancelamento (biometria facial). Você receberá um aviso por WhatsApp.';
