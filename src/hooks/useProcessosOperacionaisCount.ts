@@ -14,17 +14,14 @@ export function useProcessosOperacionaisCount() {
   return useQuery({
     queryKey: ['processos-operacionais-count'],
     queryFn: async () => {
-      // Conta SOMENTE a fila real de aprovação do Cadastro
-      // (`aguardando_cadastro` é definido pelo trigger
-      // trg_troca_promove_cadastro_via_cotacao quando a cotação atinge
-      // `aguardando_aprovacao_cadastro`). Trocas em
-      // `aguardando_termo_cancelamento` / `cotacao_em_andamento` ainda estão
-      // sob responsabilidade do novo titular no link público — não viram
-      // pendência do Cadastro.
+      // `aguardando_cadastro` pertence à fila Cadastro › Propostas Pendentes
+      // (badge roxo TROCA DE TITULARIDADE). NÃO conta em Processos.
+      // Processos só rastreia o pré-cadastro: termo pendente ou link público
+      // em andamento pelo novo titular.
       const q1 = (supabase as any)
         .from('solicitacoes_troca_titularidade')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'aguardando_cadastro');
+        .in('status', ['aguardando_termo_cancelamento', 'cotacao_em_andamento']);
 
       const q2 = supabase
         .from('substituicoes_veiculo')
