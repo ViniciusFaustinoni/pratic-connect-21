@@ -77,10 +77,18 @@ function TrocaTitularidadeTab({
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
 
+  // REGRA CANÔNICA: aprovação documental da Troca migrou para a fila
+  // Cadastro › Propostas Pendentes (com badge roxo). A aba Processos vira
+  // read-only para o Cadastro — sem botões Aprovar/Reprovar, apenas
+  // acompanhamento da timeline, SGA, documentos, autovistoria e termo.
+  // Monitoramento mantém todos os botões intactos.
+  const modoEfetivo: 'cadastro' | 'monitoramento' | 'readonly' | 'auto' =
+    modoUsuario === 'cadastro' ? 'readonly' : modoUsuario;
+
   // Resolve modo do modal
   const solicitacaoSelecionada = data?.find(s => s.id === selecionada);
   const modoModal: 'cadastro' | 'monitoramento' | 'readonly' = (() => {
-    if (modoUsuario !== 'auto') return modoUsuario;
+    if (modoEfetivo !== 'auto') return modoEfetivo;
     if (!solicitacaoSelecionada) return 'cadastro';
     const st = solicitacaoSelecionada.status;
     if (st === 'aguardando_monitoramento' || st === 'aguardando_vistoria' || st === 'liberada_para_assinatura') {
@@ -88,6 +96,8 @@ function TrocaTitularidadeTab({
     }
     return 'cadastro';
   })();
+
+  const mostrarBannerCadastroReadonly = modoUsuario === 'cadastro';
 
   return (
     <div className="space-y-4">
