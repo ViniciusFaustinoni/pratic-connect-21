@@ -1100,6 +1100,25 @@ export default function AprovacaoInstalacaoDetalhe() {
           tentarAprovar();
         }}
       />
+
+      {/* Devolver ao Cadastro — usado pelo guard de aprovação prematura */}
+      <ConfirmarDevolverCadastroDialog
+        open={devolverOpen}
+        onOpenChange={setDevolverOpen}
+        isPending={devolverCadastro.isPending}
+        onConfirm={(motivo) => {
+          if (!servico?.contrato_id) return;
+          devolverCadastro.mutate(
+            { contrato_id: servico.contrato_id, motivo },
+            {
+              onSuccess: () => {
+                setDevolverOpen(false);
+                navigate('/monitoramento/aprovacao-associados');
+              },
+            }
+          );
+        }}
+      />
     </div>
   );
 }
