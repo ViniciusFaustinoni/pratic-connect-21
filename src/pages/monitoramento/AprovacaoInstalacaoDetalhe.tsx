@@ -32,14 +32,17 @@ import {
   ExternalLink,
   Expand,
   UserSearch,
+  Undo2,
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
   useReprovarInstalacaoMonitoramento,
 } from '@/hooks/useAprovacaoMonitoramento';
 import { veiculoSubFipe, exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
+import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
+import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
 
 // Hook para buscar detalhes completos do serviço
 function useServicoDetalheAprovacao(servicoId: string | undefined) {
