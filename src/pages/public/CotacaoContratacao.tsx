@@ -371,6 +371,7 @@ export default function CotacaoContratacao() {
     hasInstalacaoAgendada,
     hasAgendamentoBase,
     agendamentoConcluido,
+    isTrocaTitularidade,
     cotacao,
   ]);
 
