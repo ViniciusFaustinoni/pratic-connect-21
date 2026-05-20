@@ -287,7 +287,10 @@ export default function CotacaoContratacao() {
       case 2:
         return statusConcluidos.contrato.includes(status);
       case 3:
-        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
+        // dispensaVistoriaTroca NÃO conta como "etapa concluída" (quebraria a
+        // monotonicidade do loop em etapaDoStatus, mandando o usuário direto
+        // para Pagamento ao abrir o link). Skip de navegação fica no useEffect.
+        return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
       case 4:
         return statusConcluidos.pagamento.includes(status);
       case 5:
