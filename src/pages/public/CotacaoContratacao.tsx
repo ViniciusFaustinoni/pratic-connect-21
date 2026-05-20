@@ -287,7 +287,10 @@ export default function CotacaoContratacao() {
       case 2:
         return statusConcluidos.contrato.includes(status);
       case 3:
-        return dispensaVistoriaTroca || !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
+        // dispensaVistoriaTroca NÃO conta como "etapa concluída" (quebraria a
+        // monotonicidade do loop em etapaDoStatus, mandando o usuário direto
+        // para Pagamento ao abrir o link). Skip de navegação fica no useEffect.
+        return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
       case 4:
         return statusConcluidos.pagamento.includes(status);
       case 5:
@@ -348,6 +351,16 @@ export default function CotacaoContratacao() {
       }
     }
 
+    // Troca de Titularidade: após pagamento, não há "etapa de instalação" para
+    // o cliente — o destino é a tela de acompanhamento. Empurra para 5 para
+    // que o render condicional caia em TelaAnaliseTrocaTitularidade.
+    if (
+      isTrocaTitularidade &&
+      ['pagamento_ok', 'contrato_gerado', 'ativo'].includes(cotacao?.status_contratacao || '')
+    ) {
+      return 5;
+    }
+
     return etapaFinal;
   }, [
     cotacao?.status_contratacao,
@@ -358,6 +371,7 @@ export default function CotacaoContratacao() {
     hasInstalacaoAgendada,
     hasAgendamentoBase,
     agendamentoConcluido,
+    isTrocaTitularidade,
     cotacao,
   ]);
 
@@ -371,7 +385,11 @@ export default function CotacaoContratacao() {
 
   // Ordem de navegação por índices INTERNOS:
   // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
-  const navOrder = useMemo<number[]>(() => [0, 1, 2, 3, 4, 5], []);
+  // Em troca dentro da janela mesmo-dia, vistoria é dispensada → remove índice 3.
+  const navOrder = useMemo<number[]>(
+    () => (dispensaVistoriaTroca ? [0, 1, 2, 4, 5] : [0, 1, 2, 3, 4, 5]),
+    [dispensaVistoriaTroca]
+  );
 
 
 
@@ -1123,8 +1141,18 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* PROTEÇÃO 360º ATIVADA - Tela de boas-vindas */}
-                  {cotacao?.status_contratacao === 'ativo' ? (
+                  {/* Troca de Titularidade pós-pagamento: cliente acompanha avaliação */}
+                  {isTrocaTitularidade && cotacao?.status_contratacao !== 'ativo' ? (
+                    <TelaAnaliseTrocaTitularidade
+                      status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
+                      motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
+                      termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
+                      aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
+                      aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+                      tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
+                      expiradaEm={(solicitacaoTroca as any)?.expirada_em}
+                    />
+                  ) : cotacao?.status_contratacao === 'ativo' ? (
                     <Card className="border-green-500/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
                         <motion.div 
