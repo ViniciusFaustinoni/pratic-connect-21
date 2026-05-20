@@ -1,105 +1,91 @@
-## Decisão
+## Estado atual KOU6D37 (banco local)
 
-Unificar a aprovação documental da Troca de Titularidade na fila **Cadastro › Propostas Pendentes**, com **badge roxo grande "TROCA DE TITULARIDADE"** no topo do card. Após o Cadastro aprovar pela Propostas Pendentes, a solicitação vai **direto para o Monitoramento** (sem reentrar na aba Processos). A aba **Processos › Troca de Titularidade** vira **read-only para o Cadastro** (acompanhamento, sem botões Aprovar/Reprovar) e segue intacta para Monitoramento.
+| Campo | Valor |
+|---|---|
+| `veiculos.associado_id` | MARCOS DATIVO (`9c05d3c4…`) |
+| `veiculos.em_troca_titularidade` | `true` |
+| `veiculos.status` | `instalacao_pendente` |
+| `veiculos.codigo_hinova` | `36274` (já existiu no Hinova) |
+| `veiculos.sincronizado_hinova` | `true` (flag local) |
+| Solicitação troca `2ee5c642` | `aguardando_monitoramento`, `efetivada_em=NULL`, `sga_status=falha` |
 
-## Fluxo canônico revisado
+Você reportou que **no SGA o veículo já não aparece mais sob o MARCOS DATIVO** (provavelmente removido manualmente no painel Hinova). Nosso lado local ainda tem MARCOS como dono e `codigo_hinova=36274` ativo — esse descasamento precisa ser corrigido.
+
+---
+
+## Parte 1 — Limpeza da troca (KOU6D37 → MARCUS VINICIUS)
+
+Migration única em transação:
 
 ```text
-Termo de cancelamento assinado (titular antigo)
-        │
-        ▼
-Link público do novo titular
-   → documentos
-   → termo de filiação assinado
-   → pagamento (quando houver — adesão)
-        │
-        ▼   (trigger trg_troca_promove_cadastro_via_cotacao já existe)
-Cadastro › Propostas Pendentes  ← AGORA mostra trocas (com badge roxo)
-        │  Analista clica "Aprovar proposta"
-        │  → aprovar-proposta detecta tipo_entrada='troca_titularidade'
-        │     e delega para aprovar-troca-cadastro
-        ▼
-Monitoramento › Aprovações Troca (fluxo existente, sem mudança)
-        │
-        ▼
-efetivar-troca-titularidade → SGA → Ativo
+1. UPDATE veiculos
+   SET em_troca_titularidade=false,
+       troca_titularidade_id=NULL,
+       troca_titularidade_iniciada_em=NULL,
+       cobertura_suspensa=false,
+       cobertura_suspensa_motivo=NULL,
+       cobertura_suspensa_em=NULL
+   WHERE id='d5181403-22c0-4f2a-b22e-b6e7d821376c';
+
+2. DELETE FROM solicitacoes_troca_titularidade
+   WHERE id='2ee5c642-a095-4423-9a9d-06dc1282ea9d';
+
+3. DELETE FROM contratos
+   WHERE id='e5a02908-b5e3-482c-a063-365a92477d71';
+
+4. DELETE FROM cotacoes
+   WHERE id='97f3142d-273b-4438-a1aa-47a129c102ce';
+
+5. DELETE FROM associados
+   WHERE id='5e83b57a-04b9-433c-9a0b-dcd0e2ab0f49';  -- MARCUS VINICIUS
 ```
 
-A solicitação **nunca mais volta** para nenhuma fila do Cadastro depois de aprovada — nem na Propostas Pendentes (filtro `cadastro_aprovado=false` quebra), nem na Processos (que agora é só leitura para o Cadastro).
+Resultado: MARCOS DATIVO continua dono local do KOU6D37, sem flag de troca, pronto para reteste.
 
-## Mudanças
+---
 
-### 1. Roteamento dentro de `aprovar-proposta` (edge)
+## Parte 2 — Reenviar KOU6D37 para o SGA sob MARCOS DATIVO
 
-**Arquivo:** `supabase/functions/aprovar-proposta/index.ts`
+Como o Hinova não tem mais o vínculo, o código antigo (`36274`) está obsoleto e o `buscar/veiculo` lá vai retornar 404. Precisamos forçar **recriação** no SGA.
 
-Depois de carregar o contrato, detectar `tipo_entrada === 'troca_titularidade'` e:
+### Passos:
 
-- Buscar `solicitacoes_troca_titularidade` por `cotacao_id`.
-- Reusar o miolo do `aprovar-troca-cadastro` (refatorar para `_shared/aprovar-troca-cadastro-core.ts`) com todos os gates herdados: termo de cancelamento assinado, situação financeira SGA ≤ 24h liberadora, autovistoria concluída OU janela mesmo-dia.
-- Marcar `contratos.cadastro_aprovado = true` e `aprovado_por = aprovador_profile_id` **só depois** que a solicitação avançar para `aguardando_monitoramento` (na mesma transação lógica), o que tira a troca da fila Propostas Pendentes.
-- **NÃO executar** "criar instalação", "promover serviço de vistoria" nem "ativar associado" — troca tem caminho próprio de efetivação via `efetivar-troca-titularidade`.
-- Devolver o mesmo formato `{ success, mensagem }` que o frontend já consome. Erros estruturados (`link_publico_incompleto`, `inadimplencia_sga_pendente`, `JANELA_TROCA_EXPIRADA`) viram toast no `useAprovarProposta`.
+1. **Zerar o snapshot Hinova local** (para que a sync trate como cadastro novo, não como update inexistente):
 
-### 2. UI da Propostas Pendentes — badge roxo de Troca
+```text
+UPDATE veiculos
+   SET codigo_hinova=NULL,
+       sincronizado_hinova=false,
+       sincronizado_hinova_em=NULL,
+       hinova_erro=NULL
+ WHERE id='d5181403-22c0-4f2a-b22e-b6e7d821376c';
+```
 
-**Arquivo:** `src/pages/cadastro/PropostasPendentes.tsx` (+ sub-card identificado na implementação).
+2. **Disparar a edge `sga-hinova-sync`** com `{ veiculo_id: 'd5181403-22c0-4f2a-b22e-b6e7d821376c', forcar: true }` (ou o action equivalente `sincronizar_veiculo`).
 
-Para cada card com `proposta.tipo_entrada === 'troca_titularidade'`:
+3. **Validar**:
+   - Resposta da edge com `codigo` novo gerado no Hinova.
+   - `veiculos.codigo_hinova` repopulado, `sincronizado_hinova=true`.
+   - Confirmação no painel Hinova de que KOU6D37 voltou a aparecer sob a matrícula do MARCOS DATIVO.
+   - Forçar situação PENDENTE (3) via `alterarSituacaoParaVeiculoHinova` logo após o cadastro (regra canônica — nunca enviar ATIVO).
 
-- Badge fixo no topo: fundo `bg-purple-600`, texto branco, mesmo tamanho do "INCLUSÃO DE VEÍCULO" já usado.
-- Texto: "TROCA DE TITULARIDADE — Titular anterior: {nome do associado antigo}".
-- Link discreto "Ver histórico" abre a aba Processos (read-only) com termo de cancelamento, SGA e timeline.
+### Observações importantes
 
-Filtro "Troca de titularidade" no `tipoEntradaOptions` (linha 70) já existe — não mexer.
+- O contrato ativo atual do MARCOS para o KOU6D37 (status `ativo`, com `valor_mensal` e `dia_vencimento`) será a base do payload da sync.
+- Se o contrato dele estiver com `dia_vencimento` ausente, a sync vai falhar (regra canônica SGA dia_vencimento). Antes de disparar, eu confirmo o `dia_vencimento` do contrato vivo do MARCOS.
+- Saneamento pontual — **não** trocar nada no fluxo da edge `sga-hinova-sync`.
 
-### 3. Hook `usePropostasPendentes` — enriquecer dados da troca
+---
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts`
+## Parte 3 — Plano da efetivação (próxima troca cancelar veículo do antigo)
 
-A query base (`status='assinado'`) já captura trocas. Acrescentar lookup em `solicitacoes_troca_titularidade` por `cotacao_id IN ...` quando houver contratos com `tipo_entrada='troca_titularidade'`, expondo:
+Para a próxima troca já cancelar o veículo do titular antigo no SGA automaticamente, manter como **trabalho separado** (já planejado anteriormente: extrair o trecho `alterarSituacaoVeiculoHinova(cod, 3)` que hoje só existe no caminho `retry_sga` para também rodar no fluxo principal). Não executar nesta rodada — primeiro limpa e reenvia, depois trata.
 
-- `troca_solicitacao_id: string | null`
-- `troca_associado_antigo_nome: string | null`
-- `troca_termo_assinado_em: string | null`
+---
 
-### 4. Aba Processos › Troca de Titularidade — read-only para Cadastro
+## Ordem de execução
 
-**Arquivos:** `src/pages/cadastro/ProcessosOperacionais.tsx`, `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
-
-Quando `modoUsuario === 'cadastro'`:
-
-- Esconder botões "Aprovar" / "Reprovar" do Cadastro.
-- Manter: timeline, dados do antigo titular, dados do novo titular, situação SGA, documentos do termo, autovistoria, status do pagamento.
-- Banner azul: "A aprovação documental desta troca é feita em **Cadastro › Propostas Pendentes**."
-
-Monitoramento (`modoUsuario='monitoramento'`) e a tela `/monitoramento/aprovacoes-troca` permanecem inalterados.
-
-### 5. Reprovação
-
-A reprovação da Troca pelo Cadastro também migra para a Propostas Pendentes. Quando `tipo_entrada='troca_titularidade'`, o `aprovar-proposta` (lado reprovação, dentro do `ReprovarPropostaDialog`) chama `reprovar-troca-titularidade` (já existe) em vez do caminho padrão.
-
-### 6. Saneamento pontual da troca atual (COT-20260520-163938040-598)
-
-A solicitação `2ee5c642-...` já tem `aprovado_cadastro_em` e `aprovado_monitoramento_em` mas está presa em `aguardando_monitoramento`. Marcar `contratos.cadastro_aprovado=true` para tirar do badge enquanto a efetivação SGA é investigada à parte (fora do escopo).
-
-## Arquivos a editar/criar
-
-- `supabase/functions/aprovar-proposta/index.ts` — desvio para troca
-- `supabase/functions/_shared/aprovar-troca-cadastro-core.ts` (novo) — extrai miolo do `aprovar-troca-cadastro`
-- `supabase/functions/aprovar-troca-cadastro/index.ts` — passa a delegar para o core
-- `src/hooks/usePropostasPendentes.ts` — enriquecer dados de troca
-- `src/pages/cadastro/PropostasPendentes.tsx` (+ card) — badge roxo "TROCA DE TITULARIDADE"
-- `src/pages/cadastro/PropostaAnalise.tsx` — banner com link para histórico da troca
-- `src/pages/cadastro/ProcessosOperacionais.tsx` — `TrocaTitularidadeTab` em modo `readonly_cadastro`
-- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` — suportar `modo='readonly_cadastro'`
-- Atualizar memória `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e` refletindo o novo ponto de aprovação documental
-
-## Como validar
-
-1. Criar uma troca de ponta a ponta: termo de cancelamento → link público novo titular (docs + termo de filiação + pagamento, quando houver).
-2. Confirmar que aparece em **Cadastro › Propostas Pendentes** com badge roxo "TROCA DE TITULARIDADE".
-3. Conferir que **Cadastro › Processos › Troca** mostra o mesmo registro em modo read-only com banner explicativo.
-4. Clicar "Aprovar proposta" → toast de sucesso → o card some da fila → aparece em **Monitoramento › Aprovações Troca** como `aguardando_monitoramento`.
-5. Confirmar `contratos.cadastro_aprovado=true` e `solicitacoes_troca_titularidade.aprovado_cadastro_em IS NOT NULL`.
-6. Após aprovação do Monitoramento, `efetivar-troca-titularidade` segue inalterado.
+1. Migration da Parte 1 (limpeza) — **bloqueia** se algo der errado, sem risco para o MARCOS.
+2. UPDATE de zerar snapshot Hinova + invocar `sga-hinova-sync` da Parte 2.
+3. Confirmar no Hinova que o KOU6D37 voltou e está PENDENTE sob o MARCOS.
+4. Você refaz a troca de titularidade do zero para reteste.
