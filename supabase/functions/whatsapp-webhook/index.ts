@@ -267,6 +267,11 @@ const buildWhatsappSystemPrompt = (prazoLinkEvento: number) => `Você é o Assis
 - Pergunte "está tudo bem?" quando o associado relatar acidente ou problema
 - Demonstre compreensão antes de coletar dados
 
+## Continuidade de templates (CRÍTICO)
+- O histórico pode conter mensagens marcadas como "[Template enviado:<codigo> vars=...]" — esse é um template Meta JÁ ENVIADO pelo sistema ao associado (confirmação de visita, cobrança, lembrete, etc.).
+- Se a resposta do associado (SIM/NÃO/CONFIRMO/REAGENDAR/horário/etc.) vier logo após um template, TRATE como continuação desse fluxo — JAMAIS responda como mensagem fria do tipo "entre em contato com a central".
+- Use o conteúdo e variáveis do template para entender do que se trata (instalação, vistoria, boleto, etc.) antes de responder.
+
 ## Regras do WhatsApp
 - Seja CONCISO (mensagens curtas)
 - Use formatação do WhatsApp: *negrito* (um asterisco), _itálico_ (underline), ~tachado~ (til)
@@ -1848,19 +1853,63 @@ ${beneficiosFormatados}
 `;
 }
 
-// Buscar histórico de conversa
+// Buscar histórico de conversa — mescla chat_mensagens_ia (texto livre IA/usuário)
+// com whatsapp_mensagens (incluindo templates Meta enviados, lembretes, cobranças etc.)
+// para que a IA tenha contexto do que foi enviado ao associado nas últimas 2h.
 async function getConversationHistory(supabase: any, associadoId: string, telefone: string) {
-  // Limitar histórico às últimas 2 horas para evitar contexto de conversas antigas
   const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const { data } = await supabase
-    .from("chat_mensagens_ia")
-    .select("role, content")
-    .eq("associado_id", associadoId)
-    .gte("created_at", duasHorasAtras)
-    .order("created_at", { ascending: false })
-    .limit(10);
 
-  return (data || []).reverse();
+  // Variantes de telefone para casar com whatsapp_mensagens (que pode estar com/sem 55)
+  const telLimpo = (telefone || "").replace(/\D/g, "");
+  const telefonesBusca = [telLimpo];
+  if (telLimpo.startsWith("55") && telLimpo.length >= 12) telefonesBusca.push(telLimpo.substring(2));
+  if (!telLimpo.startsWith("55") && telLimpo.length >= 10) telefonesBusca.push("55" + telLimpo);
+
+  const [iaRes, waRes] = await Promise.all([
+    supabase
+      .from("chat_mensagens_ia")
+      .select("role, content, created_at, message_id")
+      .eq("associado_id", associadoId)
+      .gte("created_at", duasHorasAtras)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("whatsapp_mensagens")
+      .select("direcao, tipo, mensagem, template_id, template_variaveis, media_filename, created_at, message_id")
+      .in("telefone", telefonesBusca)
+      .gte("created_at", duasHorasAtras)
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
+
+  const seenIds = new Set<string>();
+  const itens: Array<{ role: string; content: string; created_at: string }> = [];
+
+  for (const m of (iaRes.data || [])) {
+    if (m.message_id) seenIds.add(m.message_id);
+    if (!m.content) continue;
+    itens.push({ role: m.role, content: m.content, created_at: m.created_at });
+  }
+
+  for (const w of (waRes.data || [])) {
+    if (w.message_id && seenIds.has(w.message_id)) continue; // já contabilizado pelo chat_mensagens_ia
+    const role = w.direcao === "saida" ? "assistant" : "user";
+    let content = w.mensagem || "";
+    if (w.tipo === "template") {
+      const codigo = w.template_id ? `:${w.template_id}` : "";
+      const vars = w.template_variaveis ? ` vars=${JSON.stringify(w.template_variaveis)}` : "";
+      content = `[Template enviado${codigo}${vars}] ${content}`.trim();
+    } else if (!content && (w.tipo === "image" || w.tipo === "document" || w.tipo === "audio" || w.tipo === "video")) {
+      content = `[${w.tipo}${w.media_filename ? `: ${w.media_filename}` : ""}]`;
+    }
+    if (!content) continue;
+    itens.push({ role, content, created_at: w.created_at });
+  }
+
+  // Ordenar por tempo crescente e limitar às 15 últimas para não estourar contexto
+  itens.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const tail = itens.slice(-15);
+  return tail.map((i) => ({ role: i.role, content: i.content }));
 }
 
 // Chamar a IA - ATUALIZADO para usar Gemini 3 Flash via ai.gateway.lovable.dev
@@ -3301,7 +3350,7 @@ serve(async (req) => {
       .from('confirmacoes_agendamento')
       .select('*, servico:servicos(id, profissional_id, hora_agendada, confirmacao_whatsapp)')
       .in('telefone', telefonesBusca)
-      .in('status', ['enviada', 'reagendando', 'aguardando_confirmacao_vespera'])
+      .in('status', ['enviada', 'reagendando', 'aguardando_confirmacao_vespera', 'aguardando_confirmacao_manha', 'aguardando_confirmacao_encaixe'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
