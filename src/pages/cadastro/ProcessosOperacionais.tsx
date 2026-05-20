@@ -52,7 +52,7 @@ const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
 };
 
 const TROCA_FILTROS: Record<string, StatusTroca[]> = {
-  pendentes: ['aguardando_cadastro', 'cotacao_em_andamento'],
+  pendentes: ['aguardando_termo_cancelamento', 'aguardando_cadastro', 'cotacao_em_andamento'],
   aguardando_monit: ['aguardando_monitoramento'],
   em_vistoria: ['aguardando_vistoria'],
   aprovadas: ['liberada_para_assinatura', 'efetivada'],
