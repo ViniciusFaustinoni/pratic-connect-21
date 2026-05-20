@@ -244,8 +244,15 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {todosDocumentos.map((d: any) => {
               const url = d.arquivo_url || d.url;
+              const mime = (d.mime_type || d.tipo_mime || '').toString().toLowerCase();
               const tipo = d.tipo_documento || d.tipo || 'documento';
-              const isPdf = typeof url === 'string' && url.toLowerCase().split('?')[0].endsWith('.pdf');
+              const cleanUrl = typeof url === 'string' ? url.toLowerCase().split('?')[0] : '';
+              const isPdf =
+                mime === 'application/pdf' ||
+                cleanUrl.endsWith('.pdf') ||
+                /\/laudos?\//.test(cleanUrl) ||
+                /contrato|laudo/.test(String(tipo).toLowerCase());
+              const isImage = !isPdf && /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(cleanUrl);
               return (
                 <button
                   key={d.id}
@@ -263,8 +270,13 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
                         <FileText className="h-8 w-8" />
                         <span className="text-[10px] mt-1">PDF</span>
                       </div>
-                    ) : (
+                    ) : isImage ? (
                       <img src={url} alt={tipo} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center text-muted-foreground">
+                        <FileText className="h-8 w-8" />
+                        <span className="text-[10px] mt-1">Arquivo</span>
+                      </div>
                     )}
                   </div>
                   <p className="text-xs font-medium truncate">{tipo}</p>
