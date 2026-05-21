@@ -80,7 +80,11 @@ export function TrocaTitularidadeBadge({ cotacaoId, tipoEntrada }: TrocaTitulari
   const { troca, debitos } = data;
   const debitosAbertos = debitos.filter((d) => d.status === 'aberto');
   const totalDebitos = debitosAbertos.reduce((a, d) => a + Number(d.valor_total || 0), 0);
-  const cfg = STATUS_LABELS[troca.status] ?? { label: 'Troca em andamento', tone: 'info' as const };
+  const cfg = troca.status === 'cotacao_em_andamento'
+    ? (troca.termo_cancelamento_assinado_em
+        ? { label: 'Troca: aguardando novo titular', tone: 'info' as const }
+        : { label: 'Troca: termo pendente', tone: 'warn' as const })
+    : (STATUS_LABELS[troca.status] ?? { label: 'Troca em andamento', tone: 'info' as const });
   const Icon =
     cfg.tone === 'ok'
       ? CheckCircle2
