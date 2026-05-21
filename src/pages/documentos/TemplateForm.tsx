@@ -356,6 +356,31 @@ export default function TemplateForm() {
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="is_default_substituicao"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="flex items-center gap-2 text-sky-700 dark:text-sky-300">
+                            <FileText className="h-4 w-4" />
+                            Usar como template padrão para SUBSTITUIÇÃO
+                          </FormLabel>
+                          <FormDescription>
+                            Quando a cotação for de Substituição de Veículo, este template será enviado ao Autentique no lugar do Termo de Filiação.
+                            Apenas um template pode ser marcado como padrão de substituição.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
 
                   <FormField
                     control={form.control}
