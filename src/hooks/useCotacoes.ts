@@ -96,6 +96,7 @@ export interface CotacoesFunilCounts {
   agendando_vistoria: number;
   concluido: number;
   perdida: number;
+  outros_processos_total: number;
 }
 
 /**
@@ -132,6 +133,7 @@ export function useCotacoesFunilCounts(options?: UseCotacoesOptions) {
         agendando_vistoria: v.agendando_vistoria ?? 0,
         concluido: v.concluido ?? 0,
         perdida: v.perdida ?? 0,
+        outros_processos_total: v.outros_processos_total ?? 0,
       };
     },
     placeholderData: keepPreviousData,
