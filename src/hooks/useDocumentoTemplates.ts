@@ -315,7 +315,9 @@ export function useUpdateTemplate() {
       if (input.is_default !== undefined) updateData.is_default = input.is_default;
       if (input.status !== undefined) updateData.status = input.status;
       if (input.is_default_autentique !== undefined) updateData.is_default_autentique = input.is_default_autentique;
+      if (input.is_default_substituicao !== undefined) updateData.is_default_substituicao = input.is_default_substituicao;
       if (input.is_default_evento !== undefined) updateData.is_default_evento = input.is_default_evento;
+
       if (input.is_default_saida !== undefined) updateData.is_default_saida = input.is_default_saida;
       if (input.is_default_rastreador !== undefined) updateData.is_default_rastreador = input.is_default_rastreador;
       if (input.anexar_proposta !== undefined) updateData.anexar_proposta = input.anexar_proposta;
