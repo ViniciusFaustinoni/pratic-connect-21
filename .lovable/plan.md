@@ -1,71 +1,60 @@
+## Problema
 
-## Diagnóstico — KOU6D37
+A mensagem da screenshot foi enviada via template `sinistro_atualizado`:
 
-Estado atual no banco:
+> "Olá {{1}}, há uma atualização no seu sinistro {{2}}: {{3}}. Acompanhe pelo app."
 
-- `veiculos.status='ativo'`, `cobertura_suspensa=false`, **mas `cobertura_total=false` e `cobertura_roubo_furto=false`** → por isso a UI mostra "Sem Cobertura".
-- `rastreadores` (IMEI 869412077334305): `status='instalado'`, `veiculo_id` correto, **mas `associado_id` ainda aponta para o titular antigo** (`9c05d3c4…`, não o novo `de5f0d04…`).
-- **Dois contratos `status='ativo'` no mesmo veículo** para o mesmo associado novo:
-  - `cad888ca` — `origem_troca_titularidade_id=a5c915b6` (solicitação que ficou `cancelada`; contrato órfão).
-  - `a32aefd0` — `origem_troca_titularidade_id=6996a35a` (solicitação `efetivada` em 20:39:35; este é o canônico).
+Disparado em `supabase/functions/autentique-webhook/index.ts:457`, quando o titular anterior assina o termo de cancelamento da troca de titularidade. O template foi reaproveitado como "catch-all" para 15+ contextos não-sinistro (troca de titularidade, retirada, vistoria prestador, cobrança, encaixe, atribuição, asaas webhook, cron expirar, etc.) — o que produz mensagens factualmente erradas como a recebida pelo Vinícius.
 
-### Causa raiz no código
+Lista completa de pontos que usam `sinistro_atualizado` hoje (todos vão migrar):
+- `autentique-webhook` (troca titularidade — caso reportado)
+- `efetivar-troca-titularidade` (via `_shared/troca-pos-cadastro-bg.ts`)
+- `concluir-instalacao-prestador`, `concluir-vistoria-prestador`
+- `confirmar-retirada`, `criar-chamado-assistencia`
+- `retroativo-pagamento-termo`, `asaas-webhook`
+- `atribuir-proxima-tarefa`, `cron-expirar-confirmacoes`, `cron-contato-sinistro`
+- `aprovar-solicitacao-ia` (2 sites), `disparar-notificacao` (3 sites)
+- `aprovar-sinistro`, `reprovar-sinistro` (esses sim são contexto sinistro real)
+- Fallback automático em `whatsapp-send-text/index.ts`
 
-`supabase/functions/efetivar-troca-titularidade/index.ts` (passo 6, linhas ~427-439):
-- Transfere `associado_id` do veículo.
-- Limpa `cobertura_suspensa`, `em_troca_titularidade`, `troca_titularidade_id`.
-- **Não toca em `cobertura_total` nem `cobertura_roubo_furto`** → o veículo herda o que estava (que neste caso já era `false`, provavelmente porque o titular anterior nunca ativou ou foi limpo em outra etapa).
-- **Não atualiza `rastreadores.associado_id`** quando há rastreador instalado.
-- **Não cancela contratos `ativo`/`assinado`/`pendente` anteriores do mesmo veículo** vindos de outra `origem_troca_titularidade_id` (a idempotência só olha a própria solicitação).
+## Solução
 
-E o cancelamento de uma solicitação de troca não cascateia para cancelar o contrato que ela tinha criado por antecipação no link público — virou contrato fantasma `cad888ca`.
+Criar novo template neutro `notificacao_atualizacao` (UTILITY, pt_BR) e migrar todas as chamadas — inclusive as de sinistro real, já que o novo nome é genérico o suficiente para servir aos dois casos.
 
-## Plano de correção
+### Corpo do novo template
 
-### 1. Saneamento de KOU6D37 (migration)
+```
+Olá {{1}}, há uma atualização no seu atendimento {{2}}: {{3}}. Acompanhe pelo app.
+```
 
-- `veiculos`: setar `cobertura_total=true`, `cobertura_roubo_furto=true` (veículo tem rastreador instalado e está acima dos R$ 30k → cobertura 360º).
-- `rastreadores`: atualizar `associado_id` para o novo titular `de5f0d04-2e69-464d-b681-98e7bc03dfc4`.
-- `contratos.cad888ca`: `status='cancelado'`, `data_cancelamento=now()`, motivo "Contrato órfão de solicitação de troca cancelada (a5c915b6) — saneamento".
-- Manter `a32aefd0` como contrato canônico ativo.
+Variáveis-exemplo: `{"1":"Ana","2":"COT-2026-0001","3":"Troca de titularidade liberada"}`.
+Rodapé: `Pratic Car`. Sem botões (mantém compatibilidade — o link já vai dentro de {{3}}, como já acontece hoje).
 
-### 2. Fix em `efetivar-troca-titularidade` (camada estrutural)
+### Passos
 
-Logo após o UPDATE do veículo (passo 6), antes/depois conforme dependência:
+1. **Migration** — inserir `notificacao_atualizacao` em `whatsapp_meta_templates` com `status='PENDING'`, `disparo_habilitado=true`.
 
-- **Religar cobertura**: ler o plano do novo contrato (ou herdar do `contratoAnterior`), e setar em `veiculos`:
-  - `cobertura_total=true` quando o plano oferece 360º (carro ≥ R$ 30k, moto ≥ R$ 9k, diesel) **e** há rastreador instalado vinculado.
-  - `cobertura_roubo_furto=true` sempre que o plano cobrir R/F.
-  - Se não houver rastreador físico em veículos que exigem (Diesel/Carro≥30k/Moto≥9k), respeitar o guard `trg_guard_veiculo_ativo_exige_rastreador` — neste fluxo de troca o rastreador anterior permanece, então o caminho normal é religar.
-- **Reatribuir rastreador**: `UPDATE rastreadores SET associado_id=novoAssociadoId WHERE veiculo_id=… AND status='instalado'`.
-- **Dedup de contratos órfãos**: antes de criar/atualizar o contrato novo, cancelar contratos `ativo`/`assinado`/`pendente` do mesmo `veiculo_id` cujo `origem_troca_titularidade_id` aponte para uma solicitação `status='cancelada'` ou `'expirada'`. Motivo de cancelamento padronizado.
+2. **Submeter à Meta** — invocar `whatsapp-meta-templates` (action de submit/recriar) passando o id do novo template. Aguardar status mudar para `APPROVED` antes de migrar os call sites em produção (a migração de código pode ir junto, mas o template antigo segue como fallback até a Meta aprovar).
 
-### 3. Trigger de cancelamento de solicitação (defensivo)
+3. **Substituir call sites** — `rg -l "template_name: 'sinistro_atualizado'"` em `supabase/functions/` e trocar por `'notificacao_atualizacao'` em TODOS os arquivos listados acima. Atualizar também:
+   - `supabase/functions/whatsapp-send-text/index.ts` linhas 164 e 266 (`fallbackOrder` e auto-fallback).
+   - `src/lib/whatsapp/template-catalog.ts` (entrada `sinistro_atualizado` vira deprecated + nova entrada `notificacao_atualizacao`).
+   - `src/hooks/useAssociadoHistoricoCompleto.ts` linha 42 (mapping).
 
-Criar trigger `trg_troca_cancelada_cancela_contrato_orfao` em `solicitacoes_troca_titularidade`: ao mover para `status IN ('cancelada','expirada')`, cancelar qualquer `contratos` ainda em `pendente`/`assinado`/`ativo` vinculado por `origem_troca_titularidade_id`. Evita reincidência do contrato fantasma como `cad888ca`.
+4. **Desativar antigo** — `UPDATE whatsapp_meta_templates SET disparo_habilitado=false WHERE nome='sinistro_atualizado'` (respeita a regra `mem://logic/integrations/whatsapp-template-disparo-toggle`: gate local sem mexer no status Meta; mantém o registro APPROVED para histórico/auditoria mas bloqueia novos disparos).
 
-### 4. Memória
+5. **Memória** — atualizar `mem://logic/integrations/whatsapp-template-disparo-toggle` com nota de que `sinistro_atualizado` foi aposentado em favor de `notificacao_atualizacao`, e registrar a regra: "templates Meta não devem ser reusados em contexto de domínio diferente do nome".
 
-Atualizar `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e` (existente) e/ou criar leaf nova `mem://logic/operations/troca-titularidade-religa-cobertura-e-rastreador` com a regra:
-- Efetivar troca: **transfere veículo + religa cobertura conforme plano + reatribui rastreador + dedup órfãos**. Nenhuma dessas etapas é opcional.
+### Ordem de execução proposta
 
-## Detalhes técnicos
+1. Migration cria `notificacao_atualizacao` (PENDING) + desativa toggle de `sinistro_atualizado`.
+2. Edge function submete novo template à Meta.
+3. Code edits trocam todas as referências de `sinistro_atualizado` → `notificacao_atualizacao` (inclusive fallback).
+4. Memória atualizada.
 
-Arquivos a editar:
+Enquanto a Meta não aprovar, o `whatsapp-send-text` vai falhar para esses disparos (já que toggle do antigo está off). Alternativa: manter `disparo_habilitado=true` no antigo até a Meta aprovar o novo, e só então desativar. **Recomendo esta variante** para evitar janela de silêncio em produção — incluo isso no passo 4 (desativação fica condicional à aprovação Meta, em uma segunda migration curta).
 
-- `supabase/functions/efetivar-troca-titularidade/index.ts` — passo 6 e novo bloco de dedup.
-- Migration: saneamento KOU6D37 + criação da trigger defensiva.
-- Memória: index.md + leaf.
+### Não escopo
 
-Ordem de execução (após sua aprovação):
-1. Migration de saneamento + trigger.
-2. Edge function.
-3. Memória.
-
-## Pendências para sua decisão antes de aplicar
-
-1. **Auditoria histórica**: quero rodar a mesma checagem em todas as solicitações `efetivada` recentes para listar quantos outros veículos estão na mesma situação (veículo `ativo` sem `cobertura_total`/`r_f` após troca, ou com rastreador apontando para titular antigo, ou com contrato órfão). Posso rodar agora antes de codificar?
-2. **Confirmar saneamento de KOU6D37** conforme item 1 acima (religar cobertura 360º + reatribuir rastreador + cancelar contrato órfão `cad888ca`).
-3. **Comunicação ao novo titular Vinicius Faustinoni**: enviar algo ou tratar silenciosamente como correção interna? A mensagem indevida "Proteção 360º ativada" não foi enviada aqui — o problema é o oposto (UI dizendo "Sem Cobertura").
-
-Sem decisão sobre (1) e (2), não codifico.
+- Não cria templates novos para cada contexto (troca, vistoria, retirada, etc.) — escopo seria muito maior. O template neutro cobre todos os casos.
+- Não altera fluxo de geração de link/conteúdo da mensagem — só o nome do template Meta usado para entregar.
