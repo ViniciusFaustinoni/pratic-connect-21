@@ -527,18 +527,37 @@ serve(async (req) => {
     // Corpo do template — usado para gravar o conteúdo real renderizado em whatsapp_mensagens.
     // Carregamos AMBOS (v1 + v2) para suportar fallback automático por destinatário.
     const corposPorTemplate: Record<string, string> = {};
+    const disparoHabilitadoPorTemplate: Record<string, boolean> = {};
     {
       const nomesParaCarregar = Array.from(new Set([templateNomeBase, templateNomeFallback]));
       const { data: tpls } = await supabase
         .from("whatsapp_meta_templates")
-        .select("nome, corpo, status")
+        .select("nome, corpo, status, disparo_habilitado")
         .in("nome", nomesParaCarregar);
-      for (const t of tpls || []) corposPorTemplate[t.nome] = t.corpo || "";
+      for (const t of tpls || []) {
+        corposPorTemplate[t.nome] = t.corpo || "";
+        disparoHabilitadoPorTemplate[t.nome] = t.disparo_habilitado !== false;
+      }
+    }
+    // Gate de disparo local: se ambos templates estão pausados, aborta o lote inteiro
+    const algumHabilitado =
+      disparoHabilitadoPorTemplate[templateNomeBase] === true ||
+      disparoHabilitadoPorTemplate[templateNomeFallback] === true;
+    if (!algumHabilitado) {
+      console.warn(`[disparar-cobranca-csv-meta] 🚫 Templates '${templateNomeBase}' e '${templateNomeFallback}' com disparo desabilitado localmente. Lote abortado.`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "template_disparo_desabilitado",
+          mensagem: `Os templates de cobrança estão com disparo pausado em Configurações › Integrações › WhatsApp › Templates Meta. Religue para enviar.`,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
     // Se v2 não existe ou não está APPROVED, força v1 globalmente.
-    let templateV2Disponivel = templateV2 && (templateNomeBase === "cobranca_inadimplencia_pratic_v2") && !!corposPorTemplate[templateNomeBase];
+    let templateV2Disponivel = templateV2 && (templateNomeBase === "cobranca_inadimplencia_pratic_v2") && !!corposPorTemplate[templateNomeBase] && disparoHabilitadoPorTemplate[templateNomeBase] === true;
     if (templateV2 && !templateV2Disponivel) {
-      console.warn(`[disparar-cobranca-csv-meta] template ${templateNomeBase} indisponível — usando ${templateNomeFallback}`);
+      console.warn(`[disparar-cobranca-csv-meta] template ${templateNomeBase} indisponível ou pausado — usando ${templateNomeFallback}`);
     }
 
     const detalhes: Array<{
