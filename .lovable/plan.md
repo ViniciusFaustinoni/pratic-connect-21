@@ -1,65 +1,65 @@
 
-## Plano — Unificar leitura de fotos do veículo em todas as telas
+## Plano — Correção raiz da seleção da variante FIPE
 
-### Causa raiz (caso TIB8F32)
+### Causa raiz
 
-| Fonte | Quantidade | Como é lido |
-|---|---|---|
-| `vistoria_fotos` (vistoria `5f9c56b0…`, autovistoria, `veiculo_id=33ae2ced…`, `instalacao_id=NULL`) | **34 fotos** | modal "Detalhes do Veículo" lê via `vistorias.veiculo_id` ✅ |
-| `cotacoes_vistoria_fotos` (`cotacao_id=c00806f4…`) | 3 fotos + vídeo 360 | nenhuma tela junta isso ao vehicle ❌ |
-| `instalacao_fotos` (`instalacao_id=79613c9a…`) | 0 | tela de Aprovação só olha aqui ❌ |
+`supabase/functions/plate-lookup/index.ts` escolhe a melhor variante FIPE com a heurística `pontuarFipe()`, que considera **combustível, câmbio, ano, cilindrada** — mas **ignora o nome/versão (trim) do modelo** retornado pela API de placas (DETRAN). Quando trims diferentes empatam em todos esses atributos (Renegade Sport vs Renegade 75 Anos vs Limited vs Longitude — todas Flex/Aut/1.8/2016), o desempate vira **ordem da lista**, retornando uma variante errada.
 
-`AprovacaoInstalacaoDetalhe.tsx` (linhas 75–110) navega só por `servico.instalacao_origem_id`/`servico.vistoria_origem_id`. Como o serviço de instalação dessa proposta tem só `instalacao_origem_id` e a vistoria das 34 fotos não está vinculada à instalação, o caminho quebra.
+Resultado: `veiculo.modelo` fica o nome real do DETRAN, mas `codigo_fipe`/`valor_fipe` vêm de outra versão — desincronizados em cotação → contrato → veículo.
 
-### Solução: resolver canônico único de fotos do veículo
+### 1. Reforçar `pontuarFipe()` com matching por nome (correção principal)
 
-#### 1) Novo helper `src/hooks/useFotosVeiculoCanonico.ts`
+Em `supabase/functions/plate-lookup/index.ts`:
 
-Reuso o padrão já consagrado em `useVeiculoDetalhes` (memória `historico-fotos-veiculo-canonico`). Recebe `{ veiculoId, contratoId?, cotacaoId?, instalacaoId? }` e retorna `{ fotos, video360, agrupadas, source }` mesclando — **com dedupe por `arquivo_url`** — as três fontes:
+- Acrescentar entrada `nomeVeic = String(v?.modelo || v?.fipe_name || '').toUpperCase()` em `pontuarFipe`.
+- Tokenizar `nomeVeic` em palavras com ≥3 caracteres, removendo ruído comum (`AUT`, `MEC`, `FLEX`, `GASOL`, dígitos, ".", "/"). Resultado: `tokensVeic` (ex.: `["RENEGADE","SPORT","AUTOMATICO"]`).
+- Para cada token presente também em `desc`, +6 pontos (peso alto — distingue trim).
+- Lista de **tokens de trim distintivos** (`TRIM_TOKENS`) que, quando aparecem só num lado, são penalidade −12: `SPORT, LIMITED, LONGITUDE, TRAILHAWK, MOAB, 75 ANOS, S, SE, SEL, SR, SRT, LT, LTZ, LS, EX, EXL, LX, GLX, GLS, GL, SXT, HIGHLINE, COMFORTLINE, TRENDLINE, BLACK, NIGHT, RUBICON, SAHARA, WILLYS, OUTDOOR, ADVENTURE, FREEDOM`. Se `tokensVeic` contém um trim e `desc` contém **outro trim diferente**, soma −12.
+- Manter os pesos atuais (combustível, câmbio, ano, cilindrada).
 
-1. `vistoria_fotos` via `vistorias.veiculo_id = veiculoId` (canônica, captura autovistoria/presencial/troca)
-2. `cotacoes_vistoria_fotos` via `cotacao_id` resolvido (`cotacao_id` direto OU `contratos.cotacao_id` quando só veio `contratoId`)
-3. `instalacao_fotos` via `instalacao_id` direto OU resolvido por `instalacoes.veiculo_id`
+Resultado esperado para PYL9A01: "Sport Automatico" gera tokens `[SPORT, AUTOMATICO]` → "Renegade Sport 1.8..." casa SPORT (+6) e ganha; "Renegade 75 Anos..." perde 12 (tem trim "75 ANOS" que conflita com SPORT).
 
-Vídeo 360° é resolvido pela mesma ordem de prioridade (vistoria → cotacoes_vistoria_fotos `tipo=video_360`), separando `videoInstalador` (modalidade=`presencial`) de `videoAssociado` (`autovistoria`).
+### 2. Marcar resultado como "ambíguo" quando o top empata
 
-#### 2) Refator de `AprovacaoInstalacaoDetalhe.tsx` (linhas 75–232)
+Ainda em `escolherMelhorFipe`, se `ranking[0].score === ranking[1].score`, devolver `ambiguo: true` no payload (`fipeData.ambiguo`, `result.fipeAmbiguo`). A UI usa isso para **forçar o consultor a confirmar manualmente** a versão (em vez de salvar silenciosamente) — bloqueando o avanço da etapa até escolha explícita, similar ao seletor `handleTrocarFipe` que já existe em `src/components/cotacao/EtapaConsultaFipe.tsx:196`.
 
-- Substituir o bloco atual de busca de fotos/vídeo pelo helper canônico, passando `veiculoId=servico.veiculo_id, contratoId=servico.contrato_id, cotacaoId=servico.cotacao_id, instalacaoId=servico.instalacao_origem_id`.
-- Manter agrupamento atual (Identificação / Exterior / Interior / etc.) — só muda a **fonte** dos arrays.
-- Telemetria: adicionar `console.log` com contagem por fonte para debug.
+### 3. Sincronizar modelo ↔ codigo_fipe na UI
 
-#### 3) Auditoria das demais telas que mostram fotos do mesmo veículo
+Em `EtapaConsultaFipe.tsx`:
 
-Garantir que **todas** usam o resolver canônico (ou já chamam `useVeiculoDetalhes`):
+- Linha 154 hoje faz `setModelo(fipeData?.descricao || vehicleData.modelo)` — manter, mas **se** `fipeData.descricao` estiver presente, sempre usar a **descrição da FIPE** (não o nome do DETRAN), já que é a versão que ficará gravada em `codigo_fipe`. O nome do DETRAN passa a ser informativo (`modeloDetran` para mostrar como observação).
+- Quando `fipeAmbiguo === true` ou o consultor edita `modelo` manualmente: **invalidar** `codigo_fipe`/`valor_fipe` e abrir o seletor `fipeAlternativas` obrigatório. Sem confirmação, `canProceed` vira `false`.
 
-| Tela | Status atual | Ação |
-|---|---|---|
-| `cadastro/VeiculoDetalhesModal.tsx` | ✅ usa `useVeiculoDetalhes` (canônico) | nenhuma |
-| `monitoramento/AprovacaoInstalacaoDetalhe.tsx` | ❌ cadeia origem-id | **refatorar** |
-| `pages/analista-eventos/EventoAnaliseDetalhe.tsx` | usar resolver | revisar |
-| `troca-titularidade/VeiculoCompletoCard.tsx` | usar resolver | revisar |
-| `juridico/consultas/ConsultaVeiculo.tsx` | usar resolver | revisar |
-| `useGerarLaudoVistoria` / `useVistoriaCompletaAnalise` | usar resolver | revisar |
+### 4. Guarda na escrita (defesa em profundidade)
 
-Não vou tocar comportamento de upload/escrita — só leitura. Não vou apagar tabelas — só consolidar a leitura.
+Em `contrato-gerar` (e em qualquer fluxo que persista `codigo_fipe` + `veiculo_modelo`), validar coerência:
 
-#### 4) Realtime opcional (fora do escopo dessa correção, mas fica registrado)
+- Se `codigo_fipe` veio preenchido, refazer `fipe-lookup` action `consultar` (já existe, linhas 260–290) com `codigo_fipe` para obter a descrição oficial. Comparar tokens distintivos contra `veiculo_modelo`. Se conflitar (mesmo critério de TRIM_TOKENS do item 1), retornar HTTP 409 `codigo_fipe_incompatible` exigindo correção. Log estruturado para auditoria.
 
-`useFotosVeiculoCanonico` aceita flag `realtime` que assina `postgres_changes` em `vistoria_fotos`/`cotacoes_vistoria_fotos`/`instalacao_fotos` filtrando por `veiculo_id` / `cotacao_id` / `instalacao_id`. Ativo na tela de Aprovação para refletir uploads chegando ao vivo.
+### 5. Saneamento (somente lista — sem alterar)
 
-#### 5) Memória do projeto
+Script de auditoria (read-only) que cruza:
 
-Atualizar `mem://logic/operations/historico-fotos-veiculo-canonico` (ou criar `historico-fotos-veiculo-resolver-unificado`) registrando que toda tela de aprovação/análise consome o helper canônico, e que `vistoria_fotos via vistorias.veiculo_id` + `cotacoes_vistoria_fotos via cotacao_id` + `instalacao_fotos via instalacao_id` são as 3 fontes mescladas.
+```sql
+SELECT v.placa, v.modelo, v.codigo_fipe
+FROM veiculos v
+WHERE v.codigo_fipe IS NOT NULL;
+```
+
+Para cada linha, chamar `fipe-lookup` action `consultar` com o `codigo_fipe`, comparar descrição. Emitir relatório `divergencias_fipe.csv` em `/mnt/documents/` com colunas: placa, modelo_atual, codigo_fipe, descricao_oficial, valor_atual, valor_oficial. **Não corrige automaticamente** — operador revisa caso a caso (caso PYL9A01 entra aí).
+
+### 6. Memória
+
+Criar `mem://logic/quotation/fipe-variant-selection-heuristica` documentando: pesos atuais (combustível +10/-6, câmbio +8/-6, ano +5/+2, cilindrada +2, **trim/nome +6 e penalidade −12**), regra de `ambiguo`, e o invariante "modelo gravado em veiculos/cotações/contratos deve ser a descrição oficial da FIPE associada ao codigo_fipe — nunca o nome livre do DETRAN".
 
 ### Verificação após implementar
 
-1. Abrir `/monitoramento/aprovacao-associados/<servico_id de TIB8F32>` como diretor — devem aparecer **34+ fotos agrupadas + vídeo 360°**.
-2. Conferir que o modal "Detalhes do Veículo" continua mostrando 37 (= 34 vistoria + 3 cotação) sem regressão.
-3. Conferir 2 ou 3 outros casos com fotos só em `cotacoes_vistoria_fotos` (autovistoria pura sub-FIPE).
+1. Reproduzir PYL9A01 (placa real ou mock com `fipes[]` contendo Sport + 75 Anos + Limited, todas Flex/Aut/1.8/2016) — deve escolher **Sport** com score maior que 75 Anos.
+2. Rodar script de saneamento — anexar CSV de divergências para revisão.
+3. Cobertura: caso AGILE LTZ vs Easytronic já citado no código (linha 146) continua passando.
 
 ### Fora de escopo
 
-- Backfill de vínculo `vistorias.instalacao_id` em registros antigos (a leitura canônica torna isso desnecessário).
-- Mudar onde o uploader grava as fotos.
-- Mexer nas regras de aprovação/promoção do Cadastro.
+- Migrar dados antigos automaticamente (apenas listar — correção manual).
+- Substituir a API `placas.fipeapi.com.br`.
+- Tela administrativa para gerenciar TRIM_TOKENS (lista hard-coded por enquanto).
