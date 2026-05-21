@@ -18,6 +18,8 @@ export interface PlacaDuplicadaInfo {
   vendedorNome: string;
   createdAt: string;
   status: string;
+  /** Quando a reserva da placa expira. Pode ser null em registros legados. */
+  placaReservadaAte: string | null;
 }
 
 /**
