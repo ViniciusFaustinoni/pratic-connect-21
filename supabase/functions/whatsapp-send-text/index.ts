@@ -126,12 +126,25 @@ async function enviarViaMeta(
     // Enviar como template
     const { data: tmpl } = await supabase
       .from("whatsapp_meta_templates")
-      .select("nome, idioma, status, corpo, botoes")
+      .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
       .eq("nome", templateName)
       .single();
 
     template = tmpl;
     if (!template) throw new Error(`Template '${templateName}' não encontrado`);
+
+    // Gate de disparo local — independente do status na Meta
+    if (template.disparo_habilitado === false) {
+      console.warn(`[whatsapp-send-text] 🚫 Template '${templateName}' com disparo desabilitado localmente. Envio bloqueado.`);
+      await supabase.from("whatsapp_mensagens").insert({
+        telefone: telefoneFormatado, tipo: "template", mensagem: `[${templateName}]`,
+        direcao: "saida", status: "bloqueado",
+        erro_mensagem: `template_disparo_desabilitado: '${templateName}' está com disparo pausado em Configurações › Integrações › WhatsApp › Templates Meta.`,
+        provedor: "meta_oficial",
+      });
+      throw new Error(`template_disparo_desabilitado: '${templateName}' está com disparo pausado.`);
+    }
+
     if (template.status !== "APPROVED") {
       // Fallback inteligente: só usar fallback da MESMA CATEGORIA
       console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status}). Tentando fallback...`);
@@ -155,12 +168,12 @@ async function enviarViaMeta(
         if (fbName === templateName) continue;
         const { data: fbTmpl } = await supabase
           .from("whatsapp_meta_templates")
-          .select("nome, idioma, status, corpo, botoes")
+          .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
           .eq("nome", fbName)
           .eq("status", "APPROVED")
           .single();
         
-        if (fbTmpl) {
+        if (fbTmpl && fbTmpl.disparo_habilitado !== false) {
           console.log(`[whatsapp-send-text] Usando fallback '${fbName}' no lugar de '${templateName}'`);
           template = fbTmpl;
           if (bodyParams.length >= 3) {
@@ -253,17 +266,17 @@ async function enviarViaMeta(
     const fallbackName = 'sinistro_atualizado';
     const { data: fbTmpl } = await supabase
       .from("whatsapp_meta_templates")
-      .select("nome, idioma, status, corpo, botoes")
+      .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
       .eq("nome", fallbackName)
       .eq("status", "APPROVED")
       .single();
 
-    if (!fbTmpl) {
-      // Nenhum fallback aprovado — aí sim bloqueia e registra
+    if (!fbTmpl || fbTmpl.disparo_habilitado === false) {
+      // Nenhum fallback aprovado/habilitado — aí sim bloqueia e registra
       await supabase.from("whatsapp_mensagens").insert({
         telefone: telefoneFormatado, tipo: "text", mensagem,
         direcao: "saida", status: "erro",
-        erro_mensagem: `Bloqueado: Meta API ativa requer template_name e fallback '${fallbackName}' não está APPROVED.`,
+        erro_mensagem: `Bloqueado: Meta API ativa requer template_name e fallback '${fallbackName}' não está APPROVED ou está com disparo pausado.`,
         provedor: "meta_oficial",
       });
       throw new Error(`Meta API ativa: template_name obrigatório e fallback '${fallbackName}' indisponível.`);

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket, ListChecks, X, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getCatalogEntry } from '@/lib/whatsapp/template-catalog';
 import { Card, CardContent } from '@/components/ui/card';
@@ -253,6 +254,7 @@ export function WhatsAppMetaTemplates() {
                 <TableHead className="text-xs">Nome</TableHead>
                 <TableHead className="text-xs">Categoria</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Disparo</TableHead>
                 <TableHead className="text-xs hidden md:table-cell">Prévia</TableHead>
                 <TableHead className="text-xs hidden lg:table-cell">Atualizado</TableHead>
                 <TableHead className="text-xs text-right">Ações</TableHead>
@@ -299,6 +301,9 @@ export function WhatsAppMetaTemplates() {
                         {catalog?.deprecated && (
                           <Badge className="text-[9px] bg-orange-500/15 text-orange-700 px-1 py-0">legado</Badge>
                         )}
+                        {t.disparo_habilitado === false && (
+                          <Badge className="text-[9px] bg-yellow-500/20 text-yellow-700 px-1 py-0">disparo pausado</Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-xs">{t.categoria}</TableCell>
@@ -311,6 +316,27 @@ export function WhatsAppMetaTemplates() {
                           </p>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="inline-flex">
+                              <Switch
+                                checked={t.disparo_habilitado !== false}
+                                onCheckedChange={(checked) =>
+                                  atualizar.mutate({ id: t.id, disparo_habilitado: checked })
+                                }
+                                disabled={atualizar.isPending}
+                                aria-label="Ativar/desativar disparo deste template"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Desligar pausa o envio deste template sem perder a regra. Religar volta a disparar normalmente.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground truncate max-w-[200px] hidden md:table-cell">
                       {t.corpo?.substring(0, 80)}...

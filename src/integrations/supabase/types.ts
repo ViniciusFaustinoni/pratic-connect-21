@@ -33152,6 +33152,7 @@ export type Database = {
           categoria: string
           corpo: string
           created_at: string | null
+          disparo_habilitado: boolean
           email_assunto: string | null
           email_template_alias: string | null
           enviado_em: string | null
@@ -33174,6 +33175,7 @@ export type Database = {
           categoria?: string
           corpo: string
           created_at?: string | null
+          disparo_habilitado?: boolean
           email_assunto?: string | null
           email_template_alias?: string | null
           enviado_em?: string | null
@@ -33196,6 +33198,7 @@ export type Database = {
           categoria?: string
           corpo?: string
           created_at?: string | null
+          disparo_habilitado?: boolean
           email_assunto?: string | null
           email_template_alias?: string | null
           enviado_em?: string | null
