@@ -1073,16 +1073,16 @@ export default function CotacaoContratacao() {
                         estado: cotacao.cliente_uf || '',
                       }}
                       onComplete={() => {
-                        const idx = navOrder.indexOf(3);
-                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        const idx = navOrder.indexOf(4);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
                         setEtapaAtual(next);
                       }}
                       onAgendar={() => {
-                        const idx = navOrder.indexOf(3);
-                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        const idx = navOrder.indexOf(4);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
                         setEtapaAtual(next);
                       }}
-                      readOnly={isEtapaConcluida(3)}
+                      readOnly={isEtapaConcluida(4)}
                       tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
                       subFipe={!exigeRastreador({
                         tipo: detectarTipoVeiculoDaCotacao(cotacao),
