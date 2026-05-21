@@ -187,11 +187,13 @@ interface CreateTemplateInput {
   is_default?: boolean;
   status?: TemplateStatus;
   is_default_autentique?: boolean;
+  is_default_substituicao?: boolean;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
   ordem_anexo?: number;
+
 }
 
 export function useCreateTemplate() {
