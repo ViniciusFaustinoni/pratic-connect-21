@@ -115,6 +115,20 @@ function gerarTabelaCompletaHTML(coberturas: CoberturaDetalhada[], beneficios: B
 // ============= MAPEAMENTO DE VARIÁVEIS =============
 
 /**
+ * Sentinela usada por variáveis OPCIONAIS quando o valor real está vazio.
+ * Após substituição, qualquer <tr>/<p>/<li> contendo essa marca é REMOVIDO
+ * do HTML antes do PDF — assim a linha vazia some em vez de mostrar "—".
+ * Não é exportada: usada só dentro deste módulo.
+ */
+const OPT_VAZIO = '__OPT_VAZIO__';
+
+/** Marca v como OPT_VAZIO quando vazio; caso contrário devolve v. */
+function opt(v: string | null | undefined): string {
+  const s = (v ?? '').toString().trim();
+  return s ? s : OPT_VAZIO;
+}
+
+/**
  * Cria o mapeamento de variáveis disponíveis com seus valores
  */
 export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<string, string> {
