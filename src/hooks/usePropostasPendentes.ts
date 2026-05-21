@@ -1576,70 +1576,19 @@ export function usePropostaStats() {
 
       // ========================================
       // AGUARDANDO: bate exatamente com a lista de Propostas Pendentes.
-      // Conta contratos.status='assinado' EXCLUINDO os que já migraram para
-      // outras filas (Aprovação do Monitoramento ou /cadastro/associados):
-      //   - instalacao concluída (tabela `instalacoes`)
-      //   - vistoria na base realizada (`agendamentos_base.status='realizado'`)
-      //   - veículo já em status 'ativo'
-      //   - autovistoria já aprovada pelo Cadastro (cadastro_aprovado=true)
+      // Regra única: contrato em `assinado` AND `cadastro_aprovado != true`.
+      // O gate da lista (usePropostasPendentes) usa a MESMA pergunta — sem
+      // proxies de veículo/instalação/base, que criavam dessincronia entre
+      // badge e fila (especialmente em troca de titularidade).
       // ========================================
-      const { data: contratosAssinados } = await supabase
+      const { count: aguardandoCount } = await supabase
         .from('contratos')
-        .select('id, cotacao_id, veiculo_id, cadastro_aprovado, tipo_entrada, origem_troca_titularidade_id')
-        .eq('status', 'assinado');
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'assinado')
+        .or('cadastro_aprovado.is.null,cadastro_aprovado.eq.false');
 
-      let aguardando = 0;
+      const aguardando = aguardandoCount || 0;
 
-      if (contratosAssinados && contratosAssinados.length > 0) {
-        const contratoIds = contratosAssinados.map(c => c.id);
-        const cotacaoIds = contratosAssinados.map(c => c.cotacao_id).filter(Boolean) as string[];
-        const veiculoIds = contratosAssinados.map(c => c.veiculo_id).filter(Boolean) as string[];
-
-        const [
-          instalacoesConcluidasRes,
-          agendamentosBaseRealizadosRes,
-          veiculosAtivosRes,
-          cotacoesAutovistoriaRes,
-        ] = await Promise.all([
-          supabase
-            .from('instalacoes')
-            .select('contrato_id')
-            .in('contrato_id', contratoIds)
-            .eq('status', 'concluida'),
-          cotacaoIds.length
-            ? supabase
-                .from('agendamentos_base')
-                .select('cotacao_id')
-                .in('cotacao_id', cotacaoIds)
-                .eq('status', 'realizado')
-            : Promise.resolve({ data: [] as any[] }),
-          veiculoIds.length
-            ? supabase.from('veiculos').select('id').in('id', veiculoIds).eq('status', 'ativo')
-            : Promise.resolve({ data: [] as any[] }),
-          cotacaoIds.length
-            ? supabase
-                .from('cotacoes')
-                .select('id, tipo_vistoria')
-                .in('id', cotacaoIds)
-                .eq('tipo_vistoria', 'autovistoria')
-            : Promise.resolve({ data: [] as any[] }),
-        ]);
-
-        const setInstalacaoConcluida = new Set((instalacoesConcluidasRes.data || []).map((r: any) => r.contrato_id));
-        const setBaseRealizada = new Set((agendamentosBaseRealizadosRes.data || []).map((r: any) => r.cotacao_id));
-        const setVeiculoAtivo = new Set((veiculosAtivosRes.data || []).map((r: any) => r.id));
-        const setCotacaoAutovistoria = new Set((cotacoesAutovistoriaRes.data || []).map((r: any) => r.id));
-
-        aguardando = contratosAssinados.filter((c: any) => {
-          const isTroca = c.tipo_entrada === 'troca_titularidade' || !!c.origem_troca_titularidade_id;
-          if (setInstalacaoConcluida.has(c.id)) return false;
-          if (c.cotacao_id && setBaseRealizada.has(c.cotacao_id)) return false;
-          // Em troca o veículo segue 'ativo' (vinculado ao antigo titular) — não descartar.
-          if (!isTroca && c.veiculo_id && setVeiculoAtivo.has(c.veiculo_id)) return false;
-          if (c.cadastro_aprovado === true && c.cotacao_id && setCotacaoAutovistoria.has(c.cotacao_id)) return false;
-          return true;
-        }).length;
-      }
 
       // Buscar contratos em análise (pendente é usado para em análise)
       const { count: emAnalise } = await supabase
