@@ -599,38 +599,20 @@ export function usePropostasPendentes() {
         })();
         const instalacaoConcluida = mInstConcluida.has(contrato.id);
 
-        // Em troca de titularidade o veículo permanece `ativo` (vinculado ao
-        // antigo titular) durante todo o ciclo Cadastro → Monitoramento →
-        // `efetivar-troca-titularidade`. Por isso o gate "veículo já ativo"
-        // NÃO pode descartar trocas — senão a proposta do novo titular some.
-        const isTrocaEntry =
-          (contrato as any).tipo_entrada === 'troca_titularidade' ||
-          !!(contrato as any).origem_troca_titularidade_id;
+        // Saída canônica da fila do Cadastro = decisão manual do analista
+        // (`contratos.cadastro_aprovado=true`). A query base já filtra
+        // `status='assinado'`, então estados terminais do contrato (`ativo`,
+        // `cancelado`) nem chegam aqui. Não usar proxies (status do veículo,
+        // instalação concluída, base realizada) — eles são consequências e
+        // criam falsos positivos em fluxos como troca de titularidade onde
+        // o veículo permanece `ativo` durante todo o ciclo.
+        if ((contrato as any).cadastro_aprovado === true) return null;
 
-        // Veículo sincronizado no SGA NÃO significa fluxo operacional concluído.
-        // No Hinova o cadastro nasce como pendente, então veículos em
-        // `instalacao_pendente` continuam pertencendo a Propostas Pendentes
-        // mesmo com `sincronizado_hinova=true` e `codigo_hinova` preenchido.
-        const veiculoJaConcluidoOperacionalmente =
-          !isTrocaEntry && veiculoContrato?.status === 'ativo';
-
-        // Saída de Propostas Pendentes (gate do Cadastro):
-        // Fluxo linear — link público completa tudo (assina → agenda → paga →
-        // vistoria/instalação executada) e a proposta SÓ sai daqui após o
-        // Cadastro aprovar manualmente (`contratos.cadastro_aprovado=true`).
-        // Antes disso, mesmo com instalação concluída ou vistoria_base
-        // realizada, o item permanece na fila do Cadastro. O Monitoramento
-        // só vê após o gate (ver useAprovacaoMonitoramento).
-        const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
         const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
         const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
         // Vistoria na Base realizada → mantém na fila do Cadastro até aprovação manual
         const vistoriaBaseRealizada = !!(contrato.cotacao_id && mAgendBase.get(contrato.cotacao_id)?.status === 'realizado');
 
-        const propostaJaConcluida =
-          veiculoJaConcluidoOperacionalmente ||
-          cadastroAprovado;
-        if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;
         const vendedor = contrato.vendedor_id ? mVendedor.get(contrato.vendedor_id) : null;
