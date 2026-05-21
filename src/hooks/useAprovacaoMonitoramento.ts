@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+
 
 
 // ==============================
@@ -215,8 +217,10 @@ interface AprovarData {
 export function useAprovarInstalacaoMonitoramento() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  // PR-A2: ref para o mutate, usado pelo toast "Retentar" no caso de promoção parcial (HTTP 207).
+  const mutateRef = useRef<((data: AprovarData) => void) | null>(null);
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (data: AprovarData) => {
       const agora = new Date().toISOString();
 
@@ -315,10 +319,18 @@ export function useAprovarInstalacaoMonitoramento() {
         throw new Error(detailMsg);
       }
       if (ativacao && ativacao.success === false && !ativacao.idempotente) {
+        // PR-A2: promoção parcial = associado virou ativo mas algum side-effect falhou.
+        if (ativacao.error === 'promocao_parcial') {
+          const err: any = new Error(ativacao.mensagem || 'Promoção parcial — alguns alvos não foram atualizados.');
+          err.code = 'promocao_parcial';
+          err.parciais = ativacao.parciais ?? [];
+          throw err;
+        }
         throw new Error(ativacao.error === 'campos_obrigatorios_faltando'
           ? `Campos obrigatórios faltando: ${(ativacao.campos_faltando || []).join(', ')}`
           : ativacao.mensagem || ativacao.error || 'Falha na ativação');
       }
+
 
       // 4. Garantir ativação no SGA via fila com retry (idempotente)
       // force_resync_media=true: o sync inicial roda na aprovação cadastral, ANTES das fotos
@@ -388,13 +400,34 @@ export function useAprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Proteção 360 ativada com sucesso! Associado notificado.');
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       console.error('Erro ao aprovar instalação:', error);
+      // PR-A2: 207 promoção parcial — invalida queries (associado virou ativo) e oferece retentar.
+      if (error?.code === 'promocao_parcial') {
+        queryClient.invalidateQueries({ queryKey: ['instalacoes-aguardando-aprovacao-monitoramento'] });
+        queryClient.invalidateQueries({ queryKey: ['aprovacao-monitoramento-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+        queryClient.invalidateQueries({ queryKey: ['associados'] });
+        const alvos = (error.parciais ?? []).map((p: any) => p.alvo).join(', ') || 'side-effects';
+        toast.warning(`Promoção parcial — ${alvos} pendente(s).`, {
+          description: 'O associado foi ativado, mas alguns alvos não foram atualizados. Clique para retentar.',
+          duration: 15000,
+          action: {
+            label: 'Retentar',
+            onClick: () => mutateRef.current?.(variables),
+          },
+        });
+        return;
+      }
       const msg = error?.message || error?.error_description || 'Erro ao aprovar instalação';
       toast.error(msg);
     },
   });
+
+  mutateRef.current = mutation.mutate;
+  return mutation;
 }
+
 
 // ==============================
 // Mutation: Reprovar instalação
