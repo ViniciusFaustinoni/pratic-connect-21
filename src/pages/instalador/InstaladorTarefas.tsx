@@ -18,10 +18,13 @@ import { BotaoIniciarServico } from '@/components/vistoriador/BotaoIniciarServic
 import { EncaixeUrgenteCard } from '@/components/vistoriador/EncaixeUrgenteCard';
 import { FilaBaseSection } from '@/components/instalador/FilaBaseSection';
 import { Building2 } from 'lucide-react';
+import { useTarefasAtribuidas } from '@/hooks/useTarefasAtribuidas';
+import { ProximaTarefaCard } from '@/components/vistoriador/ProximaTarefaCard';
 
 export default function InstaladorTarefas() {
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading: isLoadingAtual } = useTarefaAtual();
+  const { data: tarefasAtribuidas = [] } = useTarefasAtribuidas();
   const { data: historico, isLoading: isLoadingHistorico } = useTarefasHistorico();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const { isBase } = useAlocacaoDiaria();
@@ -125,17 +128,39 @@ export default function InstaladorTarefas() {
             ) : (
               <div className="space-y-4">
                 <BotaoIniciarServico />
-                <Card className="border-slate-700 bg-slate-800">
-                  <CardContent className="flex flex-col items-center justify-center py-8">
-                    <CheckCircle2 className="h-10 w-10 text-green-500" />
-                    <h3 className="mt-3 text-base font-semibold text-white">Nenhuma tarefa ativa</h3>
-                    <p className="mt-1 text-center text-sm text-slate-400">
-                      Clique em "Iniciar Serviço" para receber sua próxima tarefa automaticamente.
-                    </p>
-                  </CardContent>
-                </Card>
+                {tarefasAtribuidas.length === 0 && (
+                  <Card className="border-slate-700 bg-slate-800">
+                    <CardContent className="flex flex-col items-center justify-center py-8">
+                      <CheckCircle2 className="h-10 w-10 text-green-500" />
+                      <h3 className="mt-3 text-base font-semibold text-white">Nenhuma tarefa ativa</h3>
+                      <p className="mt-1 text-center text-sm text-slate-400">
+                        Clique em "Iniciar Serviço" para receber sua próxima tarefa automaticamente.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
+
+            {(() => {
+              const emExecucao = tarefasAtribuidas.some(
+                (t) => t.status === 'em_rota' || t.status === 'em_andamento'
+              );
+              const proximas = tarefasAtribuidas.filter(
+                (t) => t.id !== tarefaAtual?.id && t.status === 'agendada'
+              );
+              if (proximas.length === 0) return null;
+              return (
+                <div className="space-y-2 pt-2">
+                  <h2 className="text-sm font-medium text-slate-300">
+                    Próximas atribuídas a você ({proximas.length})
+                  </h2>
+                  {proximas.map((t) => (
+                    <ProximaTarefaCard key={t.id} tarefa={t} bloqueado={emExecucao} />
+                  ))}
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* Tab: Encaixes Urgentes */}
