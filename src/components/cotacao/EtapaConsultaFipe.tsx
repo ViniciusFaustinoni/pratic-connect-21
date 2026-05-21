@@ -337,10 +337,20 @@ export function EtapaConsultaFipe({
 
           {/* Seletor de variante FIPE — somente no modo FIPE */}
           {!modoNotaFiscal && fipeAlternativas.length > 1 && (
-            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+            <Alert className={cn(
+              "border-amber-500/50 bg-amber-50 dark:bg-amber-950/20",
+              precisaConfirmarVersao && "border-destructive/70 bg-destructive/5"
+            )}>
               <AlertDescription className="space-y-2">
-                <div className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                  Foram encontradas {fipeAlternativas.length} versões FIPE para esta placa. Confira se a versão selecionada bate com o CRLV (combustível, câmbio, motorização):
+                <div className={cn(
+                  "text-sm font-medium",
+                  precisaConfirmarVersao
+                    ? "text-destructive"
+                    : "text-amber-900 dark:text-amber-200"
+                )}>
+                  {precisaConfirmarVersao
+                    ? `Mais de uma versão FIPE bate com esse veículo. Escolha a versão correta abaixo (confira combustível, câmbio e motorização no CRLV) — sem essa confirmação não é possível avançar.`
+                    : `Foram encontradas ${fipeAlternativas.length} versões FIPE para esta placa. Confira se a versão selecionada bate com o CRLV (combustível, câmbio, motorização):`}
                 </div>
                 <Select value={String(fipeSelecionada)} onValueChange={handleTrocarFipe}>
                   <SelectTrigger className="bg-background">
