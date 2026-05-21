@@ -117,7 +117,7 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
         .from('associados')
         .select(`
           id, nome, cpf, email, telefone, status, plano_id, uf, cidade, data_adesao,
-          created_at, updated_at, origem_cadastro, sincronizado_hinova, tipo_saida,
+          created_at, updated_at, origem_cadastro, sincronizado_hinova, sincronizado_hinova_em, codigo_hinova, tipo_saida,
           planos:planos!plano_id (id, nome, codigo),
           contratos:contratos!fk_contratos_associado (id, numero, status),
           veiculos (id, placa, marca, modelo, ano_modelo, status, cobertura_total, cobertura_roubo_furto, cobertura_suspensa)
