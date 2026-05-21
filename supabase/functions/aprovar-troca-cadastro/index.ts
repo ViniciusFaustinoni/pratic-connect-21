@@ -77,34 +77,11 @@ Deno.serve(async (req) => {
     }
 
     // (Removido) Trava por débito do antigo: a troca não exige mais adimplência.
+    // (Removido) Gate SGA `sga_situacao_check`: era resquício da política antiga
+    // e bloqueava a aprovação mesmo após o pivot ("basta que o titular antigo
+    // exista no sistema e tenha assinado o termo" — ver tutorial
+    // aprovacao-troca-titularidade-cadastro). Monitoramento decide o resto.
 
-    // 2b) GATE: Situação Financeira (SGA) — exige check liberador ≤ 24h
-    {
-      const dia = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: ultimo } = await admin
-        .from('sga_situacao_check')
-        .select('id, tem_debito, bypass, origem_resultado, verificado_em')
-        .eq('solicitacao_troca_id', solicitacao_id)
-        .gte('verificado_em', dia)
-        .order('verificado_em', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const liberador = ultimo && (
-        !ultimo.tem_debito ||
-        ultimo.bypass === true ||
-        ultimo.origem_resultado === 'transitorio' ||
-        ultimo.origem_resultado === 'associado_inexistente_sga'
-      );
-      if (!liberador) {
-        return new Response(
-          JSON.stringify({
-            error: 'inadimplencia_sga_pendente',
-            message: 'Consulte a situação financeira do titular antigo no SGA antes de aprovar.',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-      }
-    }
 
     // 3) Trava: autovistoria do novo titular OU janela mesmo-dia
     // Janela mesmo-dia: até 23:59:59.999 BRT (UTC-3) do dia em que o termo
