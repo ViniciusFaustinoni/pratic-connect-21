@@ -376,7 +376,7 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     queryFn: async () => {
       let query = supabase
         .from('cotacoes')
-        .select('id, numero, status, valor_fipe, valor_total_mensal, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa, token_publico, created_at, dados_extras, contrato_gerado_id')
+        .select('id, numero, status, valor_fipe, valor_total_mensal, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa, token_publico, created_at, dados_extras, contrato_gerado_id, vendedor_id')
         .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
         .order('created_at', { ascending: false });
       if (scopeAuthUserId) query = query.eq('vendedor_id', scopeAuthUserId);
