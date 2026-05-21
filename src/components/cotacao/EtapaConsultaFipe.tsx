@@ -224,8 +224,11 @@ export function EtapaConsultaFipe({
     toast.success('Versão FIPE atualizada');
   };
 
-  // Pode avançar se tem marca, modelo, ano e valorFipe preenchidos
-  const canProceed = marca && modelo && ano && valorFipe !== null;
+  // Pode avançar se tem marca, modelo, ano e valorFipe preenchidos.
+  // Quando há múltiplas variantes FIPE e o consultor ainda não confirmou uma
+  // (caso de empate na heurística), bloqueia o avanço para forçar escolha.
+  const precisaConfirmarVersao = fipeAlternativas.length > 1 && !fipeSelecionada;
+  const canProceed = !!(marca && modelo && ano && valorFipe !== null) && !precisaConfirmarVersao;
 
   return (
     <Card className="border-border bg-card">
