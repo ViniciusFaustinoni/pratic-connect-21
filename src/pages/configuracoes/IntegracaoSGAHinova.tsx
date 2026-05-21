@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Building2, CheckCircle, XCircle, RefreshCw, Trash2,
   Play, Clock, AlertTriangle, Activity, Loader2, Wifi, WifiOff,
@@ -60,6 +60,8 @@ function formatDateFull(d: string | null) {
 
 export default function IntegracaoSGAHinova() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const placaFilter = (searchParams.get('placa') || '').trim().toUpperCase();
   const {
     healthChecks, queue, queueCounts, logs, pendingVehicles,
     isLoading, testConnection, reprocess, discard, triggerSync, refetchAll,
@@ -70,9 +72,19 @@ export default function IntegracaoSGAHinova() {
   const [detailItem, setDetailItem] = useState<SGAQueueItem | null>(null);
 
   const lastCheck = healthChecks[0];
-  const filteredQueue = queueFilter === 'all'
-    ? queue
-    : queue.filter(q => q.status === queueFilter);
+  const filteredQueue = useMemo(() => {
+    let list = queueFilter === 'all' ? queue : queue.filter(q => q.status === queueFilter);
+    if (placaFilter) {
+      list = list.filter(q => (q.veiculo_placa || '').toUpperCase().includes(placaFilter));
+    }
+    return list;
+  }, [queue, queueFilter, placaFilter]);
+
+  const clearPlacaFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('placa');
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="space-y-6">
