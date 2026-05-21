@@ -660,9 +660,28 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
     // === ESTÁGIO A — Preliminar (sem plano selecionado) ===
     // Mostra elegibilidade já no carregamento do FIPE; economia só sai no Estágio B.
+    // IMPORTANTE: a Regra do 1% só faz sentido quando o valor reduzido cruza a
+    // fronteira inferior da faixa atual (entrando na faixa imediatamente abaixo).
+    // Sem essa checagem, anunciávamos elegibilidade pra FIPEs no meio da faixa
+    // — ex: FIPE 44.921 (faixa 40.000–44.999,99) com −1% = 44.471,79 continua
+    // na MESMA faixa, logo não há redução real possível.
     if (planosSelecionados.length === 0) {
+      // Usa o catálogo legado como referência genérica de fronteira (mesma
+      // fonte que alimenta o texto "Faixa enquadrada" na UI). Quando o
+      // catálogo ainda não carregou, mantém o comportamento otimista anterior
+      // pra não regredir ambientes vazios.
+      const faixaAtualGenerica = todasFaixas.length > 0
+        ? todasFaixas
+            .filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max)
+            .sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0]
+        : null;
+
+      const elegivelPreliminar = !faixaAtualGenerica
+        ? true
+        : valorReduzido < faixaAtualGenerica.fipe_min;
+
       return {
-        elegivel: true,
+        elegivel: elegivelPreliminar,
         preliminar: true,
         bloqueado: null as null | { motivo: string },
         valorReduzido,
