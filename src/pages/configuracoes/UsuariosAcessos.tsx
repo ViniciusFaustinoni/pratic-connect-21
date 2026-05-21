@@ -53,6 +53,7 @@ import { toast } from 'sonner';
 
 const PerfisVisibilidade = lazy(() => import('@/pages/configuracoes/Perfis'));
 import { ExportarUsuariosDialog } from '@/components/configuracoes/ExportarUsuariosDialog';
+import { DeslogarTodosUsuariosButton } from '@/components/configuracoes/DeslogarTodosUsuariosButton';
 
 const PAGE_SIZE = 20;
 
