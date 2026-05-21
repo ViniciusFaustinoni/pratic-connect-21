@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
           body: { 
             telefone: telefoneAssociado.replace(/\D/g, ''), 
             mensagem,
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_atendimento_pratic',
             template_params: [
               associado?.nome?.split(' ')[0] || 'Associado',
               sinistro.protocolo || '',

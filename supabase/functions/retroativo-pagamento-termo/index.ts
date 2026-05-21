@@ -197,7 +197,7 @@ serve(async (req) => {
               body: JSON.stringify({
                 telefone,
                 mensagem,
-                template_name: 'sinistro_atualizado',
+                template_name: 'notificacao_atendimento_pratic',
                 template_params: [
                   associado.nome?.split(' ')[0] || 'Associado',
                   sinistro.protocolo || 'Evento',

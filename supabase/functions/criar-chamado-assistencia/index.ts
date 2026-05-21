@@ -432,7 +432,7 @@ _Você receberá uma notificação quando o prestador for acionado._`;
             mensagem: mensagemAssociado,
             referencia_tipo: 'chamado_assistencia',
             referencia_id: chamado.id,
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_atendimento_pratic',
             template_params: [
               associado.nome?.split(' ')[0] || 'Associado',
               'assistência',

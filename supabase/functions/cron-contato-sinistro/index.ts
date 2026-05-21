@@ -88,7 +88,7 @@ serve(async (req) => {
               body: JSON.stringify({
                 telefone: ag.telefone,
                 mensagem: ag.mensagem_enviada,
-                template_name: 'sinistro_atualizado',
+                template_name: 'notificacao_atendimento_pratic',
                 template_params: ['Associado', ag.tipo || 'atualização', ag.mensagem_enviada.substring(0, 200)],
               }),
             });

@@ -208,7 +208,7 @@ serve(async (req) => {
           body: JSON.stringify({
             telefone,
             mensagem,
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_atendimento_pratic',
             template_params: [primeiroNome, veiculo.placa, 'Peças aprovadas e sendo providenciadas! Acompanhe cada etapa do reparo.'],
           }),
         });
