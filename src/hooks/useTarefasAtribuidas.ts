@@ -26,7 +26,7 @@ export interface TarefaAtribuida {
   local_vistoria: string | null;
 }
 
-const STATUS_FILA = ['agendada', 'em_rota', 'em_andamento'];
+const STATUS_FILA = ['agendada', 'em_rota', 'em_andamento'] as const;
 
 function rankStatus(s: string): number {
   if (s === 'em_andamento') return 0;
@@ -88,7 +88,7 @@ export function useTarefasAtribuidas() {
           veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)
         `)
         .eq('profissional_id', profissionalId)
-        .in('status', STATUS_FILA)
+        .in('status', STATUS_FILA as unknown as string[])
         .gte('data_agendada', hoje)
         .is('decisao_instalador', null)
         .is('imprevisto_registrado_em', null)
