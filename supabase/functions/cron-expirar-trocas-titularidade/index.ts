@@ -165,12 +165,21 @@ Deno.serve(async (req) => {
             .eq('id', s.veiculo_id);
         }
 
-        // 3) Bloquear cotação para o novo titular não conseguir assinar tarde
+        // 3) Cancelar cotação derivada + rotacionar token público (defesa em profundidade).
+        // Mesmo saneamento canônico de cancelar-troca/reprovar-troca.
         if (s.cotacao_id) {
+          const novoToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
           await admin
             .from('cotacoes')
-            .update({ status: 'recusada' })
-            .eq('id', s.cotacao_id);
+            .update({
+              status: 'cancelada',
+              status_contratacao: 'cancelada',
+              cancelada_em: agora.toISOString(),
+              motivo_cancelamento: 'Prazo de assinatura do novo titular expirado (meia-noite BRT).',
+              token_publico: novoToken,
+            })
+            .eq('id', s.cotacao_id)
+            .eq('origem_troca_titularidade', true);
         }
 
         // 4) WhatsApp (não-bloqueante)
