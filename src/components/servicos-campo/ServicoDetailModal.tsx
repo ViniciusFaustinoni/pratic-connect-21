@@ -22,7 +22,11 @@ import {
   MapPinned, MoreHorizontal, Hash,
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
+import { RealocarServicoSimplesDialog } from './RealocarServicoSimplesDialog';
+import { CancelarServicoDialog } from './CancelarServicoDialog';
+import { DevolverAoCadastroDialog } from './DevolverAoCadastroDialog';
 import { LiberarServicoButton } from './LiberarServicoButton';
+import { usePermissions } from '@/hooks/usePermissions';
 
 import { ConcluirPrestadorExternoButton } from './ConcluirPrestadorExternoButton';
 import { cn } from '@/lib/utils';
