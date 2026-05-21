@@ -186,9 +186,18 @@ export function findModelEligibility(
     const marcaOk = !entryMarca || ctxMarca.includes(entryMarca) || entryMarca.includes(ctxMarca);
 
     const ctxModelo = removeDiacritics((ctx.modelo || '').toUpperCase());
+    const ctxModeloFirstToken = ctxModelo.split(/[\s/]+/)[0] || '';
     const entryModelo = removeDiacritics((entry.modelo || '').toUpperCase());
+    const entryModeloFirstToken = entryModelo.split(/[\s/]+/)[0] || '';
     const modeloWildcard = ['TODOS', 'QUALQUER', 'ALL', ''].includes(entryModelo);
-    const modeloOk = modeloWildcard || ctxModelo.includes(entryModelo) || entryModelo.includes(ctxModelo);
+    // Match aceita: substring bidirecional OU primeiro-token bidirecional
+    // (FIPE devolve "GOL 1.0 MI TOTAL FLEX 8V 4P" e regras em geral guardam só "GOL")
+    const modeloOk = modeloWildcard
+      || ctxModelo.includes(entryModelo)
+      || entryModelo.includes(ctxModelo)
+      || (!!entryModeloFirstToken && ctxModeloFirstToken === entryModeloFirstToken)
+      || (!!entryModeloFirstToken && ctxModelo.includes(entryModeloFirstToken))
+      || (!!ctxModeloFirstToken && entryModelo.includes(ctxModeloFirstToken));
     if (!marcaOk || !modeloOk) continue;
 
     // Check year range if defined
