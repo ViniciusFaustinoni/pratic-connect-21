@@ -35,11 +35,13 @@ const templateSchema = z.object({
   conteudo: z.string().min(10, 'Conteúdo deve ter pelo menos 10 caracteres'),
   requer_assinatura: z.boolean().default(false),
   is_default_autentique: z.boolean().default(false),
+  is_default_substituicao: z.boolean().default(false),
   is_default_evento: z.boolean().default(false),
   is_default_saida: z.boolean().default(false),
   is_default_rastreador: z.boolean().default(false),
   anexar_proposta: z.boolean().default(false),
   ordem_anexo: z.coerce.number().int().min(0).default(0),
+
 });
 
 type TemplateFormData = z.infer<typeof templateSchema>;
@@ -74,11 +76,13 @@ export default function TemplateForm() {
       conteudo: '',
       requer_assinatura: false,
       is_default_autentique: false,
+      is_default_substituicao: false,
       is_default_evento: false,
       is_default_saida: false,
       is_default_rastreador: false,
       anexar_proposta: false,
       ordem_anexo: 0,
+
     },
   });
 
@@ -93,7 +97,9 @@ export default function TemplateForm() {
         conteudo: template.conteudo,
         requer_assinatura: template.requer_assinatura,
         is_default_autentique: template.is_default_autentique || false,
+        is_default_substituicao: (template as any).is_default_substituicao || false,
         is_default_evento: template.is_default_evento || false,
+
         is_default_saida: (template as any).is_default_saida || false,
         is_default_rastreador: (template as any).is_default_rastreador || false,
         anexar_proposta: (template as any).anexar_proposta || false,
@@ -151,7 +157,9 @@ export default function TemplateForm() {
           descricao: data.descricao,
           requer_assinatura: data.requer_assinatura,
           is_default_autentique: data.is_default_autentique,
+          is_default_substituicao: data.is_default_substituicao,
           is_default_evento: data.is_default_evento,
+
           is_default_saida: data.is_default_saida,
           is_default_rastreador: data.is_default_rastreador,
           anexar_proposta: data.anexar_proposta,
@@ -348,6 +356,31 @@ export default function TemplateForm() {
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="is_default_substituicao"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="flex items-center gap-2 text-sky-700 dark:text-sky-300">
+                            <FileText className="h-4 w-4" />
+                            Usar como template padrão para SUBSTITUIÇÃO
+                          </FormLabel>
+                          <FormDescription>
+                            Quando a cotação for de Substituição de Veículo, este template será enviado ao Autentique no lugar do Termo de Filiação.
+                            Apenas um template pode ser marcado como padrão de substituição.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
 
                   <FormField
                     control={form.control}

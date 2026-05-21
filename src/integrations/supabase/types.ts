@@ -12053,6 +12053,7 @@ export type Database = {
           is_default_evento: boolean | null
           is_default_rastreador: boolean | null
           is_default_saida: boolean | null
+          is_default_substituicao: boolean
           nome: string
           ordem_anexo: number | null
           perfis_permitidos: string[] | null
@@ -12084,6 +12085,7 @@ export type Database = {
           is_default_evento?: boolean | null
           is_default_rastreador?: boolean | null
           is_default_saida?: boolean | null
+          is_default_substituicao?: boolean
           nome: string
           ordem_anexo?: number | null
           perfis_permitidos?: string[] | null
@@ -12115,6 +12117,7 @@ export type Database = {
           is_default_evento?: boolean | null
           is_default_rastreador?: boolean | null
           is_default_saida?: boolean | null
+          is_default_substituicao?: boolean
           nome?: string
           ordem_anexo?: number | null
           perfis_permitidos?: string[] | null

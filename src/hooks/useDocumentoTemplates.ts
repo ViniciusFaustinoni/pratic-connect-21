@@ -31,12 +31,14 @@ interface TemplateFromDB {
   thumbnail_url?: string;
   // Campos para integração com Autentique
   is_default_autentique?: boolean;
+  is_default_substituicao?: boolean;
   template_html?: string;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
   ordem_anexo?: number;
+
 }
 
 // Tipo transformado para uso no frontend
@@ -65,12 +67,14 @@ export interface DocumentoTemplateView {
   thumbnail_url?: string;
   // Campos para integração com Autentique
   is_default_autentique?: boolean;
+  is_default_substituicao?: boolean;
   template_html?: string;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
   ordem_anexo?: number;
+
 }
 
 // Função para transformar dados do banco para o tipo do frontend
@@ -92,7 +96,9 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     thumbnail_url: data.thumbnail_url || undefined,
     // Campos Autentique
     is_default_autentique: data.is_default_autentique || false,
+    is_default_substituicao: (data as any).is_default_substituicao || false,
     template_html: data.template_html || undefined,
+
     is_default_evento: data.is_default_evento || false,
     is_default_saida: (data as any).is_default_saida || false,
     is_default_rastreador: (data as any).is_default_rastreador || false,
@@ -181,11 +187,13 @@ interface CreateTemplateInput {
   is_default?: boolean;
   status?: TemplateStatus;
   is_default_autentique?: boolean;
+  is_default_substituicao?: boolean;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
   ordem_anexo?: number;
+
 }
 
 export function useCreateTemplate() {
@@ -220,7 +228,9 @@ export function useCreateTemplate() {
           is_default: input.is_default || false,
           status: input.status || 'draft',
           is_default_autentique: input.is_default_autentique || false,
+          is_default_substituicao: input.is_default_substituicao || false,
           is_default_evento: input.is_default_evento || false,
+
           is_default_saida: input.is_default_saida || false,
           is_default_rastreador: input.is_default_rastreador || false,
           anexar_proposta: input.anexar_proposta || false,
@@ -264,7 +274,9 @@ interface UpdateTemplateInput {
   is_default?: boolean;
   status?: TemplateStatus;
   is_default_autentique?: boolean;
+  is_default_substituicao?: boolean;
   is_default_evento?: boolean;
+
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
@@ -303,7 +315,9 @@ export function useUpdateTemplate() {
       if (input.is_default !== undefined) updateData.is_default = input.is_default;
       if (input.status !== undefined) updateData.status = input.status;
       if (input.is_default_autentique !== undefined) updateData.is_default_autentique = input.is_default_autentique;
+      if (input.is_default_substituicao !== undefined) updateData.is_default_substituicao = input.is_default_substituicao;
       if (input.is_default_evento !== undefined) updateData.is_default_evento = input.is_default_evento;
+
       if (input.is_default_saida !== undefined) updateData.is_default_saida = input.is_default_saida;
       if (input.is_default_rastreador !== undefined) updateData.is_default_rastreador = input.is_default_rastreador;
       if (input.anexar_proposta !== undefined) updateData.anexar_proposta = input.anexar_proposta;
