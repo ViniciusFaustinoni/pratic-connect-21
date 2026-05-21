@@ -425,23 +425,26 @@ export function mapearDadosParaTemplate(
   associado?: any,
   vendedorNome?: string | null,
   veiculoDB?: any,
+  cotacao?: any,
 ): TermoAfiliacaoData {
   // Usar dados do associado se existir, senão do lead
   const cliente = associado || lead || {};
   const veiculo = lead || contrato || {};
-  
+  const cot = cotacao || {};
+
   return {
     cliente: {
       nome: contrato.cliente_nome || cliente.nome || "",
       cpf: contrato.cliente_cpf || cliente.cpf || "",
       rg: contrato.cliente_rg || cliente.rg || "",
       rg_orgao: contrato.cliente_rg_orgao || cliente.rg_orgao || "",
-      cnh: contrato.cliente_cnh || "",
-      cnh_validade: contrato.cliente_cnh_validade || "",
-      cnh_categoria: contrato.cliente_cnh_categoria || "",
+      // CNH — herda do registro do associado (cnh_numero/validade/categoria) quando contrato não tem snapshot.
+      cnh: contrato.cliente_cnh || associado?.cnh_numero || cliente.cnh_numero || cliente.cnh || "",
+      cnh_validade: contrato.cliente_cnh_validade || associado?.cnh_validade || cliente.cnh_validade || "",
+      cnh_categoria: contrato.cliente_cnh_categoria || associado?.cnh_categoria || cliente.cnh_categoria || "",
       data_nascimento: contrato.cliente_data_nascimento || cliente.data_nascimento || "",
-      estado_civil: contrato.cliente_estado_civil || cliente.estado_civil || "",
-      profissao: contrato.cliente_profissao || cliente.profissao || "",
+      estado_civil: contrato.cliente_estado_civil || associado?.estado_civil || cliente.estado_civil || "",
+      profissao: contrato.cliente_profissao || associado?.profissao || cliente.profissao || "",
       email: contrato.cliente_email || cliente.email || "",
       telefone: contrato.cliente_telefone || cliente.telefone || "",
       telefone_secundario: contrato.cliente_telefone_secundario || cliente.telefone_secundario || "",
@@ -455,23 +458,32 @@ export function mapearDadosParaTemplate(
     },
     veiculo: {
       placa: contrato.veiculo_placa || veiculo.veiculo_placa || "",
-      chassi: contrato.veiculo_chassi || veiculo.veiculo_chassi || "",
-      renavam: contrato.veiculo_renavam || veiculo.veiculo_renavam || "",
-      numero_motor: veiculoDB?.numero_motor || veiculo.veiculo_motor || contrato.veiculo_motor || "",
-      marca: contrato.veiculo_marca || veiculo.veiculo_marca || "",
-      modelo: contrato.veiculo_modelo || veiculo.veiculo_modelo || "",
-      // Hierarquia ano modelo: contrato > veiculoDB.ano_modelo > lead/veiculo > 0
-      ano: contrato.veiculo_ano || veiculoDB?.ano_modelo || veiculo.veiculo_ano || 0,
-      // Hierarquia ano fabricação: contrato > veiculoDB.ano_fabricacao > lead/veiculo > ano modelo (último recurso) > 0
+      chassi: contrato.veiculo_chassi || veiculo.veiculo_chassi || veiculoDB?.chassi || cot.veiculo_chassi || "",
+      renavam: contrato.veiculo_renavam || veiculo.veiculo_renavam || veiculoDB?.renavam || cot.veiculo_renavam || "",
+      numero_motor: veiculoDB?.numero_motor || veiculo.veiculo_motor || contrato.veiculo_motor || cot.veiculo_motor || "",
+      marca: contrato.veiculo_marca || veiculo.veiculo_marca || veiculoDB?.marca || cot.veiculo_marca || "",
+      modelo: contrato.veiculo_modelo || veiculo.veiculo_modelo || veiculoDB?.modelo || cot.veiculo_modelo || "",
+      // Hierarquia ano modelo: contrato > veiculoDB.ano_modelo > lead/veiculo > cotação > 0
+      ano: contrato.veiculo_ano || veiculoDB?.ano_modelo || veiculo.veiculo_ano || cot.veiculo_ano_modelo || cot.veiculo_ano || 0,
+      // Hierarquia ano fabricação: contrato > veiculoDB.ano_fabricacao > lead/veiculo > cotação > ano modelo (último recurso) > 0
       ano_fabricacao:
         contrato.veiculo_ano_fabricacao
         || veiculoDB?.ano_fabricacao
         || veiculo.veiculo_ano_fabricacao
+        || cot.veiculo_ano_fabricacao
         || contrato.veiculo_ano
         || veiculo.veiculo_ano
+        || cot.veiculo_ano_modelo
         || 0,
-      cor: contrato.veiculo_cor || veiculo.veiculo_cor || "",
-      combustivel: contrato.veiculo_combustivel || veiculo.veiculo_combustivel || "",
+      cor: contrato.veiculo_cor || veiculo.veiculo_cor || veiculoDB?.cor || cot.veiculo_cor || "",
+      // Combustível: contrato → veículo DB → lead → cotacoes.veiculo_combustivel → cotacoes.combustivel (legado).
+      combustivel:
+        contrato.veiculo_combustivel
+        || veiculoDB?.combustivel
+        || veiculo.veiculo_combustivel
+        || cot.veiculo_combustivel
+        || cot.combustivel
+        || "",
       // CATEGORIA do CRLV (Particular/Aluguel) — derivada de uso_aplicativo / veiculo_tipo_uso
       categoria: resolverCategoriaCrlv(
         contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso,
@@ -486,23 +498,25 @@ export function mapearDadosParaTemplate(
         || formatarTipoVeiculo(veiculo.veiculo_categoria)
         || "",
       tipo_uso: contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso || "Particular",
-      codigo_fipe: contrato.codigo_fipe || veiculo.codigo_fipe || "",
-      valor_fipe: contrato.veiculo_valor_fipe || veiculo.veiculo_fipe || 0,
-      alienado: contrato.veiculo_alienado || veiculo.veiculo_alienado || false,
-      financeira: contrato.veiculo_financeira || veiculo.veiculo_financeira || "",
-      procedencia: contrato.veiculo_procedencia || veiculo.veiculo_procedencia || "Usado de particular",
+      // Código FIPE: contrato → veículo DB → lead → cotação.
+      codigo_fipe: contrato.codigo_fipe || veiculoDB?.codigo_fipe || veiculo.codigo_fipe || cot.codigo_fipe || "",
+      valor_fipe: contrato.veiculo_valor_fipe || veiculo.veiculo_fipe || cot.valor_fipe || veiculoDB?.valor_fipe || 0,
+      alienado: contrato.veiculo_alienado || veiculo.veiculo_alienado || cot.veiculo_alienado || false,
+      financeira: contrato.veiculo_financeira || veiculo.veiculo_financeira || cot.veiculo_financeira || "",
+      procedencia: contrato.veiculo_procedencia || veiculo.veiculo_procedencia || cot.veiculo_procedencia || "Usado de particular",
       cambio:
         formatarCambio(contrato.veiculo_cambio)
         ?? formatarCambio(veiculoDB?.cambio)
         ?? formatarCambio(veiculo.veiculo_cambio)
+        ?? formatarCambio(cot.veiculo_cambio)
         ?? inferirCambio(contrato.veiculo_modelo || veiculo.veiculo_modelo),
       // Portas: SEM fallback. Lê do contrato → veículo (DB) → cotação. NULL se ausente.
       portas: contrato.veiculo_numero_portas
         ?? veiculoDB?.numero_portas
         ?? veiculo.numero_portas
         ?? null,
-      uso_aplicativo: contrato.uso_aplicativo || false,
-      leilao: ehLeilao(contrato.veiculo_categoria || veiculo.veiculo_categoria, contrato.veiculo_procedencia || veiculo.veiculo_procedencia),
+      uso_aplicativo: contrato.uso_aplicativo || cot.uso_aplicativo || false,
+      leilao: ehLeilao(contrato.veiculo_categoria || veiculo.veiculo_categoria || cot.veiculo_categoria, contrato.veiculo_procedencia || veiculo.veiculo_procedencia || cot.veiculo_procedencia),
       // Flags de depreciação (vindas do registro do veículo no banco)
       flag_placa_vermelha: veiculoDB?.flag_placa_vermelha || false,
       flag_ex_taxi: veiculoDB?.flag_ex_taxi || false,
@@ -510,7 +524,7 @@ export function mapearDadosParaTemplate(
       flag_chassi_remarcado: veiculoDB?.flag_chassi_remarcado || false,
       flag_ex_ressarcido: veiculoDB?.flag_ex_ressarcido || false,
       flag_avarias_vistoria: veiculoDB?.flag_avarias_vistoria || false,
-      blindado: contrato.veiculo_blindado || veiculoDB?.blindado || false,
+      blindado: contrato.veiculo_blindado || veiculoDB?.blindado || cot.veiculo_blindado || false,
     },
     plano: {
       nome: plano?.nome || "Plano Padrão",
