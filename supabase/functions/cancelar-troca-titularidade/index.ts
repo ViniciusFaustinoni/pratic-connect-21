@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const { data: sol, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, status, associado_antigo_id, veiculo_id')
+      .select('id, status, associado_antigo_id, veiculo_id, cotacao_id')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (solErr) throw solErr;
@@ -95,6 +95,30 @@ Deno.serve(async (req) => {
           .eq('id', sol.veiculo_id);
       } catch (vErr) {
         console.warn('[cancelar-troca] limpar em_troca_titularidade falhou:', vErr);
+      }
+    }
+
+    // CANÔNICO: troca cancelada => cotação derivada morre junto + link público invalidado.
+    // Sem isso, o novo titular continua acessando o token_publico mesmo após o cancelamento
+    // (caso reportado: COT-20260521-002944030-565 / VInicius Faustinoni).
+    if (sol.cotacao_id) {
+      try {
+        const novoToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+        const { error: cotErr } = await admin
+          .from('cotacoes')
+          .update({
+            status: 'cancelada',
+            status_contratacao: 'cancelada',
+            cancelada_em: new Date().toISOString(),
+            cancelada_por: reprovadoPor,
+            motivo_cancelamento: `Troca de titularidade cancelada: ${motivoFinal}`,
+            token_publico: novoToken,
+          })
+          .eq('id', sol.cotacao_id)
+          .eq('origem_troca_titularidade', true);
+        if (cotErr) console.warn('[cancelar-troca] cancelar cotação derivada falhou:', cotErr);
+      } catch (cErr) {
+        console.warn('[cancelar-troca] cancelar cotação derivada exception:', cErr);
       }
     }
 
