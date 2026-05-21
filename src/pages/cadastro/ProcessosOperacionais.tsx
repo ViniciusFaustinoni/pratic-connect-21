@@ -13,7 +13,7 @@ import {
 import {
   ArrowRightLeft, RefreshCw, Eye, Calendar, Search, ArrowRight,
   AlertTriangle, FileInput, FileSignature, Car, ExternalLink, PackagePlus,
-  MessageSquareWarning,
+  MessageSquareWarning, User,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MigracoesTab } from '@/pages/cadastro/SolicitacoesMigracao';
@@ -376,7 +376,7 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     queryFn: async () => {
       let query = supabase
         .from('cotacoes')
-        .select('id, numero, status, valor_fipe, valor_total_mensal, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa, token_publico, created_at, dados_extras, contrato_gerado_id')
+        .select('id, numero, status, valor_fipe, valor_total_mensal, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa, token_publico, created_at, dados_extras, contrato_gerado_id, vendedor_id')
         .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
         .order('created_at', { ascending: false });
       if (scopeAuthUserId) query = query.eq('vendedor_id', scopeAuthUserId);
@@ -488,6 +488,13 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
                 onClick: () => window.open(`/cotacao/${c.token_publico}`, '_blank'),
               });
             }
+            if (c.dados_extras?.associado_id) {
+              acoesExtras.push({
+                icon: User,
+                title: 'Ver associado',
+                onClick: () => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`),
+              });
+            }
 
             const data: ProcessoCardData = {
               id: c.id,
@@ -508,10 +515,8 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
                 ? { nome: consultores.byUserId[c.vendedor_id].nome }
                 : undefined,
               criadoEm: c.created_at,
-              onDetalhes: c.dados_extras?.associado_id
-                ? () => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`)
-                : undefined,
-              detalhesLabel: 'Ver associado',
+              onDetalhes: () => navigate(`/vendas/cotacoes/${c.id}`),
+              detalhesLabel: 'Ver cotação',
               acoesExtras,
             };
             return <ProcessoCard key={c.id} data={data} />;
