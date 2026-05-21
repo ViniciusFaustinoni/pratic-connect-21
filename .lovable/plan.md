@@ -1,53 +1,60 @@
-## Problema
 
-No Monitoramento → **Serviços de Campo** (modal `ServicoDetailModal`) o time não consegue:
+## Contexto
 
-1. **Realocar** serviços que não são "instalação" — Retiradas (`vistoria_retirada`), Vistorias de saída/sinistro/periódica, etc. ficam sem botão.
-2. **Cancelar** o serviço pelo modal.
-3. **Devolver ao Cadastro** em caso de erro (analista quer mandar o caso de volta para revisão de docs / decisão de R&F).
+O usuário quer sincronizar o associado **RAFAEL RODRIGUES DA SILVA – CPF 68446543249 – cód. 30157** puxando dados do SGA Hinova para que apareça em:
+- `/associados` (lista de associados — tabela `associados`)
+- `/cadastro/base-antiga` (tabela `associados` + `veiculos` filtrados por `origem_cadastro='api_externa'` / `codigo_hinova IS NOT NULL`)
 
-Hoje o botão "Realocar" em `src/components/servicos-campo/ServicoDetailModal.tsx:186` só aparece quando `isInstalacao` (`instalacao | vistoria_entrada | revistoria`). E não existem botões de Cancelar nem Devolver ao Cadastro. O hook `useDevolverAoCadastro` e a edge `devolver-ao-cadastro` já existem; o RPC `realocar_servico` também (memória `mem://logic/operations/realocar-servico-reabertura`). Falta plumbing de UI.
+Pede também uma funcionalidade reutilizável, análoga à "Sincronização de Rastreadores" (Softruck/Rede).
 
-## Mudanças (apenas frontend, escopo UI)
+## Já existe e será reutilizado
 
-### 1. `ServicoDetailModal.tsx` — barra de ações
+- **Edge function `importar-associado-sga`** (`supabase/functions/importar-associado-sga/index.ts`):
+  - Recebe `{ cpf }`, autentica, chama Hinova (`buscarAssociadoComVeiculosPorCpf` + `buscarVeiculoPorPlaca`)
+  - Faz UPSERT em `associados` (por CPF) com `origem_cadastro='api_externa'`, `codigo_hinova`, `sincronizado_hinova=true`
+  - Faz UPSERT em `veiculos` (por placa) com `codigo_hinova`, vinculados ao associado
+  - **Já garante** aparecer em `/associados` e em `/cadastro/base-antiga` automaticamente
+- Padrão visual: `StatusSincronizacaoRastreadores.tsx` (Cards/Buttons + mutation com toast)
+- Página alvo: `/configuracoes/integracoes/sga-hinova` (`IntegracaoSGAHinova.tsx`)
 
-Substituir o bloco atual de "Realocar" (linhas 186-199) por um conjunto de ações que cobre **todos os tipos** de serviço atribuíveis (instalação, retirada, vistoria_entrada, vistoria_saida, vistoria, revistoria, manutencao):
+## Mudanças
 
-- **Realocar** — visível quando `status ∈ {agendada, pendente, nao_compareceu, reagendada, cancelada, em_analise, imprevisto_pendente}` e o serviço tem `instalacao_origem_id` OU `vistoria_origem_id` OU é Retirada. Texto muda para "Reabrir e reagendar" quando `status='cancelada'` (mantém comportamento atual).
-- **Cancelar serviço** — visível quando `status ∈ {agendada, pendente, reagendada, nao_compareceu, em_analise}`. Abre `CancelarServicoDialog` (novo componente leve com textarea de motivo) → `update servicos set status='cancelada', motivo_cancelamento=...`.
-- **Devolver ao Cadastro** — visível quando o serviço tem `contrato_id` e `status ≠ concluida/aprovada/reprovada`. Abre `DevolverAoCadastroDialog` (novo, com motivo) → chama `useDevolverAoCadastro({ contrato_id, motivo })`.
+### 1. Novo componente `SincronizarAssociadoSGA.tsx`
 
-Permissões: usar `usePermissions()` — exibir Cancelar/Devolver só para `isMonitoramento || isCoordenadorMonitoramento || isDiretor`. Realocar segue a regra atual.
+`src/components/integracoes/SincronizarAssociadoSGA.tsx`
 
-### 2. `RealocarInstalacaoDialog` → suportar Retirada/Vistoria
+- Card com título "Sincronizar associado do SGA"
+- Input CPF (máscara) + botão "Buscar e sincronizar"
+- Ao clicar:
+  - Chama `supabase.functions.invoke('importar-associado-sga', { body: { cpf } })`
+  - Exibe spinner durante; toast de sucesso/erro
+  - Em sucesso, mostra resumo: nome, código_associado, lista de veículos importados (placa, marca/modelo) + links rápidos para `/associados?cpf=...` e `/cadastro/base-antiga?search=...`
+- Estados tratados: `not_found` (CPF não existe no SGA), `503` (SGA indisponível), `401`
 
-O dialog hoje recebe apenas `instalacaoId` e atualiza `instalacoes`. Estender props para:
+### 2. Encaixar na página de SGA Hinova
 
-```ts
-type RealocarTarget =
-  | { kind: 'instalacao'; instalacaoId: string }
-  | { kind: 'servico'; servicoId: string; tipo: string }; // retirada, vistoria_*
-```
+`src/pages/configuracoes/IntegracaoSGAHinova.tsx`
 
-Quando `kind='servico'`, em vez de chamar `useRealocarInstalacao` (que mexe em `instalacoes`/`agendamentos_base`), chamar o RPC genérico `realocar_servico` (já existe no schema). Para Retirada não fazem sentido as abas Base/Rota da mesma forma — habilitar só "Data + período + técnico" (re-attribute). Manter aba Base/Rota apenas quando `kind='instalacao'` ou `tipo ∈ {vistoria_entrada, revistoria}`.
+- Adicionar nova `TabsTrigger` "Importar do SGA" entre "Health Check" e "Teste Boletos"
+- `TabsContent` renderiza `<SincronizarAssociadoSGA />`
+- Restrito a `isDiretor || isCoordenadorMonitoramento || isAdminMaster` via `usePermissions`
 
-Renomear arquivo/export para `RealocarServicoDialog` (manter re-export do nome antigo para não quebrar `InstalacaoDetailDrawer` e `MapaVistoriasContent`).
+### 3. Execução imediata para o RAFAEL
 
-### 3. Novos componentes
+Após implementação, executar a sincronização do CPF `68446543249` via essa nova UI (ou direto pela edge function) e confirmar:
+- aparece em `/associados`
+- aparece em `/cadastro/base-antiga` (aba Associados)
+- `codigo_hinova=30157`, `sincronizado_hinova=true`
 
-- `src/components/servicos-campo/CancelarServicoDialog.tsx` — dialog simples com Textarea de motivo, botão "Cancelar serviço" que faz `update servicos` + `agendamentos_base` (quando houver origem), invalida queries `['servicos-campo-unificado', 'fila-servicos']`.
-- `src/components/servicos-campo/DevolverAoCadastroDialog.tsx` — wrapper sobre `useDevolverAoCadastro` com textarea de motivo e alerta explicando o efeito (reverte `cadastro_aprovado`, reabre cotação na fila do Cadastro).
+## Detalhes técnicos
 
-### 4. Testes manuais (caminhos)
-
-1. Abrir o serviço RET-2026-00005 (LRP3J98, Retirada agendada) → ver 3 botões → "Realocar" abre dialog com data/técnico (sem Base/Rota) → confirma → status volta a `agendada` com nova data/técnico.
-2. Mesmo modal → "Cancelar serviço" → motivo obrigatório → vira `cancelada`, some da fila do técnico.
-3. Vistoria com contrato aprovado → "Devolver ao Cadastro" → cotação aparece em `aguardando_aprovacao_cadastro`.
-4. Instalação normal — fluxo atual de Realocar (abas Base / Rota / Encaixe) **não regride**.
+- **Sem migrations** — schema já comporta tudo (`origem_cadastro`, `codigo_hinova`, `sincronizado_hinova`, `sincronizado_hinova_em`).
+- **Sem alteração na edge function** — já é idempotente por CPF/placa.
+- Permissões: a edge exige apenas usuário autenticado; o gate de UI é só para evitar uso indevido.
+- Logs: a edge já loga em console; opcionalmente gravar em `sga_sync_logs` numa iteração futura (fora do escopo).
 
 ## Fora de escopo
 
-- Backend: `devolver-ao-cadastro` e RPC `realocar_servico` já existem, não serão alterados.
-- Mudar a fila de Atribuição Manual (drag-and-drop) — o usuário usa o modal da fila de Serviços de Campo; o menu da AtribuicaoManualTab já permite reatribuir/devolver e fica intacto.
-- Cron, triggers DB, migrações.
+- Sincronização em lote por código_associado ou range (pode ser próxima iteração)
+- Atualização de campos PII em associados pré-existentes (a edge propositalmente preserva nome/email/telefone locais)
+- Sincronizar boletos do associado (já existe em outra área)

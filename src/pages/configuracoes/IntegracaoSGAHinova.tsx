@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Building2, CheckCircle, XCircle, RefreshCw, Trash2,
   Play, Clock, AlertTriangle, Activity, Loader2, Wifi, WifiOff,
-  List, Send, Settings, HeartPulse,
+  List, Send, Settings, HeartPulse, Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TesteBoletoVeiculoHinova } from '@/components/integracoes/TesteBoletoVeiculoHinova';
+import { SincronizarAssociadoSGA } from '@/components/integracoes/SincronizarAssociadoSGA';
 import { cn } from '@/lib/utils';
 import { useSGAHealthCheck, type SGAQueueItem } from '@/hooks/useSGAHealthCheck';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
@@ -233,6 +234,9 @@ export default function IntegracaoSGAHinova() {
           <TabsTrigger value="health" className="gap-1.5">
             <HeartPulse className="h-4 w-4" /> Health Check
           </TabsTrigger>
+          <TabsTrigger value="importar" className="gap-1.5">
+            <Download className="h-4 w-4" /> Importar do SGA
+          </TabsTrigger>
           <TabsTrigger value="teste-boletos" className="gap-1.5">
             <Send className="h-4 w-4" /> Teste Boletos
           </TabsTrigger>
@@ -428,6 +432,10 @@ export default function IntegracaoSGAHinova() {
         </TabsContent>
 
         {/* Teste de boletos por veículo */}
+        <TabsContent value="importar">
+          <SincronizarAssociadoSGA />
+        </TabsContent>
+
         <TabsContent value="teste-boletos">
           <TesteBoletoVeiculoHinova />
         </TabsContent>
