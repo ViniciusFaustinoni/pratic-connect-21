@@ -54,10 +54,7 @@ export function useVerificarPlacaDuplicada() {
         return null;
       }
 
-      // Calcula data limite (48 horas atrás)
-      const dataLimite = new Date();
-      dataLimite.setHours(dataLimite.getHours() - 48);
-
+      // Reserva da placa: bloqueia enquanto placa_reservada_ate > now()
       let query = supabase
         .from('cotacoes')
         .select(`
@@ -65,12 +62,13 @@ export function useVerificarPlacaDuplicada() {
           numero,
           vendedor_id,
           created_at,
-          status
+          status,
+          placa_reservada_ate
         `)
         .eq('veiculo_placa', placaNormalizada)
         .in('status', ['rascunho', 'enviada', 'aceita'])
-        .gte('created_at', dataLimite.toISOString())
-        .order('created_at', { ascending: false })
+        .gt('placa_reservada_ate', new Date().toISOString())
+        .order('placa_reservada_ate', { ascending: false })
         .limit(5);
 
       const { data, error } = await query;
