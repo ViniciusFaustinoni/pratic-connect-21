@@ -1,59 +1,71 @@
-## Diagnóstico — solicitação KOU6D37 (`6996a35a-…-4ff1`)
 
-Reproduzi a chamada de `efetivar-troca-titularidade` direto contra a edge function e ela retorna:
+## Diagnóstico — KOU6D37
 
-```
-{"success":false,"error":"Dados do novo titular incompletos (CPF obrigatório)"}
-```
+Estado atual no banco:
 
-Estado da solicitação no banco:
+- `veiculos.status='ativo'`, `cobertura_suspensa=false`, **mas `cobertura_total=false` e `cobertura_roubo_furto=false`** → por isso a UI mostra "Sem Cobertura".
+- `rastreadores` (IMEI 869412077334305): `status='instalado'`, `veiculo_id` correto, **mas `associado_id` ainda aponta para o titular antigo** (`9c05d3c4…`, não o novo `de5f0d04…`).
+- **Dois contratos `status='ativo'` no mesmo veículo** para o mesmo associado novo:
+  - `cad888ca` — `origem_troca_titularidade_id=a5c915b6` (solicitação que ficou `cancelada`; contrato órfão).
+  - `a32aefd0` — `origem_troca_titularidade_id=6996a35a` (solicitação `efetivada` em 20:39:35; este é o canônico).
 
-- `aprovado_monitoramento_em` ✅ (a aprovação foi registrada)
-- `aprovado_monitoramento_por` ✅
-- `status = aguardando_monitoramento` (não promove para `efetivada` porque a etapa de efetivação caiu)
-- `sga_status = falha` (fallback do `aprovar-troca-monitoramento`)
-- `novo_associado_id = de5f0d04-…` (associado já existe com CPF `12493649737`)
-- `novo_titular_dados = { nome:"VInicius Faustinoni", cpf:"", email:..., telefone:... }` ← **CPF vazio**
+### Causa raiz no código
 
-**Causa raiz:** `efetivar-troca-titularidade` valida `dadosNovoTitular.cpf` (vindo do JSON `novo_titular_dados` da solicitação). Nessa troca o snapshot foi gravado sem CPF, mesmo já existindo um `novo_associado_id` apontando para um associado real com CPF preenchido. A edge ignora o `novo_associado_id` e aborta no guard inicial (linha 227). É por isso que o botão "Aprovar" no Monitoramento parece não ter efeito: o `aprovar-troca-monitoramento` marca a aprovação, dispara a efetivação, ela falha por dado faltando, vira `sga_status=falha`, e o status volta a aparecer em "Pendentes".
+`supabase/functions/efetivar-troca-titularidade/index.ts` (passo 6, linhas ~427-439):
+- Transfere `associado_id` do veículo.
+- Limpa `cobertura_suspensa`, `em_troca_titularidade`, `troca_titularidade_id`.
+- **Não toca em `cobertura_total` nem `cobertura_roubo_furto`** → o veículo herda o que estava (que neste caso já era `false`, provavelmente porque o titular anterior nunca ativou ou foi limpo em outra etapa).
+- **Não atualiza `rastreadores.associado_id`** quando há rastreador instalado.
+- **Não cancela contratos `ativo`/`assinado`/`pendente` anteriores do mesmo veículo** vindos de outra `origem_troca_titularidade_id` (a idempotência só olha a própria solicitação).
 
-## Correção
+E o cancelamento de uma solicitação de troca não cascateia para cancelar o contrato que ela tinha criado por antecipação no link público — virou contrato fantasma `cad888ca`.
 
-### 1. `supabase/functions/efetivar-troca-titularidade/index.ts`
+## Plano de correção
 
-Logo após o mapeamento de `solicitacao` (≈ linha 222), antes do guard de CPF obrigatório, carregar o associado real quando `novo_associado_id` existir e usar seus campos como fonte canônica (com fallback para o snapshot, sem nunca sobrescrever um valor já presente no snapshot):
+### 1. Saneamento de KOU6D37 (migration)
 
-- Se `novaSol.novo_associado_id` existe, buscar `associados` (`nome, cpf, email, telefone`) e mesclar em `dados_novo_titular` preenchendo apenas os campos vazios/ausentes (CPF normalizado para apenas dígitos).
-- O `novoAssociadoId` no fluxo (passo 3) continua igual: o `associados` já é o mesmo registro, então o branch `associadoExistente` cobre tudo.
+- `veiculos`: setar `cobertura_total=true`, `cobertura_roubo_furto=true` (veículo tem rastreador instalado e está acima dos R$ 30k → cobertura 360º).
+- `rastreadores`: atualizar `associado_id` para o novo titular `de5f0d04-2e69-464d-b681-98e7bc03dfc4`.
+- `contratos.cad888ca`: `status='cancelado'`, `data_cancelamento=now()`, motivo "Contrato órfão de solicitação de troca cancelada (a5c915b6) — saneamento".
+- Manter `a32aefd0` como contrato canônico ativo.
 
-Esse padrão é o mesmo já adotado em outras edges quando a fonte da verdade é o registro persistido, não o snapshot.
+### 2. Fix em `efetivar-troca-titularidade` (camada estrutural)
 
-### 2. Saneamento desta solicitação (na própria edge — sem migration)
+Logo após o UPDATE do veículo (passo 6), antes/depois conforme dependência:
 
-Não é necessária migração. A chamada já vai funcionar para esta solicitação assim que a edge for atualizada — o `novo_associado_id` já está preenchido.
+- **Religar cobertura**: ler o plano do novo contrato (ou herdar do `contratoAnterior`), e setar em `veiculos`:
+  - `cobertura_total=true` quando o plano oferece 360º (carro ≥ R$ 30k, moto ≥ R$ 9k, diesel) **e** há rastreador instalado vinculado.
+  - `cobertura_roubo_furto=true` sempre que o plano cobrir R/F.
+  - Se não houver rastreador físico em veículos que exigem (Diesel/Carro≥30k/Moto≥9k), respeitar o guard `trg_guard_veiculo_ativo_exige_rastreador` — neste fluxo de troca o rastreador anterior permanece, então o caminho normal é religar.
+- **Reatribuir rastreador**: `UPDATE rastreadores SET associado_id=novoAssociadoId WHERE veiculo_id=… AND status='instalado'`.
+- **Dedup de contratos órfãos**: antes de criar/atualizar o contrato novo, cancelar contratos `ativo`/`assinado`/`pendente` do mesmo `veiculo_id` cujo `origem_troca_titularidade_id` aponte para uma solicitação `status='cancelada'` ou `'expirada'`. Motivo de cancelamento padronizado.
 
-Para a UI sair do "limbo" (botão clicado, sem efeito visível), basta o usuário clicar em "Aprovar" novamente após o deploy. O fluxo:
+### 3. Trigger de cancelamento de solicitação (defensivo)
 
-- `aprovar-troca-monitoramento` é idempotente (`baseUpdate` regrava os campos de aprovação).
-- `efetivar-troca-titularidade` é idempotente: tem bloco que detecta contrato existente para essa `origem_troca_titularidade_id` e reaproveita (linhas 522-570), e o veículo já está pronto para a transferência.
+Criar trigger `trg_troca_cancelada_cancela_contrato_orfao` em `solicitacoes_troca_titularidade`: ao mover para `status IN ('cancelada','expirada')`, cancelar qualquer `contratos` ainda em `pendente`/`assinado`/`ativo` vinculado por `origem_troca_titularidade_id`. Evita reincidência do contrato fantasma como `cad888ca`.
 
-## Validação
+### 4. Memória
 
-Após o deploy:
+Atualizar `mem://logic/sales/troca-titularidade-fluxo-canonico-e2e` (existente) e/ou criar leaf nova `mem://logic/operations/troca-titularidade-religa-cobertura-e-rastreador` com a regra:
+- Efetivar troca: **transfere veículo + religa cobertura conforme plano + reatribui rastreador + dedup órfãos**. Nenhuma dessas etapas é opcional.
 
-1. Rodar `curl` direto no endpoint com o mesmo `solicitacao_id` e confirmar `{"success":true,...}`.
-2. Verificar no banco:
-   - `solicitacoes_troca_titularidade.status = 'efetivada'`
-   - `efetivada_em` preenchido
-   - `veiculos.associado_id = de5f0d04-…` e `em_troca_titularidade = false`
-   - Contrato `CTR-…-HGFKJ1` segue como `ativo` (foi atualizado pelo bloco de idempotência)
-   - Contrato anterior do antigo titular cancelado
-3. Confirmar que a tela "Aprovações do Monitoramento › Troca de Titularidade › Pendentes" não lista mais KOU6D37 e ela passa a aparecer em "Aprovadas".
+## Detalhes técnicos
 
-Avisarei quando estiver concluído e validado.
+Arquivos a editar:
 
-## Fora de escopo
+- `supabase/functions/efetivar-troca-titularidade/index.ts` — passo 6 e novo bloco de dedup.
+- Migration: saneamento KOU6D37 + criação da trigger defensiva.
+- Memória: index.md + leaf.
 
-- Não vou tocar no `aprovar-troca-monitoramento` (a aprovação em si está OK, só precisa que a efetivação volte a funcionar).
-- Não vou alterar UI da tela de Aprovações — o problema é 100% backend.
-- Não vou investigar por que o CPF foi gravado vazio no snapshot inicial (caso pontual — provavelmente o link público desta troca foi finalizado antes do CPF ser confirmado; o fix garante que isso nunca mais bloqueie a efetivação enquanto `novo_associado_id` existir).
+Ordem de execução (após sua aprovação):
+1. Migration de saneamento + trigger.
+2. Edge function.
+3. Memória.
+
+## Pendências para sua decisão antes de aplicar
+
+1. **Auditoria histórica**: quero rodar a mesma checagem em todas as solicitações `efetivada` recentes para listar quantos outros veículos estão na mesma situação (veículo `ativo` sem `cobertura_total`/`r_f` após troca, ou com rastreador apontando para titular antigo, ou com contrato órfão). Posso rodar agora antes de codificar?
+2. **Confirmar saneamento de KOU6D37** conforme item 1 acima (religar cobertura 360º + reatribuir rastreador + cancelar contrato órfão `cad888ca`).
+3. **Comunicação ao novo titular Vinicius Faustinoni**: enviar algo ou tratar silenciosamente como correção interna? A mensagem indevida "Proteção 360º ativada" não foi enviada aqui — o problema é o oposto (UI dizendo "Sem Cobertura").
+
+Sem decisão sobre (1) e (2), não codifico.
