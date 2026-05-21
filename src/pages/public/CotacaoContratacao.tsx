@@ -764,6 +764,34 @@ export default function CotacaoContratacao() {
         </div>
       </motion.div>
 
+      {/* Banner proativo de prazo da troca de titularidade (janela mesmo-dia) */}
+      {isTrocaTitularidade
+        && !!solicitacaoTroca
+        && !!solicitacaoTroca.termo_cancelamento_assinado_em
+        && solicitacaoTroca.status !== 'efetivada'
+        && solicitacaoTroca.status !== 'expirada'
+        && !trocaReprovada
+        && trocaDentroJanelaMesmoDia && (
+        <motion.div
+          className="relative z-10 border-b border-amber-500/30 bg-amber-500/10"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="max-w-5xl mx-auto px-4 py-3 text-sm text-amber-200 flex items-start gap-2">
+            <span aria-hidden="true">⏰</span>
+            <p>
+              <span className="font-semibold">Prazo da troca de titularidade:</span>{' '}
+              você tem até <span className="font-semibold">hoje, 23:59 (horário de Brasília)</span>,
+              para concluir todas as etapas. Após esse horário, a troca expira e o veículo
+              precisará iniciar um novo cadastro.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 py-8 relative z-10">
         <div className="space-y-8">
