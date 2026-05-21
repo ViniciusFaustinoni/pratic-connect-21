@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
     let totalDeslogados = 0;
     const erros: string[] = [];
 
+    const CONCURRENCY = 25;
     while (true) {
       const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page, perPage });
       if (listErr) {
@@ -88,14 +89,25 @@ Deno.serve(async (req) => {
       const users = list?.users ?? [];
       if (users.length === 0) break;
 
-      for (const u of users) {
-        totalProcessados++;
-        if (u.id === callerId) continue;
-        const { error: signOutErr } = await admin.auth.admin.signOut(u.id, 'global');
-        if (signOutErr) {
-          erros.push(`signOut ${u.id}: ${signOutErr.message}`);
-        } else {
-          totalDeslogados++;
+      const targets = users.filter((u) => u.id !== callerId);
+      totalProcessados += users.length;
+
+      for (let i = 0; i < targets.length; i += CONCURRENCY) {
+        const chunk = targets.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          chunk.map((u) =>
+            admin.auth.admin
+              .signOut(u.id, 'global')
+              .then((r) => ({ id: u.id, error: r.error }))
+              .catch((e) => ({ id: u.id, error: e as Error })),
+          ),
+        );
+        for (const r of results) {
+          if (r.error) {
+            erros.push(`signOut ${r.id}: ${r.error.message}`);
+          } else {
+            totalDeslogados++;
+          }
         }
       }
 
