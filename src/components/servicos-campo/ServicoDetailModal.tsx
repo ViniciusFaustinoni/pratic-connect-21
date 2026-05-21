@@ -422,13 +422,39 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
         onOpenChange={setFichaOpen}
       />
 
-      {isInstalacao && (
+      {isInstalacao && instalacaoOrigemId && (
         <RealocarInstalacaoDialog
           open={realocarOpen}
           onOpenChange={setRealocarOpen}
           instalacaoId={servico.id}
           veiculoLabel={servico.veiculo?.placa || undefined}
           associadoNome={servico.associado?.nome || undefined}
+        />
+      )}
+
+      {!isInstalacao && (
+        <RealocarServicoSimplesDialog
+          open={realocarSimplesOpen}
+          onOpenChange={setRealocarSimplesOpen}
+          servicoId={servico.id}
+          servicoTipo={servico.tipo}
+          servicoLabel={`${TIPO_SERVICO_LABELS[servico.tipo] || servico.tipo}${servico.veiculo?.placa ? ` · ${servico.veiculo.placa}` : ''}`}
+        />
+      )}
+
+      <CancelarServicoDialog
+        open={cancelarOpen}
+        onOpenChange={setCancelarOpen}
+        servicoId={servico.id}
+        servicoLabel={servico.veiculo?.placa || undefined}
+      />
+
+      {contratoId && (
+        <DevolverAoCadastroDialog
+          open={devolverOpen}
+          onOpenChange={setDevolverOpen}
+          contratoId={contratoId}
+          servicoLabel={servico.veiculo?.placa || undefined}
         />
       )}
     </>
