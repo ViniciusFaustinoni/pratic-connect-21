@@ -366,7 +366,11 @@ export function AbrirRetiradaModal({
     ? !!novoVeiculoId
     : true;
 
-  const isValid = situacaoFinanceira && motivo && dataAgendada && periodo && profissionalId && validacaoNovoVeiculo;
+  const validacaoEnderecoNovo = localTipo === 'volante' && enderecoModo === 'novo'
+    ? !!(endNovoCep.replace(/\D/g, '').length === 8 && endNovoLogradouro.trim() && endNovoNumero.trim() && endNovoBairro.trim() && endNovoCidade.trim() && endNovoUf.trim())
+    : true;
+
+  const isValid = situacaoFinanceira && motivo && dataAgendada && periodo && profissionalId && validacaoNovoVeiculo && validacaoEnderecoNovo;
   const profissionais = equipe || [];
 
   if (!rastreador) return null;
