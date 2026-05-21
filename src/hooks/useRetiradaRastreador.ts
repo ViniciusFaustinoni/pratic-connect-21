@@ -58,6 +58,18 @@ export function useCriarSolicitacaoRetiradaCadastro() {
 
 // =============== TIPOS ===============
 
+export interface EnderecoCustomRetirada {
+  logradouro: string;
+  numero: string;
+  complemento?: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 export interface AbrirRetiradaParams {
   rastreadorId: string;
   associadoId: string | null;
@@ -74,6 +86,8 @@ export interface AbrirRetiradaParams {
   periodo: Periodo;
   localTipo: 'base' | 'volante';
   localEndereco?: string;
+  /** Endereço informado/alterado pelo Monitoramento (sobrescreve o do cadastro do associado). */
+  enderecoCustom?: EnderecoCustomRetirada | null;
   profissionalId: string;
   permiteEncaixe: boolean;
   // Notificação e observações
@@ -156,17 +170,30 @@ export function useAbrirRetirada() {
         longitude: null as number | null,
       };
 
-      if (params.localTipo === 'volante' && associadoData) {
-        endereco = {
-          logradouro: associadoData.logradouro,
-          numero: associadoData.numero,
-          bairro: associadoData.bairro,
-          cidade: associadoData.cidade,
-          uf: associadoData.uf,
-          cep: associadoData.cep,
-          latitude: associadoData.endereco_latitude,
-          longitude: associadoData.endereco_longitude,
-        };
+      if (params.localTipo === 'volante') {
+        if (params.enderecoCustom) {
+          endereco = {
+            logradouro: params.enderecoCustom.logradouro,
+            numero: params.enderecoCustom.numero,
+            bairro: params.enderecoCustom.bairro,
+            cidade: params.enderecoCustom.cidade,
+            uf: params.enderecoCustom.uf,
+            cep: params.enderecoCustom.cep,
+            latitude: params.enderecoCustom.latitude ?? null,
+            longitude: params.enderecoCustom.longitude ?? null,
+          };
+        } else if (associadoData) {
+          endereco = {
+            logradouro: associadoData.logradouro,
+            numero: associadoData.numero,
+            bairro: associadoData.bairro,
+            cidade: associadoData.cidade,
+            uf: associadoData.uf,
+            cep: associadoData.cep,
+            latitude: associadoData.endereco_latitude,
+            longitude: associadoData.endereco_longitude,
+          };
+        }
       }
 
       // 5. Criar serviço de retirada
