@@ -35,11 +35,13 @@ const templateSchema = z.object({
   conteudo: z.string().min(10, 'Conteúdo deve ter pelo menos 10 caracteres'),
   requer_assinatura: z.boolean().default(false),
   is_default_autentique: z.boolean().default(false),
+  is_default_substituicao: z.boolean().default(false),
   is_default_evento: z.boolean().default(false),
   is_default_saida: z.boolean().default(false),
   is_default_rastreador: z.boolean().default(false),
   anexar_proposta: z.boolean().default(false),
   ordem_anexo: z.coerce.number().int().min(0).default(0),
+
 });
 
 type TemplateFormData = z.infer<typeof templateSchema>;
