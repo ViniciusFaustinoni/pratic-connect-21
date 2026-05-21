@@ -375,6 +375,33 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
       valor || '—'
     );
   }
+
+  // ========== SUPRESSÃO DE LINHAS/PARÁGRAFOS OPCIONAIS VAZIOS ==========
+  // Variáveis marcadas como opcionais (CNH, complemento, código FIPE, etc.)
+  // foram substituídas pelo sentinel OPT_VAZIO. Aqui removemos o container
+  // (TR, LI, P) que contém essa marca — para que linhas vazias não apareçam
+  // no termo. Faz vários passes para casos onde TRs adjacentes encadeiam.
+  for (let i = 0; i < 4; i++) {
+    const antes = resultado;
+    // <tr>...OPT_VAZIO...</tr> — linha inteira de tabela
+    resultado = resultado.replace(
+      new RegExp(`<tr[^>]*>(?:(?!<tr[\\s>])[\\s\\S])*?${OPT_VAZIO}[\\s\\S]*?</tr>`, 'gi'),
+      ''
+    );
+    // <li>...OPT_VAZIO...</li>
+    resultado = resultado.replace(
+      new RegExp(`<li[^>]*>(?:(?!<li[\\s>])[\\s\\S])*?${OPT_VAZIO}[\\s\\S]*?</li>`, 'gi'),
+      ''
+    );
+    // <p>...OPT_VAZIO...</p> sozinho (não dentro de TD com label)
+    resultado = resultado.replace(
+      new RegExp(`<p[^>]*>(?:(?!<p[\\s>])[\\s\\S])*?${OPT_VAZIO}[\\s\\S]*?</p>`, 'gi'),
+      ''
+    );
+    if (antes === resultado) break;
+  }
+  // Qualquer OPT_VAZIO residual (fora de container reconhecido) vira "—"
+  resultado = resultado.split(OPT_VAZIO).join('—');
   
   // Remover bloco "Serviços:" — todas as variantes possíveis
   // 1) Container HTML com ç literal
