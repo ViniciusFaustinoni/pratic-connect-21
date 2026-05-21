@@ -78,6 +78,8 @@ export interface PlateResult {
   fipeData?: FipeData;
   /** Todas as variantes FIPE retornadas pela API — usuário pode trocar quando a heurística erra. */
   fipeAlternativas?: FipeAlternativa[];
+  /** true quando o ranking interno deu empate entre top1 e top2 — UI deve forçar escolha manual. */
+  fipeAmbiguo?: boolean;
   error?: string;
 }
 

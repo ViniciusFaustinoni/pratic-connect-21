@@ -150,6 +150,38 @@ serve(async (req) => {
       ).toUpperCase();
     }
 
+    // Trims/versões distintivos para detectar conflito de versão entre o nome do
+    // veículo (DETRAN) e a descrição da variante FIPE. Lista intencionalmente
+    // conservadora — só tokens que realmente distinguem trim/série.
+    const TRIM_TOKENS = [
+      'SPORT','LIMITED','LONGITUDE','TRAILHAWK','MOAB','RUBICON','SAHARA','WILLYS',
+      'OUTDOOR','ADVENTURE','FREEDOM','HIGHLINE','COMFORTLINE','TRENDLINE',
+      'BLACK','NIGHT','SRT','LTZ','LT','LS','SXT','PREMIER','MIDNIGHT',
+      'ELITE','TOURING','EXL','LX','GLX','GLS','GL','SEL','SE','SR',
+      'XEI','XEL','XLS','XLT','XLE','XL','XS','GTI','GTS','GT','RS',
+      'ANOS','MAXX','JOY','PREMIUM','ATTITUDE','STYLE','DYNAMIC',
+      'BLUEMOTION','CROSS','ALLSPACE','RALLYE','EXCLUSIVE',
+    ];
+
+    function tokensDoNome(nome: string): string[] {
+      if (!nome) return [];
+      const NOISE = new Set([
+        'AUT','AUTOMATICO','AUT.','MEC','MANUAL','MEC.',
+        'FLEX','GASOL','GASOLINA','ALCOOL','DIESEL','ELETRICO',
+        'HIBRIDO','GNV','BICOMBUSTIVEL',
+        '4X2','4X4','4P','5P','3P','2P','16V','8V','12V','20V','24V',
+        'TURBO','TFSI','TSI','VVT','VVTI','FSI','THP',
+      ]);
+      return nome
+        .toUpperCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^A-Z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(t => t.length >= 2)
+        .filter(t => !NOISE.has(t))
+        .filter(t => !/^\d+(\.\d+)?$/.test(t));   // descarta "1.8", "2016"
+    }
+
     function pontuarFipe(f: any, v: any): { score: number; motivos: string[] } {
       const desc = descricaoFipe(f);
       const motivos: string[] = [];
@@ -197,23 +229,58 @@ serve(async (req) => {
         if (re.test(desc)) { score += 2; motivos.push(`+2 cc_${litros}`); }
       }
 
+      // ===== Matching por NOME/TRIM (correção raiz PYL9A01) =====
+      // O DETRAN entrega o nome real do modelo (ex.: "RENEGADE SPORT AUTOMATICO").
+      // Quando combustível/câmbio/ano/cilindrada empatam entre variantes da mesma
+      // família, o token do trim ("SPORT" vs "75 ANOS" vs "LIMITED") é o único
+      // critério capaz de desempatar corretamente.
+      const nomeVeic = String(
+        v?.marca_modelo || v?.modelo || v?.fipe_name || ''
+      );
+      const tokensVeic = tokensDoNome(nomeVeic);
+      const descTokens = new Set(tokensDoNome(desc));
+
+      if (tokensVeic.length) {
+        let casados = 0;
+        for (const t of tokensVeic) {
+          if (descTokens.has(t)) casados++;
+        }
+        if (casados > 0) {
+          score += casados * 6;
+          motivos.push(`+${casados * 6} nome_match(${casados})`);
+        }
+
+        // Penalidade por conflito de trim: veículo tem trim X, FIPE tem trim Y≠X
+        const trimsVeic = tokensVeic.filter(t => TRIM_TOKENS.includes(t));
+        const trimsDesc = [...descTokens].filter(t => TRIM_TOKENS.includes(t));
+        if (trimsVeic.length && trimsDesc.length) {
+          const overlap = trimsVeic.some(t => trimsDesc.includes(t));
+          if (!overlap) {
+            score -= 12;
+            motivos.push(`-12 trim_conflito(${trimsVeic.join('|')} vs ${trimsDesc.join('|')})`);
+          }
+        }
+      }
+
       return { score, motivos };
     }
 
-    function escolherMelhorFipe(fipes: any[], v: any): { idx: number; ranking: any[] } {
-      if (!fipes.length) return { idx: -1, ranking: [] };
+    function escolherMelhorFipe(fipes: any[], v: any): { idx: number; ranking: any[]; ambiguo: boolean } {
+      if (!fipes.length) return { idx: -1, ranking: [], ambiguo: false };
       const ranking = fipes.map((f, idx) => {
         const { score, motivos } = pontuarFipe(f, v);
         return { idx, score, motivos, descricao: descricaoFipe(f), codigo: f?.codigo, valor: f?.valor };
       });
       // Estável: maior score; desempate por ordem original
       ranking.sort((a, b) => b.score - a.score || a.idx - b.idx);
-      return { idx: ranking[0].idx, ranking };
+      const ambiguo = ranking.length > 1 && ranking[0].score === ranking[1].score;
+      return { idx: ranking[0].idx, ranking, ambiguo };
     }
 
-    const { idx: melhorIdx, ranking: rankingFipes } = escolherMelhorFipe(fipesArray, veiculo);
+    const { idx: melhorIdx, ranking: rankingFipes, ambiguo: fipeAmbiguo } =
+      escolherMelhorFipe(fipesArray, veiculo);
     console.log(`[plate-lookup] Ranking FIPE (${fipesArray.length} variantes):`, JSON.stringify(rankingFipes));
-    console.log(`[plate-lookup] Variante escolhida: idx=${melhorIdx}`);
+    console.log(`[plate-lookup] Variante escolhida: idx=${melhorIdx} ambiguo=${fipeAmbiguo}`);
 
     if (!veiculo || !veiculo.marca_modelo) {
       console.error("[plate-lookup] Veículo não encontrado ou sem dados");
@@ -332,6 +399,7 @@ serve(async (req) => {
       vehicleData,
       fipeData,
       fipeAlternativas,
+      fipeAmbiguo, // true quando top1 e top2 do ranking empatam — UI deve forçar escolha manual
       fipeRanking: rankingFipes, // útil para debug nos logs do front
     };
 

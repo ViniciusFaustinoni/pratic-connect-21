@@ -136,12 +136,17 @@ export function EtapaConsultaFipe({
       const result = await getByPlaca(placaClean);
       
       if (result.success && result.vehicleData) {
-        const { vehicleData, fipeData, fipeAlternativas: alts } = result;
+        const { vehicleData, fipeData, fipeAlternativas: alts, fipeAmbiguo } = result;
         
+        // Modelo canônico = descrição oficial da FIPE quando disponível, NÃO o
+        // nome livre do DETRAN. Garante coerência entre `codigo_fipe` e
+        // `veiculo.modelo` (correção raiz desincronização tipo PYL9A01).
+        const modeloFinal = fipeData?.descricao || vehicleData.modelo;
+
         setVeiculoEncontrado({
           placa: vehicleData.placa,
           marca: vehicleData.marca,
-          modelo: vehicleData.modelo,
+          modelo: modeloFinal,
           ano: vehicleData.ano,
           cor: vehicleData.cor,
           combustivel: vehicleData.combustivel,
@@ -151,7 +156,7 @@ export function EtapaConsultaFipe({
         
         // PREENCHER CAMPOS AUTOMATICAMENTE
         setMarca(vehicleData.marca);
-        setModelo(fipeData?.descricao || vehicleData.modelo);
+        setModelo(modeloFinal);
         setAno(vehicleData.ano);
         if (fipeData?.valor) {
           setValorFipe(fipeData.valor);
@@ -169,7 +174,17 @@ export function EtapaConsultaFipe({
         setCamposAutoPreenchidos(camposPreenchidos);
         
         setStatus('success');
-        toast.success(`Dados do veículo preenchidos automaticamente!`);
+        if (fipeAmbiguo) {
+          // Empate na heurística — operador PRECISA escolher a versão certa
+          // manualmente antes de avançar.
+          setFipeSelecionada('');
+          toast.warning(
+            'Mais de uma versão FIPE compatível foi encontrada. Escolha a versão correta na lista abaixo antes de avançar.',
+            { duration: 8000 }
+          );
+        } else {
+          toast.success(`Dados do veículo preenchidos automaticamente!`);
+        }
       } else {
         setStatus('error');
         setErrorMessage(result.error || 'Veículo não encontrado na base FIPE');
@@ -209,8 +224,11 @@ export function EtapaConsultaFipe({
     toast.success('Versão FIPE atualizada');
   };
 
-  // Pode avançar se tem marca, modelo, ano e valorFipe preenchidos
-  const canProceed = marca && modelo && ano && valorFipe !== null;
+  // Pode avançar se tem marca, modelo, ano e valorFipe preenchidos.
+  // Quando há múltiplas variantes FIPE e o consultor ainda não confirmou uma
+  // (caso de empate na heurística), bloqueia o avanço para forçar escolha.
+  const precisaConfirmarVersao = fipeAlternativas.length > 1 && !fipeSelecionada;
+  const canProceed = !!(marca && modelo && ano && valorFipe !== null) && !precisaConfirmarVersao;
 
   return (
     <Card className="border-border bg-card">
@@ -319,10 +337,20 @@ export function EtapaConsultaFipe({
 
           {/* Seletor de variante FIPE — somente no modo FIPE */}
           {!modoNotaFiscal && fipeAlternativas.length > 1 && (
-            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+            <Alert className={cn(
+              "border-amber-500/50 bg-amber-50 dark:bg-amber-950/20",
+              precisaConfirmarVersao && "border-destructive/70 bg-destructive/5"
+            )}>
               <AlertDescription className="space-y-2">
-                <div className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                  Foram encontradas {fipeAlternativas.length} versões FIPE para esta placa. Confira se a versão selecionada bate com o CRLV (combustível, câmbio, motorização):
+                <div className={cn(
+                  "text-sm font-medium",
+                  precisaConfirmarVersao
+                    ? "text-destructive"
+                    : "text-amber-900 dark:text-amber-200"
+                )}>
+                  {precisaConfirmarVersao
+                    ? `Mais de uma versão FIPE bate com esse veículo. Escolha a versão correta abaixo (confira combustível, câmbio e motorização no CRLV) — sem essa confirmação não é possível avançar.`
+                    : `Foram encontradas ${fipeAlternativas.length} versões FIPE para esta placa. Confira se a versão selecionada bate com o CRLV (combustível, câmbio, motorização):`}
                 </div>
                 <Select value={String(fipeSelecionada)} onValueChange={handleTrocarFipe}>
                   <SelectTrigger className="bg-background">
