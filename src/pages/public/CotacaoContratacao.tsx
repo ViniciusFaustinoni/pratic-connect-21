@@ -1089,6 +1089,7 @@ export default function CotacaoContratacao() {
                         valorFipe: Number((cotacao as any).veiculo_valor_fipe ?? (cotacao as any).valor_fipe ?? 0),
                         combustivel: (cotacao as any).veiculo_combustivel || undefined,
                       } as any).exige}
+                      criadoEm={(cotacao as any)?.created_at}
                     />
                   )}
                   <NavegacaoEtapas

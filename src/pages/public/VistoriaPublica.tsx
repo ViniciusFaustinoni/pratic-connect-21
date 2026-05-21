@@ -499,10 +499,11 @@ function EtapaFotos({
   const concluirMut = useConcluirEtapaFotosPublica();
   const rascunhoMut = useSalvarRascunhoVistoriaPublica();
 
-  const categorias = useMemo(() => agruparFotosFiltradas(tipoVeiculo, false), [tipoVeiculo]);
+  const criadoEm = link?.created_at as string | undefined;
+  const categorias = useMemo(() => agruparFotosFiltradas(tipoVeiculo, false, criadoEm), [tipoVeiculo, criadoEm]);
   const todasFotos = useMemo(() => categorias.flatMap((c) => c.fotos), [categorias]);
-  const totalFotosObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo), [tipoVeiculo]);
-  const fotosObrigatoriasDoTipo = useMemo(() => getFotosFiltradas(tipoVeiculo, false), [tipoVeiculo]);
+  const totalFotosObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo, criadoEm), [tipoVeiculo, criadoEm]);
+  const fotosObrigatoriasDoTipo = useMemo(() => getFotosFiltradas(tipoVeiculo, false, criadoEm), [tipoVeiculo, criadoEm]);
 
   // Fotos visíveis na UI = uploads concluídos + previews da fila offline
   const fotosVisiveis = useMemo(() => {
@@ -851,7 +852,8 @@ function EtapaInstalacao({
 
   const concluirMut = useConcluirEtapaInstalacaoPublica();
 
-  const categoriasInst = useMemo(() => agruparFotosApenasInstalacao(tipoVeiculo), [tipoVeiculo]);
+  const criadoEmInst = link?.created_at as string | undefined;
+  const categoriasInst = useMemo(() => agruparFotosApenasInstalacao(tipoVeiculo, criadoEmInst), [tipoVeiculo, criadoEmInst]);
   const fotosInstalacao = useMemo(() => categoriasInst.flatMap(c => c.fotos), [categoriasInst]);
   const fotosEnviadasArray = useMemo(
     () => Object.entries(fotosMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url })),

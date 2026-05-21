@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatarMoeda } from '@/utils/format';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
-import { FOTOS_VISTORIA_COMPLETA } from '@/data/vistoriaConfigCompleta';
+import { getFotosByTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { BadgeInclusaoVeiculo } from '@/components/cotacao-publica/BadgeInclusaoVeiculo';
 
@@ -42,11 +42,6 @@ import {
   FOTOS_VISTORIA_CONFIG,
   STATUS_COTACAO_PUBLICA_LABELS,
 } from '@/types/cotacaoPublica';
-
-// Fotos da vistoria completa (31 fotos) para veículos sem rastreador, excluindo fotos de instalação
-const FOTOS_VISTORIA_COMPLETA_CLIENTE = FOTOS_VISTORIA_COMPLETA
-  .filter(f => f.categoria !== 'instalacao')
-  .map(f => ({ tipo: f.id, nome: f.nome, descricao: f.nome }));
 
 // Cores dinâmicas para planos — baseadas no índice do plano
 const CORES_PLANO_DINAMICAS = [
@@ -126,10 +121,13 @@ export default function CotacaoPublicaCompleta() {
     fipeMinRastreadorMoto ?? 9000
   );
 
-  // Lista de fotos da vistoria: 31 fotos completas se não precisa de rastreador, 18 padrão caso contrário
+  // Roteiro v2/legacy resolvido pela data de criação da cotação.
+  // Sem isso, cotações antigas ainda em andamento começariam a ver o roteiro v2 no meio do fluxo.
   const fotosVistoriaConfig = veiculoPrecisaRastreador
     ? FOTOS_VISTORIA_CONFIG.map(f => ({ ...f }))
-    : FOTOS_VISTORIA_COMPLETA_CLIENTE;
+    : getFotosByTipoVeiculo('automovel', (cotacao as any)?.created_at)
+        .filter(f => f.categoria !== 'instalacao')
+        .map(f => ({ tipo: f.id, nome: f.nome, descricao: f.nome }));
 
   // Estados da jornada
   const [step, setStep] = useState<JornadaStep>('uso');
