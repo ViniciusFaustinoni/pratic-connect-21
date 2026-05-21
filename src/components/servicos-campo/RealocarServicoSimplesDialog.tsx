@@ -125,7 +125,7 @@ export function RealocarServicoSimplesDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Voltar</Button>
-          <Button onClick={() => realocar.mutate()} disabled={realocar.isPending || !motivo.trim()}>
+          <Button onClick={() => realocar.mutate()} disabled={realocar.isPending || motivo.trim().length < 5}>
             {realocar.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
             Confirmar realocação
           </Button>
