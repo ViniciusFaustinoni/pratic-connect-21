@@ -303,6 +303,17 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         }
       }
 
+      // Carrega cadastro_aprovado do contrato (canônico p/ sub-estado da tela)
+      let cadastroAprovado = false;
+      if (servico.contrato_id) {
+        const { data: cRow } = await supabase
+          .from('contratos')
+          .select('cadastro_aprovado')
+          .eq('id', servico.contrato_id)
+          .maybeSingle();
+        cadastroAprovado = !!(cRow as any)?.cadastro_aprovado;
+      }
+
       return {
         servico,
         fotos,
@@ -316,6 +327,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         enderecoBase,
         isAtendimentoBase,
         vistoriaModalidade,
+        cadastroAprovado,
       };
     },
     enabled: !!servicoId,
