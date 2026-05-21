@@ -1,54 +1,74 @@
-# Endereço editável no agendamento de Retirada de Rastreador
+## Contexto
 
-## Problema
+`COT-20260521-002944030-565` é troca de titularidade com termo assinado em 20/05 18:15 BRT — a janela mesmo-dia (até 23:59:59 BRT do dia 20) já expirou. Pelo manual, a partir desse momento o fluxo passa a se comportar como **adesão normal acima da FIPE mínima** (FIPE R$ 30.835, carro, mínimo R$ 30k): autovistoria é **opcional para liberar R&F**, vistoria presencial agenda normalmente. Por isso, a opção de Vistoria/Autovistoria **deve continuar aparecendo** — o que está fora do canônico é a **ordem**: hoje o stepper exibe Vistoria antes de Pagamento. Quando há pagamento, ele vem **antes** da vistoria. Quando há isenção (`valor_adesao=0`, como nesta cotação), o passo Pagamento detecta sozinho e auto-avança.
 
-No modal **Solicitar Retirada de Rastreador** (Monitoramento), quando o atendimento é **Volante (domicílio)**, o sistema hoje copia silenciosamente o endereço do cadastro do associado para `servicos` e segue. O Monitoramento não tem como **confirmar** que esse endereço é o correto, nem como **informar um endereço diferente** (caso o associado avise por WhatsApp/telefone que o veículo está em outro lugar).
+## O que muda
 
-Quando o local é **Base (Caxias)**, endereço é o da sede — não muda nada.
+Arquivo único: `src/pages/public/CotacaoContratacao.tsx`.
 
-## Escopo
+### 1. `STEPS_BASE` (linhas 52–58) — reordenar
 
-Apenas UI + payload do hook. Sem migration: as colunas `logradouro/numero/bairro/cidade/uf/cep/latitude/longitude` já existem em `servicos` e o hook `useAbrirRetirada` já as grava.
+```text
+0 Plano  →  1 Documentos  →  2 Contrato  →  3 Pagamento  →  4 Vistoria
+                                             (auto-skip se isento)
++ 5 Instalação (apenas quando tipo_vistoria === 'autovistoria')
+```
 
-Arquivos:
-- `src/components/monitoramento/retirada/AbrirRetiradaModal.tsx`
-- `src/hooks/useRetiradaRastreador.ts` (estender `AbrirRetiradaParams` com campos de endereço estruturado e usá-los no insert quando vierem)
+### 2. `isEtapaConcluida` (linhas 282–301) — trocar mapeamento dos cases 3 e 4
 
-## Comportamento
+- `case 3` (agora **pagamento**) → `statusConcluidos.pagamento`
+- `case 4` (agora **vistoria**) → checa `cotacao.tipo_vistoria` ou `statusConcluidos.vistoria`
+- `case 5` (instalação para autovistoria) — inalterado
 
-Quando `localTipo === 'volante'`:
+### 3. `etapaDoStatus` / `determinarEtapa` (em `src/lib/etapaDoStatus.ts`)
 
-1. Logo abaixo do radio "Volante (domicílio)", aparece um **bloco "Endereço do atendimento"** já pré-preenchido com o endereço do associado (CEP, logradouro, número, bairro, cidade/UF).
-2. Dois modos, controlados por radio dentro do bloco:
-   - **Usar endereço cadastrado** (padrão) — mostra o endereço em modo leitura, com badge "do cadastro do associado".
-   - **Informar outro endereço** — desbloqueia inputs editáveis (CEP com busca ViaCEP igual ao restante do app, logradouro, número, complemento opcional, bairro, cidade, UF). Validação obrigatória dos campos exceto complemento.
-3. O endereço escolhido (cadastro ou novo) é gravado nas colunas de `servicos` no insert.
-4. Se "Informar outro endereço": o `observacoes` ganha automaticamente uma linha prefixada `[Endereço alternativo informado pelo Monitoramento]` antes do texto livre, pra ficar rastreável na timeline do serviço.
+Atualizar o map para a nova ordem:
 
-Quando `localTipo === 'base'`: nenhum bloco de endereço aparece (comportamento atual).
+- `documentos_ok` → 3 (pagamento)
+- `pagamento_ok` → 4 (vistoria)
+- `vistoria_ok` / `autovistoria_ok` / `vistoria_agendada` / `aguardando_aprovacao_*` → 5 (final / instalação)
 
-## Detalhes técnicos
+Backwards-compatible: o `useEffect` (linha 400) continua usando `Math.max` implícito via override do troca expirado.
 
-`AbrirRetiradaModal.tsx`:
-- Novos estados: `enderecoModo: 'cadastro' | 'novo'`, e os campos `cep/logradouro/numero/complemento/bairro/cidade/uf`.
-- Reaproveitar o componente/hook de busca de CEP já existente no projeto (procurar `useCep`/`buscarCep`/ViaCEP — se houver, reusar; senão, fetch direto a `viacep.com.br`).
-- Reset no `useEffect` de fechamento e quando `localTipo` muda para `base`.
-- `isValid` inclui validação do endereço quando `volante` + `modo === 'novo'`.
+### 4. `navOrder` (linhas 389–392) — passar a refletir nova ordem
 
-`useRetiradaRastreador.ts`:
-- Adicionar em `AbrirRetiradaParams` o objeto opcional `enderecoCustom?: { logradouro; numero; complemento?; bairro; cidade; uf; cep; latitude?; longitude? }`.
-- No bloco "4. Determinar endereço": se `enderecoCustom` veio, usar ele; senão, manter o fallback atual (cadastro do associado).
-- A chamada de WhatsApp (`notificar-retirada-whatsapp`) já recebe `local: params.localEndereco` — passar a string formatada do endereço escolhido nesse campo, pra o associado ver no aviso.
+```ts
+// dentro da janela mesmo-dia (troca): pula Vistoria (índice 4)
+dispensaVistoriaTroca ? [0, 1, 2, 3, 5] : [0, 1, 2, 3, 4, 5]
+```
 
-## Fora do escopo
+Quando `dispensaVistoriaTroca=true` e adesão é isenta, o `EtapaPagamentoCotacao` já auto-avança (lógica `skipPaymentCheck`) → cai direto na tela de acompanhamento (índice 5).
 
-- Geocoding automático do endereço novo (lat/long ficam null se não vierem do ViaCEP — não bloqueia agendamento).
-- Editar endereço **depois** que o serviço já foi agendado (caso pedido depois, abre nova história).
-- Tela de retirada do instalador (`ExecutarRetirada`) — ela já lê `logradouro/numero/...` direto de `servicos`, então passa a mostrar o endereço correto sem alteração.
+### 5. Override troca-pós-pagamento (linhas 354–362) — manter
 
-## Validação manual
+A regra que joga troca em `pagamento_ok|contrato_gerado|ativo` para etapa 5 (tela de acompanhamento) continua válida: troca não tem etapa de "instalação para o cliente" — o destino após pagamento é o acompanhamento (mesmo quando expirou e vai precisar de vistoria, ela é agendada via a etapa 4 antes disso).
 
-1. Abrir retirada de um rastreador qualquer com Volante → confirmar que endereço do associado aparece pré-preenchido em modo leitura.
-2. Trocar para "Informar outro endereço", digitar CEP válido → ViaCEP preenche, ajustar número, agendar.
-3. Conferir em `servicos` que o endereço novo foi gravado nas colunas e que `observacoes` recebeu o prefixo.
-4. Trocar para Base → bloco some.
+### 6. Renderização condicional (linhas ~900–1200) — swap
+
+Trocar `etapaAtual === 3` (vistoria) ↔ `etapaAtual === 4` (pagamento) nos blocos render. Conteúdo de cada componente inalterado.
+
+### 7. `handleContratoAssinado` (linhas 418–426) — sem mudança lógica
+
+`navOrder.indexOf(2) + 1` continua apontando corretamente para 3 (agora Pagamento) na nova ordem.
+
+## Validação por cenário
+
+
+| Cenário                                    | Ordem visível                                                                     | Observação                                           |
+| ------------------------------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Nova adesão acima FIPE — paga              | Plano → Docs → Contrato → **Pagamento** → Vistoria                                | Autovistoria opcional dentro da etapa                |
+| Nova adesão acima FIPE — isenta            | Plano → Docs → Contrato → Pagamento (auto-skip) → Vistoria                        | Pagamento detecta zero e avança                      |
+| Sub-FIPE — paga                            | Plano → Docs → Contrato → Pagamento → **Autovistoria** + Instalação               | Autovistoria obrigatória                             |
+| Troca dentro da janela — paga              | Plano → Docs → Contrato → Pagamento → Vistoria → Acompanhamento                   | Vistoria dispensada                                  |
+| Troca dentro da janela — isenta            | Plano → Docs → Contrato → Pag (skip) → Vistoria → Acompanhamento                  | Direto ao Cadastro                                   |
+| **Troca expirada (caso COT-565)** — isenta | Plano → Docs → Contrato → Pag (skip) → **Vistoria/Autovistoria** → Acompanhamento | Mesma régua de adesão acima FIPE                     |
+| Troca expirada — paga                      | Plano → Docs → Contrato → **Pagamento** → Vistoria → Acompanhamento               | Penúltima tela = Pagamento, exatamente como descrito |
+
+
+## Fora de escopo
+
+- Edge functions (`aprovar-proposta`, `contrato-gerar`, `criar-instalacao-pos-pagamento`)
+- Internals do `EtapaPagamentoCotacao` (já tem auto-skip)
+- Internals do `EtapaVistoria` (mantém oferta de autovistoria/levar à base/rota)
+- Cron de expiração de troca (já existente)
+- Migrations
