@@ -49,12 +49,15 @@ function detectarTipoVeiculoDaCotacao(cotacao: any): 'carro' | 'moto' {
 
 // NOVO FLUXO: 1-Plano, 2-Docs, 3-Contrato (Autentique), 4-Vistoria, 5-Pagamento
 // Quando autovistoria: adiciona 6ª etapa "Instalação" (índice 5) para agendamento físico do rastreador
+// Ordem canônica: Plano → Docs → Contrato → Pagamento → Vistoria
+// Pagamento vem antes da Vistoria. Quando há isenção, EtapaPagamentoCotacao
+// detecta valor zero e auto-avança via skipPaymentCheck.
 const STEPS_BASE: Step[] = [
   { id: 'plano', label: 'Escolha do Plano', description: 'Selecione seu plano' },
   { id: 'documentos', label: 'Documentos', description: 'Envie seus dados' },
   { id: 'contrato', label: 'Contrato', description: 'Assine digitalmente' },
-  { id: 'vistoria', label: 'Vistoria', description: 'Tire as fotos' },
   { id: 'pagamento', label: 'Pagamento', description: 'Ative sua cobertura' },
+  { id: 'vistoria', label: 'Vistoria', description: 'Tire as fotos' },
 ];
 const STEP_INSTALACAO: Step = { id: 'instalacao', label: 'Instalação', description: 'Agende o rastreador' };
 
@@ -287,12 +290,11 @@ export default function CotacaoContratacao() {
       case 2:
         return statusConcluidos.contrato.includes(status);
       case 3:
-        // dispensaVistoriaTroca NÃO conta como "etapa concluída" (quebraria a
-        // monotonicidade do loop em etapaDoStatus, mandando o usuário direto
-        // para Pagamento ao abrir o link). Skip de navegação fica no useEffect.
-        return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
-      case 4:
+        // Pagamento concluído
         return statusConcluidos.pagamento.includes(status);
+      case 4:
+        // Vistoria: dispensaVistoriaTroca NÃO conta como concluída aqui (skip fica no navOrder).
+        return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(status);
       case 5:
         if (cotacao.tipo_vistoria !== 'autovistoria') return false;
         return (
@@ -327,9 +329,6 @@ export default function CotacaoContratacao() {
 
     let etapaFinal = etapaBase >= 0 ? Math.max(etapaBase, etapaPorSinais) : etapaPorSinais;
 
-    if (etapaFinal === 3 && cotacao?.tipo_vistoria) {
-      etapaFinal = 4;
-    }
 
     if (
       cotacao?.tipo_vistoria === 'autovistoria' &&
@@ -384,10 +383,10 @@ export default function CotacaoContratacao() {
   }, [cotacao?.tipo_vistoria]);
 
   // Ordem de navegação por índices INTERNOS:
-  // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
-  // Em troca dentro da janela mesmo-dia, vistoria é dispensada → remove índice 3.
+  // 0=plano, 1=docs, 2=contrato, 3=pagamento, 4=vistoria, 5=conclusão/instalação
+  // Em troca dentro da janela mesmo-dia, vistoria é dispensada → remove índice 4.
   const navOrder = useMemo<number[]>(
-    () => (dispensaVistoriaTroca ? [0, 1, 2, 4, 5] : [0, 1, 2, 3, 4, 5]),
+    () => (dispensaVistoriaTroca ? [0, 1, 2, 3, 5] : [0, 1, 2, 3, 4, 5]),
     [dispensaVistoriaTroca]
   );
 
@@ -404,9 +403,9 @@ export default function CotacaoContratacao() {
     if (cotacao?.status_contratacao) {
       let etapa = etapaDoStatus;
 
-      // Troca dentro da janela mesmo-dia: pula etapa de vistoria automaticamente
-      if (etapa === 3 && dispensaVistoriaTroca) {
-        etapa = 4;
+      // Troca dentro da janela mesmo-dia: pula etapa de vistoria (4) automaticamente
+      if (etapa === 4 && dispensaVistoriaTroca) {
+        etapa = 5;
       }
 
       setEtapaAtual(etapa);
@@ -957,8 +956,8 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 3: Vistoria */}
-              {etapaAtual === 3 && (
+              {/* Etapa 4: Vistoria */}
+              {etapaAtual === 4 && (
                 <motion.div
                   key="vistoria"
                   variants={pageVariants}
@@ -993,8 +992,8 @@ export default function CotacaoContratacao() {
                         </div>
                         <Button
                           onClick={() => {
-                            const idx = navOrder.indexOf(3);
-                            const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                            const idx = navOrder.indexOf(4);
+                            const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
                             setEtapaAtual(next);
                           }}
                         >
@@ -1074,16 +1073,16 @@ export default function CotacaoContratacao() {
                         estado: cotacao.cliente_uf || '',
                       }}
                       onComplete={() => {
-                        const idx = navOrder.indexOf(3);
-                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        const idx = navOrder.indexOf(4);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
                         setEtapaAtual(next);
                       }}
                       onAgendar={() => {
-                        const idx = navOrder.indexOf(3);
-                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                        const idx = navOrder.indexOf(4);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
                         setEtapaAtual(next);
                       }}
-                      readOnly={isEtapaConcluida(3)}
+                      readOnly={isEtapaConcluida(4)}
                       tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
                       subFipe={!exigeRastreador({
                         tipo: detectarTipoVeiculoDaCotacao(cotacao),
@@ -1103,8 +1102,8 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 4: Pagamento */}
-              {etapaAtual === 4 && (
+              {/* Etapa 3: Pagamento */}
+              {etapaAtual === 3 && (
                 <motion.div
                   key="pagamento"
                   variants={pageVariants}
@@ -1133,9 +1132,12 @@ export default function CotacaoContratacao() {
                     onPagamentoConfirmado={async () => {
                       await queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
                       await refetch();
-                      setEtapaAtual(5);
+                      // Vai para a próxima etapa segundo navOrder (Vistoria, ou pula para Conclusão na troca dentro da janela)
+                      const idx = navOrder.indexOf(3);
+                      const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
+                      setEtapaAtual(next);
                     }}
-                    readOnly={isEtapaConcluida(4)}
+                    readOnly={isEtapaConcluida(3)}
                     tipoVistoria={cotacao.tipo_vistoria as 'autovistoria' | 'agendada'}
                     vistoriaAgendada={instalacaoAgendadaPublica ? {
                       data: instalacaoAgendadaPublica.data,
