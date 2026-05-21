@@ -34853,6 +34853,10 @@ export type Database = {
           valor_total: number
         }[]
       }
+      fn_cancelar_associado_se_orfao: {
+        Args: { _associado_id: string; _motivo: string }
+        Returns: boolean
+      }
       fn_comissoes_usuarios_visiveis: {
         Args: { p_user_id?: string }
         Returns: {
