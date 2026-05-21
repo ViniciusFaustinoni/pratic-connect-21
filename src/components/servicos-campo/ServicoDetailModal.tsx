@@ -61,12 +61,18 @@ interface ServicoDetailModalProps {
 export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetailModalProps) {
   const [fichaOpen, setFichaOpen] = useState(false);
   const [realocarOpen, setRealocarOpen] = useState(false);
+  const [realocarSimplesOpen, setRealocarSimplesOpen] = useState(false);
+  const [cancelarOpen, setCancelarOpen] = useState(false);
+  const [devolverOpen, setDevolverOpen] = useState(false);
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
+  const podeAcoesMonitor = !!(isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento);
 
   if (!servico) return null;
 
   const isRetirada = servico.tipo === 'vistoria_retirada';
   // 'vistoria_entrada' é a primeira visita (equivale a instalação) — ver mem://logic/operations/vistoria-entrada-equivale-instalacao
   const isInstalacao = servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada' || servico.tipo === 'revistoria';
+  const instalacaoOrigemId = (servico as any).instalacao_origem_id as string | null | undefined;
   const motivoRetirada = (servico as any).motivo_retirada;
   const multaAplicada = (servico as any).multa_aplicada;
   const integridade = (servico as any).integridade_aparelho;
