@@ -936,6 +936,34 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           if (resultado && resultado.valorNumerico) {
             form.setValue('valor_fipe', resultado.valorNumerico);
             toast.success(`Valor FIPE: ${resultado.valor}`);
+
+            // Auto-default de combustível no fluxo manual:
+            // 1) descrição FIPE (resultado.combustivel ou resultado.valor.descricao) costuma trazer Gasolina/Álcool/Diesel
+            // 2) descrição do modelo costuma trazer FLEX / TOTAL FLEX
+            // Sem isso o cálculo cai no default 'gasolina' do usePlanosCotacao e regras de combustível
+            // que exigem flex podem derrubar todos os planos.
+            if (!combustivelSelecionado) {
+              const modeloNome = (modelos.find(m => m.codigo.toString() === modeloSelecionado)?.nome || '').toUpperCase();
+              const anoNome = (anos.find(a => a.codigo === anoSelecionado)?.nome || '').toUpperCase();
+              const haystack = `${modeloNome} ${anoNome}`;
+              const isFlex = /\bFLEX\b|TOTAL FLEX|BICOMBUST/.test(haystack)
+                || (/GASOLINA/.test(haystack) && /(ALCOOL|ÁLCOOL|ETANOL)/.test(haystack));
+              if (isFlex) {
+                setCombustivelSelecionado('flex');
+              } else if (/DIESEL/.test(haystack)) {
+                setCombustivelSelecionado('diesel');
+              } else if (/EL[ÉE]TRICO/.test(haystack)) {
+                setCombustivelSelecionado('eletrico');
+              } else if (/GASOLINA/.test(haystack)) {
+                setCombustivelSelecionado('gasolina');
+              } else if (tipoFipeSelecionado === 'motos') {
+                // Maioria das motos modernas é flex; deixa como gasolina apenas se não conseguir inferir
+                setCombustivelSelecionado('gasolina');
+              } else {
+                // Carro sem pista clara → assumir flex (cobre maioria do parque nacional)
+                setCombustivelSelecionado('flex');
+              }
+            }
           }
         } catch (error) {
           console.error('Erro ao buscar FIPE:', error);
@@ -945,6 +973,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       };
       buscarFipeAutomatico();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marcaSelecionada, modeloSelecionado, anoSelecionado, getPreco, form, tipoFipeSelecionado]);
 
   // Handler para mudança de marca
