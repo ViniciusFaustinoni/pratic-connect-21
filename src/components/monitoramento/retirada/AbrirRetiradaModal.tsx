@@ -241,6 +241,14 @@ export function AbrirRetiradaModal({
       setPermiteEncaixe(false);
       setNotificarWhatsApp(true);
       setObservacoes('');
+      setEnderecoModo('cadastro');
+      setEndNovoCep('');
+      setEndNovoLogradouro('');
+      setEndNovoNumero('');
+      setEndNovoComplemento('');
+      setEndNovoBairro('');
+      setEndNovoCidade('');
+      setEndNovoUf('');
     }
   }, [open]);
 
@@ -264,6 +272,47 @@ export function AbrirRetiradaModal({
     }
   }, [motivo]);
 
+  // Resetar bloco de endereço quando muda para base
+  useEffect(() => {
+    if (localTipo === 'base') {
+      setEnderecoModo('cadastro');
+    }
+  }, [localTipo]);
+
+  // Buscar CEP (ViaCEP)
+  const buscarCep = async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await response.json();
+      if (data.erro) {
+        toast.error('CEP não encontrado');
+        return;
+      }
+      setEndNovoLogradouro(data.logradouro || '');
+      setEndNovoBairro(data.bairro || '');
+      setEndNovoCidade(data.localidade || '');
+      setEndNovoUf(data.uf || '');
+    } catch {
+      toast.error('Erro ao buscar CEP');
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
+  const formatEnderecoString = () => {
+    const parts = [
+      [endNovoLogradouro, endNovoNumero].filter(Boolean).join(', '),
+      endNovoComplemento || null,
+      endNovoBairro,
+      [endNovoCidade, endNovoUf].filter(Boolean).join('/'),
+      endNovoCep,
+    ].filter(Boolean);
+    return parts.join(' — ');
+  };
+
   const handleSubmit = async () => {
     if (!rastreadorCompleto || !motivo || !dataAgendada || !profissionalId || !periodo || !situacaoFinanceira) return;
 
@@ -271,6 +320,23 @@ export function AbrirRetiradaModal({
     if (motivo === 'substituicao_veiculo' && subTipo === 'retirada_com_nova_instalacao' && !novoVeiculoId) {
       return;
     }
+
+    const usandoEnderecoNovo = localTipo === 'volante' && enderecoModo === 'novo';
+    const enderecoCustom = usandoEnderecoNovo
+      ? {
+          logradouro: endNovoLogradouro.trim(),
+          numero: endNovoNumero.trim(),
+          complemento: endNovoComplemento.trim() || null,
+          bairro: endNovoBairro.trim(),
+          cidade: endNovoCidade.trim(),
+          uf: endNovoUf.trim().toUpperCase(),
+          cep: endNovoCep.replace(/\D/g, ''),
+        }
+      : null;
+
+    const observacoesFinal = usandoEnderecoNovo
+      ? `[Endereço alternativo informado pelo Monitoramento] ${formatEnderecoString()}${observacoes ? `\n${observacoes}` : ''}`
+      : (observacoes || undefined);
 
     await abrirRetiradaMutation.mutateAsync({
       rastreadorId: rastreadorCompleto.id,
@@ -284,10 +350,12 @@ export function AbrirRetiradaModal({
       dataAgendada: format(dataAgendada, 'yyyy-MM-dd'),
       periodo: periodo as Periodo,
       localTipo,
+      localEndereco: usandoEnderecoNovo ? formatEnderecoString() : undefined,
+      enderecoCustom,
       profissionalId,
       permiteEncaixe,
       notificarWhatsApp,
-      observacoes: observacoes || undefined,
+      observacoes: observacoesFinal,
     });
 
     onOpenChange(false);
