@@ -906,7 +906,7 @@ export default function AprovacaoInstalacaoDetalhe() {
 
         const terminouEmCampo = servicoConcluidoEmCampo(servico);
         const temRastreador = !!rastreador;
-        const cadastroAprovado = !!(contrato as any)?.cadastro_aprovado;
+        const cadAprovado = !!cadastroAprovado;
         const isAutovistoria = (vistoriaModalidade || '').toLowerCase() === 'autovistoria';
 
         // Sub-estados (ordem de precedência):
