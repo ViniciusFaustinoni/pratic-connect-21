@@ -49,8 +49,9 @@ export function useAprovacoesMonitoramentoBreakdown() {
               .select('id, contratos:contrato_id(cadastro_aprovado)').in('id', vistIds as string[]);
             (vs || []).forEach((v: any) => vMap.set(v.id, v.contratos?.cadastro_aprovado === true));
           }
+          // Não filtra por cobertura_total — atributo do plano, não sinal de fluxo.
           return (data || []).filter((s: any) =>
-            s?.veiculo && s.veiculo.cobertura_total !== true &&
+            s?.veiculo &&
             (s.instalacao?.contrato?.cadastro_aprovado === true ||
              (s.vistoria_origem_id && vMap.get(s.vistoria_origem_id) === true))
           ).length;

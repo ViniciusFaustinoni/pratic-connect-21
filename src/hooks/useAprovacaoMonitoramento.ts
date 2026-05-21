@@ -64,7 +64,9 @@ export function useInstalacoesAguardandoAprovacao() {
       // Gate do Cadastro: Monitoramento só recebe após aprovação manual do Cadastro.
       const aprovados = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
-        if (!v || v.cobertura_total === true) return false;
+        if (!v) return false;
+        // NÃO filtrar por cobertura_total: é atributo do plano, não sinal de fluxo.
+        // Antes excluía silenciosamente todos os contratos com cobertura total da fila.
         const cadastroAprovado =
           s.instalacao?.contrato?.cadastro_aprovado === true ||
           (s.vistoria_origem_id && vistoriaContratoMap.get(s.vistoria_origem_id) === true);
