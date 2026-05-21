@@ -956,8 +956,8 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 3: Vistoria */}
-              {etapaAtual === 3 && (
+              {/* Etapa 4: Vistoria */}
+              {etapaAtual === 4 && (
                 <motion.div
                   key="vistoria"
                   variants={pageVariants}
