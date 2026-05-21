@@ -1132,9 +1132,12 @@ export default function CotacaoContratacao() {
                     onPagamentoConfirmado={async () => {
                       await queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
                       await refetch();
-                      setEtapaAtual(5);
+                      // Vai para a próxima etapa segundo navOrder (Vistoria, ou pula para Conclusão na troca dentro da janela)
+                      const idx = navOrder.indexOf(3);
+                      const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
+                      setEtapaAtual(next);
                     }}
-                    readOnly={isEtapaConcluida(4)}
+                    readOnly={isEtapaConcluida(3)}
                     tipoVistoria={cotacao.tipo_vistoria as 'autovistoria' | 'agendada'}
                     vistoriaAgendada={instalacaoAgendadaPublica ? {
                       data: instalacaoAgendadaPublica.data,
