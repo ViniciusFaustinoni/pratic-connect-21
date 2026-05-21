@@ -1,40 +1,54 @@
-## Contaminação confirmada — fix nos demais caminhos terminais da Troca
+## Diagnóstico
 
-O bug do `cancelar-troca-titularidade` (link público sobrevivia ao cancelamento) **existe nos outros pontos terminais do fluxo**, que não foram tocados na correção anterior. Hoje só não estourou em produção porque só há 1 troca terminal (Vinicius — já saneada manualmente).
+A cotação **COT-20260521-154401431-524** (troca de titularidade, placa KOU6D37, novo titular Vinicius Faustinoni) está corretamente:
 
-### Pontos contaminados
+- `contratos.cad888ca…FZKT7W`: `status=assinado`, `cadastro_aprovado=false`, `tipo_entrada=troca_titularidade`, `origem_troca_titularidade_id` setado.
+- `solicitacoes_troca_titularidade.a5c915b6…`: `status=aguardando_cadastro`, termo do antigo titular assinado, novo titular assinou contrato.
+- `veiculos.d5181403…` (KOU6D37): `status=ativo` — **vinculado ainda ao titular antigo** (b204ac2b — N0HNLT, contrato ativo). Esse é o estado canônico de uma troca em curso (Memory: `troca-titularidade-desvinculo-logico` + `troca-titularidade-fluxo-canonico-e2e` — só `efetivar-troca-titularidade` muda o `associado_id` do veículo).
 
-**1. `supabase/functions/reprovar-troca-titularidade/index.ts`**
-Reprovação por Cadastro ou Monitoramento hoje **só** muda `status` da solicitação e dispara WhatsApp. Falta tudo o que tornamos canônico em `cancelar-troca`:
-- não limpa `veiculos.em_troca_titularidade=false` → veículo fica preso "em troca"
-- não cancela a cotação derivada (`origem_troca_titularidade=true`) nem rotaciona `token_publico` → novo titular ainda acessa o link
-- grava `reprovado_por = user.id` (auth) em vez de `profiles.id` — mesmo bug de FK que corrigimos no cancelar
+A proposta deveria aparecer em /cadastro/propostas com badge "Troca de Titularidade", mas é silenciosamente descartada.
 
-**2. `supabase/functions/cron-expirar-trocas-titularidade/index.ts`**
-Quando expira por meia-noite:
-- atualiza cotação para `status='recusada'` (campo errado — não bate com o set canônico `cancelada/expirada`) e **não** seta `status_contratacao`
-- **não rotaciona `token_publico`** → link continua acessível até o guard de frontend renderizar a tela de expirada (defesa em profundidade quebrada)
-- já limpa `em_troca_titularidade` (esse ponto está OK)
+## Causa raiz
 
-**3. Frontend `CotacaoContratacao.tsx`**
-Guard que adicionei cobre `cancelada/expirada/reprovada_cadastro/reprovada_monitoramento` — não precisa mexer. Mas a UX de "cotação recusada" do cron precisa de status alinhado.
+Em `src/hooks/usePropostasPendentes.ts` (linhas 606‑625) o gate de saída usa:
 
-### Mudanças propostas
+```ts
+const veiculoJaConcluidoOperacionalmente = veiculoContrato?.status === 'ativo';
+...
+if (propostaJaConcluida) return null;
+```
 
-**`reprovar-troca-titularidade/index.ts`**
-- Resolver `profiles.id` via `user.id` (mesma lógica do cancelar) e gravar em `reprovado_por`.
-- Após update da solicitação, em best-effort:
-  - `veiculos.update({em_troca_titularidade:false}).eq('id', sol.veiculo_id)`
-  - Se houver `sol.cotacao_id`: `cotacoes.update({status:'cancelada', status_contratacao:'cancelada', cancelada_em, cancelada_por:profileId, motivo_cancelamento:'Troca reprovada (${etapa}): ${motivo}', token_publico: novoTokenRandom}).eq('id', sol.cotacao_id).eq('origem_troca_titularidade', true)`
+Para uma **troca de titularidade**, o veículo permanece `ativo` (vinculado ao antigo titular) durante todo o ciclo Cadastro → Monitoramento → `efetivar-troca-titularidade`. Esse filtro foi pensado para fluxo comum (onde `status='ativo'` só acontece DEPOIS do `ativar-associado`), mas em troca ele **mata o item antes mesmo do gate de troca em linha 799-809** que existe justamente para deixar a troca passar sem etapa executada.
 
-**`cron-expirar-trocas-titularidade/index.ts`**
-- Trocar o update da cotação de `status:'recusada'` para `{status:'cancelada', status_contratacao:'cancelada', cancelada_em:agora, motivo_cancelamento:'Prazo de assinatura expirado (meia-noite BRT)', token_publico: novoTokenRandom}` mantendo o filtro `eq('origem_troca_titularidade', true)`.
+O mesmo bug está em `usePropostasPendentesCount.ts` (linha 1646): `setVeiculoAtivo.has(c.veiculo_id)` descarta o item, por isso o contador mostra "Aguardando: 2" em vez de 3.
 
-**Banco**
-- Nenhuma migração: única troca terminal em produção (Vinicius) já está saneada (`em_troca_titularidade=false`, cotação cancelada, token rotacionado).
+## Contaminação herdada
 
-### Validação
-- Não há solicitações terminais com flag/cotação penduradas (consulta confirmou).
-- Após o deploy, qualquer reprovação ou expiração futura passa a deixar o sistema no mesmo estado canônico que o cancelamento manual já produz.
+Como subproduto do problema anterior (troca cancelada do mesmo veículo), existe um **contrato órfão** `c4f2895f…ZWMOAX` (troca anterior `bb49bf56`, status da troca = `cancelada`) que ficou em `status='assinado'`. A edge `cancelar-troca-titularidade` cancela a **cotação** derivada (linhas 104‑123) mas **não cancela o contrato** derivado quando o novo titular já tinha assinado antes do cancelamento. Esse contrato fantasma ficou escondido pelo mesmo filtro errado — ao corrigir o filtro, ele apareceria duplicado na fila.
 
-Esse é o conserto cirúrgico — sem mexer em fluxo, UI ou regra de negócio, apenas propaga o saneamento que já fizemos no cancelar para os dois outros caminhos terminais.
+## Plano
+
+1. **Corrigir o filtro em `usePropostasPendentes.ts`**
+   - Calcular `isTroca` ANTES do gate "concluída" (mover detecção de tipo_entrada/origem_troca_titularidade_id para próximo das linhas 600).
+   - Mudar o gate para: `veiculoJaConcluidoOperacionalmente && !isTroca`.
+   - Replicar a mesma exceção no contador `usePropostasPendentesCount` (descartar `setVeiculoAtivo` quando o contrato for de troca — buscar também `tipo_entrada` e set de `isTrocaContrato`).
+
+2. **Tampar o vazamento em `cancelar-troca-titularidade/index.ts`**
+   - Após cancelar a cotação derivada, cancelar também o contrato vinculado:
+     - `UPDATE contratos SET status='cancelado', data_cancelamento=now(), motivo_cancelamento='Troca de titularidade cancelada: …', updated_at=now() WHERE origem_troca_titularidade_id = solicitacao_id AND status NOT IN ('cancelado','ativo')`.
+   - Log best-effort, mesma lógica do bloco de cotação.
+
+3. **Saneamento via migration**
+   - Marcar `c4f2895f…ZWMOAX` como `cancelado` com motivo "Saneamento: troca de titularidade `bb49bf56` cancelada em 21/05/2026" (não há trigger que dependa disso — é só remover lixo da fila do Cadastro).
+   - Verificar se existem outros contratos com `origem_troca_titularidade_id IN (SELECT id FROM solicitacoes_troca_titularidade WHERE status IN ('cancelada','expirada','reprovada')) AND status='assinado'` e aplicar o mesmo cancelamento (deve cobrir só o ZWMOAX, mas a query é segura).
+
+4. **Validação**
+   - Recarregar /cadastro/propostas como admin: deve aparecer card da KOU6D37 com badge "Troca de Titularidade", contador "Aguardando: 3", e o fantasma ZWMOAX desaparece (cancelado).
+   - Executar a mesma chamada de query no Supabase pra confirmar.
+
+## O que NÃO muda
+
+- Triggers de promoção da troca (`trg_troca_promove_cadastro_via_cotacao`) — a solicitação já está em `aguardando_cadastro` por outro caminho do fluxo.
+- Edge `aprovar-troca-cadastro` — continua funcionando assim que o item aparecer na fila e o analista clicar aprovar.
+- `usePropostasPendentes` linhas 795‑809 (gate `temQualquerEtapa`) — já trata troca corretamente; a correção é só no gate anterior.
+- Edge `efetivar-troca-titularidade` e a flag `veiculos.em_troca_titularidade` — intactas.

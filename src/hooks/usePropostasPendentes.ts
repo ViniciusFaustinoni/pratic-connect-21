@@ -599,12 +599,20 @@ export function usePropostasPendentes() {
         })();
         const instalacaoConcluida = mInstConcluida.has(contrato.id);
 
+        // Em troca de titularidade o veículo permanece `ativo` (vinculado ao
+        // antigo titular) durante todo o ciclo Cadastro → Monitoramento →
+        // `efetivar-troca-titularidade`. Por isso o gate "veículo já ativo"
+        // NÃO pode descartar trocas — senão a proposta do novo titular some.
+        const isTrocaEntry =
+          (contrato as any).tipo_entrada === 'troca_titularidade' ||
+          !!(contrato as any).origem_troca_titularidade_id;
+
         // Veículo sincronizado no SGA NÃO significa fluxo operacional concluído.
         // No Hinova o cadastro nasce como pendente, então veículos em
         // `instalacao_pendente` continuam pertencendo a Propostas Pendentes
         // mesmo com `sincronizado_hinova=true` e `codigo_hinova` preenchido.
         const veiculoJaConcluidoOperacionalmente =
-          veiculoContrato?.status === 'ativo';
+          !isTrocaEntry && veiculoContrato?.status === 'ativo';
 
         // Saída de Propostas Pendentes (gate do Cadastro):
         // Fluxo linear — link público completa tudo (assina → agenda → paga →
@@ -1595,7 +1603,7 @@ export function usePropostaStats() {
       // ========================================
       const { data: contratosAssinados } = await supabase
         .from('contratos')
-        .select('id, cotacao_id, veiculo_id, cadastro_aprovado')
+        .select('id, cotacao_id, veiculo_id, cadastro_aprovado, tipo_entrada, origem_troca_titularidade_id')
         .eq('status', 'assinado');
 
       let aguardando = 0;
@@ -1641,9 +1649,11 @@ export function usePropostaStats() {
         const setCotacaoAutovistoria = new Set((cotacoesAutovistoriaRes.data || []).map((r: any) => r.id));
 
         aguardando = contratosAssinados.filter((c: any) => {
+          const isTroca = c.tipo_entrada === 'troca_titularidade' || !!c.origem_troca_titularidade_id;
           if (setInstalacaoConcluida.has(c.id)) return false;
           if (c.cotacao_id && setBaseRealizada.has(c.cotacao_id)) return false;
-          if (c.veiculo_id && setVeiculoAtivo.has(c.veiculo_id)) return false;
+          // Em troca o veículo segue 'ativo' (vinculado ao antigo titular) — não descartar.
+          if (!isTroca && c.veiculo_id && setVeiculoAtivo.has(c.veiculo_id)) return false;
           if (c.cadastro_aprovado === true && c.cotacao_id && setCotacaoAutovistoria.has(c.cotacao_id)) return false;
           return true;
         }).length;

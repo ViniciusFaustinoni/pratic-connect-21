@@ -122,6 +122,24 @@ Deno.serve(async (req) => {
       }
     }
 
+    // CANÔNICO: troca cancelada => contrato derivado (se o novo titular já
+    // tinha assinado) também precisa ser cancelado. Sem isso fica órfão em
+    // `status=assinado` poluindo a fila de Propostas Pendentes do Cadastro.
+    try {
+      const { error: ctrErr } = await admin
+        .from('contratos')
+        .update({
+          status: 'cancelado',
+          data_cancelamento: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('origem_troca_titularidade_id', solicitacao_id)
+        .not('status', 'in', '(cancelado,ativo)');
+      if (ctrErr) console.warn('[cancelar-troca] cancelar contrato derivado falhou:', ctrErr);
+    } catch (ctrEx) {
+      console.warn('[cancelar-troca] cancelar contrato derivado exception:', ctrEx);
+    }
+
     // WhatsApp ao titular antigo (best-effort)
     try {
       if (sol.associado_antigo_id) {
