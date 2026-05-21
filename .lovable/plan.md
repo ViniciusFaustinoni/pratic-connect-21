@@ -1,62 +1,80 @@
-## Objetivo
 
-Mover o botão **"Deslogar todos os usuários"** (que estava órfão em `/configuracoes/perfis`, hoje 404) para **Configurações › Usuários e Acessos › aba Usuários**, sem alterar a edge function `deslogar-todos-usuarios`.
+## Diagnóstico — por que o termo da FERNANDA veio com tantos "—"
 
-## Passos
+O termo de filiação é gerado a partir do template editável **"Proposta de Filiação" (código `AF1`)** salvo em `documento_templates`, renderizado pela engine `supabase/functions/_shared/template-utils.ts → substituirVariaveis`. Cada variável `{{...}}` sem valor é trocada por `'—'`.
 
-### 1. Extrair o botão para componente reutilizável
+Comparando o PDF (CTR-20260521162553-HMCZ80) com o banco:
 
-Criar `src/components/configuracoes/DeslogarTodosUsuariosButton.tsx` com o código atual do `DeslogarTodosButton` que vive em `src/pages/configuracoes/Perfis.tsx` (linhas 41–91):
+| Campo no termo | O que apareceu | Causa real |
+|---|---|---|
+| **Combustível** | "—" | `veiculos.combustivel = NULL` e `cotacoes.veiculo_combustivel = NULL`. **Existe `cotacoes.combustivel = 'gasolina'`** (campo legado) que o mapeamento **não consulta** como fallback. |
+| **Código FIPE** | "—" | `cotacoes.codigo_fipe = NULL`. O plate-lookup/FIPE deveria ter gravado e não gravou. Não há fallback no mapeamento. |
+| **Câmbio / Portas** | "—" | Moto não tem. O template imprime as linhas mesmo assim (o supressor por tipo de veículo existe só no template HTML interno antigo, **não** no template `AF1` do banco). |
+| **CNH / Validade / Categoria** | "—" | `associados.cnh_numero/validade/categoria = NULL`. Caso real (0KM, mototaxista sem CNH cadastrada). O template insiste em imprimir a linha. |
+| **Renavam / Complemento** | "—" | 0KM (renavam ainda não existe) e endereço sem complemento. Casos legítimos onde a linha não devia aparecer. |
 
-- Mantém `AlertDialog` de confirmação
-- Mantém chamada `supabase.functions.invoke('deslogar-todos-usuarios')`
-- Mantém toast com `total_deslogados`
-- Mantém variant `destructive` + ícone `LogOut`
+Resumindo: **um pedaço é bug de dados/fallback** (combustível, FIPE) e **outro pedaço é template inflexível** (renderiza linhas vazias em vez de ocultá-las).
 
-Sem mudanças de lógica — só extração.
+---
 
-### 2. Colocar na aba "Usuários"
+## O que vai mudar
 
-Em `src/pages/configuracoes/UsuariosAcessos.tsx`, dentro do `<TabsContent value="usuarios">` (linha 186), adicionar uma **action bar** logo acima do `<Card>` de Gerenciamento:
+### 1) Mapeamento de dados (`supabase/functions/_shared/termo-afiliacao-utils.ts`)
 
-```tsx
-<div className="flex justify-end">
-  <DeslogarTodosUsuariosButton />
-</div>
-<Card>...</Card>
-```
+Estender a hierarquia de fallback para nunca depender de um único campo:
 
-Posição alinhada à direita, fora do Card, para destacar o caráter destrutivo. Mantém estética da página (não polui o header global de "Novo usuário"/"Exportar", que são ações positivas).
+- `combustivel`: `contrato.veiculo_combustivel → veiculoDB.combustivel → veiculo.veiculo_combustivel → cotacao.combustivel (legado) → ''`
+- `codigo_fipe`: `contrato.codigo_fipe → veiculoDB.codigo_fipe → cotacao.codigo_fipe → ''`
+- `cliente.cnh / cnh_validade / cnh_categoria`: passar a herdar de `associado.cnh_numero/validade/categoria` quando os campos do contrato estiverem vazios.
+- `cliente.estado_civil` e `cliente.profissao`: fallback para `associado.*`.
 
-### 3. Gating por permissão
+`mapearDadosParaTemplate` precisa receber `cotacao` como argumento extra (hoje só recebe `lead`, `associado`, `veiculoDB`). Ajustar todos os call-sites em `autentique-create`, `autentique-create-by-token`, `contrato-gerar` e `enviar-termo-filiacao-whatsapp`.
 
-Hoje a proteção é só na edge function (Diretor). Acrescentar guard no front para esconder o botão de quem não vai conseguir executar:
+### 2) Engine de substituição (`supabase/functions/_shared/template-utils.ts`)
 
-```tsx
-const { hasRole } = usePermissions();
-if (!hasRole('diretor')) return null;
-```
+Adicionar **supressão automática de linhas/células opcionais vazias** após a substituição:
 
-Evita expor a ação a perfis sem permissão (UX) sem trocar a regra de autorização real (que continua server-side).
+- Para um conjunto canônico de variáveis marcadas como "opcionais" (`veiculo.cambio`, `veiculo.portas`, `veiculo.renavam`, `veiculo.codigo_fipe`, `associado.cnh`, `associado.cnh_validade`, `associado.cnh_categoria`, `associado.complemento`, `associado.profissao`, `associado.telefone_secundario`, `indicador.*`), introduzir uma sentinela interna `__OPCIONAL_VAZIO__` quando o valor for vazio.
+- Depois da substituição, varrer o HTML e remover qualquer `<tr>…__OPCIONAL_VAZIO__…</tr>` (e `<p>…</p>` para campos não tabulares) usando regex restrita a essa sentinela — sem afetar campos obrigatórios que continuam saindo como "—".
+- Suprimir Câmbio e Portas quando `veiculo.tipo` for moto/motocicleta/triciclo/ciclomotor.
+- Suprimir Renavam quando `veiculo.placa = ZERO QUILÔMETRO` (já tem o aditivo 0KM logo abaixo).
 
-### 4. Limpeza do arquivo Perfis.tsx órfão
+### 3) Template `AF1` no banco (Configurações › Documentos)
 
-Verificar em `src/App.tsx` se `/configuracoes/perfis` ainda tem rota:
+Editar o conteúdo via UI em `/documentos/templates` → "Proposta de Filiação":
 
-- **Se não tem rota** (provável, dado o 404): apagar `src/pages/configuracoes/Perfis.tsx` inteiro para não deixar arquivo morto. Ou, no mínimo, remover o `DeslogarTodosButton` interno e qualquer referência ao caminho na sidebar/nav.
-- **Se tem rota mas quebrada**: ainda assim remover o botão de lá (já está na nova casa) e decidir com você se a página inteira deve sair ou se outra coisa deveria viver nela.
+- Reagrupar o bloco DADOS DO ASSOCIADO: linha "Endereço completo" única (logradouro + número + complemento) em vez de 3 linhas separadas. Complemento só aparece se preenchido (pelo mecanismo acima).
+- Bloco CNH vira sub-tabela única "CNH" com Validade e Categoria na mesma linha; some inteira se não houver CNH.
+- Veículo: Câmbio e Portas movidos para a **mesma linha**, ambos somem quando moto.
+- Código FIPE pareado com Valor FIPE (mesma linha).
+- Renavam pareado com Chassi (mesma linha); some quando 0KM.
 
-Vou reportar o que encontrar antes de apagar Perfis.tsx para você confirmar.
+Isso reduz "ruído" do termo e, combinado com a supressão, garante que vazios deixem de aparecer.
 
-### 5. QA
+### 4) Gravação dos dados na origem (`supabase/functions/contrato-gerar`)
 
-- Abrir `/configuracoes/usuarios-acessos`, aba **Usuários** → botão visível para Diretor, escondido para os outros perfis testados.
-- Clicar → `AlertDialog` de confirmação → "Sim, deslogar todos" → toast com contagem.
-- Confirmar que sua sessão de Diretor segue ativa.
-- Conferir log de auditoria (mesmo log que a edge já grava — não mexemos nela).
+Para não depender só do fallback de leitura:
 
-## Fora de escopo
+- Ao criar/atualizar o contrato, gravar `contratos.veiculo_combustivel` a partir do melhor disponível (cotação ou veículo).
+- Ao criar/atualizar `veiculos`, propagar `combustivel` e `codigo_fipe` vindos da cotação se a tabela `veiculos` estiver com esses campos NULL.
 
-- Lógica da edge `deslogar-todos-usuarios` (intocada).
-- Auditoria server-side (já existe).
-- Reaproveitar o botão em outras telas (se quiser depois, é trivial — o componente já está extraído).
+Esse passo é defensivo — corrige a fonte para que termos **futuros** já saiam preenchidos mesmo sem fallback.
+
+### 5) Validação
+
+- Regerar o termo da FERNANDA (CTR-20260521162553-HMCZ80) com a nova engine apontando para os dados atuais. Esperado: "Combustível: Gasolina", "Renavam/Câmbio/Portas" sumidos, "CNH" sumido (vazio no banco), "Cód. FIPE" continua "—" enquanto a cotação não tiver o código (mas a linha some quando vazio).
+- Testar com um contrato de carro acima da FIPE (mantém Câmbio + Portas + Renavam visíveis) e um 0KM moto (esconde tudo isso).
+- Rodar `vitest` em `cadastro/escopoAnaliseCadastro.test.ts` e teste novo de supressão para a engine.
+
+---
+
+## Detalhes técnicos (para devs)
+
+- **Arquivos editados:**
+  - `supabase/functions/_shared/termo-afiliacao-utils.ts` (assinatura + fallbacks)
+  - `supabase/functions/_shared/template-utils.ts` (sentinela `__OPCIONAL_VAZIO__`, supressão por tipo de veículo e 0KM)
+  - `supabase/functions/autentique-create/index.ts`, `autentique-create-by-token/index.ts`, `contrato-gerar/index.ts`, `_shared/enviar-termo-filiacao-whatsapp.ts` (passar `cotacao` para `mapearDadosParaTemplate`)
+  - `supabase/functions/contrato-gerar/index.ts` (gravar combustível/codigo_fipe em contrato + veículo quando ausentes)
+- **Dados (via tabela `documento_templates`, código `AF1`):** UPDATE do `conteudo` com o HTML reagrupado.
+- **Sem alteração de schema.**
+- **Memória a atualizar:** criar leaf `mem://logic/documents/termo-filiacao-supressao-opcionais` com a regra "campos opcionais marcados como vazios são removidos do termo; combustível e código FIPE têm cadeia de fallback `contrato → veículo → cotação`".
