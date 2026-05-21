@@ -234,6 +234,9 @@ export default function IntegracaoSGAHinova() {
           <TabsTrigger value="health" className="gap-1.5">
             <HeartPulse className="h-4 w-4" /> Health Check
           </TabsTrigger>
+          <TabsTrigger value="importar" className="gap-1.5">
+            <Download className="h-4 w-4" /> Importar do SGA
+          </TabsTrigger>
           <TabsTrigger value="teste-boletos" className="gap-1.5">
             <Send className="h-4 w-4" /> Teste Boletos
           </TabsTrigger>
