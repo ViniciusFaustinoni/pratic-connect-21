@@ -1,74 +1,53 @@
-## Contexto
+## Problema
 
-`COT-20260521-002944030-565` é troca de titularidade com termo assinado em 20/05 18:15 BRT — a janela mesmo-dia (até 23:59:59 BRT do dia 20) já expirou. Pelo manual, a partir desse momento o fluxo passa a se comportar como **adesão normal acima da FIPE mínima** (FIPE R$ 30.835, carro, mínimo R$ 30k): autovistoria é **opcional para liberar R&F**, vistoria presencial agenda normalmente. Por isso, a opção de Vistoria/Autovistoria **deve continuar aparecendo** — o que está fora do canônico é a **ordem**: hoje o stepper exibe Vistoria antes de Pagamento. Quando há pagamento, ele vem **antes** da vistoria. Quando há isenção (`valor_adesao=0`, como nesta cotação), o passo Pagamento detecta sozinho e auto-avança.
+No Monitoramento → **Serviços de Campo** (modal `ServicoDetailModal`) o time não consegue:
 
-## O que muda
+1. **Realocar** serviços que não são "instalação" — Retiradas (`vistoria_retirada`), Vistorias de saída/sinistro/periódica, etc. ficam sem botão.
+2. **Cancelar** o serviço pelo modal.
+3. **Devolver ao Cadastro** em caso de erro (analista quer mandar o caso de volta para revisão de docs / decisão de R&F).
 
-Arquivo único: `src/pages/public/CotacaoContratacao.tsx`.
+Hoje o botão "Realocar" em `src/components/servicos-campo/ServicoDetailModal.tsx:186` só aparece quando `isInstalacao` (`instalacao | vistoria_entrada | revistoria`). E não existem botões de Cancelar nem Devolver ao Cadastro. O hook `useDevolverAoCadastro` e a edge `devolver-ao-cadastro` já existem; o RPC `realocar_servico` também (memória `mem://logic/operations/realocar-servico-reabertura`). Falta plumbing de UI.
 
-### 1. `STEPS_BASE` (linhas 52–58) — reordenar
+## Mudanças (apenas frontend, escopo UI)
 
-```text
-0 Plano  →  1 Documentos  →  2 Contrato  →  3 Pagamento  →  4 Vistoria
-                                             (auto-skip se isento)
-+ 5 Instalação (apenas quando tipo_vistoria === 'autovistoria')
-```
+### 1. `ServicoDetailModal.tsx` — barra de ações
 
-### 2. `isEtapaConcluida` (linhas 282–301) — trocar mapeamento dos cases 3 e 4
+Substituir o bloco atual de "Realocar" (linhas 186-199) por um conjunto de ações que cobre **todos os tipos** de serviço atribuíveis (instalação, retirada, vistoria_entrada, vistoria_saida, vistoria, revistoria, manutencao):
 
-- `case 3` (agora **pagamento**) → `statusConcluidos.pagamento`
-- `case 4` (agora **vistoria**) → checa `cotacao.tipo_vistoria` ou `statusConcluidos.vistoria`
-- `case 5` (instalação para autovistoria) — inalterado
+- **Realocar** — visível quando `status ∈ {agendada, pendente, nao_compareceu, reagendada, cancelada, em_analise, imprevisto_pendente}` e o serviço tem `instalacao_origem_id` OU `vistoria_origem_id` OU é Retirada. Texto muda para "Reabrir e reagendar" quando `status='cancelada'` (mantém comportamento atual).
+- **Cancelar serviço** — visível quando `status ∈ {agendada, pendente, reagendada, nao_compareceu, em_analise}`. Abre `CancelarServicoDialog` (novo componente leve com textarea de motivo) → `update servicos set status='cancelada', motivo_cancelamento=...`.
+- **Devolver ao Cadastro** — visível quando o serviço tem `contrato_id` e `status ≠ concluida/aprovada/reprovada`. Abre `DevolverAoCadastroDialog` (novo, com motivo) → chama `useDevolverAoCadastro({ contrato_id, motivo })`.
 
-### 3. `etapaDoStatus` / `determinarEtapa` (em `src/lib/etapaDoStatus.ts`)
+Permissões: usar `usePermissions()` — exibir Cancelar/Devolver só para `isMonitoramento || isCoordenadorMonitoramento || isDiretor`. Realocar segue a regra atual.
 
-Atualizar o map para a nova ordem:
+### 2. `RealocarInstalacaoDialog` → suportar Retirada/Vistoria
 
-- `documentos_ok` → 3 (pagamento)
-- `pagamento_ok` → 4 (vistoria)
-- `vistoria_ok` / `autovistoria_ok` / `vistoria_agendada` / `aguardando_aprovacao_*` → 5 (final / instalação)
-
-Backwards-compatible: o `useEffect` (linha 400) continua usando `Math.max` implícito via override do troca expirado.
-
-### 4. `navOrder` (linhas 389–392) — passar a refletir nova ordem
+O dialog hoje recebe apenas `instalacaoId` e atualiza `instalacoes`. Estender props para:
 
 ```ts
-// dentro da janela mesmo-dia (troca): pula Vistoria (índice 4)
-dispensaVistoriaTroca ? [0, 1, 2, 3, 5] : [0, 1, 2, 3, 4, 5]
+type RealocarTarget =
+  | { kind: 'instalacao'; instalacaoId: string }
+  | { kind: 'servico'; servicoId: string; tipo: string }; // retirada, vistoria_*
 ```
 
-Quando `dispensaVistoriaTroca=true` e adesão é isenta, o `EtapaPagamentoCotacao` já auto-avança (lógica `skipPaymentCheck`) → cai direto na tela de acompanhamento (índice 5).
+Quando `kind='servico'`, em vez de chamar `useRealocarInstalacao` (que mexe em `instalacoes`/`agendamentos_base`), chamar o RPC genérico `realocar_servico` (já existe no schema). Para Retirada não fazem sentido as abas Base/Rota da mesma forma — habilitar só "Data + período + técnico" (re-attribute). Manter aba Base/Rota apenas quando `kind='instalacao'` ou `tipo ∈ {vistoria_entrada, revistoria}`.
 
-### 5. Override troca-pós-pagamento (linhas 354–362) — manter
+Renomear arquivo/export para `RealocarServicoDialog` (manter re-export do nome antigo para não quebrar `InstalacaoDetailDrawer` e `MapaVistoriasContent`).
 
-A regra que joga troca em `pagamento_ok|contrato_gerado|ativo` para etapa 5 (tela de acompanhamento) continua válida: troca não tem etapa de "instalação para o cliente" — o destino após pagamento é o acompanhamento (mesmo quando expirou e vai precisar de vistoria, ela é agendada via a etapa 4 antes disso).
+### 3. Novos componentes
 
-### 6. Renderização condicional (linhas ~900–1200) — swap
+- `src/components/servicos-campo/CancelarServicoDialog.tsx` — dialog simples com Textarea de motivo, botão "Cancelar serviço" que faz `update servicos` + `agendamentos_base` (quando houver origem), invalida queries `['servicos-campo-unificado', 'fila-servicos']`.
+- `src/components/servicos-campo/DevolverAoCadastroDialog.tsx` — wrapper sobre `useDevolverAoCadastro` com textarea de motivo e alerta explicando o efeito (reverte `cadastro_aprovado`, reabre cotação na fila do Cadastro).
 
-Trocar `etapaAtual === 3` (vistoria) ↔ `etapaAtual === 4` (pagamento) nos blocos render. Conteúdo de cada componente inalterado.
+### 4. Testes manuais (caminhos)
 
-### 7. `handleContratoAssinado` (linhas 418–426) — sem mudança lógica
-
-`navOrder.indexOf(2) + 1` continua apontando corretamente para 3 (agora Pagamento) na nova ordem.
-
-## Validação por cenário
-
-
-| Cenário                                    | Ordem visível                                                                     | Observação                                           |
-| ------------------------------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Nova adesão acima FIPE — paga              | Plano → Docs → Contrato → **Pagamento** → Vistoria                                | Autovistoria opcional dentro da etapa                |
-| Nova adesão acima FIPE — isenta            | Plano → Docs → Contrato → Pagamento (auto-skip) → Vistoria                        | Pagamento detecta zero e avança                      |
-| Sub-FIPE — paga                            | Plano → Docs → Contrato → Pagamento → **Autovistoria** + Instalação               | Autovistoria obrigatória                             |
-| Troca dentro da janela — paga              | Plano → Docs → Contrato → Pagamento → Vistoria → Acompanhamento                   | Vistoria dispensada                                  |
-| Troca dentro da janela — isenta            | Plano → Docs → Contrato → Pag (skip) → Vistoria → Acompanhamento                  | Direto ao Cadastro                                   |
-| **Troca expirada (caso COT-565)** — isenta | Plano → Docs → Contrato → Pag (skip) → **Vistoria/Autovistoria** → Acompanhamento | Mesma régua de adesão acima FIPE                     |
-| Troca expirada — paga                      | Plano → Docs → Contrato → **Pagamento** → Vistoria → Acompanhamento               | Penúltima tela = Pagamento, exatamente como descrito |
-
+1. Abrir o serviço RET-2026-00005 (LRP3J98, Retirada agendada) → ver 3 botões → "Realocar" abre dialog com data/técnico (sem Base/Rota) → confirma → status volta a `agendada` com nova data/técnico.
+2. Mesmo modal → "Cancelar serviço" → motivo obrigatório → vira `cancelada`, some da fila do técnico.
+3. Vistoria com contrato aprovado → "Devolver ao Cadastro" → cotação aparece em `aguardando_aprovacao_cadastro`.
+4. Instalação normal — fluxo atual de Realocar (abas Base / Rota / Encaixe) **não regride**.
 
 ## Fora de escopo
 
-- Edge functions (`aprovar-proposta`, `contrato-gerar`, `criar-instalacao-pos-pagamento`)
-- Internals do `EtapaPagamentoCotacao` (já tem auto-skip)
-- Internals do `EtapaVistoria` (mantém oferta de autovistoria/levar à base/rota)
-- Cron de expiração de troca (já existente)
-- Migrations
+- Backend: `devolver-ao-cadastro` e RPC `realocar_servico` já existem, não serão alterados.
+- Mudar a fila de Atribuição Manual (drag-and-drop) — o usuário usa o modal da fila de Serviços de Campo; o menu da AtribuicaoManualTab já permite reatribuir/devolver e fica intacto.
+- Cron, triggers DB, migrações.
