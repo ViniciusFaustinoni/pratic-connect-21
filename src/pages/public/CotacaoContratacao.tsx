@@ -838,13 +838,15 @@ export default function CotacaoContratacao() {
               {(() => {
                 // Mapeamento entre índice INTERNO (sempre 6 etapas: plano, documentos, contrato, vistoria, pagamento, instalacao)
                 // e o índice VISÍVEL no Stepper (que pode ter "vistoria" omitida).
-                const internalIds = ['plano','documentos','contrato','vistoria','pagamento','instalacao'] as const;
+                // Ordem canônica interna (bate com determinarEtapa):
+                // 0 plano · 1 documentos · 2 contrato · 3 pagamento · 4 vistoria · 5 instalacao
+                const internalIds = ['plano','documentos','contrato','pagamento','vistoria','instalacao'] as const;
                 const internalToVisible = (i: number) => {
                   const id = internalIds[i];
                   const v = STEPS.findIndex((s) => s.id === id);
                   if (v >= 0) return v;
-                  // Etapa interna "vistoria" não existe no STEPS visível -> aponta para a próxima visível (pagamento)
-                  return STEPS.findIndex((s) => s.id === 'pagamento');
+                  // Fallback: aponta para a última etapa visível alcançável
+                  return Math.max(0, STEPS.length - 1);
                 };
                 const visibleToInternal = (i: number) => {
                   const id = STEPS[i]?.id;
