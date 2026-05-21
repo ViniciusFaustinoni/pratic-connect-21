@@ -403,9 +403,9 @@ export default function CotacaoContratacao() {
     if (cotacao?.status_contratacao) {
       let etapa = etapaDoStatus;
 
-      // Troca dentro da janela mesmo-dia: pula etapa de vistoria automaticamente
-      if (etapa === 3 && dispensaVistoriaTroca) {
-        etapa = 4;
+      // Troca dentro da janela mesmo-dia: pula etapa de vistoria (4) automaticamente
+      if (etapa === 4 && dispensaVistoriaTroca) {
+        etapa = 5;
       }
 
       setEtapaAtual(etapa);
