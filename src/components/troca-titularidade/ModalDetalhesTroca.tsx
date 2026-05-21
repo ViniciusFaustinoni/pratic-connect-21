@@ -25,6 +25,7 @@ import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/
 import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Wrench, Camera, ChevronDown } from 'lucide-react';
+import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
 
 interface Props {
   open: boolean;
@@ -158,10 +159,16 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           <p className="text-muted-foreground">Solicitação não encontrada</p>
         ) : (
           <>
-            <div className="flex items-center justify-between">
-              <Badge variant={STATUS_LABELS[solicitacao.status].variant}>
-                {STATUS_LABELS[solicitacao.status].label}
-              </Badge>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant={STATUS_LABELS[solicitacao.status].variant}>
+                  {STATUS_LABELS[solicitacao.status].label}
+                </Badge>
+                <SgaSyncCrossBadge
+                  placa={(solicitacao as any).veiculo?.placa}
+                  sgaStatus={(solicitacao as any).sga_status}
+                />
+              </div>
               <span className="text-xs text-muted-foreground">
                 Criada em {new Date(solicitacao.created_at).toLocaleString('pt-BR')}
               </span>

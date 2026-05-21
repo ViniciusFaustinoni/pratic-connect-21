@@ -408,9 +408,14 @@ serve(async (req) => {
       .eq("id", veiculoId);
 
     if (transferError) {
-      console.error("[efetivar-troca] Erro ao transferir veículo:", transferError);
-      return new Response(JSON.stringify({ success: false, error: "Erro ao transferir veículo" }), {
-        status: 500,
+      console.error("[efetivar-troca][etapa=veiculo] Erro ao transferir veículo:", transferError);
+      return new Response(JSON.stringify({
+        success: false,
+        etapa_falha: "veiculo",
+        error: "Não foi possível transferir o veículo para o novo titular. Tente novamente; se persistir, contate o suporte.",
+        motivo_tecnico: transferError.message,
+      }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -535,9 +540,20 @@ serve(async (req) => {
           .select("id, numero")
           .single();
         if (updErr || !atualizado) {
-          console.error("[efetivar-troca] Erro ao atualizar contrato existente:", updErr);
-          return new Response(JSON.stringify({ success: false, error: "Erro ao reaproveitar contrato existente" }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          console.error("[efetivar-troca][etapa=contrato_novo] Erro ao atualizar contrato existente:", updErr);
+          // Rollback etapa 1
+          await supabase.from("veiculos").update({
+            associado_id: solicitacao.associado_id,
+            em_troca_titularidade: true,
+            troca_titularidade_id: solicitacao_id,
+          }).eq("id", veiculoId);
+          return new Response(JSON.stringify({
+            success: false,
+            etapa_falha: "contrato_novo",
+            error: "Não foi possível preparar o contrato do novo titular. Tente novamente; se persistir, contate o suporte.",
+            motivo_tecnico: updErr?.message,
+          }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         novoContrato = atualizado;
@@ -559,10 +575,20 @@ serve(async (req) => {
           .select("id, numero")
           .single();
         if (contratoError || !criado) {
-          console.error("[efetivar-troca] Erro ao criar contrato:", contratoError);
-          await supabase.from("veiculos").update({ associado_id: solicitacao.associado_id }).eq("id", veiculoId);
-          return new Response(JSON.stringify({ success: false, error: "Erro ao criar contrato do novo titular" }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          console.error("[efetivar-troca][etapa=contrato_novo] Erro ao criar contrato:", contratoError);
+          // Rollback etapa 1
+          await supabase.from("veiculos").update({
+            associado_id: solicitacao.associado_id,
+            em_troca_titularidade: true,
+            troca_titularidade_id: solicitacao_id,
+          }).eq("id", veiculoId);
+          return new Response(JSON.stringify({
+            success: false,
+            etapa_falha: "contrato_novo",
+            error: "Não foi possível criar o contrato do novo titular. Tente novamente; se persistir, contate o suporte.",
+            motivo_tecnico: contratoError?.message,
+          }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         novoContrato = criado;
@@ -570,7 +596,7 @@ serve(async (req) => {
       }
     }
 
-    // 8. Encerrar contrato anterior
+    // 8. Encerrar contrato anterior (BLOQUEANTE — etapa 3)
     if (contratoAnterior) {
       const { error: cancelError } = await supabase
         .from("contratos")
@@ -582,10 +608,28 @@ serve(async (req) => {
         .eq("id", contratoAnterior.id);
 
       if (cancelError) {
-        console.error("[efetivar-troca] Erro ao encerrar contrato anterior:", cancelError);
-      } else {
-        console.log(`[efetivar-troca] Contrato anterior ${contratoAnterior.numero || contratoAnterior.id} encerrado`);
+        console.error("[efetivar-troca][etapa=contrato_anterior] Falha ao encerrar contrato anterior:", cancelError);
+        // Rollback etapas 1 e 2
+        await supabase.from("contratos").update({
+          status: "cancelado",
+          data_cancelamento: now.toISOString(),
+          updated_at: now.toISOString(),
+        }).eq("id", novoContrato.id);
+        await supabase.from("veiculos").update({
+          associado_id: solicitacao.associado_id,
+          em_troca_titularidade: true,
+          troca_titularidade_id: solicitacao_id,
+        }).eq("id", veiculoId);
+        return new Response(JSON.stringify({
+          success: false,
+          etapa_falha: "contrato_anterior",
+          error: "Não foi possível encerrar o contrato do titular anterior. Tente novamente; se persistir, contate o suporte.",
+          motivo_tecnico: cancelError.message,
+        }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+      console.log(`[efetivar-troca] Contrato anterior ${contratoAnterior.numero || contratoAnterior.id} encerrado`);
 
       // Register contract history
       await supabase.from("contratos_historico").insert({
