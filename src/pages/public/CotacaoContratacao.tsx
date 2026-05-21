@@ -992,8 +992,8 @@ export default function CotacaoContratacao() {
                         </div>
                         <Button
                           onClick={() => {
-                            const idx = navOrder.indexOf(3);
-                            const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 4;
+                            const idx = navOrder.indexOf(4);
+                            const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
                             setEtapaAtual(next);
                           }}
                         >
