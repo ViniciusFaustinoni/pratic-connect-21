@@ -1,71 +1,65 @@
 
-## Plano — Limpeza de cotações + regra da placa presa (refinado)
+## Plano — Unificar leitura de fotos do veículo em todas as telas
 
-Resposta 4 incorporada: **aviso de placa prestes a expirar = card pulsante + popup ao clicar**, sem WhatsApp. Mesmo padrão do `FlagTravada.tsx` já existente (bolinha pulsante + tooltip), agora também com popup de detalhe.
+### Causa raiz (caso TIB8F32)
 
-Para 1–3 sigo os defaults que propus — me avise se quiser ajustar antes de implementar:
-- (1) renovação por movimentação ativada (24h por interação, teto 120h)
-- (2) defaults: 48h reserva inicial / 24h renovação / 120h teto / 30d arquivar morta
-- (3) reativação: dono original sempre; outro consultor só se a placa não estiver presa por terceiro
-
----
-
-### 1) Configurações novas em `configuracoes_sistema`
-
-| chave | default | papel |
+| Fonte | Quantidade | Como é lido |
 |---|---|---|
-| `prazo_placa_presa_horas` | 48 | reserva inicial ao criar cotação |
-| `prazo_renovacao_movimentacao_horas` | 24 | quanto cada movimento estende |
-| `prazo_teto_placa_presa_horas` | 120 | limite máximo absoluto |
-| `prazo_alerta_placa_expirando_horas` | 12 | quando o card começa a pulsar |
-| `prazo_arquivar_cotacao_morta_dias` | 30 | rascunho/enviada sem movimento → `expirada` |
+| `vistoria_fotos` (vistoria `5f9c56b0…`, autovistoria, `veiculo_id=33ae2ced…`, `instalacao_id=NULL`) | **34 fotos** | modal "Detalhes do Veículo" lê via `vistorias.veiculo_id` ✅ |
+| `cotacoes_vistoria_fotos` (`cotacao_id=c00806f4…`) | 3 fotos + vídeo 360 | nenhuma tela junta isso ao vehicle ❌ |
+| `instalacao_fotos` (`instalacao_id=79613c9a…`) | 0 | tela de Aprovação só olha aqui ❌ |
 
-Tudo editável em `/configuracoes/sistema`.
+`AprovacaoInstalacaoDetalhe.tsx` (linhas 75–110) navega só por `servico.instalacao_origem_id`/`servico.vistoria_origem_id`. Como o serviço de instalação dessa proposta tem só `instalacao_origem_id` e a vistoria das 34 fotos não está vinculada à instalação, o caminho quebra.
 
-### 2) Migration — schema
+### Solução: resolver canônico único de fotos do veículo
 
-- `ALTER TABLE cotacoes ADD COLUMN placa_reservada_ate timestamptz, cancelada_por uuid, categoria_cancelamento text, reativada_em timestamptz, reativada_por uuid`.
-- Backfill `placa_reservada_ate = created_at + 48h` para registros vivos.
-- Adicionar valores `'cancelada'`, `'liberada'`, `'expirada'` ao enum/check de `cotacoes.status`.
-- Trigger `trg_cotacoes_renovar_reserva` (BEFORE UPDATE) — quando muda plano, valor, anexa doc, link público é gerado/enviado, mensagem WhatsApp do cliente entra → `placa_reservada_ate = least(now() + renovacao_h, created_at + teto_h)`. Abrir só pra ler **não renova**.
-- Trigger `trg_cotacoes_set_cancelada_em` — preenche `cancelada_em`/`cancelada_por` quando `status → 'cancelada'`/`'liberada'`/`'expirada'`.
-- Inserts dos defaults em `configuracoes_sistema`.
+#### 1) Novo helper `src/hooks/useFotosVeiculoCanonico.ts`
 
-### 3) Edge functions
+Reuso o padrão já consagrado em `useVeiculoDetalhes` (memória `historico-fotos-veiculo-canonico`). Recebe `{ veiculoId, contratoId?, cotacaoId?, instalacaoId? }` e retorna `{ fotos, video360, agrupadas, source }` mesclando — **com dedupe por `arquivo_url`** — as três fontes:
 
-- `cancelar-cotacao` — input `{ cotacao_id, categoria, motivo }` (motivo ≥ 10 chars). Marca `status='cancelada'`, libera placa imediatamente (`placa_reservada_ate=now()`).
-- `liberar-placa-cotacao` — substitui o UPDATE direto do `PlacaDuplicadaModal` (que hoje grava `'recusada'`, contaminando relatórios). Marca `status='liberada'` + `motivo_cancelamento='[gestão] Liberação manual'`. Restringido a gestor/coordenador/diretor.
-- `reativar-cotacao` — bloqueia se placa estiver presa por terceiro; dono original tem prioridade.
-- Cron `cron-liberar-placas-presas` (hourly) — toda cotação com `placa_reservada_ate < now()` e status `rascunho`/`enviada` vira `'liberada'` com motivo `[auto] Reserva da placa expirou`.
-- Cron `cron-arquivar-cotacoes-mortas` (daily) — `rascunho`/`enviada`/`liberada` sem movimento há `prazo_arquivar_cotacao_morta_dias` → `'expirada'`.
+1. `vistoria_fotos` via `vistorias.veiculo_id = veiculoId` (canônica, captura autovistoria/presencial/troca)
+2. `cotacoes_vistoria_fotos` via `cotacao_id` resolvido (`cotacao_id` direto OU `contratos.cotacao_id` quando só veio `contratoId`)
+3. `instalacao_fotos` via `instalacao_id` direto OU resolvido por `instalacoes.veiculo_id`
 
-### 4) Frontend
+Vídeo 360° é resolvido pela mesma ordem de prioridade (vistoria → cotacoes_vistoria_fotos `tipo=video_360`), separando `videoInstalador` (modalidade=`presencial`) de `videoAssociado` (`autovistoria`).
 
-- `src/hooks/useVerificarPlaca.ts` — trocar filtro `created_at >= now()-48h` por `placa_reservada_ate > now()`.
-- `src/components/cotacoes/PlacaDuplicadaModal.tsx` — botão "Liberar placa" passa a chamar `liberar-placa-cotacao`; mostrar `placa_reservada_ate` real em vez de `addHours(createdAt, 48)`.
-- `src/pages/vendas/Cotacoes.tsx:352` — incluir `'cancelada'`, `'liberada'`, `'expirada'` em `STATUS_FINALIZADAS` (aba Finalizadas), com chips e cores próprias.
-- **Novo `FlagPlacaExpirando.tsx`** (clonar padrão do `FlagTravada.tsx`): bolinha **âmbar pulsante** quando faltam ≤ `prazo_alerta_placa_expirando_horas` para expirar; **vermelha pulsante** nas últimas 2h. Clique no card abre um `Dialog` com:
-  - placa, contador regressivo HH:MM, data exata de expiração
-  - botão "Movimentar agora" (atalho para abrir a cotação)
-  - botão "Cancelar cotação" (abre o `CancelarCotacaoDialog`)
-- **Novo `CancelarCotacaoDialog.tsx`** — combo de categoria (`cliente_desistiu`, `comprou_concorrente`, `valor_alto`, `nao_atendeu`, `duplicada`, `outro`) + textarea (≥ 10 chars), botão destructive. Mesmo padrão visual de `ConfirmacaoExclusaoDialog.tsx`.
-- **Novo `CotacaoArquivadaBanner.tsx`** — banner no topo do detalhe quando status é terminal não-comercial, mostrando motivo/categoria/quem fez/quando, com botão "Reativar".
-- `src/hooks/useCotacoes.ts` — incluir os novos campos no select e nos tipos.
+#### 2) Refator de `AprovacaoInstalacaoDetalhe.tsx` (linhas 75–232)
 
-### 5) Estado final dos status de cotação
+- Substituir o bloco atual de busca de fotos/vídeo pelo helper canônico, passando `veiculoId=servico.veiculo_id, contratoId=servico.contrato_id, cotacaoId=servico.cotacao_id, instalacaoId=servico.instalacao_origem_id`.
+- Manter agrupamento atual (Identificação / Exterior / Interior / etc.) — só muda a **fonte** dos arrays.
+- Telemetria: adicionar `console.log` com contagem por fonte para debug.
 
-| status | quem causa | placa liberada? | conta como venda? |
-|---|---|---|---|
-| `rascunho` / `enviada` / `aceita` | fluxo normal | não | em andamento |
-| `recusada` | cliente recusou proposta | sim | não (perdida comercial) |
-| `cancelada` | consultor cancelou manual | sim (na hora) | não |
-| `liberada` | cron horário OU gestor | sim | não |
-| `expirada` | cron diário (30d morta) | sim | não |
+#### 3) Auditoria das demais telas que mostram fotos do mesmo veículo
 
-Todas as terminais ficam na aba **Finalizadas**, podem ser reativadas, e **nenhuma é apagada do banco**.
+Garantir que **todas** usam o resolver canônico (ou já chamam `useVeiculoDetalhes`):
+
+| Tela | Status atual | Ação |
+|---|---|---|
+| `cadastro/VeiculoDetalhesModal.tsx` | ✅ usa `useVeiculoDetalhes` (canônico) | nenhuma |
+| `monitoramento/AprovacaoInstalacaoDetalhe.tsx` | ❌ cadeia origem-id | **refatorar** |
+| `pages/analista-eventos/EventoAnaliseDetalhe.tsx` | usar resolver | revisar |
+| `troca-titularidade/VeiculoCompletoCard.tsx` | usar resolver | revisar |
+| `juridico/consultas/ConsultaVeiculo.tsx` | usar resolver | revisar |
+| `useGerarLaudoVistoria` / `useVistoriaCompletaAnalise` | usar resolver | revisar |
+
+Não vou tocar comportamento de upload/escrita — só leitura. Não vou apagar tabelas — só consolidar a leitura.
+
+#### 4) Realtime opcional (fora do escopo dessa correção, mas fica registrado)
+
+`useFotosVeiculoCanonico` aceita flag `realtime` que assina `postgres_changes` em `vistoria_fotos`/`cotacoes_vistoria_fotos`/`instalacao_fotos` filtrando por `veiculo_id` / `cotacao_id` / `instalacao_id`. Ativo na tela de Aprovação para refletir uploads chegando ao vivo.
+
+#### 5) Memória do projeto
+
+Atualizar `mem://logic/operations/historico-fotos-veiculo-canonico` (ou criar `historico-fotos-veiculo-resolver-unificado`) registrando que toda tela de aprovação/análise consome o helper canônico, e que `vistoria_fotos via vistorias.veiculo_id` + `cotacoes_vistoria_fotos via cotacao_id` + `instalacao_fotos via instalacao_id` são as 3 fontes mescladas.
+
+### Verificação após implementar
+
+1. Abrir `/monitoramento/aprovacao-associados/<servico_id de TIB8F32>` como diretor — devem aparecer **34+ fotos agrupadas + vídeo 360°**.
+2. Conferir que o modal "Detalhes do Veículo" continua mostrando 37 (= 34 vistoria + 3 cotação) sem regressão.
+3. Conferir 2 ou 3 outros casos com fotos só em `cotacoes_vistoria_fotos` (autovistoria pura sub-FIPE).
 
 ### Fora de escopo
 
-- Mexer no fluxo de `recusada` (continua significando "cliente recusou proposta").
-- Notificação WhatsApp ao consultor (substituída pelo card pulsante + popup, conforme você definiu).
-- Mudar a tela de gestão de configurações — só inserir as novas chaves no seed.
+- Backfill de vínculo `vistorias.instalacao_id` em registros antigos (a leitura canônica torna isso desnecessário).
+- Mudar onde o uploader grava as fotos.
+- Mexer nas regras de aprovação/promoção do Cadastro.
