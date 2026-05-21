@@ -41,6 +41,11 @@ interface EtapaVistoriaProps {
    * completa (31 carro / 15 moto) para o associado executar pelo celular.
    */
   subFipe?: boolean;
+  /**
+   * created_at da cotação. Usado pelo flag de roteiro v2 do checklist sub-FIPE.
+   * Sem este valor, o helper assume "novo" e cai em v2 — pode quebrar cotações antigas.
+   */
+  criadoEm?: string;
 }
 
 type ModoVistoria = 'escolha' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
@@ -60,11 +65,15 @@ export function EtapaVistoria({
   readOnly = false, 
   tipoVistoriaRealizada,
   subFipe = false,
+  criadoEm,
 }: EtapaVistoriaProps) {
   const [modo, setModo] = useState<ModoVistoria>(subFipe ? 'autovistoria' : 'escolha');
   const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
   const { data: configBase } = useConfiguracaoBase();
-  const fotosSubFipe = useMemo(() => (subFipe ? getFotosVistoriaSubFipe(tipoVeiculo) : undefined), [subFipe, tipoVeiculo]);
+  const fotosSubFipe = useMemo(
+    () => (subFipe ? getFotosVistoriaSubFipe(tipoVeiculo, criadoEm) : undefined),
+    [subFipe, tipoVeiculo, criadoEm],
+  );
 
   const enderecoBase = configBase?.base_logradouro
     ? `${configBase.base_logradouro}${configBase.base_numero ? `, ${configBase.base_numero}` : ''} - ${configBase.base_bairro || ''} - ${configBase.base_cidade || ''}/${configBase.base_uf || ''}`

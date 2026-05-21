@@ -321,13 +321,14 @@ export default function ExecutarVistoriaCompleta() {
   // Categorias filtradas baseado na necessidade de rastreador.
   // Em modoApenasInstalacao, só categorias 'instalacao' e 'rastreador' (esta última
   // depende da regra normal de necessidade de rastreador).
+  const criadoEm = (vistoria as any)?.created_at as string | undefined;
   const categorias = useMemo(() => {
     if (modoApenasInstalacao) {
-      const todas = agruparFotosApenasInstalacao(tipoVeiculoDetectado);
+      const todas = agruparFotosApenasInstalacao(tipoVeiculoDetectado, criadoEm);
       return veiculoPrecisaRastreador ? todas : todas.filter(c => c.id !== 'rastreador');
     }
-    return agruparFotosFiltradas(tipoVeiculoDetectado, veiculoPrecisaRastreador);
-  }, [tipoVeiculoDetectado, veiculoPrecisaRastreador, modoApenasInstalacao]);
+    return agruparFotosFiltradas(tipoVeiculoDetectado, veiculoPrecisaRastreador, criadoEm);
+  }, [tipoVeiculoDetectado, veiculoPrecisaRastreador, modoApenasInstalacao, criadoEm]);
 
   // Mapa de fotos
   const fotosMap = useMemo(() => {
@@ -352,12 +353,12 @@ export default function ExecutarVistoriaCompleta() {
   // da chave do automóvel) e quaisquer fotos extras (`tipo` começando com `extra_`).
   const fotosObrigatoriasDoTipo = useMemo(
     () => (modoApenasInstalacao
-      ? getFotosApenasInstalacao(tipoVeiculoDetectado).filter(
+      ? getFotosApenasInstalacao(tipoVeiculoDetectado, criadoEm).filter(
           f => f.categoria !== 'rastreador' || veiculoPrecisaRastreador,
         )
-      : getFotosFiltradas(tipoVeiculoDetectado, false)
+      : getFotosFiltradas(tipoVeiculoDetectado, false, criadoEm)
     ).filter(f => !f.opcional),
-    [tipoVeiculoDetectado, modoApenasInstalacao, veiculoPrecisaRastreador]
+    [tipoVeiculoDetectado, modoApenasInstalacao, veiculoPrecisaRastreador, criadoEm]
   );
 
   const totalFotosObrigatorias = fotosObrigatoriasDoTipo.length;

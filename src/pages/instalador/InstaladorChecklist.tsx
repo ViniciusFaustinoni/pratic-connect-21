@@ -220,7 +220,8 @@ export default function InstaladorChecklist() {
   }, [valorFipeVeiculo, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto]);
 
   // Configuração dinâmica baseada no tipo de veículo (e se precisa rastreador)
-  const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
+  const criadoEm = (vistoriaCompleta as any)?.created_at ?? (servico as any)?.created_at;
+  const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo, criadoEm), [tipoVeiculo, criadoEm]);
   const fotosObrigatoriasConfig = useMemo(() =>
     fotosConfig.filter(f =>
       f.categoria !== 'instalacao' &&
@@ -231,8 +232,8 @@ export default function InstaladorChecklist() {
   
   // Usar categorias filtradas — incluir rastreador/instalação somente se o veículo exigir rastreador
   const categoriasComFotos = useMemo(() => {
-    return agruparFotosFiltradas(tipoVeiculo, veiculoPrecisaRastreador);
-  }, [tipoVeiculo, veiculoPrecisaRastreador]);
+    return agruparFotosFiltradas(tipoVeiculo, veiculoPrecisaRastreador, criadoEm);
+  }, [tipoVeiculo, veiculoPrecisaRastreador, criadoEm]);
 
   // Carregar checklist, quilometragem e etapa salvos
   useEffect(() => {
