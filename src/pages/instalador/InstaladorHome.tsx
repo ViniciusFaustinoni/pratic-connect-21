@@ -183,6 +183,29 @@ export default function InstaladorHome() {
           <BotaoIniciarServico />
         )}
 
+        {/* Próximas tarefas atribuídas (multi-fila) */}
+        {(() => {
+          const emExecucao = tarefasAtribuidas.some(
+            (t) => t.status === 'em_rota' || t.status === 'em_andamento'
+          );
+          const proximas = tarefasAtribuidas.filter(
+            (t) => t.id !== tarefaAtual?.id && t.status === 'agendada'
+          );
+          if (proximas.length === 0) return null;
+          return (
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium text-slate-300">
+                Próximas atribuídas a você ({proximas.length})
+              </h2>
+              <div className="space-y-2">
+                {proximas.map((t) => (
+                  <ProximaTarefaCard key={t.id} tarefa={t} bloqueado={emExecucao} />
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Encaixes Urgentes - Sistema Uber */}
         {encaixesUrgentes.length > 0 && (
           <div className="space-y-3">
