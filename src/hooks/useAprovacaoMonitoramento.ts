@@ -319,10 +319,18 @@ export function useAprovarInstalacaoMonitoramento() {
         throw new Error(detailMsg);
       }
       if (ativacao && ativacao.success === false && !ativacao.idempotente) {
+        // PR-A2: promoção parcial = associado virou ativo mas algum side-effect falhou.
+        if (ativacao.error === 'promocao_parcial') {
+          const err: any = new Error(ativacao.mensagem || 'Promoção parcial — alguns alvos não foram atualizados.');
+          err.code = 'promocao_parcial';
+          err.parciais = ativacao.parciais ?? [];
+          throw err;
+        }
         throw new Error(ativacao.error === 'campos_obrigatorios_faltando'
           ? `Campos obrigatórios faltando: ${(ativacao.campos_faltando || []).join(', ')}`
           : ativacao.mensagem || ativacao.error || 'Falha na ativação');
       }
+
 
       // 4. Garantir ativação no SGA via fila com retry (idempotente)
       // force_resync_media=true: o sync inicial roda na aprovação cadastral, ANTES das fotos
