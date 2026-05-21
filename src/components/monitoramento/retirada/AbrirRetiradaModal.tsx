@@ -63,6 +63,7 @@ import {
 } from '@/data/autovistoriaConfig';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 
 interface RastreadorInfo {
   id: string;
