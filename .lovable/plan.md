@@ -1,54 +1,89 @@
 ## Diagnóstico
 
-A cotação **COT-20260521-154401431-524** (troca de titularidade, placa KOU6D37, novo titular Vinicius Faustinoni) está corretamente:
+A placa LTC8G02 (FIPE R$ 44.921) está caindo no **Estágio A — Preliminar** da `fipeMenorInfo` em `src/components/cotacoes/CotacaoFormDialog.tsx`. Esse estágio é executado quando o usuário ainda não selecionou plano (caso da "Cotação Rápida" no screenshot).
 
-- `contratos.cad888ca…FZKT7W`: `status=assinado`, `cadastro_aprovado=false`, `tipo_entrada=troca_titularidade`, `origem_troca_titularidade_id` setado.
-- `solicitacoes_troca_titularidade.a5c915b6…`: `status=aguardando_cadastro`, termo do antigo titular assinado, novo titular assinou contrato.
-- `veiculos.d5181403…` (KOU6D37): `status=ativo` — **vinculado ainda ao titular antigo** (b204ac2b — N0HNLT, contrato ativo). Esse é o estado canônico de uma troca em curso (Memory: `troca-titularidade-desvinculo-logico` + `troca-titularidade-fluxo-canonico-e2e` — só `efetivar-troca-titularidade` muda o `associado_id` do veículo).
-
-A proposta deveria aparecer em /cadastro/propostas com badge "Troca de Titularidade", mas é silenciosamente descartada.
-
-## Causa raiz
-
-Em `src/hooks/usePropostasPendentes.ts` (linhas 606‑625) o gate de saída usa:
+Trecho (linhas 661–673):
 
 ```ts
-const veiculoJaConcluidoOperacionalmente = veiculoContrato?.status === 'ativo';
-...
-if (propostaJaConcluida) return null;
+// === ESTÁGIO A — Preliminar (sem plano selecionado) ===
+if (planosSelecionados.length === 0) {
+  return {
+    elegivel: true,         // ← sempre true
+    preliminar: true,
+    bloqueado: null,
+    valorReduzido,          // valorFipe * 0.99
+    faixaAtual: null,
+    faixaInferior: null,
+    economia: 0,
+  };
+}
 ```
 
-Para uma **troca de titularidade**, o veículo permanece `ativo` (vinculado ao antigo titular) durante todo o ciclo Cadastro → Monitoramento → `efetivar-troca-titularidade`. Esse filtro foi pensado para fluxo comum (onde `status='ativo'` só acontece DEPOIS do `ativar-associado`), mas em troca ele **mata o item antes mesmo do gate de troca em linha 799-809** que existe justamente para deixar a troca passar sem etapa executada.
+No Estágio A o flag `elegivel` é setado **cego como `true`** assim que o FIPE passa pelos dois bloqueios anteriores (mínimo por tipo e zona R$ 30k–R$ 35k). Não há verificação se o valor reduzido cruza a fronteira da faixa atual.
 
-O mesmo bug está em `usePropostasPendentesCount.ts` (linha 1646): `setVeiculoAtivo.has(c.veiculo_id)` descarta o item, por isso o contador mostra "Aguardando: 2" em vez de 3.
+### Por que isso quebra LTC8G02
 
-## Contaminação herdada
+- FIPE atual: **R$ 44.921,00** → faixa enquadrada **R$ 40.000,00 – R$ 44.999,99**
+- FIPE − 1% = **R$ 44.471,79**
+- R$ 44.471,79 > R$ 40.000,00 → **continua dentro da MESMA faixa**
 
-Como subproduto do problema anterior (troca cancelada do mesmo veículo), existe um **contrato órfão** `c4f2895f…ZWMOAX` (troca anterior `bb49bf56`, status da troca = `cancelada`) que ficou em `status='assinado'`. A edge `cancelar-troca-titularidade` cancela a **cotação** derivada (linhas 104‑123) mas **não cancela o contrato** derivado quando o novo titular já tinha assinado antes do cancelamento. Esse contrato fantasma ficou escondido pelo mesmo filtro errado — ao corrigir o filtro, ele apareceria duplicado na fila.
+A "Regra do 1%" só faz sentido quando a redução de 1% **derruba o veículo para a faixa imediatamente inferior** (e portanto para uma mensalidade menor). Como 44.471,79 não cruza o piso de 40.000, não existe redução de cota possível — mas o painel anuncia "Veículo elegível à redução de cota" porque o Estágio A não roda essa checagem.
 
-## Plano
+A prova de que a checagem existe (e está correta) está no Estágio B (linha 706), executado quando há plano selecionado:
 
-1. **Corrigir o filtro em `usePropostasPendentes.ts`**
-   - Calcular `isTroca` ANTES do gate "concluída" (mover detecção de tipo_entrada/origem_troca_titularidade_id para próximo das linhas 600).
-   - Mudar o gate para: `veiculoJaConcluidoOperacionalmente && !isTroca`.
-   - Replicar a mesma exceção no contador `usePropostasPendentesCount` (descartar `setVeiculoAtivo` quando o contrato for de troca — buscar também `tipo_entrada` e set de `isTrocaContrato`).
+```ts
+const elegivel = valorReduzido < faixaAtualRule.de;
+```
 
-2. **Tampar o vazamento em `cancelar-troca-titularidade/index.ts`**
-   - Após cancelar a cotação derivada, cancelar também o contrato vinculado:
-     - `UPDATE contratos SET status='cancelado', data_cancelamento=now(), motivo_cancelamento='Troca de titularidade cancelada: …', updated_at=now() WHERE origem_troca_titularidade_id = solicitacao_id AND status NOT IN ('cancelado','ativo')`.
-   - Log best-effort, mesma lógica do bloco de cotação.
+Aplicando essa regra ao caso: `44471.79 < 40000` → `false` → não elegível. O Estágio B daria a resposta certa, mas o Estágio A já contaminou a UI antes de chegar lá.
 
-3. **Saneamento via migration**
-   - Marcar `c4f2895f…ZWMOAX` como `cancelado` com motivo "Saneamento: troca de titularidade `bb49bf56` cancelada em 21/05/2026" (não há trigger que dependa disso — é só remover lixo da fila do Cadastro).
-   - Verificar se existem outros contratos com `origem_troca_titularidade_id IN (SELECT id FROM solicitacoes_troca_titularidade WHERE status IN ('cancelada','expirada','reprovada')) AND status='assinado'` e aplicar o mesmo cancelamento (deve cobrir só o ZWMOAX, mas a query é segura).
+### Causa raiz
 
-4. **Validação**
-   - Recarregar /cadastro/propostas como admin: deve aparecer card da KOU6D37 com badge "Troca de Titularidade", contador "Aguardando: 3", e o fantasma ZWMOAX desaparece (cancelado).
-   - Executar a mesma chamada de query no Supabase pra confirmar.
+O Estágio A foi desenhado para "anunciar elegibilidade já no carregamento do FIPE, sem esperar o plano". O problema é que ele precisa de **uma fronteira de faixa** para decidir se o −1% cruza algo. Como sem plano selecionado não temos a regra `fipe_range` específica, a única referência disponível é o catálogo `todasFaixas` (já carregado para o fallback legado).
 
-## O que NÃO muda
+### Plano de correção
 
-- Triggers de promoção da troca (`trg_troca_promove_cadastro_via_cotacao`) — a solicitação já está em `aguardando_cadastro` por outro caminho do fluxo.
-- Edge `aprovar-troca-cadastro` — continua funcionando assim que o item aparecer na fila e o analista clicar aprovar.
-- `usePropostasPendentes` linhas 795‑809 (gate `temQualquerEtapa`) — já trata troca corretamente; a correção é só no gate anterior.
-- Edge `efetivar-troca-titularidade` e a flag `veiculos.em_troca_titularidade` — intactas.
+1. **Substituir o `elegivel: true` cego do Estágio A por uma verificação preliminar de fronteira**, usando a faixa enquadrada do catálogo `todasFaixas` (mesma fonte que alimenta o texto "Faixa enquadrada" na UI logo acima do painel).
+
+   Pseudocódigo:
+
+   ```ts
+   if (planosSelecionados.length === 0) {
+     const faixaAtualGenerica = todasFaixas
+       .filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max)
+       .sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0];
+
+     // Sem catálogo carregado → fica em "preliminar elegível" como hoje
+     // (evita regressão em ambientes onde todasFaixas vem vazio).
+     const elegivelPreliminar =
+       !faixaAtualGenerica || valorReduzido < faixaAtualGenerica.fipe_min;
+
+     return {
+       elegivel: elegivelPreliminar,
+       preliminar: true,
+       bloqueado: null,
+       valorReduzido,
+       faixaAtual: null,
+       faixaInferior: null,
+       economia: 0,
+     };
+   }
+   ```
+
+2. **Não tocar no Estágio B nem nos bloqueios anteriores** — eles estão corretos. A correção é cirúrgica no preliminar.
+
+3. **Validação manual**:
+   - LTC8G02 (FIPE 44.921) sem plano: painel "Redução de Cota" deve sumir (44.471,79 > 40.000).
+   - Veículo FIPE 40.050 sem plano: painel deve continuar aparecendo (40.050 × 0,99 = 39.649,50 < 40.000, cruza a fronteira).
+   - Veículo FIPE 50.000 sem plano: depende do catálogo — se a faixa atual começa em 45.000, 49.500 > 45.000, não elegível; se começa em 50.000, sim. Comportamento certo nos dois.
+   - Após selecionar plano, o Estágio B continua sendo a fonte da verdade — sem mudança de comportamento.
+
+4. **Persistência**: o flag `solicitar_fipe_menor` e o registro em `aprovacoes_fipe_menor` continuam dependendo do Estágio B (linhas 1792 e 1800), então essa correção não afeta o que vai pro banco — só elimina a falsa promessa visual antes do plano ser escolhido.
+
+### O que NÃO muda
+
+- Bloqueios da zona R$ 30k–R$ 35k (rastreador obrigatório).
+- Bloqueio por FIPE mínimo/máximo por tipo (carro/moto).
+- Cálculo de economia no Estágio B.
+- Auto-aplicação da regra após selecionar plano.
+- Memória `mem://logic/pricing/regra-1-porcento-bloqueios` continua válida — esta correção fecha um buraco compatível com ela (não cria regra nova).
