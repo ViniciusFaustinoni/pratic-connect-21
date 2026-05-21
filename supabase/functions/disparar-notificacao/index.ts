@@ -368,7 +368,7 @@ serve(async (req) => {
           let templateParams: string[];
 
           if (tipo === 'boleto' && subtipo === 'pago') {
-            templateName = 'sinistro_atualizado';
+            templateName = 'notificacao_atualizacao';
             templateParams = [primeiroNome, 'pagamento', 'Pagamento confirmado com sucesso!'];
           } else if (tipo === 'boleto' || tipo === 'cobranca') {
             templateName = 'cobranca_mensalidade';
@@ -387,7 +387,7 @@ serve(async (req) => {
                 String(dados.link_evento || ''),
               ];
             } else {
-              templateName = 'sinistro_atualizado';
+              templateName = 'notificacao_atualizacao';
               templateParams = [primeiroNome, String(dados.protocolo || ''), titulo];
             }
           } else if (tipo === 'assistencia') {
@@ -400,7 +400,7 @@ serve(async (req) => {
             templateName = 'assistencia_confirmada';
             templateParams = [primeiroNome, String(dados.prestador || 'Prestador'), tempo];
           } else {
-            templateName = 'sinistro_atualizado';
+            templateName = 'notificacao_atualizacao';
             templateParams = [primeiroNome, tipo, titulo];
           }
 

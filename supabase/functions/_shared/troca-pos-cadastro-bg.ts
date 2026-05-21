@@ -130,7 +130,7 @@ export async function runPosCadastroBackground(admin: SupabaseClient, sol: Solic
               `Cotação *${numero}* foi liberada e marcada como *PRIORIDADE ALTA*.\n` +
               `Novo titular: ${novoNome}\n\n` +
               `A placa já está liberada para fechamento. Acesse o sistema para dar continuidade.`,
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_atualizacao',
             template_params: [
               primeiroNomeVendedor,
               `Cotação ${numero} liberada`,

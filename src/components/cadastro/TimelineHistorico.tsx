@@ -51,7 +51,7 @@ export type TipoEvento =
   | 'chamado_aberto'
   | 'chamado_concluido'
   | 'sinistro_aberto'
-  | 'sinistro_atualizado'
+  | 'notificacao_atualizacao'
   | 'sinistro_encerrado'
   | 'contrato_assinado'
   | 'observacao_adicionada'
@@ -265,7 +265,7 @@ const filterCategories: Record<string, TipoEvento[]> = {
   documentos: ['documento_enviado', 'documento_aprovado', 'documento_reprovado'],
   instalacoes: ['instalacao_agendada', 'instalacao_concluida', 'instalacao_cancelada', 'veiculo_adicionado', 'veiculo_removido', 'protecao_360_aprovada_monitoramento', 'protecao_360_reprovada_monitoramento'],
   financeiro: ['boleto_gerado', 'boleto_pago', 'boleto_cancelado', 'contrato_assinado'],
-  sinistros: ['sinistro_aberto', 'sinistro_atualizado', 'sinistro_encerrado'],
+  sinistros: ['sinistro_aberto', 'notificacao_atualizacao', 'sinistro_encerrado'],
   chamados: ['chamado_aberto', 'chamado_concluido'],
   ressalvas: ['ressalva_registrada', 'ressalva_aprovada_monitoramento', 'ressalva_declinada_monitoramento', 'ressalva_instalacao'],
 };

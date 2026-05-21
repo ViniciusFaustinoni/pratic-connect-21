@@ -1027,7 +1027,7 @@ ${linkWhatsAppCliente}
                 body: {
                   telefone: telProfNorm,
                   mensagem: mensagemVistoriador,
-                  template_name: 'sinistro_atualizado',
+                  template_name: 'notificacao_atualizacao',
                   template_params: [
                     profissionalTel?.nome?.split(' ')[0] || 'Vistoriador',
                     tipoServicoLabelWhats,

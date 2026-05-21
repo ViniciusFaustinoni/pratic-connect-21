@@ -504,7 +504,7 @@ serve(async (req) => {
               body: {
                 phone: tel,
                 message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${associado.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${valorCota.toFixed(2)} foi confirmado!\n\nEnviaremos o Termo de Entrada para assinatura digital em instantes.`,
-                template_name: 'sinistro_atualizado',
+                template_name: 'notificacao_atualizacao',
                 template_params: [primeiroNomePagto, sinistro.protocolo, 'Pagamento da cota de coparticipação confirmado! Termo de Entrada será enviado em instantes.'],
               },
             });
@@ -601,7 +601,7 @@ serve(async (req) => {
               body: {
                 phone: tel,
                 message: `✅ *PRATIC - Pagamento Confirmado*\n\nOlá ${associado.nome},\n\nO pagamento da cota de coparticipação no valor de R$ ${valorCota.toFixed(2)} foi confirmado!\n\nEnviaremos o Termo de Entrada para assinatura digital em instantes.`,
-                template_name: 'sinistro_atualizado',
+                template_name: 'notificacao_atualizacao',
                 template_params: [primeiroNomePagto2, sinistro.protocolo, 'Pagamento da cota de coparticipação confirmado! Termo de Entrada será enviado em instantes.'],
               },
             });

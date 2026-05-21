@@ -234,7 +234,7 @@ serve(async (req) => {
       ];
     } else {
       // Todos os outros status usam sinistro_atualizado (nome, referência, atualização)
-      templateName = 'sinistro_atualizado';
+      templateName = 'notificacao_atualizacao';
       templateParams = [
         nomeAssociado,
         `assistência ${dadosTemplate.protocolo}`,

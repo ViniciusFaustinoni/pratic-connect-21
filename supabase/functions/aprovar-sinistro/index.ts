@@ -211,7 +211,7 @@ Qualquer dúvida, estamos à disposição! 💙`;
           body: {
             telefone: telefone.replace(/\D/g, ''),
             mensagem,
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_atualizacao',
             template_params: [
               primeiroNomeWpp,
               sinistro.protocolo || 'Evento',

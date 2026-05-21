@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
         body: {
           telefone,
           mensagem,
-          template_name: 'sinistro_atualizado',
+          template_name: 'notificacao_atualizacao',
           template_params: [nome, placa, mensagem.substring(0, 200)],
         },
       });

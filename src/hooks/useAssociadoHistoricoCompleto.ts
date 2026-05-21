@@ -39,7 +39,7 @@ const tipoDbParaTimeline: Record<string, TipoEvento> = {
   'chamado_aberto': 'chamado_aberto',
   'chamado_concluido': 'chamado_concluido',
   'sinistro_aberto': 'sinistro_aberto',
-  'sinistro_atualizado': 'sinistro_atualizado',
+  'notificacao_atualizacao': 'notificacao_atualizacao',
   'sinistro_encerrado': 'sinistro_encerrado',
   'contrato_assinado': 'contrato_assinado',
   'observacao_adicionada': 'observacao_adicionada',

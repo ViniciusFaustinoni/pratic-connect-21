@@ -590,7 +590,7 @@ serve(async (req) => {
               body: JSON.stringify({
                 telefone: telefoneAssociado,
                 mensagem,
-                template_name: 'sinistro_atualizado',
+                template_name: 'notificacao_atualizacao',
                 template_params: [
                   associado.nome?.split(' ')[0] || 'Associado',
                   'Cancelamento',
@@ -769,7 +769,7 @@ serve(async (req) => {
               body: JSON.stringify({
                 telefone: telefoneAssociado,
                 mensagem,
-                template_name: 'sinistro_atualizado',
+                template_name: 'notificacao_atualizacao',
                 template_params: [
                   associado.nome?.split(' ')[0] || 'Associado',
                   'Troca de titularidade',
