@@ -278,7 +278,12 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
 
       // 5) Compor cotações
       const cotacaoItems: OutroProcessoItem[] = cotList.map<OutroProcessoItem>((c) => {
-        const tipo = c.tipo_entrada as TipoOutroProcesso;
+        // Normaliza aliases para o canônico antes de tipar.
+        const tipoRaw = c.tipo_entrada as string;
+        const tipo: TipoOutroProcesso =
+          tipoRaw === 'inclusao' ? 'inclusao_veiculo'
+          : tipoRaw === 'substituicao' ? 'substituicao_placa'
+          : (tipoRaw as TipoOutroProcesso);
         const troca = trocasMap.get(c.id) || null;
         const associadoAntigo = troca ? associadosMap.get(troca.associado_antigo_id) : null;
         const novoTitular = troca?.novo_titular_dados || null;
