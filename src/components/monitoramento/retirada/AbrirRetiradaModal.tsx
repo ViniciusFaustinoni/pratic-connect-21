@@ -104,6 +104,17 @@ export function AbrirRetiradaModal({
   const [profissionalId, setProfissionalId] = useState('');
   const [permiteEncaixe, setPermiteEncaixe] = useState(false);
 
+  // Estados - Endereço (volante)
+  const [enderecoModo, setEnderecoModo] = useState<'cadastro' | 'novo'>('cadastro');
+  const [endNovoCep, setEndNovoCep] = useState('');
+  const [endNovoLogradouro, setEndNovoLogradouro] = useState('');
+  const [endNovoNumero, setEndNovoNumero] = useState('');
+  const [endNovoComplemento, setEndNovoComplemento] = useState('');
+  const [endNovoBairro, setEndNovoBairro] = useState('');
+  const [endNovoCidade, setEndNovoCidade] = useState('');
+  const [endNovoUf, setEndNovoUf] = useState('');
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
   // Estados - Notificação e Observações
   const [notificarWhatsApp, setNotificarWhatsApp] = useState(true);
   const [observacoes, setObservacoes] = useState('');
