@@ -400,13 +400,34 @@ export function useAprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Proteção 360 ativada com sucesso! Associado notificado.');
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       console.error('Erro ao aprovar instalação:', error);
+      // PR-A2: 207 promoção parcial — invalida queries (associado virou ativo) e oferece retentar.
+      if (error?.code === 'promocao_parcial') {
+        queryClient.invalidateQueries({ queryKey: ['instalacoes-aguardando-aprovacao-monitoramento'] });
+        queryClient.invalidateQueries({ queryKey: ['aprovacao-monitoramento-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+        queryClient.invalidateQueries({ queryKey: ['associados'] });
+        const alvos = (error.parciais ?? []).map((p: any) => p.alvo).join(', ') || 'side-effects';
+        toast.warning(`Promoção parcial — ${alvos} pendente(s).`, {
+          description: 'O associado foi ativado, mas alguns alvos não foram atualizados. Clique para retentar.',
+          duration: 15000,
+          action: {
+            label: 'Retentar',
+            onClick: () => mutateRef.current?.(variables),
+          },
+        });
+        return;
+      }
       const msg = error?.message || error?.error_description || 'Erro ao aprovar instalação';
       toast.error(msg);
     },
   });
+
+  mutateRef.current = mutation.mutate;
+  return mutation;
 }
+
 
 // ==============================
 // Mutation: Reprovar instalação
