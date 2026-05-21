@@ -31,6 +31,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
+import { ProcessoCard, ProcessoCardList, type ProcessoCardData, type ProcessoCardBadge } from '@/components/processos/ProcessoCard';
+import { useConsultoresProfiles } from '@/hooks/useConsultoresProfiles';
 
 // ============================================
 // TROCA DE TITULARIDADE TAB (nova fonte)
@@ -76,6 +78,10 @@ function TrocaTitularidadeTab({
   const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('em_andamento');
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
+
+  // Resolver nomes de consultores (criado_por é profile.id em solicitacoes_troca_titularidade)
+  const profileIds = (data || []).map((s) => s.criado_por).filter(Boolean) as string[];
+  const { data: consultores } = useConsultoresProfiles(profileIds, []);
 
   // REGRA CANÔNICA: aprovação documental da Troca migrou para a fila
   // Cadastro › Propostas Pendentes (com badge roxo). A aba Processos vira
@@ -132,104 +138,74 @@ function TrocaTitularidadeTab({
               Nenhuma solicitação nesta aba
             </CardContent></Card>
           ) : (
-            <div className="space-y-3">
-              {data.map(s => (
-                <Card key={s.id} className="hover:shadow-md transition cursor-pointer" onClick={() => setSelecionada(s.id)}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant={
-                            s.status === 'efetivada' || s.status === 'liberada_para_assinatura' ? 'default'
-                            : s.status.startsWith('reprovada') || s.status === 'cancelada' ? 'destructive'
-                            : 'secondary'
-                          }>
-                            {STATUS_TROCA_LABEL[s.status]}
-                          </Badge>
-                          {s.termo_cancelamento_assinado_em && (
-                            <Badge variant="outline" className="text-green-600 border-green-600">
-                              <FileSignature className="h-3 w-3 mr-1" /> Termo assinado
-                            </Badge>
-                          )}
-                          {s.status === 'aguardando_cadastro' && (() => {
-                            // Caminho 1: cliente fez autovistoria
-                            if (s.autovistoria_concluida_em) {
-                              return (
-                                <Badge variant="outline" className="text-green-600 border-green-600">
-                                  Autovistoria concluída
-                                </Badge>
-                              );
-                            }
-                            // Caminho 2: troca foi pelo caminho de vistoria base (FIPE >= mínimo)
-                            const tipoVistoria = (s as any).cotacao?.tipo_vistoria as string | undefined;
-                            const agendamento = (s as any).cotacao?.agendamentos_base?.[0];
-                            if (tipoVistoria === 'agendada_base' || agendamento) {
-                              if (agendamento?.data_agendada) {
-                                const dt = new Date(`${agendamento.data_agendada}T${agendamento.horario || '00:00:00'}-03:00`);
-                                const periodo = (agendamento.horario || '').startsWith('08') ? 'Manhã' : (agendamento.horario || '').startsWith('13') ? 'Tarde' : '';
-                                return (
-                                  <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                    Vistoria base agendada {dt.toLocaleDateString('pt-BR')} {periodo}
-                                  </Badge>
-                                );
-                              }
-                              return (
-                                <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                  Aguardando vistoria base
-                                </Badge>
-                              );
-                            }
-                            // Caminho 3: janela mesmo-dia (termo assinado ainda hoje BRT) → vistoria dispensada
-                            if (s.termo_cancelamento_assinado_em) {
-                              const a = new Date(s.termo_cancelamento_assinado_em);
-                              const fimDiaBRTemUTC = new Date(Date.UTC(
-                                a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
-                                26, 59, 59, 999
-                              ));
-                              if (new Date() <= fimDiaBRTemUTC) {
-                                return (
-                                  <Badge variant="outline" className="text-green-600 border-green-600">
-                                    Vistoria dispensada (mesmo dia)
-                                  </Badge>
-                                );
-                              }
-                            }
-                            // Default: caminho autovistoria pendente
-                            return (
-                              <Badge variant="outline" className="text-amber-600 border-amber-600">
-                                Aguardando autovistoria
-                              </Badge>
-                            );
-                          })()}
-                          {(s as any).sga_status === 'falha' && (
-                            <Badge variant="destructive">Erro SGA</Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm flex-wrap">
-                          <span className="font-medium">{s.associado_antigo?.nome}</span>
-                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{s.novo_titular_dados?.nome}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Car className="h-3 w-3" />
-                          {s.veiculo?.marca} {s.veiculo?.modelo} {s.veiculo?.ano_modelo ?? s.veiculo?.ano_fabricacao ?? ''} • Placa {s.veiculo?.placa}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Criada em {new Date(s.created_at).toLocaleString('pt-BR')}
-                        </p>
-                        {s.motivo_reprovacao && (
-                          <p className="text-xs text-destructive">Motivo: {s.motivo_reprovacao}</p>
-                        )}
-                      </div>
-                      <Button variant="outline" size="sm">Detalhes</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <ProcessoCardList>
+              {data.map((s) => {
+                const badgesExtra: ProcessoCardBadge[] = [];
+                if (s.termo_cancelamento_assinado_em) {
+                  badgesExtra.push({ label: 'Termo assinado', tone: 'success', icon: FileSignature });
+                }
+                if (s.status === 'aguardando_cadastro') {
+                  if (s.autovistoria_concluida_em) {
+                    badgesExtra.push({ label: 'Autovistoria concluída', tone: 'success' });
+                  } else {
+                    const tipoVistoria = (s as any).cotacao?.tipo_vistoria as string | undefined;
+                    const agendamento = (s as any).cotacao?.agendamentos_base?.[0];
+                    if (tipoVistoria === 'agendada_base' || agendamento) {
+                      if (agendamento?.data_agendada) {
+                        const dt = new Date(`${agendamento.data_agendada}T${agendamento.horario || '00:00:00'}-03:00`);
+                        const periodo = (agendamento.horario || '').startsWith('08') ? 'Manhã' : (agendamento.horario || '').startsWith('13') ? 'Tarde' : '';
+                        badgesExtra.push({ label: `Vistoria base agendada ${dt.toLocaleDateString('pt-BR')} ${periodo}`, tone: 'info' });
+                      } else {
+                        badgesExtra.push({ label: 'Aguardando vistoria base', tone: 'info' });
+                      }
+                    } else if (s.termo_cancelamento_assinado_em) {
+                      const a = new Date(s.termo_cancelamento_assinado_em);
+                      const fimDiaBRTemUTC = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(), 26, 59, 59, 999));
+                      if (new Date() <= fimDiaBRTemUTC) {
+                        badgesExtra.push({ label: 'Vistoria dispensada (mesmo dia)', tone: 'success' });
+                      } else {
+                        badgesExtra.push({ label: 'Aguardando autovistoria', tone: 'warning' });
+                      }
+                    } else {
+                      badgesExtra.push({ label: 'Aguardando autovistoria', tone: 'warning' });
+                    }
+                  }
+                }
+                if ((s as any).sga_status === 'falha') {
+                  badgesExtra.push({ label: 'Erro SGA', tone: 'destructive' });
+                }
+
+                const statusTone: ProcessoCardBadge['tone'] =
+                  s.status === 'efetivada' || s.status === 'liberada_para_assinatura' ? 'default'
+                  : s.status.startsWith('reprovada') || s.status === 'cancelada' ? 'destructive'
+                  : 'secondary';
+
+                const cardData: ProcessoCardData = {
+                  id: s.id,
+                  statusBadge: { label: STATUS_TROCA_LABEL[s.status], tone: statusTone },
+                  badgesExtra,
+                  associado: { nome: s.associado_antigo?.nome || '—' },
+                  contraparte: s.novo_titular_dados?.nome ? { nome: s.novo_titular_dados.nome } : undefined,
+                  veiculo: {
+                    marca: s.veiculo?.marca,
+                    modelo: s.veiculo?.modelo,
+                    ano: s.veiculo?.ano_modelo ?? s.veiculo?.ano_fabricacao ?? undefined,
+                    placa: s.veiculo?.placa,
+                  },
+                  consultor: s.criado_por && consultores?.byProfileId[s.criado_por]
+                    ? { nome: consultores.byProfileId[s.criado_por].nome }
+                    : undefined,
+                  criadoEm: s.created_at,
+                  motivoReprovacao: s.motivo_reprovacao,
+                  onDetalhes: () => setSelecionada(s.id),
+                };
+                return <ProcessoCard key={s.id} data={cardData} />;
+              })}
+            </ProcessoCardList>
           )}
         </TabsContent>
       </Tabs>
+
 
       <ModalDetalhesTroca
         open={!!selecionada}
@@ -282,6 +258,10 @@ function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     return items;
   }, [substituicoes, subTab, busca, scopeAuthUserId]);
 
+  // Resolver consultor (substituicoes_veiculo.criado_por é auth.users.id)
+  const userIds = filtered.map((s: any) => s.criado_por).filter(Boolean) as string[];
+  const { data: consultores } = useConsultoresProfiles([], userIds);
+
   const pendentesCount = useMemo(
     () => substituicoes?.filter((s) => s.status === 'aguardando_aprovacao').length ?? 0,
     [substituicoes]
@@ -329,84 +309,47 @@ function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
             ) : filtered.length === 0 ? (
               <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhuma substituição encontrada.</CardContent></Card>
             ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Associado</TableHead>
-                        <TableHead>Veículo Antigo</TableHead>
-                        <TableHead>Veículo Novo</TableHead>
-                        <TableHead>Mensalidade</TableHead>
-                        <TableHead>FIPE Nova</TableHead>
-                        <TableHead>Data Solicitação</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-20">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filtered.map((s) => (
-                        <TableRow
-                          key={s.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => navigate(`/cadastro/substituicoes/${s.id}`)}
-                        >
-                          <TableCell className="font-medium">{s.associado?.nome || '—'}</TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {s.veiculo_antigo_modelo || s.veiculo_antigo?.modelo || '—'}
-                              <span className="text-muted-foreground ml-1">
-                                {s.veiculo_antigo_placa || s.veiculo_antigo?.placa || ''}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {s.veiculo_novo_modelo || s.veiculo_novo?.modelo || '—'}
-                              <span className="text-muted-foreground ml-1">
-                                {s.veiculo_novo_placa || s.veiculo_novo?.placa || ''}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-xs">
-                              {formatCurrency(s.mensalidade_antiga)} → {formatCurrency(s.mensalidade_nova)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1.5">
-                              {formatCurrency(s.veiculo_novo_fipe)}
-                              {(s.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000) && (
-                                <Badge variant="destructive" className="text-[10px] px-1">
-                                  <AlertTriangle className="h-3 w-3 mr-0.5" />FIPE ALTA
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {format(new Date(s.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={STATUS_SUBSTITUICAO_CORES[s.status as StatusSubstituicao] || 'bg-gray-100 text-gray-800'}>
-                              {STATUS_SUBSTITUICAO_LABELS[s.status as StatusSubstituicao] || s.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm">
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+              <ProcessoCardList>
+                {filtered.map((s: any) => {
+                  const veicAntigo = `${s.veiculo_antigo_modelo || s.veiculo_antigo?.modelo || '—'}${(s.veiculo_antigo_placa || s.veiculo_antigo?.placa) ? ` (${s.veiculo_antigo_placa || s.veiculo_antigo?.placa})` : ''}`;
+                  const veicNovo = `${s.veiculo_novo_modelo || s.veiculo_novo?.modelo || '—'}${(s.veiculo_novo_placa || s.veiculo_novo?.placa) ? ` (${s.veiculo_novo_placa || s.veiculo_novo?.placa})` : ''}`;
+                  const fipeAlta = (s.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000);
+                  const badgesExtra: ProcessoCardBadge[] = [];
+                  if (fipeAlta) badgesExtra.push({ label: 'FIPE ALTA', tone: 'destructive', icon: AlertTriangle });
+
+                  const statusLabel = STATUS_SUBSTITUICAO_LABELS[s.status as StatusSubstituicao] || s.status;
+                  const statusTone: ProcessoCardBadge['tone'] =
+                    s.status === 'efetivada' || s.status === 'aprovada' ? 'default'
+                    : s.status === 'rejeitada' ? 'destructive'
+                    : 'secondary';
+
+                  const data: ProcessoCardData = {
+                    id: s.id,
+                    statusBadge: { label: statusLabel, tone: statusTone },
+                    badgesExtra,
+                    associado: { nome: s.associado?.nome || '—', cpf: s.associado?.cpf },
+                    veiculo: {
+                      modelo: `${veicAntigo} → ${veicNovo}`,
+                    },
+                    infoLinhas: [
+                      `💰 Mensalidade ${formatCurrency(s.mensalidade_antiga)} → ${formatCurrency(s.mensalidade_nova)} · FIPE Novo ${formatCurrency(s.veiculo_novo_fipe)}`,
+                    ],
+                    consultor: s.criado_por && consultores?.byUserId[s.criado_por]
+                      ? { nome: consultores.byUserId[s.criado_por].nome }
+                      : undefined,
+                    criadoEm: s.created_at,
+                    criadoLabel: 'Solicitada em',
+                    onDetalhes: () => navigate(`/cadastro/substituicoes/${s.id}`),
+                  };
+                  return <ProcessoCard key={s.id} data={data} />;
+                })}
+              </ProcessoCardList>
             )}
           </TabsContent>
         ))}
       </Tabs>
     </div>
+
   );
 }
 
@@ -488,6 +431,10 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     });
   }, [cotacoes, busca, associadosMap]);
 
+  // Resolver consultor a partir de cotacoes.vendedor_id (auth.users.id)
+  const vendedorUserIds = (filtered || []).map((c: any) => c.vendedor_id).filter(Boolean) as string[];
+  const { data: consultores } = useConsultoresProfiles([], vendedorUserIds);
+
   const formatCurrency = (v: number | null) =>
     v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
 
@@ -523,107 +470,58 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
           Nenhuma cotação de inclusão encontrada.
         </CardContent></Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cotação</TableHead>
-                  <TableHead>Associado</TableHead>
-                  <TableHead>Veículo</TableHead>
-                  <TableHead>FIPE</TableHead>
-                  <TableHead>Mensalidade</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criada em</TableHead>
-                  <TableHead className="w-32">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((c: any) => {
-                  const assoc = associadosMap[c.dados_extras?.associado_id || ''];
-                  return (
-                    <TableRow key={c.id} className="hover:bg-muted/50">
-                      <TableCell className="font-mono text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span>{c.numero || '—'}</span>
-                          {(() => {
-                            const obs = (c.dados_extras?.observacao_sga as string | undefined)?.trim();
-                            const mot = (c.dados_extras?.motivo_ignorar_aviso as string | undefined)?.trim();
-                            if (!obs && !mot) return null;
-                            const previewSrc = obs || mot || '';
-                            const preview = previewSrc.length > 140 ? previewSrc.slice(0, 137) + '…' : previewSrc;
-                            return (
-                              <TooltipProvider delayDuration={150}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className={mot ? 'text-destructive' : 'text-primary'}>
-                                      <MessageSquareWarning className="h-3.5 w-3.5" />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-xs whitespace-pre-wrap">
-                                    {mot && <div className="font-semibold text-destructive mb-1">Aviso SGA ignorado</div>}
-                                    {preview}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            );
-                          })()}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium">{assoc?.nome || '—'}</div>
-                        {assoc?.cpf && <div className="text-xs text-muted-foreground">{assoc.cpf}</div>}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">{c.veiculo_marca} {c.veiculo_modelo} {c.veiculo_ano}</div>
-                        {c.veiculo_placa && <div className="text-xs text-muted-foreground">Placa {c.veiculo_placa}</div>}
-                      </TableCell>
-                      <TableCell className="text-sm">{formatCurrency(c.valor_fipe)}</TableCell>
-                      <TableCell className="text-sm">{formatCurrency(c.valor_total_mensal)}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{INCLUSAO_STATUS_LABEL[c.status] || c.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(c.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          {c.token_publico && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => window.open(`/cotacao/${c.token_publico}`, '_blank')}
-                              title="Abrir cotação pública"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {c.dados_extras?.associado_id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`)}
-                              title="Ver associado"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <ProcessoCardList>
+          {filtered.map((c: any) => {
+            const assoc = associadosMap[c.dados_extras?.associado_id || ''];
+            const obs = (c.dados_extras?.observacao_sga as string | undefined)?.trim();
+            const mot = (c.dados_extras?.motivo_ignorar_aviso as string | undefined)?.trim();
+            const badgesExtra: ProcessoCardBadge[] = [];
+            badgesExtra.push({ label: 'INCLUSÃO DE VEÍCULO', tone: 'outline' });
+            if (mot) badgesExtra.push({ label: 'Aviso SGA ignorado', tone: 'destructive', icon: MessageSquareWarning });
+            else if (obs) badgesExtra.push({ label: 'Observação SGA', tone: 'info', icon: MessageSquareWarning });
+
+            const acoesExtras: NonNullable<ProcessoCardData['acoesExtras']> = [];
+            if (c.token_publico) {
+              acoesExtras.push({
+                icon: ExternalLink,
+                title: 'Abrir cotação pública',
+                onClick: () => window.open(`/cotacao/${c.token_publico}`, '_blank'),
+              });
+            }
+
+            const data: ProcessoCardData = {
+              id: c.id,
+              statusBadge: { label: INCLUSAO_STATUS_LABEL[c.status] || c.status, tone: 'secondary' },
+              badgesExtra,
+              associado: { nome: assoc?.nome || '—', cpf: assoc?.cpf },
+              veiculo: {
+                marca: c.veiculo_marca,
+                modelo: c.veiculo_modelo,
+                ano: c.veiculo_ano,
+                placa: c.veiculo_placa,
+              },
+              infoLinhas: [
+                `💰 FIPE ${formatCurrency(c.valor_fipe)} · Mensalidade ${formatCurrency(c.valor_total_mensal)}`,
+                ...(c.numero ? [`Cotação ${c.numero}`] : []),
+              ],
+              consultor: c.vendedor_id && consultores?.byUserId[c.vendedor_id]
+                ? { nome: consultores.byUserId[c.vendedor_id].nome }
+                : undefined,
+              criadoEm: c.created_at,
+              onDetalhes: c.dados_extras?.associado_id
+                ? () => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`)
+                : undefined,
+              detalhesLabel: 'Ver associado',
+              acoesExtras,
+            };
+            return <ProcessoCard key={c.id} data={data} />;
+          })}
+        </ProcessoCardList>
       )}
     </div>
   );
 }
+
 
 // ============================================
 // CONTADORES (novas fontes)
