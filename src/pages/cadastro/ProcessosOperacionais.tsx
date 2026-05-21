@@ -138,104 +138,74 @@ function TrocaTitularidadeTab({
               Nenhuma solicitação nesta aba
             </CardContent></Card>
           ) : (
-            <div className="space-y-3">
-              {data.map(s => (
-                <Card key={s.id} className="hover:shadow-md transition cursor-pointer" onClick={() => setSelecionada(s.id)}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant={
-                            s.status === 'efetivada' || s.status === 'liberada_para_assinatura' ? 'default'
-                            : s.status.startsWith('reprovada') || s.status === 'cancelada' ? 'destructive'
-                            : 'secondary'
-                          }>
-                            {STATUS_TROCA_LABEL[s.status]}
-                          </Badge>
-                          {s.termo_cancelamento_assinado_em && (
-                            <Badge variant="outline" className="text-green-600 border-green-600">
-                              <FileSignature className="h-3 w-3 mr-1" /> Termo assinado
-                            </Badge>
-                          )}
-                          {s.status === 'aguardando_cadastro' && (() => {
-                            // Caminho 1: cliente fez autovistoria
-                            if (s.autovistoria_concluida_em) {
-                              return (
-                                <Badge variant="outline" className="text-green-600 border-green-600">
-                                  Autovistoria concluída
-                                </Badge>
-                              );
-                            }
-                            // Caminho 2: troca foi pelo caminho de vistoria base (FIPE >= mínimo)
-                            const tipoVistoria = (s as any).cotacao?.tipo_vistoria as string | undefined;
-                            const agendamento = (s as any).cotacao?.agendamentos_base?.[0];
-                            if (tipoVistoria === 'agendada_base' || agendamento) {
-                              if (agendamento?.data_agendada) {
-                                const dt = new Date(`${agendamento.data_agendada}T${agendamento.horario || '00:00:00'}-03:00`);
-                                const periodo = (agendamento.horario || '').startsWith('08') ? 'Manhã' : (agendamento.horario || '').startsWith('13') ? 'Tarde' : '';
-                                return (
-                                  <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                    Vistoria base agendada {dt.toLocaleDateString('pt-BR')} {periodo}
-                                  </Badge>
-                                );
-                              }
-                              return (
-                                <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                  Aguardando vistoria base
-                                </Badge>
-                              );
-                            }
-                            // Caminho 3: janela mesmo-dia (termo assinado ainda hoje BRT) → vistoria dispensada
-                            if (s.termo_cancelamento_assinado_em) {
-                              const a = new Date(s.termo_cancelamento_assinado_em);
-                              const fimDiaBRTemUTC = new Date(Date.UTC(
-                                a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(),
-                                26, 59, 59, 999
-                              ));
-                              if (new Date() <= fimDiaBRTemUTC) {
-                                return (
-                                  <Badge variant="outline" className="text-green-600 border-green-600">
-                                    Vistoria dispensada (mesmo dia)
-                                  </Badge>
-                                );
-                              }
-                            }
-                            // Default: caminho autovistoria pendente
-                            return (
-                              <Badge variant="outline" className="text-amber-600 border-amber-600">
-                                Aguardando autovistoria
-                              </Badge>
-                            );
-                          })()}
-                          {(s as any).sga_status === 'falha' && (
-                            <Badge variant="destructive">Erro SGA</Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm flex-wrap">
-                          <span className="font-medium">{s.associado_antigo?.nome}</span>
-                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{s.novo_titular_dados?.nome}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Car className="h-3 w-3" />
-                          {s.veiculo?.marca} {s.veiculo?.modelo} {s.veiculo?.ano_modelo ?? s.veiculo?.ano_fabricacao ?? ''} • Placa {s.veiculo?.placa}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Criada em {new Date(s.created_at).toLocaleString('pt-BR')}
-                        </p>
-                        {s.motivo_reprovacao && (
-                          <p className="text-xs text-destructive">Motivo: {s.motivo_reprovacao}</p>
-                        )}
-                      </div>
-                      <Button variant="outline" size="sm">Detalhes</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <ProcessoCardList>
+              {data.map((s) => {
+                const badgesExtra: ProcessoCardBadge[] = [];
+                if (s.termo_cancelamento_assinado_em) {
+                  badgesExtra.push({ label: 'Termo assinado', tone: 'success', icon: FileSignature });
+                }
+                if (s.status === 'aguardando_cadastro') {
+                  if (s.autovistoria_concluida_em) {
+                    badgesExtra.push({ label: 'Autovistoria concluída', tone: 'success' });
+                  } else {
+                    const tipoVistoria = (s as any).cotacao?.tipo_vistoria as string | undefined;
+                    const agendamento = (s as any).cotacao?.agendamentos_base?.[0];
+                    if (tipoVistoria === 'agendada_base' || agendamento) {
+                      if (agendamento?.data_agendada) {
+                        const dt = new Date(`${agendamento.data_agendada}T${agendamento.horario || '00:00:00'}-03:00`);
+                        const periodo = (agendamento.horario || '').startsWith('08') ? 'Manhã' : (agendamento.horario || '').startsWith('13') ? 'Tarde' : '';
+                        badgesExtra.push({ label: `Vistoria base agendada ${dt.toLocaleDateString('pt-BR')} ${periodo}`, tone: 'info' });
+                      } else {
+                        badgesExtra.push({ label: 'Aguardando vistoria base', tone: 'info' });
+                      }
+                    } else if (s.termo_cancelamento_assinado_em) {
+                      const a = new Date(s.termo_cancelamento_assinado_em);
+                      const fimDiaBRTemUTC = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(), 26, 59, 59, 999));
+                      if (new Date() <= fimDiaBRTemUTC) {
+                        badgesExtra.push({ label: 'Vistoria dispensada (mesmo dia)', tone: 'success' });
+                      } else {
+                        badgesExtra.push({ label: 'Aguardando autovistoria', tone: 'warning' });
+                      }
+                    } else {
+                      badgesExtra.push({ label: 'Aguardando autovistoria', tone: 'warning' });
+                    }
+                  }
+                }
+                if ((s as any).sga_status === 'falha') {
+                  badgesExtra.push({ label: 'Erro SGA', tone: 'destructive' });
+                }
+
+                const statusTone: ProcessoCardBadge['tone'] =
+                  s.status === 'efetivada' || s.status === 'liberada_para_assinatura' ? 'default'
+                  : s.status.startsWith('reprovada') || s.status === 'cancelada' ? 'destructive'
+                  : 'secondary';
+
+                const cardData: ProcessoCardData = {
+                  id: s.id,
+                  statusBadge: { label: STATUS_TROCA_LABEL[s.status], tone: statusTone },
+                  badgesExtra,
+                  associado: { nome: s.associado_antigo?.nome || '—' },
+                  contraparte: s.novo_titular_dados?.nome ? { nome: s.novo_titular_dados.nome } : undefined,
+                  veiculo: {
+                    marca: s.veiculo?.marca,
+                    modelo: s.veiculo?.modelo,
+                    ano: s.veiculo?.ano_modelo ?? s.veiculo?.ano_fabricacao ?? undefined,
+                    placa: s.veiculo?.placa,
+                  },
+                  consultor: s.criado_por && consultores?.byProfileId[s.criado_por]
+                    ? { nome: consultores.byProfileId[s.criado_por].nome }
+                    : undefined,
+                  criadoEm: s.created_at,
+                  motivoReprovacao: s.motivo_reprovacao,
+                  onDetalhes: () => setSelecionada(s.id),
+                };
+                return <ProcessoCard key={s.id} data={cardData} />;
+              })}
+            </ProcessoCardList>
           )}
         </TabsContent>
       </Tabs>
+
 
       <ModalDetalhesTroca
         open={!!selecionada}
