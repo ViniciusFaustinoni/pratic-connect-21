@@ -13,7 +13,7 @@ import {
 import {
   ArrowRightLeft, RefreshCw, Eye, Calendar, Search, ArrowRight,
   AlertTriangle, FileInput, FileSignature, Car, ExternalLink, PackagePlus,
-  MessageSquareWarning,
+  MessageSquareWarning, User,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MigracoesTab } from '@/pages/cadastro/SolicitacoesMigracao';
