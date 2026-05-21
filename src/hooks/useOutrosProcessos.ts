@@ -291,7 +291,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           origemCpf = c.cliente_cpf ?? null;
         }
 
-        const etapa = deriveEtapa(tipo, c.status, troca?.status ?? null);
+        const etapa = deriveEtapa(tipo, c.status, troca?.status ?? null, troca);
 
         return {
           id: c.id,
