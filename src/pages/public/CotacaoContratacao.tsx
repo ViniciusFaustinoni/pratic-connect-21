@@ -703,6 +703,37 @@ export default function CotacaoContratacao() {
     );
   }
 
+  // CANÔNICO: troca em status terminal NÃO-efetivada (cancelada/expirada/reprovada)
+  // invalida o link público inteiro. Sem essa barreira, o novo titular continua
+  // navegando o stepper mesmo após o operador cancelar (caso COT-…-565).
+  // A cotação derivada também é cancelada no edge `cancelar-troca-titularidade`,
+  // mas este guard cobre estados intermediários e cache do React.
+  if (
+    isTrocaTitularidade &&
+    !!solicitacaoTroca &&
+    ['cancelada', 'expirada', 'reprovada_cadastro', 'reprovada_monitoramento'].includes(
+      solicitacaoTroca.status as string
+    )
+  ) {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <div className="max-w-lg w-full">
+          <TelaAnaliseTrocaTitularidade
+            status={solicitacaoTroca.status as any}
+            motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
+            termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
+            aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
+            aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+            tipoVistoriaTroca={(solicitacaoTroca as any)?.tipo_vistoria_troca}
+            expiradaEm={(solicitacaoTroca as any)?.expirada_em}
+          />
+        </div>
+      </div>
+    );
+  }
+
+
+
 
   return (
     <div className="dark min-h-screen public-premium-bg relative">
