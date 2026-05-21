@@ -217,7 +217,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
         </Card>
       ) : (
         <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
-          <div className="grid grid-cols-[1fr_2fr_1.5fr_1fr_1.5fr_auto] gap-3 px-4 py-2.5 bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="grid grid-cols-[minmax(160px,1.2fr)_minmax(220px,2fr)_minmax(160px,1.4fr)_minmax(120px,1fr)_minmax(180px,1.6fr)_auto] gap-3 px-4 py-2.5 bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             <div>Tipo</div>
             <div>Origem → Destino</div>
             <div>Veículo</div>
@@ -236,7 +236,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                 tabIndex={0}
                 onClick={() => handleVerDetalhe(item)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleVerDetalhe(item); } }}
-                className={cn('grid grid-cols-[1fr_2fr_1.5fr_1fr_1.5fr_auto] gap-3 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer', semEmail && 'bg-red-500/5')}
+                className={cn('grid grid-cols-[minmax(160px,1.2fr)_minmax(220px,2fr)_minmax(160px,1.4fr)_minmax(120px,1fr)_minmax(180px,1.6fr)_auto] gap-3 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer', semEmail && 'bg-red-500/5')}
               >
                 <div className="flex flex-col gap-1 min-w-0">
                   <Badge className={cn(TIPO_LABELS[item.tipo].chip, 'border-0 text-[10px] px-2 py-0.5 rounded-full w-fit')}>

@@ -90,6 +90,9 @@ interface UseOutrosProcessosOptions {
 
 const TROCA_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' }> = {
   // cotacao_em_andamento é derivado dinamicamente em deriveEtapa() — depende de termo_cancelamento_assinado_em
+  aguardando_termo_cancelamento: { label: 'Termo pendente', tone: 'warn' },
+  termo_cancelamento_enviado: { label: 'Termo enviado', tone: 'info' },
+  termo_cancelamento_assinado: { label: 'Termo assinado', tone: 'ok' },
   aguardando_cadastro: { label: 'Aguardando cadastro', tone: 'info' },
   aguardando_monitoramento: { label: 'Aguardando monitoramento', tone: 'info' },
   aguardando_vistoria: { label: 'Aguardando vistoria', tone: 'info' },
@@ -99,6 +102,13 @@ const TROCA_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn'
   reprovada_monitoramento: { label: 'Reprovada (monitoramento)', tone: 'danger' },
   cancelada: { label: 'Cancelada', tone: 'danger' },
 };
+
+// Fallback amigável para qualquer status novo: snake_case → "Title Case"
+function humanizeStatus(raw: string): string {
+  return raw
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const COTACAO_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' }> = {
   rascunho: { label: 'Rascunho', tone: 'warn' },
@@ -121,9 +131,9 @@ function deriveEtapa(
         ? { label: 'Aguardando novo titular', tone: 'info' }
         : { label: 'Termo pendente', tone: 'warn' };
     }
-    return TROCA_STATUS_LABELS[trocaStatus] ?? { label: trocaStatus, tone: 'info' };
+    return TROCA_STATUS_LABELS[trocaStatus] ?? { label: humanizeStatus(trocaStatus), tone: 'info' };
   }
-  return COTACAO_STATUS_LABELS[cotacaoStatus] ?? { label: cotacaoStatus, tone: 'info' };
+  return COTACAO_STATUS_LABELS[cotacaoStatus] ?? { label: humanizeStatus(cotacaoStatus), tone: 'info' };
 }
 
 function deriveTermoStatus(troca: any | null): OutroProcessoItem['termo_status'] {
@@ -413,7 +423,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
             efetivada: { label: 'Efetivada', tone: 'ok' },
             cancelada: { label: 'Cancelada', tone: 'danger' },
           };
-          const etapa = etapaMap[s.status] || { label: s.status, tone: 'info' };
+          const etapa = etapaMap[s.status] || { label: humanizeStatus(s.status), tone: 'info' as const };
           return {
             id: `subst-${s.id}`,
             tipo: 'substituicao_placa',
@@ -514,7 +524,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           const aa = t.associado_antigo_id ? aaMap.get(t.associado_antigo_id) : null;
           const novo = t.novo_titular_dados || {};
           const prof = t.criado_por ? profMap.get(t.criado_por) : null;
-          const etapa = TROCA_STATUS_LABELS[t.status] || { label: t.status, tone: 'info' as const };
+          const etapa = TROCA_STATUS_LABELS[t.status] || { label: humanizeStatus(t.status), tone: 'info' as const };
           const termoStatus: OutroProcessoItem['termo_status'] =
             t.status === 'cancelada' || t.status === 'reprovada_cadastro' || t.status === 'reprovada_monitoramento'
               ? 'recusado'
