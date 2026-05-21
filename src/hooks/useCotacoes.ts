@@ -96,6 +96,7 @@ export interface CotacoesFunilCounts {
   agendando_vistoria: number;
   concluido: number;
   perdida: number;
+  outros_processos_total: number;
 }
 
 /**
