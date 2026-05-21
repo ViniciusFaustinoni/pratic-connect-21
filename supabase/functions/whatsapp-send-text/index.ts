@@ -160,8 +160,10 @@ async function enviarViaMeta(
         throw new Error(`Template '${templateName}' não aprovado pela Meta (${template.status}). Aprove o template no painel da Meta antes de usar este fluxo.`);
       }
       
-      // Para templates genéricos, tentar fallback apenas com notificacao_geral_v1
-      const fallbackOrder = ['sinistro_atualizado'];
+      // Para templates genéricos, tentar fallback (preferir o novo neutro;
+      // mantém `sinistro_atualizado` como rede de segurança enquanto Meta
+      // não aprova o novo)
+      const fallbackOrder = ['notificacao_atualizacao', 'sinistro_atualizado'];
       let fallbackFound = false;
       
       for (const fbName of fallbackOrder) {
