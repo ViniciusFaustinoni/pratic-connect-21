@@ -599,38 +599,20 @@ export function usePropostasPendentes() {
         })();
         const instalacaoConcluida = mInstConcluida.has(contrato.id);
 
-        // Em troca de titularidade o veículo permanece `ativo` (vinculado ao
-        // antigo titular) durante todo o ciclo Cadastro → Monitoramento →
-        // `efetivar-troca-titularidade`. Por isso o gate "veículo já ativo"
-        // NÃO pode descartar trocas — senão a proposta do novo titular some.
-        const isTrocaEntry =
-          (contrato as any).tipo_entrada === 'troca_titularidade' ||
-          !!(contrato as any).origem_troca_titularidade_id;
+        // Saída canônica da fila do Cadastro = decisão manual do analista
+        // (`contratos.cadastro_aprovado=true`). A query base já filtra
+        // `status='assinado'`, então estados terminais do contrato (`ativo`,
+        // `cancelado`) nem chegam aqui. Não usar proxies (status do veículo,
+        // instalação concluída, base realizada) — eles são consequências e
+        // criam falsos positivos em fluxos como troca de titularidade onde
+        // o veículo permanece `ativo` durante todo o ciclo.
+        if ((contrato as any).cadastro_aprovado === true) return null;
 
-        // Veículo sincronizado no SGA NÃO significa fluxo operacional concluído.
-        // No Hinova o cadastro nasce como pendente, então veículos em
-        // `instalacao_pendente` continuam pertencendo a Propostas Pendentes
-        // mesmo com `sincronizado_hinova=true` e `codigo_hinova` preenchido.
-        const veiculoJaConcluidoOperacionalmente =
-          !isTrocaEntry && veiculoContrato?.status === 'ativo';
-
-        // Saída de Propostas Pendentes (gate do Cadastro):
-        // Fluxo linear — link público completa tudo (assina → agenda → paga →
-        // vistoria/instalação executada) e a proposta SÓ sai daqui após o
-        // Cadastro aprovar manualmente (`contratos.cadastro_aprovado=true`).
-        // Antes disso, mesmo com instalação concluída ou vistoria_base
-        // realizada, o item permanece na fila do Cadastro. O Monitoramento
-        // só vê após o gate (ver useAprovacaoMonitoramento).
-        const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
         const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
         const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
         // Vistoria na Base realizada → mantém na fila do Cadastro até aprovação manual
         const vistoriaBaseRealizada = !!(contrato.cotacao_id && mAgendBase.get(contrato.cotacao_id)?.status === 'realizado');
 
-        const propostaJaConcluida =
-          veiculoJaConcluidoOperacionalmente ||
-          cadastroAprovado;
-        if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;
         const vendedor = contrato.vendedor_id ? mVendedor.get(contrato.vendedor_id) : null;
@@ -1594,70 +1576,19 @@ export function usePropostaStats() {
 
       // ========================================
       // AGUARDANDO: bate exatamente com a lista de Propostas Pendentes.
-      // Conta contratos.status='assinado' EXCLUINDO os que já migraram para
-      // outras filas (Aprovação do Monitoramento ou /cadastro/associados):
-      //   - instalacao concluída (tabela `instalacoes`)
-      //   - vistoria na base realizada (`agendamentos_base.status='realizado'`)
-      //   - veículo já em status 'ativo'
-      //   - autovistoria já aprovada pelo Cadastro (cadastro_aprovado=true)
+      // Regra única: contrato em `assinado` AND `cadastro_aprovado != true`.
+      // O gate da lista (usePropostasPendentes) usa a MESMA pergunta — sem
+      // proxies de veículo/instalação/base, que criavam dessincronia entre
+      // badge e fila (especialmente em troca de titularidade).
       // ========================================
-      const { data: contratosAssinados } = await supabase
+      const { count: aguardandoCount } = await supabase
         .from('contratos')
-        .select('id, cotacao_id, veiculo_id, cadastro_aprovado, tipo_entrada, origem_troca_titularidade_id')
-        .eq('status', 'assinado');
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'assinado')
+        .or('cadastro_aprovado.is.null,cadastro_aprovado.eq.false');
 
-      let aguardando = 0;
+      const aguardando = aguardandoCount || 0;
 
-      if (contratosAssinados && contratosAssinados.length > 0) {
-        const contratoIds = contratosAssinados.map(c => c.id);
-        const cotacaoIds = contratosAssinados.map(c => c.cotacao_id).filter(Boolean) as string[];
-        const veiculoIds = contratosAssinados.map(c => c.veiculo_id).filter(Boolean) as string[];
-
-        const [
-          instalacoesConcluidasRes,
-          agendamentosBaseRealizadosRes,
-          veiculosAtivosRes,
-          cotacoesAutovistoriaRes,
-        ] = await Promise.all([
-          supabase
-            .from('instalacoes')
-            .select('contrato_id')
-            .in('contrato_id', contratoIds)
-            .eq('status', 'concluida'),
-          cotacaoIds.length
-            ? supabase
-                .from('agendamentos_base')
-                .select('cotacao_id')
-                .in('cotacao_id', cotacaoIds)
-                .eq('status', 'realizado')
-            : Promise.resolve({ data: [] as any[] }),
-          veiculoIds.length
-            ? supabase.from('veiculos').select('id').in('id', veiculoIds).eq('status', 'ativo')
-            : Promise.resolve({ data: [] as any[] }),
-          cotacaoIds.length
-            ? supabase
-                .from('cotacoes')
-                .select('id, tipo_vistoria')
-                .in('id', cotacaoIds)
-                .eq('tipo_vistoria', 'autovistoria')
-            : Promise.resolve({ data: [] as any[] }),
-        ]);
-
-        const setInstalacaoConcluida = new Set((instalacoesConcluidasRes.data || []).map((r: any) => r.contrato_id));
-        const setBaseRealizada = new Set((agendamentosBaseRealizadosRes.data || []).map((r: any) => r.cotacao_id));
-        const setVeiculoAtivo = new Set((veiculosAtivosRes.data || []).map((r: any) => r.id));
-        const setCotacaoAutovistoria = new Set((cotacoesAutovistoriaRes.data || []).map((r: any) => r.id));
-
-        aguardando = contratosAssinados.filter((c: any) => {
-          const isTroca = c.tipo_entrada === 'troca_titularidade' || !!c.origem_troca_titularidade_id;
-          if (setInstalacaoConcluida.has(c.id)) return false;
-          if (c.cotacao_id && setBaseRealizada.has(c.cotacao_id)) return false;
-          // Em troca o veículo segue 'ativo' (vinculado ao antigo titular) — não descartar.
-          if (!isTroca && c.veiculo_id && setVeiculoAtivo.has(c.veiculo_id)) return false;
-          if (c.cadastro_aprovado === true && c.cotacao_id && setCotacaoAutovistoria.has(c.cotacao_id)) return false;
-          return true;
-        }).length;
-      }
 
       // Buscar contratos em análise (pendente é usado para em análise)
       const { count: emAnalise } = await supabase
