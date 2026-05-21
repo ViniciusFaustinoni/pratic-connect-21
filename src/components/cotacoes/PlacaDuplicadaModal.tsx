@@ -97,16 +97,16 @@ export function PlacaDuplicadaModal({
     }
     try {
       setLiberando(true);
-      const { error } = await supabase
-        .from('cotacoes')
-        .update({
-          status: 'recusada',
-          motivo_cancelamento: 'Liberação manual de placa (gestão)',
-          cancelada_em: new Date().toISOString(),
-        })
-        .eq('id', info.cotacaoId)
-        .eq('status', 'rascunho');
+      const { data, error } = await supabase.functions.invoke('cancelar-cotacao', {
+        body: {
+          cotacao_id: info.cotacaoId,
+          categoria: 'placa_liberada_manual',
+          motivo: 'Liberação manual de placa pela gestão',
+          status_destino: 'liberada',
+        },
+      });
       if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(`Placa ${formatarPlaca(placa)} liberada.`);
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       onOpenChange(false);
