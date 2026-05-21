@@ -222,7 +222,38 @@ serve(async (req) => {
     }
 
     const dados = (solicitacao.dados as Record<string, unknown>) || {};
-    const dadosNovoTitular = solicitacao.dados_novo_titular as Record<string, string> | null;
+    const dadosNovoTitular: Record<string, string> = {
+      ...((solicitacao.dados_novo_titular as Record<string, string> | null) || {}),
+    };
+
+    // Fallback: snapshot pode ter vindo sem CPF/nome/etc., mas se já há um
+    // `novo_associado_id` vinculado, o registro de `associados` é a fonte da
+    // verdade. Mescla preenchendo apenas campos vazios/ausentes.
+    try {
+      const novoAssocId = (solicitacao as any).novo_associado_id
+        || (await supabase
+          .from("solicitacoes_troca_titularidade")
+          .select("novo_associado_id")
+          .eq("id", solicitacao_id)
+          .maybeSingle()).data?.novo_associado_id;
+      if (novoAssocId) {
+        const { data: assocReal } = await supabase
+          .from("associados")
+          .select("nome, cpf, email, telefone")
+          .eq("id", novoAssocId)
+          .maybeSingle();
+        if (assocReal) {
+          if (!dadosNovoTitular.cpf && assocReal.cpf) {
+            dadosNovoTitular.cpf = String(assocReal.cpf).replace(/\D/g, "");
+          }
+          if (!dadosNovoTitular.nome && assocReal.nome) dadosNovoTitular.nome = assocReal.nome;
+          if (!dadosNovoTitular.email && assocReal.email) dadosNovoTitular.email = assocReal.email;
+          if (!dadosNovoTitular.telefone && assocReal.telefone) dadosNovoTitular.telefone = assocReal.telefone;
+        }
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca] fallback novo_associado falhou:", (e as Error)?.message);
+    }
 
     if (!dadosNovoTitular?.cpf) {
       return new Response(JSON.stringify({ success: false, error: "Dados do novo titular incompletos (CPF obrigatório)" }), {

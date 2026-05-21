@@ -1,81 +1,59 @@
-## Objetivo
+## Diagnóstico — solicitação KOU6D37 (`6996a35a-…-4ff1`)
 
-Criar um **Termo de Substituição** (Autentique) — idêntico em estrutura ao Termo/Proposta de Filiação atual (`AF1`), com uma **cláusula extra** explicitando que o associado tem ciência de que o veículo anterior será cancelado e ficará sem cobertura. Esse termo deve ser enviado **automaticamente** no mesmo momento em que hoje é enviado o termo de filiação, sempre que a cotação for de substituição.
+Reproduzi a chamada de `efetivar-troca-titularidade` direto contra a edge function e ela retorna:
 
-## Como o sistema decide qual template usar hoje
-
-Ambos os edges de geração do contrato (`autentique-create` e `autentique-create-by-token`) já seguem este encadeamento:
-
-1. Usa `plano.template_contrato_id` se o plano apontar um template específico.
-2. Senão, busca o `documento_templates` com `is_default_autentique=true` (hoje é `AF1 — Proposta de Filiação`).
-3. Senão, cai no HTML hardcoded `generateTermoAfiliacao()`.
-
-Ambos os edges também já carregam `templateData.substituicao = { placa_anterior, modelo_anterior, fipe_anterior }` quando `contrato.tipo_entrada IN ('substituicao_placa','substituicao')`. Ou seja, as variáveis para a cláusula nova **já existem** no contexto — não há novo `select` a fazer.
-
-## Plano
-
-### 1. Schema — nova flag de default + registro do template (migração)
-
-`documento_templates` ganha `is_default_substituicao boolean DEFAULT false`, seguindo o mesmo padrão de `is_default_autentique` / `is_default_evento` / `is_default_saida` / `is_default_rastreador`. Índice parcial único garante no máximo 1 ativo:
-
-```sql
-ALTER TABLE public.documento_templates
-  ADD COLUMN IF NOT EXISTS is_default_substituicao boolean NOT NULL DEFAULT false;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_documento_templates_default_substituicao
-  ON public.documento_templates (is_default_substituicao)
-  WHERE is_default_substituicao = true AND ativo = true;
+```
+{"success":false,"error":"Dados do novo titular incompletos (CPF obrigatório)"}
 ```
 
-Em seguida, **clona** o conteúdo atual de `AF1 (is_default_autentique=true)` para um novo registro `AF1-SUB — Termo de Substituição` na categoria "Termos", já com `is_default_substituicao=true`, e **injeta uma cláusula nova** antes do bloco de assinatura. Texto proposto:
+Estado da solicitação no banco:
 
-> **CLÁUSULA — SUBSTITUIÇÃO DE VEÍCULO.** O ASSOCIADO DECLARA estar ciente de que esta adesão substitui a proteção anteriormente vigente sobre o veículo placa **{{substituicao.placa_anterior}}** ({{substituicao.modelo_anterior}}), cuja cobertura será **integralmente CANCELADA** na data de início desta nova adesão, ficando aquele veículo **sem qualquer cobertura associativa** a partir desse momento. A presente assinatura formaliza essa ciência e autoriza o cancelamento do contrato anterior.
+- `aprovado_monitoramento_em` ✅ (a aprovação foi registrada)
+- `aprovado_monitoramento_por` ✅
+- `status = aguardando_monitoramento` (não promove para `efetivada` porque a etapa de efetivação caiu)
+- `sga_status = falha` (fallback do `aprovar-troca-monitoramento`)
+- `novo_associado_id = de5f0d04-…` (associado já existe com CPF `12493649737`)
+- `novo_titular_dados = { nome:"VInicius Faustinoni", cpf:"", email:..., telefone:... }` ← **CPF vazio**
 
-A migração lê `conteudo` de `AF1`, insere a cláusula imediatamente antes do `{{bloco_assinatura}}` (ou no final, se o marcador não existir), e grava como novo registro — sem alterar `AF1`.
+**Causa raiz:** `efetivar-troca-titularidade` valida `dadosNovoTitular.cpf` (vindo do JSON `novo_titular_dados` da solicitação). Nessa troca o snapshot foi gravado sem CPF, mesmo já existindo um `novo_associado_id` apontando para um associado real com CPF preenchido. A edge ignora o `novo_associado_id` e aborta no guard inicial (linha 227). É por isso que o botão "Aprovar" no Monitoramento parece não ter efeito: o `aprovar-troca-monitoramento` marca a aprovação, dispara a efetivação, ela falha por dado faltando, vira `sga_status=falha`, e o status volta a aparecer em "Pendentes".
 
-### 2. Edges — priorizar AF1-SUB quando for substituição
+## Correção
 
-`supabase/functions/autentique-create/index.ts` e `supabase/functions/autentique-create-by-token/index.ts`, no bloco `============= BUSCAR TEMPLATE DO BANCO =============` (linhas ~252 e ~451), após o lookup por `plano.template_contrato_id` e **antes** do fallback `is_default_autentique`, inserir:
+### 1. `supabase/functions/efetivar-troca-titularidade/index.ts`
 
-```ts
-const isSubstituicao =
-  contrato.tipo_entrada === 'substituicao_placa' ||
-  contrato.tipo_entrada === 'substituicao';
+Logo após o mapeamento de `solicitacao` (≈ linha 222), antes do guard de CPF obrigatório, carregar o associado real quando `novo_associado_id` existir e usar seus campos como fonte canônica (com fallback para o snapshot, sem nunca sobrescrever um valor já presente no snapshot):
 
-if (!templateDB && isSubstituicao) {
-  const { data: subDefault } = await supabase
-    .from('documento_templates')
-    .select('id, codigo, nome, conteudo, config_layout')
-    .eq('is_default_substituicao', true)
-    .eq('ativo', true)
-    .limit(1)
-    .maybeSingle();
-  if (subDefault) {
-    templateDB = subDefault;
-    console.log('[autentique-…] Usando template default de substituição:', subDefault.codigo);
-  }
-}
-```
+- Se `novaSol.novo_associado_id` existe, buscar `associados` (`nome, cpf, email, telefone`) e mesclar em `dados_novo_titular` preenchendo apenas os campos vazios/ausentes (CPF normalizado para apenas dígitos).
+- O `novoAssociadoId` no fluxo (passo 3) continua igual: o `associados` já é o mesmo registro, então o branch `associadoExistente` cobre tudo.
 
-Resultado: o termo de substituição é escolhido **automaticamente** no mesmo momento em que o termo de filiação seria escolhido — sem mudar timing, sem mudar quem assina, sem mexer no fluxo do Cadastro/Monitoramento. Só troca o HTML enviado ao Autentique.
+Esse padrão é o mesmo já adotado em outras edges quando a fonte da verdade é o registro persistido, não o snapshot.
 
-### 3. UI — toggle "Default para Substituição" no editor de template
+### 2. Saneamento desta solicitação (na própria edge — sem migration)
 
-`src/pages/documentos/TemplateForm.tsx` e `src/hooks/useDocumentoTemplates.ts` já tratam `is_default_autentique`, `is_default_evento`, `is_default_saida`, `is_default_rastreador`. Adicionar `is_default_substituicao` exatamente do mesmo jeito (campo no formulário + payload do save + tipo `DocumentoTemplateView`). `TemplatesList.tsx` ganha o badge "Default substituição" no card, espelhando os badges existentes.
+Não é necessária migração. A chamada já vai funcionar para esta solicitação assim que a edge for atualizada — o `novo_associado_id` já está preenchido.
 
-Sem rota nova, sem dialog novo — só mais uma flag visível no editor.
+Para a UI sair do "limbo" (botão clicado, sem efeito visível), basta o usuário clicar em "Aprovar" novamente após o deploy. O fluxo:
 
-### 4. Validação
+- `aprovar-troca-monitoramento` é idempotente (`baseUpdate` regrava os campos de aprovação).
+- `efetivar-troca-titularidade` é idempotente: tem bloco que detecta contrato existente para essa `origem_troca_titularidade_id` e reaproveita (linhas 522-570), e o veículo já está pronto para a transferência.
 
-- `SELECT id, codigo, nome FROM documento_templates WHERE is_default_substituicao=true AND ativo=true;` retorna 1 linha (`AF1-SUB`).
-- Criar cotação de substituição → chegar ao envio do termo → conferir no log da edge: `Usando template default de substituição: AF1-SUB`.
-- PDF gerado contém a cláusula nova com placa/modelo do veículo anterior preenchidos.
-- Cotação comum (adesão) continua usando `AF1` (sem regressão).
-- Cotação com `plano.template_contrato_id` explícito continua respeitando o template do plano.
+## Validação
 
-## Fora do escopo
+Após o deploy:
 
-- Sem mudanças em `enviar-termo-cancelamento-substituicao` (esse é o **termo de cancelamento do veículo antigo**, fluxo paralelo, segue como está).
-- Sem mexer no fallback hardcoded `generateTermoAfiliacao()`.
-- Sem mudanças no fluxo de Troca de Titularidade.
-- Sem nova edge function; reaproveita `autentique-create` / `autentique-create-by-token`.
+1. Rodar `curl` direto no endpoint com o mesmo `solicitacao_id` e confirmar `{"success":true,...}`.
+2. Verificar no banco:
+   - `solicitacoes_troca_titularidade.status = 'efetivada'`
+   - `efetivada_em` preenchido
+   - `veiculos.associado_id = de5f0d04-…` e `em_troca_titularidade = false`
+   - Contrato `CTR-…-HGFKJ1` segue como `ativo` (foi atualizado pelo bloco de idempotência)
+   - Contrato anterior do antigo titular cancelado
+3. Confirmar que a tela "Aprovações do Monitoramento › Troca de Titularidade › Pendentes" não lista mais KOU6D37 e ela passa a aparecer em "Aprovadas".
+
+Avisarei quando estiver concluído e validado.
+
+## Fora de escopo
+
+- Não vou tocar no `aprovar-troca-monitoramento` (a aprovação em si está OK, só precisa que a efetivação volte a funcionar).
+- Não vou alterar UI da tela de Aprovações — o problema é 100% backend.
+- Não vou investigar por que o CPF foi gravado vazio no snapshot inicial (caso pontual — provavelmente o link público desta troca foi finalizado antes do CPF ser confirmado; o fix garante que isso nunca mais bloqueie a efetivação enquanto `novo_associado_id` existir).
