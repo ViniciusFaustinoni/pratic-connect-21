@@ -276,7 +276,10 @@ export default function CotacaoContratacao() {
       plano: ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
       documentos: ['dados_preenchidos', 'documentos_ok', 'contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
       contrato: ['contrato_assinado', 'vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
-      vistoria: ['vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'pagamento_ok', 'contrato_gerado', 'ativo'],
+      // ⚠️ Ordem canônica: Pagamento vem ANTES da Vistoria.
+      // `pagamento_ok` NÃO marca vistoria como concluída — senão `etapaAtual` pula para 5
+      // antes do cliente escolher autovistoria/agendamento e a UI fica no fallback "Verificando status…"
+      vistoria: ['vistoria_ok', 'autovistoria_ok', 'vistoria_agendada', 'aguardando_aprovacao_cadastro', 'aguardando_aprovacao_monitoramento', 'cadastro_aprovado', 'monitoramento_aprovado', 'vistoria_concluida', 'contrato_gerado', 'ativo'],
       pagamento: ['pagamento_ok', 'contrato_gerado', 'ativo'],
     };
 
