@@ -524,7 +524,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           const aa = t.associado_antigo_id ? aaMap.get(t.associado_antigo_id) : null;
           const novo = t.novo_titular_dados || {};
           const prof = t.criado_por ? profMap.get(t.criado_por) : null;
-          const etapa = TROCA_STATUS_LABELS[t.status] || { label: t.status, tone: 'info' as const };
+          const etapa = TROCA_STATUS_LABELS[t.status] || { label: humanizeStatus(t.status), tone: 'info' as const };
           const termoStatus: OutroProcessoItem['termo_status'] =
             t.status === 'cancelada' || t.status === 'reprovada_cadastro' || t.status === 'reprovada_monitoramento'
               ? 'recusado'
