@@ -54,7 +54,7 @@ export function useTrocaTitularidadePorCotacao(
 }
 
 const STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' }> = {
-  cotacao_em_andamento: { label: 'Troca: termo pendente', tone: 'warn' },
+  // cotacao_em_andamento é derivado dinamicamente abaixo (depende de termo_cancelamento_assinado_em)
   aguardando_cadastro: { label: 'Troca: aguardando cadastro', tone: 'info' },
   aguardando_monitoramento: { label: 'Troca: aguardando monitoramento', tone: 'info' },
   aguardando_vistoria: { label: 'Troca: aguardando vistoria', tone: 'info' },
