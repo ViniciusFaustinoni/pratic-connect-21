@@ -193,20 +193,56 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 </Button>
               )}
 
-              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada', 'em_analise'].includes(servico.status) && (
-                <Button
-                  variant={servico.status === 'cancelada' ? 'default' : 'outline'}
-                  size="sm"
-                  className="gap-1.5 h-9"
-                  onClick={() => setRealocarOpen(true)}
-                  title={servico.status === 'cancelada'
-                    ? 'Reabrir este serviço cancelado e reagendar'
-                    : 'Realocar este serviço para outra data, técnico, rota ou base'}
-                >
-                  <MapPinned className="h-4 w-4" />
-                  {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar'}
-                </Button>
-              )}
+              {(() => {
+                const statusRealocavel = ['agendada', 'pendente', 'nao_compareceu', 'reagendada', 'cancelada', 'em_analise', 'imprevisto_pendente'].includes(servico.status);
+                const statusCancelavel = ['agendada', 'pendente', 'reagendada', 'nao_compareceu', 'em_analise', 'imprevisto_pendente'].includes(servico.status);
+                const statusDevolvivel = !['concluida', 'aprovada', 'reprovada', 'aprovada_ressalvas', 'cancelada'].includes(servico.status);
+                const podeRealocarInstalacao = isInstalacao && !!instalacaoOrigemId;
+                return (
+                  <>
+                    {statusRealocavel && (podeRealocarInstalacao || !isInstalacao) && (
+                      <Button
+                        variant={servico.status === 'cancelada' ? 'default' : 'outline'}
+                        size="sm"
+                        className="gap-1.5 h-9"
+                        onClick={() => podeRealocarInstalacao ? setRealocarOpen(true) : setRealocarSimplesOpen(true)}
+                        title={servico.status === 'cancelada'
+                          ? 'Reabrir este serviço cancelado e reagendar'
+                          : 'Realocar este serviço para outra data, técnico, rota ou base'}
+                      >
+                        <MapPinned className="h-4 w-4" />
+                        {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar'}
+                      </Button>
+                    )}
+
+                    {podeAcoesMonitor && statusCancelavel && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9 text-destructive hover:text-destructive"
+                        onClick={() => setCancelarOpen(true)}
+                        title="Cancelar este serviço"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        Cancelar
+                      </Button>
+                    )}
+
+                    {podeAcoesMonitor && contratoId && statusDevolvivel && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9"
+                        onClick={() => setDevolverOpen(true)}
+                        title="Reverter aprovação do Cadastro e reabrir a cotação para revisão"
+                      >
+                        <History className="h-4 w-4" />
+                        Devolver ao Cadastro
+                      </Button>
+                    )}
+                  </>
+                );
+              })()}
 
             </div>
           </DialogHeader>
