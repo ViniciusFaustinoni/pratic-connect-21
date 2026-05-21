@@ -25655,6 +25655,8 @@ export type Database = {
           associado_id: string | null
           avarias: string | null
           bairro: string | null
+          cancelado_em: string | null
+          cancelado_por: string | null
           cancelamento_bloqueado_ate_devolucao: boolean | null
           cep: string | null
           checklist_data: Json | null
@@ -25714,6 +25716,7 @@ export type Database = {
           logradouro: string | null
           longitude: number | null
           modalidade: string | null
+          motivo_cancelamento: string | null
           motivo_detalhe: string | null
           motivo_manutencao: string | null
           motivo_reprovacao: string | null
@@ -25778,6 +25781,8 @@ export type Database = {
           associado_id?: string | null
           avarias?: string | null
           bairro?: string | null
+          cancelado_em?: string | null
+          cancelado_por?: string | null
           cancelamento_bloqueado_ate_devolucao?: boolean | null
           cep?: string | null
           checklist_data?: Json | null
@@ -25837,6 +25842,7 @@ export type Database = {
           logradouro?: string | null
           longitude?: number | null
           modalidade?: string | null
+          motivo_cancelamento?: string | null
           motivo_detalhe?: string | null
           motivo_manutencao?: string | null
           motivo_reprovacao?: string | null
@@ -25901,6 +25907,8 @@ export type Database = {
           associado_id?: string | null
           avarias?: string | null
           bairro?: string | null
+          cancelado_em?: string | null
+          cancelado_por?: string | null
           cancelamento_bloqueado_ate_devolucao?: boolean | null
           cep?: string | null
           checklist_data?: Json | null
@@ -25960,6 +25968,7 @@ export type Database = {
           logradouro?: string | null
           longitude?: number | null
           modalidade?: string | null
+          motivo_cancelamento?: string | null
           motivo_detalhe?: string | null
           motivo_manutencao?: string | null
           motivo_reprovacao?: string | null
