@@ -48,10 +48,13 @@ export function RealocarServicoSimplesDialog({
   const realocar = useMutation({
     mutationFn: async () => {
       const m = motivo.trim();
-      if (!m) throw new Error('Informe o motivo da realocação.');
+      if (m.length < 5) throw new Error('Motivo é obrigatório (mínimo 5 caracteres).');
+      // Quando há técnico selecionado → destino='profissional'; senão → 'fila'.
+      // 'rota' exigiria _rota_id, que esse dialog não coleta.
+      const destino = profissionalId ? 'profissional' : 'fila';
       const { data: res, error } = await supabase.rpc('realocar_servico', {
         _servico_id: servicoId,
-        _destino: 'rota',
+        _destino: destino,
         _motivo: m,
         _nova_data: data,
         _novo_periodo: periodo,
