@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { CATEGORIAS_VISTORIA_COMPLETA, FOTOS_VISTORIA_COMPLETA, VistoriaFotoConfig } from '@/data/vistoriaConfigCompleta';
+import { getCategoriasByTipoVeiculo, getFotosByTipoVeiculo, VistoriaFotoConfig } from '@/data/vistoriaConfigCompleta';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
