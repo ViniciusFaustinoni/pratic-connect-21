@@ -329,9 +329,6 @@ export default function CotacaoContratacao() {
 
     let etapaFinal = etapaBase >= 0 ? Math.max(etapaBase, etapaPorSinais) : etapaPorSinais;
 
-    if (etapaFinal === 3 && cotacao?.tipo_vistoria) {
-      etapaFinal = 4;
-    }
 
     if (
       cotacao?.tipo_vistoria === 'autovistoria' &&
