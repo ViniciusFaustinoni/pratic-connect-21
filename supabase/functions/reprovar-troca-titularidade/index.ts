@@ -33,16 +33,68 @@ Deno.serve(async (req) => {
 
     const novoStatus = etapa === 'cadastro' ? 'reprovada_cadastro' : 'reprovada_monitoramento';
 
+    // FK reprovado_por -> profiles.id (NÃO auth.users.id).
+    const { data: prof } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const reprovadoPor = prof?.id ?? null;
+
     const { error } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         status: novoStatus,
         motivo_reprovacao: motivo,
-        reprovado_por: user.id,
+        reprovado_por: reprovadoPor,
         reprovado_em: new Date().toISOString(),
       })
       .eq('id', solicitacao_id);
     if (error) throw error;
+
+    // CANÔNICO: troca reprovada => limpa flag do veículo + cancela cotação derivada + rotaciona token.
+    // Mesmo saneamento aplicado em cancelar-troca-titularidade.
+    try {
+      const { data: solDados } = await admin
+        .from('solicitacoes_troca_titularidade')
+        .select('veiculo_id, cotacao_id')
+        .eq('id', solicitacao_id)
+        .maybeSingle();
+
+      if (solDados?.veiculo_id) {
+        try {
+          await admin
+            .from('veiculos')
+            .update({ em_troca_titularidade: false })
+            .eq('id', solDados.veiculo_id);
+        } catch (vErr) {
+          console.warn('[reprovar-troca] limpar em_troca_titularidade falhou:', vErr);
+        }
+      }
+
+      if (solDados?.cotacao_id) {
+        try {
+          const novoToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+          const { error: cotErr } = await admin
+            .from('cotacoes')
+            .update({
+              status: 'cancelada',
+              status_contratacao: 'cancelada',
+              cancelada_em: new Date().toISOString(),
+              cancelada_por: reprovadoPor,
+              motivo_cancelamento: `Troca de titularidade reprovada (${etapa}): ${motivo}`,
+              token_publico: novoToken,
+            })
+            .eq('id', solDados.cotacao_id)
+            .eq('origem_troca_titularidade', true);
+          if (cotErr) console.warn('[reprovar-troca] cancelar cotação derivada falhou:', cotErr);
+        } catch (cErr) {
+          console.warn('[reprovar-troca] cancelar cotação derivada exception:', cErr);
+        }
+      }
+    } catch (sanErr) {
+      console.warn('[reprovar-troca] saneamento canônico falhou (não bloqueante):', sanErr);
+    }
 
     // ── WhatsApp: avisar associado antigo da reprovação ──
     try {
