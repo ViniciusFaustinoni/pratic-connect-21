@@ -1102,8 +1102,8 @@ export default function CotacaoContratacao() {
                 </motion.div>
               )}
 
-              {/* Etapa 4: Pagamento */}
-              {etapaAtual === 4 && (
+              {/* Etapa 3: Pagamento */}
+              {etapaAtual === 3 && (
                 <motion.div
                   key="pagamento"
                   variants={pageVariants}
