@@ -550,8 +550,24 @@ export function useAtribuirServicoManual() {
 
       return servico;
     },
-    onSuccess: () => {
-      toast.success('Serviço atribuído com sucesso');
+    onSuccess: async (_data, vars) => {
+      // Contagem da fila do técnico (agendada/em_rota/em_andamento) para feedback
+      let filaCount: number | null = null;
+      try {
+        const { count } = await supabase
+          .from('servicos')
+          .select('id', { count: 'exact', head: true })
+          .eq('profissional_id', vars.profissionalId)
+          .in('status', ['agendada', 'em_rota', 'em_andamento']);
+        filaCount = count ?? null;
+      } catch {
+        /* ignore — feedback é só conveniência */
+      }
+      toast.success(
+        filaCount && filaCount > 1
+          ? `Serviço atribuído. Técnico tem ${filaCount} tarefa(s) na fila.`
+          : 'Serviço atribuído com sucesso'
+      );
       qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
       qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
       qc.invalidateQueries({ queryKey: ['vistorias-mapa'] });
@@ -560,6 +576,7 @@ export function useAtribuirServicoManual() {
       qc.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
       // Hook principal usado pelo app do técnico (/instalador) para mostrar a tarefa
       qc.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      qc.invalidateQueries({ queryKey: ['tarefas-atribuidas'] });
       qc.invalidateQueries({ queryKey: ['servicos'] });
     },
     onError: (err: any) => {
