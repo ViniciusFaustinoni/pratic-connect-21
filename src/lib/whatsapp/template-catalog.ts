@@ -197,9 +197,15 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     variaveis: ['nome', 'protocolo'],
   },
   sinistro_atualizado: {
-    momento: 'Atualização de status do sinistro (genérico, usado em vários fluxos)',
-    gatilho: 'aprovar-sinistro · reprovar-sinistro · autentique-webhook · cron-contato-sinistro · enviar-documento-sinistro · processar-termo-evento · etc.',
+    momento: 'DEPRECATED — substituído por notificacao_atualizacao. Mantido como fallback enquanto o novo template não está APPROVED na Meta. Não usar em código novo.',
+    gatilho: 'fallback automático em whatsapp-send-text',
     variaveis: ['nome', 'protocolo', 'status'],
+    deprecated: 'Não usar. Use notificacao_atualizacao.',
+  },
+  notificacao_atualizacao: {
+    momento: 'Notificação genérica neutra de atualização de atendimento (substitui o reuso de sinistro_atualizado em contextos não-sinistro: troca de titularidade, retirada, vistoria prestador, cobrança, etc.)',
+    gatilho: 'aprovar-sinistro · reprovar-sinistro · autentique-webhook · cron-contato-sinistro · enviar-documento-sinistro · processar-termo-evento · efetivar-troca-titularidade · concluir-instalacao-prestador · concluir-vistoria-prestador · confirmar-retirada · retroativo-pagamento-termo · asaas-webhook · atribuir-proxima-tarefa · cron-expirar-confirmacoes · disparar-notificacao · criar-chamado-assistencia · etc.',
+    variaveis: ['nome', 'assunto', 'detalhes'],
   },
   comunicacao_sinistro: {
     momento: 'Comunicação detalhada do andamento do sinistro com valores',
