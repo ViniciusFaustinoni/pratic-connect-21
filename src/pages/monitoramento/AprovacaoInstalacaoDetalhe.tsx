@@ -45,6 +45,7 @@ import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/Solic
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
 import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
+import { servicoConcluidoEmCampo } from '@/lib/servicos/terminaisPositivos';
 
 // Hook para buscar detalhes completos do serviço
 function useServicoDetalheAprovacao(servicoId: string | undefined) {
