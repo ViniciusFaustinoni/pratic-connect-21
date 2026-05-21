@@ -488,6 +488,13 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
                 onClick: () => window.open(`/cotacao/${c.token_publico}`, '_blank'),
               });
             }
+            if (c.dados_extras?.associado_id) {
+              acoesExtras.push({
+                icon: User,
+                title: 'Ver associado',
+                onClick: () => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`),
+              });
+            }
 
             const data: ProcessoCardData = {
               id: c.id,
@@ -508,10 +515,8 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
                 ? { nome: consultores.byUserId[c.vendedor_id].nome }
                 : undefined,
               criadoEm: c.created_at,
-              onDetalhes: c.dados_extras?.associado_id
-                ? () => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`)
-                : undefined,
-              detalhesLabel: 'Ver associado',
+              onDetalhes: () => navigate(`/vendas/cotacoes/${c.id}`),
+              detalhesLabel: 'Ver cotação',
               acoesExtras,
             };
             return <ProcessoCard key={c.id} data={data} />;
