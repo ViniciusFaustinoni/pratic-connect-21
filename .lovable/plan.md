@@ -1,75 +1,55 @@
-## Diagnóstico — TIB8F32 (revisado)
+# Diagnóstico — COT-20260521-123609790-701
 
-Rota aberta: `/monitoramento/aprovacao-associados/8a6f3676-…` → serviço **`instalacao`**, `status='aprovada'`.
+## Sintoma
+No link público, ao clicar **"Continuar com este plano"**, o toast retorna:
+> `Erro ao selecionar plano: record "new" has no field "valor_total"`
 
-| Componente | Valor |
-|---|---|
-| Veículo | Versa Advance, FIPE R$ 107.271 (exige técnica) |
-| `veiculos.status` | `ativo` |
-| Contrato | `assinado`, `cadastro_aprovado=true` |
-| Instalação | `concluida`, rastreador `instalado` vinculado |
-| Serviço aberto na tela | `tipo=instalacao`, `status=aprovada`, `vistoria_origem_id=null` |
-| Serviço irmão | `vistoria_entrada` (autovistoria) `status=concluida` |
+A cotação fica travada em `status='rascunho'` sem nunca gravar `plano_escolhido_id`.
 
-**Bug raiz**: o cálculo de bloqueio na tela (`AprovacaoInstalacaoDetalhe.tsx` linha 894) usa `servico.status !== 'concluida'` como sinônimo de "ainda não terminou em campo". Mas o pipeline canônico produz vários terminais positivos diferentes para o mesmo evento — `aprovada` (instalação fechada pelo técnico/auto-promoção), `concluida` (vistoria), `aprovada_ressalvas`. Hoje só `concluida` desbloqueia, então qualquer serviço já aceito em campo por outro caminho **esconde o botão Aprovar** e oferece apenas Devolver ao Cadastro — violando a regra canônica de que **o último aceite é do Monitoramento**.
+## Causa raiz
+Existe no banco o trigger `BEFORE UPDATE` em `public.cotacoes`:
 
-## Plano de correção
-
-### 1. Conjunto canônico de "terminais positivos de campo"
-Criar helper compartilhado `servicoConcluidoEmCampo(servico)`:
-
-```ts
-const TERMINAIS_POSITIVOS_CAMPO = ['concluida', 'aprovada', 'aprovada_ressalvas'] as const;
+```
+trg_cotacoes_renovar_reserva → fn_cotacoes_renovar_reserva()
 ```
 
-Substituir todo uso de `servico.status !== 'concluida'` por `!servicoConcluidoEmCampo(servico)` na tela de aprovação (e no resolverFotosVeiculo se aplicável). Esse helper vira a fonte única.
+A função foi escrita para um schema antigo/diferente e referencia **4 campos que não existem** na tabela `cotacoes` atual:
 
-### 2. Reescrever o bloqueio em sub-estados acionáveis
-Em `AprovacaoInstalacaoDetalhe.tsx` (linhas 884-1003), abandonar o flag único `bloqueado`. Calcular um `subEstado`:
+| Referência no trigger | Existe em `cotacoes`? | Coluna real |
+|---|---|---|
+| `NEW.valor_total` | ❌ | `valor_total_mensal` |
+| `NEW.observacoes` | ❌ | — (não existe) |
+| `NEW.cotacao_publica_token` | ❌ | `token_publico` |
+| `NEW.placa_reservada_ate` | ✅ | — |
+| `NEW.plano_id` | ✅ | — |
 
-```text
-A) PRONTO_PARA_ACEITE_FINAL     ← caso TIB8F32
-   serviço terminou em campo (in TERMINAIS_POSITIVOS_CAMPO)
-   + rastreador físico presente quando exigeTecnica
-   ações: [Aprovar — Ativar Proteção 360] + [Reprovar] + [Solicitar Vistoria de Técnico]
-   banner: nenhum (estado "verde", pronto pro aceite final)
+Como é `BEFORE UPDATE FOR EACH ROW`, **qualquer** UPDATE em `cotacoes` dispara o erro `42703: record "new" has no field "valor_total"` — não só seleção de plano. Isso afeta link público inteiro (escolher plano, gravar documentos, agendamento, etc.) — só não estourou antes porque o caminho específico que ataca o UPDATE depende do estado da cotação.
 
-B) AGUARDA_INSTALACAO_TECNICA
-   modalidade=autovistoria + exigeTecnica + sem rastreador + cadastro_aprovado=false
-   ações: [Devolver ao Cadastro] + [Reprovar]
-   banner: âmbar (mensagem atual)
+## Por que é seguro remover
 
-C) FALTA_RASTREADOR_FISICO
-   exigeTecnica + sem rastreador + serviço terminou em campo
-   ações: [Solicitar Vistoria de Técnico] + [Reprovar]
-   banner: vermelho
+1. **Nenhum código TS/SQL/edge function referencia** `placa_reservada_ate`, `fn_cotacoes_renovar_reserva`, `prazo_renovacao_movimentacao_horas` ou `prazo_teto_placa_presa_horas` (`rg` no projeto inteiro retornou 0 hits).
+2. O campo `cotacoes.placa_reservada_ate` está sempre `NULL` (verificado em produção) — feature de "reserva de placa" nunca foi ativada nem lida.
+3. A função `fn_cotacoes_renovar_reserva` está órfã: chamada só por este único trigger.
 
-D) SERVICO_NAO_CONCLUIDO_EM_CAMPO
-   serviço fora dos terminais positivos
-   ações: [Reprovar] + link "Ver execução do serviço"
-   banner: cinza
+## Plano (1 migration)
+
+**Migration única — `drop_trigger_cotacoes_renovar_reserva_quebrado`:**
+
+```sql
+DROP TRIGGER IF EXISTS trg_cotacoes_renovar_reserva ON public.cotacoes;
+DROP FUNCTION IF EXISTS public.fn_cotacoes_renovar_reserva();
 ```
 
-Regra cruzada: **Reprovar fica visível nos 4 sub-estados** (caminho de exceção sempre disponível). Aprovar aparece em A; Devolver em B; Solicitar Vistoria em A e C.
+Sem alterações em código TS, edges ou UI — o erro é 100% de banco. Após o drop, o UPDATE do link público (`plano_escolhido_id` + `valor_total_mensal`) passa.
 
-### 3. Reaproveitar `useAprovarInstalacaoMonitoramento` (sem novas edges)
-A edge `aprovar-instalacao-monitoramento` já chama `ativar-associado` (lock + CAS + 409 quando falta rastreador). No estado A, o botão Aprovar invoca o mesmo fluxo — qualquer ausência de pré-requisito é barrada no servidor com mensagem clara. Isso é o que resolve TIB8F32 sem efeito colateral.
+## Validação pós-deploy
 
-### 4. Telemetria
-`console.log('[AprovacaoInstalacao] sub-estado', { servicoId, tipo, status, subEstado, exigeTecnica, temRastreador, cadastroAprovado, veiculoStatus })` na renderização das ações.
+1. Repetir o clique em "Continuar com este plano" na cotação `COT-20260521-123609790-701` → toast some, cotação avança para próxima etapa do link público.
+2. Conferir que `cotacoes` aceita UPDATE simples (`UPDATE cotacoes SET updated_at=now() WHERE id=...`) sem erro.
+3. `rg "placa_reservada_ate|renovar_reserva"` continua zero — confirmação que nada quebra junto.
 
-### 5. Atualizar memória canônica
-Atualizar `mem://logic/operations/monitoramento-guard-aprovacao-sem-instalacao` registrando:
-- terminais positivos de campo = {concluida, aprovada, aprovada_ressalvas};
-- Reprovar sempre visível;
-- Monitoramento é o último aceite — Aprovar reaparece sempre que o serviço já terminou positivamente em campo.
+## Fora do escopo
 
-### Fora de escopo
-- Edge nova para "encerrar artefato" — desnecessária, Aprovar já resolve.
-- Mexer em triggers de promoção/dedupe da fila.
-- Auto-fechamento por cron.
-
-### Arquivos previstos
-- `src/lib/servicos/terminaisPositivos.ts` (novo, helper + constante)
-- `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` (máquina de 4 sub-estados, Reprovar sempre, Aprovar em A)
-- `mem://logic/operations/monitoramento-guard-aprovacao-sem-instalacao.md` (atualizar)
+- Reescrever a feature "reserva de placa" (não existe consumidor — se um dia for necessária, vira projeto próprio com colunas reais).
+- Mexer em `calc_orcamento_item_total` (também usa `NEW.valor_total`, mas em outra tabela onde a coluna existe; está OK).
+- Tocar no fluxo de seleção de plano em si — está correto, só é vítima do trigger.
