@@ -906,7 +906,7 @@ export default function AprovacaoInstalacaoDetalhe() {
 
         const terminouEmCampo = servicoConcluidoEmCampo(servico);
         const temRastreador = !!rastreador;
-        const cadAprovado = !!cadastroAprovado;
+        // cadastroAprovado já vem do hook (data.cadastroAprovado)
         const isAutovistoria = (vistoriaModalidade || '').toLowerCase() === 'autovistoria';
 
         // Sub-estados (ordem de precedência):
