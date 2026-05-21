@@ -96,7 +96,9 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     thumbnail_url: data.thumbnail_url || undefined,
     // Campos Autentique
     is_default_autentique: data.is_default_autentique || false,
+    is_default_substituicao: (data as any).is_default_substituicao || false,
     template_html: data.template_html || undefined,
+
     is_default_evento: data.is_default_evento || false,
     is_default_saida: (data as any).is_default_saida || false,
     is_default_rastreador: (data as any).is_default_rastreador || false,
