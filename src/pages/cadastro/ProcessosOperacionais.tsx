@@ -431,6 +431,10 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     });
   }, [cotacoes, busca, associadosMap]);
 
+  // Resolver consultor a partir de cotacoes.vendedor_id (auth.users.id)
+  const vendedorUserIds = (filtered || []).map((c: any) => c.vendedor_id).filter(Boolean) as string[];
+  const { data: consultores } = useConsultoresProfiles([], vendedorUserIds);
+
   const formatCurrency = (v: number | null) =>
     v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
 
@@ -466,107 +470,58 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
           Nenhuma cotação de inclusão encontrada.
         </CardContent></Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cotação</TableHead>
-                  <TableHead>Associado</TableHead>
-                  <TableHead>Veículo</TableHead>
-                  <TableHead>FIPE</TableHead>
-                  <TableHead>Mensalidade</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criada em</TableHead>
-                  <TableHead className="w-32">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((c: any) => {
-                  const assoc = associadosMap[c.dados_extras?.associado_id || ''];
-                  return (
-                    <TableRow key={c.id} className="hover:bg-muted/50">
-                      <TableCell className="font-mono text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span>{c.numero || '—'}</span>
-                          {(() => {
-                            const obs = (c.dados_extras?.observacao_sga as string | undefined)?.trim();
-                            const mot = (c.dados_extras?.motivo_ignorar_aviso as string | undefined)?.trim();
-                            if (!obs && !mot) return null;
-                            const previewSrc = obs || mot || '';
-                            const preview = previewSrc.length > 140 ? previewSrc.slice(0, 137) + '…' : previewSrc;
-                            return (
-                              <TooltipProvider delayDuration={150}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className={mot ? 'text-destructive' : 'text-primary'}>
-                                      <MessageSquareWarning className="h-3.5 w-3.5" />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-xs whitespace-pre-wrap">
-                                    {mot && <div className="font-semibold text-destructive mb-1">Aviso SGA ignorado</div>}
-                                    {preview}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            );
-                          })()}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium">{assoc?.nome || '—'}</div>
-                        {assoc?.cpf && <div className="text-xs text-muted-foreground">{assoc.cpf}</div>}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">{c.veiculo_marca} {c.veiculo_modelo} {c.veiculo_ano}</div>
-                        {c.veiculo_placa && <div className="text-xs text-muted-foreground">Placa {c.veiculo_placa}</div>}
-                      </TableCell>
-                      <TableCell className="text-sm">{formatCurrency(c.valor_fipe)}</TableCell>
-                      <TableCell className="text-sm">{formatCurrency(c.valor_total_mensal)}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{INCLUSAO_STATUS_LABEL[c.status] || c.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(c.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          {c.token_publico && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => window.open(`/cotacao/${c.token_publico}`, '_blank')}
-                              title="Abrir cotação pública"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {c.dados_extras?.associado_id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`)}
-                              title="Ver associado"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <ProcessoCardList>
+          {filtered.map((c: any) => {
+            const assoc = associadosMap[c.dados_extras?.associado_id || ''];
+            const obs = (c.dados_extras?.observacao_sga as string | undefined)?.trim();
+            const mot = (c.dados_extras?.motivo_ignorar_aviso as string | undefined)?.trim();
+            const badgesExtra: ProcessoCardBadge[] = [];
+            badgesExtra.push({ label: 'INCLUSÃO DE VEÍCULO', tone: 'outline' });
+            if (mot) badgesExtra.push({ label: 'Aviso SGA ignorado', tone: 'destructive', icon: MessageSquareWarning });
+            else if (obs) badgesExtra.push({ label: 'Observação SGA', tone: 'info', icon: MessageSquareWarning });
+
+            const acoesExtras: NonNullable<ProcessoCardData['acoesExtras']> = [];
+            if (c.token_publico) {
+              acoesExtras.push({
+                icon: ExternalLink,
+                title: 'Abrir cotação pública',
+                onClick: () => window.open(`/cotacao/${c.token_publico}`, '_blank'),
+              });
+            }
+
+            const data: ProcessoCardData = {
+              id: c.id,
+              statusBadge: { label: INCLUSAO_STATUS_LABEL[c.status] || c.status, tone: 'secondary' },
+              badgesExtra,
+              associado: { nome: assoc?.nome || '—', cpf: assoc?.cpf },
+              veiculo: {
+                marca: c.veiculo_marca,
+                modelo: c.veiculo_modelo,
+                ano: c.veiculo_ano,
+                placa: c.veiculo_placa,
+              },
+              infoLinhas: [
+                `💰 FIPE ${formatCurrency(c.valor_fipe)} · Mensalidade ${formatCurrency(c.valor_total_mensal)}`,
+                ...(c.numero ? [`Cotação ${c.numero}`] : []),
+              ],
+              consultor: c.vendedor_id && consultores?.byUserId[c.vendedor_id]
+                ? { nome: consultores.byUserId[c.vendedor_id].nome }
+                : undefined,
+              criadoEm: c.created_at,
+              onDetalhes: c.dados_extras?.associado_id
+                ? () => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`)
+                : undefined,
+              detalhesLabel: 'Ver associado',
+              acoesExtras,
+            };
+            return <ProcessoCard key={c.id} data={data} />;
+          })}
+        </ProcessoCardList>
       )}
     </div>
   );
 }
+
 
 // ============================================
 // CONTADORES (novas fontes)
