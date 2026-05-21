@@ -158,19 +158,19 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'associado.email': dados.cliente.email || '—',
     'associado.telefone': formatPhone(dados.cliente.telefone),
     'associado.whatsapp': formatPhone(dados.cliente.telefone_secundario || dados.cliente.telefone),
-    'associado.telefone_secundario': dados.cliente.telefone_secundario ? formatPhone(dados.cliente.telefone_secundario) : '—',
+    'associado.telefone_secundario': dados.cliente.telefone_secundario ? formatPhone(dados.cliente.telefone_secundario) : OPT_VAZIO,
     'associado.logradouro': dados.cliente.logradouro || '—',
     'associado.numero': dados.cliente.numero || '—',
-    'associado.complemento': dados.cliente.complemento || '',
+    'associado.complemento': opt(dados.cliente.complemento),
     'associado.bairro': dados.cliente.bairro || '—',
     'associado.cidade': dados.cliente.cidade || '—',
     'associado.uf': dados.cliente.uf || '—',
     'associado.cep': formatCEP(dados.cliente.cep),
-    'associado.estado_civil': dados.cliente.estado_civil || '—',
-    'associado.profissao': dados.cliente.profissao || '—',
-    'associado.cnh': dados.cliente.cnh || '—',
-    'associado.cnh_validade': formatDate(dados.cliente.cnh_validade),
-    'associado.cnh_categoria': dados.cliente.cnh_categoria || '—',
+    'associado.estado_civil': opt(dados.cliente.estado_civil),
+    'associado.profissao': opt(dados.cliente.profissao),
+    'associado.cnh': opt(dados.cliente.cnh),
+    'associado.cnh_validade': dados.cliente.cnh_validade ? formatDate(dados.cliente.cnh_validade) : OPT_VAZIO,
+    'associado.cnh_categoria': opt(dados.cliente.cnh_categoria),
     'associado.endereco_completo': `${dados.cliente.logradouro || ''}, ${dados.cliente.numero || ''}${dados.cliente.complemento ? ', ' + dados.cliente.complemento : ''} - ${dados.cliente.bairro || ''} - ${dados.cliente.cidade || ''}/${dados.cliente.uf || ''} - CEP ${formatCEP(dados.cliente.cep)}`,
     
     // Veículo
@@ -178,13 +178,13 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.modelo': dados.veiculo.modelo || '—',
     'veiculo.placa': dados.veiculo.placa || 'ZERO QUILÔMETRO',
     'veiculo.chassi': dados.veiculo.chassi || '—',
-    'veiculo.renavam': dados.veiculo.renavam || '—',
-    'veiculo.numero_motor': (dados.veiculo as any).numero_motor || '—',
-    'veiculo.motor': (dados.veiculo as any).numero_motor || '—',
+    'veiculo.renavam': opt(dados.veiculo.renavam),
+    'veiculo.numero_motor': opt((dados.veiculo as any).numero_motor),
+    'veiculo.motor': opt((dados.veiculo as any).numero_motor),
     'veiculo.ano': String(dados.veiculo.ano || '—'),
     'veiculo.ano_fabricacao': String(dados.veiculo.ano_fabricacao || dados.veiculo.ano || '—'),
     'veiculo.cor': dados.veiculo.cor || '—',
-    'veiculo.combustivel': dados.veiculo.combustivel || '—',
+    'veiculo.combustivel': opt(dados.veiculo.combustivel),
     // CATEGORIA de uso (Particular/Aplicativo) — já resolvida em mapearDadosParaTemplate
     'veiculo.categoria': (() => {
       const c = (dados.veiculo.categoria || '').toString().trim().toLowerCase();
@@ -202,14 +202,24 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       return 'Carro';
     })(),
     'veiculo.tipo_uso': dados.veiculo.tipo_uso || 'Particular',
-    'veiculo.codigo_fipe': dados.veiculo.codigo_fipe || '—',
+    'veiculo.codigo_fipe': opt(dados.veiculo.codigo_fipe),
     'veiculo.valor_fipe': formatCurrency(dados.veiculo.valor_fipe),
     'veiculo.alienado': dados.veiculo.alienado ? 'Sim' : 'Não',
-    'veiculo.financeira': dados.veiculo.financeira || '—',
+    'veiculo.financeira': dados.veiculo.alienado ? (dados.veiculo.financeira || '—') : OPT_VAZIO,
     'veiculo.procedencia': dados.veiculo.procedencia || 'Usado de particular',
-    'veiculo.cambio': dados.veiculo.cambio || '—',
-    // Portas: nunca chutar — se ausente mostra "—"
-    'veiculo.portas': dados.veiculo.portas != null ? String(dados.veiculo.portas) : '—',
+    'veiculo.cambio': (() => {
+      const tipo = ((dados.veiculo as any).tipo_veiculo || '').toString().trim().toLowerCase();
+      const ehMoto = tipo === 'moto' || tipo === 'motocicleta' || tipo === 'ciclomotor' || tipo === 'triciclo';
+      if (ehMoto) return OPT_VAZIO;
+      return opt(dados.veiculo.cambio);
+    })(),
+    // Portas: omitida em moto; ausente em carro também some.
+    'veiculo.portas': (() => {
+      const tipo = ((dados.veiculo as any).tipo_veiculo || '').toString().trim().toLowerCase();
+      const ehMoto = tipo === 'moto' || tipo === 'motocicleta' || tipo === 'ciclomotor' || tipo === 'triciclo';
+      if (ehMoto) return OPT_VAZIO;
+      return dados.veiculo.portas != null && Number(dados.veiculo.portas) > 0 ? String(dados.veiculo.portas) : OPT_VAZIO;
+    })(),
     'veiculo.leilao': dados.veiculo.leilao ? 'SIM' : 'NÃO',
     'veiculo.uso_aplicativo': dados.veiculo.uso_aplicativo ? 'SIM' : 'NÃO',
     'veiculo.valor_protegido': formatCurrency(dados.veiculo.valor_fipe),
