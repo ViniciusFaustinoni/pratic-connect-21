@@ -46,11 +46,9 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  const stats = { candidatas: 0, expiradas: 0, ainda_no_prazo: 0, erros: 0, ids: [] as string[] };
+  const stats = { candidatas: 0, expiradas: 0, ainda_no_prazo: 0, dentro_margem: 0, erros: 0, ids: [] as string[] };
 
   try {
-    // Selecionar trocas em andamento com termo de cancelamento já assinado
-    // (qualquer estado anterior à efetivação). Excluir já expirada/efetivada/recusada.
     const { data: candidatas, error } = await admin
       .from('solicitacoes_troca_titularidade')
       .select(`
@@ -74,8 +72,29 @@ Deno.serve(async (req) => {
       stats.candidatas++;
       try {
         const corte = brtEndOfDay(s.termo_cancelamento_assinado_em as string);
+        const deltaMs = agora.getTime() - corte.getTime();
+        const corteComMargem = corte.getTime() + GRACE_PERIOD_MS;
+
+        // Log estruturado por candidato (auditável via Edge Function logs)
+        console.log(JSON.stringify({
+          tag: '[cron-expirar-trocas:eval]',
+          solicitacao_id: s.id,
+          termo_assinado_em: s.termo_cancelamento_assinado_em,
+          corte_brt_iso: corte.toISOString(),
+          agora_iso: agora.toISOString(),
+          delta_ms: deltaMs,
+          grace_period_ms: GRACE_PERIOD_MS,
+          dentro_prazo: agora.getTime() <= corte.getTime(),
+          dentro_margem: agora.getTime() > corte.getTime() && agora.getTime() <= corteComMargem,
+        }));
+
         if (agora.getTime() <= corte.getTime()) {
           stats.ainda_no_prazo++;
+          continue;
+        }
+        if (agora.getTime() <= corteComMargem) {
+          // Dentro da janela de margem — não cancela ainda (defesa contra clock skew)
+          stats.dentro_margem++;
           continue;
         }
 
