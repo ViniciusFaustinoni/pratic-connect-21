@@ -317,13 +317,13 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       'troca.cenario_label': dados.trocaTitularidade.cenario_label || '—',
     } : {}),
 
-    // Indicador (quando aplicável)
-    ...(dados.indicador ? {
+    // Indicador (quando aplicável) — bloco inteiro some quando não há indicador
+    ...(dados.indicador && (dados.indicador.nome || dados.indicador.cpf) ? {
       'indicador.nome': dados.indicador.nome || '—',
       'indicador.cpf': dados.indicador.cpf ? formatCPF(dados.indicador.cpf) : '—',
     } : {
-      'indicador.nome': '—',
-      'indicador.cpf': '—',
+      'indicador.nome': OPT_VAZIO,
+      'indicador.cpf': OPT_VAZIO,
     }),
 
     // Oficina (quando aplicável — vinculada via OS)
