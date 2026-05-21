@@ -1,4 +1,4 @@
-import { CloudCheck as CloudCheckIcon } from 'lucide-react';
+import { BadgeCheck } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -39,7 +39,7 @@ export function BadgeSincronizadoSGA({ codigoHinova, sincronizadoEm, className }
           className={`inline-flex items-center text-primary cursor-help ${className ?? ''}`}
           aria-label={`Sincronizado com SGA — código ${codigoHinova}`}
         >
-          <CloudCheck className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.2} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
