@@ -10077,7 +10077,9 @@ export type Database = {
           avarias_observadas_por: string | null
           campanha_desconto_id: string | null
           cancelada_em: string | null
+          cancelada_por: string | null
           categoria: string | null
+          categoria_cancelamento: string | null
           cenario_adesao: string | null
           cidade: string | null
           cliente_bairro: string | null
@@ -10128,9 +10130,12 @@ export type Database = {
           numero: string
           numero_portas: number | null
           origem_troca_titularidade: boolean
+          placa_reservada_ate: string | null
           plano_escolhido_id: string | null
           plano_id: string | null
           prioridade: string
+          reativada_em: string | null
+          reativada_por: string | null
           regiao: string | null
           solicitar_fipe_menor: boolean
           status: Database["public"]["Enums"]["status_cotacao"]
@@ -10215,7 +10220,9 @@ export type Database = {
           avarias_observadas_por?: string | null
           campanha_desconto_id?: string | null
           cancelada_em?: string | null
+          cancelada_por?: string | null
           categoria?: string | null
+          categoria_cancelamento?: string | null
           cenario_adesao?: string | null
           cidade?: string | null
           cliente_bairro?: string | null
@@ -10266,9 +10273,12 @@ export type Database = {
           numero: string
           numero_portas?: number | null
           origem_troca_titularidade?: boolean
+          placa_reservada_ate?: string | null
           plano_escolhido_id?: string | null
           plano_id?: string | null
           prioridade?: string
+          reativada_em?: string | null
+          reativada_por?: string | null
           regiao?: string | null
           solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
@@ -10353,7 +10363,9 @@ export type Database = {
           avarias_observadas_por?: string | null
           campanha_desconto_id?: string | null
           cancelada_em?: string | null
+          cancelada_por?: string | null
           categoria?: string | null
+          categoria_cancelamento?: string | null
           cenario_adesao?: string | null
           cidade?: string | null
           cliente_bairro?: string | null
@@ -10404,9 +10416,12 @@ export type Database = {
           numero?: string
           numero_portas?: number | null
           origem_troca_titularidade?: boolean
+          placa_reservada_ate?: string | null
           plano_escolhido_id?: string | null
           plano_id?: string | null
           prioridade?: string
+          reativada_em?: string | null
+          reativada_por?: string | null
           regiao?: string | null
           solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
@@ -35004,6 +35019,10 @@ export type Database = {
         Args: { p_auth_user_id: string }
         Returns: string
       }
+      get_config_int: {
+        Args: { _chave: string; _default: number }
+        Returns: number
+      }
       get_current_profile_id: { Args: never; Returns: string }
       get_estatisticas_assistencia_dia: {
         Args: { p_data?: string }
@@ -35358,6 +35377,8 @@ export type Database = {
         | "aceita"
         | "recusada"
         | "expirada"
+        | "cancelada"
+        | "liberada"
       status_documento:
         | "pendente"
         | "em_analise"
@@ -35821,7 +35842,15 @@ export const Constants = {
         "expirado",
         "pendente_assinatura",
       ],
-      status_cotacao: ["rascunho", "enviada", "aceita", "recusada", "expirada"],
+      status_cotacao: [
+        "rascunho",
+        "enviada",
+        "aceita",
+        "recusada",
+        "expirada",
+        "cancelada",
+        "liberada",
+      ],
       status_documento: [
         "pendente",
         "em_analise",

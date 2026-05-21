@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { TrocaTitularidadeBadge } from '@/components/cotacoes/TrocaTitularidadeBadge';
 import { FlagTravada } from '@/components/cotacoes/FlagTravada';
+import { FlagPlacaExpirando } from '@/components/cotacoes/FlagPlacaExpirando';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 import type { StatusCotacao } from '@/types/database';
 import { toast } from 'sonner';
@@ -288,6 +289,7 @@ export function CotacoesTable({
                           <ArrowRight className="h-2.5 w-2.5" />
                           {etapaInfo.label}
                           <FlagTravada cotacao={cotacao} className="ml-1" />
+                          <FlagPlacaExpirando cotacao={cotacao} className="ml-1" />
                         </div>
                       )}
                       <TrocaTitularidadeBadge
