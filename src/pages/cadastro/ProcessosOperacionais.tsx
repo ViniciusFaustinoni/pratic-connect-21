@@ -309,84 +309,47 @@ function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
             ) : filtered.length === 0 ? (
               <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhuma substituição encontrada.</CardContent></Card>
             ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Associado</TableHead>
-                        <TableHead>Veículo Antigo</TableHead>
-                        <TableHead>Veículo Novo</TableHead>
-                        <TableHead>Mensalidade</TableHead>
-                        <TableHead>FIPE Nova</TableHead>
-                        <TableHead>Data Solicitação</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-20">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filtered.map((s) => (
-                        <TableRow
-                          key={s.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => navigate(`/cadastro/substituicoes/${s.id}`)}
-                        >
-                          <TableCell className="font-medium">{s.associado?.nome || '—'}</TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {s.veiculo_antigo_modelo || s.veiculo_antigo?.modelo || '—'}
-                              <span className="text-muted-foreground ml-1">
-                                {s.veiculo_antigo_placa || s.veiculo_antigo?.placa || ''}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {s.veiculo_novo_modelo || s.veiculo_novo?.modelo || '—'}
-                              <span className="text-muted-foreground ml-1">
-                                {s.veiculo_novo_placa || s.veiculo_novo?.placa || ''}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-xs">
-                              {formatCurrency(s.mensalidade_antiga)} → {formatCurrency(s.mensalidade_nova)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1.5">
-                              {formatCurrency(s.veiculo_novo_fipe)}
-                              {(s.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000) && (
-                                <Badge variant="destructive" className="text-[10px] px-1">
-                                  <AlertTriangle className="h-3 w-3 mr-0.5" />FIPE ALTA
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {format(new Date(s.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={STATUS_SUBSTITUICAO_CORES[s.status as StatusSubstituicao] || 'bg-gray-100 text-gray-800'}>
-                              {STATUS_SUBSTITUICAO_LABELS[s.status as StatusSubstituicao] || s.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm">
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+              <ProcessoCardList>
+                {filtered.map((s: any) => {
+                  const veicAntigo = `${s.veiculo_antigo_modelo || s.veiculo_antigo?.modelo || '—'}${(s.veiculo_antigo_placa || s.veiculo_antigo?.placa) ? ` (${s.veiculo_antigo_placa || s.veiculo_antigo?.placa})` : ''}`;
+                  const veicNovo = `${s.veiculo_novo_modelo || s.veiculo_novo?.modelo || '—'}${(s.veiculo_novo_placa || s.veiculo_novo?.placa) ? ` (${s.veiculo_novo_placa || s.veiculo_novo?.placa})` : ''}`;
+                  const fipeAlta = (s.veiculo_novo_fipe ?? 0) > (limites?.fipeLimiteAutorizacao ?? 120000);
+                  const badgesExtra: ProcessoCardBadge[] = [];
+                  if (fipeAlta) badgesExtra.push({ label: 'FIPE ALTA', tone: 'destructive', icon: AlertTriangle });
+
+                  const statusLabel = STATUS_SUBSTITUICAO_LABELS[s.status as StatusSubstituicao] || s.status;
+                  const statusTone: ProcessoCardBadge['tone'] =
+                    s.status === 'efetivada' || s.status === 'aprovada' ? 'default'
+                    : s.status === 'rejeitada' ? 'destructive'
+                    : 'secondary';
+
+                  const data: ProcessoCardData = {
+                    id: s.id,
+                    statusBadge: { label: statusLabel, tone: statusTone },
+                    badgesExtra,
+                    associado: { nome: s.associado?.nome || '—', cpf: s.associado?.cpf },
+                    veiculo: {
+                      modelo: `${veicAntigo} → ${veicNovo}`,
+                    },
+                    infoLinhas: [
+                      `💰 Mensalidade ${formatCurrency(s.mensalidade_antiga)} → ${formatCurrency(s.mensalidade_nova)} · FIPE Novo ${formatCurrency(s.veiculo_novo_fipe)}`,
+                    ],
+                    consultor: s.criado_por && consultores?.byUserId[s.criado_por]
+                      ? { nome: consultores.byUserId[s.criado_por].nome }
+                      : undefined,
+                    criadoEm: s.created_at,
+                    criadoLabel: 'Solicitada em',
+                    onDetalhes: () => navigate(`/cadastro/substituicoes/${s.id}`),
+                  };
+                  return <ProcessoCard key={s.id} data={data} />;
+                })}
+              </ProcessoCardList>
             )}
           </TabsContent>
         ))}
       </Tabs>
     </div>
+
   );
 }
 
