@@ -115,6 +115,20 @@ function gerarTabelaCompletaHTML(coberturas: CoberturaDetalhada[], beneficios: B
 // ============= MAPEAMENTO DE VARIÁVEIS =============
 
 /**
+ * Sentinela usada por variáveis OPCIONAIS quando o valor real está vazio.
+ * Após substituição, qualquer <tr>/<p>/<li> contendo essa marca é REMOVIDO
+ * do HTML antes do PDF — assim a linha vazia some em vez de mostrar "—".
+ * Não é exportada: usada só dentro deste módulo.
+ */
+const OPT_VAZIO = '__OPT_VAZIO__';
+
+/** Marca v como OPT_VAZIO quando vazio; caso contrário devolve v. */
+function opt(v: string | null | undefined): string {
+  const s = (v ?? '').toString().trim();
+  return s ? s : OPT_VAZIO;
+}
+
+/**
  * Cria o mapeamento de variáveis disponíveis com seus valores
  */
 export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<string, string> {
@@ -144,19 +158,19 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'associado.email': dados.cliente.email || '—',
     'associado.telefone': formatPhone(dados.cliente.telefone),
     'associado.whatsapp': formatPhone(dados.cliente.telefone_secundario || dados.cliente.telefone),
-    'associado.telefone_secundario': dados.cliente.telefone_secundario ? formatPhone(dados.cliente.telefone_secundario) : '—',
+    'associado.telefone_secundario': dados.cliente.telefone_secundario ? formatPhone(dados.cliente.telefone_secundario) : OPT_VAZIO,
     'associado.logradouro': dados.cliente.logradouro || '—',
     'associado.numero': dados.cliente.numero || '—',
-    'associado.complemento': dados.cliente.complemento || '',
+    'associado.complemento': opt(dados.cliente.complemento),
     'associado.bairro': dados.cliente.bairro || '—',
     'associado.cidade': dados.cliente.cidade || '—',
     'associado.uf': dados.cliente.uf || '—',
     'associado.cep': formatCEP(dados.cliente.cep),
-    'associado.estado_civil': dados.cliente.estado_civil || '—',
-    'associado.profissao': dados.cliente.profissao || '—',
-    'associado.cnh': dados.cliente.cnh || '—',
-    'associado.cnh_validade': formatDate(dados.cliente.cnh_validade),
-    'associado.cnh_categoria': dados.cliente.cnh_categoria || '—',
+    'associado.estado_civil': opt(dados.cliente.estado_civil),
+    'associado.profissao': opt(dados.cliente.profissao),
+    'associado.cnh': opt(dados.cliente.cnh),
+    'associado.cnh_validade': dados.cliente.cnh_validade ? formatDate(dados.cliente.cnh_validade) : OPT_VAZIO,
+    'associado.cnh_categoria': opt(dados.cliente.cnh_categoria),
     'associado.endereco_completo': `${dados.cliente.logradouro || ''}, ${dados.cliente.numero || ''}${dados.cliente.complemento ? ', ' + dados.cliente.complemento : ''} - ${dados.cliente.bairro || ''} - ${dados.cliente.cidade || ''}/${dados.cliente.uf || ''} - CEP ${formatCEP(dados.cliente.cep)}`,
     
     // Veículo
@@ -164,13 +178,13 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.modelo': dados.veiculo.modelo || '—',
     'veiculo.placa': dados.veiculo.placa || 'ZERO QUILÔMETRO',
     'veiculo.chassi': dados.veiculo.chassi || '—',
-    'veiculo.renavam': dados.veiculo.renavam || '—',
-    'veiculo.numero_motor': (dados.veiculo as any).numero_motor || '—',
-    'veiculo.motor': (dados.veiculo as any).numero_motor || '—',
+    'veiculo.renavam': opt(dados.veiculo.renavam),
+    'veiculo.numero_motor': opt((dados.veiculo as any).numero_motor),
+    'veiculo.motor': opt((dados.veiculo as any).numero_motor),
     'veiculo.ano': String(dados.veiculo.ano || '—'),
     'veiculo.ano_fabricacao': String(dados.veiculo.ano_fabricacao || dados.veiculo.ano || '—'),
     'veiculo.cor': dados.veiculo.cor || '—',
-    'veiculo.combustivel': dados.veiculo.combustivel || '—',
+    'veiculo.combustivel': opt(dados.veiculo.combustivel),
     // CATEGORIA de uso (Particular/Aplicativo) — já resolvida em mapearDadosParaTemplate
     'veiculo.categoria': (() => {
       const c = (dados.veiculo.categoria || '').toString().trim().toLowerCase();
@@ -188,14 +202,24 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       return 'Carro';
     })(),
     'veiculo.tipo_uso': dados.veiculo.tipo_uso || 'Particular',
-    'veiculo.codigo_fipe': dados.veiculo.codigo_fipe || '—',
+    'veiculo.codigo_fipe': opt(dados.veiculo.codigo_fipe),
     'veiculo.valor_fipe': formatCurrency(dados.veiculo.valor_fipe),
     'veiculo.alienado': dados.veiculo.alienado ? 'Sim' : 'Não',
-    'veiculo.financeira': dados.veiculo.financeira || '—',
+    'veiculo.financeira': dados.veiculo.alienado ? (dados.veiculo.financeira || '—') : OPT_VAZIO,
     'veiculo.procedencia': dados.veiculo.procedencia || 'Usado de particular',
-    'veiculo.cambio': dados.veiculo.cambio || '—',
-    // Portas: nunca chutar — se ausente mostra "—"
-    'veiculo.portas': dados.veiculo.portas != null ? String(dados.veiculo.portas) : '—',
+    'veiculo.cambio': (() => {
+      const tipo = ((dados.veiculo as any).tipo_veiculo || '').toString().trim().toLowerCase();
+      const ehMoto = tipo === 'moto' || tipo === 'motocicleta' || tipo === 'ciclomotor' || tipo === 'triciclo';
+      if (ehMoto) return OPT_VAZIO;
+      return opt(dados.veiculo.cambio);
+    })(),
+    // Portas: omitida em moto; ausente em carro também some.
+    'veiculo.portas': (() => {
+      const tipo = ((dados.veiculo as any).tipo_veiculo || '').toString().trim().toLowerCase();
+      const ehMoto = tipo === 'moto' || tipo === 'motocicleta' || tipo === 'ciclomotor' || tipo === 'triciclo';
+      if (ehMoto) return OPT_VAZIO;
+      return dados.veiculo.portas != null && Number(dados.veiculo.portas) > 0 ? String(dados.veiculo.portas) : OPT_VAZIO;
+    })(),
     'veiculo.leilao': dados.veiculo.leilao ? 'SIM' : 'NÃO',
     'veiculo.uso_aplicativo': dados.veiculo.uso_aplicativo ? 'SIM' : 'NÃO',
     'veiculo.valor_protegido': formatCurrency(dados.veiculo.valor_fipe),
@@ -293,13 +317,13 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       'troca.cenario_label': dados.trocaTitularidade.cenario_label || '—',
     } : {}),
 
-    // Indicador (quando aplicável)
-    ...(dados.indicador ? {
+    // Indicador (quando aplicável) — bloco inteiro some quando não há indicador
+    ...(dados.indicador && (dados.indicador.nome || dados.indicador.cpf) ? {
       'indicador.nome': dados.indicador.nome || '—',
       'indicador.cpf': dados.indicador.cpf ? formatCPF(dados.indicador.cpf) : '—',
     } : {
-      'indicador.nome': '—',
-      'indicador.cpf': '—',
+      'indicador.nome': OPT_VAZIO,
+      'indicador.cpf': OPT_VAZIO,
     }),
 
     // Oficina (quando aplicável — vinculada via OS)
@@ -351,6 +375,33 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
       valor || '—'
     );
   }
+
+  // ========== SUPRESSÃO DE LINHAS/PARÁGRAFOS OPCIONAIS VAZIOS ==========
+  // Variáveis marcadas como opcionais (CNH, complemento, código FIPE, etc.)
+  // foram substituídas pelo sentinel OPT_VAZIO. Aqui removemos o container
+  // (TR, LI, P) que contém essa marca — para que linhas vazias não apareçam
+  // no termo. Faz vários passes para casos onde TRs adjacentes encadeiam.
+  for (let i = 0; i < 4; i++) {
+    const antes = resultado;
+    // <tr>...OPT_VAZIO...</tr> — linha inteira de tabela
+    resultado = resultado.replace(
+      new RegExp(`<tr[^>]*>(?:(?!<tr[\\s>])[\\s\\S])*?${OPT_VAZIO}[\\s\\S]*?</tr>`, 'gi'),
+      ''
+    );
+    // <li>...OPT_VAZIO...</li>
+    resultado = resultado.replace(
+      new RegExp(`<li[^>]*>(?:(?!<li[\\s>])[\\s\\S])*?${OPT_VAZIO}[\\s\\S]*?</li>`, 'gi'),
+      ''
+    );
+    // <p>...OPT_VAZIO...</p> sozinho (não dentro de TD com label)
+    resultado = resultado.replace(
+      new RegExp(`<p[^>]*>(?:(?!<p[\\s>])[\\s\\S])*?${OPT_VAZIO}[\\s\\S]*?</p>`, 'gi'),
+      ''
+    );
+    if (antes === resultado) break;
+  }
+  // Qualquer OPT_VAZIO residual (fora de container reconhecido) vira "—"
+  resultado = resultado.split(OPT_VAZIO).join('—');
   
   // Remover bloco "Serviços:" — todas as variantes possíveis
   // 1) Container HTML com ç literal

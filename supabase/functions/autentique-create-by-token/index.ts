@@ -169,15 +169,26 @@ serve(async (req) => {
       buscarRegrasDepreciacao(supabase),
     ]);
 
-    // ============= BUSCAR VEÍCULO DO BANCO (FLAGS DE DEPRECIAÇÃO + CÂMBIO/TIPO) =============
+    // ============= BUSCAR VEÍCULO DO BANCO (FLAGS + CÂMBIO/TIPO + COMBUSTÍVEL + FIPE) =============
     let veiculoDB: any = null;
     if (contrato.veiculo_id) {
       const { data: veiculoData } = await supabase
         .from('veiculos')
-        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria, blindado, ano_fabricacao, ano_modelo, cambio, numero_motor')
+        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria, blindado, ano_fabricacao, ano_modelo, cambio, numero_motor, combustivel, codigo_fipe, chassi, renavam, cor, marca, modelo, valor_fipe')
         .eq('id', contrato.veiculo_id)
         .maybeSingle();
       veiculoDB = veiculoData;
+    }
+
+    // ============= BUSCAR COTAÇÃO (fallback de combustível / FIPE) =============
+    let cotacaoFallback: any = null;
+    if (contrato.cotacao_id) {
+      const { data: cotData } = await supabase
+        .from('cotacoes')
+        .select('combustivel, veiculo_combustivel, codigo_fipe, valor_fipe, veiculo_chassi, veiculo_renavam, veiculo_cor, veiculo_marca, veiculo_modelo, veiculo_ano_fabricacao, veiculo_ano_modelo, veiculo_cambio, veiculo_motor, veiculo_categoria, veiculo_procedencia, veiculo_alienado, veiculo_financeira, veiculo_blindado, uso_aplicativo')
+        .eq('id', contrato.cotacao_id)
+        .maybeSingle();
+      cotacaoFallback = cotData || null;
     }
     // Tipo (carro/moto/...) derivado de marcas_modelos (fonte canônica)
     {
@@ -230,7 +241,8 @@ serve(async (req) => {
       contrato.leads,
       contrato.associados,
       undefined,
-      veiculoDB
+      veiculoDB,
+      cotacaoFallback,
     );
     templateData.configRastreador = configRastreador;
     templateData.regrasDepreciacao = regrasDepreciacao;
