@@ -34,6 +34,11 @@ function brtEndOfDay(isoSigned: string): Date {
   return new Date(Date.UTC(y, m, day, 23, 59, 59, 999) + 3 * 60 * 60 * 1000);
 }
 
+// Margem de segurança contra clock skew do runtime Deno vs Postgres.
+// Supabase Edge Runtime é NTP-sync (skew em ms), mas mantemos defesa em profundidade
+// de 5 minutos. Acordado com o usuário em 2026-05-21.
+const GRACE_PERIOD_MS = 5 * 60 * 1000;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
