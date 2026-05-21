@@ -261,27 +261,37 @@ async function enviarViaMeta(
   } else {
     // ⚠️ Caller esqueceu o template. Em vez de perder a mensagem (que pode ser
     // crítica — contrato, troca, notificação ao vendedor/associado), aplicamos
-    // fallback automático para o template genérico aprovado `sinistro_atualizado`
-    // (3 vars: nome, assunto, detalhes). Logamos como WARN com hint para QA.
-    console.warn(`[whatsapp-send-text] ⚠️ AUTO-FALLBACK: chamada sem template_name para ${telefoneFormatado}. Aplicando template 'sinistro_atualizado'. Mensagem: "${mensagem.substring(0, 120)}..."`);
+    // fallback automático para o template genérico aprovado `notificacao_atualizacao`
+    // (3 vars: nome, assunto, detalhes). Cai para `sinistro_atualizado` enquanto
+    // o novo template não estiver APPROVED na Meta. Logamos como WARN com hint para QA.
+    console.warn(`[whatsapp-send-text] ⚠️ AUTO-FALLBACK: chamada sem template_name para ${telefoneFormatado}. Aplicando template 'notificacao_atualizacao'. Mensagem: "${mensagem.substring(0, 120)}..."`);
 
-    const fallbackName = 'sinistro_atualizado';
-    const { data: fbTmpl } = await supabase
-      .from("whatsapp_meta_templates")
-      .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
-      .eq("nome", fallbackName)
-      .eq("status", "APPROVED")
-      .single();
+    const fallbackCandidates = ['notificacao_atualizacao', 'sinistro_atualizado'];
+    let fbTmpl: any = null;
+    let fallbackName = fallbackCandidates[0];
+    for (const cand of fallbackCandidates) {
+      const { data } = await supabase
+        .from("whatsapp_meta_templates")
+        .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
+        .eq("nome", cand)
+        .eq("status", "APPROVED")
+        .single();
+      if (data && data.disparo_habilitado !== false) {
+        fbTmpl = data;
+        fallbackName = cand;
+        break;
+      }
+    }
 
-    if (!fbTmpl || fbTmpl.disparo_habilitado === false) {
+    if (!fbTmpl) {
       // Nenhum fallback aprovado/habilitado — aí sim bloqueia e registra
       await supabase.from("whatsapp_mensagens").insert({
         telefone: telefoneFormatado, tipo: "text", mensagem,
         direcao: "saida", status: "erro",
-        erro_mensagem: `Bloqueado: Meta API ativa requer template_name e fallback '${fallbackName}' não está APPROVED ou está com disparo pausado.`,
+        erro_mensagem: `Bloqueado: Meta API ativa requer template_name e nenhum fallback (${fallbackCandidates.join(', ')}) está APPROVED ou habilitado.`,
         provedor: "meta_oficial",
       });
-      throw new Error(`Meta API ativa: template_name obrigatório e fallback '${fallbackName}' indisponível.`);
+      throw new Error(`Meta API ativa: template_name obrigatório e nenhum fallback disponível.`);
     }
 
     // Extrair primeiro nome a partir da própria mensagem (procura "Olá, NOME" / "Olá NOME")
