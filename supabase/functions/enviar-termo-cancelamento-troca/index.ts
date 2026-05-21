@@ -373,16 +373,26 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
           // senão, fallback para o genérico assinatura_documento_v2.
           const { data: tmplStatus } = await admin
             .from('whatsapp_meta_templates')
-            .select('nome, status')
+            .select('nome, status, disparo_habilitado')
             .in('nome', ['troca_titularidade_termo_pendente_v2', 'assinatura_documento_v2']);
-          const aprovados = new Set((tmplStatus || []).filter((t: any) => t.status === 'APPROVED').map((t: any) => t.nome));
+          const aprovados = new Set(
+            (tmplStatus || [])
+              .filter((t: any) => t.status === 'APPROVED' && t.disparo_habilitado !== false)
+              .map((t: any) => t.nome),
+          );
           const templateName = aprovados.has('troca_titularidade_termo_pendente_v2')
             ? 'troca_titularidade_termo_pendente_v2'
-            : 'assinatura_documento_v2';
+            : aprovados.has('assinatura_documento_v2')
+              ? 'assinatura_documento_v2'
+              : null;
           // Ambos esperam 2 vars: nome + descrição/veiculo
           const veicLabel = `${(veiculo?.marca || '')} ${(veiculo?.modelo || '')}`.trim() + (veiculo?.placa ? ` (${veiculo.placa})` : '');
 
-          if (!accessToken || !phoneId) {
+          if (!templateName) {
+            waStatus = 'falhou';
+            console.warn('[enviar-termo-cancelamento-troca] 🚫 Templates de troca/assinatura com disparo desabilitado localmente — caindo para fallback texto.');
+            await logMsg('erro', 'troca_titularidade_termo_pendente_v2', `[template indisponível] ${primeiroNome} — ${descricaoDoc}`, { erro: 'template_disparo_desabilitado' });
+          } else if (!accessToken || !phoneId) {
             waStatus = 'falhou';
             console.warn('[enviar-termo-cancelamento-troca] meta_config_ausente');
             await logMsg('erro', templateName, `[template ${templateName}] ${primeiroNome} — ${descricaoDoc}`, { erro: 'meta_config_ausente' });
