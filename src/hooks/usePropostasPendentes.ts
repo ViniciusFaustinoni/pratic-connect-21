@@ -599,12 +599,20 @@ export function usePropostasPendentes() {
         })();
         const instalacaoConcluida = mInstConcluida.has(contrato.id);
 
+        // Em troca de titularidade o veículo permanece `ativo` (vinculado ao
+        // antigo titular) durante todo o ciclo Cadastro → Monitoramento →
+        // `efetivar-troca-titularidade`. Por isso o gate "veículo já ativo"
+        // NÃO pode descartar trocas — senão a proposta do novo titular some.
+        const isTrocaEntry =
+          (contrato as any).tipo_entrada === 'troca_titularidade' ||
+          !!(contrato as any).origem_troca_titularidade_id;
+
         // Veículo sincronizado no SGA NÃO significa fluxo operacional concluído.
         // No Hinova o cadastro nasce como pendente, então veículos em
         // `instalacao_pendente` continuam pertencendo a Propostas Pendentes
         // mesmo com `sincronizado_hinova=true` e `codigo_hinova` preenchido.
         const veiculoJaConcluidoOperacionalmente =
-          veiculoContrato?.status === 'ativo';
+          !isTrocaEntry && veiculoContrato?.status === 'ativo';
 
         // Saída de Propostas Pendentes (gate do Cadastro):
         // Fluxo linear — link público completa tudo (assina → agenda → paga →
