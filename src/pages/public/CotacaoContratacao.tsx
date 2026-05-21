@@ -383,10 +383,10 @@ export default function CotacaoContratacao() {
   }, [cotacao?.tipo_vistoria]);
 
   // Ordem de navegação por índices INTERNOS:
-  // 0=plano, 1=docs, 2=contrato, 3=vistoria, 4=pagamento, 5=conclusão/instalação
-  // Em troca dentro da janela mesmo-dia, vistoria é dispensada → remove índice 3.
+  // 0=plano, 1=docs, 2=contrato, 3=pagamento, 4=vistoria, 5=conclusão/instalação
+  // Em troca dentro da janela mesmo-dia, vistoria é dispensada → remove índice 4.
   const navOrder = useMemo<number[]>(
-    () => (dispensaVistoriaTroca ? [0, 1, 2, 4, 5] : [0, 1, 2, 3, 4, 5]),
+    () => (dispensaVistoriaTroca ? [0, 1, 2, 3, 5] : [0, 1, 2, 3, 4, 5]),
     [dispensaVistoriaTroca]
   );
 
