@@ -153,7 +153,7 @@ const Seguranca = lazy(() => import("./pages/configuracoes/Seguranca"));
 const NotificacoesConfig = lazy(() => import("./pages/configuracoes/Notificacoes"));
 const Usuarios = lazy(() => import("./pages/configuracoes/Usuarios"));
 const UsuarioForm = lazy(() => import("./pages/configuracoes/UsuarioForm"));
-const Perfis = lazy(() => import("./pages/configuracoes/Perfis"));
+
 const Integracoes = lazy(() => import("./pages/configuracoes/Integracoes"));
 const IntegracaoWhatsApp = lazy(() => import("./pages/configuracoes/IntegracaoWhatsApp"));
 const IntegracaoIA = lazy(() => import("./pages/configuracoes/IntegracaoIA"));

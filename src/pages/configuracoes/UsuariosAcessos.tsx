@@ -184,6 +184,9 @@ export default function UsuariosAcessos() {
         </TabsList>
 
         <TabsContent value="usuarios" className="space-y-4">
+          <div className="flex justify-end">
+            <DeslogarTodosUsuariosButton />
+          </div>
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Gerenciamento</CardTitle>
