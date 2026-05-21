@@ -164,7 +164,9 @@ export function PlacaDuplicadaModal({
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Liberação em:</span>
                 <span className="font-medium text-foreground">
-                  {formatarData(addHours(new Date(info.createdAt), 48).toISOString())}
+                  {info.placaReservadaAte
+                    ? formatarData(info.placaReservadaAte)
+                    : formatarData(addHours(new Date(info.createdAt), 48).toISOString())}
                 </span>
               </div>
             </div>

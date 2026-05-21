@@ -115,6 +115,7 @@ export function useVerificarPlacaDuplicada() {
         vendedorNome,
         createdAt: cotacao.created_at,
         status: cotacao.status || '',
+        placaReservadaAte: (cotacao as any).placa_reservada_ate ?? null,
       };
     },
   });
