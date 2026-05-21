@@ -1,162 +1,62 @@
-## Reorganização do roteiro de vistoria completa (v2) — carro + moto
+## Objetivo
 
-Aplica-se a: vistoria do técnico (carro e moto) **e** autovistoria completa sub-FIPE (cliente faz pelo celular).
-**Não toca** em `autovistoriaConfig.ts` (enxuta acima FIPE — 2 fotos + vídeo 360°).
+Mover o botão **"Deslogar todos os usuários"** (que estava órfão em `/configuracoes/perfis`, hoje 404) para **Configurações › Usuários e Acessos › aba Usuários**, sem alterar a edge function `deslogar-todos-usuarios`.
 
----
+## Passos
 
-### 1. Confirmações de escopo
+### 1. Extrair o botão para componente reutilizável
 
-- **Carro:** `chassi` e `motor` já são fotos separadas no config atual. v2 só muda `categoria` e `ordem` — sem alias, sem renomear ids.
-- **Moto:** `motor_chassi` (id único hoje) é desmembrado em `chassi`, `motor_direito`, `motor_esquerdo`. Alias de leitura `motor_chassi` fica **apenas no LEGACY** para histórico de vistorias antigas não quebrar.
-- Avarias da moto: continua `opcional: true`.
+Criar `src/components/configuracoes/DeslogarTodosUsuariosButton.tsx` com o código atual do `DeslogarTodosButton` que vive em `src/pages/configuracoes/Perfis.tsx` (linhas 41–91):
 
----
+- Mantém `AlertDialog` de confirmação
+- Mantém chamada `supabase.functions.invoke('deslogar-todos-usuarios')`
+- Mantém toast com `total_deslogados`
+- Mantém variant `destructive` + ícone `LogOut`
 
-### 2. Pré-requisito: eliminar leitura "cega" antes do flag
+Sem mudanças de lógica — só extração.
 
-Antes de materializar v2/LEGACY, **toda leitura precisa passar `criadoEm`**. Senão a vistoria antiga renderiza v2 silenciosamente.
+### 2. Colocar na aba "Usuários"
 
-#### 2.1 Refactor de assinaturas (`src/data/vistoriaConfigCompleta.ts`)
+Em `src/pages/configuracoes/UsuariosAcessos.tsx`, dentro do `<TabsContent value="usuarios">` (linha 186), adicionar uma **action bar** logo acima do `<Card>` de Gerenciamento:
 
-Adicionar `criadoEm?: string` em:
-- `getFotosByTipoVeiculo`
-- `getCategoriasByTipoVeiculo`
-- `agruparFotosPorCategoriaCompleta`
-- `getFotosFiltradas`
-- `getCategoriasFiltradas`
-- `agruparFotosFiltradas`
-- `getFotosApenasInstalacao`
-- `agruparFotosApenasInstalacao`
-- `getTotalFotosObrigatorias`
-
-Adicionar `criadoEm?: string` em `src/data/vistoriaSubFipeAdapter.ts → getFotosVistoriaSubFipe` (propaga para baixo).
-
-Helper interno: `usarRoteiroV2(criadoEm?: string): boolean` — se `criadoEm` ausente OU `criadoEm >= VISTORIA_ROTEIRO_V2_AT` → v2; senão LEGACY.
-
-#### 2.2 Refactor de 2 consumers críticos
-
-- **`src/hooks/useGerarLaudoVistoria.ts`** — trocar imports dos constants top-level por `getFotosByTipoVeiculo(tipo, vistoria.created_at)` e `getCategoriasByTipoVeiculo(tipo, vistoria.created_at)`.
-- **`src/pages/CotacaoPublicaCompleta.tsx`** — trocar import direto de `FOTOS_VISTORIA_COMPLETA_CLIENTE` por `getFotosVistoriaSubFipe(tipo, cotacao.created_at)`.
-
-#### 2.3 Passar `criadoEm` nos 3 consumers já preparados
-
-- `VistoriaPublica.tsx` (5 chamadas) — usa `vistoria.created_at`
-- `InstaladorChecklist.tsx` (3 chamadas) — usa `vistoria.created_at`
-- `ExecutarVistoriaCompleta.tsx` (5 chamadas) — usa `vistoria.created_at`
-
-#### 2.4 Remover exports dos constants top-level
-
-Após 2.1–2.3, tornar `FOTOS_VISTORIA_COMPLETA`, `FOTOS_VISTORIA_MOTO`, `CATEGORIAS_VISTORIA_COMPLETA`, `CATEGORIAS_VISTORIA_MOTO`, `TOTAL_FOTOS_OBRIGATORIAS`, `IDS_FOTOS_OBRIGATORIAS` **não-exportados** (privados do módulo). TypeScript vira rede de segurança contra reincidência.
-
-Consumers válidos que precisam de constant top-level continuam usando as funções com `criadoEm`.
-
----
-
-### 3. Materialização v2 + LEGACY
-
-Em `vistoriaConfigCompleta.ts`:
-
-```ts
-export const VISTORIA_ROTEIRO_V2_AT = '<timestamp do deploy>'; // ISO UTC
+```tsx
+<div className="flex justify-end">
+  <DeslogarTodosUsuariosButton />
+</div>
+<Card>...</Card>
 ```
 
-#### 3.1 Carro — 31 fotos reordenadas (sem novos ids)
+Posição alinhada à direita, fora do Card, para destacar o caráter destrutivo. Mantém estética da página (não polui o header global de "Novo usuário"/"Exportar", que são ações positivas).
 
-Snapshot atual → `FOTOS_VISTORIA_COMPLETA_LEGACY` (congelado).
-Novo array `FOTOS_VISTORIA_COMPLETA_V2` reordenado:
+### 3. Gating por permissão
 
-| ordem | id | categoria |
-|---|---|---|
-| 1 | vistoriador_selfie | identificacao |
-| 2 | chave | identificacao |
-| 3 | chassi | identificacao |
-| 4 | capo_aberto_placa | motor_compartimento |
-| 5 | motor | motor_compartimento |
-| 6 | bateria | motor_compartimento |
-| 7–21 | frente, farol_dir, lateral_dir, … (volta externa) | volta_externa |
-| 20–22 | porta_malas_*, estepe | porta_malas |
-| 23–29 | bancos / forrações | bancos_forracoes |
-| 30 | painel_ligado | operacionais |
-| 31 | odometro | operacionais |
+Hoje a proteção é só na edge function (Diretor). Acrescentar guard no front para esconder o botão de quem não vai conseguir executar:
 
-(ordem final detalhada via diff conservador sobre o array atual — ids preservados, apenas `categoria` e `ordem` mudam).
-
-Categorias v2: `identificacao`, `motor_compartimento`, `volta_externa`, `porta_malas`, `bancos_forracoes`, `operacionais`, `instalacao`.
-
-#### 3.2 Moto — 15 fotos (10 existentes + 5 novas, desmembrando motor_chassi)
-
-`FOTOS_VISTORIA_MOTO_LEGACY` = snapshot atual (12 fotos incluindo `motor_chassi`).
-
-`FOTOS_VISTORIA_MOTO_V2` — 15 fotos:
-
-| ordem | id | obrigatória | categoria |
-|---|---|---|---|
-| 1 | vistoriador_selfie | sim | identificacao |
-| 2 | chave | não | identificacao |
-| 3 | chassi | sim | identificacao |
-| 4 | frente | sim | volta_externa |
-| 5 | farol | sim | volta_externa |
-| 6 | lateral_direita | sim | volta_externa |
-| 7 | sola_pneu_dianteiro | não | volta_externa |
-| 8 | motor_direito | sim | volta_externa |
-| 9 | traseira | sim | volta_externa |
-| 10 | sola_pneu_traseiro | não | volta_externa |
-| 11 | lateral_esquerda | sim | volta_externa |
-| 12 | motor_esquerdo | sim | volta_externa |
-| 13 | banco | não | operacionais |
-| 14 | bateria_validade | não | operacionais |
-| 15 | painel_odometro_ligado | sim | operacionais |
-
-Avarias permanece `opcional: true` (não entra na contagem das 15).
-
-**Alias de leitura** (só LEGACY): no `agruparFotos*` em modo LEGACY, manter `motor_chassi` reconhecido para vistorias antigas — sem regravar nada.
-
-#### 3.3 Roteamento
-
-```ts
-const FOTOS_CARRO = (criadoEm) => usarRoteiroV2(criadoEm) ? V2 : LEGACY;
+```tsx
+const { hasRole } = usePermissions();
+if (!hasRole('diretor')) return null;
 ```
 
-`getFotosByTipoVeiculo(tipo, criadoEm)` → escolhe v2/LEGACY por tipo.
+Evita expor a ação a perfis sem permissão (UX) sem trocar a regra de autorização real (que continua server-side).
 
----
+### 4. Limpeza do arquivo Perfis.tsx órfão
 
-### 4. Geração do .docx
+Verificar em `src/App.tsx` se `/configuracoes/perfis` ainda tem rota:
 
-Arquivo: `/mnt/documents/roteiro-vistoria-carro-moto-v2.docx`.
+- **Se não tem rota** (provável, dado o 404): apagar `src/pages/configuracoes/Perfis.tsx` inteiro para não deixar arquivo morto. Ou, no mínimo, remover o `DeslogarTodosButton` interno e qualquer referência ao caminho na sidebar/nav.
+- **Se tem rota mas quebrada**: ainda assim remover o botão de lá (já está na nova casa) e decidir com você se a página inteira deve sair ou se outra coisa deveria viver nela.
 
-Conteúdo:
-- Título + data de vigência (VISTORIA_ROTEIRO_V2_AT)
-- Roteiro CARRO (3 blocos, 31 itens numerados)
-- Roteiro MOTO (3 blocos, 15 itens, com obrigatórias/opcionais)
-- Nota: "Autovistoria enxuta acima-FIPE permanece inalterada (2 fotos + vídeo 360°)"
+Vou reportar o que encontrar antes de apagar Perfis.tsx para você confirmar.
 
-QA visual: converte cada página a JPEG e inspeciona antes de entregar.
+### 5. QA
 
----
+- Abrir `/configuracoes/usuarios-acessos`, aba **Usuários** → botão visível para Diretor, escondido para os outros perfis testados.
+- Clicar → `AlertDialog` de confirmação → "Sim, deslogar todos" → toast com contagem.
+- Confirmar que sua sessão de Diretor segue ativa.
+- Conferir log de auditoria (mesmo log que a edge já grava — não mexemos nela).
 
-### 5. QA pós-implementação
+## Fora de escopo
 
-- `/vistoria/completa?vistoria=<antiga>` → renderiza LEGACY (motor_chassi visível)
-- `/vistoria/completa?vistoria=<nova>` → renderiza v2 (chassi + motores separados)
-- `/cotacao/<x>/autovistoria` (enxuta acima FIPE) → intocado
-- Sub-FIPE completa cliente (`CotacaoPublicaCompleta`) → v2 nova / LEGACY antiga
-- `useGerarLaudoVistoria` em vistoria antiga → laudo com layout LEGACY
-- `tsc` passa (constants top-level removidos confirmam que nada lê cego)
-
----
-
-### 6. Memória
-
-- Atualizar `mem://index.md` com 1 linha apontando o leaf.
-- Criar `mem://logic/operations/roteiro-vistoria-v2`: regra do flag por data, escopo (técnico + autovistoria completa sub-FIPE), exclusão da enxuta, alias `motor_chassi` só em LEGACY.
-
----
-
-### Fora de escopo
-
-- `autovistoriaConfig.ts` (enxuta)
-- Edges (`finalizar-autovistoria-cotacao`, `aprovar-proposta`, etc.) — leem fotos por id, não por ordem
-- `VistoriaFotoSequencial`, `Autovistoria` (sub-FIPE)
-- Migration de dados históricos (não há — flag por data resolve)
+- Lógica da edge `deslogar-todos-usuarios` (intocada).
+- Auditoria server-side (já existe).
+- Reaproveitar o botão em outras telas (se quiser depois, é trivial — o componente já está extraído).
