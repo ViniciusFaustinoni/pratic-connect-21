@@ -423,7 +423,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
             efetivada: { label: 'Efetivada', tone: 'ok' },
             cancelada: { label: 'Cancelada', tone: 'danger' },
           };
-          const etapa = etapaMap[s.status] || { label: s.status, tone: 'info' };
+          const etapa = etapaMap[s.status] || { label: humanizeStatus(s.status), tone: 'info' as const };
           return {
             id: `subst-${s.id}`,
             tipo: 'substituicao_placa',
