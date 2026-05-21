@@ -391,6 +391,9 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
+    // PR-A2: parciais[] coleta falhas dos passos 7/8/9 para sinalizar promoção parcial.
+    const parciais: Array<{ alvo: string; id: string | null; erro: string }> = [];
+
     // ----- 7) Atualizar contrato (CAS opcional) -----
     const targetContratoId = contrato_id ?? assoc.contrato_id;
     const contratoTargetStatusFlow = aguardar_instalacao ? 'assinado' : 'ativo';
@@ -403,7 +406,8 @@ Deno.serve(async (req) => {
         .eq('id', targetContratoId)
         .neq('status', 'cancelado');
       if (contratoErr) {
-        console.warn('[ativar-associado] update contrato erro (não bloqueante):', contratoErr.message);
+        console.warn('[ativar-associado] update contrato erro (promoção parcial):', contratoErr.message);
+        parciais.push({ alvo: 'contrato', id: targetContratoId, erro: contratoErr.message });
       }
     }
 
@@ -441,7 +445,8 @@ Deno.serve(async (req) => {
       }
       const { error: veicErr } = await veicQuery;
       if (veicErr) {
-        console.warn('[ativar-associado] update veiculo erro (não bloqueante):', veicErr.message);
+        console.warn('[ativar-associado] update veiculo erro (promoção parcial):', veicErr.message);
+        parciais.push({ alvo: 'veiculo', id: veiculo_id, erro: veicErr.message });
       }
     }
 
@@ -453,17 +458,20 @@ Deno.serve(async (req) => {
         .update({ status_contratacao: cotacaoTargetStatusFlow })
         .eq('id', cotacao_id);
       if (cotErr) {
-        console.warn('[ativar-associado] update cotacao erro (não bloqueante):', cotErr.message);
+        console.warn('[ativar-associado] update cotacao erro (promoção parcial):', cotErr.message);
+        parciais.push({ alvo: 'cotacao', id: cotacao_id, erro: cotErr.message });
       }
     }
+
+    const partial = parciais.length > 0;
 
     // ----- 10) Log de auditoria explícito (além do trigger) -----
     await supabase.from('ativacao_status_log').insert({
       associado_id,
       contrato_id: targetContratoId,
       from_status: assoc.status,
-      to_status: assocTargetStatus,
-      source: `edge:ativar-associado<-${source}`,
+      to_status: partial ? 'ativo_parcial' : assocTargetStatus,
+      source: `edge:ativar-associado<-${source}${partial ? ':parcial' : ''}`,
       actor_id,
       payload: {
         veiculo_id,
@@ -473,9 +481,24 @@ Deno.serve(async (req) => {
         ativar_cobertura_total,
         ativar_cobertura_roubo_furto,
         aguardar_instalacao,
+        parciais,
         ...metadata,
       },
     });
+
+    if (partial) {
+      return jsonResponse({
+        success: false,
+        error: 'promocao_parcial',
+        mensagem: `Associado promovido, mas ${parciais.length} alvo(s) falharam (${parciais.map((p) => p.alvo).join(', ')}) — clique para retentar.`,
+        associado_id,
+        contrato_id: targetContratoId,
+        status: assocTargetStatus,
+        aguardando_instalacao: aguardar_instalacao,
+        from_status: assoc.status,
+        parciais,
+      }, 207);
+    }
 
     return jsonResponse({
       success: true,
