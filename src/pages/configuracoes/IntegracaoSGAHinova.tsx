@@ -432,6 +432,10 @@ export default function IntegracaoSGAHinova() {
         </TabsContent>
 
         {/* Teste de boletos por veículo */}
+        <TabsContent value="importar">
+          <SincronizarAssociadoSGA />
+        </TabsContent>
+
         <TabsContent value="teste-boletos">
           <TesteBoletoVeiculoHinova />
         </TabsContent>
