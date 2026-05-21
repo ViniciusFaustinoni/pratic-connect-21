@@ -539,22 +539,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
 
 
-  // Detectar tipo de veículo automaticamente (moto vs carro)
-  const marcaParaDeteccao = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
-  const modeloParaDeteccao = veiculoEncontrado?.vehicleData?.modelo || '';
-  const tipoVeiculoApiPlaca = veiculoEncontrado?.vehicleData?.tipo_de_veiculo || null;
-  const { tipoVeiculo: tipoFromHook } = useDetectarTipoVeiculo(marcaParaDeteccao, modeloParaDeteccao, tipoVeiculoApiPlaca);
-  
-  const tipoVeiculoDetectado = useMemo(() => {
-    // Se veículo foi encontrado por placa/lead/cotação, usar apenas detecção do hook (ignora seleção manual)
-    if (veiculoEncontrado) return tipoFromHook;
-    // Se o vendedor selecionou marca manualmente como moto, usar direto
-    if (marcaSelecionada && tipoFipeSelecionado === 'motos') return 'moto' as const;
-    return tipoFromHook;
-  }, [veiculoEncontrado, marcaSelecionada, tipoFipeSelecionado, tipoFromHook]);
-
-  // Resolver marca/modelo para elegibilidade
-  const marcaResolvida = useMemo(() => {
+  // Resolver marca/modelo para elegibilidade (compartilhado com a detecção de tipo)
+  const marcaResolvidaRaw = useMemo(() => {
     return veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
   }, [veiculoEncontrado, marcaSelecionada, marcas]);
 
@@ -563,6 +549,32 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const mod = modelos.find(m => m.codigo.toString() === modeloSelecionado);
     return mod?.nome || '';
   }, [veiculoEncontrado, modeloSelecionado, modelos]);
+
+  // Normalizar marca FIPE: descarta prefixos tipo "VW - VolksWagen" → "VolksWagen"
+  const marcaResolvida = useMemo(() => {
+    const raw = (marcaResolvidaRaw || '').trim();
+    if (!raw) return '';
+    // "VW - VolksWagen" → "VolksWagen"; "Chevrolet" → "Chevrolet"
+    const semPrefixo = raw.replace(/^[A-Z]{1,4}\s*-\s*/i, '').trim();
+    return semPrefixo || raw;
+  }, [marcaResolvidaRaw]);
+
+  // Detectar tipo de veículo automaticamente (moto vs carro)
+  // Manual flow: também usa modeloResolvido (não só veiculoEncontrado), senão a detecção fica sem modelo
+  const marcaParaDeteccao = marcaResolvida;
+  const modeloParaDeteccao = veiculoEncontrado?.vehicleData?.modelo || modeloResolvido || '';
+  const tipoVeiculoApiPlaca = veiculoEncontrado?.vehicleData?.tipo_de_veiculo || null;
+  const { tipoVeiculo: tipoFromHook } = useDetectarTipoVeiculo(marcaParaDeteccao, modeloParaDeteccao, tipoVeiculoApiPlaca);
+  
+  const tipoVeiculoDetectado = useMemo(() => {
+    // Se veículo foi encontrado por placa/lead/cotação, usar apenas detecção do hook (ignora seleção manual)
+    if (veiculoEncontrado) return tipoFromHook;
+    // Se o vendedor selecionou marca manualmente como moto, usar direto
+    if (marcaSelecionada && tipoFipeSelecionado === 'motos') return 'moto' as const;
+    // Manual carros: tipo Fipe selecionado é fonte direta — evita falso "moto" do hook
+    if (marcaSelecionada && tipoFipeSelecionado === 'carros') return 'carro' as const;
+    return tipoFromHook;
+  }, [veiculoEncontrado, marcaSelecionada, tipoFipeSelecionado, tipoFromHook]);
 
   // Hook de planos calculados dinamicamente do banco — movido para depois de
   // fipeMenorInfo para podermos repassar a faixa reduzida quando a Regra do 1%
@@ -924,6 +936,34 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           if (resultado && resultado.valorNumerico) {
             form.setValue('valor_fipe', resultado.valorNumerico);
             toast.success(`Valor FIPE: ${resultado.valor}`);
+
+            // Auto-default de combustível no fluxo manual:
+            // 1) descrição FIPE (resultado.combustivel ou resultado.valor.descricao) costuma trazer Gasolina/Álcool/Diesel
+            // 2) descrição do modelo costuma trazer FLEX / TOTAL FLEX
+            // Sem isso o cálculo cai no default 'gasolina' do usePlanosCotacao e regras de combustível
+            // que exigem flex podem derrubar todos os planos.
+            if (!combustivelSelecionado) {
+              const modeloNome = (modelos.find(m => m.codigo.toString() === modeloSelecionado)?.nome || '').toUpperCase();
+              const anoNome = (anos.find(a => a.codigo === anoSelecionado)?.nome || '').toUpperCase();
+              const haystack = `${modeloNome} ${anoNome}`;
+              const isFlex = /\bFLEX\b|TOTAL FLEX|BICOMBUST/.test(haystack)
+                || (/GASOLINA/.test(haystack) && /(ALCOOL|ÁLCOOL|ETANOL)/.test(haystack));
+              if (isFlex) {
+                setCombustivelSelecionado('flex');
+              } else if (/DIESEL/.test(haystack)) {
+                setCombustivelSelecionado('diesel');
+              } else if (/EL[ÉE]TRICO/.test(haystack)) {
+                setCombustivelSelecionado('eletrico');
+              } else if (/GASOLINA/.test(haystack)) {
+                setCombustivelSelecionado('gasolina');
+              } else if (tipoFipeSelecionado === 'motos') {
+                // Maioria das motos modernas é flex; deixa como gasolina apenas se não conseguir inferir
+                setCombustivelSelecionado('gasolina');
+              } else {
+                // Carro sem pista clara → assumir flex (cobre maioria do parque nacional)
+                setCombustivelSelecionado('flex');
+              }
+            }
           }
         } catch (error) {
           console.error('Erro ao buscar FIPE:', error);
@@ -933,6 +973,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       };
       buscarFipeAutomatico();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marcaSelecionada, modeloSelecionado, anoSelecionado, getPreco, form, tipoFipeSelecionado]);
 
   // Handler para mudança de marca
