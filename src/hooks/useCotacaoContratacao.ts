@@ -425,39 +425,34 @@ export function useCotacaoContratacao(token: string | undefined) {
   // Determinar etapa atual baseado no status
   // NOVO FLUXO: 0=Plano, 1=Documentos+Dados, 2=Contrato (Autentique), 3=Vistoria, 4=Pagamento
   const determinarEtapa = useCallback((status: string | null) => {
+    // Ordem canônica: 0 Plano · 1 Docs · 2 Contrato · 3 Pagamento · 4 Vistoria · 5 Conclusão/Instalação
     switch (status) {
       case 'aguardando':
       case 'rascunho':
       case 'enviada':
-        return 0; // Escolha de plano
+        return 0;
       case 'plano_escolhido':
-        return 1; // Documentos e dados (unificado)
+        return 1;
       case 'dados_preenchidos':
       case 'documentos_ok':
-        return 2; // Assinatura do contrato (Autentique) - NOVA ETAPA
+        return 2; // Assinatura do contrato
       case 'contrato_assinado':
-        return 3; // Vistoria (movido)
+        return 3; // Pagamento
+      case 'pagamento_ok':
+        return 4; // Vistoria (após pagamento)
       case 'vistoria_agendada':
       case 'vistoria_ok':
-      case 'autovistoria_ok': // cliente terminou autovistoria — não regredir para etapa 0
-        return 4; // Pagamento (vistoria já agendada na base)
-      // Estados pós-autovistoria: cliente já enviou autovistoria e está aguardando análise.
-      // Mantém o avanço da régua até a etapa Vistoria (read-only com badge).
-      // Quando rastreador é obrigatório e Cadastro aprovou, a página força a etapa
-      // Instalação (índice 5) para o cliente agendar — ver CotacaoContratacao.tsx.
+      case 'autovistoria_ok':
       case 'aguardando_aprovacao_cadastro':
       case 'aguardando_aprovacao_monitoramento':
       case 'cadastro_aprovado':
       case 'monitoramento_aprovado':
       case 'vistoria_concluida':
-        return 4; // Pagamento/análise (a UI decide se mostra "Aguardando análise" ou Instalação)
-      case 'pagamento_ok':
+        return 5; // Conclusão/Instalação
       case 'contrato_gerado':
       case 'ativo':
-        return 5; // Conclusão
+        return 5;
       default:
-        // Status desconhecido: NÃO voltar para 0. Retorna -1 para que a UI use
-        // fallback baseado em sinais (plano_escolhido_id, tipo_vistoria, etc).
         return -1;
     }
   }, []);
