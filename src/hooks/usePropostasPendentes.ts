@@ -1649,9 +1649,11 @@ export function usePropostaStats() {
         const setCotacaoAutovistoria = new Set((cotacoesAutovistoriaRes.data || []).map((r: any) => r.id));
 
         aguardando = contratosAssinados.filter((c: any) => {
+          const isTroca = c.tipo_entrada === 'troca_titularidade' || !!c.origem_troca_titularidade_id;
           if (setInstalacaoConcluida.has(c.id)) return false;
           if (c.cotacao_id && setBaseRealizada.has(c.cotacao_id)) return false;
-          if (c.veiculo_id && setVeiculoAtivo.has(c.veiculo_id)) return false;
+          // Em troca o veículo segue 'ativo' (vinculado ao antigo titular) — não descartar.
+          if (!isTroca && c.veiculo_id && setVeiculoAtivo.has(c.veiculo_id)) return false;
           if (c.cadastro_aprovado === true && c.cotacao_id && setCotacaoAutovistoria.has(c.cotacao_id)) return false;
           return true;
         }).length;
