@@ -77,6 +77,13 @@ function TrocaTitularidadeTab({
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
 
+  // Resolver nomes de consultores (criado_por é profile.id em solicitacoes_troca_titularidade)
+  const profileIds = (data || []).map((s) => s.criado_por).filter(Boolean) as string[];
+  const { data: consultores } = useConsultoresProfiles(profileIds, []);
+  const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('em_andamento');
+  const [selecionada, setSelecionada] = useState<string | null>(null);
+  const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
+
   // REGRA CANÔNICA: aprovação documental da Troca migrou para a fila
   // Cadastro › Propostas Pendentes (com badge roxo). A aba Processos vira
   // read-only para o Cadastro — sem botões Aprovar/Reprovar, apenas
