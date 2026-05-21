@@ -44,6 +44,7 @@ import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
+import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
 
 // Hook para buscar detalhes completos do serviço
 function useServicoDetalheAprovacao(servicoId: string | undefined) {
@@ -72,40 +73,43 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         return { servico: null } as any;
       }
 
-      // Buscar fotos da instalação
-      let fotos: any[] = [];
-      if (servico.instalacao_origem_id) {
-        const { data: fotosData } = await supabase
-          .from('instalacao_fotos')
-          .select('*')
-          .eq('instalacao_id', servico.instalacao_origem_id)
-          .order('created_at');
-        fotos = fotosData || [];
-      }
+      // ============= FOTOS + VÍDEO 360° (resolver canônico unificado)
+      // Substitui o caminho legado origem-id (instalacao_origem_id /
+      // vistoria_origem_id), que quebra quando a vistoria não está
+      // amarrada à instalação (caso TIB8F32: autovistoria com 34 fotos
+      // em vistoria_fotos mas vistoria.instalacao_id = NULL).
+      // Une vistoria_fotos + cotacoes_vistoria_fotos + instalacao_fotos
+      // por veiculo_id / cotacao_id / instalacao_id, com dedupe por URL.
+      const resolverInput = {
+        veiculoId: servico.veiculo_id ?? null,
+        contratoId: servico.contrato_id ?? null,
+        cotacaoId: servico.cotacao_id ?? null,
+        instalacaoId: servico.instalacao_origem_id ?? null,
+      };
+      const resolverResult = await resolverFotosVeiculo(resolverInput);
+      const fotos = resolverResult.fotos;
+      let videoInstalador = resolverResult.videoInstalador;
+      let videoAssociado = resolverResult.videoAssociado;
+      let vistoriaModalidade = resolverResult.vistoriaModalidade;
 
-      // Buscar fotos de vistoria (via vistoria_origem_id ou instalacao)
-      let vistoriaFotos: any[] = [];
+      console.log('[AprovacaoInstalacaoDetalhe] fotos resolvidas (canônico)', {
+        servico_id: servico.id,
+        input: resolverInput,
+        counts: resolverResult.counts,
+        video_instalador: !!videoInstalador,
+        video_associado: !!videoAssociado,
+      });
+
+      // Modalidade priorizada pela vistoria diretamente vinculada ao serviço
+      // (mantém compatibilidade com lógica de exibição existente).
       if (servico.vistoria_origem_id) {
-        const { data: vfData } = await supabase
-          .from('vistoria_fotos')
-          .select('*')
-          .eq('vistoria_id', servico.vistoria_origem_id)
-          .order('created_at');
-        vistoriaFotos = vfData || [];
-      } else if (servico.instalacao_origem_id) {
-        // Buscar vistoria vinculada à instalação
-        const { data: vistoria } = await supabase
+        const { data: vistoriaInst } = await supabase
           .from('vistorias')
-          .select('id')
-          .eq('instalacao_id', servico.instalacao_origem_id)
+          .select('modalidade')
+          .eq('id', servico.vistoria_origem_id)
           .maybeSingle();
-        if (vistoria?.id) {
-          const { data: vfData } = await supabase
-            .from('vistoria_fotos')
-            .select('*')
-            .eq('vistoria_id', vistoria.id)
-            .order('created_at');
-          vistoriaFotos = vfData || [];
+        if (vistoriaInst?.modalidade) {
+          vistoriaModalidade = vistoriaInst.modalidade;
         }
       }
 
@@ -162,74 +166,6 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         });
       }
 
-      // Vídeo 360°: distinguir Instalador (presencial) x Associado (autovistoria)
-      let videoInstalador: string | null = null;
-      let videoAssociado: string | null = null;
-
-      // Vistoria vinculada ao serviço — categorizar pela modalidade
-      let vistoriaModalidade: string | null = null;
-      if (servico.vistoria_origem_id) {
-        const { data: vistoriaInst } = await supabase
-          .from('vistorias')
-          .select('video_360_url, modalidade')
-          .eq('id', servico.vistoria_origem_id)
-          .maybeSingle();
-        const url = vistoriaInst?.video_360_url || null;
-        vistoriaModalidade = vistoriaInst?.modalidade || null;
-        if (vistoriaModalidade === 'autovistoria') {
-          videoAssociado = url;
-        } else {
-          videoInstalador = url;
-        }
-      } else if (servico.instalacao_origem_id) {
-        const { data: vistoriaInst } = await supabase
-          .from('vistorias')
-          .select('video_360_url')
-          .eq('instalacao_id', servico.instalacao_origem_id)
-          .maybeSingle();
-        videoInstalador = vistoriaInst?.video_360_url || null;
-      }
-
-      // Buscar vídeo 360° do associado SOMENTE se ainda não carregado
-      // (autovistoria não presencial do mesmo contrato — fluxo legacy)
-      if (!videoAssociado && servico.contrato_id) {
-        let autoVistoriaQuery = supabase
-          .from('vistorias')
-          .select('video_360_url')
-          .eq('contrato_id', servico.contrato_id)
-          .neq('modalidade', 'presencial');
-        
-        if (servico.vistoria_origem_id) {
-          autoVistoriaQuery = autoVistoriaQuery.neq('id', servico.vistoria_origem_id);
-        }
-
-        const { data: autoVistoria } = await autoVistoriaQuery
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        videoAssociado = autoVistoria?.video_360_url || null;
-      }
-
-      // Fallback: buscar vídeo da autovistoria em cotacoes_vistoria_fotos
-      if (!videoAssociado && servico.contrato_id) {
-        const { data: contrato } = await supabase
-          .from('contratos')
-          .select('cotacao_id')
-          .eq('id', servico.contrato_id)
-          .maybeSingle();
-        
-        if (contrato?.cotacao_id) {
-          const { data: fotoVideo } = await supabase
-            .from('cotacoes_vistoria_fotos')
-            .select('arquivo_url')
-            .eq('cotacao_id', contrato.cotacao_id)
-            .eq('tipo', 'video_360')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          videoAssociado = fotoVideo?.arquivo_url || null;
-        }
-      }
 
       // Checklist
       const checklist: any[] = [];
@@ -368,7 +304,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
 
       return {
         servico,
-        fotos: [...fotos, ...vistoriaFotos],
+        fotos,
         rastreador,
         checklist,
         documentos,
