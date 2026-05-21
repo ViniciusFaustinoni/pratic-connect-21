@@ -54,27 +54,58 @@ async function placaLiberadaPorTrocaTitularidade(
   try {
     const { data: v } = await supabase
       .from('veiculos')
-      .select('em_troca_titularidade, troca_titularidade_id, associado_id')
+      .select('id, em_troca_titularidade, troca_titularidade_id, associado_id')
       .eq('placa', placa)
       .maybeSingle();
-    if (!v?.em_troca_titularidade || !v?.troca_titularidade_id) return false;
+    // troca_titularidade_id é a verdade canônica; em_troca_titularidade é sinal/cache
+    // (pode estar desatualizado por drift de trigger/edge). Não trava aqui.
+    if (!v?.troca_titularidade_id) return false;
+
+    const STATUS_TERMINAL = new Set(['efetivada', 'expirada', 'cancelada', 'recusada']);
 
     // 1) Match por solicitacao_id explícito em dados_extras (preferido)
     const solIdCot = cotacaoDadosExtras?.solicitacao_troca_id || cotacaoDadosExtras?.troca_titularidade_id;
-    if (solIdCot && solIdCot === v.troca_titularidade_id) return true;
+    let solRow: { id: string; associado_antigo_id: string | null; status: string | null; termo_cancelamento_assinado_em: string | null } | null = null;
 
-    // 2) Match por associado_antigo_id da cotação == associado_id atual do veículo
-    const antigoId = cotacaoDadosExtras?.associado_antigo_id;
-    if (antigoId && antigoId === v.associado_id) {
+    if (solIdCot && solIdCot === v.troca_titularidade_id) {
       const { data: sol } = await supabase
         .from('solicitacoes_troca_titularidade')
         .select('id, associado_antigo_id, status, termo_cancelamento_assinado_em')
         .eq('id', v.troca_titularidade_id)
         .maybeSingle();
-      if (sol?.associado_antigo_id === antigoId && sol?.termo_cancelamento_assinado_em) {
-        return true;
+      solRow = sol ?? null;
+    }
+
+    // 2) Fallback: match por associado_antigo_id da cotação == associado_id atual do veículo
+    if (!solRow) {
+      const antigoId = cotacaoDadosExtras?.associado_antigo_id;
+      if (antigoId && antigoId === v.associado_id) {
+        const { data: sol } = await supabase
+          .from('solicitacoes_troca_titularidade')
+          .select('id, associado_antigo_id, status, termo_cancelamento_assinado_em')
+          .eq('id', v.troca_titularidade_id)
+          .maybeSingle();
+        if (sol?.associado_antigo_id === antigoId) solRow = sol;
       }
     }
+
+    if (!solRow) return false;
+    if (!solRow.termo_cancelamento_assinado_em) return false;
+    if (solRow.status && STATUS_TERMINAL.has(solRow.status)) return false;
+
+    // Backfill defensivo: corrige drift da flag em_troca_titularidade silenciosamente.
+    if (!v.em_troca_titularidade) {
+      try {
+        await supabase
+          .from('veiculos')
+          .update({ em_troca_titularidade: true, updated_at: new Date().toISOString() })
+          .eq('id', v.id);
+        console.log(`[bypass-troca][backfill] em_troca_titularidade=true setado em veiculo=${v.id} placa=${placa} sol=${v.troca_titularidade_id}`);
+      } catch (bfErr) {
+        console.warn('[bypass-troca][backfill] falhou (não bloqueia):', bfErr);
+      }
+    }
+    return true;
   } catch (e) {
     console.warn('[placaLiberadaPorTrocaTitularidade] erro:', e);
   }
