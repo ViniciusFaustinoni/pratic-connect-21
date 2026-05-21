@@ -131,6 +131,29 @@ Deno.serve(async (req) => {
           })
           .eq('id', s.id);
 
+        // 1.1) Auditoria persistente (logs_auditoria)
+        try {
+          await admin.from('logs_auditoria').insert({
+            acao: 'cancelar',
+            modulo: 'cotacoes',
+            tabela: 'solicitacoes_troca_titularidade',
+            registro_id: s.id,
+            descricao: 'Cron expirou troca de titularidade por prazo (meia-noite BRT + 5min margem)',
+            dados_anteriores: { status: s.status },
+            dados_novos: {
+              status: 'expirada',
+              corte_brt: corte.toISOString(),
+              agora: agora.toISOString(),
+              delta_ms: deltaMs,
+              grace_period_ms: GRACE_PERIOD_MS,
+              cotacao_id: s.cotacao_id,
+              veiculo_id: s.veiculo_id,
+            },
+          });
+        } catch (auditErr) {
+          console.warn('[cron-expirar-trocas] audit insert falhou (não bloqueante):', auditErr);
+        }
+
         // 2) Cancelar veículo do antigo (termo de cancelamento já honrado)
         if (s.veiculo_id) {
           await admin
