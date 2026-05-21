@@ -22,7 +22,11 @@ import {
   MapPinned, MoreHorizontal, Hash,
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
+import { RealocarServicoSimplesDialog } from './RealocarServicoSimplesDialog';
+import { CancelarServicoDialog } from './CancelarServicoDialog';
+import { DevolverAoCadastroDialog } from './DevolverAoCadastroDialog';
 import { LiberarServicoButton } from './LiberarServicoButton';
+import { usePermissions } from '@/hooks/usePermissions';
 
 import { ConcluirPrestadorExternoButton } from './ConcluirPrestadorExternoButton';
 import { cn } from '@/lib/utils';
@@ -57,12 +61,18 @@ interface ServicoDetailModalProps {
 export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetailModalProps) {
   const [fichaOpen, setFichaOpen] = useState(false);
   const [realocarOpen, setRealocarOpen] = useState(false);
+  const [realocarSimplesOpen, setRealocarSimplesOpen] = useState(false);
+  const [cancelarOpen, setCancelarOpen] = useState(false);
+  const [devolverOpen, setDevolverOpen] = useState(false);
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
+  const podeAcoesMonitor = !!(isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento);
 
   if (!servico) return null;
 
   const isRetirada = servico.tipo === 'vistoria_retirada';
   // 'vistoria_entrada' é a primeira visita (equivale a instalação) — ver mem://logic/operations/vistoria-entrada-equivale-instalacao
   const isInstalacao = servico.tipo === 'instalacao' || servico.tipo === 'vistoria_entrada' || servico.tipo === 'revistoria';
+  const instalacaoOrigemId = (servico as any).instalacao_origem_id as string | null | undefined;
   const motivoRetirada = (servico as any).motivo_retirada;
   const multaAplicada = (servico as any).multa_aplicada;
   const integridade = (servico as any).integridade_aparelho;
@@ -183,20 +193,56 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 </Button>
               )}
 
-              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada', 'em_analise'].includes(servico.status) && (
-                <Button
-                  variant={servico.status === 'cancelada' ? 'default' : 'outline'}
-                  size="sm"
-                  className="gap-1.5 h-9"
-                  onClick={() => setRealocarOpen(true)}
-                  title={servico.status === 'cancelada'
-                    ? 'Reabrir este serviço cancelado e reagendar'
-                    : 'Realocar este serviço para outra data, técnico, rota ou base'}
-                >
-                  <MapPinned className="h-4 w-4" />
-                  {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar'}
-                </Button>
-              )}
+              {(() => {
+                const statusRealocavel = ['agendada', 'pendente', 'nao_compareceu', 'reagendada', 'cancelada', 'em_analise', 'imprevisto_pendente'].includes(servico.status);
+                const statusCancelavel = ['agendada', 'pendente', 'reagendada', 'nao_compareceu', 'em_analise', 'imprevisto_pendente'].includes(servico.status);
+                const statusDevolvivel = !['concluida', 'aprovada', 'reprovada', 'aprovada_ressalvas', 'cancelada'].includes(servico.status);
+                const podeRealocarInstalacao = isInstalacao && !!instalacaoOrigemId;
+                return (
+                  <>
+                    {statusRealocavel && (podeRealocarInstalacao || !isInstalacao) && (
+                      <Button
+                        variant={servico.status === 'cancelada' ? 'default' : 'outline'}
+                        size="sm"
+                        className="gap-1.5 h-9"
+                        onClick={() => podeRealocarInstalacao ? setRealocarOpen(true) : setRealocarSimplesOpen(true)}
+                        title={servico.status === 'cancelada'
+                          ? 'Reabrir este serviço cancelado e reagendar'
+                          : 'Realocar este serviço para outra data, técnico, rota ou base'}
+                      >
+                        <MapPinned className="h-4 w-4" />
+                        {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar'}
+                      </Button>
+                    )}
+
+                    {podeAcoesMonitor && statusCancelavel && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9 text-destructive hover:text-destructive"
+                        onClick={() => setCancelarOpen(true)}
+                        title="Cancelar este serviço"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        Cancelar
+                      </Button>
+                    )}
+
+                    {podeAcoesMonitor && contratoId && statusDevolvivel && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9"
+                        onClick={() => setDevolverOpen(true)}
+                        title="Reverter aprovação do Cadastro e reabrir a cotação para revisão"
+                      >
+                        <History className="h-4 w-4" />
+                        Devolver ao Cadastro
+                      </Button>
+                    )}
+                  </>
+                );
+              })()}
 
             </div>
           </DialogHeader>
@@ -376,13 +422,39 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
         onOpenChange={setFichaOpen}
       />
 
-      {isInstalacao && (
+      {isInstalacao && instalacaoOrigemId && (
         <RealocarInstalacaoDialog
           open={realocarOpen}
           onOpenChange={setRealocarOpen}
           instalacaoId={servico.id}
           veiculoLabel={servico.veiculo?.placa || undefined}
           associadoNome={servico.associado?.nome || undefined}
+        />
+      )}
+
+      {!isInstalacao && (
+        <RealocarServicoSimplesDialog
+          open={realocarSimplesOpen}
+          onOpenChange={setRealocarSimplesOpen}
+          servicoId={servico.id}
+          servicoTipo={servico.tipo}
+          servicoLabel={`${TIPO_SERVICO_LABELS[servico.tipo] || servico.tipo}${servico.veiculo?.placa ? ` · ${servico.veiculo.placa}` : ''}`}
+        />
+      )}
+
+      <CancelarServicoDialog
+        open={cancelarOpen}
+        onOpenChange={setCancelarOpen}
+        servicoId={servico.id}
+        servicoLabel={servico.veiculo?.placa || undefined}
+      />
+
+      {contratoId && (
+        <DevolverAoCadastroDialog
+          open={devolverOpen}
+          onOpenChange={setDevolverOpen}
+          contratoId={contratoId}
+          servicoLabel={servico.veiculo?.placa || undefined}
         />
       )}
     </>
