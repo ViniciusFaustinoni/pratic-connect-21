@@ -31,6 +31,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
+import { ProcessoCard, ProcessoCardList, type ProcessoCardData, type ProcessoCardBadge } from '@/components/processos/ProcessoCard';
+import { useConsultoresProfiles } from '@/hooks/useConsultoresProfiles';
 
 // ============================================
 // TROCA DE TITULARIDADE TAB (nova fonte)
