@@ -34,6 +34,11 @@ function brtEndOfDay(isoSigned: string): Date {
   return new Date(Date.UTC(y, m, day, 23, 59, 59, 999) + 3 * 60 * 60 * 1000);
 }
 
+// Margem de segurança contra clock skew do runtime Deno vs Postgres.
+// Supabase Edge Runtime é NTP-sync (skew em ms), mas mantemos defesa em profundidade
+// de 5 minutos. Acordado com o usuário em 2026-05-21.
+const GRACE_PERIOD_MS = 5 * 60 * 1000;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -41,11 +46,9 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  const stats = { candidatas: 0, expiradas: 0, ainda_no_prazo: 0, erros: 0, ids: [] as string[] };
+  const stats = { candidatas: 0, expiradas: 0, ainda_no_prazo: 0, dentro_margem: 0, erros: 0, ids: [] as string[] };
 
   try {
-    // Selecionar trocas em andamento com termo de cancelamento já assinado
-    // (qualquer estado anterior à efetivação). Excluir já expirada/efetivada/recusada.
     const { data: candidatas, error } = await admin
       .from('solicitacoes_troca_titularidade')
       .select(`
@@ -69,8 +72,29 @@ Deno.serve(async (req) => {
       stats.candidatas++;
       try {
         const corte = brtEndOfDay(s.termo_cancelamento_assinado_em as string);
+        const deltaMs = agora.getTime() - corte.getTime();
+        const corteComMargem = corte.getTime() + GRACE_PERIOD_MS;
+
+        // Log estruturado por candidato (auditável via Edge Function logs)
+        console.log(JSON.stringify({
+          tag: '[cron-expirar-trocas:eval]',
+          solicitacao_id: s.id,
+          termo_assinado_em: s.termo_cancelamento_assinado_em,
+          corte_brt_iso: corte.toISOString(),
+          agora_iso: agora.toISOString(),
+          delta_ms: deltaMs,
+          grace_period_ms: GRACE_PERIOD_MS,
+          dentro_prazo: agora.getTime() <= corte.getTime(),
+          dentro_margem: agora.getTime() > corte.getTime() && agora.getTime() <= corteComMargem,
+        }));
+
         if (agora.getTime() <= corte.getTime()) {
           stats.ainda_no_prazo++;
+          continue;
+        }
+        if (agora.getTime() <= corteComMargem) {
+          // Dentro da janela de margem — não cancela ainda (defesa contra clock skew)
+          stats.dentro_margem++;
           continue;
         }
 
@@ -106,6 +130,29 @@ Deno.serve(async (req) => {
             motivo_reprovacao: motivo,
           })
           .eq('id', s.id);
+
+        // 1.1) Auditoria persistente (logs_auditoria)
+        try {
+          await admin.from('logs_auditoria').insert({
+            acao: 'cancelar',
+            modulo: 'cotacoes',
+            tabela: 'solicitacoes_troca_titularidade',
+            registro_id: s.id,
+            descricao: 'Cron expirou troca de titularidade por prazo (meia-noite BRT + 5min margem)',
+            dados_anteriores: { status: s.status },
+            dados_novos: {
+              status: 'expirada',
+              corte_brt: corte.toISOString(),
+              agora: agora.toISOString(),
+              delta_ms: deltaMs,
+              grace_period_ms: GRACE_PERIOD_MS,
+              cotacao_id: s.cotacao_id,
+              veiculo_id: s.veiculo_id,
+            },
+          });
+        } catch (auditErr) {
+          console.warn('[cron-expirar-trocas] audit insert falhou (não bloqueante):', auditErr);
+        }
 
         // 2) Cancelar veículo do antigo (termo de cancelamento já honrado)
         if (s.veiculo_id) {
