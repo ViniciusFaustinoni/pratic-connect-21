@@ -313,17 +313,21 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
 
               {/* ENDEREÇO */}
               <TabsContent value="endereco" className="p-6 space-y-4">
-                <Section title="Local do serviço" icon={MapPin}>
-                  <Field label="CEP" value={servico.cep || '—'} mono />
-                  <Field label="Logradouro" value={servico.logradouro || '—'} />
-                  <Field label="Número" value={servico.numero || '—'} />
-                  <Field label="Complemento" value={servico.complemento || '—'} />
-                  <Field label="Bairro" value={servico.bairro || '—'} />
-                  <Field label="Cidade / UF" value={`${servico.cidade || '—'} / ${servico.uf || '—'}`} />
-                  {servico.local_vistoria && (
-                    <Field label="Local da vistoria" value={servico.local_vistoria} />
-                  )}
-                </Section>
+                <EnderecoServicoEditavel
+                  servicoId={servico.id}
+                  canEdit={podeAcoesMonitor}
+                  mapsUrl={mapsUrl}
+                  localVistoria={servico.local_vistoria}
+                  values={{
+                    cep: servico.cep,
+                    logradouro: servico.logradouro,
+                    numero: servico.numero,
+                    complemento: servico.complemento,
+                    bairro: servico.bairro,
+                    cidade: servico.cidade,
+                    uf: servico.uf,
+                  }}
+                />
               </TabsContent>
 
               {/* RETIRADA */}
