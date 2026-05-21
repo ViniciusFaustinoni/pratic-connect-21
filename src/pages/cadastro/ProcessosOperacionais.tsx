@@ -258,6 +258,10 @@ function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     return items;
   }, [substituicoes, subTab, busca, scopeAuthUserId]);
 
+  // Resolver consultor (substituicoes_veiculo.criado_por é auth.users.id)
+  const userIds = filtered.map((s: any) => s.criado_por).filter(Boolean) as string[];
+  const { data: consultores } = useConsultoresProfiles([], userIds);
+
   const pendentesCount = useMemo(
     () => substituicoes?.filter((s) => s.status === 'aguardando_aprovacao').length ?? 0,
     [substituicoes]
