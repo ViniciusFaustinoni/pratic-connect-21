@@ -76,11 +76,13 @@ export default function TemplateForm() {
       conteudo: '',
       requer_assinatura: false,
       is_default_autentique: false,
+      is_default_substituicao: false,
       is_default_evento: false,
       is_default_saida: false,
       is_default_rastreador: false,
       anexar_proposta: false,
       ordem_anexo: 0,
+
     },
   });
 
