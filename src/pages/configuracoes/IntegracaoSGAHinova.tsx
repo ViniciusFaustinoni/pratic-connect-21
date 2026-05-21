@@ -204,6 +204,20 @@ export default function IntegracaoSGAHinova() {
         </p>
       )}
 
+      {/* Filtro vindo do Monitoramento (?placa=) */}
+      {placaFilter && (
+        <div className="flex items-center justify-between rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="border-primary/40 text-primary">Filtrando por placa</Badge>
+            <span className="font-mono font-semibold">{placaFilter}</span>
+            <span className="text-muted-foreground">— vindo da fila de Monitoramento</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={clearPlacaFilter}>Limpar</Button>
+        </div>
+      )}
+
+
+
       {/* Tabs */}
       <Tabs defaultValue="queue" className="space-y-4">
         <TabsList>

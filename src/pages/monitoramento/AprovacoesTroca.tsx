@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ShieldCheck, Car, ArrowRight, FileSignature } from 'lucide-react';
 import { useSolicitacoesTroca, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { ModalDetalhesTroca } from '@/components/troca-titularidade/ModalDetalhesTroca';
+import { SgaSyncCrossBadge } from '@/components/troca-titularidade/SgaSyncCrossBadge';
 
 export default function AprovacoesTroca() {
   const [aba, setAba] = useState<'pendentes'|'em_vistoria'|'aprovadas'|'recusadas'>('pendentes');
@@ -60,6 +61,7 @@ export default function AprovacoesTroca() {
                               <FileSignature className="h-3 w-3 mr-1" /> Termo assinado
                             </Badge>
                           )}
+                          <SgaSyncCrossBadge placa={s.veiculo?.placa} sgaStatus={(s as any).sga_status} />
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <span className="font-medium">{s.associado_antigo?.nome}</span>
