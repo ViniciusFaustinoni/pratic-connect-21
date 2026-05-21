@@ -158,31 +158,42 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     let associadoId: string;
+    const dataCadastroSGA = parseDataBR(meta?.data_cadastro_sga);
     if (existente?.id) {
       associadoId = existente.id;
-      await admin
-        .from('associados')
-        .update({
-          codigo_hinova: codigoAssociado,
-          sincronizado_hinova: true,
-          sincronizado_hinova_em: new Date().toISOString(),
-        })
-        .eq('id', associadoId);
+      const updateData: any = {
+        codigo_hinova: codigoAssociado,
+        sincronizado_hinova: true,
+        sincronizado_hinova_em: new Date().toISOString(),
+      };
+      if (meta?.situacao_mapeada) {
+        updateData.status = meta.situacao_mapeada.status;
+        if (meta.situacao_mapeada.tipo_saida) {
+          updateData.tipo_saida = meta.situacao_mapeada.tipo_saida;
+        }
+      }
+      if (dataCadastroSGA) updateData.data_cadastro_sga = dataCadastroSGA;
+      await admin.from('associados').update(updateData).eq('id', associadoId);
     } else {
       const nome = (meta?.nome || `Associado SGA ${codigoAssociado}`).toString().trim();
       const email = (meta?.email || `sga-${cpf}@import.local`).toString().trim();
       const telefone = String(meta?.telefone || '').replace(/\D/g, '') || '00000000000';
+      const statusInicial = meta?.situacao_mapeada?.status || 'ativo';
       const insertData: any = {
         nome,
         cpf,
         email,
         telefone,
-        status: 'ativo',
+        status: statusInicial,
         origem_cadastro: 'api_externa',
         codigo_hinova: codigoAssociado,
         sincronizado_hinova: true,
         sincronizado_hinova_em: new Date().toISOString(),
       };
+      if (meta?.situacao_mapeada?.tipo_saida) {
+        insertData.tipo_saida = meta.situacao_mapeada.tipo_saida;
+      }
+      if (dataCadastroSGA) insertData.data_cadastro_sga = dataCadastroSGA;
       if (meta?.cep) insertData.cep = String(meta.cep).replace(/\D/g, '') || null;
       if (meta?.logradouro) insertData.logradouro = meta.logradouro;
       if (meta?.numero) insertData.numero = String(meta.numero);
@@ -192,10 +203,8 @@ Deno.serve(async (req) => {
       if (meta?.rg) insertData.rg = meta.rg;
       if (meta?.sexo) insertData.sexo = meta.sexo;
       if (meta?.data_nascimento) {
-        // Aceita 'dd/mm/yyyy' ou ISO
-        const d = String(meta.data_nascimento);
-        const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-        insertData.data_nascimento = m ? `${m[3]}-${m[2]}-${m[1]}` : d.slice(0, 10);
+        const parsed = parseDataBR(meta.data_nascimento);
+        if (parsed) insertData.data_nascimento = parsed;
       }
       const { data: novo, error: insErr } = await admin
         .from('associados')
@@ -205,6 +214,7 @@ Deno.serve(async (req) => {
       if (insErr) throw new Error(`Erro ao criar associado: ${insErr.message}`);
       associadoId = novo.id;
     }
+
 
     // 4) Para cada placa do SGA, UPSERT em veiculos
     const veiculosOut: Array<{ id: string; placa: string; codigo_veiculo: number; marca: string; modelo: string; ano_modelo: number | null }> = [];
