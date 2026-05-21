@@ -241,7 +241,8 @@ serve(async (req) => {
       contrato.leads,
       contrato.associados,
       undefined,
-      veiculoDB
+      veiculoDB,
+      cotacaoFallback,
     );
     templateData.configRastreador = configRastreador;
     templateData.regrasDepreciacao = regrasDepreciacao;
