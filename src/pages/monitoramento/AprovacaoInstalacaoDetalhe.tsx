@@ -44,6 +44,7 @@ import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
+import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
 
 // Hook para buscar detalhes completos do serviço
 function useServicoDetalheAprovacao(servicoId: string | undefined) {
