@@ -453,6 +453,93 @@ serve(async (req) => {
 
     console.log(`[efetivar-troca] Veículo ${veiculoId} transferido para ${novoAssociadoId}`);
 
+    // 6.1 RELIGAR COBERTURA + REAPONTAR RASTREADOR para o novo titular
+    //     (o veículo já é conhecido — a proteção precisa voltar imediatamente após
+    //      a troca, sem depender de nova instalação ou aprovação adicional).
+    try {
+      // Há rastreador físico instalado neste veículo?
+      const { data: rastreadorAtivo } = await supabase
+        .from("rastreadores")
+        .select("id, associado_id")
+        .eq("veiculo_id", veiculoId)
+        .eq("status", "instalado")
+        .maybeSingle();
+
+      // Veículo exige rastreador? (Diesel / Carro≥30k / Moto≥9k)
+      const { data: precisa } = await supabase.rpc("fn_veiculo_precisa_rastreador", {
+        _veiculo_id: veiculoId,
+      });
+      const exigeRastreador = precisa === true;
+
+      // Regra: cobertura_total quando exige rastreador E há rastreador instalado;
+      //         cobertura_roubo_furto sempre que houver rastreador instalado
+      //         (ou veículo sub-FIPE que não exige rastreador → R/F via autovistoria
+      //          herdada). Na troca, o veículo já passou pelo Monitoramento da
+      //          própria solicitação, então a cobertura volta integral.
+      const coberturaUpdate: Record<string, unknown> = {
+        cobertura_total: exigeRastreador ? !!rastreadorAtivo : true,
+        cobertura_roubo_furto: true,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: covErr } = await supabase
+        .from("veiculos")
+        .update(coberturaUpdate)
+        .eq("id", veiculoId);
+
+      if (covErr) {
+        console.warn("[efetivar-troca][cobertura] Falha ao religar cobertura:", covErr.message);
+      } else {
+        console.log(
+          `[efetivar-troca][cobertura] Religada: cobertura_total=${coberturaUpdate.cobertura_total}, cobertura_roubo_furto=true (exigeRastreador=${exigeRastreador}, temRastreador=${!!rastreadorAtivo})`,
+        );
+      }
+
+      // Reapontar rastreador instalado para o novo titular
+      if (rastreadorAtivo && rastreadorAtivo.associado_id !== novoAssociadoId) {
+        const { error: rastErr } = await supabase
+          .from("rastreadores")
+          .update({
+            associado_id: novoAssociadoId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", rastreadorAtivo.id);
+        if (rastErr) {
+          console.warn("[efetivar-troca][rastreador] Falha ao reapontar rastreador:", rastErr.message);
+        } else {
+          console.log(`[efetivar-troca][rastreador] Reapontado ${rastreadorAtivo.id} → ${novoAssociadoId}`);
+        }
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca][religar] erro não-bloqueante:", (e as Error)?.message);
+    }
+
+    // 6.2 Dedup defensivo: cancelar contratos vivos de SOLICITAÇÕES anteriores
+    //     já canceladas/expiradas para este veículo (gemini de contrato órfão).
+    try {
+      const { data: orfaos } = await supabase
+        .from("contratos")
+        .select("id, numero, origem_troca_titularidade_id, solicitacoes_troca_titularidade!inner(status)")
+        .eq("veiculo_id", veiculoId)
+        .in("status", ["pendente", "assinado", "ativo"])
+        .neq("origem_troca_titularidade_id", solicitacao_id)
+        .in("solicitacoes_troca_titularidade.status", ["cancelada", "expirada"]);
+
+      const ids = (orfaos || []).map((c: any) => c.id);
+      if (ids.length) {
+        await supabase.from("contratos").update({
+          status: "cancelado",
+          data_cancelamento: now.toISOString(),
+          updated_at: now.toISOString(),
+        }).in("id", ids);
+        console.log(`[efetivar-troca][dedup] Cancelados ${ids.length} contrato(s) órfão(s) de solicitações antigas`);
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca][dedup] erro não-bloqueante:", (e as Error)?.message);
+    }
+
+
+
     // 7. Criar contrato do novo titular
     const now = new Date();
     const year = now.getFullYear();
