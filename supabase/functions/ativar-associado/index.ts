@@ -183,26 +183,30 @@ Deno.serve(async (req) => {
       const agora = new Date().toISOString();
       const targetContratoId = contrato_id ?? assoc.contrato_id;
       const sideEffects: Record<string, unknown> = {};
-      // Quando o novo veículo/contrato exige instalação física, NÃO promover
-      // contrato/veículo/cotação para 'ativo' nesta etapa — eles ficam 'aguardando_instalacao'
-      // até o Monitoramento aprovar a pós-instalação (que rechamará esta edge sem aguardar_instalacao).
+      // PR-A2: parciais[] coleta falhas dos side-effects para detectar promoção parcial.
+      // Quando >0, resposta retorna 207 + success:false para o caller saber que precisa retentar.
+      const parciais: Array<{ alvo: string; id: string | null; erro: string }> = [];
       const contratoTargetStatus = aguardar_instalacao ? 'assinado' : 'ativo';
       const cotacaoTargetStatus = aguardar_instalacao ? 'contrato_assinado' : 'ativo';
 
       if (targetContratoId) {
         const contratoUpdate: Record<string, unknown> = { status: contratoTargetStatus };
         if (!aguardar_instalacao) contratoUpdate.data_ativacao = agora;
-        const { error: contratoErr } = await supabase
+        const { data: contratoRow, error: contratoErr } = await supabase
           .from('contratos')
           .update(contratoUpdate)
           .eq('id', targetContratoId)
           .neq('status', 'cancelado')
-          .neq('status', 'ativo');
+          .neq('status', 'ativo')
+          .select('id')
+          .maybeSingle();
         if (contratoErr) {
           console.warn('[ativar-associado][idem] update contrato erro:', contratoErr.message);
           sideEffects.contrato_erro = contratoErr.message;
+          parciais.push({ alvo: 'contrato', id: targetContratoId, erro: contratoErr.message });
         } else {
-          sideEffects.contrato_atualizado = targetContratoId;
+          // 0 rows é OK aqui — significa que contrato já estava no status alvo (idempotente).
+          sideEffects.contrato_atualizado = contratoRow?.id ?? targetContratoId;
           sideEffects.contrato_status = contratoTargetStatus;
         }
       }
@@ -222,10 +226,11 @@ Deno.serve(async (req) => {
           .eq('id', veiculo_id)
           .neq('status', 'cancelado');
         if (!promoverStatus) veicQuery = veicQuery.neq('status', 'ativo');
-        const { error: veicErr } = await veicQuery;
+        const { error: veicErr } = await veicQuery.select('id').maybeSingle();
         if (veicErr) {
           console.warn('[ativar-associado][idem] update veiculo erro:', veicErr.message);
           sideEffects.veiculo_erro = veicErr.message;
+          parciais.push({ alvo: 'veiculo', id: veiculo_id, erro: veicErr.message });
         } else {
           sideEffects.veiculo_atualizado = veiculo_id;
           sideEffects.veiculo_status = veiculoUpdate.status;
@@ -240,19 +245,21 @@ Deno.serve(async (req) => {
         if (cotErr) {
           console.warn('[ativar-associado][idem] update cotacao erro:', cotErr.message);
           sideEffects.cotacao_erro = cotErr.message;
+          parciais.push({ alvo: 'cotacao', id: cotacao_id, erro: cotErr.message });
         } else {
           sideEffects.cotacao_atualizado = cotacao_id;
           sideEffects.cotacao_status = cotacaoTargetStatus;
         }
       }
 
+      const partialIdem = parciais.length > 0;
       // Log da reativação idempotente para auditoria
       await supabase.from('ativacao_status_log').insert({
         associado_id,
         contrato_id: targetContratoId,
         from_status: 'ativo',
-        to_status: 'ativo',
-        source: `edge:ativar-associado<-${source}#idem-side-effects`,
+        to_status: partialIdem ? 'ativo_parcial' : 'ativo',
+        source: `edge:ativar-associado<-${source}#idem-side-effects${partialIdem ? ':parcial' : ''}`,
         actor_id,
         payload: {
           veiculo_id,
@@ -262,9 +269,23 @@ Deno.serve(async (req) => {
           ativar_cobertura_total,
           ativar_cobertura_roubo_furto,
           side_effects: sideEffects,
+          parciais,
           ...metadata,
         },
       });
+
+      if (partialIdem) {
+        return jsonResponse({
+          success: false,
+          error: 'promocao_parcial',
+          mensagem: `Associado ativo, mas ${parciais.length} side-effect(s) falharam — clique para retentar.`,
+          idempotente: true,
+          associado_id,
+          status: 'ativo',
+          parciais,
+          side_effects: sideEffects,
+        }, 207);
+      }
 
       return jsonResponse({
         success: true,
