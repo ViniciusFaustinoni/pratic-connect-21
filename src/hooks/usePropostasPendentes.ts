@@ -1603,7 +1603,7 @@ export function usePropostaStats() {
       // ========================================
       const { data: contratosAssinados } = await supabase
         .from('contratos')
-        .select('id, cotacao_id, veiculo_id, cadastro_aprovado')
+        .select('id, cotacao_id, veiculo_id, cadastro_aprovado, tipo_entrada, origem_troca_titularidade_id')
         .eq('status', 'assinado');
 
       let aguardando = 0;
