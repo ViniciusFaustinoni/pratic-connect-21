@@ -249,19 +249,23 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Tabs defaultValue="resumo" className="w-full">
-              <div className="px-6 pt-3 pb-0 sticky top-0 bg-background/95 backdrop-blur z-20 border-b">
-                <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0 overflow-x-auto">
-                  <TabsTrigger value="resumo">Resumo</TabsTrigger>
-                  <TabsTrigger value="cliente" className="gap-1.5"><User className="h-3.5 w-3.5" /> Cliente & Veículo</TabsTrigger>
-                  <TabsTrigger value="endereco" className="gap-1.5"><MapPin className="h-3.5 w-3.5" /> Endereço</TabsTrigger>
-                  {isRetirada && <TabsTrigger value="retirada">Retirada</TabsTrigger>}
-                  {isInstalacao && <TabsTrigger value="rastreador" className="gap-1.5"><Cpu className="h-3.5 w-3.5" /> Rastreador</TabsTrigger>}
-                  <TabsTrigger value="documentos" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Documentos</TabsTrigger>
-                  <TabsTrigger value="fotos" className="gap-1.5"><Camera className="h-3.5 w-3.5" /> Fotos</TabsTrigger>
-                  <TabsTrigger value="financeiro" className="gap-1.5"><Receipt className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
-                  <TabsTrigger value="historico-associado" className="gap-1.5"><History className="h-3.5 w-3.5" /> Histórico</TabsTrigger>
-                  <TabsTrigger value="historico" className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Timeline</TabsTrigger>
-                </TabsList>
+              <div className="pt-3 pb-0 sticky top-0 bg-background/95 backdrop-blur z-20 border-b">
+                <div className="relative">
+                  <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-10 bg-gradient-to-r from-background to-transparent" />
+                  <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 z-10 bg-gradient-to-l from-background to-transparent" />
+                  <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0 px-6 overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <TabsTrigger value="resumo" className="shrink-0">Resumo</TabsTrigger>
+                    <TabsTrigger value="cliente" className="shrink-0 gap-1.5"><User className="h-3.5 w-3.5" /> Cliente & Veículo</TabsTrigger>
+                    <TabsTrigger value="endereco" className="shrink-0 gap-1.5"><MapPin className="h-3.5 w-3.5" /> Endereço</TabsTrigger>
+                    {isRetirada && <TabsTrigger value="retirada" className="shrink-0">Retirada</TabsTrigger>}
+                    {isInstalacao && <TabsTrigger value="rastreador" className="shrink-0 gap-1.5"><Cpu className="h-3.5 w-3.5" /> Rastreador</TabsTrigger>}
+                    <TabsTrigger value="documentos" className="shrink-0 gap-1.5"><FileText className="h-3.5 w-3.5" /> Documentos</TabsTrigger>
+                    <TabsTrigger value="fotos" className="shrink-0 gap-1.5"><Camera className="h-3.5 w-3.5" /> Fotos</TabsTrigger>
+                    <TabsTrigger value="financeiro" className="shrink-0 gap-1.5"><Receipt className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
+                    <TabsTrigger value="historico-associado" className="shrink-0 gap-1.5"><History className="h-3.5 w-3.5" /> Histórico</TabsTrigger>
+                    <TabsTrigger value="historico" className="shrink-0 gap-1.5"><Clock className="h-3.5 w-3.5" /> Timeline</TabsTrigger>
+                  </TabsList>
+                </div>
               </div>
 
               {/* RESUMO */}
