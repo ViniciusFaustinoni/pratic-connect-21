@@ -131,9 +131,9 @@ function deriveEtapa(
         ? { label: 'Aguardando novo titular', tone: 'info' }
         : { label: 'Termo pendente', tone: 'warn' };
     }
-    return TROCA_STATUS_LABELS[trocaStatus] ?? { label: trocaStatus, tone: 'info' };
+    return TROCA_STATUS_LABELS[trocaStatus] ?? { label: humanizeStatus(trocaStatus), tone: 'info' };
   }
-  return COTACAO_STATUS_LABELS[cotacaoStatus] ?? { label: cotacaoStatus, tone: 'info' };
+  return COTACAO_STATUS_LABELS[cotacaoStatus] ?? { label: humanizeStatus(cotacaoStatus), tone: 'info' };
 }
 
 function deriveTermoStatus(troca: any | null): OutroProcessoItem['termo_status'] {
