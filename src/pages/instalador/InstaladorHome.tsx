@@ -25,6 +25,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { ModalResumoDia } from '@/components/vistoriador/ModalResumoDia';
 import { FilaBaseSection } from '@/components/instalador/FilaBaseSection';
+import { useTarefasAtribuidas } from '@/hooks/useTarefasAtribuidas';
+import { ProximaTarefaCard } from '@/components/vistoriador/ProximaTarefaCard';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
@@ -34,6 +36,7 @@ export default function InstaladorHome() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
+  const { data: tarefasAtribuidas = [] } = useTarefasAtribuidas();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const { emServico } = useIniciarServico();
   const { isGarantindo } = useGarantirTurno(emServico);
