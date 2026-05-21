@@ -31,12 +31,14 @@ interface TemplateFromDB {
   thumbnail_url?: string;
   // Campos para integração com Autentique
   is_default_autentique?: boolean;
+  is_default_substituicao?: boolean;
   template_html?: string;
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
   ordem_anexo?: number;
+
 }
 
 // Tipo transformado para uso no frontend
