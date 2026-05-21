@@ -136,12 +136,17 @@ export function EtapaConsultaFipe({
       const result = await getByPlaca(placaClean);
       
       if (result.success && result.vehicleData) {
-        const { vehicleData, fipeData, fipeAlternativas: alts } = result;
+        const { vehicleData, fipeData, fipeAlternativas: alts, fipeAmbiguo } = result;
         
+        // Modelo canônico = descrição oficial da FIPE quando disponível, NÃO o
+        // nome livre do DETRAN. Garante coerência entre `codigo_fipe` e
+        // `veiculo.modelo` (correção raiz desincronização tipo PYL9A01).
+        const modeloFinal = fipeData?.descricao || vehicleData.modelo;
+
         setVeiculoEncontrado({
           placa: vehicleData.placa,
           marca: vehicleData.marca,
-          modelo: vehicleData.modelo,
+          modelo: modeloFinal,
           ano: vehicleData.ano,
           cor: vehicleData.cor,
           combustivel: vehicleData.combustivel,
@@ -151,7 +156,7 @@ export function EtapaConsultaFipe({
         
         // PREENCHER CAMPOS AUTOMATICAMENTE
         setMarca(vehicleData.marca);
-        setModelo(fipeData?.descricao || vehicleData.modelo);
+        setModelo(modeloFinal);
         setAno(vehicleData.ano);
         if (fipeData?.valor) {
           setValorFipe(fipeData.valor);
@@ -169,7 +174,17 @@ export function EtapaConsultaFipe({
         setCamposAutoPreenchidos(camposPreenchidos);
         
         setStatus('success');
-        toast.success(`Dados do veículo preenchidos automaticamente!`);
+        if (fipeAmbiguo) {
+          // Empate na heurística — operador PRECISA escolher a versão certa
+          // manualmente antes de avançar.
+          setFipeSelecionada('');
+          toast.warning(
+            'Mais de uma versão FIPE compatível foi encontrada. Escolha a versão correta na lista abaixo antes de avançar.',
+            { duration: 8000 }
+          );
+        } else {
+          toast.success(`Dados do veículo preenchidos automaticamente!`);
+        }
       } else {
         setStatus('error');
         setErrorMessage(result.error || 'Veículo não encontrado na base FIPE');
