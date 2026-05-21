@@ -266,17 +266,17 @@ async function enviarViaMeta(
     const fallbackName = 'sinistro_atualizado';
     const { data: fbTmpl } = await supabase
       .from("whatsapp_meta_templates")
-      .select("nome, idioma, status, corpo, botoes")
+      .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
       .eq("nome", fallbackName)
       .eq("status", "APPROVED")
       .single();
 
-    if (!fbTmpl) {
-      // Nenhum fallback aprovado — aí sim bloqueia e registra
+    if (!fbTmpl || fbTmpl.disparo_habilitado === false) {
+      // Nenhum fallback aprovado/habilitado — aí sim bloqueia e registra
       await supabase.from("whatsapp_mensagens").insert({
         telefone: telefoneFormatado, tipo: "text", mensagem,
         direcao: "saida", status: "erro",
-        erro_mensagem: `Bloqueado: Meta API ativa requer template_name e fallback '${fallbackName}' não está APPROVED.`,
+        erro_mensagem: `Bloqueado: Meta API ativa requer template_name e fallback '${fallbackName}' não está APPROVED ou está com disparo pausado.`,
         provedor: "meta_oficial",
       });
       throw new Error(`Meta API ativa: template_name obrigatório e fallback '${fallbackName}' indisponível.`);
