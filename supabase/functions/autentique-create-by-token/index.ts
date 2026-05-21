@@ -467,6 +467,27 @@ serve(async (req) => {
       }
     }
 
+    // Se cotação for de substituição, priorizar template default de substituição (AF1-SUB)
+    const isSubstituicao =
+      contrato.tipo_entrada === 'substituicao_placa' ||
+      contrato.tipo_entrada === 'substituicao';
+
+    if (!templateDB && isSubstituicao) {
+      const { data: subDefault } = await supabase
+        .from("documento_templates")
+        .select("id, codigo, nome, conteudo, config_layout")
+        .eq("is_default_substituicao", true)
+        .eq("ativo", true)
+        .limit(1)
+        .maybeSingle();
+      if (subDefault) {
+        templateDB = subDefault;
+        console.log(`[autentique-create-by-token] Usando template default de SUBSTITUIÇÃO: ${subDefault.codigo} (${subDefault.nome})`);
+      } else {
+        console.warn('[autentique-create-by-token] Cotação é de substituição mas nenhum template com is_default_substituicao=true foi encontrado; caindo no default de filiação');
+      }
+    }
+
     if (!templateDB) {
       const { data: templatesDB, error: templateError } = await supabase
         .from("documento_templates")
@@ -484,6 +505,7 @@ serve(async (req) => {
       }
       templateDB = templatesDB?.[0] || null;
     }
+
 
     const usandoTemplateBanco = templateDB?.conteudo;
 
