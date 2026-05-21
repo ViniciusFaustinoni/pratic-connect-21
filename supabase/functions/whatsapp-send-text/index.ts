@@ -163,7 +163,7 @@ async function enviarViaMeta(
       // Para templates genéricos, tentar fallback (preferir o novo neutro;
       // mantém `sinistro_atualizado` como rede de segurança enquanto Meta
       // não aprova o novo)
-      const fallbackOrder = ['notificacao_atualizacao', 'sinistro_atualizado'];
+      const fallbackOrder = ['notificacao_atendimento_pratic', 'sinistro_atualizado'];
       let fallbackFound = false;
       
       for (const fbName of fallbackOrder) {
@@ -261,12 +261,12 @@ async function enviarViaMeta(
   } else {
     // ⚠️ Caller esqueceu o template. Em vez de perder a mensagem (que pode ser
     // crítica — contrato, troca, notificação ao vendedor/associado), aplicamos
-    // fallback automático para o template genérico aprovado `notificacao_atualizacao`
+    // fallback automático para o template genérico aprovado `notificacao_atendimento_pratic`
     // (3 vars: nome, assunto, detalhes). Cai para `sinistro_atualizado` enquanto
     // o novo template não estiver APPROVED na Meta. Logamos como WARN com hint para QA.
-    console.warn(`[whatsapp-send-text] ⚠️ AUTO-FALLBACK: chamada sem template_name para ${telefoneFormatado}. Aplicando template 'notificacao_atualizacao'. Mensagem: "${mensagem.substring(0, 120)}..."`);
+    console.warn(`[whatsapp-send-text] ⚠️ AUTO-FALLBACK: chamada sem template_name para ${telefoneFormatado}. Aplicando template 'notificacao_atendimento_pratic'. Mensagem: "${mensagem.substring(0, 120)}..."`);
 
-    const fallbackCandidates = ['notificacao_atualizacao', 'sinistro_atualizado'];
+    const fallbackCandidates = ['notificacao_atendimento_pratic', 'sinistro_atualizado'];
     let fbTmpl: any = null;
     let fallbackName = fallbackCandidates[0];
     for (const cand of fallbackCandidates) {

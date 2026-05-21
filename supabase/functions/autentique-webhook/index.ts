@@ -454,7 +454,7 @@ serve(async (req) => {
                       `✅ *Troca de titularidade liberada*\n\n` +
                       `${primeiroNome}, o titular anterior assinou o termo de cancelamento ` +
                       `(${placa}). Agora é com você: continue sua contratação aqui:\n${link}`,
-                    template_name: 'notificacao_atualizacao',
+                    template_name: 'notificacao_atendimento_pratic',
                     template_params: [
                       primeiroNome,
                       `Cotação ${cot.numero || ''} liberada`,
@@ -971,7 +971,7 @@ serve(async (req) => {
                       body: JSON.stringify({
                         telefone,
                         mensagem,
-                        template_name: 'notificacao_atualizacao',
+                        template_name: 'notificacao_atendimento_pratic',
                         template_params: [primeiroNomeWpp, sinistroDoc.protocolo, `Termo assinado! Efetue o pagamento de R$ ${valorFormatado} para encaminhar à oficina.`],
                       }),
                     });

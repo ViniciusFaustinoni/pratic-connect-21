@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
             extras?.link_evento || '',
           ];
         } else {
-          templateName = 'notificacao_atualizacao';
+          templateName = 'notificacao_atendimento_pratic';
           templateParams = [primeiroNome, sinistro.protocolo, titulo.replace(/[*]/g, '').substring(0, 200)];
         }
         

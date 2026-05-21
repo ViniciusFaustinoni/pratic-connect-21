@@ -61,7 +61,7 @@ serve(async (req) => {
       body: {
         telefone: payload.telefone,
         mensagem,
-        template_name: 'notificacao_atualizacao',
+        template_name: 'notificacao_atendimento_pratic',
         template_params: [
           payload.nome_associado?.split(' ')[0] || 'Associado',
           'Manutenção de rastreador',

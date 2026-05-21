@@ -118,7 +118,7 @@ Agradecemos sua compreensão.`;
           body: {
             telefone: telefone.replace(/\D/g, ''),
             mensagem,
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             template_params: [
               associado?.nome?.split(' ')[0] || 'Associado',
               sinistro?.protocolo || '',

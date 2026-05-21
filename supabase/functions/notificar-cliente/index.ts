@@ -387,7 +387,7 @@ serve(async (req) => {
 
         const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] | Promise<string[]>; getButtonParams?: () => string[] | null }> = {
           cadastro_aprovado: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
@@ -399,7 +399,7 @@ serve(async (req) => {
             },
           },
           proposta_aprovada_roubo_furto: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
@@ -407,7 +407,7 @@ serve(async (req) => {
             },
           },
           proposta_aprovada_cobertura_total: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
@@ -423,7 +423,7 @@ serve(async (req) => {
             },
           },
           vistoria_aprovada: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
@@ -455,7 +455,7 @@ serve(async (req) => {
             },
           },
           instalacao_agendada: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => {
               // Formatar data de ISO (2026-03-12) para dd/MM/yyyy
               let dataFormatada = 'em breve';
@@ -511,7 +511,7 @@ serve(async (req) => {
           },
           // Vistoria → notificacao_geral_v1
           vistoria_reprovada: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => [
               primeiroNome,
               'vistoria',
@@ -519,7 +519,7 @@ serve(async (req) => {
             ],
           },
           vistoria_nova_tentativa: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => [
               primeiroNome,
               'vistoria',
@@ -528,7 +528,7 @@ serve(async (req) => {
           },
           // Documento → notificacao_geral_v1
           documento_aprovado: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => [
               primeiroNome,
               'documento',
@@ -544,7 +544,7 @@ serve(async (req) => {
           },
           // Status → notificacao_geral_v1
           status_atualizado: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => [
               primeiroNome,
               'cadastro',
@@ -553,7 +553,7 @@ serve(async (req) => {
           },
           // Veículo negado / followups → notificacao_geral_v1
           veiculo_negado_orientacoes: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => [
               primeiroNome,
               'avaliação',
@@ -561,7 +561,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia3: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => [
               primeiroNome,
               'avaliação',
@@ -569,7 +569,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia7: {
-            template_name: 'notificacao_atualizacao',
+            template_name: 'notificacao_atendimento_pratic',
             getParams: () => [
               primeiroNome,
               'proteção',
@@ -610,7 +610,7 @@ serve(async (req) => {
         } else if (isMetaAtivo) {
           // Fallback: usar sinistro_atualizado como template genérico
           console.warn(`[notificar-cliente] ⚠️ Meta ativo mas sem template específico para tipo '${tipo}'. Usando sinistro_atualizado como fallback.`);
-          sendBody.template_name = 'notificacao_atualizacao';
+          sendBody.template_name = 'notificacao_atendimento_pratic';
           sendBody.template_params = [primeiroNome, tipo, titulo.replace(/[^\w\s]/g, '').substring(0, 200)];
         }
 
