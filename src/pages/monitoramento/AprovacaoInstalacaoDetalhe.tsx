@@ -304,7 +304,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
 
       return {
         servico,
-        fotos: [...fotos, ...vistoriaFotos],
+        fotos,
         rastreador,
         checklist,
         documentos,
