@@ -168,12 +168,12 @@ async function enviarViaMeta(
         if (fbName === templateName) continue;
         const { data: fbTmpl } = await supabase
           .from("whatsapp_meta_templates")
-          .select("nome, idioma, status, corpo, botoes")
+          .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
           .eq("nome", fbName)
           .eq("status", "APPROVED")
           .single();
         
-        if (fbTmpl) {
+        if (fbTmpl && fbTmpl.disparo_habilitado !== false) {
           console.log(`[whatsapp-send-text] Usando fallback '${fbName}' no lugar de '${templateName}'`);
           template = fbTmpl;
           if (bodyParams.length >= 3) {
