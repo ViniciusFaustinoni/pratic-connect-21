@@ -25,6 +25,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { ModalResumoDia } from '@/components/vistoriador/ModalResumoDia';
 import { FilaBaseSection } from '@/components/instalador/FilaBaseSection';
+import { useTarefasAtribuidas } from '@/hooks/useTarefasAtribuidas';
+import { ProximaTarefaCard } from '@/components/vistoriador/ProximaTarefaCard';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
@@ -34,6 +36,7 @@ export default function InstaladorHome() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
+  const { data: tarefasAtribuidas = [] } = useTarefasAtribuidas();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const { emServico } = useIniciarServico();
   const { isGarantindo } = useGarantirTurno(emServico);
@@ -179,6 +182,29 @@ export default function InstaladorHome() {
         ) : (
           <BotaoIniciarServico />
         )}
+
+        {/* Próximas tarefas atribuídas (multi-fila) */}
+        {(() => {
+          const emExecucao = tarefasAtribuidas.some(
+            (t) => t.status === 'em_rota' || t.status === 'em_andamento'
+          );
+          const proximas = tarefasAtribuidas.filter(
+            (t) => t.id !== tarefaAtual?.id && t.status === 'agendada'
+          );
+          if (proximas.length === 0) return null;
+          return (
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium text-slate-300">
+                Próximas atribuídas a você ({proximas.length})
+              </h2>
+              <div className="space-y-2">
+                {proximas.map((t) => (
+                  <ProximaTarefaCard key={t.id} tarefa={t} bloqueado={emExecucao} />
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Encaixes Urgentes - Sistema Uber */}
         {encaixesUrgentes.length > 0 && (

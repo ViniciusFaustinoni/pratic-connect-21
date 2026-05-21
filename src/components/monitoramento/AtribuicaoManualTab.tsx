@@ -168,8 +168,18 @@ function DroppableVistoriador({
               {vistoriador.tarefas.length} tarefa(s) atribuída(s)
             </p>
           </div>
-          <Badge variant={vistoriador.tarefas.length === 0 ? 'default' : 'secondary'} className="text-[10px]">
-            {vistoriador.tarefas.length === 0 ? 'Disponível' : 'Ocupado'}
+          <Badge
+            variant={vistoriador.tarefas.length === 0 ? 'default' : 'secondary'}
+            className="text-[10px]"
+            title={
+              vistoriador.tarefas.length === 0
+                ? 'Sem tarefas atribuídas'
+                : `${vistoriador.tarefas.length} tarefa(s) na fila do técnico`
+            }
+          >
+            {vistoriador.tarefas.length === 0
+              ? 'Disponível'
+              : `${vistoriador.tarefas.length} na fila`}
           </Badge>
         </div>
       </CardHeader>
