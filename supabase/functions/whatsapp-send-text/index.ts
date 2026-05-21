@@ -126,12 +126,25 @@ async function enviarViaMeta(
     // Enviar como template
     const { data: tmpl } = await supabase
       .from("whatsapp_meta_templates")
-      .select("nome, idioma, status, corpo, botoes")
+      .select("nome, idioma, status, corpo, botoes, disparo_habilitado")
       .eq("nome", templateName)
       .single();
 
     template = tmpl;
     if (!template) throw new Error(`Template '${templateName}' não encontrado`);
+
+    // Gate de disparo local — independente do status na Meta
+    if (template.disparo_habilitado === false) {
+      console.warn(`[whatsapp-send-text] 🚫 Template '${templateName}' com disparo desabilitado localmente. Envio bloqueado.`);
+      await supabase.from("whatsapp_mensagens").insert({
+        telefone: telefoneFormatado, tipo: "template", mensagem: `[${templateName}]`,
+        direcao: "saida", status: "bloqueado",
+        erro_mensagem: `template_disparo_desabilitado: '${templateName}' está com disparo pausado em Configurações › Integrações › WhatsApp › Templates Meta.`,
+        provedor: "meta_oficial",
+      });
+      throw new Error(`template_disparo_desabilitado: '${templateName}' está com disparo pausado.`);
+    }
+
     if (template.status !== "APPROVED") {
       // Fallback inteligente: só usar fallback da MESMA CATEGORIA
       console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status}). Tentando fallback...`);
