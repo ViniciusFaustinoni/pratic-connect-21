@@ -58,6 +58,18 @@ export function useCriarSolicitacaoRetiradaCadastro() {
 
 // =============== TIPOS ===============
 
+export interface EnderecoCustomRetirada {
+  logradouro: string;
+  numero: string;
+  complemento?: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 export interface AbrirRetiradaParams {
   rastreadorId: string;
   associadoId: string | null;
@@ -74,6 +86,8 @@ export interface AbrirRetiradaParams {
   periodo: Periodo;
   localTipo: 'base' | 'volante';
   localEndereco?: string;
+  /** Endereço informado/alterado pelo Monitoramento (sobrescreve o do cadastro do associado). */
+  enderecoCustom?: EnderecoCustomRetirada | null;
   profissionalId: string;
   permiteEncaixe: boolean;
   // Notificação e observações
