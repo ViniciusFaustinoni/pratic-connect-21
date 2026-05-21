@@ -157,7 +157,9 @@ export default function TemplateForm() {
           descricao: data.descricao,
           requer_assinatura: data.requer_assinatura,
           is_default_autentique: data.is_default_autentique,
+          is_default_substituicao: data.is_default_substituicao,
           is_default_evento: data.is_default_evento,
+
           is_default_saida: data.is_default_saida,
           is_default_rastreador: data.is_default_rastreador,
           anexar_proposta: data.anexar_proposta,
