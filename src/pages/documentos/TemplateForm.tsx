@@ -97,7 +97,9 @@ export default function TemplateForm() {
         conteudo: template.conteudo,
         requer_assinatura: template.requer_assinatura,
         is_default_autentique: template.is_default_autentique || false,
+        is_default_substituicao: (template as any).is_default_substituicao || false,
         is_default_evento: template.is_default_evento || false,
+
         is_default_saida: (template as any).is_default_saida || false,
         is_default_rastreador: (template as any).is_default_rastreador || false,
         anexar_proposta: (template as any).anexar_proposta || false,
