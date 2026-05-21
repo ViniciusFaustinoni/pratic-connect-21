@@ -426,18 +426,21 @@ export function useGerarLaudoVistoria() {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Agrupar fotos por categoria
-    const fotosAgrupadas = CATEGORIAS_VISTORIA_COMPLETA
-      .filter(cat => cat.id !== 'instalacao') // Excluir categoria de instalação
+    // Agrupar fotos por categoria — usa criadoEm para escolher V2/LEGACY
+    const tipoVeiculoLaudo = (dados.veiculo as any)?.tipo === 'moto' ? 'moto' : 'automovel';
+    const catsLaudo = getCategoriasByTipoVeiculo(tipoVeiculoLaudo, dados.dataVistoria);
+    const fotosLaudo = getFotosByTipoVeiculo(tipoVeiculoLaudo, dados.dataVistoria);
+    const fotosAgrupadas = catsLaudo
+      .filter(cat => cat.id !== 'instalacao' && cat.id !== 'rastreador')
       .map(categoria => ({
         ...categoria,
-        fotos: FOTOS_VISTORIA_COMPLETA
+        fotos: fotosLaudo
           .filter(fotoConfig => fotoConfig.categoria === categoria.id)
           .map(fotoConfig => ({
             config: fotoConfig,
             url: dados.fotos.find(f => f.tipo === fotoConfig.id)?.url,
           }))
-          .filter(f => f.url), // Apenas fotos que existem
+          .filter(f => f.url),
       }))
       .filter(cat => cat.fotos.length > 0);
 
