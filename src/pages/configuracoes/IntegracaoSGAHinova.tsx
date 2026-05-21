@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TesteBoletoVeiculoHinova } from '@/components/integracoes/TesteBoletoVeiculoHinova';
+import { SincronizarAssociadoSGA } from '@/components/integracoes/SincronizarAssociadoSGA';
 import { cn } from '@/lib/utils';
 import { useSGAHealthCheck, type SGAQueueItem } from '@/hooks/useSGAHealthCheck';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
