@@ -88,7 +88,7 @@ export function useTarefasAtribuidas() {
           veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)
         `)
         .eq('profissional_id', profissionalId)
-        .in('status', STATUS_FILA as unknown as string[])
+        .in('status', ['agendada', 'em_rota', 'em_andamento'])
         .gte('data_agendada', hoje)
         .is('decisao_instalador', null)
         .is('imprevisto_registrado_em', null)
