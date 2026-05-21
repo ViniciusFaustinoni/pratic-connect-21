@@ -228,7 +228,9 @@ export function useCreateTemplate() {
           is_default: input.is_default || false,
           status: input.status || 'draft',
           is_default_autentique: input.is_default_autentique || false,
+          is_default_substituicao: input.is_default_substituicao || false,
           is_default_evento: input.is_default_evento || false,
+
           is_default_saida: input.is_default_saida || false,
           is_default_rastreador: input.is_default_rastreador || false,
           anexar_proposta: input.anexar_proposta || false,
