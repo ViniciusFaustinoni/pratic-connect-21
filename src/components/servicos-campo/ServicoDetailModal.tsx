@@ -51,6 +51,7 @@ import {
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { AssociadoFichaCompletaDialog } from './AssociadoFichaCompletaDialog';
 import { TIPO_DOCUMENTO_LABELS, STATUS_DOCUMENTO_LABELS, STATUS_DOCUMENTO_COLORS } from '@/types/cadastro';
+import { EnderecoServicoEditavel } from './EnderecoServicoEditavel';
 
 interface ServicoDetailModalProps {
   servico: Servico | null;
