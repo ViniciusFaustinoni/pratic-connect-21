@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'invalid_json' }, 400);
     }
 
-    const {
+    let {
       associado_id,
       source,
       actor_id = null,
