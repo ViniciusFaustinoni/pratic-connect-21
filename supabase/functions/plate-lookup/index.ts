@@ -399,6 +399,7 @@ serve(async (req) => {
       vehicleData,
       fipeData,
       fipeAlternativas,
+      fipeAmbiguo, // true quando top1 e top2 do ranking empatam — UI deve forçar escolha manual
       fipeRanking: rankingFipes, // útil para debug nos logs do front
     };
 
