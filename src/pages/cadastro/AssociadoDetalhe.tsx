@@ -77,6 +77,8 @@ import { useDocumentosSolicitadosPendentes } from '@/hooks/useDocumentosSolicita
 import { useQueryClient } from '@tanstack/react-query';
 import { MediaViewerModal, type MediaItem } from '@/components/cadastro/MediaViewerModal';
 import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
+import { BadgeSincronizadoSGA } from '@/components/associados/BadgeSincronizadoSGA';
+
 
 // ============================================
 // UTILITÁRIOS
@@ -614,7 +616,17 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
             <Card className="border-border/60">
               <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Dados Pessoais</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <DataField label="Nome Completo" value={associado.nome} />
+                <div>
+                  <div className="text-xs text-muted-foreground">Nome Completo</div>
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    <span>{associado.nome}</span>
+                    <BadgeSincronizadoSGA
+                      codigoHinova={(associado as any).codigo_hinova}
+                      sincronizadoEm={(associado as any).sincronizado_hinova_em}
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <DataField label="CPF" value={formatCPF(associado.cpf)} />
                   <DataField label="RG" value={associado.rg || '—'} />
