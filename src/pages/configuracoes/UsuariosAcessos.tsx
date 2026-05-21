@@ -53,6 +53,7 @@ import { toast } from 'sonner';
 
 const PerfisVisibilidade = lazy(() => import('@/pages/configuracoes/Perfis'));
 import { ExportarUsuariosDialog } from '@/components/configuracoes/ExportarUsuariosDialog';
+import { DeslogarTodosUsuariosButton } from '@/components/configuracoes/DeslogarTodosUsuariosButton';
 
 const PAGE_SIZE = 20;
 
@@ -184,6 +185,9 @@ export default function UsuariosAcessos() {
         </TabsList>
 
         <TabsContent value="usuarios" className="space-y-4">
+          <div className="flex justify-end">
+            <DeslogarTodosUsuariosButton />
+          </div>
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Gerenciamento</CardTitle>
