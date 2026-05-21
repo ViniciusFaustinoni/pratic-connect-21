@@ -254,6 +254,7 @@ export function WhatsAppMetaTemplates() {
                 <TableHead className="text-xs">Nome</TableHead>
                 <TableHead className="text-xs">Categoria</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Disparo</TableHead>
                 <TableHead className="text-xs hidden md:table-cell">Prévia</TableHead>
                 <TableHead className="text-xs hidden lg:table-cell">Atualizado</TableHead>
                 <TableHead className="text-xs text-right">Ações</TableHead>
