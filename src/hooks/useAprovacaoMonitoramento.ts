@@ -217,8 +217,10 @@ interface AprovarData {
 export function useAprovarInstalacaoMonitoramento() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  // PR-A2: ref para o mutate, usado pelo toast "Retentar" no caso de promoção parcial (HTTP 207).
+  const mutateRef = useRef<((data: AprovarData) => void) | null>(null);
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (data: AprovarData) => {
       const agora = new Date().toISOString();
 
