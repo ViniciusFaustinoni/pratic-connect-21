@@ -723,6 +723,119 @@ export function AbrirRetiradaModal({
               </RadioGroup>
             </div>
 
+            {/* Endereço do atendimento (apenas volante) */}
+            {localTipo === 'volante' && (
+              <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Endereço do atendimento *</Label>
+                </div>
+
+                <RadioGroup
+                  value={enderecoModo}
+                  onValueChange={(v) => setEnderecoModo(v as 'cadastro' | 'novo')}
+                  className="space-y-2"
+                >
+                  <div className="flex items-start space-x-2">
+                    <RadioGroupItem value="cadastro" id="end_cadastro" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="end_cadastro" className="font-normal flex items-center gap-2">
+                        Usar endereço cadastrado
+                        <Badge variant="outline" className="text-[10px]">do cadastro do associado</Badge>
+                      </Label>
+                      {enderecoModo === 'cadastro' && (
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          {associado && (associado.logradouro || associado.bairro || associado.cidade) ? (
+                            <span>
+                              {[
+                                [associado.logradouro, associado.numero].filter(Boolean).join(', '),
+                                associado.bairro,
+                                [associado.cidade, associado.uf].filter(Boolean).join('/'),
+                                associado.cep,
+                              ].filter(Boolean).join(' — ')}
+                            </span>
+                          ) : (
+                            <span className="text-amber-600">Associado sem endereço cadastrado — informe um endereço abaixo.</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <RadioGroupItem value="novo" id="end_novo" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="end_novo" className="font-normal">Informar outro endereço</Label>
+                    </div>
+                  </div>
+                </RadioGroup>
+
+                {enderecoModo === 'novo' && (
+                  <div className="space-y-3 pt-2">
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">CEP *</Label>
+                        <Input
+                          placeholder="00000-000"
+                          value={endNovoCep}
+                          onChange={(e) => setEndNovoCep(e.target.value)}
+                          onBlur={(e) => buscarCep(e.target.value)}
+                          maxLength={9}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">&nbsp;</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => buscarCep(endNovoCep)}
+                          disabled={buscandoCep || endNovoCep.replace(/\D/g, '').length !== 8}
+                        >
+                          {buscandoCep ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-[1fr_120px] gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Logradouro *</Label>
+                        <Input value={endNovoLogradouro} onChange={(e) => setEndNovoLogradouro(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Número *</Label>
+                        <Input value={endNovoNumero} onChange={(e) => setEndNovoNumero(e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs">Complemento</Label>
+                      <Input value={endNovoComplemento} onChange={(e) => setEndNovoComplemento(e.target.value)} placeholder="Apto, bloco, referência..." />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs">Bairro *</Label>
+                      <Input value={endNovoBairro} onChange={(e) => setEndNovoBairro(e.target.value)} />
+                    </div>
+
+                    <div className="grid grid-cols-[1fr_80px] gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Cidade *</Label>
+                        <Input value={endNovoCidade} onChange={(e) => setEndNovoCidade(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">UF *</Label>
+                        <Input
+                          value={endNovoUf}
+                          onChange={(e) => setEndNovoUf(e.target.value.toUpperCase().slice(0, 2))}
+                          maxLength={2}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Técnico */}
             <div className="space-y-2">
               <Label>Técnico Responsável *</Label>
