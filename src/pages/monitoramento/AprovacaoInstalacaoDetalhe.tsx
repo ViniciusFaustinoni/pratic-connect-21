@@ -882,92 +882,110 @@ export default function AprovacaoInstalacaoDetalhe() {
         </CardContent>
       </Card>
 
-      {/* Ações */}
+      {/* Ações — máquina canônica de 4 sub-estados.
+          Regra canônica: o último aceite é do Monitoramento. Aprovar reaparece
+          sempre que o serviço já terminou positivamente em campo
+          (concluida / aprovada / aprovada_ressalvas). Reprovar fica visível
+          em TODOS os sub-estados como caminho de exceção. */}
       {(() => {
         const subFipe = veiculoSubFipe(veiculo || {});
         const exigeTecnica = exigeInstalacaoTecnica(veiculo || {});
         const isMoto = ((veiculo?.categoria || '') as string).toLowerCase().includes('moto');
 
-        // Guards canônicos contra aprovação prematura via URL direta
-        const isAutovistoriaSemTecnica =
-          (vistoriaModalidade || '').toLowerCase() === 'autovistoria' &&
-          (servico.status !== 'concluida' || (exigeTecnica && !rastreador));
-        const servicoNaoConcluido = servico.status !== 'concluida';
-        const faltaRastreadorFisico = exigeTecnica && !rastreador;
+        const terminouEmCampo = servicoConcluidoEmCampo(servico);
+        const temRastreador = !!rastreador;
+        const cadastroAprovado = !!(contrato as any)?.cadastro_aprovado;
+        const isAutovistoria = (vistoriaModalidade || '').toLowerCase() === 'autovistoria';
 
-        const bloqueado =
-          servicoNaoConcluido || faltaRastreadorFisico || isAutovistoriaSemTecnica;
+        // Sub-estados (ordem de precedência):
+        // B) AGUARDA_INSTALACAO_TECNICA — autovistoria opcional sem rastreador
+        //    e cadastro ainda não aprovou R&F → caminho é devolver ao Cadastro
+        // C) FALTA_RASTREADOR_FISICO     — terminou em campo mas falta rastreador
+        // D) SERVICO_NAO_CONCLUIDO       — não terminou em campo ainda
+        // A) PRONTO_PARA_ACEITE_FINAL    — tudo pronto, Monitoramento dá o último aceite
+        type SubEstado =
+          | 'PRONTO_PARA_ACEITE_FINAL'
+          | 'AGUARDA_INSTALACAO_TECNICA'
+          | 'FALTA_RASTREADOR_FISICO'
+          | 'SERVICO_NAO_CONCLUIDO';
 
-        let motivoBloqueio: string | null = null;
-        if (isAutovistoriaSemTecnica) {
-          motivoBloqueio =
-            'Esta autovistoria é opcional e libera apenas Roubo & Furto. A aprovação final só acontece após a instalação técnica do rastreador ser concluída pelo técnico em campo.';
-        } else if (faltaRastreadorFisico) {
-          motivoBloqueio =
-            'Veículo exige rastreador físico (Diesel / Carro FIPE ≥ R$ 30.000 / Moto FIPE ≥ R$ 9.000) e nenhum está vinculado. Conclua a instalação técnica antes de aprovar.';
-        } else if (servicoNaoConcluido) {
-          motivoBloqueio =
-            'Aguardando conclusão da instalação técnica. A aprovação só será liberada após o técnico fechar a vistoria presencial.';
+        let subEstado: SubEstado;
+        let banner: { tone: 'amber' | 'red' | 'slate'; titulo: string; texto: string } | null = null;
+
+        if (isAutovistoria && exigeTecnica && !temRastreador && !cadastroAprovado) {
+          subEstado = 'AGUARDA_INSTALACAO_TECNICA';
+          banner = {
+            tone: 'amber',
+            titulo: 'Aprovação ainda não liberada',
+            texto:
+              'Esta autovistoria é opcional e libera apenas Roubo & Furto. A aprovação final só acontece após a instalação técnica do rastreador ser concluída pelo técnico em campo. Devolva ao Cadastro para liberar R&F enquanto a instalação segue agendada.',
+          };
+        } else if (terminouEmCampo && exigeTecnica && !temRastreador) {
+          subEstado = 'FALTA_RASTREADOR_FISICO';
+          banner = {
+            tone: 'red',
+            titulo: 'Rastreador obrigatório não vinculado',
+            texto:
+              'Veículo exige rastreador físico (Diesel / Carro FIPE ≥ R$ 30.000 / Moto FIPE ≥ R$ 9.000) e nenhum está vinculado. Solicite uma vistoria de técnico para instalar antes do aceite final.',
+          };
+        } else if (!terminouEmCampo) {
+          subEstado = 'SERVICO_NAO_CONCLUIDO';
+          banner = {
+            tone: 'slate',
+            titulo: 'Aguardando execução em campo',
+            texto:
+              'O serviço ainda não foi finalizado pelo técnico. Acompanhe a execução na fila de Serviços de Campo. Você pode reprovar como caminho de exceção, se necessário.',
+          };
+        } else {
+          subEstado = 'PRONTO_PARA_ACEITE_FINAL';
         }
+
+        // Telemetria canônica
+        console.log('[AprovacaoInstalacao] sub-estado', {
+          servicoId: servico.id,
+          tipo: servico.tipo,
+          status: servico.status,
+          subEstado,
+          exigeTecnica,
+          temRastreador,
+          cadastroAprovado,
+          veiculoStatus: (veiculo as any)?.status,
+          vistoriaModalidade,
+        });
+
+        const bannerClasses: Record<NonNullable<typeof banner>['tone'], string> = {
+          amber: 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+          red: 'border-destructive/50 bg-destructive/10 text-destructive',
+          slate: 'border-muted-foreground/30 bg-muted/40 text-muted-foreground',
+        };
+        const bannerIconClasses: Record<NonNullable<typeof banner>['tone'], string> = {
+          amber: 'text-amber-500',
+          red: 'text-destructive',
+          slate: 'text-muted-foreground',
+        };
+
+        const mostrarAprovar = subEstado === 'PRONTO_PARA_ACEITE_FINAL';
+        const mostrarDevolver = subEstado === 'AGUARDA_INSTALACAO_TECNICA';
+        const mostrarSolicitarVistoria =
+          subEstado === 'FALTA_RASTREADOR_FISICO' ||
+          (subFipe && subEstado === 'PRONTO_PARA_ACEITE_FINAL');
+        // Reprovar SEMPRE visível como caminho de exceção
+        const mostrarReprovar = true;
 
         return (
           <>
-            {bloqueado && motivoBloqueio && (
-              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 flex gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            {banner && (
+              <div className={`rounded-lg border p-4 flex gap-3 ${bannerClasses[banner.tone]}`}>
+                <AlertTriangle className={`h-5 w-5 shrink-0 mt-0.5 ${bannerIconClasses[banner.tone]}`} />
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                    Aprovação ainda não liberada
-                  </p>
-                  <p className="text-xs text-amber-700/90 dark:text-amber-200/90 leading-relaxed">
-                    {motivoBloqueio}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground pt-1">
-                    Devolva o caso ao Cadastro para o analista aprovar Roubo & Furto.
-                    A instalação técnica do rastreador continua agendada e o caso volta
-                    para esta fila após a conclusão pelo técnico.
-                  </p>
+                  <p className="text-sm font-semibold">{banner.titulo}</p>
+                  <p className="text-xs leading-relaxed opacity-90">{banner.texto}</p>
                 </div>
               </div>
             )}
 
             <div className="flex flex-wrap gap-3 pb-2">
-              {bloqueado ? (
-                <Button
-                  className="flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white"
-                  onClick={() => setDevolverOpen(true)}
-                  disabled={devolverCadastro.isPending}
-                >
-                  {devolverCadastro.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Undo2 className="h-4 w-4 mr-2" />
-                  )}
-                  Devolver ao Cadastro (aprovar R&amp;F lá)
-                </Button>
-              ) : (
-                <Button
-                  variant="destructive"
-                  className="flex-1 min-w-[140px]"
-                  onClick={() => setShowReprovar(true)}
-                  disabled={aprovar.isPending || reprovar.isPending}
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  Reprovar
-                </Button>
-              )}
-              {subFipe && !bloqueado && (
-                <Button
-                  variant="outline"
-                  className="flex-1 min-w-[200px] border-amber-500/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-                  onClick={() => setSolicitarVistoriaOpen(true)}
-                  disabled={aprovar.isPending || reprovar.isPending}
-                >
-                  <UserSearch className="h-4 w-4 mr-2" />
-                  Solicitar Vistoria de Técnico
-                </Button>
-              )}
-              {!bloqueado && (
+              {mostrarAprovar && (
                 <Button
                   className="flex-1 min-w-[200px] bg-success hover:bg-success/90 text-success-foreground"
                   onClick={handleAprovar}
@@ -981,14 +999,55 @@ export default function AprovacaoInstalacaoDetalhe() {
                   Aprovar — Ativar Proteção 360
                 </Button>
               )}
+
+              {mostrarDevolver && (
+                <Button
+                  className="flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white"
+                  onClick={() => setDevolverOpen(true)}
+                  disabled={devolverCadastro.isPending}
+                >
+                  {devolverCadastro.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Undo2 className="h-4 w-4 mr-2" />
+                  )}
+                  Devolver ao Cadastro (aprovar R&amp;F lá)
+                </Button>
+              )}
+
+              {mostrarSolicitarVistoria && (
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-[200px] border-amber-500/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                  onClick={() => setSolicitarVistoriaOpen(true)}
+                  disabled={aprovar.isPending || reprovar.isPending}
+                >
+                  <UserSearch className="h-4 w-4 mr-2" />
+                  Solicitar Vistoria de Técnico
+                </Button>
+              )}
+
+              {mostrarReprovar && (
+                <Button
+                  variant="destructive"
+                  className="flex-1 min-w-[140px]"
+                  onClick={() => setShowReprovar(true)}
+                  disabled={aprovar.isPending || reprovar.isPending}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reprovar
+                </Button>
+              )}
             </div>
-            {subFipe && !bloqueado && (
+
+            {subFipe && subEstado === 'PRONTO_PARA_ACEITE_FINAL' && (
               <p className="text-xs text-muted-foreground pb-6">
                 Veículo abaixo do limite FIPE — dispensa rastreador. Você pode aprovar direto, reprovar
                 ou solicitar uma nova vistoria presencial pelo técnico (sem instalação,
                 apenas {isMoto ? 15 : 31} fotos).
               </p>
             )}
+
             <SolicitarVistoriaTecnicoDialog
               open={solicitarVistoriaOpen}
               onOpenChange={setSolicitarVistoriaOpen}
@@ -1002,6 +1061,7 @@ export default function AprovacaoInstalacaoDetalhe() {
           </>
         );
       })()}
+
 
       {/* Dialog Reprovar */}
       <Dialog open={showReprovar} onOpenChange={setShowReprovar}>
