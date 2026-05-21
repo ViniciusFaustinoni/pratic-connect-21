@@ -35,35 +35,35 @@ export function useConsultoresProfiles(
 
       if (pIds.length > 0) {
         promises.push(
-          supabase
-            .from('profiles')
-            .select('id, user_id, nome')
-            .in('id', pIds)
-            .then(({ data }) => {
-              (data || []).forEach((p: any) => {
-                if (p.nome) {
-                  byProfileId[p.id] = { nome: p.nome };
-                  if (p.user_id) byUserId[p.user_id] = { nome: p.nome };
-                }
-              });
-            }),
+          (async () => {
+            const { data } = await supabase
+              .from('profiles')
+              .select('id, user_id, nome')
+              .in('id', pIds);
+            (data || []).forEach((p: any) => {
+              if (p.nome) {
+                byProfileId[p.id] = { nome: p.nome };
+                if (p.user_id) byUserId[p.user_id] = { nome: p.nome };
+              }
+            });
+          })(),
         );
       }
 
       if (uIds.length > 0) {
         promises.push(
-          supabase
-            .from('profiles')
-            .select('id, user_id, nome')
-            .in('user_id', uIds)
-            .then(({ data }) => {
-              (data || []).forEach((p: any) => {
-                if (p.nome) {
-                  byUserId[p.user_id] = { nome: p.nome };
-                  byProfileId[p.id] = { nome: p.nome };
-                }
-              });
-            }),
+          (async () => {
+            const { data } = await supabase
+              .from('profiles')
+              .select('id, user_id, nome')
+              .in('user_id', uIds);
+            (data || []).forEach((p: any) => {
+              if (p.nome) {
+                byUserId[p.user_id] = { nome: p.nome };
+                byProfileId[p.id] = { nome: p.nome };
+              }
+            });
+          })(),
         );
       }
 
