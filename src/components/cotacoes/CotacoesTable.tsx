@@ -293,10 +293,21 @@ export function CotacoesTable({
                           <FlagPlacaExpirando cotacao={cotacao} className="ml-1" />
                         </div>
                       )}
-                      <TrocaTitularidadeBadge
-                        cotacaoId={cotacao.id}
-                        tipoEntrada={(cotacao.dados_extras as any)?.tipo_entrada ?? null}
-                      />
+                      {(() => {
+                        const tipo =
+                          (cotacao as any).tipo_entrada ??
+                          (cotacao.dados_extras as any)?.tipo_entrada ??
+                          (cotacao.dados_extras as any)?.ln ??
+                          null;
+                        return (
+                          <>
+                            <TrocaTitularidadeBadge cotacaoId={cotacao.id} tipoEntrada={tipo} />
+                            {tipo && tipo !== 'troca_titularidade' && (
+                              <TipoEntradaBadge tipo={tipo} />
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </TableCell>
 
