@@ -29,8 +29,8 @@ function adapt(foto: VistoriaFotoConfig): FotoAutovistoria {
  * (categoria === 'instalacao' / 'rastreador' / id local_rastreador|codigo_rastreador|teste_comunicacao)
  * pois não há rastreador a fotografar.
  */
-export function getFotosVistoriaSubFipe(tipo: TipoVeiculoAuto): FotoAutovistoria[] {
-  const todas = getFotosByTipoVeiculo(tipoToCompleto(tipo));
+export function getFotosVistoriaSubFipe(tipo: TipoVeiculoAuto, criadoEm?: string): FotoAutovistoria[] {
+  const todas = getFotosByTipoVeiculo(tipoToCompleto(tipo), criadoEm);
   const idsExcluir = new Set(['local_rastreador', 'codigo_rastreador', 'teste_comunicacao']);
   return todas
     .filter((f) => f.categoria !== 'instalacao' && f.categoria !== 'rastreador' && !idsExcluir.has(f.id))
