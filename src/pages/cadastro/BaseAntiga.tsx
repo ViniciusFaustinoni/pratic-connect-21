@@ -140,8 +140,13 @@ export default function BaseAntiga() {
                     data.associados.map((a: any) => (
                       <TableRow key={a.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(a.id)}>
                         <TableCell className="font-medium">
-                          {a.nome}
-                          <Badge variant="outline" className="ml-2 text-xs bg-violet-50 text-violet-700 border-violet-200">SGA</Badge>
+                          <span className="inline-flex items-center gap-1.5">
+                            {a.nome}
+                            <BadgeSincronizadoSGA
+                              codigoHinova={a.codigo_hinova}
+                              sincronizadoEm={(a as any).sincronizado_hinova_em}
+                            />
+                          </span>
                         </TableCell>
                         <TableCell className="font-mono text-sm">{formatCpf(a.cpf)}</TableCell>
                         <TableCell>{a.telefone || '—'}</TableCell>
@@ -178,10 +183,15 @@ export default function BaseAntiga() {
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{a.nome}</p>
+                        <p className="font-medium text-sm truncate inline-flex items-center gap-1.5">
+                          <span className="truncate">{a.nome}</span>
+                          <BadgeSincronizadoSGA
+                            codigoHinova={a.codigo_hinova}
+                            sincronizadoEm={(a as any).sincronizado_hinova_em}
+                          />
+                        </p>
                         <p className="font-mono text-xs text-muted-foreground">{formatCpf(a.cpf)}</p>
                       </div>
-                      <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200 shrink-0">SGA</Badge>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <Badge className={`${STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-800'} text-xs`}>{a.status?.replace(/_/g, ' ')}</Badge>
