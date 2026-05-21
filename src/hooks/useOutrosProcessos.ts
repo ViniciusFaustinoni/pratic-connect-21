@@ -90,6 +90,9 @@ interface UseOutrosProcessosOptions {
 
 const TROCA_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' }> = {
   // cotacao_em_andamento é derivado dinamicamente em deriveEtapa() — depende de termo_cancelamento_assinado_em
+  aguardando_termo_cancelamento: { label: 'Termo pendente', tone: 'warn' },
+  termo_cancelamento_enviado: { label: 'Termo enviado', tone: 'info' },
+  termo_cancelamento_assinado: { label: 'Termo assinado', tone: 'ok' },
   aguardando_cadastro: { label: 'Aguardando cadastro', tone: 'info' },
   aguardando_monitoramento: { label: 'Aguardando monitoramento', tone: 'info' },
   aguardando_vistoria: { label: 'Aguardando vistoria', tone: 'info' },
@@ -99,6 +102,13 @@ const TROCA_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn'
   reprovada_monitoramento: { label: 'Reprovada (monitoramento)', tone: 'danger' },
   cancelada: { label: 'Cancelada', tone: 'danger' },
 };
+
+// Fallback amigável para qualquer status novo: snake_case → "Title Case"
+function humanizeStatus(raw: string): string {
+  return raw
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const COTACAO_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' }> = {
   rascunho: { label: 'Rascunho', tone: 'warn' },
