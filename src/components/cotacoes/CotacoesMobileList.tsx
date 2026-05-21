@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { FlagTravada } from '@/components/cotacoes/FlagTravada';
+import { FlagPlacaExpirando } from '@/components/cotacoes/FlagPlacaExpirando';
 import {
   getEtapaVenda,
   statusConfig,
@@ -172,6 +173,7 @@ export function CotacoesMobileList({
                       <ArrowRight className="h-2.5 w-2.5" />
                       {etapaInfo.label}
                       <FlagTravada cotacao={cotacao} className="ml-1" />
+                      <FlagPlacaExpirando cotacao={cotacao} className="ml-1" />
                     </div>
                   )}
                 </div>
