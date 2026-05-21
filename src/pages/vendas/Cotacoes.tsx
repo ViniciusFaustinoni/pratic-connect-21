@@ -349,7 +349,7 @@ export default function Cotacoes() {
 
   // Separação Em Andamento vs Finalizadas
   const STATUS_EM_ANDAMENTO = ['rascunho', 'enviada'];
-  const STATUS_FINALIZADAS = ['aceita', 'recusada', 'expirada'];
+  const STATUS_FINALIZADAS = ['aceita', 'recusada', 'expirada', 'cancelada', 'liberada'];
 
   const cotacoesEmAndamento = useMemo(() => {
     return sortedCotacoes.filter(c => 
