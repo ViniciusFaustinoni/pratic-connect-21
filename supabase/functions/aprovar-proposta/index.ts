@@ -836,9 +836,21 @@ serve(async (req) => {
           console.warn('[aprovar-proposta] Erro promoção sub-FIPE pós-autovistoria:', e);
         }
 
-        supabase.functions.invoke('notificar-cliente', {
-          body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
-        }).catch(() => {});
+        // CAMADA 2: gating idêntico ao caminho acima — só notifica se veículo realmente ATIVO.
+        try {
+          const { data: vAtivo2 } = await supabase
+            .from('veiculos')
+            .select('status, cobertura_total')
+            .eq('id', veiculoId)
+            .maybeSingle();
+          if (vAtivo2?.status === 'ativo' && vAtivo2?.cobertura_total === true) {
+            supabase.functions.invoke('notificar-cliente', {
+              body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
+            }).catch(() => {});
+          } else {
+            console.log('[aprovar-proposta/pos-autovistoria] suprimindo cobertura_total_ativada — veículo ainda não ativo', { veiculoId, status: vAtivo2?.status, cobertura_total: vAtivo2?.cobertura_total });
+          }
+        } catch (_) { /* não bloqueia */ }
       }
     }
 
