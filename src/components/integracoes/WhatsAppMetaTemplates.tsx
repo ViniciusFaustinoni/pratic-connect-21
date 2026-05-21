@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket, ListChecks, X, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getCatalogEntry } from '@/lib/whatsapp/template-catalog';
 import { Card, CardContent } from '@/components/ui/card';
