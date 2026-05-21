@@ -131,7 +131,6 @@ Deno.serve(async (req) => {
         .update({
           status: 'cancelado',
           data_cancelamento: new Date().toISOString(),
-          motivo_cancelamento: `Troca de titularidade cancelada: ${motivoFinal}`,
           updated_at: new Date().toISOString(),
         })
         .eq('origem_troca_titularidade_id', solicitacao_id)
