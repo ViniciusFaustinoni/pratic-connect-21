@@ -89,7 +89,7 @@ interface UseOutrosProcessosOptions {
 }
 
 const TROCA_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' }> = {
-  cotacao_em_andamento: { label: 'Termo pendente', tone: 'warn' },
+  // cotacao_em_andamento é derivado dinamicamente em deriveEtapa() — depende de termo_cancelamento_assinado_em
   aguardando_cadastro: { label: 'Aguardando cadastro', tone: 'info' },
   aguardando_monitoramento: { label: 'Aguardando monitoramento', tone: 'info' },
   aguardando_vistoria: { label: 'Aguardando vistoria', tone: 'info' },
@@ -112,8 +112,15 @@ function deriveEtapa(
   tipo: TipoOutroProcesso,
   cotacaoStatus: string,
   trocaStatus: string | null,
+  troca: any | null,
 ): { label: string; tone: 'info' | 'warn' | 'ok' | 'danger' } {
   if (tipo === 'troca_titularidade' && trocaStatus) {
+    // cotacao_em_andamento cobre duas fases: antes de assinar termo (warn) e depois (info)
+    if (trocaStatus === 'cotacao_em_andamento') {
+      return troca?.termo_cancelamento_assinado_em
+        ? { label: 'Aguardando novo titular', tone: 'info' }
+        : { label: 'Termo pendente', tone: 'warn' };
+    }
     return TROCA_STATUS_LABELS[trocaStatus] ?? { label: trocaStatus, tone: 'info' };
   }
   return COTACAO_STATUS_LABELS[cotacaoStatus] ?? { label: cotacaoStatus, tone: 'info' };
