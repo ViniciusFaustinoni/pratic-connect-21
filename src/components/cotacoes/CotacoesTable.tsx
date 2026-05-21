@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { TrocaTitularidadeBadge } from '@/components/cotacoes/TrocaTitularidadeBadge';
+import { TipoEntradaBadge } from '@/components/cotacoes/TipoEntradaBadge';
 import { FlagTravada } from '@/components/cotacoes/FlagTravada';
 import { FlagPlacaExpirando } from '@/components/cotacoes/FlagPlacaExpirando';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
