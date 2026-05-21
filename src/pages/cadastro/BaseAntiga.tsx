@@ -13,6 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2, WifiOff } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
+import { BadgeSincronizadoSGA } from '@/components/associados/BadgeSincronizadoSGA';
+
 
 const STATUS_COLORS: Record<string, string> = {
   ativo: 'bg-green-100 text-green-800',
