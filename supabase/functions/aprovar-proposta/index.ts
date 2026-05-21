@@ -454,9 +454,24 @@ serve(async (req) => {
             // chamando ativar-associado com source/allowed_from corretos. Aqui apenas garantimos
             // a notificação ao cliente — não invocar ativar-associado novamente para evitar payload inválido.
 
-            supabase.functions.invoke('notificar-cliente', {
-              body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
-            }).catch(() => {});
+            // CAMADA 2: só anuncia 'cobertura_total_ativada' se associado/veiculo já estão
+            // efetivamente ATIVOS. Caso contrário (sub-FIPE, aguardando instalação,
+            // pendente de monitoramento) a notificação é mentira — quem libera o anúncio
+            // é o `aplicar-conclusao-vistoria` → `ativar-associado` ao virar ATIVO de fato.
+            try {
+              const { data: vAtivo } = await supabase
+                .from('veiculos')
+                .select('status, cobertura_total')
+                .eq('id', veiculoId)
+                .maybeSingle();
+              if (vAtivo?.status === 'ativo' && vAtivo?.cobertura_total === true) {
+                supabase.functions.invoke('notificar-cliente', {
+                  body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
+                }).catch(() => {});
+              } else {
+                console.log('[aprovar-proposta] suprimindo cobertura_total_ativada — veículo ainda não está ativo', { veiculoId, status: vAtivo?.status, cobertura_total: vAtivo?.cobertura_total });
+              }
+            } catch (_) { /* não bloqueia */ }
           }
         } catch (err) {
           console.warn('[aprovar-proposta] Erro ativação automática:', err);
@@ -821,9 +836,21 @@ serve(async (req) => {
           console.warn('[aprovar-proposta] Erro promoção sub-FIPE pós-autovistoria:', e);
         }
 
-        supabase.functions.invoke('notificar-cliente', {
-          body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
-        }).catch(() => {});
+        // CAMADA 2: gating idêntico ao caminho acima — só notifica se veículo realmente ATIVO.
+        try {
+          const { data: vAtivo2 } = await supabase
+            .from('veiculos')
+            .select('status, cobertura_total')
+            .eq('id', veiculoId)
+            .maybeSingle();
+          if (vAtivo2?.status === 'ativo' && vAtivo2?.cobertura_total === true) {
+            supabase.functions.invoke('notificar-cliente', {
+              body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
+            }).catch(() => {});
+          } else {
+            console.log('[aprovar-proposta/pos-autovistoria] suprimindo cobertura_total_ativada — veículo ainda não ativo', { veiculoId, status: vAtivo2?.status, cobertura_total: vAtivo2?.cobertura_total });
+          }
+        } catch (_) { /* não bloqueia */ }
       }
     }
 

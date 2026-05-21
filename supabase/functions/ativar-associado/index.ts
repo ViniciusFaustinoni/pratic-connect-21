@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'invalid_json' }, 400);
     }
 
-    const {
+    let {
       associado_id,
       source,
       actor_id = null,
@@ -84,6 +84,24 @@ Deno.serve(async (req) => {
 
     if (!associado_id || !source) {
       return jsonResponse({ success: false, error: 'missing_required_fields', fields: ['associado_id', 'source'] }, 400);
+    }
+
+    // ----- CAMADA 2 (defesa em profundidade) -----
+    // Quando aguardar_instalacao=true, a cobertura NÃO pode ser promovida nem
+    // anunciada ao cliente: o veículo ainda vai passar por vistoria/instalação
+    // ou aprovação manual do Monitoramento. Coagimos os flags de ativação de
+    // cobertura para false e logamos o desvio para nunca disparar
+    // `cobertura_total_ativada` em sub-FIPE / inclusão isenta antes da hora
+    // (regressão do caso LUIZ KZZ9E93). Ver memória
+    // `mem://logic/operations/sub-fipe-nao-anuncia-protecao-ativada-pre-monitoramento`.
+    if (aguardar_instalacao && (ativar_cobertura_total || ativar_cobertura_roubo_furto)) {
+      console.warn('[ativar-associado] coerce: aguardar_instalacao=true → cobertura flags forçadas a false', {
+        associado_id, veiculo_id, source,
+        ativar_cobertura_total_request: ativar_cobertura_total,
+        ativar_cobertura_roubo_furto_request: ativar_cobertura_roubo_furto,
+      });
+      ativar_cobertura_total = false;
+      ativar_cobertura_roubo_furto = false;
     }
 
     // ----- 0) Guard: cobertura total exige rastreador físico em veículos que exigem -----
