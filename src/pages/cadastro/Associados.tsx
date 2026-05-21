@@ -12,6 +12,8 @@ import { motion } from 'framer-motion';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { BadgeCoberturaCompact } from '@/components/veiculos/BadgeCobertura';
+import { BadgeSincronizadoSGA } from '@/components/associados/BadgeSincronizadoSGA';
+
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -680,6 +682,11 @@ export default function Associados() {
                             {getInitials(associado.nome)}
                           </div>
                           <span className="truncate max-w-[180px]">{associado.nome}</span>
+                          <BadgeSincronizadoSGA
+                            codigoHinova={(associado as any).codigo_hinova}
+                            sincronizadoEm={(associado as any).sincronizado_hinova_em}
+                          />
+
                         </div>
                       </TableCell>
                       <TableCell onClick={() => handleAssociadoClick(associado)} className="text-muted-foreground">
@@ -945,7 +952,14 @@ export default function Associados() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="font-medium text-sm truncate">{associado.nome}</p>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <p className="font-medium text-sm truncate">{associado.nome}</p>
+                              <BadgeSincronizadoSGA
+                                codigoHinova={(associado as any).codigo_hinova}
+                                sincronizadoEm={(associado as any).sincronizado_hinova_em}
+                              />
+                            </div>
+
                             <p className="text-[11px] text-muted-foreground truncate">
                               {formatCpf(associado.cpf)}{associado.telefone ? ` • ${formatTelefone(associado.telefone)}` : ''}
                             </p>

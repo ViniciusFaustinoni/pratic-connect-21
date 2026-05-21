@@ -26,6 +26,38 @@ const json = (status: number, body: unknown) =>
 const cleanCPF = (v: unknown) => String(v ?? '').replace(/\D/g, '');
 const cleanPlaca = (v: unknown) => String(v ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 
+/**
+ * Mapeia a situação textual/numérica devolvida pelo SGA Hinova para o enum
+ * local `associados.status`. Retorna `null` quando não conseguimos reconhecer
+ * — nesse caso o caller preserva o status atual em vez de sobrescrever.
+ *
+ * Códigos numéricos Hinova conhecidos (situacao_associado):
+ *   1=ATIVO, 2=CANCELADO, 3=PENDENTE, 4=INADIMPLENTE, 5=SUSPENSO
+ */
+function mapSituacaoSGA(raw: any): { status: string; tipo_saida: string | null } | null {
+  if (raw == null) return null;
+  const s = String(raw).trim().toUpperCase();
+  if (!s) return null;
+  // Numérico
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    if (n === 1) return { status: 'ativo', tipo_saida: null };
+    if (n === 3) return { status: 'pendente', tipo_saida: null };
+    if (n === 4) return { status: 'bloqueado', tipo_saida: 'inadimplencia' };
+    if (n === 5) return { status: 'bloqueado', tipo_saida: null };
+    if (n === 2) return { status: 'cancelado', tipo_saida: 'cancelamento_voluntario' };
+    return null;
+  }
+  if (s.includes('ATIV')) return { status: 'ativo', tipo_saida: null };
+  if (s.includes('PEND')) return { status: 'pendente', tipo_saida: null };
+  if (s.includes('INADIMP')) return { status: 'bloqueado', tipo_saida: 'inadimplencia' };
+  if (s.includes('SUSPEN')) return { status: 'bloqueado', tipo_saida: null };
+  if (s.includes('CANCEL') || s.includes('DESLIG') || s.includes('EXCLU')) {
+    return { status: 'cancelado', tipo_saida: 'cancelamento_voluntario' };
+  }
+  return null;
+}
+
 async function fetchAssociadoMeta(s: any, cpf: string) {
   try {
     const r = await fetch(`${s.apiUrl}/associado/buscar/${cpf}/cpf`, {
@@ -38,6 +70,10 @@ async function fetchAssociadoMeta(s: any, cpf: string) {
     const root = j?.data ?? j?.dados ?? j;
     const a = Array.isArray(root) ? root[0] : root;
     if (!a) return null;
+    const situacaoRaw =
+      a.situacao_associado ?? a.situacao ?? a.codigo_situacao ?? a.status ?? null;
+    const dataCadastroRaw =
+      a.data_cadastro ?? a.dt_cadastro ?? a.data_inscricao ?? a.data_adesao ?? null;
     return {
       nome: a.nome ?? a.nome_completo ?? null,
       email: a.email ?? a.email_principal ?? null,
@@ -51,8 +87,21 @@ async function fetchAssociadoMeta(s: any, cpf: string) {
       data_nascimento: a.data_nascimento ?? a.dt_nascimento ?? null,
       rg: a.rg ?? null,
       sexo: a.sexo ?? null,
+      situacao_raw: situacaoRaw,
+      situacao_mapeada: mapSituacaoSGA(situacaoRaw),
+      data_cadastro_sga: dataCadastroRaw,
     };
   } catch { return null; }
+}
+
+function parseDataBR(d: string | null | undefined): string | null {
+  if (!d) return null;
+  const s = String(d);
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  // ISO já válido
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -109,31 +158,42 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     let associadoId: string;
+    const dataCadastroSGA = parseDataBR(meta?.data_cadastro_sga);
     if (existente?.id) {
       associadoId = existente.id;
-      await admin
-        .from('associados')
-        .update({
-          codigo_hinova: codigoAssociado,
-          sincronizado_hinova: true,
-          sincronizado_hinova_em: new Date().toISOString(),
-        })
-        .eq('id', associadoId);
+      const updateData: any = {
+        codigo_hinova: codigoAssociado,
+        sincronizado_hinova: true,
+        sincronizado_hinova_em: new Date().toISOString(),
+      };
+      if (meta?.situacao_mapeada) {
+        updateData.status = meta.situacao_mapeada.status;
+        if (meta.situacao_mapeada.tipo_saida) {
+          updateData.tipo_saida = meta.situacao_mapeada.tipo_saida;
+        }
+      }
+      if (dataCadastroSGA) updateData.data_cadastro_sga = dataCadastroSGA;
+      await admin.from('associados').update(updateData).eq('id', associadoId);
     } else {
       const nome = (meta?.nome || `Associado SGA ${codigoAssociado}`).toString().trim();
       const email = (meta?.email || `sga-${cpf}@import.local`).toString().trim();
       const telefone = String(meta?.telefone || '').replace(/\D/g, '') || '00000000000';
+      const statusInicial = meta?.situacao_mapeada?.status || 'ativo';
       const insertData: any = {
         nome,
         cpf,
         email,
         telefone,
-        status: 'ativo',
+        status: statusInicial,
         origem_cadastro: 'api_externa',
         codigo_hinova: codigoAssociado,
         sincronizado_hinova: true,
         sincronizado_hinova_em: new Date().toISOString(),
       };
+      if (meta?.situacao_mapeada?.tipo_saida) {
+        insertData.tipo_saida = meta.situacao_mapeada.tipo_saida;
+      }
+      if (dataCadastroSGA) insertData.data_cadastro_sga = dataCadastroSGA;
       if (meta?.cep) insertData.cep = String(meta.cep).replace(/\D/g, '') || null;
       if (meta?.logradouro) insertData.logradouro = meta.logradouro;
       if (meta?.numero) insertData.numero = String(meta.numero);
@@ -143,10 +203,8 @@ Deno.serve(async (req) => {
       if (meta?.rg) insertData.rg = meta.rg;
       if (meta?.sexo) insertData.sexo = meta.sexo;
       if (meta?.data_nascimento) {
-        // Aceita 'dd/mm/yyyy' ou ISO
-        const d = String(meta.data_nascimento);
-        const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-        insertData.data_nascimento = m ? `${m[3]}-${m[2]}-${m[1]}` : d.slice(0, 10);
+        const parsed = parseDataBR(meta.data_nascimento);
+        if (parsed) insertData.data_nascimento = parsed;
       }
       const { data: novo, error: insErr } = await admin
         .from('associados')
@@ -156,6 +214,7 @@ Deno.serve(async (req) => {
       if (insErr) throw new Error(`Erro ao criar associado: ${insErr.message}`);
       associadoId = novo.id;
     }
+
 
     // 4) Para cada placa do SGA, UPSERT em veiculos
     const veiculosOut: Array<{ id: string; placa: string; codigo_veiculo: number; marca: string; modelo: string; ano_modelo: number | null }> = [];

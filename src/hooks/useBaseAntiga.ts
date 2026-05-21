@@ -15,7 +15,7 @@ export function useBaseAntigaAssociados(filters?: BaseAntigaFilters, pagination?
     queryFn: async () => {
       let query = supabase
         .from('associados')
-        .select('id, nome, cpf, telefone, email, status, cidade, uf, plano_id, data_adesao, codigo_hinova, created_at, planos(nome)', { count: 'exact' })
+        .select('id, nome, cpf, telefone, email, status, cidade, uf, plano_id, data_adesao, codigo_hinova, sincronizado_hinova_em, created_at, planos(nome)', { count: 'exact' })
         .eq('origem_cadastro', 'api_externa');
 
       if (filters?.search && filters.search.length >= 2) {
@@ -63,7 +63,7 @@ export function useBaseAntigaAssociados(filters?: BaseAntigaFilters, pagination?
         if (missingIds.length > 0) {
           const { data: extra } = await supabase
             .from('associados')
-            .select('id, nome, cpf, telefone, email, status, cidade, uf, plano_id, data_adesao, codigo_hinova, created_at, planos(nome)')
+            .select('id, nome, cpf, telefone, email, status, cidade, uf, plano_id, data_adesao, codigo_hinova, sincronizado_hinova_em, created_at, planos(nome)')
             .eq('origem_cadastro', 'api_externa')
             .in('id', missingIds);
           if (extra) allData = [...allData, ...extra];
