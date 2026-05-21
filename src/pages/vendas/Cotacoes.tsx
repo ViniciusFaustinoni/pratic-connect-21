@@ -211,7 +211,9 @@ export default function Cotacoes() {
     page: currentPage,
     pageSize: effectivePageSize,
     statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
-    excluirTiposEntrada: ['troca_titularidade', 'substituicao_placa', 'substituicao', 'inclusao_veiculo', 'inclusao', 'migracao'],
+    // Inclusão/troca/substituição/migração agora aparecem aqui também (com badge de tipo),
+    // sem deixar de aparecer na aba "Outros Processos".
+    excluirTiposEntrada: [],
   });
   const cotacoes = paginatedResult?.data;
   const totalPaginaAtual = paginatedResult?.count ?? 0;

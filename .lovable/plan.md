@@ -1,43 +1,43 @@
-## Problema
+## Objetivo
 
-Na cotação **COT-20260428-105230565-852** (HONDA PCX 160, FIPE R$ 21.315, pagamento já efetuado), o link público renderiza o conteúdo correto da etapa de **Vistoria** ("Vistoria do Veículo / Escolha como deseja realizar a vistoria"), mas o **Stepper no topo destaca "4 Pagamento" como etapa ativa** e mostra "Vistoria" como próxima (5). Há dessincronia entre o conteúdo renderizado e o indicador visual de etapa.
+Mostrar cotações de **Inclusão**, **Troca de titularidade**, **Substituição** e **Migração** também na aba principal **"Em Andamento" / "Finalizadas"** — sem removê-las da aba "Outros Processos". Cada linha leva um **badge de tipo** (Inclusão / Troca / Substituição / Migração) no mesmo padrão visual usado hoje na fila do Cadastro, para o corretor identificar sem precisar abrir.
 
-## Causa raiz
+Caso de teste: LTC8G02 (COT-20260521-…-919, `tipo_entrada='inclusao'`) deve aparecer em Em Andamento com badge "Inclusão de veículo" e continuar visível em Outros Processos.
 
-`src/pages/public/CotacaoContratacao.tsx:841` declara:
+## Diagnóstico
 
-```ts
-const internalIds = ['plano','documentos','contrato','vistoria','pagamento','instalacao'] as const;
-```
-
-Mas o restante do arquivo e o `determinarEtapa` em `src/hooks/useCotacaoContratacao.ts:427` usam a ordem canônica:
-
-```
-0 plano · 1 documentos · 2 contrato · 3 pagamento · 4 vistoria · 5 instalacao
-```
-
-`pagamento` e `vistoria` estão **trocados** no array `internalIds`. Com `etapaAtual = 4` (vistoria), `internalToVisible(4)` busca `internalIds[4] = 'pagamento'`, encontra o índice visível de "Pagamento" e o destaca como etapa atual — enquanto o `etapaAtual === 4` renderiza o conteúdo de Vistoria mais abaixo. Mesma inversão afeta `visibleToInternal` (clique no Stepper).
-
-`STEPS_BASE` (linha 55) já está na ordem correta (plano, documentos, contrato, pagamento, vistoria), reforçando que o defeito está só no array `internalIds`.
+- `src/pages/vendas/Cotacoes.tsx` passa `excluirTiposEntrada: ['troca_titularidade','substituicao_placa','substituicao','inclusao_veiculo','inclusao','migracao']` para `useCotacoes` → esses tipos somem da aba principal.
+- `useCotacoes.ts` aplica o filtro como `tipo_entrada.is.null,tipo_entrada.not.in.(...)`.
+- RPC `cotacoes_funil_counts` calcula `em_andamento_total`, `finalizadas_total` e cada status com `WHERE NOT is_outros` → badges não batem com a listagem nova.
+- `useOutrosProcessos.ts` filtra só pelos canônicos (`'inclusao_veiculo'`, `'substituicao_placa'`, …) — alias `'inclusao'` / `'substituicao'` ficam fora da aba Outros Processos.
+- Badge: o componente `TipoEntradaBadge` (usado na fila do Cadastro em `PropostasPendentes`) já cobre os 4 tipos com cores/ícones. Reaproveitar é o caminho certo, sem CSS novo.
 
 ## Correção
 
-Trocar a ordem em `internalIds` para alinhar com a ordem canônica:
+### 1. Aba principal volta a listar todos os tipos
+`src/pages/vendas/Cotacoes.tsx` (linha ~214): remover `excluirTiposEntrada` da chamada do `useCotacoes` (ou passar `[]`). Em Andamento e Finalizadas passam a mostrar LTC8G02 e demais inclusões/trocas/substituições/migrações.
 
-```ts
-const internalIds = ['plano','documentos','contrato','pagamento','vistoria','instalacao'] as const;
-```
+### 2. RPC `cotacoes_funil_counts` alinhada (migração)
+Reescrever a função removendo `WHERE NOT is_outros` de **todos** os contadores principais (`em_andamento_total`, `finalizadas_total`, `rascunho`, `enviada`, `escolhendo_plano`, `enviando_documentos`, `em_analise`, `assinando_contrato`, `pagando_taxa`, `agendando_vistoria`, `concluido`, `perdida`). Manter `outros_processos_total` calculado com `is_outros` — o badge da aba Outros Processos continua igual. Assim o banner "filtros estão escondendo resultados" para de aparecer indevidamente.
 
-E remover o fallback redundante em `internalToVisible` ("vistoria não existe no STEPS visível → pagamento"), que só fazia sentido com a ordem antiga; com a ordem corrigida, `vistoria` está sempre presente em `STEPS_BASE`.
+### 3. Badge de tipo na tabela de cotações
+`src/pages/vendas/Cotacoes.tsx`: na linha de cada cotação, renderizar `<TipoEntradaBadge tipo={c.tipo_entrada} />` ao lado do código/placa (mesmo componente já usado em `PropostasPendentes`). Para cotações comuns (`tipo_entrada` nulo) o componente retorna `null` e nada muda. `tipo_entrada` já vem do `select` em `useCotacoes` — não precisa novo fetch.
 
-## Fora do escopo
-
-- Nada nos dados da cotação/contrato — o estado é o esperado pós-pagamento.
-- Nenhuma mudança em `EtapaVistoria`, regras de autovistoria opcional, `exigeRastreador` ou no fluxo de instalação.
-- Nenhuma mudança na função `determinarEtapa` nem em `STEPS_BASE`.
+### 4. "Outros Processos" aceita aliases
+`src/hooks/useOutrosProcessos.ts`:
+- Expandir `.in('tipo_entrada', …)` para incluir `'inclusao'` e `'substituicao'` quando o conjunto contiver os canônicos correspondentes.
+- No mapeamento da linha (~270): normalizar `'inclusao'→'inclusao_veiculo'` e `'substituicao'→'substituicao_placa'` antes de tipar como `TipoOutroProcesso`. API pública do hook não muda.
 
 ## Validação
 
-1. Abrir o link da cotação como admin → Stepper destaca **"5 Vistoria"** ativo, conteúdo "Vistoria do Veículo" abaixo bate.
-2. Clicar em "Pagamento" no Stepper → volta para conteúdo de Pagamento (etapa 3 interna).
-3. Conferir uma cotação em etapa anterior (ex.: `documentos_ok`) — etapa "Contrato" continua destacada corretamente.
+1. `psql`: rodar `cotacoes_funil_counts` para o vendedor dono de LTC8G02 → `em_andamento_total ≥ 1` **e** `outros_processos_total ≥ 1` (mesma cotação contada nas duas agregações).
+2. UI `/vendas/cotacoes` como esse corretor:
+   - Em Andamento: LTC8G02 aparece com badge "Inclusão de veículo", sem banner de filtro.
+   - Outros Processos: LTC8G02 segue lá, mesmo badge.
+3. Regressão: cotação comum (`tipo_entrada` nulo) aparece só em Em Andamento, sem badge. Troca de titularidade aparece nas duas abas com badge correto. Nenhum tipo duplicado dentro da mesma aba.
+
+## Fora do escopo
+
+- Não migrar `'inclusao'` → `'inclusao_veiculo'` no banco (alias segue válido — `mem://constraints/contracts/tipo-entrada-substituicao-canonical`).
+- Sem alterações em `Cotador.tsx`, `CotacaoContratacao.tsx`, edge functions, cadastro ou monitoramento.
+- Aba "Outros Processos" continua existindo como atalho/visão dedicada.

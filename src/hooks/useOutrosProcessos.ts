@@ -154,6 +154,17 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       search,
     ],
     queryFn: async (): Promise<OutroProcessoItem[]> => {
+      // Expande tipos canônicos com seus aliases (ainda gravados no banco).
+      const ALIASES: Record<string, string[]> = {
+        inclusao_veiculo: ['inclusao_veiculo', 'inclusao'],
+        substituicao_placa: ['substituicao_placa', 'substituicao'],
+        troca_titularidade: ['troca_titularidade'],
+        migracao: ['migracao'],
+      };
+      const tiposComAlias = Array.from(
+        new Set(tipos.flatMap((t) => ALIASES[t] ?? [t])),
+      );
+
       // 1) Cotações com tipo_entrada nos tipos requisitados
       let q = supabase
         .from('cotacoes')
@@ -164,7 +175,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano,
           tipo_entrada, dados_extras
         `)
-        .in('tipo_entrada', tipos as any)
+        .in('tipo_entrada', tiposComAlias as any)
         .order('created_at', { ascending: false })
         .limit(500);
 
@@ -267,7 +278,12 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
 
       // 5) Compor cotações
       const cotacaoItems: OutroProcessoItem[] = cotList.map<OutroProcessoItem>((c) => {
-        const tipo = c.tipo_entrada as TipoOutroProcesso;
+        // Normaliza aliases para o canônico antes de tipar.
+        const tipoRaw = c.tipo_entrada as string;
+        const tipo: TipoOutroProcesso =
+          tipoRaw === 'inclusao' ? 'inclusao_veiculo'
+          : tipoRaw === 'substituicao' ? 'substituicao_placa'
+          : (tipoRaw as TipoOutroProcesso);
         const troca = trocasMap.get(c.id) || null;
         const associadoAntigo = troca ? associadosMap.get(troca.associado_antigo_id) : null;
         const novoTitular = troca?.novo_titular_dados || null;
