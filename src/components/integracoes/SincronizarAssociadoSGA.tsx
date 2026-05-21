@@ -75,7 +75,7 @@ export function SincronizarAssociadoSGA() {
           `Associado sincronizado (cód. ${r.codigo_associado}) com ${r.veiculos.length} veículo(s)`
         );
       } else if ((r as ResultadoNotFound)?.not_found) {
-        toast.warning(r.error || 'Associado não encontrado no SGA');
+        toast.warning((r as ResultadoNotFound).error || 'Associado não encontrado no SGA');
       } else {
         toast.error((r as any)?.error || 'Erro inesperado');
       }
