@@ -1637,9 +1637,11 @@ export default function CotacaoContratacao() {
                     )
                   ) : cotacao?.tipo_vistoria === 'agendada' ? (
                     // ========== FLUXO VISTORIA PRESENCIAL (AGENDADA) ==========
-                    // Cliente já agendou na Etapa 3 - NUNCA mostrar formulário de agendamento aqui
-                    // Aceita tanto colunas vistoria_* (presencial direto) quanto vistoria_completa_* (rota pós-pagamento)
-                    (cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada) ? (
+                    // Gate de persistência: só consideramos agendado se HÁ registro operacional
+                    // (vistoria/instalação/agendamento_base) — não basta a coluna espelho da cotação.
+                    (cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada) &&
+                    (hasVistoriaAgendada || hasInstalacaoAgendada || hasAgendamentoBase) ? (
+
                       // Tem dados do agendamento - mostrar detalhes
                       (() => {
                         const dataAg = cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada;
