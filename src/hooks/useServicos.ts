@@ -1172,20 +1172,29 @@ export function useAprovarVeiculoServico() {
         ? `${decisaoLabel} - Rastreador ${data.imeiRastreador} instalado`
         : `${decisaoLabel} - Sem rastreador`;
       
-      await supabase.from('associados_historico').insert({
-        associado_id: data.associadoId,
-        tipo: 'instalacao_concluida',
-        descricao: descricaoHistorico,
-        dados_novos: {
-          servico_id: data.servicoId,
-          veiculo_id: data.veiculoId,
-          rastreador_id: rastreadorId,
-          imei: data.imeiRastreador,
-          decisao_instalador: data.decisaoInstalador || 'aprovado',
-          ressalvas: data.ressalvasInstalador,
-        },
-        usuario_id: profile?.id,
-      });
+      // Histórico não-bloqueante: falhas em triggers (auth_logs/logs_auditoria) ou FK
+      // não devem abortar a conclusão da instalação (já efetivada acima).
+      try {
+        const { error: histError } = await supabase.from('associados_historico').insert({
+          associado_id: data.associadoId,
+          tipo: 'instalacao_concluida',
+          descricao: descricaoHistorico,
+          dados_novos: {
+            servico_id: data.servicoId,
+            veiculo_id: data.veiculoId,
+            rastreador_id: rastreadorId,
+            imei: data.imeiRastreador,
+            decisao_instalador: data.decisaoInstalador || 'aprovado',
+            ressalvas: data.ressalvasInstalador,
+          },
+          usuario_id: profile?.id,
+        });
+        if (histError) {
+          console.warn('[useAprovarVeiculoServico] Falha ao gravar histórico (não bloqueia):', histError);
+        }
+      } catch (histErr) {
+        console.warn('[useAprovarVeiculoServico] Exceção ao gravar histórico (não bloqueia):', histErr);
+      }
 
       // 7. Gerar Laudo PDF (anexado automaticamente aos documentos do associado)
       try {
