@@ -798,6 +798,7 @@ serve(async (req) => {
               cobertura_roubo_furto: false,
               cobertura_total: false,
               aguardando_placa_definitiva: (cotacao as any).veiculo_zero_km === true || !placaLimpaEmail,
+              uso_aplicativo: (cotacao as any).uso_aplicativo === true,
               ...categoriaFlagsEmail,
             })
             .select('id')
