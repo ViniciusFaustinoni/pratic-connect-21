@@ -252,6 +252,141 @@ serve(async (req) => {
 
     const associadoId = contrato.associado_id;
 
+    // ── GATE: Caminho público completo ─────────────────────────────────────
+    // Réplica server-side do gate hoje só client-side em
+    // src/hooks/usePropostasPendentes.ts (linhas 760–778). Garante que
+    // o cliente cumpriu pelo menos uma das etapas canônicas antes do
+    // Cadastro poder aprovar. Sem isso, qualquer chamada à edge (script,
+    // API externa, integração) consegue marcar `cadastro_aprovado=true`
+    // pulando a etapa.
+    //
+    // Aceita uma das condições:
+    //   1) Autovistoria enxuta: ≥2 fotos em vistoria modalidade='autovistoria' + video_360_url
+    //   2) Vistoria presencial materializada: vistoria modalidade≠'autovistoria' + ≥1 foto
+    //   3) Agendamento de instalação ativo: agendamentos_base em ('agendado','realizado')
+    //   4) Instalação ativa: instalacoes com status ≠ ('cancelada','concluida')
+    //   5) Instalação já concluída (caminho histórico — não pode bloquear).
+    //
+    // Troca de titularidade já foi delegada acima (return early) e nem
+    // chega aqui — segue isenta conforme regra canônica.
+    {
+      const cotacaoIdForGate = contrato.cotacao_id || null;
+      const veiculoIdForGate = (contrato as any).veiculo_id || null;
+
+      type GateResult = { ok: boolean; via: string };
+      const checks: Array<Promise<GateResult>> = [];
+
+      // (5) Instalação JÁ concluída — caso histórico (re-aprovação)
+      checks.push(
+        supabase.from('instalacoes')
+          .select('id', { head: true, count: 'exact' })
+          .eq('contrato_id', contrato_id)
+          .eq('status', 'concluida')
+          .then((r) => ({ ok: (r.count ?? 0) > 0, via: 'instalacao_concluida' })),
+      );
+
+      // (4) Instalação ativa (agendada / em_andamento / em_rota / em_analise)
+      checks.push(
+        supabase.from('instalacoes')
+          .select('id', { head: true, count: 'exact' })
+          .eq('contrato_id', contrato_id)
+          .in('status', ['agendada', 'em_andamento', 'em_rota', 'em_analise'])
+          .then((r) => ({ ok: (r.count ?? 0) > 0, via: 'instalacao_ativa' })),
+      );
+
+      // (3) Agendamento de instalação base ativo
+      if (cotacaoIdForGate) {
+        checks.push(
+          supabase.from('agendamentos_base')
+            .select('id', { head: true, count: 'exact' })
+            .eq('cotacao_id', cotacaoIdForGate)
+            .in('status', ['agendado', 'realizado'])
+            .then((r) => ({ ok: (r.count ?? 0) > 0, via: 'agendamento_base' })),
+        );
+      }
+
+      // (1) e (2) Vistoria materializada (presencial ou autovistoria enxuta)
+      // Busca vistorias por contrato_id OU cotacao_id OU veiculo_id (ampla — qualquer
+      // vistoria criada para o caso). Depois avalia cada uma localmente.
+      const vistoriaFilter: string[] = [];
+      vistoriaFilter.push(`contrato_id.eq.${contrato_id}`);
+      if (cotacaoIdForGate) vistoriaFilter.push(`cotacao_id.eq.${cotacaoIdForGate}`);
+      if (veiculoIdForGate) vistoriaFilter.push(`veiculo_id.eq.${veiculoIdForGate}`);
+      checks.push(
+        supabase.from('vistorias')
+          .select('id, modalidade, video_360_url')
+          .or(vistoriaFilter.join(','))
+          .then(async (r) => {
+            const vist = (r.data || []) as any[];
+            if (vist.length === 0) return { ok: false, via: 'sem_vistoria' };
+            const ids = vist.map((v) => v.id);
+            const { data: fotosRows } = await supabase
+              .from('vistoria_fotos')
+              .select('vistoria_id, tipo')
+              .in('vistoria_id', ids);
+            const fotosPorVist = new Map<string, any[]>();
+            for (const f of (fotosRows || []) as any[]) {
+              const arr = fotosPorVist.get(f.vistoria_id) || [];
+              arr.push(f);
+              fotosPorVist.set(f.vistoria_id, arr);
+            }
+            for (const v of vist) {
+              const fotos = fotosPorVist.get(v.id) || [];
+              const modalidade = (v.modalidade || '').toLowerCase();
+              if (modalidade === 'autovistoria') {
+                // (1) autovistoria enxuta: ≥2 fotos + vídeo 360°
+                const temVideo = !!v.video_360_url
+                  || fotos.some((f) => ['video_360', 'video'].includes((f.tipo || '').toLowerCase()));
+                if (fotos.length >= 2 && temVideo) {
+                  return { ok: true, via: 'autovistoria_enxuta' };
+                }
+              } else {
+                // (2) vistoria presencial materializada: ≥1 foto
+                if (fotos.length >= 1) {
+                  return { ok: true, via: 'vistoria_presencial' };
+                }
+              }
+            }
+            return { ok: false, via: 'vistoria_incompleta' };
+          }),
+      );
+
+      const results = await Promise.all(checks);
+      const aprovado = results.find((r) => r.ok);
+
+      if (!aprovado) {
+        const motivos = results.map((r) => r.via).join(',');
+        console.warn('[aprovar-proposta] BLOQUEIO caminho_publico_incompleto:', { contrato_id, motivos });
+        try {
+          await supabase.from('logs_auditoria').insert({
+            acao: 'aprovar_proposta_bloqueado_caminho_incompleto',
+            modulo: 'contratos',
+            tabela: 'contratos',
+            registro_id: contrato_id,
+            descricao: `Aprovação bloqueada pelo gate de caminho público: nenhuma das etapas canônicas foi cumprida (autovistoria enxuta, vistoria presencial materializada, agendamento de instalação ou instalação ativa). Verificações: ${motivos}.`,
+            usuario_id: aprovado_por || null,
+          });
+        } catch (_) { /* log opcional */ }
+        return new Response(
+          JSON.stringify({
+            success: false,
+            codigo: 'caminho_publico_incompleto',
+            error: 'caminho_publico_incompleto',
+            mensagem:
+              'Não é possível aprovar: o cliente ainda não concluiu o caminho público. ' +
+              'É necessário pelo menos uma destas etapas: autovistoria enxuta concluída ' +
+              '(2 fotos + vídeo 360°), vistoria presencial materializada, agendamento de ' +
+              'instalação ativo ou instalação já agendada/em andamento.',
+            verificacoes: motivos,
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      console.log(`[aprovar-proposta] caminho público OK via "${aprovado.via}" — prosseguindo com aprovação.`);
+    }
+    // ── fim do gate ────────────────────────────────────────────────────────
+
     // 2. Registrar aprovação cadastral no contrato sem ativar ainda.
     // A ativação definitiva acontece somente após instalação + aprovação do Monitoramento.
     const { data: contratoAtualizado, error: contratoError } = await supabase
