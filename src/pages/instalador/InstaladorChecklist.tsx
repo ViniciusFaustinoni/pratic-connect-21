@@ -108,6 +108,7 @@ type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: str
 interface InstaladorChecklistProps {
   /** Quando passado, sobrepõe o id da rota — usado quando a tela é embedada em modal (ex.: Coordenador de Monitoramento). */
   servicoIdProp?: string;
+  vistoriaInterna?: boolean;
   /** Callback de saída — substitui o navigate('/instalador') quando embedado. */
   onClose?: () => void;
 }

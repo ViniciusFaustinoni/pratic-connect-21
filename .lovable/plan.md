@@ -1,49 +1,29 @@
-# Vistoria Interna em Modal (Coordenador de Monitoramento)
+## Contexto
 
-Hoje os botões "Realizar Vistoria Interna" (aba **Veículos Suspensos** e card de serviço em **Serviços de Campo**) fazem `window.open('/instalador/instalacao/:id')`, levando o Coordenador para o app do instalador em outra aba.
+Na tela do técnico (`InstaladorChecklist`), o componente `VideoCapture` é montado com `cameraOnly` fixo (linha 1421 de `src/pages/instalador/InstaladorChecklist.tsx`). Isso esconde o botão "Selecionar da Galeria", obrigando o uso da câmera ao vivo — comportamento correto para o técnico em campo (antifraude).
 
-O pedido é manter **exatamente a mesma tela** (mesmas etapas, campos, textos, fotos, vídeo, checklist e decisão), mas exibida em um **modal full-screen** dentro do contexto do Monitoramento.
+Quando o Coordenador de Monitoramento abre essa mesma tela via `VistoriaInternaDialog` (caso PYL9A01: serviço `nao_compareceu`, veículo `instalacao_pendente`, sem `video_360_url`), ele tipicamente já recebeu o vídeo por outro canal (WhatsApp, etc.) e precisa **anexar** o arquivo — não regravar.
 
-## O que vai mudar
+## O que muda
 
-### 1. Refatoração mínima de `src/pages/instalador/InstaladorChecklist.tsx`
+Adicionar uma flag `vistoriaInterna` que percorre `VistoriaInternaDialog → InstaladorChecklist → VideoCapture` e libera o upload do vídeo da galeria **somente** nesse contexto.
 
-A página hoje lê `id` de `useParams` e chama `navigate('/instalador')` em ~6 pontos (sucesso, erro, voltar). Vou torná-la **embedável**:
+### Arquivos
 
-- Adicionar props opcionais: `servicoIdProp?: string` e `onClose?: () => void`.
-- `const id = servicoIdProp ?? params.id`.
-- Criar `const exitToList = () => onClose ? onClose() : navigate('/instalador')` e substituir as 6 ocorrências de `navigate('/instalador')` por `exitToList()`.
-- Nenhuma mudança visual, de etapa, de texto ou de lógica de negócio. A rota `/instalador/instalacao/:id` continua funcionando idêntica para o técnico.
+**1. `src/pages/instalador/InstaladorChecklist.tsx`**
+- Adicionar `vistoriaInterna?: boolean` em `InstaladorChecklistProps`.
+- Na montagem do `<VideoCapture>` (linha 1413), trocar `cameraOnly` fixo por `cameraOnly={!vistoriaInterna}`.
 
-### 2. Novo componente `src/components/monitoramento/VistoriaInternaDialog.tsx`
+**2. `src/components/monitoramento/VistoriaInternaDialog.tsx`**
+- Repassar `vistoriaInterna` como prop ao `<InstaladorChecklist>` (linha 53).
 
-- `Dialog` do shadcn com `DialogContent` em modo full-screen (`max-w-none w-screen h-screen p-0 overflow-y-auto bg-slate-900`) para acomodar a UI escura do instalador.
-- Renderiza `<InstaladorChecklist servicoIdProp={servicoId} onClose={() => onOpenChange(false)} />`.
-- Botão "fechar" do Dialog no canto superior direito (sobreposto ao header existente).
-- Invalida queries de Monitoramento ao fechar (`servicos-campo`, `veiculos-suspensos-instalacao`, `instalacoes-aguardando-aprovacao-monitoramento`) para refletir a conclusão imediatamente na lista.
+### Não muda
 
-### 3. `RealizarVistoriaInternaButton.tsx` (Serviços de Campo)
+- Fluxo do técnico (`/instalador/checklist/:id`) continua `cameraOnly` — câmera ao vivo obrigatória.
+- Todas as outras etapas (Dados, Checklist, Fotos, Decisão), validações, hooks, mutations, triggers DB permanecem idênticos.
+- Comportamento das fotos (que já permite seleção de arquivo dentro do próprio fluxo) não é alterado.
+- `handleVideoCapture` e o pipeline de upload (`videoUpload.ts`, bucket, progress) já aceitam `File` de qualquer origem — nenhum ajuste necessário.
 
-- Substituir `window.open(...)` por estado local `[dialogOpen, setDialogOpen]` e abrir `<VistoriaInternaDialog servicoId={servico.id} ... />`.
-- Guard de permissão (Coordenador/Diretor) permanece igual.
-- Auditoria (`registrarLog`) permanece igual.
+## Resultado esperado no caso PYL9A01
 
-### 4. `VeiculosSuspensosTab.tsx` (aba Veículos Suspensos)
-
-- `VeiculoCard` ganha estado local para o dialog.
-- Caso A (serviço aberto já existe): abre o Dialog direto com `servico_aberto.id`.
-- Caso B (sem serviço): chama a edge `abrir-servico-instalacao-suspenso` como hoje, mas em vez de `window.open`, guarda o `servicoId` retornado e abre o Dialog.
-- Toda a lógica de motivos/permissão/listagem permanece igual.
-
-## O que NÃO muda
-
-- A página `InstaladorChecklist` continua sendo a mesma tela usada pelo técnico em `/instalador/instalacao/:id` — mesmos hooks, mesmas mutations, mesma chamada à edge `concluir-instalacao-tecnico` (e portanto mesmos triggers DB de religar cobertura, mover para fila de Aprovação de Associados, etc.).
-- Nenhuma mudança em edge functions, no hook `useVeiculosSuspensos`, em permissões ou em fluxo de negócio.
-- Nada relativo ao app PWA do instalador é alterado.
-
-## Arquivos
-
-- editar `src/pages/instalador/InstaladorChecklist.tsx` (props opcionais + helper `exitToList`)
-- criar `src/components/monitoramento/VistoriaInternaDialog.tsx`
-- editar `src/components/servicos-campo/RealizarVistoriaInternaButton.tsx`
-- editar `src/pages/monitoramento/VeiculosSuspensosTab.tsx`
+Ao abrir Vistoria Interna pelo Monitoramento, na etapa Fotos o card de "Vídeo 360°" passa a mostrar o botão "Selecionar da Galeria" abaixo de "Gravar Vídeo", permitindo anexar o vídeo recebido externamente sem precisar regravar.
