@@ -1562,7 +1562,10 @@ export function useProposta(contratoId: string | undefined) {
         veiculo_blindado: veiculoBlindadoCot,
         cenario_adesao: cenarioAdesaoCot,
         plano_tem_roubo_furto: planoTemRouboFurto,
-        optou_roubo_furto: !!(veiculoCoberturaRouboFurto || temAutovistoriaProp || planoTemRouboFurto),
+        // Ver comentário canônico na query de lista (acima): "optou" exige sinal real
+        // (cobertura ativada ou autovistoria materializada). Plano com R/F disponível
+        // é pré-requisito, não consentimento.
+        optou_roubo_furto: !!(veiculoCoberturaRouboFurto || temAutovistoriaProp),
         endereco_instalacao: _resolveEnderecoInstalacao(cotacaoDetalhe, {
           logradouro: (associado as any)?.logradouro ?? (contrato as any).cliente_logradouro,
           numero: (associado as any)?.numero ?? null,
