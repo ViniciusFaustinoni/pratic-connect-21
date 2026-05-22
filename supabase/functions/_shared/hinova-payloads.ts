@@ -326,6 +326,31 @@ export interface FotoMeta {
 // evita que fotos da vistoria sumam silenciosamente no SGA (caso LTV3631).
 const HINOVA_TIPO_FOTO_ADICIONAL = 15;
 
+/**
+ * Detecta se um documento é vídeo (não enviável como foto no Hinova).
+ * Olha extensão da URL e o tipo declarado.
+ */
+function isVideoLike(arquivoUrl: string | null | undefined, tipo: string | null | undefined): boolean {
+  const url = (arquivoUrl || '').toLowerCase();
+  if (/\.(mp4|mov|webm|avi|mkv|m4v|3gp|qt|hevc)(\?|#|$)/.test(url)) return true;
+  const t = (tipo || '').toLowerCase();
+  if (!t) return false;
+  return t.includes('video') || t.includes('vídeo') || t === 'video_360' || t === 'video360' || t.includes('360');
+}
+
+/**
+ * Normaliza alias de tipo de foto/documento antes de resolver código Hinova.
+ * Conservador: trim + lower + remove acentos. Mantém o resto como está
+ * para o resolver da edge decidir o mapeamento.
+ */
+function aliasTipo(tipo: string): string {
+  return tipo
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
 export function buildFotosPayload(
   documentos: DocumentoEntrada[],
   resolverCodigoTipo: (tipo: string) => number | null,
