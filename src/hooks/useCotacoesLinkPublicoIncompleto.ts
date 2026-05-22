@@ -50,7 +50,9 @@ export function useCotacoesLinkPublicoIncompleto(options?: {
     queryKey: ['cotacoes-link-publico-incompleto', options?.vendedorId ?? 'all'],
     refetchInterval: 60_000,
     queryFn: async (): Promise<CotacaoLinkIncompleto[]> => {
-      let query = supabase
+      // Cast para `any` para evitar inferência recursiva pesada do Supabase
+      // (TS2589) — a tipagem final é forçada via `as unknown as CotacaoWithRelations[]`.
+      let query: any = (supabase as any)
         .from('cotacoes')
         .select(`
           id, numero, status, status_contratacao, created_at, updated_at,
@@ -69,8 +71,8 @@ export function useCotacoesLinkPublicoIncompleto(options?: {
           ),
           instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)
         `)
-        .in('status', STATUS_COTACAO_ATIVOS as any)
-        .in('status_contratacao', STATUS_CONTRATACAO_ATIVOS as any)
+        .in('status', STATUS_COTACAO_ATIVOS)
+        .in('status_contratacao', STATUS_CONTRATACAO_ATIVOS)
         .order('updated_at', { ascending: false })
         .limit(500);
 
