@@ -416,8 +416,22 @@ export default function CotacaoContratacao() {
 
   // Sincronizar etapa com status da cotação (apenas se não está em navegação manual)
   useEffect(() => {
-    // Não sincronizar se usuário está navegando manualmente (revisando etapas anteriores)
-    if (navegacaoManual) return;
+    // Guarda contra "limbo pós-pagamento": se o usuário está em etapa 5 mas o
+    // estado da cotação não bate com nenhuma das branches renderizáveis dessa
+    // etapa (sem tipo_vistoria, sem agendamento, sem ativo, sem troca), ignora
+    // navegacaoManual e re-sincroniza para etapaDoStatus — evita o fallback
+    // "Verificando status da sua proposta..." infinito.
+    const emLimboEtapa5 =
+      etapaAtual === 5 &&
+      !isTrocaTitularidade &&
+      cotacao?.status_contratacao !== 'ativo' &&
+      !cotacao?.tipo_vistoria &&
+      !hasInstalacaoAgendada &&
+      !hasAgendamentoBase &&
+      !agendamentoConcluido &&
+      !(docsPendentes && docsPendentes.length > 0);
+
+    if (navegacaoManual && !emLimboEtapa5) return;
 
     if (cotacao?.status_contratacao) {
       let etapa = etapaDoStatus;
@@ -429,7 +443,7 @@ export default function CotacaoContratacao() {
 
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual, etapaAtual, isTrocaTitularidade, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, docsPendentes]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade segue a navOrder (Pagamento na sequência), igual à nova adesão.
