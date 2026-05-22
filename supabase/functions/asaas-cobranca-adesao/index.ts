@@ -322,8 +322,9 @@ serve(async (req) => {
       }
     }
 
-    // Gerar link de pagamento para cartão de crédito
-    const linkPagamento = `https://www.asaas.com/c/${cobrancaData.id}`;
+    // Link de pagamento canônico = invoiceUrl oficial do ASAAS (https://www.asaas.com/i/{shortId}).
+    // NUNCA usar /c/{payment_id} — esse caminho é o catálogo por customer (cus_xxx) e não resolve pagamento.
+    const linkPagamento = cobrancaData.invoiceUrl || null;
 
     // Salvar cobrança no banco de dados
     // Usar associado_id se existir, ou criar um placeholder para lead
@@ -348,7 +349,9 @@ serve(async (req) => {
         pix_expiracao: pixData?.expirationDate,
         referencia: `adesao-${contratoId}`,
         forma_pagamento: billingType,
+        invoice_url: cobrancaData.invoiceUrl ?? null,
       })
+
       .select()
       .single();
 
