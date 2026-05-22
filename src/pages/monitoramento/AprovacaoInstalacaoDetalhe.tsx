@@ -44,6 +44,8 @@ import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
+import { MarcarManutencaoDialog } from '@/components/monitoramento/MarcarManutencaoDialog';
+import { Wrench } from 'lucide-react';
 import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
 import { servicoConcluidoEmCampo } from '@/lib/servicos/terminaisPositivos';
 
