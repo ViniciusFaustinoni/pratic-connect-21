@@ -2157,6 +2157,22 @@ export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, on
         </DialogContent>
       </Dialog>
 
+      {/* Modal de Recusa (Negado) — nível raiz para funcionar em qualquer etapa */}
+      <ModalRecusaVeiculoComFotos
+        open={showModalRecusa}
+        onClose={() => { setShowModalRecusa(false); setMotivoPrePreenchido(''); }}
+        onConfirm={({ motivoCompleto, fotos }) => {
+          handleRecusarVeiculo(motivoCompleto, fotos);
+        }}
+        isPending={recusarVeiculoMutation.isPending}
+        veiculoInfo={{
+          placa: (servico as any)?.veiculos?.placa,
+          modelo: (servico as any)?.veiculos?.modelo,
+        }}
+        detalhesInicial={motivoPrePreenchido}
+      />
+
+
       {/* Footer com navegação */}
       <div className="flex-shrink-0 border-t border-slate-700 bg-slate-800 p-4 pb-safe">
         <div className="flex gap-3 max-w-lg mx-auto">
