@@ -335,7 +335,8 @@ export default function SubstituicaoVeiculoPage() {
         <StepFinanceiro
           substituicaoId={substituicaoId}
           associadoId={associadoId!}
-          diaVencimento={associado?.dia_vencimento || 10}
+          diaVencimento={diaVencimentoSubstituicao ?? associado?.dia_vencimento ?? 10}
+          onDiaVencimentoChange={setDiaVencimentoSubstituicao}
           veiculoAntigo={veiculoAntigoResumo}
           dadosNovoVeiculo={dadosNovoVeiculo}
           beneficiosSelecionados={beneficiosSelecionados}
