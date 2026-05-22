@@ -267,6 +267,19 @@ export function VideoCapture({
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       setPendingFile(file);
+
+      // Vistoria Interna / fluxos com galeria habilitada (cameraOnly=false):
+      // o usuário JÁ escolheu o arquivo conscientemente — dispara upload na hora,
+      // pulando a etapa manual de "Confirmar e Enviar" que causava confusão
+      // (UI ficava em pending e o "Próximo" mostrava toast "Falta enviar").
+      // Para gravação ao vivo (startRecording) o fluxo NÃO muda — mantém a
+      // revisão manual para permitir regravar antes de enviar.
+      if (!cameraOnly) {
+        onCapture(file);
+        setPendingFile(null);
+        try { URL.revokeObjectURL(url); } catch {}
+        setPreviewUrl(null);
+      }
     }
     e.target.value = '';
   };
