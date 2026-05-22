@@ -16,6 +16,27 @@ export interface PlacaOcrResultado {
   skipped?: boolean;
 }
 
+/**
+ * Aguarda a vistoria correspondente à cotação aparecer no banco com data_agendada
+ * preenchida. Usado como gate de persistência após chamadas à edge function de
+ * agendamento — evita renderizar "Vistoria Agendada com Sucesso!" sem registro
+ * operacional gravado. Tenta até 3 vezes com backoff curto (250/500/1000ms).
+ */
+async function aguardarVistoriaPersistida(cotacaoId: string): Promise<boolean> {
+  const intervalos = [250, 500, 1000];
+  for (let i = 0; i < intervalos.length; i++) {
+    const { data } = await publicSupabase
+      .from('vistorias')
+      .select('id, data_agendada')
+      .eq('cotacao_id', cotacaoId)
+      .not('data_agendada', 'is', null)
+      .limit(1);
+    if (data && data.length > 0) return true;
+    await new Promise((r) => setTimeout(r, intervalos[i]));
+  }
+  return false;
+}
+
 // Interface para resultado da edge function de agendamento presencial
 interface AgendarPresencialResponse {
   success: boolean;
@@ -227,10 +248,20 @@ export function useFinalizarVistoriaCotacao() {
           console.error('[FinalizarVistoria] Erro:', data?.error);
           throw new Error(data?.error || 'Erro ao agendar vistoria');
         }
-        
-        console.log('[FinalizarVistoria] Agendamento presencial criado:', data);
+
+        // GATE DE PERSISTÊNCIA: confirmar que vistoria com data_agendada existe
+        // antes de sinalizar sucesso para a UI (evita "Vistoria Agendada com Sucesso!"
+        // em cima de UPDATE silencioso sem registro operacional).
+        const confirmou = await aguardarVistoriaPersistida(cotacaoId);
+        if (!confirmou) {
+          console.error('[FinalizarVistoria] Edge devolveu success mas vistoria não apareceu no DB');
+          throw new Error('Não conseguimos confirmar o registro do agendamento. Tente novamente.');
+        }
+
+        console.log('[FinalizarVistoria] Agendamento presencial criado e confirmado:', data);
         return { vistoriaId: data.vistoriaId, instalacaoId: data.instalacaoId };
       }
+      
       
       // FLUXO AUTOVISTORIA — materializa vistoria + servico via edge (RLS-safe + idempotente).
       // Sem isso, a fila Monitoramento › Aprovação de Associados não enxerga o caso e o
@@ -311,6 +342,13 @@ export function useAgendarVistoriaCompleta() {
         console.error('[AgendarVistoriaCompleta] Erro:', data?.error);
         throw new Error(data?.error || 'Erro ao agendar vistoria');
       }
+
+      const confirmou = await aguardarVistoriaPersistida(cotacaoId);
+      if (!confirmou) {
+        throw new Error('Não conseguimos confirmar o registro do agendamento. Tente novamente.');
+      }
+
+      
       
       console.log('[AgendarVistoriaCompleta] Sucesso:', data);
       return { id: data.vistoriaId };

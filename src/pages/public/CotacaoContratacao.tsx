@@ -1637,9 +1637,11 @@ export default function CotacaoContratacao() {
                     )
                   ) : cotacao?.tipo_vistoria === 'agendada' ? (
                     // ========== FLUXO VISTORIA PRESENCIAL (AGENDADA) ==========
-                    // Cliente já agendou na Etapa 3 - NUNCA mostrar formulário de agendamento aqui
-                    // Aceita tanto colunas vistoria_* (presencial direto) quanto vistoria_completa_* (rota pós-pagamento)
-                    (cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada) ? (
+                    // Gate de persistência: só consideramos agendado se HÁ registro operacional
+                    // (vistoria/instalação/agendamento_base) — não basta a coluna espelho da cotação.
+                    (cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada) &&
+                    (hasVistoriaAgendada || hasInstalacaoAgendada || hasAgendamentoBase) ? (
+
                       // Tem dados do agendamento - mostrar detalhes
                       (() => {
                         const dataAg = cotacao?.vistoria_data_agendada || cotacao?.vistoria_completa_data_agendada;
@@ -1776,35 +1778,52 @@ export default function CotacaoContratacao() {
                       </Card>
                     ) : (
                       // Cotação marcada como 'agendada' mas sem dados nem registro operacional —
-                      // forçar coleta real de data/horário/endereço (evita limbo "fantasma" no monitoramento)
-                      <AgendamentoVistoriaCompleta
-                        cotacaoId={cotacao.id}
-                        tipoVistoria="agendada"
-                        tipoInstalacao={(cotacao as any).tipo_instalacao as 'rota' | 'base' | null}
-                        clienteNome={cotacao?.vistoria_responsavel_nome || cotacao?.nome_solicitante || ''}
-                        clienteTelefone={cotacao?.vistoria_responsavel_telefone || cotacao?.telefone1_solicitante}
-                        clienteEmail={cotacao?.email_solicitante}
-                        veiculoPlaca={cotacao?.veiculo_placa}
-                        veiculoDescricao={`${cotacao?.veiculo_marca || ''} ${cotacao?.veiculo_modelo || ''}`.trim()}
-                        enderecoInicial={{
-                          cep: cotacao?.cliente_cep || '',
-                          logradouro: cotacao?.cliente_logradouro || '',
-                          numero: cotacao?.cliente_numero || '',
-                          complemento: cotacao?.cliente_complemento || '',
-                          bairro: cotacao?.cliente_bairro || '',
-                          cidade: cotacao?.cliente_cidade || '',
-                          estado: cotacao?.cliente_uf || '',
-                        }}
-                        onConfirmar={() => {
-                          setAgendamentoConcluido(true);
-                          queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
-                          queryClient.invalidateQueries({ queryKey: ['instalacao-existente'] });
-                          queryClient.invalidateQueries({ queryKey: ['vistoria-existente'] });
-                          queryClient.invalidateQueries({ queryKey: ['agendamento-base-existente'] });
-                          refetch();
-                        }}
-                      />
+                      // limbo detectado. Mostrar banner de inconsistência + reabrir form de agendamento.
+                      <div className="space-y-4">
+                        {cotacao?.vistoria_data_agendada && (
+                          <Card className="border-amber-500/40 bg-amber-500/5">
+                            <CardContent className="py-4 flex items-start gap-3">
+                              <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                              <div className="text-left">
+                                <p className="font-semibold text-amber-200">Detectamos uma inconsistência no seu agendamento</p>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Nosso sistema não conseguiu confirmar o registro completo da sua vistoria.
+                                  Por favor, reagende abaixo para garantir que tudo seja registrado corretamente.
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                        <AgendamentoVistoriaCompleta
+                          cotacaoId={cotacao.id}
+                          tipoVistoria="agendada"
+                          tipoInstalacao={(cotacao as any).tipo_instalacao as 'rota' | 'base' | null}
+                          clienteNome={cotacao?.vistoria_responsavel_nome || cotacao?.nome_solicitante || ''}
+                          clienteTelefone={cotacao?.vistoria_responsavel_telefone || cotacao?.telefone1_solicitante}
+                          clienteEmail={cotacao?.email_solicitante}
+                          veiculoPlaca={cotacao?.veiculo_placa}
+                          veiculoDescricao={`${cotacao?.veiculo_marca || ''} ${cotacao?.veiculo_modelo || ''}`.trim()}
+                          enderecoInicial={{
+                            cep: cotacao?.vistoria_endereco_cep || cotacao?.cliente_cep || '',
+                            logradouro: cotacao?.vistoria_endereco_logradouro || cotacao?.cliente_logradouro || '',
+                            numero: cotacao?.vistoria_endereco_numero || cotacao?.cliente_numero || '',
+                            complemento: cotacao?.cliente_complemento || '',
+                            bairro: cotacao?.vistoria_endereco_bairro || cotacao?.cliente_bairro || '',
+                            cidade: cotacao?.vistoria_endereco_cidade || cotacao?.cliente_cidade || '',
+                            estado: cotacao?.vistoria_endereco_estado || cotacao?.cliente_uf || '',
+                          }}
+                          onConfirmar={() => {
+                            setAgendamentoConcluido(true);
+                            queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
+                            queryClient.invalidateQueries({ queryKey: ['instalacao-existente'] });
+                            queryClient.invalidateQueries({ queryKey: ['vistoria-existente'] });
+                            queryClient.invalidateQueries({ queryKey: ['agendamento-base-existente'] });
+                            refetch();
+                          }}
+                        />
+                      </div>
                     )
+
                   ) : (cotacao?.tipo_vistoria === 'agendada_base' || hasAgendamentoBase) ? (
                     // ========== FLUXO AGENDAMENTO NA BASE ==========
                     <Card className="border-primary/30 bg-card/80 backdrop-blur-xl">
