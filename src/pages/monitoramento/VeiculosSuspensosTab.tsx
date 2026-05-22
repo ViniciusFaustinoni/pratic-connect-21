@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { ShieldOff, Search, ClipboardCheck, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,14 +12,21 @@ import { registrarLog } from '@/hooks/useAuditLog';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { VistoriaInternaDialog } from '@/components/monitoramento/VistoriaInternaDialog';
 
 function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: boolean }) {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [servicoIdAberto, setServicoIdAberto] = useState<string | null>(null);
+
+  const abrirModal = (servicoId: string) => {
+    setServicoIdAberto(servicoId);
+    setDialogOpen(true);
+  };
 
   const handleExecutar = async () => {
     if (!podeExecutar) return;
-    // Caso A: já existe serviço aberto → abre direto na rota do técnico
+    // Caso A: já existe serviço aberto → abre o modal direto
     if (v.servico_aberto) {
       void registrarLog({
         acao: 'iniciar',
@@ -30,14 +37,14 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
         dados_novos: {
           placa: v.placa, veiculo_id: v.id,
           motivo_suspensao: v.cobertura_suspensa_motivo,
-          modo: 'vistoria_interna_coordenador_suspenso',
+          modo: 'vistoria_interna_coordenador_suspenso_modal',
           reused_servico: true,
         },
       });
-      window.open(`/instalador/instalacao/${v.servico_aberto.id}`, '_blank', 'noopener,noreferrer');
+      abrirModal(v.servico_aberto.id);
       return;
     }
-    // Caso B: cria serviço via edge
+    // Caso B: cria serviço via edge e abre o modal com o id retornado
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('abrir-servico-instalacao-suspenso', {
@@ -47,7 +54,7 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
       const servicoId = (data as any)?.servicoId;
       if (!servicoId) throw new Error('Sem servicoId no retorno');
       toast.success('Serviço criado. Abrindo execução…');
-      window.open(`/instalador/instalacao/${servicoId}`, '_blank', 'noopener,noreferrer');
+      abrirModal(servicoId);
     } catch (e: any) {
       console.error(e);
       toast.error('Falha ao abrir vistoria interna', {
@@ -57,6 +64,7 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
       setLoading(false);
     }
   };
+
 
   return (
     <Card className="border-destructive/30">
@@ -112,9 +120,15 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
           </Button>
         )}
       </CardContent>
+      <VistoriaInternaDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        servicoId={servicoIdAberto}
+      />
     </Card>
   );
 }
+
 
 export default function VeiculosSuspensosTab() {
   const { data, isLoading } = useVeiculosSuspensos();

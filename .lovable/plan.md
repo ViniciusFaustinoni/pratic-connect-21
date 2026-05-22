@@ -1,28 +1,49 @@
-## Problema
+# Vistoria Interna em Modal (Coordenador de Monitoramento)
 
-A aba "Veículos Suspensos" mostra vazio, mas o banco tem 12 veículos elegíveis (3× "Adesão cancelada — não instalou no prazo", 4× "Instalação não realizada no prazo de 48h/72h após assinatura/agendamento", 1× "Recusa do instalador", etc.).
+Hoje os botões "Realizar Vistoria Interna" (aba **Veículos Suspensos** e card de serviço em **Serviços de Campo**) fazem `window.open('/instalador/instalacao/:id')`, levando o Coordenador para o app do instalador em outra aba.
 
-O hook `useVeiculosSuspensos.ts` usa:
+O pedido é manter **exatamente a mesma tela** (mesmas etapas, campos, textos, fotos, vídeo, checklist e decisão), mas exibida em um **modal full-screen** dentro do contexto do Monitoramento.
 
-```ts
-.not('status', 'in', '(cancelado,inativo)')
-```
+## O que vai mudar
 
-`inativo` **não existe** no enum `status_veiculo` (valores reais: `em_analise`, `aprovado`, `instalacao_pendente`, `ativo`, `suspenso`, `cancelado`, `sinistrado`, `recusado`). O PostgREST rejeita a query inteira (`invalid input value for enum status_veiculo: "inativo"`), e o React Query devolve erro silencioso — por isso a lista fica vazia.
+### 1. Refatoração mínima de `src/pages/instalador/InstaladorChecklist.tsx`
 
-## Correção
+A página hoje lê `id` de `useParams` e chama `navigate('/instalador')` em ~6 pontos (sucesso, erro, voltar). Vou torná-la **embedável**:
 
-Editar `src/hooks/useVeiculosSuspensos.ts`:
+- Adicionar props opcionais: `servicoIdProp?: string` e `onClose?: () => void`.
+- `const id = servicoIdProp ?? params.id`.
+- Criar `const exitToList = () => onClose ? onClose() : navigate('/instalador')` e substituir as 6 ocorrências de `navigate('/instalador')` por `exitToList()`.
+- Nenhuma mudança visual, de etapa, de texto ou de lógica de negócio. A rota `/instalador/instalacao/:id` continua funcionando idêntica para o técnico.
 
-1. Trocar `.not('status', 'in', '(cancelado,inativo)')` por `.not('status', 'in', '(cancelado)')` (única terminal real para esta fila — `sinistrado` e `recusado` ainda podem demandar vistoria interna; `cancelado` é o único que deve sumir).
-2. Adicionar `console.error` ou `throw` explícito em caso de erro pra evitar regressão silenciosa futura (o `throw error` já existe — manter).
+### 2. Novo componente `src/components/monitoramento/VistoriaInternaDialog.tsx`
 
-Sem mudanças em UI, edge function, ou critério de motivo (os patterns ILIKE já cobrem todos os motivos vistos no banco).
+- `Dialog` do shadcn com `DialogContent` em modo full-screen (`max-w-none w-screen h-screen p-0 overflow-y-auto bg-slate-900`) para acomodar a UI escura do instalador.
+- Renderiza `<InstaladorChecklist servicoIdProp={servicoId} onClose={() => onOpenChange(false)} />`.
+- Botão "fechar" do Dialog no canto superior direito (sobreposto ao header existente).
+- Invalida queries de Monitoramento ao fechar (`servicos-campo`, `veiculos-suspensos-instalacao`, `instalacoes-aguardando-aprovacao-monitoramento`) para refletir a conclusão imediatamente na lista.
 
-## Verificação após o fix
+### 3. `RealizarVistoriaInternaButton.tsx` (Serviços de Campo)
 
-Recarregar a aba — devem aparecer ~12 cards com placas reais, badge vermelho de contagem no TabsTrigger e botão "Realizar Vistoria Interna" habilitado para o diretor de teste.
+- Substituir `window.open(...)` por estado local `[dialogOpen, setDialogOpen]` e abrir `<VistoriaInternaDialog servicoId={servico.id} ... />`.
+- Guard de permissão (Coordenador/Diretor) permanece igual.
+- Auditoria (`registrarLog`) permanece igual.
+
+### 4. `VeiculosSuspensosTab.tsx` (aba Veículos Suspensos)
+
+- `VeiculoCard` ganha estado local para o dialog.
+- Caso A (serviço aberto já existe): abre o Dialog direto com `servico_aberto.id`.
+- Caso B (sem serviço): chama a edge `abrir-servico-instalacao-suspenso` como hoje, mas em vez de `window.open`, guarda o `servicoId` retornado e abre o Dialog.
+- Toda a lógica de motivos/permissão/listagem permanece igual.
+
+## O que NÃO muda
+
+- A página `InstaladorChecklist` continua sendo a mesma tela usada pelo técnico em `/instalador/instalacao/:id` — mesmos hooks, mesmas mutations, mesma chamada à edge `concluir-instalacao-tecnico` (e portanto mesmos triggers DB de religar cobertura, mover para fila de Aprovação de Associados, etc.).
+- Nenhuma mudança em edge functions, no hook `useVeiculosSuspensos`, em permissões ou em fluxo de negócio.
+- Nada relativo ao app PWA do instalador é alterado.
 
 ## Arquivos
 
-- Editar: `src/hooks/useVeiculosSuspensos.ts` (uma linha)
+- editar `src/pages/instalador/InstaladorChecklist.tsx` (props opcionais + helper `exitToList`)
+- criar `src/components/monitoramento/VistoriaInternaDialog.tsx`
+- editar `src/components/servicos-campo/RealizarVistoriaInternaButton.tsx`
+- editar `src/pages/monitoramento/VeiculosSuspensosTab.tsx`
