@@ -1241,8 +1241,11 @@ export function useDuplicateProductLine() {
           product_line_id: createdLine.id,
           ativo: true,
           categoria: tipoVeiculo === 'motorcycle' ? 'moto' : tipoVeiculo === 'car' ? 'carro' : planData.categoria,
+          // SGA code nunca é copiado — cada plano filho precisa ser remapeado manualmente
+          codigo_sga_plano: null,
         };
       });
+
 
       const { data: createdPlans, error: batchPlanErr } = await supabase
         .from('planos').insert(newPlansData).select();
