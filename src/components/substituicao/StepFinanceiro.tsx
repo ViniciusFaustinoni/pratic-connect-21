@@ -205,7 +205,7 @@ export function StepFinanceiro({
       valorProRata,
       diferenca,
     };
-  }, [diaVencimento, totalMensalNovo, totalMensalAntigo]);
+  }, [diaVencimentoLocal, totalMensalNovo, totalMensalAntigo]);
 
   // Carência
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
