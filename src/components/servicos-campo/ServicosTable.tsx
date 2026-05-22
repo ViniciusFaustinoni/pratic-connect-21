@@ -16,6 +16,8 @@ import {
   type Servico,
 } from '@/hooks/useServicos';
 import { ServicoTipoBadge } from './ServicoTipoBadge';
+import { RealizarVistoriaInternaButton } from './RealizarVistoriaInternaButton';
+
 
 interface ServicosTableProps {
   servicos: Servico[];
@@ -36,20 +38,23 @@ export function ServicosTable({ servicos, isLoading, onRowClick }: ServicosTable
             <TableHead>Endereço</TableHead>
             <TableHead>Técnico</TableHead>
             <TableHead className="w-[140px]">Status</TableHead>
+            <TableHead className="w-[60px]" />
+
           </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 6 }).map((_, i) => (
               <TableRow key={i}>
-                {Array.from({ length: 7 }).map((__, j) => (
+                {Array.from({ length: 8 }).map((__, j) => (
                   <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                 ))}
               </TableRow>
+
             ))
           ) : servicos.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-32 text-center">
+              <TableCell colSpan={8} className="h-32 text-center">
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
                   <ClipboardList className="h-8 w-8" />
                   <p>Nenhum serviço encontrado</p>
@@ -162,7 +167,11 @@ export function ServicosTable({ servicos, isLoading, onRowClick }: ServicosTable
                       {STATUS_SERVICO_LABELS[s.status]}
                     </Badge>
                   </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <RealizarVistoriaInternaButton servico={s} variant="icon" />
+                  </TableCell>
                 </TableRow>
+
               );
             })
           )}
