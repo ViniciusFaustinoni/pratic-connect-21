@@ -35,6 +35,7 @@ const acaoConfig: Record<string, { label: string; className: string }> = {
   sincronizar: { label: 'Sincronizar', className: 'border-primary/30 bg-primary/10 text-primary' },
   configuracao: { label: 'Configuração', className: 'border-warning/30 bg-warning/10 text-warning' },
   exportar: { label: 'Exportar', className: 'border-primary/30 bg-primary/10 text-primary' },
+  duplicar: { label: 'Duplicar', className: 'border-accent/30 bg-accent/10 text-accent-foreground' },
 };
 
 const moduloOptions = [
@@ -53,6 +54,8 @@ const tabelaLabels: Record<string, string> = {
   comissoes: 'Comissões',
   comissoes_pagamentos: 'Pagamentos de comissões',
   comissoes_pagamento_itens: 'Itens de pagamento',
+  planos: 'Planos',
+  product_lines: 'Linhas de produto',
 };
 
 const csvEscape = (value: unknown) => {
