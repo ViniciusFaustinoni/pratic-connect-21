@@ -186,6 +186,43 @@ export function buildAssociadoPayload(
 // Doc: POST /veiculo/cadastrar
 // ============================================================
 
+/**
+ * Normaliza o codigo_fipe para o formato aceito pelo Hinova/SGA.
+ *
+ * Variantes em circulação no mercado FIPE:
+ *   - "827144-5"  (canônico com dígito verificador)
+ *   - "8271445"   (sem hífen)
+ *   - "827144"    (sem dígito verificador)
+ *
+ * Vários tenants do Hinova só matcham o catálogo interno quando o código
+ * chega no formato `NNNNNN-N`. Outros só com `NNNNNNN`. A função
+ * preferencial retorna o formato canônico (com hífen) e a lista de
+ * `alternativas` que `cadastrarVeiculoComFipeRetry` usa em fallback
+ * quando o Hinova responde "O MODELO enviado não foi encontrado".
+ */
+export function variantesCodigoFipe(raw: string | null | undefined): string[] {
+  const t = (raw ?? '').trim();
+  if (!t) return [];
+  const soDigitos = t.replace(/\D/g, '');
+  if (!soDigitos) return [];
+  // Formato canônico com hífen (último dígito é o verificador)
+  const canonico = soDigitos.length > 1
+    ? `${soDigitos.slice(0, -1)}-${soDigitos.slice(-1)}`
+    : soDigitos;
+  const semHifen = soDigitos;
+  const semDigito = soDigitos.length > 1 ? soDigitos.slice(0, -1) : soDigitos;
+  // Ordem: tenta primeiro o que o tenant local indicou (input original),
+  // depois canônico, depois variantes.
+  const lista = [t, canonico, semHifen, semDigito];
+  const seen = new Set<string>();
+  return lista.filter((x) => {
+    const v = x.trim();
+    if (!v || seen.has(v)) return false;
+    seen.add(v);
+    return true;
+  });
+}
+
 export function buildVeiculoPayload(
   veiculo: any,
   codigo_fipe: string,
