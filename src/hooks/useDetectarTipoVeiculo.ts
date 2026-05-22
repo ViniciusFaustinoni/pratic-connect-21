@@ -25,7 +25,7 @@ export function useDetectarTipoVeiculo(
   const modeloNorm = (modelo || '').trim().toUpperCase();
 
   const { data: tipoFromDb, isLoading } = useQuery({
-    queryKey: ['detectar-tipo-veiculo', marcaNorm, modeloNorm],
+    queryKey: ['detectar-tipo-veiculo', marcaNorm, modeloNorm, snapshotTipo ?? null],
     queryFn: async (): Promise<TipoVeiculoResult | null> => {
       // Snapshot canônico sempre vence.
       if (snapshotTipo === 'moto' || snapshotTipo === 'carro') return snapshotTipo;
