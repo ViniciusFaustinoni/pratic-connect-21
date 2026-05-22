@@ -1,0 +1,1 @@
+ALTER TABLE public.asaas_cobrancas ADD COLUMN IF NOT EXISTS invoice_url text;
