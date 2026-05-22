@@ -1584,3 +1584,168 @@ export async function cadastrarHistoricoAtendimentoHinova(
   };
 }
 
+// ============================================================
+// LISTAR MODELOS HINOVA (fallback para "MODELO não encontrado")
+// ============================================================
+// Hinova aceita `codigo_fipe` OU `codigo_modelo` no cadastro de veículo.
+// Quando o catálogo regional não tem a FIPE específica (caso comum em 0KM/lançamento),
+// buscamos `codigo_modelo` do catálogo interno por marca + texto de modelo.
+// Endpoint varia por instalação; tentamos várias rotas conhecidas.
+
+export type ModeloHinova = {
+  codigo_modelo: number;
+  descricao: string;
+  ano?: number | null;
+  codigo_marca?: number | null;
+  codigo_fipe?: string | null;
+  codigo_tipo_veiculo?: number | null;
+  raw?: any;
+};
+
+function normalizarModelosResposta(j: any): ModeloHinova[] {
+  if (!j) return [];
+  const rows: any[] = Array.isArray(j)
+    ? j
+    : Array.isArray(j?.data) ? j.data
+    : Array.isArray(j?.dados) ? j.dados
+    : Array.isArray(j?.modelos) ? j.modelos
+    : Array.isArray(j?.lista) ? j.lista
+    : [];
+  return rows
+    .map((r) => {
+      const cod = r?.codigo_modelo ?? r?.codigoModelo ?? r?.codigo ?? r?.id;
+      if (cod == null) return null;
+      return {
+        codigo_modelo: Number(cod),
+        descricao: String(r?.descricao ?? r?.modelo ?? r?.nome ?? '').trim(),
+        ano: r?.ano ?? r?.ano_modelo ?? null,
+        codigo_marca: r?.codigo_marca ?? r?.codigoMarca ?? null,
+        codigo_fipe: r?.codigo_fipe ?? r?.codigoFipe ?? null,
+        codigo_tipo_veiculo: r?.codigo_tipo_veiculo ?? r?.codigoTipoVeiculo ?? null,
+        raw: r,
+      } as ModeloHinova;
+    })
+    .filter((x): x is ModeloHinova => !!x);
+}
+
+const _modelosCache = new Map<string, { ts: number; items: ModeloHinova[] }>();
+const MODELOS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Busca modelos no catálogo Hinova por marca (texto) e/ou texto do modelo.
+ * Retorna lista; vazia significa "não encontrei nada" (não é erro).
+ *
+ * Endpoints testados em ordem (todos GET, autenticados via Bearer):
+ *   - /buscar/modelo-veiculo?marca=X&modelo=Y
+ *   - /buscar/modelo?marca=X&modelo=Y
+ *   - /buscar/modelos?marca=X&modelo=Y
+ *   - /listar/modelos?marca=X&modelo=Y
+ */
+export async function listarModelosHinova(
+  supabase: any,
+  args: { marca: string; texto?: string; ano?: number | null; tipo_veiculo?: number | null },
+): Promise<{ items: ModeloHinova[]; debug: { endpoint: string; status: number; bodySample: string } }> {
+  const marca = (args.marca || '').trim();
+  const texto = (args.texto || '').trim();
+  if (!marca && !texto) {
+    return { items: [], debug: { endpoint: 'listar-modelos', status: 0, bodySample: 'marca/texto vazios' } };
+  }
+
+  const cacheKey = `${marca.toLowerCase()}|${texto.toLowerCase()}|${args.ano ?? ''}|${args.tipo_veiculo ?? ''}`;
+  const cached = _modelosCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < MODELOS_CACHE_TTL_MS) {
+    return { items: cached.items, debug: { endpoint: 'cache', status: 200, bodySample: `n=${cached.items.length}` } };
+  }
+
+  const session0 = await getHinovaSession(supabase);
+  const apiUrl = session0.apiUrl;
+
+  const qs = new URLSearchParams();
+  if (marca) qs.set('marca', marca);
+  if (texto) qs.set('modelo', texto);
+  if (args.ano) qs.set('ano', String(args.ano));
+  if (args.tipo_veiculo) qs.set('codigo_tipo_veiculo', String(args.tipo_veiculo));
+  const query = qs.toString();
+
+  const candidates = [
+    `/buscar/modelo-veiculo?${query}`,
+    `/buscar/modelo?${query}`,
+    `/buscar/modelos?${query}`,
+    `/listar/modelos?${query}`,
+    // alguns tenants aceitam GET sem querystring, com marca no path
+    ...(marca ? [`/buscar/modelo/${encodeURIComponent(marca)}`] : []),
+  ];
+
+  let lastDebug = { endpoint: 'listar-modelos', status: 0, bodySample: '' };
+
+  for (const path of candidates) {
+    try {
+      const { response, bodyText } = await hinovaFetch(
+        supabase,
+        (token) => ({
+          url: `${apiUrl}${path}`,
+          init: { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+        }),
+        'listarModelosHinova',
+      );
+      const status = response.status;
+      lastDebug = { endpoint: path, status, bodySample: bodyText.slice(0, 200) };
+      if (status === 404) continue;
+      if (!response.ok) continue;
+      const j = parseJsonSafe(bodyText);
+      const items = normalizarModelosResposta(j);
+      if (items.length > 0) {
+        _modelosCache.set(cacheKey, { ts: Date.now(), items });
+        return { items, debug: lastDebug };
+      }
+    } catch (e: any) {
+      // erro transitório: passa pro próximo candidato
+      lastDebug = { endpoint: path, status: 0, bodySample: String(e?.message || e).slice(0, 200) };
+    }
+  }
+  return { items: [], debug: lastDebug };
+}
+
+/**
+ * Heurística simples para escolher o melhor modelo Hinova a partir do nome livre.
+ * Pontua por:
+ *   +10 match exato (case-insensitive)
+ *   +5  todas as palavras do texto presentes na descrição
+ *   +2  cada palavra do texto presente
+ *   +3  ano bate (quando informado)
+ *   −5  ano diverge em mais de 1
+ *
+ * Retorna `null` se nenhum candidato tiver pontuação > 0.
+ */
+export function escolherMelhorModeloHinova(
+  candidatos: ModeloHinova[],
+  texto: string,
+  ano?: number | null,
+): ModeloHinova | null {
+  const t = (texto || '').toUpperCase().trim();
+  if (!t || candidatos.length === 0) return null;
+  const palavras = t.split(/\s+/).filter((p) => p.length >= 2);
+
+  let melhor: ModeloHinova | null = null;
+  let melhorScore = 0;
+  for (const c of candidatos) {
+    const d = (c.descricao || '').toUpperCase();
+    if (!d) continue;
+    let score = 0;
+    if (d === t) score += 10;
+    const hits = palavras.filter((p) => d.includes(p)).length;
+    score += hits * 2;
+    if (palavras.length > 0 && hits === palavras.length) score += 5;
+    if (ano && c.ano) {
+      const diff = Math.abs(Number(c.ano) - Number(ano));
+      if (diff === 0) score += 3;
+      else if (diff > 1) score -= 5;
+    }
+    if (score > melhorScore) {
+      melhorScore = score;
+      melhor = c;
+    }
+  }
+  return melhorScore > 0 ? melhor : null;
+}
+
