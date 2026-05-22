@@ -41,7 +41,7 @@ export function useBuscaPlacaLocal(termo: string) {
         associadoNome: v.associados?.nome || '',
         associadoCpf: v.associados?.cpf || '',
         associadoStatus: v.associados?.status || 'ativo',
-        origem_sga: false as any, // marca local
+        origem_sga: false,
       }));
     },
   });
