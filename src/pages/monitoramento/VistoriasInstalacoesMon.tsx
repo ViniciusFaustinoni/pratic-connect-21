@@ -16,6 +16,7 @@ const MapaTab = lazy(() => import('./Mapa'));
 
 export default function VistoriasInstalacoesMon() {
   const { data: manualAtiva } = useConfigAtribuicaoManual();
+  const { data: suspensos } = useVeiculosSuspensos();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const defaultTab = tabFromUrl || (manualAtiva ? 'atribuicao-manual' : 'servicos');
