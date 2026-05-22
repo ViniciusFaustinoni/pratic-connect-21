@@ -705,7 +705,7 @@ export function AppSidebar() {
     }
     
     return baseGroups;
-  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount, propostasPendentesCount]);
+  }, [permissions, additionalModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount, propostasPendentesCount, isItemVisible]);
 
   const visibleMainItems = useMemo(() => {
     if (permissions.isSindicanteOnly) {
@@ -714,16 +714,22 @@ export function AppSidebar() {
         { title: 'Meus Casos', url: '/sindicante', icon: Search, color: MENU_COLORS.eventos },
       ];
     }
-    return filterByPermission(menuConfig.main).filter(item => {
-      if (item.url === '/dashboard') {
-        return visibleModules.length === 0 || visibleModules.includes('dashboard');
-      }
-      return true;
-    });
-  }, [permissions, visibleModules, fipeMenorAtivo]);
-  // Visibilidade de configurações baseada no banco
-  const showConfigModule = visibleModules.length === 0 || visibleModules.includes('configuracoes');
-  const visibleConfigItems = (permissions.isPerfilLimitado || !showConfigModule) ? [] : filterByPermission(configItems);
+    // Aditivo: se Dashboard não passou pelo perfil mas está em additionalModules, injeta.
+    const base = filterByPermission(menuConfig.main);
+    const hasDashboard = base.some(i => i.url === '/dashboard');
+    if (!hasDashboard && additionalModules.includes('dashboard')) {
+      const dashItem = menuConfig.main.find(i => i.url === '/dashboard');
+      if (dashItem) return [dashItem, ...base];
+    }
+    return base;
+  }, [permissions, additionalModules, fipeMenorAtivo]);
+
+  // Aditivo: Configurações fica visível se o perfil libera (não-limitado) OU se foi concedida como extra.
+  const hasConfigFromExtra = additionalModules.includes('configuracoes');
+  const showConfigModule = !permissions.isPerfilLimitado || hasConfigFromExtra;
+  const visibleConfigItems = !showConfigModule
+    ? []
+    : (hasConfigFromExtra && permissions.isPerfilLimitado ? configItems : filterByPermission(configItems));
 
   const [openGroups, setOpenGroups] = useState<string[]>([]);
 
