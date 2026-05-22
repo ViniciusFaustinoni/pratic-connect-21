@@ -158,6 +158,7 @@ Deno.serve(async (req) => {
           .maybeSingle()
 
         const diaVencimentoOriginal =
+          (substituicao as { dia_vencimento?: number | null }).dia_vencimento ??
           contratoAnterior?.dia_vencimento ??
           associado?.dia_vencimento ??
           10
