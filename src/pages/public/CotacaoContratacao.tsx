@@ -363,6 +363,22 @@ export default function CotacaoContratacao() {
       return 5;
     }
 
+    // Self-heal "limbo pós-pagamento": cliente terminou pagamento mas ainda não
+    // escolheu autovistoria/agendamento (tipo_vistoria=NULL) e não há nenhum
+    // agendamento materializado. Sem isso, etapaFinal poderia ter virado 5 por
+    // sinais antigos e a etapa 5 só tem fallback "Verificando status..." infinito.
+    // Força volta para a etapa Vistoria (4) onde o cliente pode escolher.
+    if (
+      !isTrocaTitularidade &&
+      cotacao?.status_contratacao === 'pagamento_ok' &&
+      !cotacao?.tipo_vistoria &&
+      !hasInstalacaoAgendada &&
+      !hasAgendamentoBase &&
+      !agendamentoConcluido
+    ) {
+      return 4;
+    }
+
     return etapaFinal;
   }, [
     cotacao?.status_contratacao,
@@ -400,8 +416,22 @@ export default function CotacaoContratacao() {
 
   // Sincronizar etapa com status da cotação (apenas se não está em navegação manual)
   useEffect(() => {
-    // Não sincronizar se usuário está navegando manualmente (revisando etapas anteriores)
-    if (navegacaoManual) return;
+    // Guarda contra "limbo pós-pagamento": se o usuário está em etapa 5 mas o
+    // estado da cotação não bate com nenhuma das branches renderizáveis dessa
+    // etapa (sem tipo_vistoria, sem agendamento, sem ativo, sem troca), ignora
+    // navegacaoManual e re-sincroniza para etapaDoStatus — evita o fallback
+    // "Verificando status da sua proposta..." infinito.
+    const emLimboEtapa5 =
+      etapaAtual === 5 &&
+      !isTrocaTitularidade &&
+      cotacao?.status_contratacao !== 'ativo' &&
+      !cotacao?.tipo_vistoria &&
+      !hasInstalacaoAgendada &&
+      !hasAgendamentoBase &&
+      !agendamentoConcluido &&
+      !(docsPendentes && docsPendentes.length > 0);
+
+    if (navegacaoManual && !emLimboEtapa5) return;
 
     if (cotacao?.status_contratacao) {
       let etapa = etapaDoStatus;
@@ -413,7 +443,7 @@ export default function CotacaoContratacao() {
 
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual, etapaAtual, isTrocaTitularidade, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, docsPendentes]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade segue a navOrder (Pagamento na sequência), igual à nova adesão.
@@ -1704,6 +1734,43 @@ export default function CotacaoContratacao() {
                         </div>
                       </CardContent>
                     </Card>
+                  ) : cotacao?.status_contratacao === 'pagamento_ok' && !cotacao?.tipo_vistoria ? (
+                    // ========== REDE DE SEGURANÇA: limbo pós-pagamento ==========
+                    // Caiu na etapa 5 mas o cliente ainda não escolheu autovistoria
+                    // x agendamento técnico. Renderiza a UI de seleção da etapa 4.
+                    <EtapaVistoria
+                      cotacaoId={cotacao.id}
+                      tipoVeiculo={detectarTipoVeiculoDaCotacao(cotacao)}
+                      tipoInstalacao={(cotacao as any).tipo_instalacao as 'rota' | 'base' | null}
+                      clienteNome={cotacao.nome_solicitante || ''}
+                      clienteTelefone={cotacao.telefone1_solicitante || undefined}
+                      clienteEmail={cotacao.email_solicitante || undefined}
+                      veiculoPlaca={cotacao.veiculo_placa || undefined}
+                      veiculoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ') || undefined}
+                      enderecoInicial={{
+                        cep: cotacao.cliente_cep || '',
+                        logradouro: cotacao.cliente_logradouro || '',
+                        numero: cotacao.cliente_numero || '',
+                        complemento: cotacao.cliente_complemento || '',
+                        bairro: cotacao.cliente_bairro || '',
+                        cidade: cotacao.cliente_cidade || '',
+                        estado: cotacao.cliente_uf || '',
+                      }}
+                      onComplete={() => {
+                        refetch();
+                      }}
+                      onAgendar={() => {
+                        refetch();
+                      }}
+                      readOnly={false}
+                      tipoVistoriaRealizada={cotacao.tipo_vistoria as 'autovistoria' | 'agendada' | undefined}
+                      subFipe={!exigeRastreador({
+                        tipo: detectarTipoVeiculoDaCotacao(cotacao),
+                        valorFipe: Number((cotacao as any).veiculo_valor_fipe ?? (cotacao as any).valor_fipe ?? 0),
+                        combustivel: (cotacao as any).veiculo_combustivel || undefined,
+                      } as any).exige}
+                      criadoEm={(cotacao as any)?.created_at}
+                    />
                   ) : (
                     // ========== FALLBACK: Tipo não definido ou estado inconsistente ==========
                     <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
