@@ -287,6 +287,12 @@ export default function CotadorPage() {
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
+
+  // Gate canônico "Este veículo é 0KM?" — bloqueia o restante do formulário
+  // de veículo enquanto a resposta for null. Quando true, força modo manual.
+  // Pré-população: SOMENTE com boolean explícito (cotacoes.veiculo_zero_km).
+  // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
+  const [isZeroKm, setIsZeroKm] = useState<boolean | null>(null);
   
   // Busca por placa
   const [placaBusca, setPlacaBusca] = useState('');
