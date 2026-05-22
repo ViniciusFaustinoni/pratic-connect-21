@@ -1042,6 +1042,17 @@ export default function AprovacaoInstalacaoDetalhe() {
                 </Button>
               )}
 
+              <Button
+                variant="outline"
+                className="flex-1 min-w-[200px] border-indigo-500/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10"
+                onClick={() => setManutencaoOpen(true)}
+                disabled={aprovar.isPending || reprovar.isPending}
+                title="Converte este atendimento em Vistoria de Manutenção (fallback quando o rastreador já está no veículo)."
+              >
+                <Wrench className="h-4 w-4 mr-2" />
+                Tratar como Manutenção
+              </Button>
+
               {mostrarReprovar && (
                 <Button
                   variant="destructive"
