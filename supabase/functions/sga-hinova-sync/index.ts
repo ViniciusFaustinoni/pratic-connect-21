@@ -41,6 +41,7 @@ import {
   cleanAlphaNum,
   cleanDigits,
   isPlacaPlaceholder,
+  variantesCodigoFipe,
   type AssociadoCtx,
   type VeiculoCtx,
   type DocumentoEntrada,
@@ -966,61 +967,122 @@ serve(async (req) => {
           // Fonte da verdade do vencimento — evita divergência com SGA.
           dia_vencimento_contrato: contrato?.dia_vencimento ?? null,
         };
-        const payloadV = buildVeiculoPayload(veiculo, codigoFipeLimpo, Number(veiculo.valor_fipe) || valorFipeAuto || 0, ctxV);
+        // Hinova exige `codigo_fipe` em formato específico (varia por tenant).
+        // Algumas regionais aceitam "827144-5" (canônico com hífen), outras
+        // apenas "8271445" (sem hífen) ou "827144" (sem dígito verificador).
+        // Quando o tenant não reconhece o formato, devolve
+        // `"O MODELO enviado não foi encontrado"`. Para destravar esses casos
+        // sem intervenção manual, tentamos as variantes em sequência e
+        // persistimos a que funcionou.
+        const variantesFipe = variantesCodigoFipe(codigoFipeLimpo);
+        const valorFipeFinal = Number(veiculo.valor_fipe) || valorFipeAuto || 0;
 
-        try {
-          const res = await cadastrarVeiculoHinova(supabase, payloadV);
-          // Mensagem amigável: priorizamos `errors` (detalhe técnico do Hinova)
-          // sobre `mensagem` (que costuma ser apenas "Não aceitável" / "Bad Request").
-          const detalhe = res.errors.length > 0
-            ? res.errors.join('; ')
-            : (res.mensagem || `HTTP ${res.status}`);
-          await logSync(_vid, _aid, 'cadastrar_veiculo', res.ok ? 'success' : 'error',
-            payloadV, res.raw, res.ok ? null : detalhe);
-          if (!res.ok || !res.codigo) {
-            const allErr = [...res.errors, res.mensagem || ''].join(' ').toLowerCase();
-            // Se Hinova diz que o associado não está cadastrado → invalidar e requeue
-            const isAssocInvalido = allErr.includes('associado') &&
-              (allErr.includes('não está cadastrado') || allErr.includes('nao esta cadastrado')
-               || allErr.includes('não encontrado') || allErr.includes('nao encontrado') || allErr.includes('not found'));
-            if (isAssocInvalido && codigoAssociadoHinova) {
-              await supabase.from('associados').update({
-                codigo_hinova: null, sincronizado_hinova: false, sincronizado_hinova_em: null,
-              }).eq('id', _aid);
-              await logSync(_vid, _aid, 'invalidar_codigo_associado', 'info',
-                { codigo_invalidado: codigoAssociadoHinova }, res.raw, 'Associado inválido no Hinova — recadastrar');
-              await setStatusSga(_vid, 'erro_sincronizacao');
-              await upsertQueue(_vid, _aid, 'associado', 'codigo_associado inválido no Hinova — resetando');
-              return;
+        let lastRes: Awaited<ReturnType<typeof cadastrarVeiculoHinova>> | null = null;
+        let lastPayloadV: Record<string, unknown> | null = null;
+        let lastErrDetalhe = '';
+        let usouVariante: string | null = null;
+        let exceptionFinal: any = null;
+
+        for (const variante of variantesFipe) {
+          const payloadV = buildVeiculoPayload(veiculo, variante, valorFipeFinal, ctxV);
+          lastPayloadV = payloadV;
+          try {
+            const res = await cadastrarVeiculoHinova(supabase, payloadV);
+            lastRes = res;
+            const detalhe = res.errors.length > 0
+              ? res.errors.join('; ')
+              : (res.mensagem || `HTTP ${res.status}`);
+            lastErrDetalhe = detalhe;
+
+            if (res.ok && res.codigo) {
+              usouVariante = variante;
+              await logSync(_vid, _aid, 'cadastrar_veiculo', 'success',
+                { ...payloadV, _variante_fipe: variante }, res.raw, null);
+              break;
             }
+
+            // Só vale tentar a próxima variante quando o erro é especificamente
+            // "modelo não encontrado" (significa que o codigo_fipe não bateu
+            // no catálogo Hinova). Qualquer outro erro deve cair direto na fila.
+            const allErrLower = `${detalhe} ${(res.raw as any)?.error?.join?.(' ') || ''}`.toLowerCase();
+            const ehErroDeModelo = allErrLower.includes('modelo enviado')
+              || (allErrLower.includes('modelo') && allErrLower.includes('encontrado'));
+            if (!ehErroDeModelo) break;
+
+            await logSync(_vid, _aid, 'cadastrar_veiculo', 'warning',
+              { ...payloadV, _variante_fipe: variante, _proxima_tentativa: true },
+              res.raw, `Variante "${variante}" rejeitada por modelo. Tentando próxima.`);
+          } catch (e: any) {
+            exceptionFinal = e;
+            // erro transitório / de rede — não vale a pena ir tentando variantes
+            break;
+          }
+        }
+
+        const sucesso = !!(lastRes?.ok && lastRes?.codigo);
+        if (!sucesso) {
+          const detalheFinal = lastErrDetalhe || (exceptionFinal ? String(exceptionFinal?.message || exceptionFinal) : 'falha desconhecida');
+          await logSync(_vid, _aid, 'cadastrar_veiculo', 'error',
+            lastPayloadV || { _variantes_tentadas: variantesFipe },
+            lastRes?.raw ?? null,
+            `${detalheFinal}${variantesFipe.length > 1 ? ` (tentadas ${variantesFipe.length} variantes de codigo_fipe: ${variantesFipe.join(', ')})` : ''}`);
+
+          const allErr = lastRes
+            ? [...lastRes.errors, lastRes.mensagem || ''].join(' ').toLowerCase()
+            : '';
+          // Se Hinova diz que o associado não está cadastrado → invalidar e requeue
+          const isAssocInvalido = allErr.includes('associado') &&
+            (allErr.includes('não está cadastrado') || allErr.includes('nao esta cadastrado')
+             || allErr.includes('não encontrado') || allErr.includes('nao encontrado') || allErr.includes('not found'));
+          if (isAssocInvalido && codigoAssociadoHinova) {
+            await supabase.from('associados').update({
+              codigo_hinova: null, sincronizado_hinova: false, sincronizado_hinova_em: null,
+            }).eq('id', _aid);
+            await logSync(_vid, _aid, 'invalidar_codigo_associado', 'info',
+              { codigo_invalidado: codigoAssociadoHinova }, lastRes?.raw ?? null, 'Associado inválido no Hinova — recadastrar');
             await setStatusSga(_vid, 'erro_sincronizacao');
-            await upsertQueue(_vid, _aid, 'veiculo', `Falha cadastro veículo: ${detalhe}`, codigoAssociadoHinova);
+            await upsertQueue(_vid, _aid, 'associado', 'codigo_associado inválido no Hinova — resetando');
             return;
           }
-          codigoVeiculoHinova = res.codigo;
 
-          // Confirmação defensiva: força PENDENTE (3) via GET /veiculo/alterar-situacao-para
-          // logo após o cadastro. Mesma postura que adotamos para o associado.
-          // Não interrompe a sync se falhar — o payload de cadastro já enviou codigo_situacao=3.
-          try {
-            const sit = await alterarSituacaoParaVeiculoHinova(supabase, codigoVeiculoHinova, 3);
-            const detSit = sit.errors.length > 0
-              ? sit.errors.join('; ')
-              : (sit.mensagem || `HTTP ${sit.status}`);
-            await logSync(_vid, _aid, 'alterar_situacao_veiculo', sit.ok ? 'success' : 'warning',
-              { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: 3 },
-              sit.raw, sit.ok ? null : detSit);
-          } catch (e: any) {
-            await logSync(_vid, _aid, 'alterar_situacao_veiculo', 'warning',
-              { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: 3 },
-              null, String(e?.message || e));
-          }
-        } catch (e: any) {
-          await logSync(_vid, _aid, 'cadastrar_veiculo', 'error', payloadV, null, String(e?.message || e));
           await setStatusSga(_vid, 'erro_sincronizacao');
-          await upsertQueue(_vid, _aid, 'veiculo', `Erro rede/transitório: ${e?.message || e}`,
-            codigoAssociadoHinova);
+          const motivoFila = exceptionFinal
+            ? `Erro rede/transitório: ${exceptionFinal?.message || exceptionFinal}`
+            : `Falha cadastro veículo: ${detalheFinal}`;
+          await upsertQueue(_vid, _aid, 'veiculo', motivoFila, codigoAssociadoHinova);
           return;
+        }
+
+        codigoVeiculoHinova = lastRes!.codigo!;
+
+        // Se uma variante alternativa funcionou, persistimos o formato canônico
+        // no banco para que reprocessamentos futuros já saiam corretos.
+        if (usouVariante && usouVariante !== codigoFipeLimpo) {
+          try {
+            await supabase.from('veiculos').update({ codigo_fipe: usouVariante }).eq('id', _vid);
+            await logSync(_vid, _aid, 'normalizar_codigo_fipe', 'info',
+              { antes: codigoFipeLimpo, depois: usouVariante }, null,
+              'codigo_fipe re-normalizado para o formato aceito pelo SGA Hinova deste tenant.');
+          } catch (e: any) {
+            console.warn('[sga-hinova-sync] falha ao persistir variante FIPE:', e?.message);
+          }
+        }
+
+        // Confirmação defensiva: força PENDENTE (3) via GET /veiculo/alterar-situacao-para
+        // logo após o cadastro. Mesma postura que adotamos para o associado.
+        // Não interrompe a sync se falhar — o payload de cadastro já enviou codigo_situacao=3.
+        try {
+          const sit = await alterarSituacaoParaVeiculoHinova(supabase, codigoVeiculoHinova, 3);
+          const detSit = sit.errors.length > 0
+            ? sit.errors.join('; ')
+            : (sit.mensagem || `HTTP ${sit.status}`);
+          await logSync(_vid, _aid, 'alterar_situacao_veiculo', sit.ok ? 'success' : 'warning',
+            { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: 3 },
+            sit.raw, sit.ok ? null : detSit);
+        } catch (e: any) {
+          await logSync(_vid, _aid, 'alterar_situacao_veiculo', 'warning',
+            { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: 3 },
+            null, String(e?.message || e));
         }
       }
 
