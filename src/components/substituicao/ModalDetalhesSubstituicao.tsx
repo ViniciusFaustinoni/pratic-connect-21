@@ -4,9 +4,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Send, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, Send, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSolicitacaoSubstituicao, useEnviarTermoCancelamentoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
+import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
