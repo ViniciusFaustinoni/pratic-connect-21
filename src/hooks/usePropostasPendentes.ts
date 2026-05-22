@@ -857,7 +857,13 @@ export function usePropostasPendentes() {
           veiculo_blindado: veiculoBlindadoCot,
           cenario_adesao: cenarioAdesaoCot,
           plano_tem_roubo_furto: planoTemRouboFurto,
-          optou_roubo_furto: !!(veiculoContrato?.cobertura_roubo_furto || temAutovistoria || planoTemRouboFurto),
+          // R/F só conta como "optou" quando há sinal real de adesão pelo cliente:
+          // (1) cobertura R/F já ativada no veículo, ou
+          // (2) autovistoria enxuta/completa materializada (o ato que dispara R/F).
+          // Plano que TEM R/F disponível NÃO significa que o cliente optou — é só
+          // pré-requisito. Caso contrário, propostas sem autovistoria seriam marcadas
+          // como "Sim — optou" indevidamente.
+          optou_roubo_furto: !!(veiculoContrato?.cobertura_roubo_furto || temAutovistoria),
           endereco_instalacao: _resolveEnderecoInstalacao(cotacao, {
             logradouro: associado?.logradouro ?? (contrato as any).cliente_logradouro,
             numero: associado?.numero ?? null,
@@ -1556,7 +1562,10 @@ export function useProposta(contratoId: string | undefined) {
         veiculo_blindado: veiculoBlindadoCot,
         cenario_adesao: cenarioAdesaoCot,
         plano_tem_roubo_furto: planoTemRouboFurto,
-        optou_roubo_furto: !!(veiculoCoberturaRouboFurto || temAutovistoriaProp || planoTemRouboFurto),
+        // Ver comentário canônico na query de lista (acima): "optou" exige sinal real
+        // (cobertura ativada ou autovistoria materializada). Plano com R/F disponível
+        // é pré-requisito, não consentimento.
+        optou_roubo_furto: !!(veiculoCoberturaRouboFurto || temAutovistoriaProp),
         endereco_instalacao: _resolveEnderecoInstalacao(cotacaoDetalhe, {
           logradouro: (associado as any)?.logradouro ?? (contrato as any).cliente_logradouro,
           numero: (associado as any)?.numero ?? null,
