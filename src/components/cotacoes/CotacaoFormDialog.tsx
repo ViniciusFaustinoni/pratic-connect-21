@@ -1815,6 +1815,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           solicitar_fipe_menor: !!(fipeMenorAtivo && fipeMenorInfo?.elegivel && fipeMenorInfo?.faixaInferior),
           status: 'rascunho',
           vendedor_id: vendedorIdFinal,
+          // Snapshot canônico do tipo de veículo (derivado da elegibilidade de linhas)
+          tipo_veiculo: tipoVeiculoCanonico,
+          tipo_veiculo_motivo: tipoVeiculoMotivo,
         });
 
         // Redução de Cota (Regra do 1%): aplicação AUTOMÁTICA quando elegível.
