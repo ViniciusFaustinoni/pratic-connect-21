@@ -104,7 +104,7 @@ export function useServicosParaAtribuir() {
       // Fetch base inspections without technician assigned
       const { data: baseItems, error: baseError } = await supabase
         .from('agendamentos_base')
-        .select('id, instalacao_id, vistoria_id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes, oficina_id')
+        .select('id, cotacao_id, instalacao_id, vistoria_id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes, oficina_id')
         .is('atendido_por', null)
         .in('status', ['agendado', 'pendente'])
         .gte('data_agendada', hoje)
@@ -112,6 +112,30 @@ export function useServicosParaAtribuir() {
         .order('horario', { ascending: true });
 
       if (baseError) console.error('Erro ao buscar agendamentos_base:', baseError);
+
+      // Gate canônico: agendamentos_base só entram na Atribuição Manual quando o
+      // contrato vinculado já foi APROVADO pelo Cadastro (`aprovado_em IS NOT NULL`).
+      // Sem esse gate, a proposta caía no Monitoramento no instante em que o
+      // cliente agendava no link público — paralelamente à fila do Cadastro —
+      // violando o fluxo canônico (caso MARCOS VINICIUS DATIVO, KOU6D37, 22/05/26).
+      // Troca de titularidade tem aprovação independente (mesma exceção do branch de servicos).
+      const cotacaoIdsBase = Array.from(
+        new Set((baseItems || []).map((b: any) => b.cotacao_id).filter(Boolean))
+      );
+      const aprovadosPorCotacao = new Map<string, boolean>();
+      if (cotacaoIdsBase.length > 0) {
+        const { data: contratosBase } = await supabase
+          .from('contratos')
+          .select('cotacao_id, aprovado_em, origem_troca_titularidade_id')
+          .in('cotacao_id', cotacaoIdsBase);
+        for (const c of contratosBase || []) {
+          if (!c.cotacao_id) continue;
+          aprovadosPorCotacao.set(
+            c.cotacao_id,
+            !!c.aprovado_em || !!c.origem_troca_titularidade_id
+          );
+        }
+      }
 
       // Dedupe: se o agendamento_base já tem servico vinculado (instalacao ou
       // vistoria) presente na lista de servicosFiltrados, NÃO mostrar o
@@ -129,6 +153,9 @@ export function useServicosParaAtribuir() {
       );
 
       const baseSemDup = (baseItems || []).filter((b: any) => {
+        // Gate Cadastro: sem cotação vinculada ou sem aprovação → não exibe.
+        if (!b.cotacao_id) return false;
+        if (!aprovadosPorCotacao.get(b.cotacao_id)) return false;
         if (b.instalacao_id && instalacoesNaFila.has(b.instalacao_id)) return false;
         if (b.vistoria_id && vistoriasNaFila.has(b.vistoria_id)) return false;
         return true;
