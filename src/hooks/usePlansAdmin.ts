@@ -926,6 +926,8 @@ export function useDuplicateCobertura() {
         nome: `${(cobData.nome || '').slice(0, 140)} (cópia)`,
         codigo: `${(cobData.codigo || 'COB').slice(0, 80)}-CP-${suffix}`,
         ativo: false,
+        // SGA code nunca é copiado — mapeamento manual posterior
+        codigo_sga: null,
       };
 
       const { data, error } = await supabase
