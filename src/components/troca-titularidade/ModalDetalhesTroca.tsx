@@ -69,6 +69,19 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
 
+  // Polling do termo (fallback para o webhook Autentique, que não chega).
+  // Ativa enquanto o modal está aberto, o termo foi enviado e ainda não foi
+  // marcado como assinado. Ver `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica`.
+  const precisaSyncTermo = !!solicitacao
+    && !!solicitacao.termo_cancelamento_enviado_em
+    && !solicitacao.termo_cancelamento_assinado_em
+    && solicitacao.status === 'aguardando_termo_cancelamento';
+  const syncTermo = useSyncTermoCancelamento({
+    tipo: 'troca',
+    solicitacaoId: solicitacao?.id,
+    enabled: open && precisaSyncTermo,
+  });
+
   // Monta cotacaoBase para o formulário padrão a partir da solicitação +
   // dados do veículo. NÃO cria cotação avulsa antes — a cotação só nasce
   // quando o usuário escolher um plano e salvar.
