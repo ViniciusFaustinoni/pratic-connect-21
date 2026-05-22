@@ -48,6 +48,9 @@ import { useDeleteAssociado } from '@/hooks/useAssociados';
 import { supabase } from '@/integrations/supabase/client';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { UserAvatar } from '@/components/UserAvatar';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { LinkPublicoIncompletoTab } from '@/components/cadastro/LinkPublicoIncompletoTab';
+import { useCotacoesLinkPublicoIncompletoCount } from '@/hooks/useCotacoesLinkPublicoIncompleto';
 
 // ============================================
 // STATUS CONFIG
