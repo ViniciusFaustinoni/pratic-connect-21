@@ -1304,6 +1304,8 @@ export function useDuplicateProductLine() {
             name: sufixo ? `${bData.name}${sufixo}` : bData.name,
             slug: ((bData.slug as string) || '').slice(0, 80) + `-${uid()}`,
             preco_sugerido: applyDiscount(bData.preco_sugerido, desconto),
+            // SGA code nunca é copiado — mapeamento manual posterior
+            codigo_sga: null,
           });
           benefitOriginMap.push({
             origBenefitId: pb.benefit_id,
