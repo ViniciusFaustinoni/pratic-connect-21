@@ -2313,20 +2313,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 Veículo
               </h3>
               
-              {/* Toggle: Veículo 0KM (dentro da Agência) */}
-              <div className={`flex items-start gap-3 rounded-lg border p-3 ${isZeroKm ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}>
-                <div className="flex-1 space-y-0.5">
-                  <Label htmlFor="cot-0km" className="text-sm font-medium cursor-pointer">
-                    Veículo 0KM (dentro da Agência)
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Sem placa definitiva. Use o valor da Nota Fiscal e preencha marca/modelo/ano manualmente.
-                  </p>
-                </div>
-                <Switch
-                  id="cot-0km"
-                  checked={isZeroKm}
-                  onCheckedChange={(checked) => {
+              {/* Gate canônico "Este veículo é 0KM?" — substituiu o toggle passável */}
+              <div id="bloco-veiculo-gate-0km">
+                <PerguntaZeroKmGate
+                  value={isZeroKm}
+                  onChange={(checked) => {
                     setIsZeroKm(checked);
                     if (checked) {
                       setPlaca('');
@@ -2336,6 +2327,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   }}
                 />
               </div>
+
+              {/* Restante do bloco veículo só aparece após responder o gate */}
+              {isZeroKm !== null && (
+              <>
+              {isZeroKm === true && (
+                <p className="text-xs text-muted-foreground rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2">
+                  Veículo 0KM: chassi é obrigatório. Use o valor da Nota Fiscal e preencha marca/modelo/ano manualmente abaixo.
+                </p>
+              )}
+
 
               <div className="flex gap-2">
                 <Input
