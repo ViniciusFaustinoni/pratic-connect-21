@@ -1,0 +1,2 @@
+ALTER TABLE public.veiculos ADD COLUMN IF NOT EXISTS codigo_modelo_hinova INTEGER NULL;
+COMMENT ON COLUMN public.veiculos.codigo_modelo_hinova IS 'Código do modelo no catálogo Hinova (fallback quando codigo_fipe não bate). Usado em payload de cadastrar veículo.';
