@@ -1175,6 +1175,16 @@ export default function AprovacaoInstalacaoDetalhe() {
           );
         }}
       />
+
+      {/* Tratar como Manutenção — fallback do Monitoramento (não mexe nos fluxos pré-existentes de Troca/Substituição/Revistoria) */}
+      <MarcarManutencaoDialog
+        open={manutencaoOpen}
+        onOpenChange={setManutencaoOpen}
+        servicoId={servico.id}
+        veiculoId={veiculo.id}
+        veiculoPlaca={veiculo.placa}
+        onSuccess={() => navigate('/monitoramento/aprovacao-associados')}
+      />
     </div>
   );
 }
