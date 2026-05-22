@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ArrowLeftRight, Users, FileInput, PlusCircle, Search, Loader2, AlertTriangle, ArrowLeft, Car, CheckCircle2, XCircle, Plus, Info } from 'lucide-react';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useBuscaPlaca } from '@/hooks/useBuscaPlaca';
+import { useBuscaPlacaLocal } from '@/hooks/useBuscaPlacaLocal';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
