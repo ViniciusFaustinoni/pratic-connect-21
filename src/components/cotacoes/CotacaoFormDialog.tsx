@@ -2505,6 +2505,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   </div>
                 </>
               )}
+              </>
+              )}
             </div>
 
             <Separator />
