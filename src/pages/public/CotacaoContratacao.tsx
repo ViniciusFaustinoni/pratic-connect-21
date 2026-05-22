@@ -410,6 +410,50 @@ export default function CotacaoContratacao() {
     [dispensaVistoriaTroca]
   );
 
+  // ========== GUARD CANÔNICO: limbo pós-pagamento ==========
+  // Cliente pagou (status_contratacao='pagamento_ok') mas ainda não escolheu
+  // autovistoria × técnico × base. Sem este curto-circuito, dependendo de
+  // etapaAtual/navegacaoManual/bundle em cache, o render cai em loader infinito
+  // ("Verificando status...") ou em readOnly "Vistoria Concluída".
+  // Esta flag é consumida no TOPO do render de Etapa 4 e Etapa 5 para forçar
+  // EtapaVistoria editável antes de qualquer outra branch decidir.
+  const emLimboPosPagamento = useMemo(
+    () =>
+      !isTrocaTitularidade &&
+      cotacao?.status_contratacao === 'pagamento_ok' &&
+      !cotacao?.tipo_vistoria &&
+      !cotacao?.vistoria_concluida_em &&
+      !hasInstalacaoAgendada &&
+      !hasAgendamentoBase &&
+      !agendamentoConcluido,
+    [
+      isTrocaTitularidade,
+      cotacao?.status_contratacao,
+      cotacao?.tipo_vistoria,
+      cotacao?.vistoria_concluida_em,
+      hasInstalacaoAgendada,
+      hasAgendamentoBase,
+      agendamentoConcluido,
+    ],
+  );
+
+  // Telemetria: log único quando entrar/sair do limbo, para diagnóstico de lotes.
+  useEffect(() => {
+    if (emLimboPosPagamento && cotacao?.id) {
+      console.warn(
+        '[CotacaoContratacao] LIMBO_POS_PAGAMENTO detectado',
+        {
+          cotacao_id: cotacao.id,
+          numero: cotacao.numero,
+          valor_fipe: (cotacao as any).valor_fipe,
+          etapaAtual,
+          navegacaoManual,
+        },
+      );
+    }
+  }, [emLimboPosPagamento, cotacao?.id, cotacao?.numero, etapaAtual, navegacaoManual]);
+
+
 
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
