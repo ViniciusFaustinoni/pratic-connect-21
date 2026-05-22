@@ -50,7 +50,7 @@ export function VistoriaInternaDialog({ open, onOpenChange, servicoId }: Props) 
           <X className="h-5 w-5" />
         </Button>
         {servicoId && (
-          <InstaladorChecklist servicoIdProp={servicoId} onClose={handleClose} />
+          <InstaladorChecklist servicoIdProp={servicoId} vistoriaInterna onClose={handleClose} />
         )}
       </DialogContent>
     </Dialog>

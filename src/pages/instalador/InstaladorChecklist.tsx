@@ -108,11 +108,12 @@ type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: str
 interface InstaladorChecklistProps {
   /** Quando passado, sobrepõe o id da rota — usado quando a tela é embedada em modal (ex.: Coordenador de Monitoramento). */
   servicoIdProp?: string;
+  vistoriaInterna?: boolean;
   /** Callback de saída — substitui o navigate('/instalador') quando embedado. */
   onClose?: () => void;
 }
 
-export default function InstaladorChecklist({ servicoIdProp, onClose }: InstaladorChecklistProps = {}) {
+export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, onClose }: InstaladorChecklistProps = {}) {
   const params = useParams<{ id: string }>();
   const id = servicoIdProp ?? params.id;
   const navigate = useNavigate();
@@ -1418,7 +1419,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
                       confirmed={!!videoUrl && !uploadingVideo}
                       maxDuration={120}
                       label="Vídeo 360° do veículo"
-                      cameraOnly
+                      cameraOnly={!vistoriaInterna}
                     />
                   </CardContent>
                 </Card>
