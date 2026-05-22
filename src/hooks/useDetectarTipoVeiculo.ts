@@ -82,7 +82,7 @@ export function useDetectarTipoVeiculo(
 
       return null;
     },
-    enabled: !!marcaNorm,
+    enabled: !!marcaNorm || snapshotTipo === 'moto' || snapshotTipo === 'carro',
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
   });
