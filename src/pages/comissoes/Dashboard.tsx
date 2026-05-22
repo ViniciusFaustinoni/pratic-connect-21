@@ -51,6 +51,22 @@ export default function DashboardComissoes() {
         </Button>
       </div>
 
+      {semGrade && semGrade.total > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {semGrade.total} vendedor(es) sem grade de comissão atribuída
+          </AlertTitle>
+          <AlertDescription>
+            Estes vendedores geraram lançamentos no período mas não têm grade vinculada — as comissões estão sendo registradas com valor R$ 0,00. Atribua uma grade em <strong>Comissões › Grades de Comissão</strong> para regularizar:{' '}
+            <span className="font-medium">
+              {semGrade.semGrade.slice(0, 5).map((v) => v.nome).join(', ')}
+              {semGrade.semGrade.length > 5 ? ` e mais ${semGrade.semGrade.length - 5}` : ''}
+            </span>.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Filtros</CardTitle>
