@@ -13,7 +13,13 @@ type TipoVeiculoResult = 'carro' | 'moto';
 export function useDetectarTipoVeiculo(
   marca: string | undefined | null,
   modelo: string | undefined | null,
-  tipoVeiculoApi?: string | null
+  tipoVeiculoApi?: string | null,
+  /**
+   * Snapshot canônico (cotacoes.tipo_veiculo / contratos.tipo_veiculo). Quando
+   * presente, vence sobre todas as heurísticas. Ver
+   * `mem://logic/operations/vehicle-type-detection-source`.
+   */
+  snapshotTipo?: 'carro' | 'moto' | null
 ) {
   const marcaNorm = (marca || '').trim().toUpperCase();
   const modeloNorm = (modelo || '').trim().toUpperCase();
