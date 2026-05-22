@@ -54,18 +54,21 @@ export function RealizarVistoriaInternaButton({
 }: Props) {
   const perms = usePermissions();
   const podeUsar = perms.isCoordenadorMonitoramento || perms.isDiretor || (perms as any).isAdminMaster || (perms as any).isDesenvolvedor;
+  const [dialogOpen, setDialogOpen] = useState(false);
+
   if (!podeUsar) return null;
-
-
-  // Esconde em status terminal — nada a executar
   if (STATUS_TERMINAIS.has(servico.status)) return null;
 
   const rotaBase = resolverRotaTecnico(servico.tipo);
   if (!rotaBase) return null;
 
+  // Para instalação / vistoria_entrada / revistoria abrimos a tela embedada em modal.
+  // Demais tipos (retirada, manutenção, vistoria genérica) seguem com window.open
+  // por enquanto, já que reusam outras páginas do app do instalador.
+  const podeEmbedar = rotaBase === '/instalador/instalacao';
+
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Auditoria não-bloqueante
     void registrarLog({
       acao: 'iniciar',
       modulo: 'monitoramento',
@@ -76,17 +79,21 @@ export function RealizarVistoriaInternaButton({
         tipo: servico.tipo,
         placa: servico.veiculo?.placa ?? null,
         associado_id: servico.associado_id ?? null,
-        modo: 'vistoria_interna_coordenador',
+        modo: podeEmbedar ? 'vistoria_interna_coordenador_modal' : 'vistoria_interna_coordenador',
       },
     });
-    toast.info('Abrindo tela de execução…', {
-      description: 'A conclusão segue o mesmo fluxo do técnico.',
-    });
-    window.open(`${rotaBase}/${servico.id}`, '_blank', 'noopener,noreferrer');
+    if (podeEmbedar) {
+      setDialogOpen(true);
+    } else {
+      toast.info('Abrindo tela de execução…', {
+        description: 'A conclusão segue o mesmo fluxo do técnico.',
+      });
+      window.open(`${rotaBase}/${servico.id}`, '_blank', 'noopener,noreferrer');
+    }
   };
 
-  if (variant === 'icon') {
-    return (
+  const trigger =
+    variant === 'icon' ? (
       <Button
         type="button"
         variant="ghost"
@@ -97,20 +104,31 @@ export function RealizarVistoriaInternaButton({
       >
         <ClipboardCheck className="h-4 w-4" />
       </Button>
+    ) : (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className={cn('gap-1.5 h-9 border-primary/40 text-primary hover:bg-primary/5', className)}
+        onClick={handleClick}
+        title="Executar fotos, vídeo e dados do rastreador como técnico (Coordenador de Monitoramento)"
+      >
+        <ClipboardCheck className="h-4 w-4" />
+        Realizar Vistoria Interna
+      </Button>
     );
-  }
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className={cn('gap-1.5 h-9 border-primary/40 text-primary hover:bg-primary/5', className)}
-      onClick={handleClick}
-      title="Executar fotos, vídeo e dados do rastreador como técnico (Coordenador de Monitoramento)"
-    >
-      <ClipboardCheck className="h-4 w-4" />
-      Realizar Vistoria Interna
-    </Button>
+    <>
+      {trigger}
+      {podeEmbedar && (
+        <VistoriaInternaDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          servicoId={servico.id}
+        />
+      )}
+    </>
   );
 }
+
