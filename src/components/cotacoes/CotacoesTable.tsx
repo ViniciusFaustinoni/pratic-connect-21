@@ -254,44 +254,44 @@ export function CotacoesTable({
                     </TableCell>
                   )}
                   {/* Status / Etapa */}
-                  <TableCell className="py-3">
-                    <div className="flex flex-col gap-1.5">
+                  <TableCell className="py-3 align-top">
+                    <div className="flex flex-col gap-1 items-start">
                       {(() => {
                         const prio = (cotacao as any).prioridade as string | undefined;
                         if (prio && prio !== 'normal') {
                           const isUrg = prio === 'urgente';
                           return (
-                            <Badge
+                            <span
                               className={cn(
-                                'font-bold border-0 text-[10px] px-2 py-0.5 w-fit rounded-full animate-pulse',
+                                'inline-flex items-center h-5 px-2 rounded-md text-[10px] font-bold tracking-wide whitespace-nowrap animate-pulse',
                                 isUrg
-                                  ? 'bg-red-500/20 text-red-700 dark:text-red-300'
-                                  : 'bg-orange-500/20 text-orange-700 dark:text-orange-300',
+                                  ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+                                  : 'bg-orange-500/15 text-orange-700 dark:text-orange-300',
                               )}
                             >
-                              ⚡ Prioridade {isUrg ? 'URGENTE' : 'ALTA'}
-                            </Badge>
+                              ⚡ {isUrg ? 'URGENTE' : 'ALTA'}
+                            </span>
                           );
                         }
                         return null;
                       })()}
-                      <Badge className={cn(
-                        status.bgColor, status.color, 
-                        "font-semibold border-0 text-[11px] px-2.5 py-0.5 w-fit rounded-full"
+                      <span className={cn(
+                        status.bgColor, status.color,
+                        "inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold whitespace-nowrap"
                       )}>
                         <status.icon className="h-3 w-3 mr-1" />
                         {status.label}
-                      </Badge>
+                      </span>
                       {etapaInfo && (
-                        <div className={cn(
-                          "flex items-center gap-1 text-[10px] font-medium w-fit px-2 py-0.5 rounded-full",
+                        <span className={cn(
+                          "inline-flex items-center h-5 px-2 rounded-md text-[10px] font-medium whitespace-nowrap",
                           etapaInfo.bgColor, etapaInfo.color
                         )}>
-                          <ArrowRight className="h-2.5 w-2.5" />
+                          <ArrowRight className="h-2.5 w-2.5 mr-1 shrink-0" />
                           {etapaInfo.label}
                           <FlagTravada cotacao={cotacao} className="ml-1" />
                           <FlagPlacaExpirando cotacao={cotacao} className="ml-1" />
-                        </div>
+                        </span>
                       )}
                       {(() => {
                         const tipo =
