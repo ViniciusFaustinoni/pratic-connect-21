@@ -87,7 +87,7 @@ serve(async (req) => {
       const dadosNovo = (troca.novo_titular_dados || {}) as Record<string, string>;
       const cpfLimpo = (dadosNovo.cpf || "").replace(/\D/g, "");
       const { data: vehicleData } = await supabase
-        .from("veiculos").select("placa, chassi, renavam, marca, modelo, ano, cor, valor_fipe").eq("id", troca.veiculo_id).maybeSingle();
+        .from("veiculos").select("placa, chassi, renavam, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe").eq("id", troca.veiculo_id).maybeSingle();
 
       let sgaCodAss: number | null = null;
       let sgaCodVeic: number | null = null;
