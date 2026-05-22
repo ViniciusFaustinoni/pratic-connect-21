@@ -61,7 +61,7 @@ export function useVeiculosSuspensos() {
         `,
         )
         .eq('cobertura_suspensa', true)
-        .not('status', 'in', '(cancelado,inativo)')
+        .not('status', 'in', '(cancelado)')
         .or(orFilter)
         .order('cobertura_suspensa_em', { ascending: true });
 
