@@ -1160,6 +1160,22 @@ serve(async (req) => {
           }
         }
 
+        // Se o fallback de codigo_modelo resolveu, persiste para que próximas
+        // sincronizações já partam direto pelo fast-path.
+        if (usouCodigoModelo && (veiculo as any).codigo_modelo_hinova !== usouCodigoModelo) {
+          try {
+            await supabase.from('veiculos')
+              .update({ codigo_modelo_hinova: usouCodigoModelo })
+              .eq('id', _vid);
+            await logSync(_vid, _aid, 'persistir_codigo_modelo', 'info',
+              { codigo_modelo: usouCodigoModelo }, null,
+              'codigo_modelo_hinova gravado — próximas syncs usam fast-path.');
+          } catch (e: any) {
+            console.warn('[sga-hinova-sync] falha ao persistir codigo_modelo:', e?.message);
+          }
+        }
+
+
         // Confirmação defensiva: força PENDENTE (3) via GET /veiculo/alterar-situacao-para
         // logo após o cadastro. Mesma postura que adotamos para o associado.
         // Não interrompe a sync se falhar — o payload de cadastro já enviou codigo_situacao=3.
