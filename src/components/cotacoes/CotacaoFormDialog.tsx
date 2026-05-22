@@ -93,6 +93,7 @@ import { PlacaOutroAssociadoModal } from '@/components/cotacoes/PlacaOutroAssoci
 import { useCotacaoDraft, type DraftPayload } from '@/hooks/useCotacaoDraft';
 import { DraftRestoreBanner } from '@/components/cotacao/DraftRestoreBanner';
 import { shouldBypassPlateGuards } from '@/components/cotacoes/plateGuardBypass';
+import { PerguntaZeroKmGate } from '@/components/cotacoes/PerguntaZeroKmGate';
 
 // Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
