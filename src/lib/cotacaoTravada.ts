@@ -1,20 +1,20 @@
 /**
- * Detecta se uma cotação está "travada" num passo após a assinatura do termo,
- * para sinalizar ao consultor (badge pulsante) que o cliente provavelmente
- * precisa de um nudge.
+ * Detecta se uma cotação está "travada" em alguma etapa do link público,
+ * para sinalizar ao consultor (badge pulsante) que o cliente precisa de nudge.
  *
- * Regra principal: só considera travada cotações cujo CONTRATO já está
- * `assinado` ou `ativo`. Antes da assinatura o consultor já tem o funil normal.
+ * Cobre PRÉ-ASSINATURA (plano/docs/contrato) e PÓS-ASSINATURA (vistoria/instalação).
+ * Antes só tratava pós-assinatura — agora o gate `contratoStatus in [assinado, ativo]`
+ * foi removido para alinhar com a nova aba "Link Público Incompleto" do Cadastro.
  *
  * Fora de escopo (não aciona o flag): em_analise, associado_ativo,
- * vistoria_realizada, veiculo_recusado, cancelado — nesses casos a bola
- * está fora do cliente.
+ * vistoria_realizada, realizando_vistoria, veiculo_recusado, cancelado.
  *
  * Fonte do "tempo no passo atual": `cotacoes.updated_at`. É bumpado por
  * triggers e mutações relevantes; suficiente para SLAs em horas.
  */
 
 import { getEtapaVenda, type EtapaVenda } from './cotacaoEtapa';
+import { etapaVendaParaPendente, descreverEtapaPendente, type CodigoEtapaPendente } from './etapaPendentePublica';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 
 export type NivelTravada = 'amarelo' | 'vermelho';
@@ -25,19 +25,26 @@ export interface CotacaoTravadaInfo {
   motivo: string | null;
   horasParada: number;
   etapa: EtapaVenda | null;
+  /** Código canônico da etapa pendente (mesmo vocabulário do Cadastro). */
+  codigoPendente: CodigoEtapaPendente;
 }
 
 interface SlaEtapa {
   amareloHoras: number;
   vermelhoHoras: number;
-  label: string;
 }
 
+// SLA por etapa do funil (mesmas faixas amarelo/vermelho usadas pelo Cadastro).
 const SLA_POR_ETAPA: Partial<Record<EtapaVenda, SlaEtapa>> = {
-  realizando_pagamento: { amareloHoras: 6, vermelhoHoras: 24, label: 'Realizando Pagamento' },
-  escolha_vistoria: { amareloHoras: 12, vermelhoHoras: 36, label: 'Escolha de Vistoria' },
-  realizando_autovistoria: { amareloHoras: 12, vermelhoHoras: 48, label: 'Realizando Autovistoria' },
-  aguardando_vistoria: { amareloHoras: 24, vermelhoHoras: 48, label: 'Aguardando Vistoria' },
+  // Pré-assinatura
+  escolhendo_plano: { amareloHoras: 12, vermelhoHoras: 48 },
+  enviando_documentos: { amareloHoras: 12, vermelhoHoras: 48 },
+  assinando_contrato: { amareloHoras: 6, vermelhoHoras: 24 },
+  // Pós-assinatura
+  realizando_pagamento: { amareloHoras: 6, vermelhoHoras: 24 },
+  escolha_vistoria: { amareloHoras: 12, vermelhoHoras: 36 },
+  realizando_autovistoria: { amareloHoras: 12, vermelhoHoras: 48 },
+  aguardando_vistoria: { amareloHoras: 24, vermelhoHoras: 48 },
 };
 
 const SEM_FLAG: ReadonlySet<EtapaVenda> = new Set<EtapaVenda>([
@@ -59,24 +66,22 @@ export function getCotacaoTravada(
   cotacao: CotacaoWithRelations,
   agora: Date = new Date(),
 ): CotacaoTravadaInfo {
+  const etapa = getEtapaVenda(cotacao);
+  const codigoPendente = etapaVendaParaPendente(etapa);
   const vazio: CotacaoTravadaInfo = {
     travada: false,
     nivel: null,
     motivo: null,
     horasParada: 0,
-    etapa: null,
+    etapa,
+    codigoPendente,
   };
 
-  const contratoStatus = cotacao.contrato?.status;
-  if (!contratoStatus || !['assinado', 'ativo'].includes(contratoStatus)) {
-    return vazio;
-  }
-
-  const etapa = getEtapaVenda(cotacao);
   if (!etapa || SEM_FLAG.has(etapa)) return vazio;
 
+  const labelCanonica = descreverEtapaPendente(codigoPendente).label;
   const desde = cotacao.updated_at || cotacao.created_at;
-  if (!desde) return { ...vazio, etapa };
+  if (!desde) return vazio;
   const horas = diffHoras(desde, agora);
 
   // Vistoria/instalação agendada com data no passado e não concluída.
@@ -87,32 +92,34 @@ export function getCotacaoTravada(
       : cotacao.vistoria_data_agendada
         ? new Date(cotacao.vistoria_data_agendada as any)
         : null;
-    if (!dataAg) return { ...vazio, etapa };
+    if (!dataAg) return vazio;
     const concluida = inst?.status === 'concluida';
-    if (concluida) return { ...vazio, etapa };
+    if (concluida) return vazio;
     const horasApos = diffHoras(dataAg, agora);
-    if (horasApos <= 0) return { ...vazio, etapa };
+    if (horasApos <= 0) return vazio;
     return {
       travada: true,
       nivel: horasApos > 24 ? 'vermelho' : 'amarelo',
-      motivo: `Vistoria agendada para ${dataAg.toLocaleDateString('pt-BR')} sem conclusão`,
+      motivo: `Agendamento de ${dataAg.toLocaleDateString('pt-BR')} sem conclusão`,
       horasParada: horasApos,
       etapa,
+      codigoPendente,
     };
   }
 
   const sla = SLA_POR_ETAPA[etapa];
-  if (!sla) return { ...vazio, etapa };
+  if (!sla) return vazio;
 
-  if (horas <= sla.amareloHoras) return { ...vazio, etapa };
+  if (horas <= sla.amareloHoras) return vazio;
 
   const nivel: NivelTravada = horas > sla.vermelhoHoras ? 'vermelho' : 'amarelo';
   const horasInt = Math.round(horas);
   return {
     travada: true,
     nivel,
-    motivo: `Cliente parado em "${sla.label}" há ${horasInt}h`,
+    motivo: `${labelCanonica} há ${horasInt}h`,
     horasParada: horas,
     etapa,
+    codigoPendente,
   };
 }
