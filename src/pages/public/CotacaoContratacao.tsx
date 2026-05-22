@@ -1317,8 +1317,39 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* Troca de Titularidade pós-pagamento: cliente acompanha avaliação */}
-                  {isTrocaTitularidade && cotacao?.status_contratacao !== 'ativo' ? (
+                  {/* ========== CURTO-CIRCUITO: limbo pós-pagamento ========== */}
+                  {emLimboPosPagamento ? (
+                    <EtapaVistoria
+                      cotacaoId={cotacao.id}
+                      tipoVeiculo={detectarTipoVeiculoDaCotacao(cotacao)}
+                      tipoInstalacao={(cotacao as any).tipo_instalacao as 'rota' | 'base' | null}
+                      clienteNome={cotacao.nome_solicitante || ''}
+                      clienteTelefone={cotacao.telefone1_solicitante || undefined}
+                      clienteEmail={cotacao.email_solicitante || undefined}
+                      veiculoPlaca={cotacao.veiculo_placa || undefined}
+                      veiculoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ') || undefined}
+                      enderecoInicial={{
+                        cep: cotacao.cliente_cep || '',
+                        logradouro: cotacao.cliente_logradouro || '',
+                        numero: cotacao.cliente_numero || '',
+                        complemento: cotacao.cliente_complemento || '',
+                        bairro: cotacao.cliente_bairro || '',
+                        cidade: cotacao.cliente_cidade || '',
+                        estado: cotacao.cliente_uf || '',
+                      }}
+                      onComplete={() => { refetch(); }}
+                      onAgendar={() => { refetch(); }}
+                      readOnly={false}
+                      tipoVistoriaRealizada={undefined}
+                      subFipe={!exigeRastreador({
+                        tipo: detectarTipoVeiculoDaCotacao(cotacao),
+                        valorFipe: Number((cotacao as any).veiculo_valor_fipe ?? (cotacao as any).valor_fipe ?? 0),
+                        combustivel: (cotacao as any).veiculo_combustivel || undefined,
+                      } as any).exige}
+                      criadoEm={(cotacao as any)?.created_at}
+                    />
+                  ) : /* Troca de Titularidade pós-pagamento: cliente acompanha avaliação */
+                  isTrocaTitularidade && cotacao?.status_contratacao !== 'ativo' ? (
                     (() => {
                       // Override defensivo: se a cotação já avançou (pagamento_ok / contrato_gerado /
                       // aguardando_aprovacao_monitoramento) mas a trigger DB ainda não promoveu a
