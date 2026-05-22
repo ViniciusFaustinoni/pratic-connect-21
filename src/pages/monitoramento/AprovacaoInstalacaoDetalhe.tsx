@@ -369,6 +369,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
   const [solicitarVistoriaOpen, setSolicitarVistoriaOpen] = useState(false);
   const [devolverOpen, setDevolverOpen] = useState(false);
+  const [manutencaoOpen, setManutencaoOpen] = useState(false);
 
   if (isLoading) {
     return (
