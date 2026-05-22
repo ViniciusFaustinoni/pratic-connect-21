@@ -342,6 +342,13 @@ export function useAgendarVistoriaCompleta() {
         console.error('[AgendarVistoriaCompleta] Erro:', data?.error);
         throw new Error(data?.error || 'Erro ao agendar vistoria');
       }
+
+      const confirmou = await aguardarVistoriaPersistida(cotacaoId);
+      if (!confirmou) {
+        throw new Error('Não conseguimos confirmar o registro do agendamento. Tente novamente.');
+      }
+
+      
       
       console.log('[AgendarVistoriaCompleta] Sucesso:', data);
       return { id: data.vistoriaId };
