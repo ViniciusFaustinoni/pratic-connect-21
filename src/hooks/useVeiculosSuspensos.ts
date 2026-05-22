@@ -56,7 +56,7 @@ export function useVeiculosSuspensos() {
           `
           id, placa, modelo, marca,
           cobertura_suspensa_motivo, cobertura_suspensa_em,
-          contrato_id, associado_id, status,
+          associado_id, status,
           associado:associados(nome, cpf)
         `,
         )
