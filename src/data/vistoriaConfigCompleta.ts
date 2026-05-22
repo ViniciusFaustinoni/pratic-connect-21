@@ -888,8 +888,17 @@ const MOTO_REGEX = new RegExp(
 export function detectarTipoVeiculo(
   tipoVeiculoStr?: string | null,
   modelo?: string | null,
-  marca?: string | null
+  marca?: string | null,
+  /**
+   * Snapshot canônico congelado em cotacoes.tipo_veiculo / contratos.tipo_veiculo
+   * (resolverTipoPorElegibilidade). Quando presente, sempre vence — nenhuma
+   * heurística roda. Ver `mem://logic/operations/vehicle-type-detection-source`.
+   */
+  tipoSnapshot?: 'carro' | 'moto' | null
 ): TipoVeiculo {
+  if (tipoSnapshot === 'moto') return 'moto';
+  if (tipoSnapshot === 'carro') return 'automovel';
+
   if (tipoVeiculoStr) {
     const normalized = tipoVeiculoStr.toLowerCase();
     if (normalized.includes('moto') || normalized.includes('motocicleta') || normalized.includes('ciclomotor') || normalized.includes('triciclo')) {
