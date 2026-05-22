@@ -25719,6 +25719,8 @@ export type Database = {
           iniciada_em: string | null
           instalacao_origem_id: string | null
           integridade_aparelho: string | null
+          intencao_rastreador_imei: string | null
+          intencao_rastreador_rastreador_id: string | null
           km_atual: number | null
           latitude: number | null
           laudo_assinado: boolean | null
@@ -25845,6 +25847,8 @@ export type Database = {
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
           integridade_aparelho?: string | null
+          intencao_rastreador_imei?: string | null
+          intencao_rastreador_rastreador_id?: string | null
           km_atual?: number | null
           latitude?: number | null
           laudo_assinado?: boolean | null
@@ -25971,6 +25975,8 @@ export type Database = {
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
           integridade_aparelho?: string | null
+          intencao_rastreador_imei?: string | null
+          intencao_rastreador_rastreador_id?: string | null
           km_atual?: number | null
           latitude?: number | null
           laudo_assinado?: boolean | null
@@ -26211,6 +26217,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "servicos_intencao_rastreador_rastreador_id_fkey"
+            columns: ["intencao_rastreador_rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_intencao_rastreador_rastreador_id_fkey"
+            columns: ["intencao_rastreador_rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores_pendentes_vinculo"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "servicos_intencao_rastreador_rastreador_id_fkey"
+            columns: ["intencao_rastreador_rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
           },
           {
             foreignKeyName: "servicos_lead_id_fkey"
