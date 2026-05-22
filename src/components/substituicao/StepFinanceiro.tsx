@@ -576,8 +576,31 @@ export function StepFinanceiro({
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-muted-foreground">Dia de vencimento</p>
-              <p className="font-medium">Dia {proRata.diaVenc}</p>
+              <p className="text-muted-foreground mb-1">Dia de vencimento</p>
+              <Select
+                value={String(diaVencimentoLocal)}
+                onValueChange={async (v) => {
+                  const novo = Number(v);
+                  setDiaVencimentoLocal(novo);
+                  onDiaVencimentoChange?.(novo);
+                  if (substituicaoId) {
+                    try {
+                      await atualizarSubstituicao.mutateAsync({ id: substituicaoId, dia_vencimento: novo });
+                    } catch (e) {
+                      toast.error('Não foi possível salvar o dia de vencimento.');
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[5, 10, 15, 20, 25, 30].map((d) => (
+                    <SelectItem key={d} value={String(d)}>Dia {d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <p className="text-muted-foreground">Dias já pagos</p>
