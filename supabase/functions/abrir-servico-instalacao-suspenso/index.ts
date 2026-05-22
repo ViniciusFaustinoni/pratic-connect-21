@@ -97,21 +97,27 @@ serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Contrato ativo
-    const { data: contrato } = await supabase
+    // Contrato ativo do veículo.
+    // OBS: `reprovado` NÃO existe no enum `status_contrato` — incluí-lo no .not('in')
+    // faz PostgREST devolver erro silencioso e o contrato vir como null.
+    const { data: contrato, error: cErr } = await supabase
       .from('contratos')
       .select('id, associado_id, cotacao_id, cep, logradouro, numero, bairro, cidade, uf, latitude, longitude')
       .eq('veiculo_id', veiculoId)
-      .not('status', 'in', '(cancelado,reprovado)')
+      .neq('status', 'cancelado')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    if (cErr) {
+      console.error('[abrir-servico-instalacao-suspenso] erro contrato', cErr);
+    }
     if (!contrato) {
-      return new Response(JSON.stringify({ error: 'contrato_nao_encontrado' }), {
+      return new Response(JSON.stringify({ error: 'contrato_nao_encontrado', detalhe: cErr?.message }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     // Reusa instalação aberta ou cria nova
     const { data: instExist } = await supabase
