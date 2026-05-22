@@ -663,12 +663,21 @@ export function useDuplicatePlan() {
         throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (createdPlan: { id: string; nome: string }) => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
       queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
-      toast.success('Plano duplicado!');
+      toast.success('Plano duplicado!', {
+        description: 'Lembre-se: o código SGA não foi copiado. Mapeie o novo plano antes de ativá-lo.',
+        duration: 12000,
+        action: {
+          label: 'Mapear no SGA',
+          onClick: () => {
+            window.location.href = `/configuracoes/integracoes/planos-sga?busca=${encodeURIComponent(createdPlan?.nome || '')}`;
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(`Erro ao duplicar plano: ${error.message}`);
