@@ -45,7 +45,9 @@ interface StepFinanceiroProps {
   onConfirmar: () => void;
   onBack: () => void;
   onIniciarSubstituicao: () => Promise<string>;
+  onDiaVencimentoChange?: (dia: number) => void;
 }
+
 
 // =============================================
 // Component
