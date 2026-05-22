@@ -172,11 +172,12 @@ export function StepFinanceiro({
   // Pro-rata
   const proRata = useMemo(() => {
     const hoje = new Date();
-    const diaVenc = diaVencimento || 10;
+    const diaVenc = diaVencimentoLocal || 10;
     const mesAtual = hoje.getMonth();
     const anoAtual = hoje.getFullYear();
 
     const vencimento = new Date(anoAtual, mesAtual, Math.min(diaVenc, 28));
+
 
     let inicioPeríodo: Date;
     let fimPeríodo: Date;
