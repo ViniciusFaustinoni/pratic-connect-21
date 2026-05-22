@@ -63,7 +63,7 @@ export function useConverterParaManutencao() {
       const novoServicoPayload: any = {
         tipo: 'vistoria_manutencao',
         status: 'agendada',
-        origem: 'monitoramento_aprovacao',
+        origem: 'servicos_campo_manual',
         modalidade: orig.modalidade ?? null,
         associado_id: orig.associado_id,
         veiculo_id: orig.veiculo_id,

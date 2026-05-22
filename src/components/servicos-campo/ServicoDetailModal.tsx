@@ -19,12 +19,14 @@ import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
-  MapPinned, MoreHorizontal, Hash,
+  MapPinned, MoreHorizontal, Hash, Wrench,
+
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { RealocarServicoSimplesDialog } from './RealocarServicoSimplesDialog';
 import { CancelarServicoDialog } from './CancelarServicoDialog';
 import { DevolverAoCadastroDialog } from './DevolverAoCadastroDialog';
+import { MarcarManutencaoDialog } from '@/components/monitoramento/MarcarManutencaoDialog';
 import { LiberarServicoButton } from './LiberarServicoButton';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -67,6 +69,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
   const [realocarSimplesOpen, setRealocarSimplesOpen] = useState(false);
   const [cancelarOpen, setCancelarOpen] = useState(false);
   const [devolverOpen, setDevolverOpen] = useState(false);
+  const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
   const podeAcoesMonitor = !!(isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento);
 
@@ -243,6 +246,20 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                         Devolver ao Cadastro
                       </Button>
                     )}
+
+                    {podeAcoesMonitor && isInstalacao && statusDevolvivel && servico.veiculo_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9 border-indigo-500/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10"
+                        onClick={() => setManutencaoOpen(true)}
+                        title="Opcional: converter este serviço em Vistoria de Manutenção (rastreador já está no veículo)"
+                      >
+                        <Wrench className="h-4 w-4" />
+                        Tratar como Manutenção
+                      </Button>
+                    )}
+
                   </>
                 );
               })()}
@@ -471,6 +488,18 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
           servicoLabel={servico.veiculo?.placa || undefined}
         />
       )}
+
+      {isInstalacao && servico.veiculo_id && (
+        <MarcarManutencaoDialog
+          open={manutencaoOpen}
+          onOpenChange={setManutencaoOpen}
+          servicoId={servico.id}
+          veiculoId={servico.veiculo_id}
+          veiculoPlaca={servico.veiculo?.placa || undefined}
+          onSuccess={() => onOpenChange(false)}
+        />
+      )}
+
     </>
   );
 }
