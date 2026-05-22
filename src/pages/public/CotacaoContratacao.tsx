@@ -363,6 +363,22 @@ export default function CotacaoContratacao() {
       return 5;
     }
 
+    // Self-heal "limbo pós-pagamento": cliente terminou pagamento mas ainda não
+    // escolheu autovistoria/agendamento (tipo_vistoria=NULL) e não há nenhum
+    // agendamento materializado. Sem isso, etapaFinal poderia ter virado 5 por
+    // sinais antigos e a etapa 5 só tem fallback "Verificando status..." infinito.
+    // Força volta para a etapa Vistoria (4) onde o cliente pode escolher.
+    if (
+      !isTrocaTitularidade &&
+      cotacao?.status_contratacao === 'pagamento_ok' &&
+      !cotacao?.tipo_vistoria &&
+      !hasInstalacaoAgendada &&
+      !hasAgendamentoBase &&
+      !agendamentoConcluido
+    ) {
+      return 4;
+    }
+
     return etapaFinal;
   }, [
     cotacao?.status_contratacao,
