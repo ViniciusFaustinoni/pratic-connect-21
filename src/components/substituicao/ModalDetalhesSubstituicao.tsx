@@ -34,6 +34,13 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
   const enviar = useEnviarTermoCancelamentoSubstituicao();
   const [confirmando, setConfirmando] = useState(false);
 
+  // Polling do termo (fallback para o webhook Autentique).
+  const syncTermo = useSyncTermoCancelamento({
+    tipo: 'substituicao',
+    solicitacaoId: sol?.id,
+    enabled: open && !!sol && sol.status === 'termo_enviado' && !sol.termo_cancelamento_assinado_em,
+  });
+
   const handleEnviar = async (force: boolean) => {
     if (!sol) return;
     setConfirmando(true);
