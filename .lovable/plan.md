@@ -1,119 +1,122 @@
-## Diagnóstico da causa raiz
 
-O caso Luiz Fernando (cotação `3eda326b-4cd1-42d6-8197-847ad601a913`) revelou que o "Vistoria Agendada com Sucesso!" é renderizado a partir de **colunas espelho** em `cotacoes` (`vistoria_*` ou `agendamentos_base`), e não a partir de uma confirmação de que os registros operacionais correspondentes existem no banco.
+# Tipo de veículo derivado da elegibilidade de linhas — congelado na cotação
 
-**Estado real do caso Luiz Fernando hoje:**
-- `cotacoes.tipo_vistoria = 'agendada_base'`, mas `vistoria_data_agendada` / `vistoria_endereco_*` estão NULL
-- `agendamentos_base` existe (22/05, 13:00, status `realizado`) — não bate com a tela ("Manhã 08:00-12:00")
-- `vistorias` existe (`modalidade=presencial`, `status=agendada`) mas com `data_agendada=22/05 00:00`, `instalacao_id=NULL` e sem `agendamentos_base.instalacao_id` apontando pra ela
-- `instalacoes` para essa cotação: **inexistente**
+## Pré-checagem (já validada)
 
-**Origem do limbo no código (duas portas):**
+| Slug da linha | `vehicle_type` | Planos ativos |
+|---|---|---|
+| advanced (+2 cópias) | `motorcycle` | 12 cada |
+| proteção-veicular (+ cópias) / especial | `car` | 15–37 |
 
-1. **Fluxo presencial (cliente):** `supabase/functions/agendar-vistoria-presencial/index.ts` só faz `UPDATE cotacoes SET vistoria_data_agendada=...` e retorna `success:true` — **nunca insere em `vistorias` nem `instalacoes`** (comentários linhas 199-200 confirmam o design). O hook `useFinalizarVistoriaCotacao` recebe `success` e chama `onConfirmar` → tela de sucesso aparece sem nenhum registro operacional gravado.
+A Diretoria mantém `vehicle_type` em Gestão Comercial. **Nenhuma** regra `entity_eligibility_rules` precisa mudar — `vehicle_type` é lido direto da linha. Mudanças futuras (nova linha de moto, descontinuar Advanced) refletem automaticamente sem deploy.
 
-2. **Fluxo base:** `useCriarAgendamentoBase` insere em `agendamentos_base` corretamente, mas o `criar-instalacao-pos-pagamento` (chamado em seguida) pode falhar silenciosamente (try/catch com `console.warn`), e o `onConfirmar` é chamado mesmo assim. A vistoria correspondente nunca é materializada por essa porta — depende de outros gatilhos.
+## Como derivar o tipo a partir da elegibilidade (sem circularidade)
 
-A tela em `src/pages/public/CotacaoContratacao.tsx` (linhas 1642-1846) lê só `cotacao.vistoria_*` ou conta `hasAgendamentoBase` — não valida que existe `vistorias` com `data_agendada` preenchida nem que `instalacoes` foi criada.
+O cotador hoje filtra planos usando `vehicleCtx.categoriaVeiculo`, que vem de heurística externa — circular. Inverto:
 
----
-
-## O que vai ser feito
-
-### 1. Persistir o agendamento de verdade antes da tela de sucesso
-
-**1a. Edge `agendar-vistoria-presencial` passa a criar `vistorias` (e quando aplicável `instalacoes`) na mesma transação**
-- Após o `UPDATE cotacoes`, fazer `INSERT INTO vistorias` com `cotacao_id`, `contrato_id`, `associado_id`, `veiculo_id`, `modalidade='presencial'`, `status='agendada'`, `data_agendada=<dataAgendada>`, `periodo=<periodoAgendado>`, endereço completo e coordenadas
-- Reaproveitar o caminho já existente do `criar-instalacao-pos-pagamento` (idempotente) chamando-o em sequência para materializar `instalacoes` + back-link em `agendamentos_base.instalacao_id` quando aplicável
-- Se qualquer um dos INSERTs falhar, **retornar `success:false` com `error` claro** e **fazer rollback do UPDATE em `cotacoes`** (reverter `vistoria_data_agendada`, `tipo_vistoria` para os valores anteriores) para não deixar o espelho atualizado sem o registro operacional
-- Devolver `{ success, vistoriaId, instalacaoId }` reais (hoje devolve `instalacaoId:null` por design)
-
-**1b. `useCriarAgendamentoBase` para de engolir falha do `criar-instalacao-pos-pagamento`**
-- Substituir o `try/console.warn` por throw que propaga para o `onError` da mutation
-- Toast de erro claro: "Não foi possível registrar seu agendamento. Tente novamente."
-- Não chamar `onAgendado` (a página não troca para a tela de sucesso)
-
-**1c. Hooks `useFinalizarVistoriaCotacao` e `useAgendarVistoriaCompleta` viram gate de verificação**
-- Após `success:true` da edge, fazer um SELECT de confirmação em `vistorias` por `cotacao_id` exigindo `data_agendada IS NOT NULL`. Se vier vazio em até 3 tentativas (250ms/500ms/1s), tratar como falha
-- Só então chamar `onConfirmar`. Caso contrário, lançar erro → `onError` mostra toast e o usuário continua na etapa 5 com o formulário aberto
-
-**1d. `CotacaoContratacao.tsx` para de confiar nas colunas espelho da cotação como prova**
-- Antes de renderizar "Vistoria Agendada com Sucesso!", exigir que **pelo menos uma** das seguintes verificações seja verdadeira via `useAgendamentoExistente`:
-  - existe `vistorias` com `status` ativo e `data_agendada` não-nula, OU
-  - existe `agendamentos_base` em status `agendado/confirmado/realizado` com `data_agendada` preenchida, OU
-  - existe `instalacoes` agendada com `cotacao_id`
-- Se `cotacao.vistoria_data_agendada` está preenchido mas nenhum desses registros existe, renderizar **card de inconsistência detectada** (ver item 4) em vez da tela de sucesso
-
----
-
-### 2. Erro forçado: confirmar que tela de sucesso não aparece
-
-Roteiro de validação manual após implementar:
-- Forçar `agendar-vistoria-presencial` a retornar `success:false` (ex.: passar `cotacaoId` inválido)
-- Confirmar que o cliente vê toast vermelho "Erro ao agendar vistoria" e o formulário de data/período/endereço continua aberto na etapa 5
-- Confirmar que `cotacoes.vistoria_data_agendada` continua NULL após a tentativa
-
----
-
-### 3. Listar cotações em limbo (sem corrigir)
-
-Criar query SQL (executada via `supabase--read_query` e exportada para `/mnt/documents/limbo-vistorias-agendamento.csv`) com critério canônico de limbo:
-
-```sql
-SELECT c.id, c.nome_solicitante, c.tipo_vistoria,
-       c.vistoria_data_agendada, c.created_at,
-       v.id as vistoria_id, v.status as vistoria_status, v.data_agendada,
-       ab.id as agendamento_base_id, ab.data_agendada as base_data,
-       i.id as instalacao_id, i.status as instalacao_status
-FROM cotacoes c
-LEFT JOIN vistorias v ON v.cotacao_id = c.id
-LEFT JOIN agendamentos_base ab ON ab.cotacao_id = c.id
-LEFT JOIN instalacoes i ON i.cotacao_id = c.id
-WHERE c.created_at >= date_trunc('month', now())
-  AND c.tipo_vistoria IN ('agendada','agendada_base')
-  AND (
-    -- caminho presencial: cotação diz agendado, mas vistoria sem data ou inexistente
-    (c.tipo_vistoria='agendada' AND (v.id IS NULL OR v.data_agendada IS NULL))
-    -- caminho base: cotação diz agendada_base mas agendamentos_base ausente
-    OR (c.tipo_vistoria='agendada_base' AND ab.id IS NULL)
-    -- vistoria existe mas instalação obrigatória ausente (carro≥30k/moto≥9k/diesel)
-    OR (v.id IS NOT NULL AND v.data_agendada IS NOT NULL AND i.id IS NULL)
-  );
+```text
+para cada plano ativo:
+  rodar checkAllRules IGNORANDO a regra `categoria_veiculo`
+  (deixa todas as outras: FIPE, ano, região, marca_modelo, uso, combustível, placa)
+  se passou → marcar candidato com vehicle_type da linha do plano
 ```
 
-Devolver no chat: `cotacao_id`, nome, data de criação, `tipo_vistoria`, e quais campos estão faltando. **Sem nenhum UPDATE.** Confirmar que `3eda326b-4cd1-42d6-8197-847ad601a913` aparece.
+Decisão a partir dos candidatos:
 
----
+| Candidatos | Decisão |
+|---|---|
+| Só `motorcycle` | `tipo = 'moto'` |
+| Só `car` | `tipo = 'carro'` |
+| Misto (FIPE/ano cabe nos dois) | **bloqueia** com modal "Confirme: este veículo é carro ou moto?" — escolha do operador vira o tipo |
+| Nenhum | **bloqueia** com mensagem "Nenhuma linha de produto elegível para este veículo. Verifique os dados ou contate a Gestão Comercial." |
 
-### 4. Caminho de recuperação para casos em limbo
+O caso "misto" é raro porque na prática as faixas FIPE de planos moto (≤ ~R$80k) e carro (≥ ~R$15k) só se sobrepõem em FIPEs intermediárias sem outras restrições. Quando acontece, pedimos confirmação humana — sem heurística silenciosa.
 
-Em `CotacaoContratacao.tsx`, quando detectar inconsistência (cotação diz agendado mas registros operacionais ausentes), renderizar um **card de recuperação** no lugar do "Vistoria Agendada com Sucesso!":
+## Arquitetura
 
-- Título: "Detectamos uma inconsistência no seu agendamento"
-- Mensagem: "Nosso sistema não conseguiu confirmar o registro completo. Por favor, reagende abaixo para garantir que tudo seja registrado corretamente."
-- Botão "Reagendar agora" → reabre o `AgendamentoVistoria` / `AgendamentoBase` com o endereço pré-preenchido
-- A reabertura usa o fluxo corrigido (item 1), então uma vez salvo, o registro fica completo
-
-A mesma detecção é usada por operador interno acessando o detalhe da vistoria — adicionar banner discreto em `ModalDetalhesVistoria` (já existente) avisando "Cotação aprovou agendamento na etapa pública mas registro operacional está incompleto — peça reagendamento pelo link público".
-
----
+```text
+src/lib/veiculo/resolverTipoPorElegibilidade.ts   (FONTE ÚNICA)
+   resolve({ planos, regras, product_lines, vehicleCtx })
+     → { tipo: 'carro'|'moto', motivo: 'unanime_moto'|'unanime_carro'|'operador_resolveu' }
+     → ou { bloqueio: 'nenhuma_linha' | 'ambiguo', candidatos }
+                  │
+                  ▼
+   Cotador / CotacaoFormDialog
+   - chama resolver no mesmo useMemo que calcula planos
+   - se bloqueio='ambiguo' → abre modal "Carro ou Moto?"
+   - se bloqueio='nenhuma_linha' → modal bloqueante com link p/ Gestão Comercial
+   - tipo segue no estado da cotação; muda quando placa/marca/modelo/FIPE mudar
+                  │
+                  ▼  (ao salvar cotação)
+   cotacoes.tipo_veiculo (NOT NULL via guard) + tipo_veiculo_motivo
+                  │
+                  ▼
+   contrato-gerar copia → contratos.tipo_veiculo
+                  │
+                  ▼
+   Consumidores LEEM (não recomputam):
+   1. usePlanosCotacao (origem; segue calculando)
+   2. vistoriaConfigCompleta.getFotosByTipoVeiculo ← tipo do snapshot
+   3. autentique-create ← contratos.tipo_veiculo (remove fallback "primeira marca")
+   4. contrato-gerar ← cotacoes.tipo_veiculo (sem detectarCategoriaVeiculo)
+   5. RealizarVistoriaDialog ← contratos.tipo_veiculo
+```
 
 ## Detalhes técnicos
 
-**Arquivos modificados:**
-- `supabase/functions/agendar-vistoria-presencial/index.ts` — criar `vistorias` + chamar `criar-instalacao-pos-pagamento`; rollback de cotação em falha; resposta com `vistoriaId` real
-- `src/hooks/useAgendamentoBase.ts` — `useCriarAgendamentoBase` propaga falha de `criar-instalacao-pos-pagamento`
-- `src/hooks/useCotacaoVistoria.ts` — `useFinalizarVistoriaCotacao` e `useAgendarVistoriaCompleta` fazem SELECT de confirmação antes de retornar
-- `src/pages/public/CotacaoContratacao.tsx` — só renderiza tela de sucesso quando há registro operacional confirmado via `useAgendamentoExistente`; renderiza card de recuperação no caso inconsistente
-- `src/components/vistorias/ModalDetalhesVistoria.tsx` — banner de inconsistência para operador interno
+### Schema
+```sql
+ALTER TABLE cotacoes
+  ADD COLUMN tipo_veiculo text CHECK (tipo_veiculo IN ('carro','moto')),
+  ADD COLUMN tipo_veiculo_motivo text;  -- 'unanime_moto'|'unanime_carro'|'operador_resolveu'
 
-**Fora de escopo (confirmado no pedido):**
-- Não corrigir automaticamente os limbos existentes
-- Não mexer na divisão arquitetural vistoria × instalação
-- Não mexer na detecção de tipo de veículo do roteiro
+ALTER TABLE contratos
+  ADD COLUMN tipo_veiculo text CHECK (tipo_veiculo IN ('carro','moto'));
+```
+Nascem NULL (sem backfill, conforme escopo).
 
-**Entregáveis no fim:**
-1. Print de novo agendamento via link público mostrando o registro em `vistorias` e `agendamentos_base` **antes** da tela de sucesso
-2. Print do teste de falha forçada: toast de erro e formulário continua aberto
-3. CSV com lista de cotações em limbo do mês corrente em `/mnt/documents/limbo-vistorias-agendamento.csv`
-4. Confirmação explícita que `3eda326b` aparece na lista
+### Guards DB (barreira final)
+Trigger BEFORE INSERT/UPDATE em `cotacoes`: quando `status` sai de `rascunho`, exige `tipo_veiculo IS NOT NULL`.
+Trigger BEFORE INSERT em `contratos`: exige `tipo_veiculo IS NOT NULL` quando `cotacao_id` aponta para cotação com `tipo_veiculo` preenchido (permite legados sem snapshot continuarem entrando).
+
+### Resolver
+- Reaproveita `useAllEligibilityRules`, `checkAllRules`, `findModelEligibility` que já existem em `useEntityEligibilityRules.ts`.
+- Adiciona uma flag `ignoreCategoriaVeiculoRule` em `checkAllRules` ou aplica `.filter(r => r.rule_type !== 'categoria_veiculo')` antes da chamada.
+- Retorna o conjunto `candidatos: { planoId, vehicleType: 'motorcycle'|'car' }[]` para alimentar o modal de desambiguação.
+
+### Modal de bloqueio
+Componente `<BloqueioTipoVeiculoModal>` com dois modos:
+- `ambiguo`: lista de "planos compatíveis se for carro" vs "se for moto" + dois botões grandes ("É um carro" / "É uma moto"). Escolha persiste em estado local e dispara recálculo (forçando o `vehicleCtx.categoriaVeiculo`).
+- `nenhuma_linha`: mensagem + botão "Abrir Gestão Comercial" → rota das linhas/regras.
+
+Reaproveito no `RealizarVistoriaDialog` para contratos legados sem snapshot (idem fallback).
+
+### Consumidores — diff resumido
+
+| Arquivo | Mudança |
+|---|---|
+| `src/hooks/useDetectarTipoVeiculo.ts` | Vira wrapper deprecated: se `cotacaoId` for passado, lê snapshot; senão chama resolver de elegibilidade. Remove `marcas_exclusivas_moto`, `MOTO_KEYWORDS`, fallback `'carro'`. |
+| `src/hooks/usePlanosCotacao.ts` | `buildVehicleContext` passa a aceitar `categoriaOverride` do resolver/modal em vez de `tipoVeiculo` cego. Exporta `candidatosTipoVeiculo` para o modal. |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` + `Cotador.tsx` | Bloqueio do botão "Salvar" enquanto resolver não devolve tipo definido; integra modal de desambiguação; grava `tipo_veiculo` + `tipo_veiculo_motivo` no payload. |
+| `src/data/vistoriaConfigCompleta.ts::detectarTipoVeiculo` | Aceita `tipoSnapshot?: 'carro'\|'moto'` como primeiro argumento; quando presente retorna direto, lógica antiga removida. |
+| `supabase/functions/contrato-gerar/index.ts` | Lê `cotacoes.tipo_veiculo` e copia. Se ausente (legado), roda resolver server-side; se bloqueio → erro 409. Remove `detectarCategoriaVeiculo`. |
+| `supabase/functions/autentique-create/index.ts` | Lê `contratos.tipo_veiculo`. Remove o bloco `.from('marcas_modelos').eq('marca').limit(1)` + fallback "primeira linha". |
+| `src/components/.../RealizarVistoriaDialog.tsx` | Lê `contratos.tipo_veiculo`. Para legado ausente, modal de desambiguação. |
+
+Resolver canônico vive em frontend e edge (`src/lib/veiculo/resolverTipoPorElegibilidade.ts` + `supabase/functions/_shared/resolver-tipo-por-elegibilidade.ts`) — mesma assinatura, mesmos critérios, alimentados pelo mesmo SELECT em `entity_eligibility_rules` + `product_lines`.
+
+### Memória
+- Atualizar `mem://logic/operations/vehicle-type-detection-source` → "derivado de `product_lines.vehicle_type` via resolver de elegibilidade; congelado em `cotacoes.tipo_veiculo`/`contratos.tipo_veiculo`."
+- Substituir `mem://logic/operations/catalogo-marcas-modelos-divergente` (override por keyword some — `marcas_modelos` deixa de ser fonte de tipo).
+- Adicionar Core: "Tipo de veículo é decidido pela elegibilidade de linhas (`product_lines.vehicle_type`) na cotação e congelado; consumidores leem, não recomputam."
+
+## Fora deste turno (confirmado pelo usuário)
+Backfill, listagem retroativa, correção da Fernanda (HMCZ80) e Luiz Fernando — fora.
+
+## Ordem de execução
+1. Migração DB (colunas + guards desativados).
+2. Resolver canônico (frontend + edge shared).
+3. Refator dos 5 consumidores + modais.
+4. Ligar guards DB.
+5. Atualizar memórias.
+6. Verificar no preview: criar cotação de Honda PCX e de Honda Civic, conferir tipo persistido + modal de ambiguidade se aparecer.
