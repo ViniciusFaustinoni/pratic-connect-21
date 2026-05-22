@@ -39,20 +39,21 @@ function resolverRotaTecnico(tipo: Servico['tipo']): string | null {
     return '/instalador/instalacao';
   }
   if (tipo === 'vistoria_retirada') return '/instalador/retirada';
-  if (tipo === 'manutencao') return '/instalador/manutencao';
+  if (tipo === 'vistoria_manutencao') return '/instalador/manutencao';
   // Demais tipos de vistoria (saída, sinistro, periódica, cancelamento)
   return '/instalador/vistoria';
 }
+
 
 export function RealizarVistoriaInternaButton({
   servico,
   variant = 'default',
   className,
 }: Props) {
-  const { isCoordenadorMonitoramento, isDiretor, isSuperAdmin } = usePermissions();
-
-  const podeUsar = isCoordenadorMonitoramento || isDiretor || isSuperAdmin;
+  const perms = usePermissions();
+  const podeUsar = perms.isCoordenadorMonitoramento || perms.isDiretor || (perms as any).isAdminMaster || (perms as any).isDesenvolvedor;
   if (!podeUsar) return null;
+
 
   // Esconde em status terminal — nada a executar
   if (STATUS_TERMINAIS.has(servico.status)) return null;
