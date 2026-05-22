@@ -1655,7 +1655,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         toast.warning(`Atenção: O valor de adesão (${formatCurrency(data.valor_adesao)}) está bem abaixo do sugerido pelo plano (${formatCurrency(valorPlano)}). Verifique se está correto.`);
       }
     }
-    
+
+    // Snapshot canônico do tipo: bloqueia se elegibilidade não decide e operador
+    // ainda não escolheu manualmente.
+    if (!tipoVeiculoManualOverride && tipoResolver.bloqueio) {
+      setShowBloqueioTipoVeiculo(true);
+      return;
+    }
+
     // Guardar dados e abrir popup de confirmação
     setPendingFormData(data);
     setShowConfirmDialog(true);
