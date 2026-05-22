@@ -1539,6 +1539,8 @@ export function useDuplicateBenefit() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['benefits'] });
+      queryClient.invalidateQueries({ queryKey: ['benefit_category_exclusions'] });
+      queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
       toast.success('Benefício duplicado! (criado como inativo)');
     },
     onError: (error: Error) => {
