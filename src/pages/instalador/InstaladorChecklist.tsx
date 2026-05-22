@@ -1419,7 +1419,7 @@ export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, on
                       confirmed={!!videoUrl && !uploadingVideo}
                       maxDuration={120}
                       label="Vídeo 360° do veículo"
-                      cameraOnly
+                      cameraOnly={!vistoriaInterna}
                     />
                   </CardContent>
                 </Card>
