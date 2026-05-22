@@ -642,9 +642,23 @@ export function AppSidebar() {
       }),
     }));
 
-    // Filtrar por visibilidade de módulos do banco (se carregado)
-    if (visibleModules.length > 0) {
-      baseGroups = baseGroups.filter(g => visibleModules.includes(g.id));
+    // Aditivo: módulos extras concedidos via card "Acesso a Módulos" entram
+    // ALÉM dos que o perfil libera (não substituem). Quando o grupo extra não
+    // veio do perfil, é injetado com todos os seus itens (sem filtro de permissão).
+    if (additionalModules.length > 0) {
+      const existingIds = new Set(baseGroups.map(g => g.id));
+      const extras = menuConfig.groups
+        .filter(g => additionalModules.includes(g.id) && !existingIds.has(g.id))
+        .map(g => ({
+          ...g,
+          items: g.items.filter(item => {
+            const itemId = MENU_ITEM_IDS[item.url];
+            if (!itemId) return true;
+            return isItemVisible(g.id, itemId);
+          }),
+        }))
+        .filter(g => g.items.length > 0);
+      baseGroups = [...baseGroups, ...extras];
     }
 
     // Ajustes de itens específicos por perfil (mantém lógica existente)
