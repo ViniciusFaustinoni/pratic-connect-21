@@ -1,52 +1,36 @@
-## Problema
+## Objetivo
 
-Em **Vendas › Cotações › Outras Entradas › Substituição de Placa**, a busca pela placa só consulta o SGA Hinova (hook `useBuscaPlaca` → edge `sga-buscar-associado-completo`). Quando a placa existe **apenas na base local** (ou o SGA está fora), a tela mostra "Nenhum veículo ativo encontrado", mesmo havendo associado ativo no nosso banco.
+Na cotação tipo **Substituição de Placa**, permitir que o operador escolha **qualquer uma das 6 opções de dia de vencimento do sistema** (5, 10, 15, 20, 25, 30), em vez de herdar fixo o `dia_vencimento` do associado.
 
-Confirmado no caso reportado: placa `KZZ9E93` existe localmente (LUIZ AMARAL BARROS NETO) mas o SGA não devolve nada → lista vazia.
-
-## Decisão de escopo
-
-Listar **somente veículos ATIVOS**, somando duas fontes:
-- **Local:** `veiculos.status = 'ativo'` **e** `associados.status = 'ativo'`
-- **SGA:** comportamento atual (mantido como já é)
-
-Veículos em `instalacao_pendente`, `pendente_vistoria`, `suspenso`, `cancelado` continuam fora — Substituição pressupõe associado já ativo. Isso significa que o **KZZ9E93 (hoje em `instalacao_pendente`) continuará não aparecendo** até ser ativado; a correção endereça os casos em que o SGA falha/atrasa para veículos que já são ativos no nosso lado.
+Hoje a Etapa Financeira (`StepFinanceiro`) só **exibe** "Dia X" como rótulo somente-leitura, e o contrato novo é criado pelo `efetivar-substituicao` reaproveitando o dia do contrato anterior / associado.
 
 ## Mudanças
 
-### 1. Novo hook `useBuscaPlacaLocal(placa)`
-- Arquivo novo: `src/hooks/useBuscaPlacaLocal.ts`
-- Query Supabase em `veiculos` com join em `associados`, filtrando:
-  - `placa` (normalizada, com e sem hífen) igual ao termo
-  - `veiculos.status = 'ativo'`
-  - `associados.status = 'ativo'`
-- Habilitado apenas quando o termo bate o regex Mercosul/antiga (mesma checagem do `useBuscaPlaca`).
-- Retorna o mesmo shape `PlacaSearchResult` (sem `origem_sga: true`), com `associadoId` = UUID local.
+### 1. Banco — nova coluna em `substituicoes_veiculo`
+Migration adicionando:
+- `dia_vencimento smallint NULL` com `CHECK (dia_vencimento IN (5,10,15,20,25,30))`
 
-### 2. Merge dos resultados em `OutrasEntradasMenu.tsx`
-- Chamar `useBuscaPlacaLocal` em paralelo a `useBuscaPlaca` no ramo `isSubstituicao`.
-- Construir `placaResultsMerged`: SGA primeiro (preserva integração existente), depois local, deduplicando por placa normalizada.
-- `loadingPlacas` vira `loadingSGA || loadingLocal`.
-- A mensagem "Nenhum veículo ativo encontrado com esta placa" só aparece quando **ambas** as fontes retornaram vazio e não há erro transitório.
-- O banner `SgaTransientAlert` continua sendo mostrado quando o SGA falhou **e** o local também não achou — preserva o caminho de retry.
+Sem backfill (substituições existentes seguem usando o fallback atual).
 
-### 3. Fluxo de `handleSelectPlaca`
-- Quando o resultado vem do local (sem `origem_sga`), `associadoId` já é UUID — usa direto, sem importar do SGA.
-- Quando vem do SGA, mantém o caminho atual de import (já existe).
+### 2. UI — `src/components/substituicao/StepFinanceiro.tsx`
+- Trocar o bloco somente-leitura "Dia {proRata.diaVenc}" por um `Select` com as 6 opções fixas: 5, 10, 15, 20, 25, 30.
+- Valor inicial: prop `diaVencimento` recebida (que continua vindo do associado).
+- Ao mudar, chamar `useAtualizarSubstituicao` para persistir `dia_vencimento` na linha de `substituicoes_veiculo` e propagar via callback (`onDiaVencimentoChange`) para o pai recalcular pro-rata.
+- Pro-rata (`useMemo`) passa a depender do estado local em vez da prop estática.
 
-### 4. Sem mudanças em
-- `useBuscaPlaca` / `useBuscaSGA` / `useVerificarVeiculoSGA` — outros fluxos (Troca de Titularidade, validação de duplicidade no cotador) continuam consultando o SGA do jeito que estão.
-- Regras de inadimplência, repasse maior e demais gates da Substituição.
+### 3. Container — `src/pages/cadastro/SubstituicaoVeiculoPage.tsx`
+- Adicionar state `diaVencimentoSubstituicao` (default: `associado?.dia_vencimento || 10`).
+- Passar `diaVencimento` + `onDiaVencimentoChange` para `<StepFinanceiro>`.
 
-## Detalhes técnicos
+### 4. Edge — `supabase/functions/efetivar-substituicao/index.ts`
+- Ler `substituicao.dia_vencimento` e usá-lo no `insert` do contrato novo com prioridade máxima:
+  `substituicao.dia_vencimento ?? contratoAnterior?.dia_vencimento ?? associado?.dia_vencimento ?? 10`.
 
-- A normalização da placa precisa cobrir o hífen herdado (`KZZ-9E93`), por isso o filtro usa `or('placa.eq.KZZ9E93,placa.eq.KZZ-9E93')` (ou um `in(...)` com as duas variações).
-- Manter dedupe estável: `Map<string, PlacaSearchResult>` com chave = placa normalizada — entradas SGA preexistentes não são sobrescritas pelas locais.
-- Não criar trigger nem migration; é mudança puramente de frontend.
-- Sem alteração de RLS: a tela só é usada por usuários internos (já têm SELECT em `veiculos`/`associados`).
+## Fora do escopo
+- Outros fluxos (Nova Cotação, Troca de Titularidade, Migração) continuam com a regra atual (2 opções calculadas por data corrente).
+- Não altera `dia_vencimento` do associado nem de contratos pré-existentes — só do novo contrato gerado pela substituição.
+- Sem mudança no link público, no SGA ou em geração de boletos (já leem `contratos.dia_vencimento`).
 
-## Fora de escopo
-
-- Não relaxar a regra "associado precisa estar ativo".
-- Não tocar no fluxo de Troca de Titularidade nem no cotador comum.
-- Não criar tela/edge function nova — apenas hook + merge no componente existente.
+## Riscos
+- Boletos: o ASAAS/SGA usam `contratos.dia_vencimento` na criação do contrato novo — como gravamos a escolha lá, fica consistente.
+- Pro-rata: o cálculo continua client-side e atualiza ao trocar o dia.

@@ -45,7 +45,9 @@ interface StepFinanceiroProps {
   onConfirmar: () => void;
   onBack: () => void;
   onIniciarSubstituicao: () => Promise<string>;
+  onDiaVencimentoChange?: (dia: number) => void;
 }
+
 
 // =============================================
 // Component
@@ -60,6 +62,7 @@ export function StepFinanceiro({
   onConfirmar,
   onBack,
   onIniciarSubstituicao,
+  onDiaVencimentoChange,
 }: StepFinanceiroProps) {
   const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'UNDEFINED'>('PIX');
   const [tipoAtendimento, setTipoAtendimento] = useState<'base' | 'volante'>('base');
@@ -68,6 +71,12 @@ export function StepFinanceiro({
   const [confirmado, setConfirmado] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [mensalidadeManual, setMensalidadeManual] = useState<string>('');
+  const [diaVencimentoLocal, setDiaVencimentoLocal] = useState<number>(diaVencimento || 10);
+
+  useEffect(() => {
+    setDiaVencimentoLocal(diaVencimento || 10);
+  }, [diaVencimento]);
+
 
   const { criarCobranca } = useAsaas();
   const atualizarSubstituicao = useAtualizarSubstituicao();
@@ -163,11 +172,12 @@ export function StepFinanceiro({
   // Pro-rata
   const proRata = useMemo(() => {
     const hoje = new Date();
-    const diaVenc = diaVencimento || 10;
+    const diaVenc = diaVencimentoLocal || 10;
     const mesAtual = hoje.getMonth();
     const anoAtual = hoje.getFullYear();
 
     const vencimento = new Date(anoAtual, mesAtual, Math.min(diaVenc, 28));
+
 
     let inicioPeríodo: Date;
     let fimPeríodo: Date;
@@ -195,7 +205,7 @@ export function StepFinanceiro({
       valorProRata,
       diferenca,
     };
-  }, [diaVencimento, totalMensalNovo, totalMensalAntigo]);
+  }, [diaVencimentoLocal, totalMensalNovo, totalMensalAntigo]);
 
   // Carência
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
@@ -566,8 +576,31 @@ export function StepFinanceiro({
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-muted-foreground">Dia de vencimento</p>
-              <p className="font-medium">Dia {proRata.diaVenc}</p>
+              <p className="text-muted-foreground mb-1">Dia de vencimento</p>
+              <Select
+                value={String(diaVencimentoLocal)}
+                onValueChange={async (v) => {
+                  const novo = Number(v);
+                  setDiaVencimentoLocal(novo);
+                  onDiaVencimentoChange?.(novo);
+                  if (substituicaoId) {
+                    try {
+                      await atualizarSubstituicao.mutateAsync({ id: substituicaoId, dia_vencimento: novo });
+                    } catch (e) {
+                      toast.error('Não foi possível salvar o dia de vencimento.');
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[5, 10, 15, 20, 25, 30].map((d) => (
+                    <SelectItem key={d} value={String(d)}>Dia {d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <p className="text-muted-foreground">Dias já pagos</p>

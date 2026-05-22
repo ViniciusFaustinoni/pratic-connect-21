@@ -30227,6 +30227,7 @@ export type Database = {
           criado_por: string | null
           data_fim_carencia: string | null
           data_inicio_carencia: string | null
+          dia_vencimento: number | null
           diferenca_mensalidade: number | null
           evento_bloqueante_id: string | null
           id: string
@@ -30277,6 +30278,7 @@ export type Database = {
           criado_por?: string | null
           data_fim_carencia?: string | null
           data_inicio_carencia?: string | null
+          dia_vencimento?: number | null
           diferenca_mensalidade?: number | null
           evento_bloqueante_id?: string | null
           id?: string
@@ -30327,6 +30329,7 @@ export type Database = {
           criado_por?: string | null
           data_fim_carencia?: string | null
           data_inicio_carencia?: string | null
+          dia_vencimento?: number | null
           diferenca_mensalidade?: number | null
           evento_bloqueante_id?: string | null
           id?: string
