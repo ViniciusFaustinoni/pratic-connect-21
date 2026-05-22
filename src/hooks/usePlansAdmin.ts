@@ -1550,13 +1550,22 @@ export function useDuplicateProductLine() {
         throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (createdLine: { id: string; name: string }) => {
       queryClient.invalidateQueries({ queryKey: ['product_lines'] });
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
       queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
-      toast.success('Linha duplicada com todos os planos!');
+      toast.success('Linha duplicada com todos os planos!', {
+        description: 'Os códigos SGA dos planos clonados não foram copiados. Mapeie cada um antes de ativar.',
+        duration: 12000,
+        action: {
+          label: 'Mapear no SGA',
+          onClick: () => {
+            window.location.href = `/configuracoes/integracoes/planos-sga?busca=${encodeURIComponent(createdLine?.name || '')}`;
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(`Erro ao duplicar linha: ${error.message}`);
