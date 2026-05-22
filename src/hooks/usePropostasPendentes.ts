@@ -857,6 +857,7 @@ export function usePropostasPendentes() {
           veiculo_blindado: veiculoBlindadoCot,
           cenario_adesao: cenarioAdesaoCot,
           plano_tem_roubo_furto: planoTemRouboFurto,
+          optou_roubo_furto: !!(veiculoContrato?.cobertura_roubo_furto || temAutovistoria || planoTemRouboFurto),
           endereco_instalacao: _resolveEnderecoInstalacao(cotacao, {
             logradouro: associado?.logradouro ?? (contrato as any).cliente_logradouro,
             numero: associado?.numero ?? null,
