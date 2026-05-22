@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy } from 'lucide-react';
+import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KpiCard } from '@/components/comissoes/KpiCard';
 import { ComissoesDetalhesModal } from '@/components/comissoes/ComissoesDetalhesModal';
 import { useComissoesDashboard, type ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
+import { useVendedoresSemGrade } from '@/hooks/useVendedoresSemGrade';
 import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, isComissaoVitalicia } from '@/lib/comissoes-filtros';
 import type { DateRange } from 'react-day-picker';
 
@@ -27,6 +29,7 @@ export default function DashboardComissoes() {
     status,
     tipoLancamento,
   });
+  const { data: semGrade } = useVendedoresSemGrade(dateRange?.from, dateRange?.to || dateRange?.from);
   const [modal, setModal] = useState<{ title: string; items: ComissaoDashboardItem[] } | null>(null);
 
   const pendentes = useMemo(() => items.filter(i => ['pendente', 'aprovada'].includes(i.status)), [items]);
@@ -47,6 +50,22 @@ export default function DashboardComissoes() {
           <a href="/comissoes/pagamentos">Pagamentos</a>
         </Button>
       </div>
+
+      {semGrade && semGrade.total > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {semGrade.total} vendedor(es) sem grade de comissão atribuída
+          </AlertTitle>
+          <AlertDescription>
+            Estes vendedores geraram lançamentos no período mas não têm grade vinculada — as comissões estão sendo registradas com valor R$ 0,00. Atribua uma grade em <strong>Comissões › Grades de Comissão</strong> para regularizar:{' '}
+            <span className="font-medium">
+              {semGrade.semGrade.slice(0, 5).map((v) => v.nome).join(', ')}
+              {semGrade.semGrade.length > 5 ? ` e mais ${semGrade.semGrade.length - 5}` : ''}
+            </span>.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
