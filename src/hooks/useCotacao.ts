@@ -389,6 +389,11 @@ export function useCriarCotacao() {
         veiculo_modelo: payload.veiculo_modelo,
         veiculo_ano: payload.veiculo_ano,
         veiculo_placa: payload.veiculo_placa || null,
+        // 0KM canônico — fonte da verdade. contrato-gerar usa para gerar placeholder
+        // de placa, dispensar RENAVAM e marcar aguardando_placa_definitiva.
+        // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
+        veiculo_zero_km: typeof payload.veiculo_zero_km === 'boolean' ? payload.veiculo_zero_km : null,
+        veiculo_chassi: payload.veiculo_chassi || null,
         codigo_fipe: payload.codigo_fipe,
         valor_fipe: payload.valor_fipe,
         valor_cota: resultado.valores.valor_cota,
