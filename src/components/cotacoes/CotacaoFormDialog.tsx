@@ -805,6 +805,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   });
   // Tipo congelado para persistir (snapshot canônico via elegibilidade de linhas)
   const [tipoVeiculoManualOverride, setTipoVeiculoManualOverride] = useState<'carro' | 'moto' | null>(null);
+  const [showBloqueioTipoVeiculo, setShowBloqueioTipoVeiculo] = useState(false);
   const tipoVeiculoCanonico: 'carro' | 'moto' = tipoVeiculoManualOverride || tipoResolver.tipo || tipoVeiculoDetectado;
   const tipoVeiculoMotivo = tipoVeiculoManualOverride ? 'operador_resolveu' : (tipoResolver.motivo || 'legado_heuristica');
 
