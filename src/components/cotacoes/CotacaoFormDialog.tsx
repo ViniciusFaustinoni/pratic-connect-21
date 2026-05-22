@@ -1622,11 +1622,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Abre o popup de confirmação de adesão
   const onSubmit = (data: CotacaoFormData) => {
+    // Gate 0KM canônico: bloqueia salvar enquanto o operador não decide.
+    // Evita cotação com veiculo_zero_km=NULL caindo na cascata como
+    // "emplacado por default" (caso Luiz Fernando YAMAHA AEROX).
+    if (isZeroKm === null) {
+      toast.error('Responda primeiro se o veículo é 0KM no topo do bloco "Veículo".');
+      try {
+        document.getElementById('bloco-veiculo-gate-0km')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch { /* noop */ }
+      return;
+    }
+
     // Validar dados do associado
     if (!dadosAssociadoValidos) {
       toast.error('Preencha o nome e telefone do associado!');
       return;
     }
+
     
     // Regra do 1% (Redução de Cota) agora é automática quando elegível —
     // sem checkbox/justificativa, sem trava. Supervisores apenas tomam ciência depois.
