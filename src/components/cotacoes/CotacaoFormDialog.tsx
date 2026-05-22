@@ -108,6 +108,7 @@ export interface CotacaoBaseParaFormulario {
   veiculo_modelo: string | null;
   veiculo_ano: number | null;
   veiculo_placa: string | null;
+  veiculo_zero_km?: boolean | null;
   codigo_fipe: string | null;
   categoria: string | null;
   regiao: string | null;
