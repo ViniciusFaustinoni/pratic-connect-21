@@ -1,64 +1,96 @@
+## Diagnóstico
 
-## Mapeamento do que já existe (código real, não suposição)
+A seção **"Acesso a Módulos"** do formulário Editar Usuário (Configurações › Usuários e Acessos) tem dois bugs encadeados, confirmados por inspeção do código e por consulta direta ao banco.
 
-**Consultor — `/vendas/cotacoes` (`src/pages/vendas/Cotacoes.tsx` + `src/components/cotacoes/CotacoesTable.tsx` + `CotacoesMobileList.tsx`)**
-- Mostra badge "Etapa da Venda" derivada de `getEtapaVenda()` em `src/lib/cotacaoEtapa.ts` (16 estágios: cotacao_realizada, escolhendo_plano, enviando_documentos, escolha_vistoria, realizando_autovistoria, assinando_contrato, realizando_pagamento, aguardando_vistoria, vistoria_agendada, instalacao_agendada, etc.).
-- Tem bolinha pulsante âmbar/vermelha `FlagTravada` (`src/components/cotacoes/FlagTravada.tsx`) que consulta `getCotacaoTravada()` em `src/lib/cotacaoTravada.ts`. Hoje **só dispara para contratos `assinado` ou `ativo`** (linha 71 do arquivo) — cotações paradas ANTES da assinatura (plano/docs/contrato) mostram a etapa mas sem sinal de "parado".
-- Filtro "Apenas travadas" e contador já existem (`Cotacoes.tsx` linhas 338 e 982).
+### Bug 1 — chave errada gravada
 
-**Cadastro — `/cadastro/propostas-pendentes` (`src/pages/cadastro/PropostasPendentes.tsx`, hook `src/hooks/usePropostasPendentes.ts`)**
-- Query base filtra `contratos` com `.eq('status', 'assinado')` (linha 347 do hook). **Cotações com link público incompleto, onde o contrato ainda não foi assinado, simplesmente não entram nessa lista** — Cadastro não vê o caso.
-- Pós-assinatura há badges granulares funcionando: "Aguard. Doc", "Pendente Vistoria Inicial", "Aguard. Vistoria", "Aguard. Instalação", "Agendado" (funções `isPendenteVistoriaInicial`, `isAguardandoDoc` etc. nas linhas 107–135).
-- Dashboard do Cadastro (`src/components/cadastro/DashboardCadastro.tsx`) não tem KPI de "parados no link público".
+`UsuarioForm.tsx` (ModuleAccessCard) grava em `user_module_visibility.user_id` o valor do `id` vindo de `useParams()`, que é o **`profiles.id`**. Confirmado em banco: todas as linhas existentes apontam para `profiles.id`, não para `profiles.user_id`.
 
-**Monitoramento — `/monitoramento/vistorias-instalacoes-mon` (`src/pages/monitoramento/ServicosCampoUnificado.tsx`, `AprovacaoInstalacaoDetalhe.tsx`)**
-- Trabalha em cima de `servicos`/`instalacoes`/`agendamentos_base` materializados. Casos parados no link público **não chegam até aqui** (não há agendamento, não há instalação) e não têm sinalização própria.
-- O guard backend `caminho_publico_incompleto` já existe em `supabase/functions/aprovar-proposta/index.ts` (linhas 290–388) com motivos canônicos: `sem_vistoria`, `vistoria_incompleta`, `sem_agendamento`, `agendamento_base`. Mas a mensagem vai pro toast com texto cru — sem o vocabulário canônico das telas.
+Já o hook `useModuleVisibility` (consumido pelo `AppSidebar` e pelo `useRouteGuard`) consulta a tabela pela chave do usuário logado vinda de `useAuth().user.id`, que é o **`auth.users.id`**.
 
-Conclusão: o Consultor enxerga parcialmente (só pós-assinatura); o Cadastro é cego pré-assinatura; o Monitoramento só ouve o guard via erro de toast.
+Resultado: o toast diz "salvo", mas nenhum acesso chega ao usuário em runtime.
+
+### Bug 2 — semântica invertida (substitui em vez de somar)
+
+No `AppSidebar.tsx` (linha 646) e no `useRouteGuard.ts` (linha 43):
+
+```
+if (visibleModules.length > 0) {
+  baseGroups = baseGroups.filter(g => visibleModules.includes(g.id));
+}
+```
+
+Assim que **qualquer** linha existe para o usuário em `user_module_visibility`, o sidebar passa a mostrar **somente** esses módulos — apagando o que o perfil já concedia. O comportamento correto é overlay aditivo: o card adiciona módulos por cima do que o perfil garante, sem nunca remover nada do perfil.
 
 ---
 
-## O que vai ser feito
+## Plano de correção
 
-### 1. Fonte única de vocabulário (lib pura, sem UI)
-Novo `src/lib/etapaPendentePublica.ts` que recebe uma cotação e devolve `{ codigo, label, descricao_associado, cobrar }`. Conjunto canônico:
+### Passo 1 — Corrigir a chave gravada (`UsuarioForm.tsx`)
 
-- `aguardando_escolha_plano`
-- `aguardando_documentos`
-- `aguardando_assinatura_contrato`
-- `aguardando_pagamento_adesao`
-- `aguardando_escolha_vistoria`
-- `aguardando_autovistoria`
-- `aguardando_agendamento_instalacao`
-- `aguardando_execucao_agendada`
-- `nenhuma` (caso completou tudo / caso fora do escopo)
+No `ModuleAccessCard`:
 
-Cada código mapeia 1‑pra‑1 contra as etapas que `getEtapaVenda()` já devolve e contra os motivos do guard backend (`sem_vistoria` → `aguardando_autovistoria`, `sem_agendamento` → `aguardando_agendamento_instalacao`, etc.). Essa lib é a única fonte de label nas três telas.
+- Receber também o `authUserId` (o `usuario.user_id` já carregado pelo `useQuery` do formulário pai), além do `profileId`.
+- Trocar o `upsert` para usar `user_id: authUserId`.
+- Trocar a query interna (`useQuery` do card) para filtrar por `authUserId`.
+- Manter `onConflict: 'user_id,module_id'` (já existe constraint).
+- Mostrar o card como "carregando" enquanto o `authUserId` ainda não chegou (evita upsert com `undefined`).
 
-### 2. Consultor — estender o que já existe (sem nova UI)
-- Em `src/lib/cotacaoTravada.ts`, remover o gate `contratoStatus in [assinado, ativo]` e adicionar SLAs para as etapas pré‑assinatura (`escolhendo_plano`, `enviando_documentos`, `assinando_contrato`). Mesmas faixas amarelo/vermelho.
-- Tooltip da `FlagTravada` passa a usar `etapaPendentePublica.label` em vez de string ad‑hoc — vocabulário fica idêntico ao do Cadastro.
-- Filtro "Apenas travadas" e contador já existentes em `Cotacoes.tsx` passam a cobrir também o pré‑assinatura sem mudança adicional.
+### Passo 2 — Migração de dados (preserva o que já foi marcado)
 
-### 3. Cadastro — nova aba "Link Público Incompleto" em `PropostasPendentes.tsx`
-- Novo hook `src/hooks/useCotacoesLinkPublicoIncompleto.ts`: lista cotações com `status_contratacao` ativo (cliente já entrou no link) e SEM `contrato.status='assinado'`. Computa `etapaPendentePublica` por linha.
-- Nova aba no topo da página `PropostasPendentes.tsx` ("Em análise" — atual padrão — / "Link Público Incompleto" — nova) reusando os mesmos componentes de tabela, filtros e ordenação que a aba atual usa (sem componente novo). Colunas: associado, veículo, plano, vendedor, etapa pendente (label canônico), tempo na etapa (com cor de SLA — verde/amarelo/vermelho usando as mesmas funções `getWaitColor`/`getWaitTextColor`).
-- KPI no `DashboardCadastro.tsx`: novo `KPICard` "Parados no link público" com mesma cor de SLA. Clique abre a nova aba.
-- Realtime: o hook se invalida pelos mesmos canais que `usePropostasPendentes` já escuta (cotações + contratos). Quando o contrato for assinado, o caso some da nova aba e cai na fila normal sem ação manual.
+Migração que converte todas as linhas atuais de `user_module_visibility` cujo `user_id` corresponde a um `profiles.id` para o `profiles.user_id` (auth.users.id) correspondente.
 
-### 4. Monitoramento — consistência, sem nova listagem
-- Casos parados no Cadastro / link público NÃO ganham nova lista no Monitoramento (decisão consciente: não é a responsabilidade do papel e polui a fila). 
-- O que muda: em `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`, quando o `aprovar-proposta` retorna `caminho_publico_incompleto` / `sem_agendamento` / `sem_vistoria_materializada`, a mensagem de erro é traduzida via `etapaPendentePublica` (mesma label que o Consultor e o Cadastro veem). Vocabulário fica unificado nas três telas.
+- Idempotente: faz `UPDATE ... FROM profiles WHERE user_module_visibility.user_id = profiles.id`.
+- Trata conflito `(user_id, module_id)` mantendo a versão mais recente (`updated_at` maior vence; demais são deletadas antes do update).
+- Linhas que já estão coerentes (já apontam para `profiles.user_id`) ficam intactas.
 
-### 5. Validação ao terminar
-- Caso novo entra no link público e para em "Documentos" → aparece em `/vendas/cotacoes` com badge "Enviando Documentos" + bolinha pulsante (SLA pré‑assinatura) e em `/cadastro/propostas-pendentes` aba "Link Público Incompleto" com a mesma label "Aguardando documentos".
-- Cliente envia os documentos e assina → caso some das duas telas e entra na fila normal de análise do Cadastro automaticamente (invalidação já existente).
-- Se o Monitoramento for tentar aprovar prematuramente, o toast de erro usa exatamente a mesma label.
+Assim, todos os acessos marcados antes da correção passam a funcionar imediatamente — sem precisar remarcar nada.
 
-### Detalhes técnicos
-- Arquivos novos: `src/lib/etapaPendentePublica.ts`, `src/hooks/useCotacoesLinkPublicoIncompleto.ts`.
-- Arquivos alterados: `src/lib/cotacaoTravada.ts` (estender SLAs pré‑assinatura), `src/components/cotacoes/FlagTravada.tsx` (label canônica no tooltip), `src/pages/cadastro/PropostasPendentes.tsx` (adicionar Tabs com nova aba), `src/components/cadastro/DashboardCadastro.tsx` (novo KPI + navegação), `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` (tradução do erro do guard).
-- Sem migração de banco. Sem mudança no edge `aprovar-proposta` (guard já está ativo).
-- Sem componente UI novo: reuso de `Tabs`, `Badge`, `KPICard`, `FlagTravada` e da tabela existente.
+### Passo 3 — Tornar o overlay aditivo
 
+Em `src/hooks/useModuleVisibility.ts`, renomear semanticamente o retorno para `additionalModules` (manter `visibleModules` como alias depreciado durante a transição interna, se necessário, mas idealmente trocar de uma vez todos os consumidores).
+
+Ajustar os dois pontos de consumo para usar **união** com o que o perfil já concede:
+
+- **`src/components/layout/AppSidebar.tsx`** (linha 646):
+  - Remover o filtro restritivo.
+  - Em vez disso, quando um grupo NÃO passa pelo filtro de permissões do perfil mas o seu `g.id` está em `additionalModules`, incluí-lo mesmo assim. Para os itens internos desse grupo extra, assumir acesso de leitura (badge "Acesso adicional" opcional, ou simplesmente listar todos os itens do grupo).
+  - Mesma lógica em `visibleMainItems` (Dashboard) e em `showConfigModule` (Configurações): a presença do módulo em `additionalModules` libera, mas a ausência **não** restringe quem já tinha pelo perfil.
+
+- **`src/hooks/useRouteGuard.ts`** (linha 43):
+  - Em vez de redirecionar quando a rota não está em `visibleModules`, montar a união (rotas cobertas pelo perfil + rotas em `additionalModules`) e só redirecionar quando a rota não estiver em nenhum dos dois conjuntos.
+  - Manter rotas `ALWAYS_ALLOWED` e a rota de perfis operacionais como hoje.
+
+Resultado: o card volta a ser uma ferramenta de "conceder acessos extras a um usuário específico sem precisar trocar o perfil dele".
+
+### Passo 4 — UX do card (texto + estado "Já incluso no perfil")
+
+Em `ModuleAccessCard`:
+
+- Atualizar `CardDescription` para:
+  > "Conceda módulos adicionais a este usuário, além dos já liberados pelo perfil de acesso. Desmarcar aqui não remove acessos concedidos pelo perfil — para isso, ajuste o perfil acima."
+
+- Para cada módulo da lista, calcular se ele já é concedido pelos `formData.perfis` atuais do usuário (cruzando com `app_roles_config.permissions` via `getPermissionsForRoles` de `useAppRoles`, mapeando permissão → `module_id`).
+- Quando o módulo já vem do perfil:
+  - Mostrar um badge "Já incluso no perfil" ao lado do nome.
+  - Desabilitar o `Switch` (mantendo-o visualmente "ligado", já que o usuário enxerga o módulo).
+  - Esconder o toggle de "pode editar" (irrelevante quando o acesso vem do perfil).
+- Quando o módulo NÃO vem do perfil, comportamento normal (toggle ativo, salva extras).
+
+### Passo 5 — Validação manual
+
+- Logar como **admin@teste.com**, editar um Analista de Monitoramento, marcar "Cadastro" no card → salvar.
+- Logar como esse analista → confirmar que vê Monitoramento (perfil) **e** Cadastro (extra), e que `/cadastro/*` não redireciona.
+- Voltar como admin, desmarcar "Cadastro" → salvar.
+- Re-logar como o analista → confirmar que volta a ver só Monitoramento.
+- Conferir um usuário pré-existente que já tinha extras configurados antes da correção → confirmar que continua com o acesso após a migração (sem precisar remarcar).
+
+---
+
+## Arquivos impactados
+
+- `src/pages/configuracoes/UsuarioForm.tsx` — passa `authUserId` ao card, texto novo, estado "já incluso no perfil"
+- `src/hooks/useModuleVisibility.ts` — semântica aditiva (`additionalModules`)
+- `src/components/layout/AppSidebar.tsx` — união com permissões do perfil
+- `src/hooks/useRouteGuard.ts` — união com permissões do perfil
+- Migração SQL — backfill de `user_id` em `user_module_visibility` (de `profiles.id` para `profiles.user_id`), com deduplicação por `(user_id, module_id)`
