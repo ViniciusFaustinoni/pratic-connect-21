@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy } from 'lucide-react';
+import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KpiCard } from '@/components/comissoes/KpiCard';
 import { ComissoesDetalhesModal } from '@/components/comissoes/ComissoesDetalhesModal';
 import { useComissoesDashboard, type ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
+import { useVendedoresSemGrade } from '@/hooks/useVendedoresSemGrade';
 import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, isComissaoVitalicia } from '@/lib/comissoes-filtros';
 import type { DateRange } from 'react-day-picker';
 
