@@ -1556,6 +1556,7 @@ export function useProposta(contratoId: string | undefined) {
         veiculo_blindado: veiculoBlindadoCot,
         cenario_adesao: cenarioAdesaoCot,
         plano_tem_roubo_furto: planoTemRouboFurto,
+        optou_roubo_furto: !!(veiculoCoberturaRouboFurto || temAutovistoriaProp || planoTemRouboFurto),
         endereco_instalacao: _resolveEnderecoInstalacao(cotacaoDetalhe, {
           logradouro: (associado as any)?.logradouro ?? (contrato as any).cliente_logradouro,
           numero: (associado as any)?.numero ?? null,
