@@ -113,7 +113,7 @@ interface InstaladorChecklistProps {
   onClose?: () => void;
 }
 
-export default function InstaladorChecklist({ servicoIdProp, onClose }: InstaladorChecklistProps = {}) {
+export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, onClose }: InstaladorChecklistProps = {}) {
   const params = useParams<{ id: string }>();
   const id = servicoIdProp ?? params.id;
   const navigate = useNavigate();
