@@ -108,7 +108,7 @@ type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: str
 interface InstaladorChecklistProps {
   /** Quando passado, sobrepõe o id da rota — usado quando a tela é embedada em modal (ex.: Coordenador de Monitoramento). */
   servicoIdProp?: string;
-  /** Callback de saída — substitui o navigate('/instalador') quando embedado. */
+  /** Callback de saída — substitui o exitToList() quando embedado. */
   onClose?: () => void;
 }
 
@@ -118,7 +118,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
   const navigate = useNavigate();
   const exitToList = () => {
     if (onClose) onClose();
-    else navigate('/instalador');
+    else exitToList();
   };
   
   const [etapaAtual, setEtapaAtual] = useState(1);
@@ -751,7 +751,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
         descricaoInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? descricaoInstalacao.trim() : undefined,
         fotoLocalInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? fotoLocalInstalacaoResolvida || undefined : undefined,
       });
-      navigate('/instalador');
+      exitToList();
     } catch (err) {
       toast.error('Erro ao concluir instalação');
     }
@@ -787,7 +787,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
         fotosRecusa: fotosUrls,
       });
       setShowModalRecusa(false);
-      navigate('/instalador');
+      exitToList();
     } catch (err) {
       toast.error('Erro ao recusar veículo');
     }
@@ -894,7 +894,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
     if (etapaAtual > 1) {
       setEtapaAtual(etapaAtual - 1);
     } else {
-      navigate('/instalador');
+      exitToList();
     }
   };
 
@@ -911,7 +911,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 p-4">
         <AlertCircle className="h-12 w-12 text-red-500" />
         <p className="mt-4 text-white">Serviço não encontrado</p>
-        <Button onClick={() => navigate('/instalador')} className="mt-4">
+        <Button onClick={() => exitToList()} className="mt-4">
           Voltar
         </Button>
       </div>
@@ -963,7 +963,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
             size="lg"
             variant="outline"
             className="mt-4 border-slate-600 text-slate-300"
-            onClick={() => navigate('/instalador')}
+            onClick={() => exitToList()}
           >
             <ArrowLeft className="mr-2 h-5 w-5" />
             Voltar ao Início
@@ -1001,7 +1001,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
           <Button
             variant="ghost"
             className="text-slate-500"
-            onClick={() => navigate('/instalador')}
+            onClick={() => exitToList()}
           >
             Sair e verificar depois
           </Button>
@@ -1063,7 +1063,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
         </Card>
         
         <Button 
-          onClick={() => navigate('/instalador')} 
+          onClick={() => exitToList()} 
           className="mt-4"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
