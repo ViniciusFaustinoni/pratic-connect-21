@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ArrowLeftRight, Users, FileInput, PlusCircle, Search, Loader2, AlertTriangle, ArrowLeft, Car, CheckCircle2, XCircle, Plus, Info } from 'lucide-react';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useBuscaPlaca } from '@/hooks/useBuscaPlaca';
+import { useBuscaPlacaLocal } from '@/hooks/useBuscaPlacaLocal';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
@@ -99,9 +100,28 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const buscaPlaca = useBuscaPlaca(
     selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
   );
-  const { data: placaResults, isLoading: loadingPlacas, refetch: refetchPlaca } = buscaPlaca;
+  const { data: placaResultsSga, isLoading: loadingPlacasSga, refetch: refetchPlaca } = buscaPlaca;
   const placaErroTransitorio = buscaPlaca.erroTransitorio;
   const placaMotivoTransitorio = buscaPlaca.motivoTransitorio;
+
+  // Fallback/complemento local: encontra veículos ATIVOS na nossa base
+  // (com associado ativo) quando o SGA está fora ou ainda não sincronizou.
+  // Habilitado apenas para Substituição, único fluxo que pede esse fallback.
+  const buscaPlacaLocal = useBuscaPlacaLocal(isSubstituicao ? searchTerm : '');
+  const { data: placaResultsLocal, isLoading: loadingPlacasLocal } = buscaPlacaLocal;
+
+  // Mesclado: SGA primeiro (preserva integração existente), depois local — dedup por placa normalizada.
+  const placaResults = (() => {
+    const norm = (p: string) => (p || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const map = new Map<string, typeof placaResultsSga[number]>();
+    (placaResultsSga || []).forEach((p) => map.set(norm(p.placa), p));
+    (placaResultsLocal || []).forEach((p) => {
+      const k = norm(p.placa);
+      if (!map.has(k)) map.set(k, p);
+    });
+    return Array.from(map.values());
+  })();
+  const loadingPlacas = loadingPlacasSga || loadingPlacasLocal;
 
   // Debt check for selected associado (substituicao/inclusao)
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);

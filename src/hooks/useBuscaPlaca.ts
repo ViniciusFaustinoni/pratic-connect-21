@@ -9,7 +9,7 @@ export interface PlacaSearchResult {
   associadoNome: string;
   associadoCpf: string;
   associadoStatus: string;
-  origem_sga: true;
+  origem_sga: boolean;
 }
 
 /**
