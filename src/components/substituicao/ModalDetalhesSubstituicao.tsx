@@ -4,9 +4,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Send, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, Send, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSolicitacaoSubstituicao, useEnviarTermoCancelamentoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
+import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -32,6 +33,13 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
   const { data: sol, isLoading } = useSolicitacaoSubstituicao(solicitacaoId);
   const enviar = useEnviarTermoCancelamentoSubstituicao();
   const [confirmando, setConfirmando] = useState(false);
+
+  // Polling do termo (fallback para o webhook Autentique).
+  const syncTermo = useSyncTermoCancelamento({
+    tipo: 'substituicao',
+    solicitacaoId: sol?.id,
+    enabled: open && !!sol && sol.status === 'termo_enviado' && !sol.termo_cancelamento_assinado_em,
+  });
 
   const handleEnviar = async (force: boolean) => {
     if (!sol) return;
@@ -146,7 +154,21 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
                         {confirmando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
                         Reenviar
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => syncTermo.verificarAgora()}
+                        disabled={syncTermo.verificando}
+                      >
+                        {syncTermo.verificando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                        Verificar assinatura agora
+                      </Button>
                     </div>
+                    {syncTermo.ultimaVerificacao && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Última verificação: {syncTermo.ultimaVerificacao.toLocaleTimeString('pt-BR')}
+                      </p>
+                    )}
                   </>
                 )}
 

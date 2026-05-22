@@ -1,58 +1,99 @@
-## Correção de escopo
-A versão anterior colocou "Tratar como Manutenção" na tela **Aprovação de Associados** (`AprovacaoInstalacaoDetalhe.tsx`). Isso quebra a regra canônica: aquela fila só decide aprovação/reprovação após o caminho completo do cliente, não converte tipo de serviço.
+## Diagnóstico — por que "Termo assinado" não foi reconhecido
 
-A ação correta vive em **Monitoramento › Serviços de Campo › Serviços**, como ação **opcional** do operador sobre um serviço pendente, no mesmo padrão de `DevolverAoCadastroDialog` que já existe no `ServicoDetailModal`.
+### Evidências reais coletadas
 
-## O que muda em relação à implementação atual
+**1. Estado da troca KOU6D37 (DB)**
+`solicitacoes_troca_titularidade.id = af5d46d0-0c9a-4e16-9b3b-9e6346bc72d1`:
+- `status = 'aguardando_termo_cancelamento'`
+- `termo_cancelamento_assinado_em = NULL`
+- `termo_cancelamento_autentique_id = '75cf74d5d3191db2d7ebd47af20b7f82eb4d1331935a72ce6'`
+- `termo_cancelamento_enviado_em = 2026-05-22 15:47:10`
+- `termo_whatsapp_status = 'falhou'`
 
-### Remover de Aprovação de Associados
-- Em `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`:
-  - Remover o botão "Tratar como Manutenção" e o `MarcarManutencaoDialog` montado ali.
-  - Não tocar em nenhuma outra regra dessa tela.
+Autentique confirma assinatura via biometria SERPRO às 12:47 (print), mas DB nunca foi atualizado.
 
-### Adicionar em Serviços de Campo › Serviços
-- Em `src/components/servicos-campo/ServicoDetailModal.tsx`:
-  - Adicionar um botão **"Tratar como Manutenção"** (ícone `Wrench`, estilo outline/secundário) ao lado das ações já existentes (`DevolverAoCadastroDialog`, `RealocarServicoSimplesDialog`, `CancelarServicoDialog`).
-  - O botão só aparece quando o serviço atual é `instalacao` ou `vistoria_entrada` e ainda está em estado não terminal (mesmas regras que já valem para realocar).
-  - Reaproveita o `MarcarManutencaoDialog` já criado para abrir a busca tri-fonte e converter o serviço.
-- Opcional: expor o mesmo botão na linha da `ServicosTable` apenas se ficar visualmente leve; por padrão fica só dentro do modal de detalhe.
+**2. Webhook Autentique não chegou**
+`function_edge_logs` filtrando `url like '%autentique-webhook%'` nas últimas 48h retorna **zero requisições**. Apenas `autentique-sync-contrato` (polling do front) aparece. Conclusão objetiva: **o webhook Autentique não está fazendo POST para `/autentique-webhook`** — nenhum evento (signature.viewed, accepted, updated) chegou.
 
-### Hook de conversão (sem mudar comportamento)
-- `useConverterParaManutencao.ts` continua igual:
-  - Mantém `origem='monitoramento_aprovacao'`? Não — renomear para `origem='servicos_campo_manual'` para refletir a tela correta.
-  - Continua cancelando o serviço original (`instalacao` / `vistoria_entrada`) e criando um `vistoria_manutencao` novo herdando contexto (`veiculo_id`, `contrato_id`, `associado_id`, endereço).
-  - Continua respeitando "1 serviço vivo por origem".
-  - Continua gravando `intencao_rastreador_imei` e `intencao_rastreador_rastreador_id` quando o operador informou IMEI/rastreador.
+**3. Por que contratos ficam "assinado" e trocas não**
+- `supabase/functions/autentique-sync-contrato/index.ts` é polling acionado pelo front quando o associado volta do Autentique. Cobre **apenas `contratos`** (busca por `autentique_documento_id` em `contratos`, linhas 188-210, 285).
+- Não existe equivalente para `solicitacoes_troca_titularidade`. Busca por `rg "sync.*troca|sincronizar.*termo|sync-termo"` em `supabase/functions` e `src` retorna vazio.
+- Resultado: contratos "se salvam" pelo polling; trocas dependem 100% do webhook, que não está chegando.
 
-### Banco
-- Migration `20260522154822_..._add_intencao_rastreador.sql` permanece como está — colunas continuam válidas.
-- Sem novas migrations.
+**4. Branch da troca no webhook (existe e está correto)**
+`supabase/functions/autentique-webhook/index.ts` linhas 305-327:
+```
+.from('solicitacoes_troca_titularidade')
+.eq('termo_cancelamento_autentique_id', documentId)
+```
+Atualizaria `termo_cancelamento_assinado_em` + `status='cotacao_em_andamento'`. Lógica está OK — só não é executada porque o webhook não dispara.
 
-### Regras canônicas preservadas
-- Aprovação de Associados continua decidindo só aprovar/reprovar/devolver — não converte tipo.
-- `cadastro_aprovado` não é alterado pela conversão.
-- Badge indigo de `vistoria_manutencao` continua vindo de `ServicoTipoBadge`.
-- Guards DB (`trg_guard_instalacao_concluida_exige_rastreador`, `trg_guard_veiculo_ativo_exige_rastreador`) seguem ativos e não são afetados.
-- Triggers de dedupe `trg_sync_agendamento_base_on_servico_terminal` fecham automaticamente o agendamento do serviço original cancelado.
+**5. Formato do ID (não é o bug)**
+Tanto `solicitacoes_troca_titularidade.termo_cancelamento_autentique_id` (49 chars hex) quanto `contratos.autentique_documento_id` (49 chars hex, todos os registros) têm o mesmo formato. É o ID que o Autentique retorna em `createDocument.id` (`supabase/functions/enviar-termo-cancelamento-troca/index.ts:284`). Não há mismatch de formato — descartado.
 
-### Memória
-- Atualizar `mem://logic/operations/intencao-rastreador-fallback-monitoramento.md`:
-  - Trocar referência de "Aprovação de Associados" por "Serviços de Campo › Serviços (ação opcional no `ServicoDetailModal`)".
-  - Trocar `origem='monitoramento_aprovacao'` por `origem='servicos_campo_manual'`.
-  - Manter regras de bloqueio (IMEI em outro veículo ativo), preservação de `cadastro_aprovado` e badge canônico.
-- Atualizar o item do índice `mem://index.md` para apontar a nova localização.
+**6. Telefone falhou também**
+`termo_whatsapp_status='falhou'` → o titular antigo não recebeu o link por WhatsApp. Operador teve que enviar manualmente. Não bloqueia assinatura, mas reforça que o canal "automático" não está fechado.
+
+### Escopo da contaminação
+
+Query em `solicitacoes_troca_titularidade where termo_cancelamento_autentique_id is not null`: **2 trocas, ambas com `termo_cancelamento_assinado_em = NULL`** (KOU6D37 e 65d581ba-..., criada em 20/05). Toda troca recente está nessa situação — o pipeline automatizado nunca fechou nenhuma desde que o módulo entrou no ar; o que o usuário lembra como "finalizamos diversas vezes" foi via efetivação manual/contornos, não pelo webhook.
+
+`solicitacoes_substituicao` provavelmente tem o mesmo gap (mesma arquitetura, mesma ausência de polling) — vai entrar no plano de correção.
+
+## Plano de correção
+
+### 1. Edge function nova: `autentique-sync-troca-termo`
+- Espelho do `autentique-sync-contrato`, mas para troca.
+- Entrada: `solicitacaoId` (ou `documentId`).
+- Carrega `solicitacoes_troca_titularidade` pelo `termo_cancelamento_autentique_id`.
+- Faz a mesma GraphQL `query GetDocument($id: UUID!) { document(id) { signatures { signed { created_at } biometric_approved { created_at } viewed { created_at } rejected { created_at } } } }`.
+- Reusa a regra de `isEffectivelySigned` (signed.created_at OU biometric_approved.created_at + viewed) já implementada em `autentique-sync-contrato:362-364`.
+- Quando detecta assinatura, faz **a mesma atualização** que o webhook faria (linhas 320-478 do `autentique-webhook`):
+  - `UPDATE solicitacoes_troca_titularidade SET termo_cancelamento_assinado_em, status='cotacao_em_andamento'`
+  - Marca `veiculos.em_troca_titularidade=true`
+  - Auto-vincula cotação por `dados_extras.veiculo_origem_id` quando faltar
+  - Envia WhatsApp ao novo titular (template `liberacao_link_troca`)
+- Idempotente (verifica `termo_cancelamento_assinado_em IS NULL` antes).
+
+### 2. Polling no front (modal Detalhes da Troca)
+- Em `src/components/troca-titularidade/ModalDetalhesTroca.tsx`: enquanto `!solicitacao.termo_cancelamento_assinado_em && status === 'aguardando_termo_cancelamento'`, abrir um `useQuery` com `refetchInterval` de 15 s que chama a nova edge.
+- Botão "Verificar assinatura agora" como fallback manual (mesmo padrão de Cotação pública atual).
+- Hook `useSolicitacoesTroca` revalida sozinho via React Query invalidate ao receber sinal.
+
+### 3. Cron de segurança (opcional mas recomendado)
+- Edge `cron-sync-trocas-pendentes` rodando 5/5 min: lista `solicitacoes_troca_titularidade WHERE termo_cancelamento_assinado_em IS NULL AND termo_cancelamento_enviado_em < now() - interval '2 min'` e chama a sync para cada uma.
+- Garante que, mesmo sem operador olhando o modal, trocas se desbloqueiem sozinhas.
+
+### 4. Saneamento dos contaminados
+- Migration de saneamento: para os 2 registros atuais, rodar a sync uma única vez (script seed) consultando o Autentique. Se o documento estiver assinado, gravar `termo_cancelamento_assinado_em` retroativo + `status='cotacao_em_andamento'` + replicar marcações de `em_troca_titularidade` no veículo + auto-vinculação de cotação.
+- Loga auditoria em `associados_historico` com `via='saneamento_2026-05-22'`.
+
+### 5. Reaplicar mesmo padrão a Substituição
+- Verificar `solicitacoes_substituicao` (não tem polling, só webhook). Replicar `autentique-sync-substituicao-termo` + polling no `ModalDetalhesSubstituicao.tsx`. Mesmo cron pode varrer as duas tabelas.
+
+### 6. Investigar a raiz do webhook Autentique
+- Documentar (sem corrigir agora) que o webhook não está chegando: validar no painel Autentique se `https://<project>.supabase.co/functions/v1/autentique-webhook` está configurado e o secret esperado bate. Sem acesso ao painel Autentique, isso fica como tarefa do usuário — o sync acima já garante o fluxo independente do webhook.
+
+### 7. Memória canônica
+- Atualizar `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica` adicionando: "Detecção de assinatura tem 2 caminhos canônicos: (a) webhook Autentique em `autentique-webhook` e (b) polling `autentique-sync-troca-termo` (front + cron). Idem para substituição. Webhook sozinho NÃO é confiável — sempre manter o sync."
 
 ## Detalhes técnicos
-- Arquivos editados:
-  - `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` — remover botão e dialog.
-  - `src/components/servicos-campo/ServicoDetailModal.tsx` — adicionar botão "Tratar como Manutenção" + mount do `MarcarManutencaoDialog`.
-  - `src/hooks/useConverterParaManutencao.ts` — trocar `origem` para `servicos_campo_manual`.
-  - `mem://logic/operations/intencao-rastreador-fallback-monitoramento.md` — corrigir localização e origem.
-  - `mem://index.md` — atualizar one-liner do item.
-- Arquivos mantidos sem alteração:
-  - `src/components/monitoramento/MarcarManutencaoDialog.tsx`
-  - migration `..._add_intencao_rastreador.sql`
+- Arquivos a criar:
+  - `supabase/functions/autentique-sync-troca-termo/index.ts`
+  - `supabase/functions/autentique-sync-substituicao-termo/index.ts`
+  - `supabase/functions/cron-sync-trocas-pendentes/index.ts`
+  - Migration de saneamento dos 2 registros + agendamento do cron (`pg_cron`).
+- Arquivos a editar:
+  - `src/components/troca-titularidade/ModalDetalhesTroca.tsx` (polling + botão manual)
+  - `src/components/substituicao/ModalDetalhesSubstituicao.tsx` (idem)
+  - `src/hooks/useSolicitacoesTroca.ts` (invalidar ao receber update)
+  - `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica`
+  - `mem://index.md` (one-liner atualizado)
+- Arquivos preservados (lógica do webhook está correta):
+  - `supabase/functions/autentique-webhook/index.ts` (mantido — quando o webhook voltar, complementa o sync sem conflito por causa do guard `IS NULL`)
+  - `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
 
 ## Fora de escopo
-- Nenhuma alteração em fluxo SGA Hinova, modelo/listar ou Advanced Especial (esses pontos ficam para tarefas separadas).
-- Nenhuma mudança em Aprovação de Associados além de remover o botão indevido.
+- Reconfigurar o webhook no painel Autentique (depende do usuário).
+- Reescrever o módulo de envio do termo (`enviar-termo-cancelamento-troca`) — está OK.
+- Alterar formato do `autentique_documento_id` — formato 49 chars é o padrão Autentique, não é bug.

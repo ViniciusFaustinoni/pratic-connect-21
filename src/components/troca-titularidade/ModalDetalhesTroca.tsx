@@ -26,6 +26,8 @@ import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Wrench, Camera, ChevronDown } from 'lucide-react';
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
+import { RefreshCw } from 'lucide-react';
+import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 
 interface Props {
   open: boolean;
@@ -66,6 +68,19 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
+
+  // Polling do termo (fallback para o webhook Autentique, que não chega).
+  // Ativa enquanto o modal está aberto, o termo foi enviado e ainda não foi
+  // marcado como assinado. Ver `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica`.
+  const precisaSyncTermo = !!solicitacao
+    && !!solicitacao.termo_cancelamento_enviado_em
+    && !solicitacao.termo_cancelamento_assinado_em
+    && solicitacao.status === 'aguardando_termo_cancelamento';
+  const syncTermo = useSyncTermoCancelamento({
+    tipo: 'troca',
+    solicitacaoId: solicitacao?.id,
+    enabled: open && precisaSyncTermo,
+  });
 
   // Monta cotacaoBase para o formulário padrão a partir da solicitação +
   // dados do veículo. NÃO cria cotação avulsa antes — a cotação só nasce
@@ -280,7 +295,25 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                       <span className="text-sm">Assinado em {new Date(solicitacao.termo_cancelamento_assinado_em).toLocaleString('pt-BR')}</span>
                     </div>
                   ) : solicitacao.termo_cancelamento_enviado_em ? (
-                    <p className="text-sm text-amber-600">Enviado em {new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR')} — aguardando assinatura</p>
+                    <div className="space-y-2">
+                      <p className="text-sm text-amber-600">Enviado em {new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR')} — aguardando assinatura</p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => syncTermo.verificarAgora()}
+                          disabled={syncTermo.verificando}
+                        >
+                          {syncTermo.verificando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                          Verificar assinatura agora
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {syncTermo.ultimaVerificacao
+                            ? `Última verificação: ${syncTermo.ultimaVerificacao.toLocaleTimeString('pt-BR')}`
+                            : 'Sincronizando com Autentique…'}
+                        </span>
+                      </div>
+                    </div>
                   ) : (
                     <Button
                       onClick={() => enviarTermo.mutate(solicitacao.id)}
