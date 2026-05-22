@@ -1388,6 +1388,8 @@ export function useDuplicateProductLine() {
           valor: applyDiscount(cobData.valor, desconto),
           valor_limite: applyDiscount(cobData.valor_limite, desconto),
           franquia_valor: applyDiscount(cobData.franquia_valor, desconto),
+          // SGA code nunca é copiado — mapeamento manual posterior
+          codigo_sga: null,
         });
         cobOriginMap.push({
           origCobId: pc.cobertura_id,
