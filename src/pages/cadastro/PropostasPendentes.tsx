@@ -942,6 +942,8 @@ export default function PropostasPendentes() {
           })}
         </div>
       )}
+        </TabsContent>
+      </Tabs>
 
       <ConfirmacaoAcaoDialog
         open={dialogExcluirAberto}
