@@ -419,7 +419,7 @@ export default function CotadorPage() {
     modelo: modelo || undefined,
   }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado, marca, modelo, veiculoEncontrado?.combustivel, regiao]);
   
-  const { planos: planosDB, planosNegados, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
+  const { planos: planosDB, planosNegados, isLoading: loadingPlanos, tipoResolver } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();
   const atualizarLead = useUpdateLead();
   const { data: resultadosBuscaIndicador = [], isLoading: isSearchingIndicador } = useAssociadoSearch(buscaIndicador);
@@ -977,9 +977,10 @@ export default function CotadorPage() {
         veiculo_antigo_modelo: isSubstituicao ? veiculoAntigoModelo : undefined,
         solicitacao_substituicao_id: isSubstituicao ? solicitacaoSubstituicaoId : undefined,
         // Snapshot canônico do tipo (derivado da elegibilidade de linhas).
-        // Cotador legado: ainda usa heurística — registra como 'legado_heuristica' até refator completo.
-        tipo_veiculo: tipoVeiculoDetectado,
-        tipo_veiculo_motivo: 'legado_heuristica',
+        // Quando o resolver não decide (bloqueio), cai para a heurística como
+        // last-resort — o fluxo principal de criação é o CotacaoFormDialog.
+        tipo_veiculo: (tipoResolver.tipo as 'carro' | 'moto' | null) || tipoVeiculoDetectado,
+        tipo_veiculo_motivo: tipoResolver.motivo || 'legado_heuristica',
       });
 
       setCotacaoSalva(cotacaoData);

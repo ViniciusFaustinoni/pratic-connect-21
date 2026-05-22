@@ -14,6 +14,7 @@ import { gerarAlertaCategoriaElegibilidade } from '@/utils/alertaCategoriaElegib
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
+import { BloqueioTipoVeiculoModal } from '@/components/cotacoes/BloqueioTipoVeiculoModal';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -804,6 +805,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   });
   // Tipo congelado para persistir (snapshot canônico via elegibilidade de linhas)
   const [tipoVeiculoManualOverride, setTipoVeiculoManualOverride] = useState<'carro' | 'moto' | null>(null);
+  const [showBloqueioTipoVeiculo, setShowBloqueioTipoVeiculo] = useState(false);
   const tipoVeiculoCanonico: 'carro' | 'moto' = tipoVeiculoManualOverride || tipoResolver.tipo || tipoVeiculoDetectado;
   const tipoVeiculoMotivo = tipoVeiculoManualOverride ? 'operador_resolveu' : (tipoResolver.motivo || 'legado_heuristica');
 
@@ -1654,7 +1656,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         toast.warning(`Atenção: O valor de adesão (${formatCurrency(data.valor_adesao)}) está bem abaixo do sugerido pelo plano (${formatCurrency(valorPlano)}). Verifique se está correto.`);
       }
     }
-    
+
+    // Snapshot canônico do tipo: bloqueia se elegibilidade não decide e operador
+    // ainda não escolheu manualmente.
+    if (!tipoVeiculoManualOverride && tipoResolver.bloqueio) {
+      setShowBloqueioTipoVeiculo(true);
+      return;
+    }
+
     // Guardar dados e abrir popup de confirmação
     setPendingFormData(data);
     setShowConfirmDialog(true);
@@ -3520,6 +3529,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           setBypassPlacaOutroAssoc((s) => new Set(s).add(placaNorm(placa)));
           setShowPlacaOutroAssocModal(false);
           setTimeout(() => buscarPorPlaca(), 100);
+        }}
+      />
+
+      {/* Bloqueio canônico: tipo de veículo não resolvido pela elegibilidade */}
+      <BloqueioTipoVeiculoModal
+        open={showBloqueioTipoVeiculo}
+        bloqueio={tipoResolver.bloqueio}
+        onClose={() => setShowBloqueioTipoVeiculo(false)}
+        onResolverManual={(tipo) => {
+          setTipoVeiculoManualOverride(tipo);
+          setShowBloqueioTipoVeiculo(false);
+          // reabre fluxo de submit imediatamente após escolha
+          form.handleSubmit(onSubmit)();
         }}
       />
     </>

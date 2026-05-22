@@ -350,28 +350,38 @@ serve(async (req) => {
       cotacaoFallback = cotData || null;
     }
 
-    // Tipo (carro/moto/...) derivado de marcas_modelos (fonte canônica)
-    const marcaTipo = (contrato as any).veiculo_marca;
-    const modeloTipo = (contrato as any).veiculo_modelo;
-    if (marcaTipo) {
-      const { data: mm } = await supabase
-        .from('marcas_modelos')
-        .select('tipo_veiculo')
-        .eq('marca', marcaTipo)
-        .eq('modelo', modeloTipo || '')
-        .eq('ativo', true)
-        .maybeSingle();
-      const tipoFromMM = mm?.tipo_veiculo
-        || (await supabase
-              .from('marcas_modelos')
-              .select('tipo_veiculo')
-              .eq('marca', marcaTipo)
-              .eq('ativo', true)
-              .not('tipo_veiculo', 'is', null)
-              .limit(1)
-              .maybeSingle()).data?.tipo_veiculo
-        || null;
-      veiculoDB = { ...(veiculoDB || {}), tipo_veiculo: tipoFromMM };
+    // Tipo (carro/moto) — SNAPSHOT canônico congelado em contratos.tipo_veiculo
+    // pelo resolverTipoPorElegibilidade (ver mem://logic/operations/vehicle-type-detection-source).
+    // Fallback para marcas_modelos apenas em contratos legados sem snapshot.
+    const tipoSnapshot = (contrato as any).tipo_veiculo as 'carro' | 'moto' | null | undefined;
+    let tipoCanonico: string | null = null;
+    if (tipoSnapshot === 'moto') tipoCanonico = 'moto';
+    else if (tipoSnapshot === 'carro') tipoCanonico = 'carro';
+    else {
+      const marcaTipo = (contrato as any).veiculo_marca;
+      const modeloTipo = (contrato as any).veiculo_modelo;
+      if (marcaTipo) {
+        const { data: mm } = await supabase
+          .from('marcas_modelos')
+          .select('tipo_veiculo')
+          .eq('marca', marcaTipo)
+          .eq('modelo', modeloTipo || '')
+          .eq('ativo', true)
+          .maybeSingle();
+        tipoCanonico = mm?.tipo_veiculo
+          || (await supabase
+                .from('marcas_modelos')
+                .select('tipo_veiculo')
+                .eq('marca', marcaTipo)
+                .eq('ativo', true)
+                .not('tipo_veiculo', 'is', null)
+                .limit(1)
+                .maybeSingle()).data?.tipo_veiculo
+          || null;
+      }
+    }
+    if (tipoCanonico) {
+      veiculoDB = { ...(veiculoDB || {}), tipo_veiculo: tipoCanonico };
     }
     
     

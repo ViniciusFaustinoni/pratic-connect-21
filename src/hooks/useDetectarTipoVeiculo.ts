@@ -13,14 +13,22 @@ type TipoVeiculoResult = 'carro' | 'moto';
 export function useDetectarTipoVeiculo(
   marca: string | undefined | null,
   modelo: string | undefined | null,
-  tipoVeiculoApi?: string | null
+  tipoVeiculoApi?: string | null,
+  /**
+   * Snapshot canônico (cotacoes.tipo_veiculo / contratos.tipo_veiculo). Quando
+   * presente, vence sobre todas as heurísticas. Ver
+   * `mem://logic/operations/vehicle-type-detection-source`.
+   */
+  snapshotTipo?: 'carro' | 'moto' | null
 ) {
   const marcaNorm = (marca || '').trim().toUpperCase();
   const modeloNorm = (modelo || '').trim().toUpperCase();
 
   const { data: tipoFromDb, isLoading } = useQuery({
-    queryKey: ['detectar-tipo-veiculo', marcaNorm, modeloNorm],
+    queryKey: ['detectar-tipo-veiculo', marcaNorm, modeloNorm, snapshotTipo ?? null],
     queryFn: async (): Promise<TipoVeiculoResult | null> => {
+      // Snapshot canônico sempre vence.
+      if (snapshotTipo === 'moto' || snapshotTipo === 'carro') return snapshotTipo;
       if (!marcaNorm) return null;
 
       // ── Regra 1: Marcas exclusivas de moto (tabela configuracoes) ──
@@ -74,7 +82,7 @@ export function useDetectarTipoVeiculo(
 
       return null;
     },
-    enabled: !!marcaNorm,
+    enabled: !!marcaNorm || snapshotTipo === 'moto' || snapshotTipo === 'carro',
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
   });
