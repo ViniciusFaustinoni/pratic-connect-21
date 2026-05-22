@@ -1020,7 +1020,12 @@ export default function AprovacaoInstalacaoDetalhe() {
 
               {mostrarDevolver && (
                 <Button
-                  className="flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white"
+                  variant={devolverEhPrimario ? 'default' : 'outline'}
+                  className={
+                    devolverEhPrimario
+                      ? 'flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white'
+                      : 'flex-1 min-w-[180px] border-amber-500/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10'
+                  }
                   onClick={() => setDevolverOpen(true)}
                   disabled={devolverCadastro.isPending}
                 >
@@ -1029,7 +1034,7 @@ export default function AprovacaoInstalacaoDetalhe() {
                   ) : (
                     <Undo2 className="h-4 w-4 mr-2" />
                   )}
-                  Devolver ao Cadastro (aprovar R&amp;F lá)
+                  {devolverEhPrimario ? 'Devolver ao Cadastro (aprovar R&F lá)' : 'Devolver ao Cadastro'}
                 </Button>
               )}
 
