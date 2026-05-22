@@ -191,4 +191,8 @@ export interface CriarCotacaoPayload {
   veiculo_antigo_placa?: string | null;
   veiculo_antigo_modelo?: string | null;
   solicitacao_substituicao_id?: string | null;
+  /** Snapshot canônico (carro|moto) derivado da elegibilidade de linhas. Obrigatório ao salvar fora de rascunho. */
+  tipo_veiculo?: 'carro' | 'moto' | null;
+  /** Como o tipo foi resolvido. */
+  tipo_veiculo_motivo?: 'unanime_moto' | 'unanime_carro' | 'operador_resolveu' | 'legado_heuristica' | null;
 }
