@@ -2044,20 +2044,8 @@ export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, on
               )}
             </div>
 
-            {/* Modal de Recusa (para decisão Negado) */}
-            <ModalRecusaVeiculoComFotos
-              open={showModalRecusa}
-              onClose={() => { setShowModalRecusa(false); setMotivoPrePreenchido(''); }}
-              onConfirm={({ motivoCompleto, fotos }) => {
-                handleRecusarVeiculo(motivoCompleto, fotos);
-              }}
-              isPending={recusarVeiculoMutation.isPending}
-              veiculoInfo={{
-                placa: (servico as any).veiculos?.placa,
-                modelo: (servico as any).veiculos?.modelo,
-              }}
-              detalhesInicial={motivoPrePreenchido}
-            />
+            {/* Modal de Recusa movido para fora deste bloco — agora renderizado em nível raiz */}
+
 
           </div>
         )}
