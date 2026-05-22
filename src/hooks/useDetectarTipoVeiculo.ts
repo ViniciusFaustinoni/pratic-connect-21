@@ -27,6 +27,8 @@ export function useDetectarTipoVeiculo(
   const { data: tipoFromDb, isLoading } = useQuery({
     queryKey: ['detectar-tipo-veiculo', marcaNorm, modeloNorm],
     queryFn: async (): Promise<TipoVeiculoResult | null> => {
+      // Snapshot canônico sempre vence.
+      if (snapshotTipo === 'moto' || snapshotTipo === 'carro') return snapshotTipo;
       if (!marcaNorm) return null;
 
       // ── Regra 1: Marcas exclusivas de moto (tabela configuracoes) ──
