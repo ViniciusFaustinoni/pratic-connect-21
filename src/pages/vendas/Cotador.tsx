@@ -1182,8 +1182,26 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         </Alert>
       )}
 
-      {/* SELETOR DE MODO — oculto na edição de troca */}
+      {/* GATE 0KM canônico — antes de tudo. Edição de troca pula (veículo já existe). */}
       {!isEdicaoTroca && (
+        <div id="bloco-veiculo-gate-0km">
+          <PerguntaZeroKmGate
+            value={isZeroKm}
+            onChange={(checked) => {
+              setIsZeroKm(checked);
+              if (checked) {
+                // 0KM: força modo manual e limpa qualquer estado de busca por placa
+                if (modo !== 'manual') handleModoChange('manual');
+                setPlacaBusca('');
+                setVeiculoEncontrado(null);
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* SELETOR DE MODO — oculto na edição de troca e quando 0KM (força manual) */}
+      {!isEdicaoTroca && isZeroKm === false && (
       <Card className="bg-muted/30">
         <CardContent className="py-4">
           <p className="font-medium text-foreground mb-4">
@@ -1233,8 +1251,11 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         </CardContent>
       </Card>
       )}
-      {/* GRID PRINCIPAL */}
+
+      {/* GRID PRINCIPAL — só aparece após responder o gate (ou em edição de troca) */}
+      {(isEdicaoTroca || isZeroKm !== null) && (
       <div className="grid gap-6 lg:grid-cols-2">
+        
         
         {/* CARD ESQUERDO - DADOS DO VEÍCULO */}
         <Card>
