@@ -177,8 +177,10 @@ serve(async (req) => {
       pix_qrcode: pixData?.encodedImage ?? null,
       pix_copia_cola: pixData?.payload ?? null,
       pix_expiracao: pixData?.expirationDate ?? null,
+      invoice_url: novaCobrancaAsaas.invoiceUrl ?? null,
       updated_at: new Date().toISOString(),
     };
+
     if (recriou) {
       updateDb.asaas_id = novaCobrancaAsaasId;
     }

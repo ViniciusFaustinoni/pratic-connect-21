@@ -322,8 +322,9 @@ serve(async (req) => {
       }
     }
 
-    // Gerar link de pagamento para cartão de crédito
-    const linkPagamento = `https://www.asaas.com/c/${cobrancaData.id}`;
+    // Link de pagamento canônico = invoiceUrl oficial do ASAAS (https://www.asaas.com/i/{shortId}).
+    // NUNCA usar /c/{payment_id} — esse caminho é o catálogo por customer (cus_xxx) e não resolve pagamento.
+    const linkPagamento = cobrancaData.invoiceUrl || null;
 
     // Salvar cobrança no banco de dados
     // Usar associado_id se existir, ou criar um placeholder para lead
@@ -348,7 +349,9 @@ serve(async (req) => {
         pix_expiracao: pixData?.expirationDate,
         referencia: `adesao-${contratoId}`,
         forma_pagamento: billingType,
+        invoice_url: cobrancaData.invoiceUrl ?? null,
       })
+
       .select()
       .single();
 
@@ -380,6 +383,23 @@ serve(async (req) => {
             console.warn('[asaas-cobranca-adesao] Não foi possível cancelar duplicata no Asaas (pode já estar paga):', cancelError);
           }
           
+          // Recuperar invoiceUrl real do ASAAS (não chutar /c/{id}, que é URL inválida)
+          let invoiceUrlExistente: string | null = (cobrancaExistenteDup as any).invoice_url ?? null;
+          if (!invoiceUrlExistente && cobrancaExistenteDup.asaas_id) {
+            try {
+              const pgGet = await asaasRequest(`/payments/${cobrancaExistenteDup.asaas_id}`, 'GET');
+              invoiceUrlExistente = pgGet?.invoiceUrl ?? null;
+              if (invoiceUrlExistente) {
+                await supabase
+                  .from('asaas_cobrancas')
+                  .update({ invoice_url: invoiceUrlExistente })
+                  .eq('id', cobrancaExistenteDup.id);
+              }
+            } catch (e) {
+              console.warn('[asaas-cobranca-adesao] Falha ao recuperar invoiceUrl da cobrança existente:', e);
+            }
+          }
+
           return new Response(
             JSON.stringify({
               success: true,
@@ -389,9 +409,8 @@ serve(async (req) => {
               pix_qrcode: cobrancaExistenteDup.pix_qrcode,
               boleto_url: cobrancaExistenteDup.boleto_url,
               linha_digitavel: cobrancaExistenteDup.linha_digitavel,
-              link_pagamento: cobrancaExistenteDup.asaas_id
-                ? `https://www.asaas.com/c/${cobrancaExistenteDup.asaas_id}`
-                : undefined,
+              link_pagamento: invoiceUrlExistente ?? undefined,
+              invoice_url: invoiceUrlExistente ?? undefined,
               valor: cobrancaExistenteDup.valor,
               vencimento: cobrancaExistenteDup.data_vencimento,
               message: 'Cobrança existente retornada (race condition tratada)',
@@ -400,6 +419,7 @@ serve(async (req) => {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             }
           );
+
         }
       }
       

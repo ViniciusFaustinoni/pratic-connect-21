@@ -1674,6 +1674,7 @@ export type Database = {
           fechamento_id: string | null
           forma_pagamento: string | null
           id: string
+          invoice_url: string | null
           juros: number | null
           lembrete_d1_enviado: boolean | null
           lembrete_d3_enviado: boolean | null
@@ -1725,6 +1726,7 @@ export type Database = {
           fechamento_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          invoice_url?: string | null
           juros?: number | null
           lembrete_d1_enviado?: boolean | null
           lembrete_d3_enviado?: boolean | null
@@ -1776,6 +1778,7 @@ export type Database = {
           fechamento_id?: string | null
           forma_pagamento?: string | null
           id?: string
+          invoice_url?: string | null
           juros?: number | null
           lembrete_d1_enviado?: boolean | null
           lembrete_d3_enviado?: boolean | null

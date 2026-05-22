@@ -157,18 +157,34 @@ export function EtapaPagamentoCotacao({
 
       if (cobrancaExistente) {
         console.log('[EtapaPagamento] Cobrança existente encontrada:', cobrancaExistente.id);
+
+        // Resolver invoice_url canônico do ASAAS. NUNCA chutar /c/{asaas_id} (URL inválida).
+        let invoiceUrl: string | undefined = (cobrancaExistente as any).invoice_url || undefined;
+        if (!invoiceUrl && cobrancaExistente.asaas_id) {
+          try {
+            const { data: buscaData } = await publicSupabase.functions.invoke('asaas-cobrancas', {
+              body: { action: 'buscar', asaas_id: cobrancaExistente.asaas_id },
+            });
+            invoiceUrl = buscaData?.cobranca?.invoiceUrl || buscaData?.invoiceUrl || undefined;
+          } catch (e) {
+            console.warn('[EtapaPagamento] Falha ao recuperar invoiceUrl:', e);
+          }
+        }
+
         setCobranca({
           id: cobrancaExistente.id,
           pixCopiaECola: cobrancaExistente.pix_copia_cola,
           pixQrCode: cobrancaExistente.pix_qrcode,
           boletoUrl: cobrancaExistente.boleto_url,
           linhaDigitavel: cobrancaExistente.linha_digitavel,
-          linkPagamento: `https://www.asaas.com/c/${cobrancaExistente.asaas_id}`,
+          linkPagamento: invoiceUrl,
+          invoiceUrl,
           status: cobrancaExistente.status,
         });
         setEtapaInterna('aguardando_pagamento');
         return;
       }
+
 
       const cpfNormalizado = clienteCpf?.replace(/\D/g, '') || '';
       if (!validateCPF(cpfNormalizado)) {
@@ -194,10 +210,8 @@ export function EtapaPagamentoCotacao({
       if (!data?.success) throw new Error(data?.error || 'Erro ao criar cobrança');
 
       console.log('[EtapaPagamento] Cobrança criada:', data.cobranca_id);
-      const linkPagamentoFinal =
-        data.link_pagamento ||
-        data.invoice_url ||
-        (data.asaas_id ? `https://www.asaas.com/c/${data.asaas_id}` : undefined);
+      const linkPagamentoFinal = data.invoice_url || data.link_pagamento || undefined;
+
       setCobranca({
         id: data.cobranca_id,
         pixCopiaECola: data.pix_copia_cola,

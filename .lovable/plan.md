@@ -1,122 +1,61 @@
+## Objetivo
 
-# Tipo de veículo derivado da elegibilidade de linhas — congelado na cotação
+Corrigir o pagamento por cartão de crédito no link público de adesão. Hoje o botão "Pagar com Cartão" abre `https://www.asaas.com/c/pay_xxx`, que não é uma URL de pagamento válida no ASAAS. O correto é abrir o `invoiceUrl` (`https://www.asaas.com/i/{shortId}`) que a própria API ASAAS já retorna na criação da cobrança.
 
-## Pré-checagem (já validada)
+Caso impactado confirmado: placa **LSW8130**, contrato `CTR-20260522194347-H9HV8B`, cobrança ASAAS `pay_fzap7eptk36ird03` (PIX funcionando, cartão quebrado).
 
-| Slug da linha | `vehicle_type` | Planos ativos |
-|---|---|---|
-| advanced (+2 cópias) | `motorcycle` | 12 cada |
-| proteção-veicular (+ cópias) / especial | `car` | 15–37 |
+## Mudanças
 
-A Diretoria mantém `vehicle_type` em Gestão Comercial. **Nenhuma** regra `entity_eligibility_rules` precisa mudar — `vehicle_type` é lido direto da linha. Mudanças futuras (nova linha de moto, descontinuar Advanced) refletem automaticamente sem deploy.
+### 1. `supabase/functions/asaas-cobranca-adesao/index.ts`
 
-## Como derivar o tipo a partir da elegibilidade (sem circularidade)
-
-O cotador hoje filtra planos usando `vehicleCtx.categoriaVeiculo`, que vem de heurística externa — circular. Inverto:
-
-```text
-para cada plano ativo:
-  rodar checkAllRules IGNORANDO a regra `categoria_veiculo`
-  (deixa todas as outras: FIPE, ano, região, marca_modelo, uso, combustível, placa)
-  se passou → marcar candidato com vehicle_type da linha do plano
+**Linha 326** — trocar a construção do link de pagamento para usar o `invoiceUrl` real:
+```ts
+// antes
+const linkPagamento = `https://www.asaas.com/c/${cobrancaData.id}`;
+// depois
+const linkPagamento = cobrancaData.invoiceUrl || null;
 ```
 
-Decisão a partir dos candidatos:
+**Linhas 386-394** — no branch de duplicata (race condition), parar de remontar `/c/${asaas_id}`. Buscar o `invoiceUrl` real do ASAAS via `GET /payments/{id}` antes de responder. Se a busca falhar, retornar `null` em `link_pagamento` e deixar o front cair no `invoice_url`/PIX em vez de abrir uma URL quebrada.
 
-| Candidatos | Decisão |
-|---|---|
-| Só `motorcycle` | `tipo = 'moto'` |
-| Só `car` | `tipo = 'carro'` |
-| Misto (FIPE/ano cabe nos dois) | **bloqueia** com modal "Confirme: este veículo é carro ou moto?" — escolha do operador vira o tipo |
-| Nenhum | **bloqueia** com mensagem "Nenhuma linha de produto elegível para este veículo. Verifique os dados ou contate a Gestão Comercial." |
+### 2. `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx`
 
-O caso "misto" é raro porque na prática as faixas FIPE de planos moto (≤ ~R$80k) e carro (≥ ~R$15k) só se sobrepõem em FIPEs intermediárias sem outras restrições. Quando acontece, pedimos confirmação humana — sem heurística silenciosa.
+**Linha 166** — ao reusar cobrança existente do banco, parar de chutar `https://www.asaas.com/c/${asaas_id}`. Quando a cobrança existente não tiver `invoice_url` armazenado, chamar `asaas-cobrancas` (`action: 'buscar'`) para obter o `invoiceUrl` atualizado do ASAAS. Sem isso, deixar o botão de cartão desabilitado com mensagem clara em vez de abrir URL inválida.
 
-## Arquitetura
-
-```text
-src/lib/veiculo/resolverTipoPorElegibilidade.ts   (FONTE ÚNICA)
-   resolve({ planos, regras, product_lines, vehicleCtx })
-     → { tipo: 'carro'|'moto', motivo: 'unanime_moto'|'unanime_carro'|'operador_resolveu' }
-     → ou { bloqueio: 'nenhuma_linha' | 'ambiguo', candidatos }
-                  │
-                  ▼
-   Cotador / CotacaoFormDialog
-   - chama resolver no mesmo useMemo que calcula planos
-   - se bloqueio='ambiguo' → abre modal "Carro ou Moto?"
-   - se bloqueio='nenhuma_linha' → modal bloqueante com link p/ Gestão Comercial
-   - tipo segue no estado da cotação; muda quando placa/marca/modelo/FIPE mudar
-                  │
-                  ▼  (ao salvar cotação)
-   cotacoes.tipo_veiculo (NOT NULL via guard) + tipo_veiculo_motivo
-                  │
-                  ▼
-   contrato-gerar copia → contratos.tipo_veiculo
-                  │
-                  ▼
-   Consumidores LEEM (não recomputam):
-   1. usePlanosCotacao (origem; segue calculando)
-   2. vistoriaConfigCompleta.getFotosByTipoVeiculo ← tipo do snapshot
-   3. autentique-create ← contratos.tipo_veiculo (remove fallback "primeira marca")
-   4. contrato-gerar ← cotacoes.tipo_veiculo (sem detectarCategoriaVeiculo)
-   5. RealizarVistoriaDialog ← contratos.tipo_veiculo
+**Linhas 197-200** — inverter prioridade do fallback:
+```ts
+// antes
+const linkPagamentoFinal =
+  data.link_pagamento ||
+  data.invoice_url ||
+  (data.asaas_id ? `https://www.asaas.com/c/${data.asaas_id}` : undefined);
+// depois
+const linkPagamentoFinal = data.invoice_url || data.link_pagamento || undefined;
 ```
+Remover o fallback `/c/${asaas_id}` por completo — ele só esconde a falha real.
 
-## Detalhes técnicos
+### 3. Persistir `invoice_url` em `asaas_cobrancas`
 
-### Schema
-```sql
-ALTER TABLE cotacoes
-  ADD COLUMN tipo_veiculo text CHECK (tipo_veiculo IN ('carro','moto')),
-  ADD COLUMN tipo_veiculo_motivo text;  -- 'unanime_moto'|'unanime_carro'|'operador_resolveu'
+Hoje a tabela `asaas_cobrancas` não guarda o `invoiceUrl`. Adicionar coluna `invoice_url text` e gravá-la em:
+- `asaas-cobranca-adesao` (criação inicial)
+- `asaas-alterar-forma-pagamento` (linhas 170-184, já retorna `invoiceUrl` no JSON mas não persiste)
+- `asaas-webhook` (quando ASAAS confirma/atualiza a cobrança, opcional)
 
-ALTER TABLE contratos
-  ADD COLUMN tipo_veiculo text CHECK (tipo_veiculo IN ('carro','moto'));
-```
-Nascem NULL (sem backfill, conforme escopo).
+Isso evita o GET extra no ASAAS toda vez que o link público re-abre.
 
-### Guards DB (barreira final)
-Trigger BEFORE INSERT/UPDATE em `cotacoes`: quando `status` sai de `rascunho`, exige `tipo_veiculo IS NOT NULL`.
-Trigger BEFORE INSERT em `contratos`: exige `tipo_veiculo IS NOT NULL` quando `cotacao_id` aponta para cotação com `tipo_veiculo` preenchido (permite legados sem snapshot continuarem entrando).
+### 4. Saneamento manual do caso LSW8130
 
-### Resolver
-- Reaproveita `useAllEligibilityRules`, `checkAllRules`, `findModelEligibility` que já existem em `useEntityEligibilityRules.ts`.
-- Adiciona uma flag `ignoreCategoriaVeiculoRule` em `checkAllRules` ou aplica `.filter(r => r.rule_type !== 'categoria_veiculo')` antes da chamada.
-- Retorna o conjunto `candidatos: { planoId, vehicleType: 'motorcycle'|'car' }[]` para alimentar o modal de desambiguação.
+Após o deploy, chamar `GET https://api.asaas.com/v3/payments/pay_fzap7eptk36ird03` pelo edge function existente (`asaas-cobrancas` action `buscar`) e gravar o `invoiceUrl` retornado na cobrança `a813af2c-740c-4fab-aaf3-8b7052668a63`. O cliente Pedro Henrique consegue concluir o pagamento por cartão sem precisar gerar nova cobrança.
 
-### Modal de bloqueio
-Componente `<BloqueioTipoVeiculoModal>` com dois modos:
-- `ambiguo`: lista de "planos compatíveis se for carro" vs "se for moto" + dois botões grandes ("É um carro" / "É uma moto"). Escolha persiste em estado local e dispara recálculo (forçando o `vehicleCtx.categoriaVeiculo`).
-- `nenhuma_linha`: mensagem + botão "Abrir Gestão Comercial" → rota das linhas/regras.
+## Verificação
 
-Reaproveito no `RealizarVistoriaDialog` para contratos legados sem snapshot (idem fallback).
+1. Reabrir o link público de pagamento da cotação `1c4eedee-994d-4099-a02c-ab3b3826d334` e confirmar que o botão "Pagar com Cartão" abre uma URL `asaas.com/i/{shortId}` (não `/c/pay_xxx`).
+2. Criar uma cotação nova de teste, ir até pagamento, confirmar mesmo comportamento.
+3. Verificar que o fluxo PIX continua intacto (não tocamos no PIX QR/copia-e-cola).
+4. Verificar que `asaas_cobrancas.invoice_url` está populado para a cobrança nova.
 
-### Consumidores — diff resumido
+## Fora de escopo
 
-| Arquivo | Mudança |
-|---|---|
-| `src/hooks/useDetectarTipoVeiculo.ts` | Vira wrapper deprecated: se `cotacaoId` for passado, lê snapshot; senão chama resolver de elegibilidade. Remove `marcas_exclusivas_moto`, `MOTO_KEYWORDS`, fallback `'carro'`. |
-| `src/hooks/usePlanosCotacao.ts` | `buildVehicleContext` passa a aceitar `categoriaOverride` do resolver/modal em vez de `tipoVeiculo` cego. Exporta `candidatosTipoVeiculo` para o modal. |
-| `src/components/cotacoes/CotacaoFormDialog.tsx` + `Cotador.tsx` | Bloqueio do botão "Salvar" enquanto resolver não devolve tipo definido; integra modal de desambiguação; grava `tipo_veiculo` + `tipo_veiculo_motivo` no payload. |
-| `src/data/vistoriaConfigCompleta.ts::detectarTipoVeiculo` | Aceita `tipoSnapshot?: 'carro'\|'moto'` como primeiro argumento; quando presente retorna direto, lógica antiga removida. |
-| `supabase/functions/contrato-gerar/index.ts` | Lê `cotacoes.tipo_veiculo` e copia. Se ausente (legado), roda resolver server-side; se bloqueio → erro 409. Remove `detectarCategoriaVeiculo`. |
-| `supabase/functions/autentique-create/index.ts` | Lê `contratos.tipo_veiculo`. Remove o bloco `.from('marcas_modelos').eq('marca').limit(1)` + fallback "primeira linha". |
-| `src/components/.../RealizarVistoriaDialog.tsx` | Lê `contratos.tipo_veiculo`. Para legado ausente, modal de desambiguação. |
-
-Resolver canônico vive em frontend e edge (`src/lib/veiculo/resolverTipoPorElegibilidade.ts` + `supabase/functions/_shared/resolver-tipo-por-elegibilidade.ts`) — mesma assinatura, mesmos critérios, alimentados pelo mesmo SELECT em `entity_eligibility_rules` + `product_lines`.
-
-### Memória
-- Atualizar `mem://logic/operations/vehicle-type-detection-source` → "derivado de `product_lines.vehicle_type` via resolver de elegibilidade; congelado em `cotacoes.tipo_veiculo`/`contratos.tipo_veiculo`."
-- Substituir `mem://logic/operations/catalogo-marcas-modelos-divergente` (override por keyword some — `marcas_modelos` deixa de ser fonte de tipo).
-- Adicionar Core: "Tipo de veículo é decidido pela elegibilidade de linhas (`product_lines.vehicle_type`) na cotação e congelado; consumidores leem, não recomputam."
-
-## Fora deste turno (confirmado pelo usuário)
-Backfill, listagem retroativa, correção da Fernanda (HMCZ80) e Luiz Fernando — fora.
-
-## Ordem de execução
-1. Migração DB (colunas + guards desativados).
-2. Resolver canônico (frontend + edge shared).
-3. Refator dos 5 consumidores + modais.
-4. Ligar guards DB.
-5. Atualizar memórias.
-6. Verificar no preview: criar cotação de Honda PCX e de Honda Civic, conferir tipo persistido + modal de ambiguidade se aparecer.
+- Não vou mexer no fluxo de webhook de pagamento (`asaas-webhook`) além de opcionalmente gravar o `invoice_url`.
+- Não vou tocar em cobranças recorrentes (mensalidades) — o bug é específico do link público de adesão.
+- Não vou alterar a integração com o ASAAS em si (API key, secrets, ambiente) — está tudo correto, é só URL formatada errada no nosso lado.
