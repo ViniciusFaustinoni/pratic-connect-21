@@ -182,7 +182,14 @@ export interface PropostaPendente {
   cotacao_id: string | null;
   veiculo_id: string | null; // ID do veículo vinculado
   veiculo_cobertura_total: boolean | null; // Se veículo tem cobertura total ativada
-  veiculo_cobertura_roubo_furto: boolean | null; // Se veículo optou pela cobertura de Roubo e Furto
+  veiculo_cobertura_roubo_furto: boolean | null; // Se R&F já está ATIVADO no veículo (flipa após aprovação do Cadastro)
+  /**
+   * True quando o cliente OPTOU por R&F (intenção), independente da ativação no veículo.
+   * Derivado de: cobertura já ativada OU autovistoria materializada OU plano inclui R&F.
+   * Use ESTE campo na UI de badges "optou / não optou". Use `veiculo_cobertura_roubo_furto`
+   * só quando precisar saber se a cobertura JÁ foi liberada.
+   */
+  optou_roubo_furto: boolean;
   contrato_link_token: string | null;
   associado: Associado | null;
   plano: { nome: string } | null;
