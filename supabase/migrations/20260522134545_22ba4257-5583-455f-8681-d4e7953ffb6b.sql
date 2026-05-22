@@ -1,0 +1,1 @@
+UPDATE instalacoes SET dispensa_rastreador = false, updated_at = now() WHERE id = '7c4877dc-8e9a-40bc-a0d8-ecdcda9d7e1f';

@@ -1063,16 +1063,23 @@ export function useAprovarVeiculoServico() {
         // 4. Registrar movimentação de estoque APENAS se vinha do estoque
         // (evita duplicar movimentação em retomadas idempotentes)
         if (rastreadorStatusAnterior === 'estoque') {
-          await supabase.from('estoque_movimentacoes').insert({
-            rastreador_id: rastreadorId,
-            tipo: 'instalacao',
-            quantidade: 1,
-            status_anterior: 'estoque',
-            status_novo: 'instalado',
-            veiculo_id: data.veiculoId,
-            observacoes: `Instalado pelo profissional no veículo`,
-            usuario_id: profile?.id,
-          });
+          try {
+            const { error: movError } = await supabase.from('estoque_movimentacoes').insert({
+              rastreador_id: rastreadorId,
+              tipo: 'instalacao',
+              quantidade: 1,
+              status_anterior: 'estoque',
+              status_novo: 'instalado',
+              veiculo_id: data.veiculoId,
+              observacoes: `Instalado pelo profissional no veículo`,
+              usuario_id: profile?.id,
+            });
+            if (movError) {
+              console.warn('[useAprovarVeiculoServico] Falha ao registrar movimentação de estoque (não bloqueia):', movError);
+            }
+          } catch (movErr) {
+            console.warn('[useAprovarVeiculoServico] Exceção ao registrar movimentação de estoque (não bloqueia):', movErr);
+          }
         } else {
           console.log('[useAprovarVeiculoServico] Movimentação de estoque pulada (status anterior:', rastreadorStatusAnterior, ')');
         }
@@ -1172,20 +1179,29 @@ export function useAprovarVeiculoServico() {
         ? `${decisaoLabel} - Rastreador ${data.imeiRastreador} instalado`
         : `${decisaoLabel} - Sem rastreador`;
       
-      await supabase.from('associados_historico').insert({
-        associado_id: data.associadoId,
-        tipo: 'instalacao_concluida',
-        descricao: descricaoHistorico,
-        dados_novos: {
-          servico_id: data.servicoId,
-          veiculo_id: data.veiculoId,
-          rastreador_id: rastreadorId,
-          imei: data.imeiRastreador,
-          decisao_instalador: data.decisaoInstalador || 'aprovado',
-          ressalvas: data.ressalvasInstalador,
-        },
-        usuario_id: profile?.id,
-      });
+      // Histórico não-bloqueante: falhas em triggers (auth_logs/logs_auditoria) ou FK
+      // não devem abortar a conclusão da instalação (já efetivada acima).
+      try {
+        const { error: histError } = await supabase.from('associados_historico').insert({
+          associado_id: data.associadoId,
+          tipo: 'instalacao_concluida',
+          descricao: descricaoHistorico,
+          dados_novos: {
+            servico_id: data.servicoId,
+            veiculo_id: data.veiculoId,
+            rastreador_id: rastreadorId,
+            imei: data.imeiRastreador,
+            decisao_instalador: data.decisaoInstalador || 'aprovado',
+            ressalvas: data.ressalvasInstalador,
+          },
+          usuario_id: profile?.id,
+        });
+        if (histError) {
+          console.warn('[useAprovarVeiculoServico] Falha ao gravar histórico (não bloqueia):', histError);
+        }
+      } catch (histErr) {
+        console.warn('[useAprovarVeiculoServico] Exceção ao gravar histórico (não bloqueia):', histErr);
+      }
 
       // 7. Gerar Laudo PDF (anexado automaticamente aos documentos do associado)
       try {
