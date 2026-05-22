@@ -60,6 +60,7 @@ export function StepFinanceiro({
   onConfirmar,
   onBack,
   onIniciarSubstituicao,
+  onDiaVencimentoChange,
 }: StepFinanceiroProps) {
   const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'UNDEFINED'>('PIX');
   const [tipoAtendimento, setTipoAtendimento] = useState<'base' | 'volante'>('base');
@@ -68,6 +69,12 @@ export function StepFinanceiro({
   const [confirmado, setConfirmado] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [mensalidadeManual, setMensalidadeManual] = useState<string>('');
+  const [diaVencimentoLocal, setDiaVencimentoLocal] = useState<number>(diaVencimento || 10);
+
+  useEffect(() => {
+    setDiaVencimentoLocal(diaVencimento || 10);
+  }, [diaVencimento]);
+
 
   const { criarCobranca } = useAsaas();
   const atualizarSubstituicao = useAtualizarSubstituicao();
