@@ -19,6 +19,8 @@ import { LinkPrestadorResultDialog } from './LinkPrestadorResultDialog';
 import { DevolverFilaDialog } from './DevolverFilaDialog';
 import { formatPlacaOuChassi, isPlacaPlaceholder } from '@/lib/placa-utils';
 import { usePermissions } from '@/hooks/usePermissions';
+import { RealizarVistoriaInternaButton } from '@/components/servicos-campo/RealizarVistoriaInternaButton';
+
 
 function getTipoLabel(tipo: string) {
   if (tipo === 'vistoria_base') return 'Vistoria Base';
