@@ -202,8 +202,15 @@ export function PropostaDetalhesTabs({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Roubo &amp; Furto:</span>
-                {proposta.veiculo_cobertura_roubo_furto ? (
-                  <Badge className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20 font-semibold">
+                {proposta.optou_roubo_furto ? (
+                  <Badge
+                    className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20 font-semibold"
+                    title={
+                      proposta.veiculo_cobertura_roubo_furto
+                        ? 'Cobertura R&F já ativada no veículo'
+                        : 'Cliente optou por R&F — aguardando aprovação do Cadastro para ativar'
+                    }
+                  >
                     Sim — optou
                   </Badge>
                 ) : (
