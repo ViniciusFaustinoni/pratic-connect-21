@@ -50,10 +50,20 @@ export default function VistoriasInstalacoesMon() {
               <ListChecks className="h-4 w-4" />
               <span className="hidden sm:inline">Serviços</span>
             </TabsTrigger>
+            <TabsTrigger value="suspensos" className="gap-2 shrink-0">
+              <ShieldOff className="h-4 w-4" />
+              <span className="hidden sm:inline">Veículos Suspensos</span>
+              {suspensos && suspensos.length > 0 && (
+                <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                  {suspensos.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="mapa" className="gap-2 shrink-0">
               <MapIcon className="h-4 w-4" />
               <span className="hidden sm:inline">Mapa</span>
             </TabsTrigger>
+            
             
             <TabsTrigger value="historico" className="gap-2 shrink-0">
               <History className="h-4 w-4" />
