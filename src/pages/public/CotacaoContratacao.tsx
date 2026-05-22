@@ -372,6 +372,7 @@ export default function CotacaoContratacao() {
       !isTrocaTitularidade &&
       cotacao?.status_contratacao === 'pagamento_ok' &&
       !cotacao?.tipo_vistoria &&
+      !cotacao?.vistoria_concluida_em &&
       !hasInstalacaoAgendada &&
       !hasAgendamentoBase &&
       !agendamentoConcluido
