@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy, Loader2, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useDuplicatePlan } from '@/hooks/usePlansAdmin';
 import { useRegioes } from '@/hooks/useRegioes';
 
@@ -73,6 +74,14 @@ export function DuplicarPlanoModal({ open, onOpenChange, plano }: DuplicarPlanoM
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <Alert variant="default" className="border-warning/40 bg-warning/5">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertTitle className="text-sm">Código SGA não é copiado</AlertTitle>
+            <AlertDescription className="text-xs">
+              Após duplicar, mapeie o novo plano em <strong>Configurações › Integrações › SGA Hinova</strong> antes de ativá-lo.
+            </AlertDescription>
+          </Alert>
+
           <div className="space-y-2">
             <Label>Nome resultante</Label>
             <p className="text-sm font-medium text-foreground bg-muted rounded-md px-3 py-2">

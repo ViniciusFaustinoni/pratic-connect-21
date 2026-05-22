@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -60,9 +61,16 @@ function matchTexto(haystack: string, q: string) {
 
 export default function PlanosSGA() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<'produtos' | 'beneficios'>('produtos');
-  const [busca, setBusca] = useState('');
+  const [busca, setBusca] = useState(() => searchParams.get('busca') ?? '');
   const [situacao, setSituacao] = useState<SGASituacao>('ativo');
+
+  // Reage a navegação posterior com ?busca= (ex.: vindo do toast de duplicação)
+  useEffect(() => {
+    const q = searchParams.get('busca');
+    if (q) setBusca(q);
+  }, [searchParams]);
   const [detalhe, setDetalhe] = useState<{ tipo: 'produto' | 'beneficio'; data: SGAProduto | SGABeneficio } | null>(null);
 
   const produtosQ = useSGAProdutos();
