@@ -44,8 +44,6 @@ import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
-import { MarcarManutencaoDialog } from '@/components/monitoramento/MarcarManutencaoDialog';
-import { Wrench } from 'lucide-react';
 import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
 import { servicoConcluidoEmCampo } from '@/lib/servicos/terminaisPositivos';
 
@@ -369,7 +367,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
   const [solicitarVistoriaOpen, setSolicitarVistoriaOpen] = useState(false);
   const [devolverOpen, setDevolverOpen] = useState(false);
-  const [manutencaoOpen, setManutencaoOpen] = useState(false);
+  
 
   if (isLoading) {
     return (
@@ -1042,16 +1040,6 @@ export default function AprovacaoInstalacaoDetalhe() {
                 </Button>
               )}
 
-              <Button
-                variant="outline"
-                className="flex-1 min-w-[200px] border-indigo-500/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10"
-                onClick={() => setManutencaoOpen(true)}
-                disabled={aprovar.isPending || reprovar.isPending}
-                title="Converte este atendimento em Vistoria de Manutenção (fallback quando o rastreador já está no veículo)."
-              >
-                <Wrench className="h-4 w-4 mr-2" />
-                Tratar como Manutenção
-              </Button>
 
               {mostrarReprovar && (
                 <Button
@@ -1176,15 +1164,6 @@ export default function AprovacaoInstalacaoDetalhe() {
         }}
       />
 
-      {/* Tratar como Manutenção — fallback do Monitoramento (não mexe nos fluxos pré-existentes de Troca/Substituição/Revistoria) */}
-      <MarcarManutencaoDialog
-        open={manutencaoOpen}
-        onOpenChange={setManutencaoOpen}
-        servicoId={servico.id}
-        veiculoId={veiculo.id}
-        veiculoPlaca={veiculo.placa}
-        onSuccess={() => navigate('/monitoramento/aprovacao-associados')}
-      />
     </div>
   );
 }
