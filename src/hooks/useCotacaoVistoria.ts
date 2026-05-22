@@ -16,6 +16,27 @@ export interface PlacaOcrResultado {
   skipped?: boolean;
 }
 
+/**
+ * Aguarda a vistoria correspondente à cotação aparecer no banco com data_agendada
+ * preenchida. Usado como gate de persistência após chamadas à edge function de
+ * agendamento — evita renderizar "Vistoria Agendada com Sucesso!" sem registro
+ * operacional gravado. Tenta até 3 vezes com backoff curto (250/500/1000ms).
+ */
+async function aguardarVistoriaPersistida(cotacaoId: string): Promise<boolean> {
+  const intervalos = [250, 500, 1000];
+  for (let i = 0; i < intervalos.length; i++) {
+    const { data } = await publicSupabase
+      .from('vistorias')
+      .select('id, data_agendada')
+      .eq('cotacao_id', cotacaoId)
+      .not('data_agendada', 'is', null)
+      .limit(1);
+    if (data && data.length > 0) return true;
+    await new Promise((r) => setTimeout(r, intervalos[i]));
+  }
+  return false;
+}
+
 // Interface para resultado da edge function de agendamento presencial
 interface AgendarPresencialResponse {
   success: boolean;
