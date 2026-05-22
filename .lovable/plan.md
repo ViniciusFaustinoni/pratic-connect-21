@@ -1,98 +1,65 @@
-# Corrigir caso Rosimeire no SGA
+## Por que MARCOS apareceu em Serviços de Campo antes do Cadastro aprovar
 
-## Diagnóstico confirmado
-- O caso é da **Rosimeire da Silva Miranda**, veículo **YAMAHA AEROX CONNECTED ABS 2026**, chassi **9C6SGA210T0008483**, placa placeholder **0KM751A9**.
-- O veículo local já está com **FIPE correta** no banco:
-  - `codigo_fipe = 827144-5`
-  - `valor_fipe = 19912`
-  - `combustivel = Gasolina`
-- A edge `fipe-lookup` confirmou o mesmo resultado ao consultar por nome:
-  - marca `YAMAHA`
-  - modelo `AEROX CONNECTED ABS`
-  - ano `2026`
-  - `modeloCodigo = 11862`
-  - `codigoFipe = 827144-5`
-- O erro **não acontece na busca FIPE**. Ele acontece **depois**, no momento do `POST /veiculo/cadastrar` do Hinova.
-- Os logs do `sga_sync_logs` mostram o ponto exato da quebra:
-  - `fipe_auto_lookup_preflight`: sucesso
-  - `buscar_associado` / `cadastrar_associado`: sucesso
-  - `cadastrar_veiculo`: erro com resposta **"O MODELO enviado não foi encontrado"**
-- O payload enviado ao Hinova contém **`codigo_fipe: 827144-5`**, mas **não envia `codigo_modelo`**.
-- O próprio código já documenta isso em `sga-hinova-sync`: hoje o fluxo assume que **`codigo_fipe` ou `codigo_modelo`** bastam, mas na prática este caso mostra que, para alguns veículos/motos 0KM, o Hinova **não resolve o modelo só com `codigo_fipe`**.
+### Linha do tempo (KOU6D37, COT-20260522-105020696-877)
 
-## Causa raiz
-- A integração com o Hinova está **incompleta para cadastro de veículo**: ela envia o **código FIPE**, mas não possui um caminho robusto para enviar também o **código do modelo aceito pelo SGA/Hinova**.
-- Isso gera falhas em lote sempre que o Hinova não consegue mapear internamente o `codigo_fipe` recebido para o catálogo/modelo da conta.
-- O problema do plano **"Advanced Especial" sem código de grupo SGA** apareceu nos logs, mas é apenas **warning** e **não bloqueou** este cadastro. O bloqueio real foi o **modelo não encontrado**.
+| Hora | Evento |
+|---|---|
+| 13:51 | Contrato gerado (`cadastro_aprovado=false`) |
+| **14:28:18** | Cliente agenda Vistoria Base no link público → cria `agendamentos_base` (status `agendado`, hoje 13:00) |
+| **14:31:07** | Cadastro aprova (`cadastro_aprovado=true`, `aprovado_em` preenchido) |
 
-## O que implementar
+Entre 14:28 e 14:31 a proposta ficou simultaneamente na fila do **Cadastro** e na fila **Serviços de Campo › Atribuição Manual** — exatamente o que o canônico proíbe (Monitoramento só recebe pós-Cadastro).
 
-### 1) Tornar o pré-flight de veículo completo
-No fluxo `sga-hinova-sync`, antes de chamar `cadastrar_veiculo`:
-- continuar resolvendo `codigo_fipe`, `valor_fipe` e `combustivel` como hoje;
-- passar a resolver também o **código do modelo FIPE** (`modeloCodigo`) via `fipe-lookup`;
-- persistir esse identificador em campo próprio canônico no banco, para reuso em reprocessamentos.
+### Causa raiz no código
 
-### 2) Enviar `codigo_modelo` no payload do Hinova
-Atualizar o builder de payload do veículo para:
-- manter `codigo_fipe`;
-- incluir **`codigo_modelo`** quando disponível;
-- logar claramente qual combinação foi enviada ao Hinova (`codigo_fipe`, `codigo_modelo`, `marca`, `modelo`, `ano`).
+`src/hooks/useAtribuicaoManual.ts` monta a fila a partir de **duas fontes**:
 
-### 3) Fallback defensivo quando Hinova rejeitar o modelo
-Se o Hinova responder novamente com mensagem contendo **"MODELO"**:
-- registrar o erro como falha de catálogo/modelo;
-- gravar na fila SGA com motivo explícito, sem repetir tentativas cegas;
-- evitar novo looping silencioso de retries com o mesmo payload inválido.
+1. **`servicos`** (linhas 34–102) — filtra corretamente por `!!s.contrato?.aprovado_em` (ou `origem='troca_titularidade'`). ✅
+2. **`agendamentos_base`** (linhas 104–154) — busca por `atendido_por IS NULL` + `status IN ('agendado','pendente')` + data ≥ hoje. **Sem nenhum gate de `contratos.cadastro_aprovado`.** ❌
 
-### 4) Saneamento do caso Rosimeire
-Depois da correção do código:
-- recalcular/confirmar FIPE pela consulta canônica do veículo;
-- preencher o novo campo de modelo resolvido para o veículo da Rosimeire;
-- reprocessar a sincronização SGA do veículo;
-- validar que `codigo_hinova` foi gravado no veículo e que o erro saiu da fila.
+Como o agendamento_base é materializado no momento em que o cliente marca data/hora no link público (`criar-instalacao-pos-pagamento`, mem `criar-instalacao-sem-cadastro-aprovado`), ele entra na fila do Monitoramento **na hora**, antes do Cadastro decidir. Foi o que aconteceu com MARCOS — e é um vazamento sistêmico, não um caso isolado.
 
-## Dados já confirmados para o saneamento
-- **Associada:** Rosimeire da Silva Miranda
-- **Código Hinova do associado:** `30456`
-- **Contrato:** `CTR-20260519130333-HJVC2E`
-- **Cotação:** `COT-20260519-094350410-530`
-- **Veículo local:** `6f20a5df-90d6-4cde-9e7e-5bc1e50645cf`
-- **Plano:** `Advanced Especial`
-- **FIPE confirmada:** `827144-5`
-- **Modelo FIPE confirmado:** `11862`
+### Plano de correção
 
-## Arquivos que devem ser alterados
-- `supabase/functions/sga-hinova-sync/index.ts`
-- `supabase/functions/_shared/hinova-payloads.ts`
-- possivelmente uma migration para persistir o código de modelo resolvido no cadastro do veículo/logs de reprocessamento
+**1. Gate de `cadastro_aprovado` no branch de `agendamentos_base`** (`src/hooks/useAtribuicaoManual.ts`, ~linhas 104–135)
 
-## Detalhes técnicos
-- A edge `fipe-lookup` já retorna tudo que precisamos:
-  - `codigoFipe`
-  - `modeloCodigo`
-  - `marcaCodigo`
-  - `anoCodigo`
-- Hoje o `sga-hinova-sync` só consome `codigoFipe` e ignora `modeloCodigo`.
-- O payload que falhou no Hinova foi este núcleo:
-```text
-codigo_associado: 30456
-codigo_fipe: 827144-5
-codigo_tipo_veiculo: 2
-codigo_combustivel: 2
-ano_fabricacao: 2026
-ano_modelo: 2026
-chassi: 9C6SGA210T0008483
-numero_motor: G3W4E-008496
+Buscar os contratos vinculados (via `cotacao_id` → `contratos.cotacao_id`) e descartar os `agendamentos_base` cujo contrato ainda não tem `aprovado_em`:
+
+```ts
+// após buscar baseItems
+const cotacaoIds = [...new Set(baseItems.map(b => b.cotacao_id).filter(Boolean))];
+const { data: contratosBase } = await supabase
+  .from('contratos')
+  .select('cotacao_id, aprovado_em, origem_troca_titularidade_id')
+  .in('cotacao_id', cotacaoIds);
+const aprovadosPorCotacao = new Map(
+  (contratosBase || []).map(c => [c.cotacao_id, !!c.aprovado_em || !!c.origem_troca_titularidade_id])
+);
+
+const baseSemDup = (baseItems || []).filter(b => {
+  if (!aprovadosPorCotacao.get(b.cotacao_id)) return false;       // ⬅ novo gate
+  if (b.instalacao_id && instalacoesNaFila.has(b.instalacao_id)) return false;
+  if (b.vistoria_id   && vistoriasNaFila.has(b.vistoria_id))   return false;
+  return true;
+});
 ```
-- A resposta do Hinova foi sempre:
-```text
-Não aceitável
-O MODELO enviado não foi encontrado
-```
-- Isso demonstra que o bug está na **montagem do payload do veículo para o Hinova**, não na consulta da FIPE.
 
-## Resultado esperado após implementar
-- Casos como Rosimeire deixam de falhar em lote por ausência de `codigo_modelo`.
-- O sync SGA passa a ser determinístico para motos/veículos cujo catálogo do Hinova exige resolução explícita do modelo.
-- O caso da Rosimeire poderá ser reprocessado com segurança, com criação do veículo no SGA em vez de novo erro de modelo.
+(Selecionar `cotacao_id` em `baseItems` também — está faltando no `.select` atual.)
+
+**2. Mesmo gate em qualquer outra leitura "para o Monitoramento" que consuma `agendamentos_base` direto.** Auditoria rápida:
+- `useServicosRota.ts`, `Rotas.tsx`, `VistoriasInstalacoesMon.tsx` — confirmar se algum lista pré-Cadastro.
+
+**3. Saneamento pontual** — verificar no momento da correção quantos `agendamentos_base` ativos hoje pertencem a cotações ainda em `aguardando_aprovacao_cadastro` (mesmo padrão MARCOS). Não há mutação destrutiva: apenas filtro de leitura.
+
+**4. Memória nova** — registrar `mem://logic/operations/atribuicao-manual-gate-cadastro-aprovado` para fixar a invariante: "Atribuição Manual nunca lista `agendamentos_base` cujo contrato não tem `aprovado_em` (exceto troca de titularidade)."
+
+### Arquivos a editar
+
+- `src/hooks/useAtribuicaoManual.ts` (correção principal)
+- Possível ajuste em hooks consumidores de `agendamentos_base` (a confirmar na execução)
+- Novo arquivo de memória
+
+### Fora do escopo
+
+- Não alterar `criar-instalacao-pos-pagamento` (manter materialização no agendamento; o gate fica na leitura).
+- Sem migration de DB — fix é puramente no front/hook.
