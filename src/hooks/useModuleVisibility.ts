@@ -3,38 +3,49 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
- * Hook que consulta a tabela user_module_visibility para o usuário atual.
- * Retorna os módulos visíveis e editáveis configurados diretamente para o usuário.
+ * Hook que consulta `user_module_visibility` para o usuário logado.
+ *
+ * IMPORTANTE: A tabela `user_module_visibility.user_id` tem FK para `profiles.id`
+ * (NÃO auth.users.id). Por isso filtramos por `profile.id`.
+ *
+ * Semântica ADITIVA: retorna `additionalModules` = módulos extras concedidos
+ * a este usuário pelo card "Acesso a Módulos" do Editar Usuário, ALÉM do que
+ * o perfil de acesso dele já garante. Consumidores (AppSidebar, useRouteGuard)
+ * devem usar a UNIÃO entre o que o perfil libera e esta lista — nunca tratá-la
+ * como filtro restritivo.
  */
 export function useModuleVisibility() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
+  const profileId = profile?.id;
 
-  const { data: visibilityResult = { visibleModules: [], editableModules: [] }, isLoading } = useQuery({
-    queryKey: ['module-visibility', user?.id],
+  const { data: visibilityResult = { additionalModules: [], editableModules: [] }, isLoading } = useQuery({
+    queryKey: ['module-visibility', profileId],
     queryFn: async () => {
-      if (!user?.id) return { visibleModules: [], editableModules: [] };
+      if (!profileId) return { additionalModules: [], editableModules: [] };
 
       const { data, error } = await (supabase as any)
         .from('user_module_visibility')
         .select('module_id, visible, can_edit')
-        .eq('user_id', user.id)
+        .eq('user_id', profileId)
         .eq('visible', true);
 
       if (error) throw error;
 
-      const visibleModules = (data || []).map((r: any) => r.module_id) as string[];
+      const additionalModules = (data || []).map((r: any) => r.module_id) as string[];
       const editableModules = (data || []).filter((r: any) => r.can_edit === true).map((r: any) => r.module_id) as string[];
 
-      return { visibleModules, editableModules };
+      return { additionalModules, editableModules };
     },
-    enabled: !!user?.id,
+    enabled: !!profileId,
     staleTime: 5 * 60 * 1000,
   });
 
-  return { 
-    visibleModules: visibilityResult.visibleModules, 
-    editableModules: visibilityResult.editableModules, 
-    isLoading 
+  return {
+    additionalModules: visibilityResult.additionalModules,
+    editableModules: visibilityResult.editableModules,
+    /** @deprecated alias retrocompatível — use `additionalModules`. */
+    visibleModules: visibilityResult.additionalModules,
+    isLoading,
   };
 }
 

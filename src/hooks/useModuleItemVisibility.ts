@@ -6,17 +6,19 @@ import { useAuth } from '@/contexts/AuthContext';
  * Hook que consulta a tabela user_module_item_visibility para o usuário atual.
  */
 export function useModuleItemVisibility() {
-  const { user } = useAuth();
+  // user_module_item_visibility.user_id usa profile.id (mesmo padrão de user_module_visibility)
+  const { profile } = useAuth();
+  const profileId = profile?.id;
 
   const { data: visibleItems = [], isLoading } = useQuery({
-    queryKey: ['module-item-visibility', user?.id],
+    queryKey: ['module-item-visibility', profileId],
     queryFn: async () => {
-      if (!user?.id) return [];
+      if (!profileId) return [];
 
       const { data, error } = await (supabase as any)
         .from('user_module_item_visibility')
         .select('module_id, item_id, visible')
-        .eq('user_id', user.id)
+        .eq('user_id', profileId)
         .eq('visible', true);
 
       if (error) throw error;
@@ -25,7 +27,7 @@ export function useModuleItemVisibility() {
         (data || []).map((r: any) => `${r.module_id}:${r.item_id}`)
       )] as string[];
     },
-    enabled: !!user?.id,
+    enabled: !!profileId,
     staleTime: 5 * 60 * 1000,
   });
 
