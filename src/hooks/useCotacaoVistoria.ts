@@ -227,10 +227,20 @@ export function useFinalizarVistoriaCotacao() {
           console.error('[FinalizarVistoria] Erro:', data?.error);
           throw new Error(data?.error || 'Erro ao agendar vistoria');
         }
-        
-        console.log('[FinalizarVistoria] Agendamento presencial criado:', data);
+
+        // GATE DE PERSISTÊNCIA: confirmar que vistoria com data_agendada existe
+        // antes de sinalizar sucesso para a UI (evita "Vistoria Agendada com Sucesso!"
+        // em cima de UPDATE silencioso sem registro operacional).
+        const confirmou = await aguardarVistoriaPersistida(cotacaoId);
+        if (!confirmou) {
+          console.error('[FinalizarVistoria] Edge devolveu success mas vistoria não apareceu no DB');
+          throw new Error('Não conseguimos confirmar o registro do agendamento. Tente novamente.');
+        }
+
+        console.log('[FinalizarVistoria] Agendamento presencial criado e confirmado:', data);
         return { vistoriaId: data.vistoriaId, instalacaoId: data.instalacaoId };
       }
+      
       
       // FLUXO AUTOVISTORIA — materializa vistoria + servico via edge (RLS-safe + idempotente).
       // Sem isso, a fila Monitoramento › Aprovação de Associados não enxerga o caso e o
