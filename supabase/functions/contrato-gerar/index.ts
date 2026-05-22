@@ -662,6 +662,7 @@ serve(async (req) => {
             // 0KM: marca aguardando_placa_definitiva para SGA Hinova dispensar RENAVAM
             // e Softruck enviar chassi como plate/vin. Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
             aguardando_placa_definitiva: (cotacao as any).veiculo_zero_km === true || !placaLimpa,
+            uso_aplicativo: (cotacao as any).uso_aplicativo === true,
             ...categoriaFlags,
           })
           .select('id')
@@ -797,6 +798,7 @@ serve(async (req) => {
               cobertura_roubo_furto: false,
               cobertura_total: false,
               aguardando_placa_definitiva: (cotacao as any).veiculo_zero_km === true || !placaLimpaEmail,
+              uso_aplicativo: (cotacao as any).uso_aplicativo === true,
               ...categoriaFlagsEmail,
             })
             .select('id')
@@ -932,6 +934,7 @@ serve(async (req) => {
             cobertura_roubo_furto: false,
             cobertura_total: false,
             aguardando_placa_definitiva: (cotacao as any).veiculo_zero_km === true || !placaLimpaNovo,
+            uso_aplicativo: (cotacao as any).uso_aplicativo === true,
             ...categoriaFlagsNovo,
           })
           .select('id')
