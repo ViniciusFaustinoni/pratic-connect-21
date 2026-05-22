@@ -40,6 +40,7 @@ export default function SubstituicaoVeiculoPage() {
   const [eventoAtivo, setEventoAtivo] = useState<{ id: string; tipo: string } | null>(null);
   const [dadosNovoVeiculo, setDadosNovoVeiculo] = useState<Partial<DadosNovoVeiculo>>({});
   const [beneficiosSelecionados, setBeneficiosSelecionados] = useState<Record<string, boolean | string>>({});
+  const [diaVencimentoSubstituicao, setDiaVencimentoSubstituicao] = useState<number | null>(null);
 
   const iniciarSubstituicao = useIniciarSubstituicao();
 
