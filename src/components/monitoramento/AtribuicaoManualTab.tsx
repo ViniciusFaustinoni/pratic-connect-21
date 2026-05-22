@@ -93,20 +93,31 @@ function DraggableServico({ servico }: { servico: any }) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>
-              {isToday(parseISO(servico.data_agendada)) ? 'Hoje' :
-                isTomorrow(parseISO(servico.data_agendada)) ? 'Amanhã' :
-                  format(parseISO(servico.data_agendada), 'dd/MM', { locale: ptBR })}
-              {servico.hora_agendada && ` às ${servico.hora_agendada.slice(0, 5)}`}
-            </span>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Clock className="h-3 w-3" />
+              <span>
+                {isToday(parseISO(servico.data_agendada)) ? 'Hoje' :
+                  isTomorrow(parseISO(servico.data_agendada)) ? 'Amanhã' :
+                    format(parseISO(servico.data_agendada), 'dd/MM', { locale: ptBR })}
+                {servico.hora_agendada && ` às ${servico.hora_agendada.slice(0, 5)}`}
+              </span>
+            </div>
+            {/* Botão "Realizar Vistoria Interna" — só Coordenador/Diretor */}
+            <div
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <RealizarVistoriaInternaButton servico={servico} variant="icon" />
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ── Overlay card while dragging ──
 function DragOverlayCard({ servico }: { servico: any }) {
