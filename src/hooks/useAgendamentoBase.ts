@@ -247,14 +247,18 @@ export function useCriarAgendamentoBase() {
             { body: { cotacaoId: dados.cotacaoId, skipPaymentCheck: true } }
           );
           if (invokeErr) {
-            console.warn('[useCriarAgendamentoBase] Falha ao materializar instalação (não bloqueia agendamento):', invokeErr);
-          } else {
-            console.log('[useCriarAgendamentoBase] Instalação materializada:', invokeData);
+            console.error('[useCriarAgendamentoBase] Falha ao materializar instalação:', invokeErr);
+            throw new Error('Não foi possível registrar seu agendamento. Tente novamente.');
           }
+          console.log('[useCriarAgendamentoBase] Instalação materializada:', invokeData);
         } catch (e) {
-          console.warn('[useCriarAgendamentoBase] Erro ao invocar criar-instalacao-pos-pagamento:', e);
+          console.error('[useCriarAgendamentoBase] Erro ao invocar criar-instalacao-pos-pagamento:', e);
+          throw e instanceof Error
+            ? e
+            : new Error('Não foi possível registrar seu agendamento. Tente novamente.');
         }
       }
+
 
       return agendamento;
     },
