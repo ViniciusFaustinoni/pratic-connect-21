@@ -976,7 +976,12 @@ export default function CotadorPage() {
         regiao: regiao,
         categoria_veiculo: categoriaVeiculo || undefined,
         nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
-        veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
+        veiculo_placa: isZeroKm === true
+          ? null
+          : (veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null),
+        // 0KM canônico — gate respondido no topo. Mantém boolean explícito
+        // (true/false). Em edição de troca segue null/inalterado.
+        veiculo_zero_km: typeof isZeroKm === 'boolean' ? isZeroKm : undefined,
         valor_adesao: valorAdesaoCustom ?? undefined,
         tipo_instalacao: tipoInstalacao || undefined,
         cenario_adesao: (cenarioExterno as any) || null,
