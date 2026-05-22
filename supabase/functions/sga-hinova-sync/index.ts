@@ -31,6 +31,8 @@ import {
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
   HinovaNotFoundError,
+  listarModelosHinova,
+  escolherMelhorModeloHinova,
   type HinovaSession,
 } from '../_shared/hinova-client.ts';
 import {
