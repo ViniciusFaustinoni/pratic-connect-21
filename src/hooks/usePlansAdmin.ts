@@ -1480,6 +1480,8 @@ export function useDuplicateBenefit() {
         name: `${(benefitData.name || '').slice(0, 140)} (cópia)`,
         slug: `${(benefitData.slug || 'ben').slice(0, 80)}-cp-${suffix}`,
         is_active: original.is_active ?? true,
+        // SGA code nunca é copiado — mapeamento manual posterior
+        codigo_sga: null,
       };
 
       const { data, error } = await supabase
