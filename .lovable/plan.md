@@ -1,29 +1,25 @@
-## Contexto
+## Diagnóstico
 
-Na tela do técnico (`InstaladorChecklist`), o componente `VideoCapture` é montado com `cameraOnly` fixo (linha 1421 de `src/pages/instalador/InstaladorChecklist.tsx`). Isso esconde o botão "Selecionar da Galeria", obrigando o uso da câmera ao vivo — comportamento correto para o técnico em campo (antifraude).
+No fluxo **Vistoria Interna** (PYL9A01), o usuário seleciona o vídeo da galeria → vê o player com os botões **"Confirmar e Enviar"** / **"Gravar Novamente"** → clica em **"Próximo"** e recebe o toast *"Falta enviar: vídeo 360°"*.
 
-Quando o Coordenador de Monitoramento abre essa mesma tela via `VistoriaInternaDialog` (caso PYL9A01: serviço `nao_compareceu`, veículo `instalacao_pendente`, sem `video_360_url`), ele tipicamente já recebeu o vídeo por outro canal (WhatsApp, etc.) e precisa **anexar** o arquivo — não regravar.
+**Causa**: ao escolher um arquivo da galeria, o `VideoCapture` apenas guarda em estado local (`pendingFile` + `previewUrl`) — o upload só dispara quando o usuário clica explicitamente em "Confirmar e Enviar" (`handleConfirmUpload` → `onCapture` → `handleVideoCapture` → `uploadVideoMutation`). Ou seja, o vídeo fica em "rascunho local" até o clique explícito.
 
-## O que muda
+O DB confirma: `vistorias.video_360_url` para PYL9A01 foi gravado às `13:09:48 UTC`, ou seja, ~3 min DEPOIS do screenshot (10:06 BRT = 13:06 UTC). No momento do screenshot o vídeo ainda não tinha sido enviado — o toast estava correto, mas a UX é enganosa: vendo o player rodando, o coordenador acha que "já está pronto" e tenta avançar.
 
-Adicionar uma flag `vistoriaInterna` que percorre `VistoriaInternaDialog → InstaladorChecklist → VideoCapture` e libera o upload do vídeo da galeria **somente** nesse contexto.
+A etapa de revisão manual (`Confirmar e Enviar`) faz sentido para **gravação ao vivo** (técnico em campo pode querer regravar antes de enviar), mas **não faz sentido para seleção de galeria no fluxo interno** — o coordenador já escolheu o arquivo conscientemente.
 
-### Arquivos
+## Correção proposta
 
-**1. `src/pages/instalador/InstaladorChecklist.tsx`**
-- Adicionar `vistoriaInterna?: boolean` em `InstaladorChecklistProps`.
-- Na montagem do `<VideoCapture>` (linha 1413), trocar `cameraOnly` fixo por `cameraOnly={!vistoriaInterna}`.
+Em `src/components/instalador/VideoCapture.tsx`, no `handleFileUpload` (linha 245-272):
 
-**2. `src/components/monitoramento/VistoriaInternaDialog.tsx`**
-- Repassar `vistoriaInterna` como prop ao `<InstaladorChecklist>` (linha 53).
+- Quando `cameraOnly === false` (modo Vistoria Interna), após validar o arquivo selecionado da galeria, disparar automaticamente `onCapture(file)` — pulando o estado `isPendingReview`. Mantém o `previewUrl` local apenas para exibição enquanto o upload roda.
+- O `confirmed` (controlado pelo pai via `!!videoUrl && !uploadingVideo`) continua sendo a fonte da verdade do "enviado".
+- Para gravação ao vivo (`startRecording`) o fluxo **não muda** — mantém a revisão manual via `isPendingReview` para permitir regravar antes de enviar (importante para técnico em campo, que não tem o arquivo "pronto" como na galeria).
 
-### Não muda
+Resultado: no Vistoria Interna, selecionar da galeria = subir imediatamente. O coordenador vê spinner com progresso, depois o check verde, e o "Próximo" funciona naturalmente.
 
-- Fluxo do técnico (`/instalador/checklist/:id`) continua `cameraOnly` — câmera ao vivo obrigatória.
-- Todas as outras etapas (Dados, Checklist, Fotos, Decisão), validações, hooks, mutations, triggers DB permanecem idênticos.
-- Comportamento das fotos (que já permite seleção de arquivo dentro do próprio fluxo) não é alterado.
-- `handleVideoCapture` e o pipeline de upload (`videoUpload.ts`, bucket, progress) já aceitam `File` de qualquer origem — nenhum ajuste necessário.
+## Arquivos
 
-## Resultado esperado no caso PYL9A01
+- `src/components/instalador/VideoCapture.tsx` — ajuste em `handleFileUpload` para auto-disparar `onCapture` quando `cameraOnly=false`.
 
-Ao abrir Vistoria Interna pelo Monitoramento, na etapa Fotos o card de "Vídeo 360°" passa a mostrar o botão "Selecionar da Galeria" abaixo de "Gravar Vídeo", permitindo anexar o vídeo recebido externamente sem precisar regravar.
+Nenhuma mudança em hooks, mutations, edge functions ou DB.
