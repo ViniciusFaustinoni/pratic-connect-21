@@ -84,6 +84,13 @@ export default function VistoriasInstalacoesMon() {
           <ServicosCampoUnificado />
         </TabsContent>
 
+        <TabsContent value="suspensos">
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <VeiculosSuspensosTab />
+          </Suspense>
+        </TabsContent>
+
+
         <TabsContent value="mapa">
           <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
             <MapaTab />
