@@ -2,6 +2,7 @@ import React from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { getCotacaoTravada } from '@/lib/cotacaoTravada';
+import { descreverEtapaPendente } from '@/lib/etapaPendentePublica';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 
 interface FlagTravadaProps {
@@ -13,7 +14,8 @@ interface FlagTravadaProps {
 
 /**
  * Bolinha pulsante exibida ao lado do badge de etapa quando o cliente está
- * parado num passo após a assinatura. Visível apenas se `travada=true`.
+ * parado num passo do link público. Visível apenas se `travada=true`.
+ * Tooltip usa a label canônica (mesma do Cadastro e Monitoramento).
  * Respeita `prefers-reduced-motion`.
  */
 export const FlagTravada: React.FC<FlagTravadaProps> = ({ cotacao, now, className }) => {
@@ -21,10 +23,13 @@ export const FlagTravada: React.FC<FlagTravadaProps> = ({ cotacao, now, classNam
 
   if (!info.travada || !info.nivel) return null;
 
+  const etapaCanonica = descreverEtapaPendente(info.codigoPendente);
   const cor =
     info.nivel === 'vermelho'
       ? { dot: 'bg-red-500', ping: 'bg-red-500' }
       : { dot: 'bg-amber-500', ping: 'bg-amber-500' };
+
+  const horasInt = Math.round(info.horasParada);
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -32,7 +37,7 @@ export const FlagTravada: React.FC<FlagTravadaProps> = ({ cotacao, now, classNam
         <TooltipTrigger asChild>
           <span
             role="status"
-            aria-label={info.motivo ?? 'Cotação travada'}
+            aria-label={`${etapaCanonica.label} há ${horasInt}h`}
             className={cn(
               'relative inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center',
               className,
@@ -51,9 +56,13 @@ export const FlagTravada: React.FC<FlagTravadaProps> = ({ cotacao, now, classNam
           <p className="font-medium">
             {info.nivel === 'vermelho' ? 'Atenção urgente' : 'Acompanhamento sugerido'}
           </p>
-          {info.motivo && <p className="text-muted-foreground">{info.motivo}</p>}
+          <p className="text-foreground">{etapaCanonica.label} há {horasInt}h</p>
+          {etapaCanonica.descricaoAssociado && (
+            <p className="text-muted-foreground mt-1">{etapaCanonica.descricaoAssociado}</p>
+          )}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
 };
+
