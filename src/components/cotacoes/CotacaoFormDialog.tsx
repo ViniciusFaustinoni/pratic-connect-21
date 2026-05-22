@@ -1404,6 +1404,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       if (cotacaoParaEditar.regiao) {
         setRegiaoSelecionada(cotacaoParaEditar.regiao);
       }
+
+      // Pré-preencher gate 0KM — SOMENTE com valor boolean explícito.
+      // NULL/undefined em cotação antiga força nova decisão do operador.
+      if (typeof cotacaoParaEditar.veiculo_zero_km === 'boolean') {
+        setIsZeroKm(cotacaoParaEditar.veiculo_zero_km);
+      } else {
+        setIsZeroKm(null);
+      }
+
       
       // Preencher dados do veículo encontrado
       if (cotacaoParaEditar.veiculo_marca && cotacaoParaEditar.veiculo_modelo) {
