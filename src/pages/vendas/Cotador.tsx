@@ -2072,6 +2072,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* SEÇÃO: RESUMO DA COTAÇÃO */}
       {planoFinalSelecionado && (
