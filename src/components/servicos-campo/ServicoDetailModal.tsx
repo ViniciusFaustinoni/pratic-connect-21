@@ -29,6 +29,8 @@ import { LiberarServicoButton } from './LiberarServicoButton';
 import { usePermissions } from '@/hooks/usePermissions';
 
 import { ConcluirPrestadorExternoButton } from './ConcluirPrestadorExternoButton';
+import { RealizarVistoriaInternaButton } from './RealizarVistoriaInternaButton';
+
 import { cn } from '@/lib/utils';
 import {
   TIPO_SERVICO_LABELS, STATUS_SERVICO_LABELS, STATUS_SERVICO_COLORS,
@@ -245,7 +247,10 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 );
               })()}
 
+              <RealizarVistoriaInternaButton servico={servico} />
+
             </div>
+
           </DialogHeader>
 
           <div className="flex-1 min-h-0 overflow-y-auto">

@@ -77,8 +77,16 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
     return <Navigate to="/instalador/login" state={{ from: location }} replace />;
   }
 
-  // Verificar se tem alguma role operacional do app do técnico
-  const podeAcessar = hasRole('instalador_vistoriador') || hasRole('vistoriador_base');
+  // Verificar se tem alguma role operacional do app do técnico.
+  // Coordenador de Monitoramento e Diretor podem entrar para executar
+  // "Vistoria Interna" — reusam as mesmas telas de instalação/vistoria/retirada/manutenção.
+  const podeAcessar =
+    hasRole('instalador_vistoriador') ||
+    hasRole('vistoriador_base') ||
+    hasRole('coordenador_monitoramento') ||
+    hasRole('diretor') ||
+    hasRole('admin_master') ||
+    hasRole('desenvolvedor');
   if (!podeAcessar) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
@@ -97,6 +105,7 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
       </div>
     );
   }
+
 
   return <>{children}</>;
 }
