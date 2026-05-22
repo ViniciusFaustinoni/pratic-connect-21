@@ -54,6 +54,8 @@ const tabelaLabels: Record<string, string> = {
   comissoes: 'Comissões',
   comissoes_pagamentos: 'Pagamentos de comissões',
   comissoes_pagamento_itens: 'Itens de pagamento',
+  planos: 'Planos',
+  product_lines: 'Linhas de produto',
 };
 
 const csvEscape = (value: unknown) => {
