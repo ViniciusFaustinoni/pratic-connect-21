@@ -31,6 +31,8 @@ import {
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
   HinovaNotFoundError,
+  listarModelosHinova,
+  escolherMelhorModeloHinova,
   type HinovaSession,
 } from '../_shared/hinova-client.ts';
 import {
@@ -981,43 +983,133 @@ serve(async (req) => {
         let lastPayloadV: Record<string, unknown> | null = null;
         let lastErrDetalhe = '';
         let usouVariante: string | null = null;
+        let usouCodigoModelo: number | null = null;
         let exceptionFinal: any = null;
 
-        for (const variante of variantesFipe) {
-          const payloadV = buildVeiculoPayload(veiculo, variante, valorFipeFinal, ctxV);
+        // FAST-PATH: se já temos codigo_modelo_hinova persistido (resolvido em sync anterior),
+        // tentamos direto com ele — pula completamente o loop de variantes FIPE.
+        const codigoModeloPersistido = (veiculo as any).codigo_modelo_hinova
+          ? Number((veiculo as any).codigo_modelo_hinova) : null;
+        if (codigoModeloPersistido && Number.isFinite(codigoModeloPersistido) && codigoModeloPersistido > 0) {
+          const ctxComModelo: VeiculoCtx = { ...ctxV, codigo_modelo: codigoModeloPersistido };
+          const payloadV = buildVeiculoPayload(veiculo, '', valorFipeFinal, ctxComModelo);
           lastPayloadV = payloadV;
           try {
             const res = await cadastrarVeiculoHinova(supabase, payloadV);
             lastRes = res;
-            const detalhe = res.errors.length > 0
-              ? res.errors.join('; ')
-              : (res.mensagem || `HTTP ${res.status}`);
-            lastErrDetalhe = detalhe;
-
+            lastErrDetalhe = res.errors.length > 0 ? res.errors.join('; ') : (res.mensagem || `HTTP ${res.status}`);
             if (res.ok && res.codigo) {
-              usouVariante = variante;
+              usouCodigoModelo = codigoModeloPersistido;
               await logSync(_vid, _aid, 'cadastrar_veiculo', 'success',
-                { ...payloadV, _variante_fipe: variante }, res.raw, null);
-              break;
+                { ...payloadV, _via: 'codigo_modelo_persistido' }, res.raw, null);
+            } else {
+              await logSync(_vid, _aid, 'cadastrar_veiculo', 'warning',
+                { ...payloadV, _via: 'codigo_modelo_persistido_falhou' }, res.raw,
+                `codigo_modelo persistido (${codigoModeloPersistido}) rejeitado — caindo no loop de FIPE.`);
             }
-
-            // Só vale tentar a próxima variante quando o erro é especificamente
-            // "modelo não encontrado" (significa que o codigo_fipe não bateu
-            // no catálogo Hinova). Qualquer outro erro deve cair direto na fila.
-            const allErrLower = `${detalhe} ${(res.raw as any)?.error?.join?.(' ') || ''}`.toLowerCase();
-            const ehErroDeModelo = allErrLower.includes('modelo enviado')
-              || (allErrLower.includes('modelo') && allErrLower.includes('encontrado'));
-            if (!ehErroDeModelo) break;
-
-            await logSync(_vid, _aid, 'cadastrar_veiculo', 'warning',
-              { ...payloadV, _variante_fipe: variante, _proxima_tentativa: true },
-              res.raw, `Variante "${variante}" rejeitada por modelo. Tentando próxima.`);
           } catch (e: any) {
             exceptionFinal = e;
-            // erro transitório / de rede — não vale a pena ir tentando variantes
-            break;
           }
         }
+
+        // Loop normal de variantes FIPE (pulado se o fast-path acima já resolveu).
+        if (!(lastRes?.ok && lastRes?.codigo)) {
+          for (const variante of variantesFipe) {
+            const payloadV = buildVeiculoPayload(veiculo, variante, valorFipeFinal, ctxV);
+            lastPayloadV = payloadV;
+            try {
+              const res = await cadastrarVeiculoHinova(supabase, payloadV);
+              lastRes = res;
+              const detalhe = res.errors.length > 0
+                ? res.errors.join('; ')
+                : (res.mensagem || `HTTP ${res.status}`);
+              lastErrDetalhe = detalhe;
+
+              if (res.ok && res.codigo) {
+                usouVariante = variante;
+                await logSync(_vid, _aid, 'cadastrar_veiculo', 'success',
+                  { ...payloadV, _variante_fipe: variante }, res.raw, null);
+                break;
+              }
+
+              const allErrLower = `${detalhe} ${(res.raw as any)?.error?.join?.(' ') || ''}`.toLowerCase();
+              const ehErroDeModelo = allErrLower.includes('modelo enviado')
+                || (allErrLower.includes('modelo') && allErrLower.includes('encontrado'));
+              if (!ehErroDeModelo) break;
+
+              await logSync(_vid, _aid, 'cadastrar_veiculo', 'warning',
+                { ...payloadV, _variante_fipe: variante, _proxima_tentativa: true },
+                res.raw, `Variante "${variante}" rejeitada por modelo. Tentando próxima.`);
+            } catch (e: any) {
+              exceptionFinal = e;
+              break;
+            }
+          }
+        }
+
+        // FALLBACK FINAL: todas as variantes FIPE falharam com "MODELO não encontrado".
+        // Buscamos codigo_modelo no catálogo interno do Hinova (por marca + texto do modelo)
+        // e tentamos uma última vez enviando codigo_modelo em vez de codigo_fipe.
+        if (!(lastRes?.ok && lastRes?.codigo) && !exceptionFinal) {
+          const allErrLower = lastRes
+            ? `${(lastRes.errors || []).join(' ')} ${lastRes.mensagem || ''}`.toLowerCase()
+            : '';
+          const ehErroDeModelo = allErrLower.includes('modelo enviado')
+            || (allErrLower.includes('modelo') && allErrLower.includes('encontrado'));
+
+          if (ehErroDeModelo) {
+            try {
+              const lookup = await listarModelosHinova(supabase, {
+                marca: String(veiculo.marca || '').trim(),
+                texto: String(veiculo.modelo || '').trim(),
+                ano: veiculo.ano_modelo || veiculo.ano_fabricacao || null,
+                tipo_veiculo: tipoVeiculo,
+              });
+              await logSync(_vid, _aid, 'listar_modelos_hinova',
+                lookup.items.length > 0 ? 'success' : 'warning',
+                { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo },
+                { count: lookup.items.length, endpoint: lookup.debug.endpoint, status: lookup.debug.status,
+                  amostra: lookup.items.slice(0, 5) },
+                lookup.items.length === 0
+                  ? `Nenhum modelo encontrado no catálogo Hinova (endpoint=${lookup.debug.endpoint}, status=${lookup.debug.status})`
+                  : null);
+
+              const melhor = escolherMelhorModeloHinova(
+                lookup.items,
+                String(veiculo.modelo || ''),
+                veiculo.ano_modelo || veiculo.ano_fabricacao || null,
+              );
+
+              if (melhor?.codigo_modelo) {
+                const ctxComModelo: VeiculoCtx = { ...ctxV, codigo_modelo: melhor.codigo_modelo };
+                const payloadV = buildVeiculoPayload(veiculo, '', valorFipeFinal, ctxComModelo);
+                lastPayloadV = payloadV;
+                try {
+                  const res = await cadastrarVeiculoHinova(supabase, payloadV);
+                  lastRes = res;
+                  lastErrDetalhe = res.errors.length > 0 ? res.errors.join('; ') : (res.mensagem || `HTTP ${res.status}`);
+                  if (res.ok && res.codigo) {
+                    usouCodigoModelo = melhor.codigo_modelo;
+                    await logSync(_vid, _aid, 'cadastrar_veiculo', 'success',
+                      { ...payloadV, _via: 'codigo_modelo_fallback', _modelo_match: melhor.descricao },
+                      res.raw, `Resolveu via codigo_modelo=${melhor.codigo_modelo} (${melhor.descricao}) após esgotar variantes FIPE`);
+                  } else {
+                    await logSync(_vid, _aid, 'cadastrar_veiculo', 'warning',
+                      { ...payloadV, _via: 'codigo_modelo_fallback', _modelo_match: melhor.descricao },
+                      res.raw, `Fallback codigo_modelo=${melhor.codigo_modelo} também rejeitado: ${lastErrDetalhe}`);
+                  }
+                } catch (e: any) {
+                  exceptionFinal = e;
+                }
+              }
+            } catch (e: any) {
+              await logSync(_vid, _aid, 'listar_modelos_hinova', 'error',
+                { marca: veiculo.marca, modelo: veiculo.modelo }, null,
+                `Lookup catálogo Hinova falhou: ${e?.message || e}`);
+            }
+          }
+        }
+
 
         const sucesso = !!(lastRes?.ok && lastRes?.codigo);
         if (!sucesso) {
@@ -1067,6 +1159,22 @@ serve(async (req) => {
             console.warn('[sga-hinova-sync] falha ao persistir variante FIPE:', e?.message);
           }
         }
+
+        // Se o fallback de codigo_modelo resolveu, persiste para que próximas
+        // sincronizações já partam direto pelo fast-path.
+        if (usouCodigoModelo && (veiculo as any).codigo_modelo_hinova !== usouCodigoModelo) {
+          try {
+            await supabase.from('veiculos')
+              .update({ codigo_modelo_hinova: usouCodigoModelo })
+              .eq('id', _vid);
+            await logSync(_vid, _aid, 'persistir_codigo_modelo', 'info',
+              { codigo_modelo: usouCodigoModelo }, null,
+              'codigo_modelo_hinova gravado — próximas syncs usam fast-path.');
+          } catch (e: any) {
+            console.warn('[sga-hinova-sync] falha ao persistir codigo_modelo:', e?.message);
+          }
+        }
+
 
         // Confirmação defensiva: força PENDENTE (3) via GET /veiculo/alterar-situacao-para
         // logo após o cadastro. Mesma postura que adotamos para o associado.

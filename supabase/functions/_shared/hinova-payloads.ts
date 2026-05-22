@@ -59,6 +59,12 @@ export interface VeiculoCtx {
    * Quando presente, prevalece sobre `veiculo.dia_vencimento`.
    */
   dia_vencimento_contrato?: number | null;
+  /**
+   * Código do modelo no catálogo interno Hinova. Fallback para `codigo_fipe`
+   * — Hinova aceita um OU outro no /veiculo/cadastrar. Quando presente,
+   * `buildVeiculoPayload` envia `codigo_modelo` e OMITE `codigo_fipe`.
+   */
+  codigo_modelo?: number;
 }
 
 // ============================================================
@@ -249,7 +255,9 @@ export function buildVeiculoPayload(
     ...incluirRenavam,
     ano_fabricacao: veiculo.ano_fabricacao || veiculo.ano_modelo,
     ano_modelo: veiculo.ano_modelo,
-    codigo_fipe,
+    // Hinova aceita codigo_fipe OU codigo_modelo. Quando o ctx tem codigo_modelo
+    // (fallback após esgotar variantes de FIPE), usamos só ele.
+    ...(ctx.codigo_modelo ? { codigo_modelo: ctx.codigo_modelo } : { codigo_fipe }),
     valor_fipe,
     kilometragem: Number(veiculo.kilometragem) || 0,
     numero_motor: veiculo.numero_motor || '',

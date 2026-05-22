@@ -31441,6 +31441,7 @@ export type Database = {
           cobertura_vidros: boolean | null
           codigo_fipe: string | null
           codigo_hinova: number | null
+          codigo_modelo_hinova: number | null
           codigo_sga_combustivel: number | null
           codigo_sga_cor: number | null
           combustivel: string | null
@@ -31512,6 +31513,7 @@ export type Database = {
           cobertura_vidros?: boolean | null
           codigo_fipe?: string | null
           codigo_hinova?: number | null
+          codigo_modelo_hinova?: number | null
           codigo_sga_combustivel?: number | null
           codigo_sga_cor?: number | null
           combustivel?: string | null
@@ -31583,6 +31585,7 @@ export type Database = {
           cobertura_vidros?: boolean | null
           codigo_fipe?: string | null
           codigo_hinova?: number | null
+          codigo_modelo_hinova?: number | null
           codigo_sga_combustivel?: number | null
           codigo_sga_cor?: number | null
           combustivel?: string | null
