@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/hooks/usePermissions';
 import { registrarLog } from '@/hooks/useAuditLog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { VistoriaInternaDialog } from '@/components/monitoramento/VistoriaInternaDialog';
 import type { Servico } from '@/hooks/useServicos';
 
 /**
