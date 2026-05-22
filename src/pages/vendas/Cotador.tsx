@@ -923,6 +923,17 @@ export default function CotadorPage() {
   const handleSalvarEEnviarWhatsApp = async () => {
     if (!planoFinalSelecionado || !valorFipe) return;
 
+    // Gate 0KM canônico: bloqueia salvar sem decisão explícita
+    // (exceto em edição de troca de titularidade, onde o veículo já existe).
+    if (!isEdicaoTroca && isZeroKm === null) {
+      toast.error('Responda primeiro se o veículo é 0KM no topo da página.');
+      try {
+        document.getElementById('bloco-veiculo-gate-0km')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch { /* noop */ }
+      return;
+    }
+
+
     // Vendedor externo DEVE selecionar um cenário antes de salvar
     if (isVendedorExterno && !cenarioExterno) {
       toast.error('Selecione o cenário de adesão/instalação antes de salvar.');
