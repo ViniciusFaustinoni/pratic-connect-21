@@ -85,13 +85,26 @@ interface AuditoriaDuplicacaoParams {
   rollback?: { ok: boolean; errors: string[] };
 }
 
-/** Registra uma tentativa de duplicação no log de auditoria existente. */
+/** Registra uma tentativa de duplicação no log de auditoria existente (visível em Diretoria › Logs de Auditoria). */
 export async function registrarDuplicacao(params: AuditoriaDuplicacaoParams): Promise<void> {
   const { modulo, tabela, origem, criado, sucesso, etapaFalha, erro, rollback } = params;
   const acao: AcaoAuditoria = 'duplicar';
-  const descricao = sucesso
-    ? `Duplicou "${origem.nome}" → "${criado?.nome ?? '—'}"`
-    : `FALHA ao duplicar "${origem.nome}"${etapaFalha ? ` (etapa: ${etapaFalha})` : ''}${erro ? ` — ${erro}` : ''}${rollback ? (rollback.ok ? ' — rollback OK' : ` — rollback com erros: ${rollback.errors.join('; ')}`) : ''}`;
+
+  // Rótulo da operação derivado da tabela — mantém legibilidade na listagem da Diretoria
+  const tipoOperacao =
+    tabela === 'product_lines' ? 'Duplicação de linha'
+    : tabela === 'planos' ? 'Duplicação de plano'
+    : `Duplicação (${tabela})`;
+
+  const statusTag = sucesso
+    ? '[SUCESSO]'
+    : rollback?.ok === false ? '[FALHA — ROLLBACK PARCIAL]' : '[FALHA REVERTIDA]';
+
+  const corpo = sucesso
+    ? `original: "${origem.nome}" → criado: "${criado?.nome ?? '—'}"`
+    : `original: "${origem.nome}"${etapaFalha ? ` — etapa que quebrou: ${etapaFalha}` : ''}${erro ? ` — erro: ${erro}` : ''}${rollback && !rollback.ok ? ` — rollback com erros: ${rollback.errors.join('; ')}` : ''}`;
+
+  const descricao = `${statusTag} ${tipoOperacao} — ${corpo}`;
 
   await registrarLog({
     acao,
@@ -101,7 +114,10 @@ export async function registrarDuplicacao(params: AuditoriaDuplicacaoParams): Pr
     entidade_id: criado?.id ?? origem.id,
     dados_anteriores: { origem },
     dados_novos: {
+      tipo_operacao: tipoOperacao,
+      status: sucesso ? 'sucesso' : (rollback?.ok === false ? 'falha_rollback_parcial' : 'falha_revertida'),
       sucesso,
+      origem,
       criado: criado ?? null,
       etapa_falha: etapaFalha ?? null,
       erro: erro ?? null,
