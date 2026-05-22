@@ -475,7 +475,7 @@ export default function Integracoes() {
       </div>
 
       {/* Status sincronização Softruck / Rede Veículos */}
-      {isDiretor && <StatusSincronizacaoRastreadores />}
+      {false && isDiretor && <StatusSincronizacaoRastreadores />}
 
       {/* Categories */}
       {categorias.map((cat) => (
