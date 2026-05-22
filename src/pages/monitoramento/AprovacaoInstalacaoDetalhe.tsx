@@ -978,7 +978,12 @@ export default function AprovacaoInstalacaoDetalhe() {
         };
 
         const mostrarAprovar = subEstado === 'PRONTO_PARA_ACEITE_FINAL';
-        const mostrarDevolver = subEstado === 'AGUARDA_INSTALACAO_TECNICA';
+        // Devolver ao Cadastro: caminho de exceção SEMPRE visível quando há
+        // cadastro_aprovado=true (não há nada a devolver se já está false).
+        // Cobre tanto o fluxo canônico de autovistoria opcional (AGUARDA_INSTALACAO_TECNICA)
+        // quanto saneamentos de casos pré-correção que ficaram presos no aceite final.
+        const mostrarDevolver = !!servico?.contrato_id && cadastroAprovado;
+        const devolverEhPrimario = subEstado === 'AGUARDA_INSTALACAO_TECNICA';
         const mostrarSolicitarVistoria =
           subEstado === 'FALTA_RASTREADOR_FISICO' ||
           (subFipe && subEstado === 'PRONTO_PARA_ACEITE_FINAL');
@@ -1015,7 +1020,12 @@ export default function AprovacaoInstalacaoDetalhe() {
 
               {mostrarDevolver && (
                 <Button
-                  className="flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white"
+                  variant={devolverEhPrimario ? 'default' : 'outline'}
+                  className={
+                    devolverEhPrimario
+                      ? 'flex-1 min-w-[220px] bg-amber-500 hover:bg-amber-500/90 text-white'
+                      : 'flex-1 min-w-[180px] border-amber-500/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10'
+                  }
                   onClick={() => setDevolverOpen(true)}
                   disabled={devolverCadastro.isPending}
                 >
@@ -1024,7 +1034,7 @@ export default function AprovacaoInstalacaoDetalhe() {
                   ) : (
                     <Undo2 className="h-4 w-4 mr-2" />
                   )}
-                  Devolver ao Cadastro (aprovar R&amp;F lá)
+                  {devolverEhPrimario ? 'Devolver ao Cadastro (aprovar R&F lá)' : 'Devolver ao Cadastro'}
                 </Button>
               )}
 
