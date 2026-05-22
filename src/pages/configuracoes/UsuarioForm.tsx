@@ -22,7 +22,30 @@ import { MODULE_LABELS } from '@/config/modules';
 import { useRegioesAtendimento } from '@/hooks/useRegioesAtendimento';
 
 // Card editável de acesso a módulos por usuário
-function ModuleAccessCard({ userId }: { userId: string | undefined }) {
+// Mapa permission → module_id (sincronizado com `permission` dos grupos do AppSidebar).
+// Usado para detectar quais módulos JÁ vêm do perfil de acesso do usuário.
+const PERMISSION_TO_MODULE: Record<string, string> = {
+  canViewDashboard: 'dashboard',
+  canManageLeads: 'vendas',
+  canManageCadastro: 'cadastro',
+  canManageInstalacoes: 'monitoramento',
+  canManageRastreadores: 'monitoramento',
+  canManageEquipeEstoque: 'monitoramento',
+  canManageSinistros: 'eventos',
+  canManageOficinas: 'oficinas',
+  canApproveOS: 'oficinas',
+  canManageContabilidade: 'contabilidade',
+  canManageJuridico: 'juridico',
+  canManageRH: 'rh',
+  canManageMarketing: 'marketing',
+  canManageOuvidoria: 'ouvidoria',
+  canManageUsers: 'configuracoes',
+  canCreateTemplate: 'documentos',
+  canEditTemplate: 'documentos',
+  canDeleteTemplate: 'documentos',
+};
+
+function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perfis: string[] }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [localChanges, setLocalChanges] = useState<Record<string, { visible: boolean; can_edit: boolean }>>({});
