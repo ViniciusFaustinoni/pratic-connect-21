@@ -1,61 +1,115 @@
-## Objetivo
 
-Corrigir o pagamento por cartão de crédito no link público de adesão. Hoje o botão "Pagar com Cartão" abre `https://www.asaas.com/c/pay_xxx`, que não é uma URL de pagamento válida no ASAAS. O correto é abrir o `invoiceUrl` (`https://www.asaas.com/i/{shortId}`) que a própria API ASAAS já retorna na criação da cobrança.
+# Plano: 5 ajustes no fluxo de aprovação de cotações
 
-Caso impactado confirmado: placa **LSW8130**, contrato `CTR-20260522194347-H9HV8B`, cobrança ASAAS `pay_fzap7eptk36ird03` (PIX funcionando, cartão quebrado).
+Fluxo canônico reforçado: **link público → Cadastro → Monitoramento → SGA**. Sem retorno ao Cadastro depois que ele aprova; sem atalhos que pulem a materialização do serviço de campo.
 
-## Mudanças
+---
 
-### 1. `supabase/functions/asaas-cobranca-adesao/index.ts`
+## 1. Saneamento dos dois casos presos (KZZ9E93 e 9C2KF5200TR010548)
 
-**Linha 326** — trocar a construção do link de pagamento para usar o `invoiceUrl` real:
-```ts
-// antes
-const linkPagamento = `https://www.asaas.com/c/${cobrancaData.id}`;
-// depois
-const linkPagamento = cobrancaData.invoiceUrl || null;
-```
+**Onde:** migration de dados (insert tool, não schema).
 
-**Linhas 386-394** — no branch de duplicata (race condition), parar de remontar `/c/${asaas_id}`. Buscar o `invoiceUrl` real do ASAAS via `GET /payments/{id}` antes de responder. Se a busca falhar, retornar `null` em `link_pagamento` e deixar o front cair no `invoice_url`/PIX em vez de abrir uma URL quebrada.
+**O que faz:**
+- Localiza os contratos pelo identificador (placa/chassi) e descobre `instalacao_id` / `vistoria_id` / `agendamento_base_id` existentes.
+- Para **Luiz (KZZ9E93)** — sub-FIPE, sem rastreador: cria `servicos` (`tipo='vistoria_entrada'`, `vistoria_origem_id` apontando para a vistoria com vídeo, `status='concluida'`, `local_vistoria` conforme agendamento), preenche `contratos.vistoria_concluida_em` se vazio.
+- Para **Fernanda (9C2KF5200TR010548)** — moto que exige rastreador: cria também `instalacoes` (`status='agendada'`) e `servicos` (`tipo='instalacao'`, `instalacao_origem_id` no novo registro, `status='concluida'`), além do `vistoria_entrada` se houver vistoria materializada com vídeo.
+- Idempotente: usa `WHERE NOT EXISTS` por `instalacao_origem_id` / `vistoria_origem_id`.
+- **Não toca** `cadastro_aprovado`, `aprovado_em`, `status` do contrato, nem promove veículo a `ativo`.
 
-### 2. `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx`
+**Resultado:** os dois casos aparecem em `/monitoramento/aprovacoes-unificadas` (aba Aprovação de Associados) no próximo refresh com vídeo anexado e prontos pra decisão final.
 
-**Linha 166** — ao reusar cobrança existente do banco, parar de chutar `https://www.asaas.com/c/${asaas_id}`. Quando a cobrança existente não tiver `invoice_url` armazenado, chamar `asaas-cobrancas` (`action: 'buscar'`) para obter o `invoiceUrl` atualizado do ASAAS. Sem isso, deixar o botão de cartão desabilitado com mensagem clara em vez de abrir URL inválida.
+---
 
-**Linhas 197-200** — inverter prioridade do fallback:
-```ts
-// antes
-const linkPagamentoFinal =
-  data.link_pagamento ||
-  data.invoice_url ||
-  (data.asaas_id ? `https://www.asaas.com/c/${data.asaas_id}` : undefined);
-// depois
-const linkPagamentoFinal = data.invoice_url || data.link_pagamento || undefined;
-```
-Remover o fallback `/c/${asaas_id}` por completo — ele só esconde a falha real.
+## 2. Bloquear Cadastro em sub-FIPE sem autovistoria completa
 
-### 3. Persistir `invoice_url` em `asaas_cobrancas`
+**Onde:** `supabase/functions/aprovar-proposta/index.ts` (handler de aprovação) + UI do Cadastro (`src/pages/cadastro/Associados.tsx` ou similar, no botão Aprovar).
 
-Hoje a tabela `asaas_cobrancas` não guarda o `invoiceUrl`. Adicionar coluna `invoice_url text` e gravá-la em:
-- `asaas-cobranca-adesao` (criação inicial)
-- `asaas-alterar-forma-pagamento` (linhas 170-184, já retorna `invoiceUrl` no JSON mas não persiste)
-- `asaas-webhook` (quando ASAAS confirma/atualiza a cobrança, opcional)
+**Regra:**
+- Se o veículo é sub-FIPE (`carro FIPE < 30k` ou `moto FIPE < 9k`, e não-diesel) e o plano tem R/F:
+  - Exigir autovistoria **completa** (≥31 fotos carro / ≥15 fotos moto) **+ vídeo 360°** materializada em `vistorias`/`vistoria_fotos`.
+  - Caso contrário, retornar **HTTP 409** com `code='autovistoria_subfipe_incompleta'` e mensagem: *"Sub-FIPE exige autovistoria completa no link público antes do Cadastro aprovar. O associado precisa concluir 31 fotos (carro) / 15 fotos (moto) + vídeo 360°."*
+- Usa `resolverEscopoAnaliseCadastro` (`src/lib/cadastro/escopoAnaliseCadastro.ts`) como fonte da verdade do que conta como "completa".
+- UI: hook que avalia o mesmo escopo desabilita o botão Aprovar e mostra a mensagem antes do request.
 
-Isso evita o GET extra no ASAAS toda vez que o link público re-abre.
+---
 
-### 4. Saneamento manual do caso LSW8130
+## 3. Bloquear Cadastro em caso com rastreador obrigatório sem instalação agendada
 
-Após o deploy, chamar `GET https://api.asaas.com/v3/payments/pay_fzap7eptk36ird03` pelo edge function existente (`asaas-cobrancas` action `buscar`) e gravar o `invoiceUrl` retornado na cobrança `a813af2c-740c-4fab-aaf3-8b7052668a63`. O cliente Pedro Henrique consegue concluir o pagamento por cartão sem precisar gerar nova cobrança.
+**Onde:** mesma edge `aprovar-proposta` + UI do Cadastro.
 
-## Verificação
+**Regra:**
+- Se exige rastreador (`diesel`, ou `carro FIPE ≥ 30k`, ou `moto FIPE ≥ 9k`):
+  - Exigir `instalacoes` com `status='agendada'` E `data_agendada IS NOT NULL` vinculada à cotação (criada via `criar-instalacao-pos-pagamento` a partir do agendamento do cliente no link público).
+  - Caso contrário, **HTTP 409** com `code='instalacao_nao_agendada'`: *"Cliente precisa agendar a instalação do rastreador no link público antes do Cadastro aprovar."*
+- **Agendamento_base sozinho não basta** — alinhado com o aperto da guarda já planejado (item 4).
+- UI espelha o bloqueio.
 
-1. Reabrir o link público de pagamento da cotação `1c4eedee-994d-4099-a02c-ab3b3826d334` e confirmar que o botão "Pagar com Cartão" abre uma URL `asaas.com/i/{shortId}` (não `/c/pay_xxx`).
-2. Criar uma cotação nova de teste, ir até pagamento, confirmar mesmo comportamento.
-3. Verificar que o fluxo PIX continua intacto (não tocamos no PIX QR/copia-e-cola).
-4. Verificar que `asaas_cobrancas.invoice_url` está populado para a cobrança nova.
+---
 
-## Fora de escopo
+## 4. Rede de segurança: agendamento interno do Monitoramento materializa `servicos`
 
-- Não vou mexer no fluxo de webhook de pagamento (`asaas-webhook`) além de opcionalmente gravar o `invoice_url`.
-- Não vou tocar em cobranças recorrentes (mensalidades) — o bug é específico do link público de adesão.
-- Não vou alterar a integração com o ASAAS em si (API key, secrets, ambiente) — está tudo correto, é só URL formatada errada no nosso lado.
+**Onde:** trigger DB em `agendamentos_base`.
+
+**Trigger:** `trg_agendamento_base_materializa_servico` — `AFTER INSERT OR UPDATE OF vistoria_id, instalacao_id ON agendamentos_base`.
+
+**O que faz:**
+- Quando `vistoria_id` ou `instalacao_id` é preenchido e ainda não existe `servicos` vivo correspondente (`WHERE vistoria_origem_id = NEW.vistoria_id` ou `instalacao_origem_id = NEW.instalacao_id` e status fora de terminais), cria um `servicos` com:
+  - `tipo` = `vistoria_entrada` (vistoria) ou `instalacao` (instalação)
+  - `status` = `agendada`
+  - `data_agendada` / `periodo` derivados do agendamento_base
+  - `profissional_id` = `NEW.atendido_por` (se houver)
+  - `contrato_id` / `associado_id` herdados via instalação→veículo→contrato (mesma lógica de `trg_vistoria_vinculos_obrigatorios`)
+- Idempotente (verificação prévia).
+- Tolerante: usa exception handler que loga e segue, para não bloquear escrita em `agendamentos_base`.
+- Respeita memória `mem://logic/operations/servicos-um-canonico-por-origem` (1 vivo por origem).
+
+**Bônus:** alinhar `VistoriaInternaDialog` / `InstaladorChecklist` para invalidar `instalacoes-aguardando-aprovacao-monitoramento` (já invalida).
+
+---
+
+## 5. Fechamento automático da vistoria presencial quando o vídeo é anexado
+
+**Onde:** trigger DB em `vistorias`.
+
+**Trigger:** `trg_vistoria_video_360_promove_concluida` — `AFTER UPDATE OF video_360_url ON vistorias`.
+
+**O que faz:**
+- Dispara quando `OLD.video_360_url IS NULL AND NEW.video_360_url IS NOT NULL` e `NEW.modalidade <> 'autovistoria'` (presencial: técnico próprio, prestador, base, rota, fit).
+- Atualiza:
+  - `vistorias.status = 'concluida'`, `concluida_em = now()` (se ainda não).
+  - `servicos` vivo com `vistoria_origem_id = NEW.id` → `status = 'concluida'`, `concluida_em = now()`.
+  - `contratos.vistoria_concluida_em = now()` (se vazio).
+- **NÃO** toca `instalacoes` — vistoria de instalação só fecha pelo fluxo presente (técnico/prestador); aqui é só sincronia da vistoria. Para instalação, o caminho presencial existente (`InstaladorChecklist`) e o prestador (`concluir-instalacao-prestador`) seguem responsáveis.
+- Resultado: vistoria presencial cai automaticamente na fila do Monitoramento como "Concluída — Pendente Monitoramento" igual ao caminho do prestador.
+
+**Guardas preservados:** continuam ativos `trg_guard_instalacao_concluida_exige_rastreador`, `trg_guard_veiculo_ativo_exige_rastreador`, `trg_guard_cobertura_rf_exige_decisao_cadastro`. Ativação só via `ativar-associado`.
+
+---
+
+## Ordem de execução
+
+1. **Migration de saneamento** (Luiz + Fernanda) — destrava o problema imediato.
+2. **Trigger materializa serviço** (item 4) — rede de segurança antes de apertar a guarda.
+3. **Trigger vídeo → concluída** (item 5).
+4. **Aperto de `aprovar-proposta`** (itens 2 e 3) — guarda backend + 409 tipados.
+5. **UI Cadastro** — desabilita botão + mostra mensagem; consome `code` retornado pela edge.
+
+---
+
+## Detalhes técnicos resumidos
+
+- **Files editados:**
+  - `supabase/functions/aprovar-proposta/index.ts` — adicionar guards (2) e (3) reutilizando `resolverEscopoAnaliseCadastro` portado pra Deno (ou condição equivalente inline).
+  - UI do Cadastro (a localizar entre `src/pages/cadastro/` e `src/components/cadastro/`) — handler do botão Aprovar interpreta `code` 409.
+- **Migrations (schema):**
+  - `trg_agendamento_base_materializa_servico` + função `fn_agendamento_base_materializa_servico`.
+  - `trg_vistoria_video_360_promove_concluida` + função `fn_vistoria_video_360_promove_concluida`.
+- **Migration (dados, via insert tool):** saneamento dos 2 casos.
+
+## O que NÃO muda
+
+- Estrutura do fluxo (link público → Cadastro → Monitoramento → SGA).
+- Regras de prazo (48h, meia-noite troca de titularidade).
+- Telas/UX do Cadastro e Monitoramento.
+- Caminhos de Troca de Titularidade, Substituição, Prestador, Autovistoria sub-FIPE (já corretos).
+- `ativar-associado` segue como única porta para `ativo`.
