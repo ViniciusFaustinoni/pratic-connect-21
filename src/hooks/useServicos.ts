@@ -1063,16 +1063,23 @@ export function useAprovarVeiculoServico() {
         // 4. Registrar movimentação de estoque APENAS se vinha do estoque
         // (evita duplicar movimentação em retomadas idempotentes)
         if (rastreadorStatusAnterior === 'estoque') {
-          await supabase.from('estoque_movimentacoes').insert({
-            rastreador_id: rastreadorId,
-            tipo: 'instalacao',
-            quantidade: 1,
-            status_anterior: 'estoque',
-            status_novo: 'instalado',
-            veiculo_id: data.veiculoId,
-            observacoes: `Instalado pelo profissional no veículo`,
-            usuario_id: profile?.id,
-          });
+          try {
+            const { error: movError } = await supabase.from('estoque_movimentacoes').insert({
+              rastreador_id: rastreadorId,
+              tipo: 'instalacao',
+              quantidade: 1,
+              status_anterior: 'estoque',
+              status_novo: 'instalado',
+              veiculo_id: data.veiculoId,
+              observacoes: `Instalado pelo profissional no veículo`,
+              usuario_id: profile?.id,
+            });
+            if (movError) {
+              console.warn('[useAprovarVeiculoServico] Falha ao registrar movimentação de estoque (não bloqueia):', movError);
+            }
+          } catch (movErr) {
+            console.warn('[useAprovarVeiculoServico] Exceção ao registrar movimentação de estoque (não bloqueia):', movErr);
+          }
         } else {
           console.log('[useAprovarVeiculoServico] Movimentação de estoque pulada (status anterior:', rastreadorStatusAnterior, ')');
         }
