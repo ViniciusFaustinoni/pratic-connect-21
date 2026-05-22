@@ -41,6 +41,7 @@ import {
   cleanAlphaNum,
   cleanDigits,
   isPlacaPlaceholder,
+  variantesCodigoFipe,
   type AssociadoCtx,
   type VeiculoCtx,
   type DocumentoEntrada,
