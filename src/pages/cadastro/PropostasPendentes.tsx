@@ -48,6 +48,9 @@ import { useDeleteAssociado } from '@/hooks/useAssociados';
 import { supabase } from '@/integrations/supabase/client';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { UserAvatar } from '@/components/UserAvatar';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { LinkPublicoIncompletoTab } from '@/components/cadastro/LinkPublicoIncompletoTab';
+import { useCotacoesLinkPublicoIncompletoCount } from '@/hooks/useCotacoesLinkPublicoIncompleto';
 
 // ============================================
 // STATUS CONFIG
@@ -505,6 +508,9 @@ export default function PropostasPendentes() {
     ordenacao,
   ]);
 
+  const { count: countLinkIncompleto } = useCotacoesLinkPublicoIncompletoCount();
+  const [tabAtiva, setTabAtiva] = useState<'em_analise' | 'link_incompleto'>('em_analise');
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header melhorado */}
@@ -517,6 +523,25 @@ export default function PropostasPendentes() {
           <p className="text-sm text-muted-foreground">Contratos assinados aguardando análise e aprovação</p>
         </div>
       </div>
+
+      <Tabs value={tabAtiva} onValueChange={(v) => setTabAtiva(v as any)} className="space-y-5">
+        <TabsList className="bg-muted/50">
+          <TabsTrigger value="em_analise">Em análise</TabsTrigger>
+          <TabsTrigger value="link_incompleto" className="gap-2">
+            Link público incompleto
+            {countLinkIncompleto > 0 && (
+              <Badge className="bg-warning/15 text-warning border-warning/30 h-5 px-1.5 text-[10px]">
+                {countLinkIncompleto}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="link_incompleto" className="space-y-5">
+          <LinkPublicoIncompletoTab />
+        </TabsContent>
+
+        <TabsContent value="em_analise" className="space-y-5">
 
       {/* KPIs como cards interativos */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -917,6 +942,8 @@ export default function PropostasPendentes() {
           })}
         </div>
       )}
+        </TabsContent>
+      </Tabs>
 
       <ConfirmacaoAcaoDialog
         open={dialogExcluirAberto}

@@ -1,115 +1,64 @@
 
-# Plano: 5 ajustes no fluxo de aprovação de cotações
+## Mapeamento do que já existe (código real, não suposição)
 
-Fluxo canônico reforçado: **link público → Cadastro → Monitoramento → SGA**. Sem retorno ao Cadastro depois que ele aprova; sem atalhos que pulem a materialização do serviço de campo.
+**Consultor — `/vendas/cotacoes` (`src/pages/vendas/Cotacoes.tsx` + `src/components/cotacoes/CotacoesTable.tsx` + `CotacoesMobileList.tsx`)**
+- Mostra badge "Etapa da Venda" derivada de `getEtapaVenda()` em `src/lib/cotacaoEtapa.ts` (16 estágios: cotacao_realizada, escolhendo_plano, enviando_documentos, escolha_vistoria, realizando_autovistoria, assinando_contrato, realizando_pagamento, aguardando_vistoria, vistoria_agendada, instalacao_agendada, etc.).
+- Tem bolinha pulsante âmbar/vermelha `FlagTravada` (`src/components/cotacoes/FlagTravada.tsx`) que consulta `getCotacaoTravada()` em `src/lib/cotacaoTravada.ts`. Hoje **só dispara para contratos `assinado` ou `ativo`** (linha 71 do arquivo) — cotações paradas ANTES da assinatura (plano/docs/contrato) mostram a etapa mas sem sinal de "parado".
+- Filtro "Apenas travadas" e contador já existem (`Cotacoes.tsx` linhas 338 e 982).
 
----
+**Cadastro — `/cadastro/propostas-pendentes` (`src/pages/cadastro/PropostasPendentes.tsx`, hook `src/hooks/usePropostasPendentes.ts`)**
+- Query base filtra `contratos` com `.eq('status', 'assinado')` (linha 347 do hook). **Cotações com link público incompleto, onde o contrato ainda não foi assinado, simplesmente não entram nessa lista** — Cadastro não vê o caso.
+- Pós-assinatura há badges granulares funcionando: "Aguard. Doc", "Pendente Vistoria Inicial", "Aguard. Vistoria", "Aguard. Instalação", "Agendado" (funções `isPendenteVistoriaInicial`, `isAguardandoDoc` etc. nas linhas 107–135).
+- Dashboard do Cadastro (`src/components/cadastro/DashboardCadastro.tsx`) não tem KPI de "parados no link público".
 
-## 1. Saneamento dos dois casos presos (KZZ9E93 e 9C2KF5200TR010548)
+**Monitoramento — `/monitoramento/vistorias-instalacoes-mon` (`src/pages/monitoramento/ServicosCampoUnificado.tsx`, `AprovacaoInstalacaoDetalhe.tsx`)**
+- Trabalha em cima de `servicos`/`instalacoes`/`agendamentos_base` materializados. Casos parados no link público **não chegam até aqui** (não há agendamento, não há instalação) e não têm sinalização própria.
+- O guard backend `caminho_publico_incompleto` já existe em `supabase/functions/aprovar-proposta/index.ts` (linhas 290–388) com motivos canônicos: `sem_vistoria`, `vistoria_incompleta`, `sem_agendamento`, `agendamento_base`. Mas a mensagem vai pro toast com texto cru — sem o vocabulário canônico das telas.
 
-**Onde:** migration de dados (insert tool, não schema).
-
-**O que faz:**
-- Localiza os contratos pelo identificador (placa/chassi) e descobre `instalacao_id` / `vistoria_id` / `agendamento_base_id` existentes.
-- Para **Luiz (KZZ9E93)** — sub-FIPE, sem rastreador: cria `servicos` (`tipo='vistoria_entrada'`, `vistoria_origem_id` apontando para a vistoria com vídeo, `status='concluida'`, `local_vistoria` conforme agendamento), preenche `contratos.vistoria_concluida_em` se vazio.
-- Para **Fernanda (9C2KF5200TR010548)** — moto que exige rastreador: cria também `instalacoes` (`status='agendada'`) e `servicos` (`tipo='instalacao'`, `instalacao_origem_id` no novo registro, `status='concluida'`), além do `vistoria_entrada` se houver vistoria materializada com vídeo.
-- Idempotente: usa `WHERE NOT EXISTS` por `instalacao_origem_id` / `vistoria_origem_id`.
-- **Não toca** `cadastro_aprovado`, `aprovado_em`, `status` do contrato, nem promove veículo a `ativo`.
-
-**Resultado:** os dois casos aparecem em `/monitoramento/aprovacoes-unificadas` (aba Aprovação de Associados) no próximo refresh com vídeo anexado e prontos pra decisão final.
-
----
-
-## 2. Bloquear Cadastro em sub-FIPE sem autovistoria completa
-
-**Onde:** `supabase/functions/aprovar-proposta/index.ts` (handler de aprovação) + UI do Cadastro (`src/pages/cadastro/Associados.tsx` ou similar, no botão Aprovar).
-
-**Regra:**
-- Se o veículo é sub-FIPE (`carro FIPE < 30k` ou `moto FIPE < 9k`, e não-diesel) e o plano tem R/F:
-  - Exigir autovistoria **completa** (≥31 fotos carro / ≥15 fotos moto) **+ vídeo 360°** materializada em `vistorias`/`vistoria_fotos`.
-  - Caso contrário, retornar **HTTP 409** com `code='autovistoria_subfipe_incompleta'` e mensagem: *"Sub-FIPE exige autovistoria completa no link público antes do Cadastro aprovar. O associado precisa concluir 31 fotos (carro) / 15 fotos (moto) + vídeo 360°."*
-- Usa `resolverEscopoAnaliseCadastro` (`src/lib/cadastro/escopoAnaliseCadastro.ts`) como fonte da verdade do que conta como "completa".
-- UI: hook que avalia o mesmo escopo desabilita o botão Aprovar e mostra a mensagem antes do request.
+Conclusão: o Consultor enxerga parcialmente (só pós-assinatura); o Cadastro é cego pré-assinatura; o Monitoramento só ouve o guard via erro de toast.
 
 ---
 
-## 3. Bloquear Cadastro em caso com rastreador obrigatório sem instalação agendada
+## O que vai ser feito
 
-**Onde:** mesma edge `aprovar-proposta` + UI do Cadastro.
+### 1. Fonte única de vocabulário (lib pura, sem UI)
+Novo `src/lib/etapaPendentePublica.ts` que recebe uma cotação e devolve `{ codigo, label, descricao_associado, cobrar }`. Conjunto canônico:
 
-**Regra:**
-- Se exige rastreador (`diesel`, ou `carro FIPE ≥ 30k`, ou `moto FIPE ≥ 9k`):
-  - Exigir `instalacoes` com `status='agendada'` E `data_agendada IS NOT NULL` vinculada à cotação (criada via `criar-instalacao-pos-pagamento` a partir do agendamento do cliente no link público).
-  - Caso contrário, **HTTP 409** com `code='instalacao_nao_agendada'`: *"Cliente precisa agendar a instalação do rastreador no link público antes do Cadastro aprovar."*
-- **Agendamento_base sozinho não basta** — alinhado com o aperto da guarda já planejado (item 4).
-- UI espelha o bloqueio.
+- `aguardando_escolha_plano`
+- `aguardando_documentos`
+- `aguardando_assinatura_contrato`
+- `aguardando_pagamento_adesao`
+- `aguardando_escolha_vistoria`
+- `aguardando_autovistoria`
+- `aguardando_agendamento_instalacao`
+- `aguardando_execucao_agendada`
+- `nenhuma` (caso completou tudo / caso fora do escopo)
 
----
+Cada código mapeia 1‑pra‑1 contra as etapas que `getEtapaVenda()` já devolve e contra os motivos do guard backend (`sem_vistoria` → `aguardando_autovistoria`, `sem_agendamento` → `aguardando_agendamento_instalacao`, etc.). Essa lib é a única fonte de label nas três telas.
 
-## 4. Rede de segurança: agendamento interno do Monitoramento materializa `servicos`
+### 2. Consultor — estender o que já existe (sem nova UI)
+- Em `src/lib/cotacaoTravada.ts`, remover o gate `contratoStatus in [assinado, ativo]` e adicionar SLAs para as etapas pré‑assinatura (`escolhendo_plano`, `enviando_documentos`, `assinando_contrato`). Mesmas faixas amarelo/vermelho.
+- Tooltip da `FlagTravada` passa a usar `etapaPendentePublica.label` em vez de string ad‑hoc — vocabulário fica idêntico ao do Cadastro.
+- Filtro "Apenas travadas" e contador já existentes em `Cotacoes.tsx` passam a cobrir também o pré‑assinatura sem mudança adicional.
 
-**Onde:** trigger DB em `agendamentos_base`.
+### 3. Cadastro — nova aba "Link Público Incompleto" em `PropostasPendentes.tsx`
+- Novo hook `src/hooks/useCotacoesLinkPublicoIncompleto.ts`: lista cotações com `status_contratacao` ativo (cliente já entrou no link) e SEM `contrato.status='assinado'`. Computa `etapaPendentePublica` por linha.
+- Nova aba no topo da página `PropostasPendentes.tsx` ("Em análise" — atual padrão — / "Link Público Incompleto" — nova) reusando os mesmos componentes de tabela, filtros e ordenação que a aba atual usa (sem componente novo). Colunas: associado, veículo, plano, vendedor, etapa pendente (label canônico), tempo na etapa (com cor de SLA — verde/amarelo/vermelho usando as mesmas funções `getWaitColor`/`getWaitTextColor`).
+- KPI no `DashboardCadastro.tsx`: novo `KPICard` "Parados no link público" com mesma cor de SLA. Clique abre a nova aba.
+- Realtime: o hook se invalida pelos mesmos canais que `usePropostasPendentes` já escuta (cotações + contratos). Quando o contrato for assinado, o caso some da nova aba e cai na fila normal sem ação manual.
 
-**Trigger:** `trg_agendamento_base_materializa_servico` — `AFTER INSERT OR UPDATE OF vistoria_id, instalacao_id ON agendamentos_base`.
+### 4. Monitoramento — consistência, sem nova listagem
+- Casos parados no Cadastro / link público NÃO ganham nova lista no Monitoramento (decisão consciente: não é a responsabilidade do papel e polui a fila). 
+- O que muda: em `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`, quando o `aprovar-proposta` retorna `caminho_publico_incompleto` / `sem_agendamento` / `sem_vistoria_materializada`, a mensagem de erro é traduzida via `etapaPendentePublica` (mesma label que o Consultor e o Cadastro veem). Vocabulário fica unificado nas três telas.
 
-**O que faz:**
-- Quando `vistoria_id` ou `instalacao_id` é preenchido e ainda não existe `servicos` vivo correspondente (`WHERE vistoria_origem_id = NEW.vistoria_id` ou `instalacao_origem_id = NEW.instalacao_id` e status fora de terminais), cria um `servicos` com:
-  - `tipo` = `vistoria_entrada` (vistoria) ou `instalacao` (instalação)
-  - `status` = `agendada`
-  - `data_agendada` / `periodo` derivados do agendamento_base
-  - `profissional_id` = `NEW.atendido_por` (se houver)
-  - `contrato_id` / `associado_id` herdados via instalação→veículo→contrato (mesma lógica de `trg_vistoria_vinculos_obrigatorios`)
-- Idempotente (verificação prévia).
-- Tolerante: usa exception handler que loga e segue, para não bloquear escrita em `agendamentos_base`.
-- Respeita memória `mem://logic/operations/servicos-um-canonico-por-origem` (1 vivo por origem).
+### 5. Validação ao terminar
+- Caso novo entra no link público e para em "Documentos" → aparece em `/vendas/cotacoes` com badge "Enviando Documentos" + bolinha pulsante (SLA pré‑assinatura) e em `/cadastro/propostas-pendentes` aba "Link Público Incompleto" com a mesma label "Aguardando documentos".
+- Cliente envia os documentos e assina → caso some das duas telas e entra na fila normal de análise do Cadastro automaticamente (invalidação já existente).
+- Se o Monitoramento for tentar aprovar prematuramente, o toast de erro usa exatamente a mesma label.
 
-**Bônus:** alinhar `VistoriaInternaDialog` / `InstaladorChecklist` para invalidar `instalacoes-aguardando-aprovacao-monitoramento` (já invalida).
+### Detalhes técnicos
+- Arquivos novos: `src/lib/etapaPendentePublica.ts`, `src/hooks/useCotacoesLinkPublicoIncompleto.ts`.
+- Arquivos alterados: `src/lib/cotacaoTravada.ts` (estender SLAs pré‑assinatura), `src/components/cotacoes/FlagTravada.tsx` (label canônica no tooltip), `src/pages/cadastro/PropostasPendentes.tsx` (adicionar Tabs com nova aba), `src/components/cadastro/DashboardCadastro.tsx` (novo KPI + navegação), `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` (tradução do erro do guard).
+- Sem migração de banco. Sem mudança no edge `aprovar-proposta` (guard já está ativo).
+- Sem componente UI novo: reuso de `Tabs`, `Badge`, `KPICard`, `FlagTravada` e da tabela existente.
 
----
-
-## 5. Fechamento automático da vistoria presencial quando o vídeo é anexado
-
-**Onde:** trigger DB em `vistorias`.
-
-**Trigger:** `trg_vistoria_video_360_promove_concluida` — `AFTER UPDATE OF video_360_url ON vistorias`.
-
-**O que faz:**
-- Dispara quando `OLD.video_360_url IS NULL AND NEW.video_360_url IS NOT NULL` e `NEW.modalidade <> 'autovistoria'` (presencial: técnico próprio, prestador, base, rota, fit).
-- Atualiza:
-  - `vistorias.status = 'concluida'`, `concluida_em = now()` (se ainda não).
-  - `servicos` vivo com `vistoria_origem_id = NEW.id` → `status = 'concluida'`, `concluida_em = now()`.
-  - `contratos.vistoria_concluida_em = now()` (se vazio).
-- **NÃO** toca `instalacoes` — vistoria de instalação só fecha pelo fluxo presente (técnico/prestador); aqui é só sincronia da vistoria. Para instalação, o caminho presencial existente (`InstaladorChecklist`) e o prestador (`concluir-instalacao-prestador`) seguem responsáveis.
-- Resultado: vistoria presencial cai automaticamente na fila do Monitoramento como "Concluída — Pendente Monitoramento" igual ao caminho do prestador.
-
-**Guardas preservados:** continuam ativos `trg_guard_instalacao_concluida_exige_rastreador`, `trg_guard_veiculo_ativo_exige_rastreador`, `trg_guard_cobertura_rf_exige_decisao_cadastro`. Ativação só via `ativar-associado`.
-
----
-
-## Ordem de execução
-
-1. **Migration de saneamento** (Luiz + Fernanda) — destrava o problema imediato.
-2. **Trigger materializa serviço** (item 4) — rede de segurança antes de apertar a guarda.
-3. **Trigger vídeo → concluída** (item 5).
-4. **Aperto de `aprovar-proposta`** (itens 2 e 3) — guarda backend + 409 tipados.
-5. **UI Cadastro** — desabilita botão + mostra mensagem; consome `code` retornado pela edge.
-
----
-
-## Detalhes técnicos resumidos
-
-- **Files editados:**
-  - `supabase/functions/aprovar-proposta/index.ts` — adicionar guards (2) e (3) reutilizando `resolverEscopoAnaliseCadastro` portado pra Deno (ou condição equivalente inline).
-  - UI do Cadastro (a localizar entre `src/pages/cadastro/` e `src/components/cadastro/`) — handler do botão Aprovar interpreta `code` 409.
-- **Migrations (schema):**
-  - `trg_agendamento_base_materializa_servico` + função `fn_agendamento_base_materializa_servico`.
-  - `trg_vistoria_video_360_promove_concluida` + função `fn_vistoria_video_360_promove_concluida`.
-- **Migration (dados, via insert tool):** saneamento dos 2 casos.
-
-## O que NÃO muda
-
-- Estrutura do fluxo (link público → Cadastro → Monitoramento → SGA).
-- Regras de prazo (48h, meia-noite troca de titularidade).
-- Telas/UX do Cadastro e Monitoramento.
-- Caminhos de Troca de Titularidade, Substituição, Prestador, Autovistoria sub-FIPE (já corretos).
-- `ativar-associado` segue como única porta para `ativo`.

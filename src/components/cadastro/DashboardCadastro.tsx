@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePropostaStats, usePropostasPendentes } from '@/hooks/usePropostasPendentes';
+import { useCotacoesLinkPublicoIncompletoCount } from '@/hooks/useCotacoesLinkPublicoIncompleto';
+import { Link2Off } from 'lucide-react';
 import { useCadastroPerformance } from '@/hooks/useCadastroPerformance';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -319,6 +321,7 @@ export function DashboardCadastro() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { data: stats, isLoading: statsLoading } = usePropostaStats();
+  const { count: linkIncompletoCount } = useCotacoesLinkPublicoIncompletoCount();
 
   const aprovadosHoje = stats?.aprovadosHoje || 0;
   const reprovadosHoje = stats?.reprovadosHoje || 0;
@@ -332,6 +335,28 @@ export function DashboardCadastro() {
         nome={profile?.nome?.split(' ')[0] || 'Analista'}
         aguardando={stats?.aguardando || 0}
       />
+
+      {/* Aviso: parados no link público (entra em "Em análise" via aba) */}
+      {linkIncompletoCount > 0 && (
+        <button
+          type="button"
+          onClick={() => navigate('/cadastro/propostas?tab=link_incompleto')}
+          className="w-full text-left rounded-xl border border-warning/30 bg-warning/5 p-3 flex items-center gap-3 transition-all hover:bg-warning/10"
+        >
+          <div className="p-2 rounded-lg bg-warning/15 text-warning">
+            <Link2Off className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {linkIncompletoCount} cotação(ões) paradas no link público
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Associado entrou no link mas não concluiu uma etapa — cobre o consultor responsável.
+            </p>
+          </div>
+          <Badge className="bg-warning text-warning-foreground text-[10px] px-1.5">{linkIncompletoCount}</Badge>
+        </button>
+      )}
 
       {/* Pipeline Funil */}
       <PipelineFunnel stats={stats} loading={statsLoading} />
