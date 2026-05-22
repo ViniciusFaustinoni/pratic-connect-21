@@ -1,99 +1,119 @@
-## Diagnóstico — por que "Termo assinado" não foi reconhecido
+## Diagnóstico da causa raiz
 
-### Evidências reais coletadas
+O caso Luiz Fernando (cotação `3eda326b-4cd1-42d6-8197-847ad601a913`) revelou que o "Vistoria Agendada com Sucesso!" é renderizado a partir de **colunas espelho** em `cotacoes` (`vistoria_*` ou `agendamentos_base`), e não a partir de uma confirmação de que os registros operacionais correspondentes existem no banco.
 
-**1. Estado da troca KOU6D37 (DB)**
-`solicitacoes_troca_titularidade.id = af5d46d0-0c9a-4e16-9b3b-9e6346bc72d1`:
-- `status = 'aguardando_termo_cancelamento'`
-- `termo_cancelamento_assinado_em = NULL`
-- `termo_cancelamento_autentique_id = '75cf74d5d3191db2d7ebd47af20b7f82eb4d1331935a72ce6'`
-- `termo_cancelamento_enviado_em = 2026-05-22 15:47:10`
-- `termo_whatsapp_status = 'falhou'`
+**Estado real do caso Luiz Fernando hoje:**
+- `cotacoes.tipo_vistoria = 'agendada_base'`, mas `vistoria_data_agendada` / `vistoria_endereco_*` estão NULL
+- `agendamentos_base` existe (22/05, 13:00, status `realizado`) — não bate com a tela ("Manhã 08:00-12:00")
+- `vistorias` existe (`modalidade=presencial`, `status=agendada`) mas com `data_agendada=22/05 00:00`, `instalacao_id=NULL` e sem `agendamentos_base.instalacao_id` apontando pra ela
+- `instalacoes` para essa cotação: **inexistente**
 
-Autentique confirma assinatura via biometria SERPRO às 12:47 (print), mas DB nunca foi atualizado.
+**Origem do limbo no código (duas portas):**
 
-**2. Webhook Autentique não chegou**
-`function_edge_logs` filtrando `url like '%autentique-webhook%'` nas últimas 48h retorna **zero requisições**. Apenas `autentique-sync-contrato` (polling do front) aparece. Conclusão objetiva: **o webhook Autentique não está fazendo POST para `/autentique-webhook`** — nenhum evento (signature.viewed, accepted, updated) chegou.
+1. **Fluxo presencial (cliente):** `supabase/functions/agendar-vistoria-presencial/index.ts` só faz `UPDATE cotacoes SET vistoria_data_agendada=...` e retorna `success:true` — **nunca insere em `vistorias` nem `instalacoes`** (comentários linhas 199-200 confirmam o design). O hook `useFinalizarVistoriaCotacao` recebe `success` e chama `onConfirmar` → tela de sucesso aparece sem nenhum registro operacional gravado.
 
-**3. Por que contratos ficam "assinado" e trocas não**
-- `supabase/functions/autentique-sync-contrato/index.ts` é polling acionado pelo front quando o associado volta do Autentique. Cobre **apenas `contratos`** (busca por `autentique_documento_id` em `contratos`, linhas 188-210, 285).
-- Não existe equivalente para `solicitacoes_troca_titularidade`. Busca por `rg "sync.*troca|sincronizar.*termo|sync-termo"` em `supabase/functions` e `src` retorna vazio.
-- Resultado: contratos "se salvam" pelo polling; trocas dependem 100% do webhook, que não está chegando.
+2. **Fluxo base:** `useCriarAgendamentoBase` insere em `agendamentos_base` corretamente, mas o `criar-instalacao-pos-pagamento` (chamado em seguida) pode falhar silenciosamente (try/catch com `console.warn`), e o `onConfirmar` é chamado mesmo assim. A vistoria correspondente nunca é materializada por essa porta — depende de outros gatilhos.
 
-**4. Branch da troca no webhook (existe e está correto)**
-`supabase/functions/autentique-webhook/index.ts` linhas 305-327:
+A tela em `src/pages/public/CotacaoContratacao.tsx` (linhas 1642-1846) lê só `cotacao.vistoria_*` ou conta `hasAgendamentoBase` — não valida que existe `vistorias` com `data_agendada` preenchida nem que `instalacoes` foi criada.
+
+---
+
+## O que vai ser feito
+
+### 1. Persistir o agendamento de verdade antes da tela de sucesso
+
+**1a. Edge `agendar-vistoria-presencial` passa a criar `vistorias` (e quando aplicável `instalacoes`) na mesma transação**
+- Após o `UPDATE cotacoes`, fazer `INSERT INTO vistorias` com `cotacao_id`, `contrato_id`, `associado_id`, `veiculo_id`, `modalidade='presencial'`, `status='agendada'`, `data_agendada=<dataAgendada>`, `periodo=<periodoAgendado>`, endereço completo e coordenadas
+- Reaproveitar o caminho já existente do `criar-instalacao-pos-pagamento` (idempotente) chamando-o em sequência para materializar `instalacoes` + back-link em `agendamentos_base.instalacao_id` quando aplicável
+- Se qualquer um dos INSERTs falhar, **retornar `success:false` com `error` claro** e **fazer rollback do UPDATE em `cotacoes`** (reverter `vistoria_data_agendada`, `tipo_vistoria` para os valores anteriores) para não deixar o espelho atualizado sem o registro operacional
+- Devolver `{ success, vistoriaId, instalacaoId }` reais (hoje devolve `instalacaoId:null` por design)
+
+**1b. `useCriarAgendamentoBase` para de engolir falha do `criar-instalacao-pos-pagamento`**
+- Substituir o `try/console.warn` por throw que propaga para o `onError` da mutation
+- Toast de erro claro: "Não foi possível registrar seu agendamento. Tente novamente."
+- Não chamar `onAgendado` (a página não troca para a tela de sucesso)
+
+**1c. Hooks `useFinalizarVistoriaCotacao` e `useAgendarVistoriaCompleta` viram gate de verificação**
+- Após `success:true` da edge, fazer um SELECT de confirmação em `vistorias` por `cotacao_id` exigindo `data_agendada IS NOT NULL`. Se vier vazio em até 3 tentativas (250ms/500ms/1s), tratar como falha
+- Só então chamar `onConfirmar`. Caso contrário, lançar erro → `onError` mostra toast e o usuário continua na etapa 5 com o formulário aberto
+
+**1d. `CotacaoContratacao.tsx` para de confiar nas colunas espelho da cotação como prova**
+- Antes de renderizar "Vistoria Agendada com Sucesso!", exigir que **pelo menos uma** das seguintes verificações seja verdadeira via `useAgendamentoExistente`:
+  - existe `vistorias` com `status` ativo e `data_agendada` não-nula, OU
+  - existe `agendamentos_base` em status `agendado/confirmado/realizado` com `data_agendada` preenchida, OU
+  - existe `instalacoes` agendada com `cotacao_id`
+- Se `cotacao.vistoria_data_agendada` está preenchido mas nenhum desses registros existe, renderizar **card de inconsistência detectada** (ver item 4) em vez da tela de sucesso
+
+---
+
+### 2. Erro forçado: confirmar que tela de sucesso não aparece
+
+Roteiro de validação manual após implementar:
+- Forçar `agendar-vistoria-presencial` a retornar `success:false` (ex.: passar `cotacaoId` inválido)
+- Confirmar que o cliente vê toast vermelho "Erro ao agendar vistoria" e o formulário de data/período/endereço continua aberto na etapa 5
+- Confirmar que `cotacoes.vistoria_data_agendada` continua NULL após a tentativa
+
+---
+
+### 3. Listar cotações em limbo (sem corrigir)
+
+Criar query SQL (executada via `supabase--read_query` e exportada para `/mnt/documents/limbo-vistorias-agendamento.csv`) com critério canônico de limbo:
+
+```sql
+SELECT c.id, c.nome_solicitante, c.tipo_vistoria,
+       c.vistoria_data_agendada, c.created_at,
+       v.id as vistoria_id, v.status as vistoria_status, v.data_agendada,
+       ab.id as agendamento_base_id, ab.data_agendada as base_data,
+       i.id as instalacao_id, i.status as instalacao_status
+FROM cotacoes c
+LEFT JOIN vistorias v ON v.cotacao_id = c.id
+LEFT JOIN agendamentos_base ab ON ab.cotacao_id = c.id
+LEFT JOIN instalacoes i ON i.cotacao_id = c.id
+WHERE c.created_at >= date_trunc('month', now())
+  AND c.tipo_vistoria IN ('agendada','agendada_base')
+  AND (
+    -- caminho presencial: cotação diz agendado, mas vistoria sem data ou inexistente
+    (c.tipo_vistoria='agendada' AND (v.id IS NULL OR v.data_agendada IS NULL))
+    -- caminho base: cotação diz agendada_base mas agendamentos_base ausente
+    OR (c.tipo_vistoria='agendada_base' AND ab.id IS NULL)
+    -- vistoria existe mas instalação obrigatória ausente (carro≥30k/moto≥9k/diesel)
+    OR (v.id IS NOT NULL AND v.data_agendada IS NOT NULL AND i.id IS NULL)
+  );
 ```
-.from('solicitacoes_troca_titularidade')
-.eq('termo_cancelamento_autentique_id', documentId)
-```
-Atualizaria `termo_cancelamento_assinado_em` + `status='cotacao_em_andamento'`. Lógica está OK — só não é executada porque o webhook não dispara.
 
-**5. Formato do ID (não é o bug)**
-Tanto `solicitacoes_troca_titularidade.termo_cancelamento_autentique_id` (49 chars hex) quanto `contratos.autentique_documento_id` (49 chars hex, todos os registros) têm o mesmo formato. É o ID que o Autentique retorna em `createDocument.id` (`supabase/functions/enviar-termo-cancelamento-troca/index.ts:284`). Não há mismatch de formato — descartado.
+Devolver no chat: `cotacao_id`, nome, data de criação, `tipo_vistoria`, e quais campos estão faltando. **Sem nenhum UPDATE.** Confirmar que `3eda326b-4cd1-42d6-8197-847ad601a913` aparece.
 
-**6. Telefone falhou também**
-`termo_whatsapp_status='falhou'` → o titular antigo não recebeu o link por WhatsApp. Operador teve que enviar manualmente. Não bloqueia assinatura, mas reforça que o canal "automático" não está fechado.
+---
 
-### Escopo da contaminação
+### 4. Caminho de recuperação para casos em limbo
 
-Query em `solicitacoes_troca_titularidade where termo_cancelamento_autentique_id is not null`: **2 trocas, ambas com `termo_cancelamento_assinado_em = NULL`** (KOU6D37 e 65d581ba-..., criada em 20/05). Toda troca recente está nessa situação — o pipeline automatizado nunca fechou nenhuma desde que o módulo entrou no ar; o que o usuário lembra como "finalizamos diversas vezes" foi via efetivação manual/contornos, não pelo webhook.
+Em `CotacaoContratacao.tsx`, quando detectar inconsistência (cotação diz agendado mas registros operacionais ausentes), renderizar um **card de recuperação** no lugar do "Vistoria Agendada com Sucesso!":
 
-`solicitacoes_substituicao` provavelmente tem o mesmo gap (mesma arquitetura, mesma ausência de polling) — vai entrar no plano de correção.
+- Título: "Detectamos uma inconsistência no seu agendamento"
+- Mensagem: "Nosso sistema não conseguiu confirmar o registro completo. Por favor, reagende abaixo para garantir que tudo seja registrado corretamente."
+- Botão "Reagendar agora" → reabre o `AgendamentoVistoria` / `AgendamentoBase` com o endereço pré-preenchido
+- A reabertura usa o fluxo corrigido (item 1), então uma vez salvo, o registro fica completo
 
-## Plano de correção
+A mesma detecção é usada por operador interno acessando o detalhe da vistoria — adicionar banner discreto em `ModalDetalhesVistoria` (já existente) avisando "Cotação aprovou agendamento na etapa pública mas registro operacional está incompleto — peça reagendamento pelo link público".
 
-### 1. Edge function nova: `autentique-sync-troca-termo`
-- Espelho do `autentique-sync-contrato`, mas para troca.
-- Entrada: `solicitacaoId` (ou `documentId`).
-- Carrega `solicitacoes_troca_titularidade` pelo `termo_cancelamento_autentique_id`.
-- Faz a mesma GraphQL `query GetDocument($id: UUID!) { document(id) { signatures { signed { created_at } biometric_approved { created_at } viewed { created_at } rejected { created_at } } } }`.
-- Reusa a regra de `isEffectivelySigned` (signed.created_at OU biometric_approved.created_at + viewed) já implementada em `autentique-sync-contrato:362-364`.
-- Quando detecta assinatura, faz **a mesma atualização** que o webhook faria (linhas 320-478 do `autentique-webhook`):
-  - `UPDATE solicitacoes_troca_titularidade SET termo_cancelamento_assinado_em, status='cotacao_em_andamento'`
-  - Marca `veiculos.em_troca_titularidade=true`
-  - Auto-vincula cotação por `dados_extras.veiculo_origem_id` quando faltar
-  - Envia WhatsApp ao novo titular (template `liberacao_link_troca`)
-- Idempotente (verifica `termo_cancelamento_assinado_em IS NULL` antes).
-
-### 2. Polling no front (modal Detalhes da Troca)
-- Em `src/components/troca-titularidade/ModalDetalhesTroca.tsx`: enquanto `!solicitacao.termo_cancelamento_assinado_em && status === 'aguardando_termo_cancelamento'`, abrir um `useQuery` com `refetchInterval` de 15 s que chama a nova edge.
-- Botão "Verificar assinatura agora" como fallback manual (mesmo padrão de Cotação pública atual).
-- Hook `useSolicitacoesTroca` revalida sozinho via React Query invalidate ao receber sinal.
-
-### 3. Cron de segurança (opcional mas recomendado)
-- Edge `cron-sync-trocas-pendentes` rodando 5/5 min: lista `solicitacoes_troca_titularidade WHERE termo_cancelamento_assinado_em IS NULL AND termo_cancelamento_enviado_em < now() - interval '2 min'` e chama a sync para cada uma.
-- Garante que, mesmo sem operador olhando o modal, trocas se desbloqueiem sozinhas.
-
-### 4. Saneamento dos contaminados
-- Migration de saneamento: para os 2 registros atuais, rodar a sync uma única vez (script seed) consultando o Autentique. Se o documento estiver assinado, gravar `termo_cancelamento_assinado_em` retroativo + `status='cotacao_em_andamento'` + replicar marcações de `em_troca_titularidade` no veículo + auto-vinculação de cotação.
-- Loga auditoria em `associados_historico` com `via='saneamento_2026-05-22'`.
-
-### 5. Reaplicar mesmo padrão a Substituição
-- Verificar `solicitacoes_substituicao` (não tem polling, só webhook). Replicar `autentique-sync-substituicao-termo` + polling no `ModalDetalhesSubstituicao.tsx`. Mesmo cron pode varrer as duas tabelas.
-
-### 6. Investigar a raiz do webhook Autentique
-- Documentar (sem corrigir agora) que o webhook não está chegando: validar no painel Autentique se `https://<project>.supabase.co/functions/v1/autentique-webhook` está configurado e o secret esperado bate. Sem acesso ao painel Autentique, isso fica como tarefa do usuário — o sync acima já garante o fluxo independente do webhook.
-
-### 7. Memória canônica
-- Atualizar `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica` adicionando: "Detecção de assinatura tem 2 caminhos canônicos: (a) webhook Autentique em `autentique-webhook` e (b) polling `autentique-sync-troca-termo` (front + cron). Idem para substituição. Webhook sozinho NÃO é confiável — sempre manter o sync."
+---
 
 ## Detalhes técnicos
-- Arquivos a criar:
-  - `supabase/functions/autentique-sync-troca-termo/index.ts`
-  - `supabase/functions/autentique-sync-substituicao-termo/index.ts`
-  - `supabase/functions/cron-sync-trocas-pendentes/index.ts`
-  - Migration de saneamento dos 2 registros + agendamento do cron (`pg_cron`).
-- Arquivos a editar:
-  - `src/components/troca-titularidade/ModalDetalhesTroca.tsx` (polling + botão manual)
-  - `src/components/substituicao/ModalDetalhesSubstituicao.tsx` (idem)
-  - `src/hooks/useSolicitacoesTroca.ts` (invalidar ao receber update)
-  - `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica`
-  - `mem://index.md` (one-liner atualizado)
-- Arquivos preservados (lógica do webhook está correta):
-  - `supabase/functions/autentique-webhook/index.ts` (mantido — quando o webhook voltar, complementa o sync sem conflito por causa do guard `IS NULL`)
-  - `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
 
-## Fora de escopo
-- Reconfigurar o webhook no painel Autentique (depende do usuário).
-- Reescrever o módulo de envio do termo (`enviar-termo-cancelamento-troca`) — está OK.
-- Alterar formato do `autentique_documento_id` — formato 49 chars é o padrão Autentique, não é bug.
+**Arquivos modificados:**
+- `supabase/functions/agendar-vistoria-presencial/index.ts` — criar `vistorias` + chamar `criar-instalacao-pos-pagamento`; rollback de cotação em falha; resposta com `vistoriaId` real
+- `src/hooks/useAgendamentoBase.ts` — `useCriarAgendamentoBase` propaga falha de `criar-instalacao-pos-pagamento`
+- `src/hooks/useCotacaoVistoria.ts` — `useFinalizarVistoriaCotacao` e `useAgendarVistoriaCompleta` fazem SELECT de confirmação antes de retornar
+- `src/pages/public/CotacaoContratacao.tsx` — só renderiza tela de sucesso quando há registro operacional confirmado via `useAgendamentoExistente`; renderiza card de recuperação no caso inconsistente
+- `src/components/vistorias/ModalDetalhesVistoria.tsx` — banner de inconsistência para operador interno
+
+**Fora de escopo (confirmado no pedido):**
+- Não corrigir automaticamente os limbos existentes
+- Não mexer na divisão arquitetural vistoria × instalação
+- Não mexer na detecção de tipo de veículo do roteiro
+
+**Entregáveis no fim:**
+1. Print de novo agendamento via link público mostrando o registro em `vistorias` e `agendamentos_base` **antes** da tela de sucesso
+2. Print do teste de falha forçada: toast de erro e formulário continua aberto
+3. CSV com lista de cotações em limbo do mês corrente em `/mnt/documents/limbo-vistorias-agendamento.csv`
+4. Confirmação explícita que `3eda326b` aparece na lista
