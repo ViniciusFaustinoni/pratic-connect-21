@@ -93,6 +93,7 @@ import { PlacaOutroAssociadoModal } from '@/components/cotacoes/PlacaOutroAssoci
 import { useCotacaoDraft, type DraftPayload } from '@/hooks/useCotacaoDraft';
 import { DraftRestoreBanner } from '@/components/cotacao/DraftRestoreBanner';
 import { shouldBypassPlateGuards } from '@/components/cotacoes/plateGuardBypass';
+import { PerguntaZeroKmGate } from '@/components/cotacoes/PerguntaZeroKmGate';
 
 // Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
@@ -108,6 +109,7 @@ export interface CotacaoBaseParaFormulario {
   veiculo_modelo: string | null;
   veiculo_ano: number | null;
   veiculo_placa: string | null;
+  veiculo_zero_km?: boolean | null;
   codigo_fipe: string | null;
   categoria: string | null;
   regiao: string | null;
@@ -237,15 +239,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Guard de auto-busca (evita loop e re-disparo na mesma abertura)
   const autoBuscaPlacaRef = useRef<string | null>(null);
 
-  // Veículo 0KM (dentro da agência, ainda sem placa definitiva).
-  // Quando true:
-  //  - desabilita o input de placa e a consulta FIPE automática
-  //  - exige preenchimento manual de marca/modelo/ano/valor FIPE (Nota Fiscal)
-  //  - grava cotacoes.veiculo_zero_km=true e veiculo_placa=null
-  //  - contrato-gerar criará o veículo com placa placeholder "0KM*****" e
-  //    aguardando_placa_definitiva=true (necessário para SGA Hinova e Softruck).
+  // Gate canônico "Este veículo é 0KM?" — bloqueia o restante do bloco veículo
+  // enquanto a resposta for null. Substitui o antigo toggle "passável".
+  //  - true  → desabilita input de placa, exige preenchimento manual,
+  //            grava cotacoes.veiculo_zero_km=true e veiculo_placa=null
+  //  - false → caminho normal (busca por placa ou manual com placa)
+  // Pré-população: SOMENTE quando cotacaoParaEditar.veiculo_zero_km é boolean
+  // explícito. NULL nunca infere — força decisão consciente do operador.
   // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
-  const [isZeroKm, setIsZeroKm] = useState(false);
+  const [isZeroKm, setIsZeroKm] = useState<boolean | null>(null);
 
   // Estados para confirmação de valor de adesão
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -906,6 +908,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setJustificativaFipeMenor('');
       setTipoPlacaSelecionado('');
       setCombustivelSelecionado('');
+      setIsZeroKm(null);
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 
@@ -1401,6 +1404,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       if (cotacaoParaEditar.regiao) {
         setRegiaoSelecionada(cotacaoParaEditar.regiao);
       }
+
+      // Pré-preencher gate 0KM — SOMENTE com valor boolean explícito.
+      // NULL/undefined em cotação antiga força nova decisão do operador.
+      if (typeof cotacaoParaEditar.veiculo_zero_km === 'boolean') {
+        setIsZeroKm(cotacaoParaEditar.veiculo_zero_km);
+      } else {
+        setIsZeroKm(null);
+      }
+
       
       // Preencher dados do veículo encontrado
       if (cotacaoParaEditar.veiculo_marca && cotacaoParaEditar.veiculo_modelo) {
@@ -1610,11 +1622,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Abre o popup de confirmação de adesão
   const onSubmit = (data: CotacaoFormData) => {
+    // Gate 0KM canônico: bloqueia salvar enquanto o operador não decide.
+    // Evita cotação com veiculo_zero_km=NULL caindo na cascata como
+    // "emplacado por default" (caso Luiz Fernando YAMAHA AEROX).
+    if (isZeroKm === null) {
+      toast.error('Responda primeiro se o veículo é 0KM no topo do bloco "Veículo".');
+      try {
+        document.getElementById('bloco-veiculo-gate-0km')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch { /* noop */ }
+      return;
+    }
+
     // Validar dados do associado
     if (!dadosAssociadoValidos) {
       toast.error('Preencha o nome e telefone do associado!');
       return;
     }
+
     
     // Regra do 1% (Redução de Cota) agora é automática quando elegível —
     // sem checkbox/justificativa, sem trava. Supervisores apenas tomam ciência depois.
@@ -1707,10 +1731,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         veiculo_marca: marcaVeiculo,
         veiculo_modelo: modeloVeiculo,
         veiculo_ano: anoVeiculo,
-        veiculo_placa: isZeroKm ? null : (placa || veiculoEncontrado?.extractedPlate || null),
-        // 0KM: marca fonte de verdade para contrato-gerar / SGA Hinova / Softruck.
+        veiculo_placa: isZeroKm === true ? null : (placa || veiculoEncontrado?.extractedPlate || null),
+        // 0KM: gate canônico. Persiste boolean explícito (true/false). Quando
+        // null (cotação salva sem decisão), o backend bloqueia em contrato-gerar.
         // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
-        veiculo_zero_km: isZeroKm || null,
+        veiculo_zero_km: typeof isZeroKm === 'boolean' ? isZeroKm : null,
         veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
         // Número de portas vindo do CRLV/plate-lookup (snapshot para o termo)
         numero_portas: (() => {
@@ -2288,20 +2313,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 Veículo
               </h3>
               
-              {/* Toggle: Veículo 0KM (dentro da Agência) */}
-              <div className={`flex items-start gap-3 rounded-lg border p-3 ${isZeroKm ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}>
-                <div className="flex-1 space-y-0.5">
-                  <Label htmlFor="cot-0km" className="text-sm font-medium cursor-pointer">
-                    Veículo 0KM (dentro da Agência)
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Sem placa definitiva. Use o valor da Nota Fiscal e preencha marca/modelo/ano manualmente.
-                  </p>
-                </div>
-                <Switch
-                  id="cot-0km"
-                  checked={isZeroKm}
-                  onCheckedChange={(checked) => {
+              {/* Gate canônico "Este veículo é 0KM?" — substituiu o toggle passável */}
+              <div id="bloco-veiculo-gate-0km">
+                <PerguntaZeroKmGate
+                  value={isZeroKm}
+                  onChange={(checked) => {
                     setIsZeroKm(checked);
                     if (checked) {
                       setPlaca('');
@@ -2311,6 +2327,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   }}
                 />
               </div>
+
+              {/* Restante do bloco veículo só aparece após responder o gate */}
+              {isZeroKm !== null && (
+              <>
+              {isZeroKm === true && (
+                <p className="text-xs text-muted-foreground rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2">
+                  Veículo 0KM: chassi é obrigatório. Use o valor da Nota Fiscal e preencha marca/modelo/ano manualmente abaixo.
+                </p>
+              )}
+
 
               <div className="flex gap-2">
                 <Input
@@ -2478,6 +2504,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     </div>
                   </div>
                 </>
+              )}
+              </>
               )}
             </div>
 

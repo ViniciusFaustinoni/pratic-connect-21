@@ -195,4 +195,8 @@ export interface CriarCotacaoPayload {
   tipo_veiculo?: 'carro' | 'moto' | null;
   /** Como o tipo foi resolvido. */
   tipo_veiculo_motivo?: 'unanime_moto' | 'unanime_carro' | 'operador_resolveu' | 'legado_heuristica' | null;
+  /** Resposta canônica do gate "Este veículo é 0KM?". Persiste em cotacoes.veiculo_zero_km. */
+  veiculo_zero_km?: boolean | null;
+  /** Chassi (VIN) — obrigatório quando veiculo_zero_km=true. Preenchido manualmente. */
+  veiculo_chassi?: string | null;
 }

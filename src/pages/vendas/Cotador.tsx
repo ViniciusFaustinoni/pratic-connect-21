@@ -234,6 +234,7 @@ const normalizarAno = (anoAPI: string): number => {
 
 // Função estimativa de FIPE — centralizada em src/utils/fipe.ts
 import { estimarValorFipe } from '@/utils/fipe';
+import { PerguntaZeroKmGate } from '@/components/cotacoes/PerguntaZeroKmGate';
 
 // mapearPlanosParaExibicao REMOVIDO — dados vêm direto do hook usePlanosCotacao
 
@@ -286,6 +287,12 @@ export default function CotadorPage() {
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
+
+  // Gate canônico "Este veículo é 0KM?" — bloqueia o restante do formulário
+  // de veículo enquanto a resposta for null. Quando true, força modo manual.
+  // Pré-população: SOMENTE com boolean explícito (cotacoes.veiculo_zero_km).
+  // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
+  const [isZeroKm, setIsZeroKm] = useState<boolean | null>(null);
   
   // Busca por placa
   const [placaBusca, setPlacaBusca] = useState('');
@@ -489,6 +496,11 @@ export default function CotadorPage() {
         if ((cot as any).tipo_instalacao) setTipoInstalacao((cot as any).tipo_instalacao);
         if ((cot as any).valor_adesao != null) setValorAdesaoCustom(Number((cot as any).valor_adesao));
         if (cot.nome_solicitante) setNomeAssociado(cot.nome_solicitante);
+
+        // Gate 0KM: pré-preenche SOMENTE com boolean explícito
+        if (typeof (cot as any).veiculo_zero_km === 'boolean') {
+          setIsZeroKm((cot as any).veiculo_zero_km);
+        }
 
         setEdicaoTrocaCarregada(true);
       } catch (e: any) {
@@ -911,6 +923,17 @@ export default function CotadorPage() {
   const handleSalvarEEnviarWhatsApp = async () => {
     if (!planoFinalSelecionado || !valorFipe) return;
 
+    // Gate 0KM canônico: bloqueia salvar sem decisão explícita
+    // (exceto em edição de troca de titularidade, onde o veículo já existe).
+    if (!isEdicaoTroca && isZeroKm === null) {
+      toast.error('Responda primeiro se o veículo é 0KM no topo da página.');
+      try {
+        document.getElementById('bloco-veiculo-gate-0km')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch { /* noop */ }
+      return;
+    }
+
+
     // Vendedor externo DEVE selecionar um cenário antes de salvar
     if (isVendedorExterno && !cenarioExterno) {
       toast.error('Selecione o cenário de adesão/instalação antes de salvar.');
@@ -964,7 +987,12 @@ export default function CotadorPage() {
         regiao: regiao,
         categoria_veiculo: categoriaVeiculo || undefined,
         nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
-        veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
+        veiculo_placa: isZeroKm === true
+          ? null
+          : (veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null),
+        // 0KM canônico — gate respondido no topo. Mantém boolean explícito
+        // (true/false). Em edição de troca segue null/inalterado.
+        veiculo_zero_km: typeof isZeroKm === 'boolean' ? isZeroKm : undefined,
         valor_adesao: valorAdesaoCustom ?? undefined,
         tipo_instalacao: tipoInstalacao || undefined,
         cenario_adesao: (cenarioExterno as any) || null,
@@ -1170,8 +1198,26 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         </Alert>
       )}
 
-      {/* SELETOR DE MODO — oculto na edição de troca */}
+      {/* GATE 0KM canônico — antes de tudo. Edição de troca pula (veículo já existe). */}
       {!isEdicaoTroca && (
+        <div id="bloco-veiculo-gate-0km">
+          <PerguntaZeroKmGate
+            value={isZeroKm}
+            onChange={(checked) => {
+              setIsZeroKm(checked);
+              if (checked) {
+                // 0KM: força modo manual e limpa qualquer estado de busca por placa
+                if (modo !== 'manual') handleModoChange('manual');
+                setPlacaBusca('');
+                setVeiculoEncontrado(null);
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* SELETOR DE MODO — oculto na edição de troca e quando 0KM (força manual) */}
+      {!isEdicaoTroca && isZeroKm === false && (
       <Card className="bg-muted/30">
         <CardContent className="py-4">
           <p className="font-medium text-foreground mb-4">
@@ -1221,8 +1267,11 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         </CardContent>
       </Card>
       )}
-      {/* GRID PRINCIPAL */}
+
+      {/* GRID PRINCIPAL — só aparece após responder o gate (ou em edição de troca) */}
+      {(isEdicaoTroca || isZeroKm !== null) && (
       <div className="grid gap-6 lg:grid-cols-2">
+        
         
         {/* CARD ESQUERDO - DADOS DO VEÍCULO */}
         <Card>
@@ -2039,6 +2088,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* SEÇÃO: RESUMO DA COTAÇÃO */}
       {planoFinalSelecionado && (
