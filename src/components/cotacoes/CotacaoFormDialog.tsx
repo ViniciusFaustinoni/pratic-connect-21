@@ -238,15 +238,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Guard de auto-busca (evita loop e re-disparo na mesma abertura)
   const autoBuscaPlacaRef = useRef<string | null>(null);
 
-  // Veículo 0KM (dentro da agência, ainda sem placa definitiva).
-  // Quando true:
-  //  - desabilita o input de placa e a consulta FIPE automática
-  //  - exige preenchimento manual de marca/modelo/ano/valor FIPE (Nota Fiscal)
-  //  - grava cotacoes.veiculo_zero_km=true e veiculo_placa=null
-  //  - contrato-gerar criará o veículo com placa placeholder "0KM*****" e
-  //    aguardando_placa_definitiva=true (necessário para SGA Hinova e Softruck).
+  // Gate canônico "Este veículo é 0KM?" — bloqueia o restante do bloco veículo
+  // enquanto a resposta for null. Substitui o antigo toggle "passável".
+  //  - true  → desabilita input de placa, exige preenchimento manual,
+  //            grava cotacoes.veiculo_zero_km=true e veiculo_placa=null
+  //  - false → caminho normal (busca por placa ou manual com placa)
+  // Pré-população: SOMENTE quando cotacaoParaEditar.veiculo_zero_km é boolean
+  // explícito. NULL nunca infere — força decisão consciente do operador.
   // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
-  const [isZeroKm, setIsZeroKm] = useState(false);
+  const [isZeroKm, setIsZeroKm] = useState<boolean | null>(null);
 
   // Estados para confirmação de valor de adesão
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
