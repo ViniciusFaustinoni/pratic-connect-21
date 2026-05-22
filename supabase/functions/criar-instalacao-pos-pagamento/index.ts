@@ -479,6 +479,43 @@ serve(async (req) => {
     } catch (_) { /* default true */ }
     if (dataAgendada && !veiculoPrecisaRastreadorGuard) {
       console.log(`[CriarInstalacaoPosPagamento] Veículo ${veiculoIdFinal} dispensa rastreador — pulando criação de instalação (artefato canônico = servico vistoria_entrada).`);
+
+      // CORREÇÃO CANÔNICA: quando o veículo dispensa rastreador MAS o cliente
+      // agendou vistoria presencial (tipo_vistoria='agendada' / 'agendada_base'),
+      // precisamos materializar `agendamentos_base` para o caso não cair no guard
+      // `sem_vistoria_materializada` de aprovar-proposta. Sub-FIPE com autovistoria
+      // não passa por aqui (a autovistoria é materializada por outro fluxo).
+      if (tipoVistoria === 'agendada' || tipoVistoria === 'agendada_base') {
+        try {
+          const { data: jaExiste } = await supabase
+            .from('agendamentos_base')
+            .select('id')
+            .eq('cotacao_id', cotacaoId)
+            .maybeSingle();
+          if (!jaExiste) {
+            const horario = periodoAgendado === 'tarde' ? '13:00' : '08:00';
+            const veiculoDesc = `${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''}`.trim();
+            const { error: agErr } = await supabase.from('agendamentos_base').insert({
+              cotacao_id: cotacaoId,
+              data_agendada: dataAgendada,
+              horario,
+              cliente_nome: cotacao.nome_solicitante || '',
+              cliente_telefone: cotacao.telefone1_solicitante || '',
+              veiculo_placa: cotacao.veiculo_placa || '',
+              veiculo_descricao: veiculoDesc,
+              status: 'agendado',
+              observacoes: 'Sub-FIPE com vistoria presencial agendada (sem rastreador) — materializado para destravar fila do Cadastro/Monitoramento',
+            });
+            if (agErr) {
+              console.warn('[CriarInstalacaoPosPagamento] Falha ao materializar agendamentos_base sub-FIPE:', agErr.message);
+            } else {
+              console.log('[CriarInstalacaoPosPagamento] ✓ agendamentos_base materializado (sub-FIPE presencial)');
+            }
+          }
+        } catch (e) {
+          console.warn('[CriarInstalacaoPosPagamento] Erro materializando agendamentos_base sub-FIPE:', (e as Error).message);
+        }
+      }
     }
     if (dataAgendada && veiculoPrecisaRastreadorGuard) {
       // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
