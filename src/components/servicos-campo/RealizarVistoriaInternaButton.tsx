@@ -98,7 +98,10 @@ export function RealizarVistoriaInternaButton({
         type="button"
         variant="ghost"
         size="icon"
-        className={cn('h-7 w-7 text-primary hover:text-primary', className)}
+        className={cn(
+          'h-7 w-7 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border border-primary/30',
+          className,
+        )}
         onClick={handleClick}
         title="Realizar vistoria interna (Coordenador)"
       >
@@ -107,9 +110,11 @@ export function RealizarVistoriaInternaButton({
     ) : (
       <Button
         type="button"
-        variant="outline"
         size="sm"
-        className={cn('gap-1.5 h-9 border-primary/40 text-primary hover:bg-primary/5', className)}
+        className={cn(
+          'gap-1.5 h-9 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm font-medium',
+          className,
+        )}
         onClick={handleClick}
         title="Executar fotos, vídeo e dados do rastreador como técnico (Coordenador de Monitoramento)"
       >
