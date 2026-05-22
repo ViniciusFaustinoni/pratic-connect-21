@@ -97,7 +97,7 @@ export function useVeiculosSuspensos() {
           marca: v.marca,
           cobertura_suspensa_motivo: v.cobertura_suspensa_motivo,
           cobertura_suspensa_em: v.cobertura_suspensa_em,
-          contrato_id: v.contrato_id,
+          contrato_id: null,
           associado_id: v.associado_id,
           associado_nome: v.associado?.nome ?? null,
           associado_cpf: v.associado?.cpf ?? null,
