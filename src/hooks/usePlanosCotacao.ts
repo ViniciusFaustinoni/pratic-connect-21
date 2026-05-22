@@ -8,6 +8,7 @@ import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 
 
 import { useAllEligibilityRules, checkAllRules, findModelEligibility, type VehicleContext, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
+import { resolverTipoPorElegibilidade, type ResolverResult } from '@/lib/veiculo/resolverTipoPorElegibilidade';
 
 const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
 const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
@@ -546,10 +547,23 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     return { planos: sorted, planosNegados: negados };
   }, [params, planosBanco, planoCoberturasData, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading, allEligibilityRules]);
 
+  // === Resolver de tipo de veículo (fonte canônica) ===
+  // Roda elegibilidade IGNORANDO categoria_veiculo. Os planos que passarem
+  // são candidatos; o vehicle_type de cada product_line discrimina o tipo.
+  const tipoResolver = useMemo<ResolverResult>(() => {
+    if (!params.valorFipe || params.valorFipe <= 0 || !planosBanco || dependenciasCriticasLoading) {
+      return { tipo: null, motivo: null, bloqueio: null, candidatosMoto: [], candidatosCarro: [] };
+    }
+    const ctx = buildVehicleContext(params);
+    return resolverTipoPorElegibilidade(planosBanco as any, allEligibilityRules, ctx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, planosBanco, allEligibilityRules, regioes, dependenciasCriticasLoading]);
+
   return {
     planos,
     planosNegados,
     isLoading: dependenciasCriticasLoading,
+    tipoResolver,
   };
 }
 
