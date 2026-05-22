@@ -413,6 +413,9 @@ export function useDuplicatePlan() {
         codigo: `${planData.codigo}-copia-${Date.now()}`,
         slug: `${planData.slug || planData.codigo}-copia-${Date.now()}`,
         ativo: false,
+        // SGA code is NEVER copied — must be remapped manually in SGA Hinova panel.
+        // Unique partial index (codigo_sga_plano WHERE NOT NULL) would otherwise collide.
+        codigo_sga_plano: null,
       };
 
       const { data: createdPlan, error: createError } = await supabase
