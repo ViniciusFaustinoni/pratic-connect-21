@@ -26,6 +26,8 @@ import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Wrench, Camera, ChevronDown } from 'lucide-react';
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
+import { RefreshCw } from 'lucide-react';
+import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 
 interface Props {
   open: boolean;
