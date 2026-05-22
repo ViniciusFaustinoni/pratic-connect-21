@@ -66,11 +66,13 @@ const STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok
 };
 
 const TONE_CLASS: Record<string, string> = {
-  info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-0',
-  warn: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-0',
-  ok: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-0',
-  danger: 'bg-red-500/15 text-red-700 dark:text-red-300 border-0',
+  info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+  warn: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  ok: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+  danger: 'bg-red-500/15 text-red-700 dark:text-red-300',
 };
+
+const PILL = 'inline-flex items-center h-5 px-2 rounded-md text-[10px] font-semibold whitespace-nowrap';
 
 export function TrocaTitularidadeBadge({ cotacaoId, tipoEntrada }: TrocaTitularidadeBadgeProps) {
   const isTroca = tipoEntrada === 'troca_titularidade';
@@ -95,18 +97,18 @@ export function TrocaTitularidadeBadge({ cotacaoId, tipoEntrada }: TrocaTitulari
           : ArrowRightLeft;
 
   return (
-    <div className="flex flex-col gap-1 w-fit">
-      <Badge className={cn(TONE_CLASS[cfg.tone], 'text-[10px] px-2 py-0.5 rounded-full')}>
-        <Icon className="h-2.5 w-2.5 mr-1" />
+    <div className="flex flex-col gap-1 items-start">
+      <span className={cn(PILL, TONE_CLASS[cfg.tone])}>
+        <Icon className="h-2.5 w-2.5 mr-1 shrink-0" />
         {cfg.label}
-      </Badge>
+      </span>
       {debitosAbertos.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-0 text-[10px] px-2 py-0.5 rounded-full cursor-help">
-              <AlertTriangle className="h-2.5 w-2.5 mr-1" />
+            <span className={cn(PILL, 'bg-red-500/15 text-red-700 dark:text-red-300 cursor-help')}>
+              <AlertTriangle className="h-2.5 w-2.5 mr-1 shrink-0" />
               Associado com pendência
-            </Badge>
+            </span>
           </TooltipTrigger>
           <TooltipContent side="right">
             {debitosAbertos.length} boleto(s) em aberto · R${' '}
@@ -115,10 +117,10 @@ export function TrocaTitularidadeBadge({ cotacaoId, tipoEntrada }: TrocaTitulari
         </Tooltip>
       )}
       {troca.status === 'aguardando_cadastro' && !debitosAbertos.length && (
-        <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-0 text-[10px] px-2 py-0.5 rounded-full">
-          <CheckCircle2 className="h-2.5 w-2.5 mr-1" />
+        <span className={cn(PILL, 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300')}>
+          <CheckCircle2 className="h-2.5 w-2.5 mr-1 shrink-0" />
           Placa liberada
-        </Badge>
+        </span>
       )}
     </div>
   );
