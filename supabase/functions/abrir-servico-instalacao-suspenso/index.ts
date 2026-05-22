@@ -143,9 +143,8 @@ serve(async (req) => {
           data_agendada: hoje,
           periodo: 'manha',
           status: 'agendada',
-          cep: contrato.cep, logradouro: contrato.logradouro, numero: contrato.numero,
-          bairro: contrato.bairro, cidade: contrato.cidade, uf: contrato.uf,
-          endereco_latitude: contrato.latitude, endereco_longitude: contrato.longitude,
+          cep: contrato.cliente_cep, logradouro: contrato.cliente_logradouro, numero: contrato.cliente_numero,
+          bairro: contrato.cliente_bairro, cidade: contrato.cliente_cidade, uf: contrato.cliente_uf,
           local_vistoria: 'cliente',
         })
         .select('id')
