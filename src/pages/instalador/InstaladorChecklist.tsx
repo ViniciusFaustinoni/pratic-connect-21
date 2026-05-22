@@ -105,9 +105,21 @@ const ETAPAS = [
 
 type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: string; fotos?: string[] }>;
 
-export default function InstaladorChecklist() {
-  const { id } = useParams<{ id: string }>();
+interface InstaladorChecklistProps {
+  /** Quando passado, sobrepõe o id da rota — usado quando a tela é embedada em modal (ex.: Coordenador de Monitoramento). */
+  servicoIdProp?: string;
+  /** Callback de saída — substitui o navigate('/instalador') quando embedado. */
+  onClose?: () => void;
+}
+
+export default function InstaladorChecklist({ servicoIdProp, onClose }: InstaladorChecklistProps = {}) {
+  const params = useParams<{ id: string }>();
+  const id = servicoIdProp ?? params.id;
   const navigate = useNavigate();
+  const exitToList = () => {
+    if (onClose) onClose();
+    else navigate('/instalador');
+  };
   
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [checklist, setChecklist] = useState<ChecklistState>(() => 
