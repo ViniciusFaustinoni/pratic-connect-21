@@ -1239,7 +1239,8 @@ export function useDuplicateProductLine() {
           codigo: `${(planData.codigo || '').slice(0, 70)}-c-${uid()}`,
           slug: `${(planData.slug || planData.codigo || '').slice(0, 70)}-c-${uid()}`,
           product_line_id: createdLine.id,
-          ativo: true,
+          // Unificado: toda duplicação nasce inativa — operador revisa e ativa
+          ativo: false,
           categoria: tipoVeiculo === 'motorcycle' ? 'moto' : tipoVeiculo === 'car' ? 'carro' : planData.categoria,
           // SGA code nunca é copiado — cada plano filho precisa ser remapeado manualmente
           codigo_sga_plano: null,
@@ -1486,7 +1487,8 @@ export function useDuplicateBenefit() {
         ...benefitData,
         name: `${(benefitData.name || '').slice(0, 140)} (cópia)`,
         slug: `${(benefitData.slug || 'ben').slice(0, 80)}-cp-${suffix}`,
-        is_active: original.is_active ?? true,
+        // Unificado: toda duplicação nasce inativa
+        is_active: false,
         // SGA code nunca é copiado — mapeamento manual posterior
         codigo_sga: null,
       };
@@ -1511,7 +1513,26 @@ export function useDuplicateBenefit() {
           ...rule,
           entity_id: data.id,
         }));
-        await supabase.from('entity_eligibility_rules').insert(newRules);
+        const { error: rulesErr } = await supabase.from('entity_eligibility_rules').insert(newRules);
+        if (rulesErr) throw new Error(`Falha ao copiar regras de elegibilidade: ${rulesErr.message}`);
+      }
+
+      // 3. Copy benefit_category_exclusions (restrições de categoria)
+      const { data: exclusions, error: exclFetchErr } = await supabase
+        .from('benefit_category_exclusions')
+        .select('*')
+        .eq('benefit_id', id);
+      if (exclFetchErr) throw new Error(`Falha ao ler restrições de categoria: ${exclFetchErr.message}`);
+
+      if (exclusions && exclusions.length > 0) {
+        const newExclusions = exclusions.map(({ id: _eid, created_at: _eca, ...excl }) => ({
+          ...excl,
+          benefit_id: data.id,
+        }));
+        const { error: exclInsErr } = await supabase
+          .from('benefit_category_exclusions')
+          .insert(newExclusions);
+        if (exclInsErr) throw new Error(`Falha ao copiar restrições de categoria: ${exclInsErr.message}`);
       }
 
       return data;
