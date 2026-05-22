@@ -12,6 +12,7 @@ import { registrarLog } from '@/hooks/useAuditLog';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { VistoriaInternaDialog } from '@/components/monitoramento/VistoriaInternaDialog';
 
 function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: boolean }) {
   const navigate = useNavigate();
