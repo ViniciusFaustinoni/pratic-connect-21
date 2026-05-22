@@ -335,7 +335,7 @@ export function buildFotosPayload(
   const descartadasSemTipo: Array<{ id: string; tipo: string }> = [];
   const descartadasVideo: Array<{ id: string; arquivo_url: string }> = [];
   const tiposFallback15: Array<{ id: string; tipo: string }> = [];
-...
+
   for (const doc of documentos) {
     if (!doc.arquivo_url) {
       descartadasSemLink.push(doc.id);
