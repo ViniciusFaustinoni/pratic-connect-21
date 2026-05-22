@@ -3531,6 +3531,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           setTimeout(() => buscarPorPlaca(), 100);
         }}
       />
+
+      {/* Bloqueio canônico: tipo de veículo não resolvido pela elegibilidade */}
+      <BloqueioTipoVeiculoModal
+        open={showBloqueioTipoVeiculo}
+        bloqueio={tipoResolver.bloqueio}
+        onClose={() => setShowBloqueioTipoVeiculo(false)}
+        onResolverManual={(tipo) => {
+          setTipoVeiculoManualOverride(tipo);
+          setShowBloqueioTipoVeiculo(false);
+          // reabre fluxo de submit imediatamente após escolha
+          form.handleSubmit(onSubmit)();
+        }}
+      />
     </>
   );
 }
