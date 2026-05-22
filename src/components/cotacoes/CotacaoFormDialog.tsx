@@ -908,6 +908,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setJustificativaFipeMenor('');
       setTipoPlacaSelecionado('');
       setCombustivelSelecionado('');
+      setIsZeroKm(null);
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 
