@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePropostaStats, usePropostasPendentes } from '@/hooks/usePropostasPendentes';
+import { useCotacoesLinkPublicoIncompletoCount } from '@/hooks/useCotacoesLinkPublicoIncompleto';
+import { Link2Off } from 'lucide-react';
 import { useCadastroPerformance } from '@/hooks/useCadastroPerformance';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
