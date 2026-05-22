@@ -87,7 +87,7 @@ serve(async (req) => {
       const dadosNovo = (troca.novo_titular_dados || {}) as Record<string, string>;
       const cpfLimpo = (dadosNovo.cpf || "").replace(/\D/g, "");
       const { data: vehicleData } = await supabase
-        .from("veiculos").select("placa, chassi, renavam, marca, modelo, ano, cor, valor_fipe").eq("id", troca.veiculo_id).maybeSingle();
+        .from("veiculos").select("placa, chassi, renavam, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe").eq("id", troca.veiculo_id).maybeSingle();
 
       let sgaCodAss: number | null = null;
       let sgaCodVeic: number | null = null;
@@ -611,7 +611,7 @@ serve(async (req) => {
     // Copy vehicle data for the contract snapshot
     const { data: veiculoData } = await supabase
       .from("veiculos")
-      .select("placa, marca, modelo, ano, cor, chassi, renavam, valor_fipe")
+      .select("placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, renavam, valor_fipe")
       .eq("id", veiculoId)
       .maybeSingle();
 
@@ -619,7 +619,7 @@ serve(async (req) => {
       contratoData.veiculo_placa = veiculoData.placa;
       contratoData.veiculo_marca = veiculoData.marca;
       contratoData.veiculo_modelo = veiculoData.modelo;
-      contratoData.veiculo_ano = veiculoData.ano;
+      contratoData.veiculo_ano = veiculoData.ano_modelo;
       contratoData.veiculo_cor = veiculoData.cor;
       contratoData.veiculo_chassi = veiculoData.chassi;
       contratoData.veiculo_renavam = veiculoData.renavam;
