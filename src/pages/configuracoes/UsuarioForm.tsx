@@ -119,6 +119,22 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
 
   const allModules = Object.keys(MODULE_LABELS);
 
+  // Conjunto de módulos JÁ liberados pelo perfil — overlay aditivo no card.
+  const { getPermissionsForRoles } = useAppRoles();
+  const modulesFromPerfil = React.useMemo(() => {
+    const set = new Set<string>();
+    const perms = getPermissionsForRoles(perfis || []);
+    perms.forEach(p => {
+      const m = PERMISSION_TO_MODULE[p];
+      if (m) set.add(m);
+    });
+    // Diretor / Admin Master / Desenvolvedor liberam tudo na prática.
+    if ((perfis || []).some(p => ['diretor', 'admin_master', 'desenvolvedor'].includes(p))) {
+      allModules.forEach(m => set.add(m));
+    }
+    return set;
+  }, [perfis, getPermissionsForRoles]);
+
   if (!userId) {
     return (
       <Card className="border-border/50">
@@ -145,7 +161,7 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
               Acesso a Módulos
             </CardTitle>
             <CardDescription>
-              Configure quais módulos este usuário pode visualizar e editar
+              Conceda módulos adicionais a este usuário, além dos já liberados pelo perfil de acesso. Desmarcar aqui não remove acessos concedidos pelo perfil — para isso, ajuste o perfil acima.
             </CardDescription>
           </div>
           {hasChanges && (
@@ -167,25 +183,34 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
               {allModules.map(mod => {
                 const state = getModuleState(mod);
                 const isChanged = !!localChanges[mod];
+                const fromPerfil = modulesFromPerfil.has(mod);
+                const effectiveOn = state.visible || fromPerfil;
                 return (
                   <div
                     key={mod}
                     className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${
                       isChanged ? 'border-amber-500/50 bg-amber-500/5' :
+                      fromPerfil ? 'border-emerald-500/30 bg-emerald-500/5' :
                       state.visible ? 'border-primary/30 bg-primary/5' : 'border-border/50'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Switch
-                        checked={state.visible}
-                        onCheckedChange={() => toggleVisible(mod)}
+                        checked={effectiveOn}
+                        disabled={fromPerfil}
+                        onCheckedChange={() => !fromPerfil && toggleVisible(mod)}
                         className="scale-75"
                       />
-                      <span className={`text-sm font-medium ${state.visible ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      <span className={`text-sm font-medium truncate ${effectiveOn ? 'text-foreground' : 'text-muted-foreground'}`}>
                         {MODULE_LABELS[mod]}
                       </span>
+                      {fromPerfil && (
+                        <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500 bg-emerald-500/10 shrink-0">
+                          Já incluso no perfil
+                        </Badge>
+                      )}
                     </div>
-                    {state.visible && (
+                    {!fromPerfil && state.visible && (
                       <button
                         onClick={() => toggleCanEdit(mod)}
                         className={`p-1 rounded transition-colors ${
