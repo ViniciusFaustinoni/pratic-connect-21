@@ -978,7 +978,12 @@ export default function AprovacaoInstalacaoDetalhe() {
         };
 
         const mostrarAprovar = subEstado === 'PRONTO_PARA_ACEITE_FINAL';
-        const mostrarDevolver = subEstado === 'AGUARDA_INSTALACAO_TECNICA';
+        // Devolver ao Cadastro: caminho de exceção SEMPRE visível quando há
+        // cadastro_aprovado=true (não há nada a devolver se já está false).
+        // Cobre tanto o fluxo canônico de autovistoria opcional (AGUARDA_INSTALACAO_TECNICA)
+        // quanto saneamentos de casos pré-correção que ficaram presos no aceite final.
+        const mostrarDevolver = !!servico?.contrato_id && cadastroAprovado;
+        const devolverEhPrimario = subEstado === 'AGUARDA_INSTALACAO_TECNICA';
         const mostrarSolicitarVistoria =
           subEstado === 'FALTA_RASTREADOR_FISICO' ||
           (subFipe && subEstado === 'PRONTO_PARA_ACEITE_FINAL');
