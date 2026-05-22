@@ -1719,10 +1719,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         veiculo_marca: marcaVeiculo,
         veiculo_modelo: modeloVeiculo,
         veiculo_ano: anoVeiculo,
-        veiculo_placa: isZeroKm ? null : (placa || veiculoEncontrado?.extractedPlate || null),
-        // 0KM: marca fonte de verdade para contrato-gerar / SGA Hinova / Softruck.
+        veiculo_placa: isZeroKm === true ? null : (placa || veiculoEncontrado?.extractedPlate || null),
+        // 0KM: gate canônico. Persiste boolean explícito (true/false). Quando
+        // null (cotação salva sem decisão), o backend bloqueia em contrato-gerar.
         // Ver mem://logic/quotation/cotacao-0km-fluxo-canonico
-        veiculo_zero_km: isZeroKm || null,
+        veiculo_zero_km: typeof isZeroKm === 'boolean' ? isZeroKm : null,
         veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
         // Número de portas vindo do CRLV/plate-lookup (snapshot para o termo)
         numero_portas: (() => {
