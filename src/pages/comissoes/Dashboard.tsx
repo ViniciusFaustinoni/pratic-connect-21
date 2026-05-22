@@ -29,6 +29,7 @@ export default function DashboardComissoes() {
     status,
     tipoLancamento,
   });
+  const { data: semGrade } = useVendedoresSemGrade(dateRange?.from, dateRange?.to || dateRange?.from);
   const [modal, setModal] = useState<{ title: string; items: ComissaoDashboardItem[] } | null>(null);
 
   const pendentes = useMemo(() => items.filter(i => ['pendente', 'aprovada'].includes(i.status)), [items]);
