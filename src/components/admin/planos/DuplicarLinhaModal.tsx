@@ -83,6 +83,14 @@ export function DuplicarLinhaModal({ open, onOpenChange, linha }: DuplicarLinhaM
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <Alert variant="default" className="border-warning/40 bg-warning/5">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertTitle className="text-sm">Códigos SGA não são copiados</AlertTitle>
+            <AlertDescription className="text-xs">
+              Os planos, coberturas e benefícios clonados nascem sem código SGA. Mapeie cada um em <strong>Configurações › Integrações › SGA Hinova</strong> antes de ativá-los.
+            </AlertDescription>
+          </Alert>
+
           <div className="space-y-2">
             <Label htmlFor="nome-linha">Nome da linha</Label>
             <Input
