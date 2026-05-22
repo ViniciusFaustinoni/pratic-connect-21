@@ -173,9 +173,8 @@ serve(async (req) => {
         cotacao_id: contrato.cotacao_id,
         profissional_id: userId,
         instalacao_origem_id: instalacaoId,
-        cep: contrato.cep, logradouro: contrato.logradouro, numero: contrato.numero,
-        bairro: contrato.bairro, cidade: contrato.cidade, uf: contrato.uf,
-        latitude: contrato.latitude, longitude: contrato.longitude,
+        cep: contrato.cliente_cep, logradouro: contrato.cliente_logradouro, numero: contrato.cliente_numero,
+        bairro: contrato.cliente_bairro, cidade: contrato.cliente_cidade, uf: contrato.cliente_uf,
         local_vistoria: 'cliente',
         origem: 'vistoria_interna_coordenador_suspenso',
       })
