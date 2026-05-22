@@ -102,7 +102,7 @@ serve(async (req) => {
     // faz PostgREST devolver erro silencioso e o contrato vir como null.
     const { data: contrato, error: cErr } = await supabase
       .from('contratos')
-      .select('id, associado_id, cotacao_id, cep, logradouro, numero, bairro, cidade, uf, latitude, longitude')
+      .select('id, associado_id, cotacao_id, cliente_cep, cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf')
       .eq('veiculo_id', veiculoId)
       .neq('status', 'cancelado')
       .order('created_at', { ascending: false })
@@ -143,9 +143,8 @@ serve(async (req) => {
           data_agendada: hoje,
           periodo: 'manha',
           status: 'agendada',
-          cep: contrato.cep, logradouro: contrato.logradouro, numero: contrato.numero,
-          bairro: contrato.bairro, cidade: contrato.cidade, uf: contrato.uf,
-          endereco_latitude: contrato.latitude, endereco_longitude: contrato.longitude,
+          cep: contrato.cliente_cep, logradouro: contrato.cliente_logradouro, numero: contrato.cliente_numero,
+          bairro: contrato.cliente_bairro, cidade: contrato.cliente_cidade, uf: contrato.cliente_uf,
           local_vistoria: 'cliente',
         })
         .select('id')
@@ -174,9 +173,8 @@ serve(async (req) => {
         cotacao_id: contrato.cotacao_id,
         profissional_id: userId,
         instalacao_origem_id: instalacaoId,
-        cep: contrato.cep, logradouro: contrato.logradouro, numero: contrato.numero,
-        bairro: contrato.bairro, cidade: contrato.cidade, uf: contrato.uf,
-        latitude: contrato.latitude, longitude: contrato.longitude,
+        cep: contrato.cliente_cep, logradouro: contrato.cliente_logradouro, numero: contrato.cliente_numero,
+        bairro: contrato.cliente_bairro, cidade: contrato.cliente_cidade, uf: contrato.cliente_uf,
         local_vistoria: 'cliente',
         origem: 'vistoria_interna_coordenador_suspenso',
       })
