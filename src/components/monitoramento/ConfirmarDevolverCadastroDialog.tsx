@@ -34,7 +34,10 @@ export function ConfirmarDevolverCadastroDialog({ open, onOpenChange, isPending,
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">Motivo (interno, opcional)</label>
+          <label className="text-sm text-muted-foreground">
+            Motivo <span className="text-destructive">*</span>
+            <span className="ml-1 text-xs">(obrigatório — fica registrado em auditoria)</span>
+          </label>
           <Textarea
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
@@ -50,8 +53,8 @@ export function ConfirmarDevolverCadastroDialog({ open, onOpenChange, isPending,
           </Button>
           <Button
             className="bg-amber-500 hover:bg-amber-500/90 text-white"
-            onClick={() => onConfirm(motivo)}
-            disabled={isPending}
+            onClick={() => onConfirm(motivo.trim())}
+            disabled={isPending || motivo.trim().length < 5}
           >
             {isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
