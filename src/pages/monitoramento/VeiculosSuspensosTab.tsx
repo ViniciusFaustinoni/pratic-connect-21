@@ -120,9 +120,15 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
           </Button>
         )}
       </CardContent>
+      <VistoriaInternaDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        servicoId={servicoIdAberto}
+      />
     </Card>
   );
 }
+
 
 export default function VeiculosSuspensosTab() {
   const { data, isLoading } = useVeiculosSuspensos();
