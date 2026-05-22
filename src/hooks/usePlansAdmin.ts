@@ -413,6 +413,9 @@ export function useDuplicatePlan() {
         codigo: `${planData.codigo}-copia-${Date.now()}`,
         slug: `${planData.slug || planData.codigo}-copia-${Date.now()}`,
         ativo: false,
+        // SGA code is NEVER copied — must be remapped manually in SGA Hinova panel.
+        // Unique partial index (codigo_sga_plano WHERE NOT NULL) would otherwise collide.
+        codigo_sga_plano: null,
       };
 
       const { data: createdPlan, error: createError } = await supabase
@@ -454,13 +457,15 @@ export function useDuplicatePlan() {
         for (const pb of planos_beneficios as any[]) {
           if (!pb.benefit_id) continue;
 
-          const { data: origBenefit } = await supabase
+          const { data: origBenefit, error: origBenefitErr } = await supabase
             .from('benefits')
             .select('*')
             .eq('id', pb.benefit_id)
             .single();
 
-          if (!origBenefit) continue;
+          if (origBenefitErr || !origBenefit) {
+            throw new Error(`Falha ao ler benefício original (id ${pb.benefit_id}): ${origBenefitErr?.message || 'não encontrado'}`);
+          }
 
           const { id: bId, created_at: bCreated, ...bData } = origBenefit;
           const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -471,13 +476,17 @@ export function useDuplicatePlan() {
               name: sufixo ? `${bData.name}${sufixo}` : bData.name,
               slug: ((bData.slug as string) || '').slice(0, 80) + uniqueSuffix,
               preco_sugerido: applyDiscount(bData.preco_sugerido, desconto),
+              // SGA code nunca é copiado — mapeamento manual posterior
+              codigo_sga: null,
             })
             .select()
             .single();
 
-          if (bError || !newBenefit) continue;
+          if (bError || !newBenefit) {
+            throw new Error(`Falha ao duplicar benefício "${origBenefit.name}": ${bError?.message || 'sem retorno'}`);
+          }
 
-          await supabase.from('planos_beneficios').insert({
+          const { error: pbErr } = await supabase.from('planos_beneficios').insert({
             plano_id: createdPlan.id,
             benefit_id: newBenefit.id,
             beneficio: pb.beneficio,
@@ -488,6 +497,7 @@ export function useDuplicatePlan() {
             display_order: pb.display_order,
             incluso: pb.incluso,
           });
+          if (pbErr) throw new Error(`Falha ao vincular benefício "${origBenefit.name}" ao plano: ${pbErr.message}`);
 
           // Clone eligibility rules for this benefit (with overrides)
           const { data: bRules } = await supabase
@@ -504,7 +514,7 @@ export function useDuplicatePlan() {
           const finalBRules = applyBulkRuleOverrides(discountedBRules, newBenefit.id, 'beneficio', bulkOverrides);
           if (finalBRules.length > 0) {
             const { error: bRulesErr } = await supabase.from('entity_eligibility_rules').insert(finalBRules);
-            if (bRulesErr) { console.error('Erro ao inserir regras do benefício:', bRulesErr); throw bRulesErr; }
+            if (bRulesErr) throw new Error(`Falha ao copiar regras de elegibilidade do benefício "${origBenefit.name}": ${bRulesErr.message}`);
           }
 
           // Clone category exclusions
@@ -518,10 +528,12 @@ export function useDuplicatePlan() {
               benefit_id: newBenefit.id,
               categoria_veiculo: e.categoria_veiculo,
             }));
-            await supabase.from('benefit_category_exclusions').insert(clonedExcl);
+            const { error: exclErr } = await supabase.from('benefit_category_exclusions').insert(clonedExcl);
+            if (exclErr) throw new Error(`Falha ao copiar exclusões de categoria do benefício "${origBenefit.name}": ${exclErr.message}`);
           }
         }
       }
+
 
       // Duplicate region links
       if (planos_regioes && (planos_regioes as any[]).length > 0) {
@@ -540,13 +552,15 @@ export function useDuplicatePlan() {
 
       if (originalCoberturas && originalCoberturas.length > 0) {
         for (const pc of originalCoberturas) {
-          const { data: origCob } = await supabase
+          const { data: origCob, error: origCobErr } = await supabase
             .from('coberturas')
             .select('*')
             .eq('id', pc.cobertura_id)
             .single();
 
-          if (!origCob) continue;
+          if (origCobErr || !origCob) {
+            throw new Error(`Falha ao ler cobertura original (id ${pc.cobertura_id}): ${origCobErr?.message || 'não encontrada'}`);
+          }
 
           const { id: cobId, created_at: cobCreated, ...cobData } = origCob;
           const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -559,11 +573,15 @@ export function useDuplicatePlan() {
               valor: applyDiscount(cobData.valor, desconto),
               valor_limite: applyDiscount(cobData.valor_limite, desconto),
               franquia_valor: applyDiscount(cobData.franquia_valor, desconto),
+              // SGA code nunca é copiado — mapeamento manual posterior
+              codigo_sga: null,
             })
             .select()
             .single();
 
-          if (cobError || !newCob) continue;
+          if (cobError || !newCob) {
+            throw new Error(`Falha ao duplicar cobertura "${origCob.nome}": ${cobError?.message || 'sem retorno'}`);
+          }
 
           // Fetch original planos_coberturas data to preserve all fields
           const { data: origPC } = await supabase
@@ -573,7 +591,7 @@ export function useDuplicatePlan() {
             .eq('cobertura_id', pc.cobertura_id)
             .single();
 
-          await supabase.from('planos_coberturas').insert({
+          const { error: pcErr } = await supabase.from('planos_coberturas').insert({
             plano_id: createdPlan.id,
             cobertura_id: newCob.id,
             carencia_dias: origPC?.carencia_dias,
@@ -583,6 +601,7 @@ export function useDuplicatePlan() {
             percentual_cobertura: origPC?.percentual_cobertura,
             valor_limite: applyDiscount(origPC?.valor_limite, desconto),
           });
+          if (pcErr) throw new Error(`Falha ao vincular cobertura "${origCob.nome}" ao plano: ${pcErr.message}`);
 
           // Clone eligibility rules for this coverage (with overrides)
           const { data: rules } = await supabase
@@ -599,10 +618,11 @@ export function useDuplicatePlan() {
           const finalRules = applyBulkRuleOverrides(discountedRules, newCob.id, 'cobertura', bulkOverrides);
           if (finalRules.length > 0) {
             const { error: cobRulesErr } = await supabase.from('entity_eligibility_rules').insert(finalRules);
-            if (cobRulesErr) { console.error('Erro ao inserir regras da cobertura:', cobRulesErr); throw cobRulesErr; }
+            if (cobRulesErr) throw new Error(`Falha ao copiar regras de elegibilidade da cobertura "${origCob.nome}": ${cobRulesErr.message}`);
           }
         }
       }
+
 
       return createdPlan;
     },
@@ -906,6 +926,8 @@ export function useDuplicateCobertura() {
         nome: `${(cobData.nome || '').slice(0, 140)} (cópia)`,
         codigo: `${(cobData.codigo || 'COB').slice(0, 80)}-CP-${suffix}`,
         ativo: false,
+        // SGA code nunca é copiado — mapeamento manual posterior
+        codigo_sga: null,
       };
 
       const { data, error } = await supabase
@@ -1219,8 +1241,11 @@ export function useDuplicateProductLine() {
           product_line_id: createdLine.id,
           ativo: true,
           categoria: tipoVeiculo === 'motorcycle' ? 'moto' : tipoVeiculo === 'car' ? 'carro' : planData.categoria,
+          // SGA code nunca é copiado — cada plano filho precisa ser remapeado manualmente
+          codigo_sga_plano: null,
         };
       });
+
 
       const { data: createdPlans, error: batchPlanErr } = await supabase
         .from('planos').insert(newPlansData).select();
@@ -1279,6 +1304,8 @@ export function useDuplicateProductLine() {
             name: sufixo ? `${bData.name}${sufixo}` : bData.name,
             slug: ((bData.slug as string) || '').slice(0, 80) + `-${uid()}`,
             preco_sugerido: applyDiscount(bData.preco_sugerido, desconto),
+            // SGA code nunca é copiado — mapeamento manual posterior
+            codigo_sga: null,
           });
           benefitOriginMap.push({
             origBenefitId: pb.benefit_id,
@@ -1361,6 +1388,8 @@ export function useDuplicateProductLine() {
           valor: applyDiscount(cobData.valor, desconto),
           valor_limite: applyDiscount(cobData.valor_limite, desconto),
           franquia_valor: applyDiscount(cobData.franquia_valor, desconto),
+          // SGA code nunca é copiado — mapeamento manual posterior
+          codigo_sga: null,
         });
         cobOriginMap.push({
           origCobId: pc.cobertura_id,
@@ -1458,6 +1487,8 @@ export function useDuplicateBenefit() {
         name: `${(benefitData.name || '').slice(0, 140)} (cópia)`,
         slug: `${(benefitData.slug || 'ben').slice(0, 80)}-cp-${suffix}`,
         is_active: original.is_active ?? true,
+        // SGA code nunca é copiado — mapeamento manual posterior
+        codigo_sga: null,
       };
 
       const { data, error } = await supabase
