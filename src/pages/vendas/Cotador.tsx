@@ -976,6 +976,10 @@ export default function CotadorPage() {
         veiculo_antigo_placa: isSubstituicao ? veiculoAntigoPlaca : undefined,
         veiculo_antigo_modelo: isSubstituicao ? veiculoAntigoModelo : undefined,
         solicitacao_substituicao_id: isSubstituicao ? solicitacaoSubstituicaoId : undefined,
+        // Snapshot canônico do tipo (derivado da elegibilidade de linhas).
+        // Cotador legado: ainda usa heurística — registra como 'legado_heuristica' até refator completo.
+        tipo_veiculo: tipoVeiculoDetectado,
+        tipo_veiculo_motivo: 'legado_heuristica',
       });
 
       setCotacaoSalva(cotacaoData);

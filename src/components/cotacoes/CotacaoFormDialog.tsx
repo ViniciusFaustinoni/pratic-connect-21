@@ -790,7 +790,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     : valorFipe;
 
   // Hook de planos calculados dinamicamente do banco
-  const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
+  const { planos: planosCalculados, planosNegados, isLoading: planosLoading, tipoResolver } = usePlanosCotacao({
     valorFipe: valorFipeParaPlanos,
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
@@ -802,6 +802,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     marca: marcaResolvida || undefined,
     modelo: modeloResolvido || undefined,
   });
+  // Tipo congelado para persistir (snapshot canônico via elegibilidade de linhas)
+  const [tipoVeiculoManualOverride, setTipoVeiculoManualOverride] = useState<'carro' | 'moto' | null>(null);
+  const tipoVeiculoCanonico: 'carro' | 'moto' = tipoVeiculoManualOverride || tipoResolver.tipo || tipoVeiculoDetectado;
+  const tipoVeiculoMotivo = tipoVeiculoManualOverride ? 'operador_resolveu' : (tipoResolver.motivo || 'legado_heuristica');
 
 
   // Faixa de preço atual onde o FIPE se enquadra
@@ -1811,6 +1815,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           solicitar_fipe_menor: !!(fipeMenorAtivo && fipeMenorInfo?.elegivel && fipeMenorInfo?.faixaInferior),
           status: 'rascunho',
           vendedor_id: vendedorIdFinal,
+          // Snapshot canônico do tipo de veículo (derivado da elegibilidade de linhas)
+          tipo_veiculo: tipoVeiculoCanonico,
+          tipo_veiculo_motivo: tipoVeiculoMotivo,
         });
 
         // Redução de Cota (Regra do 1%): aplicação AUTOMÁTICA quando elegível.

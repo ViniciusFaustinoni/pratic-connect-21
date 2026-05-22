@@ -410,6 +410,10 @@ export function useCriarCotacao() {
         })(),
         regiao: payload.regiao || null,
         nome_solicitante: payload.nome_solicitante || null,
+        // Snapshot canônico do tipo (derivado da elegibilidade de linhas).
+        // Ver mem://logic/operations/vehicle-type-detection-source
+        tipo_veiculo: payload.tipo_veiculo || null,
+        tipo_veiculo_motivo: payload.tipo_veiculo_motivo || null,
         tipo_instalacao: payload.tipo_instalacao || null,
         indicador_id: payload.indicador_id || null,
         indicador_nome: payload.indicador_nome || null,

@@ -1158,6 +1158,9 @@ serve(async (req) => {
             codigo_fipe: cotacao.codigo_fipe || null,
             uso_aplicativo: cotacao.uso_aplicativo || false,
             veiculo_categoria: cotacao.veiculo_categoria || await detectarCategoriaVeiculo(supabase, cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.categoria),
+            // Snapshot canônico carro|moto — herdado da cotação (trigger DB também enforce).
+            // Ver mem://logic/operations/vehicle-type-detection-source
+            tipo_veiculo: (cotacao as any).tipo_veiculo || null,
             // Número de portas (snapshot do CRLV/plate-lookup) — null se ausente
             veiculo_numero_portas: cotacao.numero_portas ?? null,
             // Tipo de uso (Particular/Aluguel/Particular comercial) — propaga da cotação para o termo

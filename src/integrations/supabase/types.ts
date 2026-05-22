@@ -9105,6 +9105,7 @@ export type Database = {
           status: Database["public"]["Enums"]["status_contrato"]
           tipo_atendimento: string | null
           tipo_entrada: string | null
+          tipo_veiculo: string | null
           tipo_venda: string | null
           tipo_vistoria: string | null
           updated_at: string
@@ -9234,6 +9235,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_contrato"]
           tipo_atendimento?: string | null
           tipo_entrada?: string | null
+          tipo_veiculo?: string | null
           tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
@@ -9363,6 +9365,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_contrato"]
           tipo_atendimento?: string | null
           tipo_entrada?: string | null
+          tipo_veiculo?: string | null
           tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
@@ -10146,6 +10149,8 @@ export type Database = {
           telefone2_solicitante: string | null
           tipo_entrada: string | null
           tipo_instalacao: string | null
+          tipo_veiculo: string | null
+          tipo_veiculo_motivo: string | null
           tipo_vistoria: string | null
           token_publico: string | null
           updated_at: string
@@ -10289,6 +10294,8 @@ export type Database = {
           telefone2_solicitante?: string | null
           tipo_entrada?: string | null
           tipo_instalacao?: string | null
+          tipo_veiculo?: string | null
+          tipo_veiculo_motivo?: string | null
           tipo_vistoria?: string | null
           token_publico?: string | null
           updated_at?: string
@@ -10432,6 +10439,8 @@ export type Database = {
           telefone2_solicitante?: string | null
           tipo_entrada?: string | null
           tipo_instalacao?: string | null
+          tipo_veiculo?: string | null
+          tipo_veiculo_motivo?: string | null
           tipo_vistoria?: string | null
           token_publico?: string | null
           updated_at?: string
