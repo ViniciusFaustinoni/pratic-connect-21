@@ -154,7 +154,21 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
                         {confirmando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
                         Reenviar
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => syncTermo.verificarAgora()}
+                        disabled={syncTermo.verificando}
+                      >
+                        {syncTermo.verificando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                        Verificar assinatura agora
+                      </Button>
                     </div>
+                    {syncTermo.ultimaVerificacao && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Última verificação: {syncTermo.ultimaVerificacao.toLocaleTimeString('pt-BR')}
+                      </p>
+                    )}
                   </>
                 )}
 
