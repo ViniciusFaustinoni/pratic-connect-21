@@ -419,7 +419,7 @@ export default function CotadorPage() {
     modelo: modelo || undefined,
   }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado, marca, modelo, veiculoEncontrado?.combustivel, regiao]);
   
-  const { planos: planosDB, planosNegados, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
+  const { planos: planosDB, planosNegados, isLoading: loadingPlanos, tipoResolver } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();
   const atualizarLead = useUpdateLead();
   const { data: resultadosBuscaIndicador = [], isLoading: isSearchingIndicador } = useAssociadoSearch(buscaIndicador);
