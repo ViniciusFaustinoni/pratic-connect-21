@@ -59,6 +59,12 @@ export interface VeiculoCtx {
    * Quando presente, prevalece sobre `veiculo.dia_vencimento`.
    */
   dia_vencimento_contrato?: number | null;
+  /**
+   * Código do modelo no catálogo interno Hinova. Fallback para `codigo_fipe`
+   * — Hinova aceita um OU outro no /veiculo/cadastrar. Quando presente,
+   * `buildVeiculoPayload` envia `codigo_modelo` e OMITE `codigo_fipe`.
+   */
+  codigo_modelo?: number;
 }
 
 // ============================================================
