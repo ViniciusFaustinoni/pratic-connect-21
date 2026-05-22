@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Benefit, MainCoverage, ProductLine } from '@/types/plans';
 import { clearExclusionsCache } from '@/data/restricoesCategorias';
+import { DuplicacaoTracker, registrarDuplicacao } from '@/lib/duplicacao/rollback';
 
 // ==================== PLAN TYPES ====================
 
