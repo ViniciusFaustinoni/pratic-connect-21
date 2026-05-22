@@ -102,7 +102,7 @@ serve(async (req) => {
     // faz PostgREST devolver erro silencioso e o contrato vir como null.
     const { data: contrato, error: cErr } = await supabase
       .from('contratos')
-      .select('id, associado_id, cotacao_id, cep, logradouro, numero, bairro, cidade, uf, latitude, longitude')
+      .select('id, associado_id, cotacao_id, cliente_cep, cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf')
       .eq('veiculo_id', veiculoId)
       .neq('status', 'cancelado')
       .order('created_at', { ascending: false })
