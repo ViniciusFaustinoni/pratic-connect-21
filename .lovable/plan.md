@@ -1,57 +1,108 @@
-## Caso ROSIMEIRE — Yamaha Aerox Connected ABS 2026 (0KM, chassi 9C6SGA210T0008483)
+## Adendo final — "Tratar como Manutenção" reaproveita badge `vistoria_manutencao` (indigo) já existente
 
-### Estado atual
+### Entendi a observação dos badges
 
-- Associada **sincronizada** no Hinova (codigo 30456).
-- Veículo **fila `pendente`**, 8 tentativas, `etapa_parou='veiculo'`, erro fixo: **"O MODELO enviado não foi encontrado"**.
-- `codigo_fipe=827144-5`, `valor_fipe=19.912`, `ano_modelo=2026`, `aguardando_placa_definitiva=true`, placa interna `0KM751A9`.
-- Última execução (22/05 14:22) já testou as **3 variantes** do retry: `827144-5`, `8271445`, `827144`. Todas → "MODELO não encontrado".
+A área de serviços já tem um sistema canônico de badges por tipo, em `src/components/servicos-campo/ServicoTipoBadge.tsx`:
 
-### Diagnóstico
+| Tipo | Cor | Ícone |
+|---|---|---|
+| `instalacao` | azul | Wrench |
+| `vistoria_entrada` | esmeralda | ClipboardCheck |
+| `vistoria_saida` | âmbar | ClipboardCheck |
+| `vistoria_sinistro` | vermelho | AlertOctagon |
+| `vistoria_periodica` | ciano | FileSearch |
+| **`vistoria_manutencao`** | **indigo** | **Settings** |
+| `vistoria_retirada` | roxo | PackageX |
+| `revistoria` | teal | RefreshCw |
 
-O retry de FIPE (implementado na sessão anterior) está fazendo seu trabalho — não é mais bug de formato. **O catálogo regional Hinova não tem o modelo Aerox Connected ABS 2026** vinculado a esse FIPE. Como ela é 0KM/lançamento, o catálogo Hinova ainda não reconhece o pacote `FIPE 827144-5 + ano 2026`.
+**Então não vou inventar badge laranja novo.** O fluxo "Tratar como Manutenção" vai usar a cor + ícone **indigo / Settings** que já é canônico para manutenção.
 
-Hinova aceita dois caminhos no `POST /veiculo/cadastrar`: `codigo_fipe` **ou** `codigo_modelo` (catálogo interno da regional). Hoje o sistema só envia `codigo_fipe`. Quando o catálogo é mais novo que o FIPE-lookup da regional, a única saída é mandar `codigo_modelo`.
+### Como isso muda o adendo
 
-### Plano
+**Antes:** eu propus "marcar `intencao_rastreador='manutencao'` mantendo `servicos.tipo='instalacao'/'vistoria_entrada'`".
 
-**1. Edge function nova: `hinova-listar-modelos`**
-Envelope POST autenticado para `GET /buscar/modelo` (e fallbacks `/buscar/modelos`, `/listar/modelos`) — Hinova varia o caminho entre versões, replicar o padrão já usado em `findVeiculoByChassiHinova`. Parâmetros: `marca`, `texto`, opcional `ano`. Retorna `[{codigo_modelo, descricao, ano, codigo_fipe}]`. Cache curto em memória da edge (5 min) por marca, igual já é feito em outros lookups.
+**Agora (alinhado ao sistema de badges existente):** quando o Monitoramento clica em **"Tratar como Manutenção"**, o serviço é **convertido para `tipo='vistoria_manutencao'`** — exatamente o tipo que o `ServicoTipoBadge` já sabe pintar de indigo com ícone Settings.
 
-**2. Resolver `codigo_modelo` quando FIPE falha**
-Em `supabase/functions/sga-hinova-sync/index.ts` (loop de retry de FIPE, linhas 986–1020):
-- Manter as 3 variantes de FIPE.
-- Se TODAS falharem com "MODELO não encontrado", chamar `hinova-listar-modelos` com `marca=veiculo.marca`, `texto=veiculo.modelo`, `ano=veiculo.ano_modelo`.
-- Se houver match (matching simples por substring case-insensitive, mesma heurística do `pontuarFipe` do `plate-lookup`), montar payload **sem** `codigo_fipe` e **com** `codigo_modelo`.
-- Persistir `veiculos.codigo_modelo_hinova` (campo novo) quando a variante funcionou — evita re-busca em reprocessos.
+Isso resolve badges em **todas as superfícies de uma vez**, sem código novo de UI:
+- `ServicosTable`, `ServicosMetricasCards`, `ServicosFilters` — todos já consomem `ServicoTipoBadge`
+- Card da fila Aprovação de Associados (Monitoramento) — exibe o mesmo badge
+- Tela de Atribuição Manual — exibe o mesmo badge
+- App do instalador / drawer do veículo / histórico do veículo — todos consomem o mesmo componente
 
-**3. Estender `buildVeiculoPayload`**
-- Adicionar `codigo_modelo?: number` em `VeiculoCtx`.
-- Quando presente, payload envia `codigo_modelo` **em vez** de `codigo_fipe` (regra Hinova: um ou outro).
-- Manter `valor_fipe` (Hinova continua exigindo).
+Zero badge novo. Zero cor hardcoded. Zero `BadgeManutencao` próprio.
 
-**4. Migration**
-- `ALTER TABLE veiculos ADD COLUMN codigo_modelo_hinova INT NULL;`
-- Sem trigger, sem RLS adicional.
+### Implicações do uso de `vistoria_manutencao`
 
-**5. Reprocessar Rosimeire**
-- Após o deploy, disparar manualmente `sga-hinova-sync` para o `veiculo_id=6f20a5df…`.
-- Esperado: o lookup de modelo encontra o Aerox Connected ABS 2026 na regional → cadastro do veículo OK → `sga_sync_queue` zera, `veiculos.status_sga='sincronizado'`.
-- Fallback humano se o catálogo regional REALMENTE não tem o 2026 ainda: log `cadastrar_veiculo` traz a lista de modelos retornados pelo Hinova; operador escolhe o que mais se aproxima (ex.: Aerox 2025) e digita o `codigo_modelo_hinova` na tela do veículo. Sem essa rota manual o caso continua travado por catálogo externo.
+Como `vistoria_manutencao` já existe como tipo de serviço com fluxo próprio (na aba Manutenção interna, ver `mem://features/operations/field-services-maintenance-tab-v2`), precisamos garantir que o serviço **criado/convertido pelo Monitoramento** seja distinguível por **origem**, não por tipo:
 
-**6. Memória nova** — `mem://logic/integrations/hinova-codigo-modelo-fallback`:
-> "Quando `cadastrar_veiculo` Hinova falha com 'MODELO não encontrado' após esgotar as 3 variantes de `codigo_fipe`, sga-hinova-sync busca `codigo_modelo` via `hinova-listar-modelos` (marca + texto modelo + ano) e reenvia o payload usando `codigo_modelo` em vez de `codigo_fipe`. Match persistido em `veiculos.codigo_modelo_hinova`."
+- `servicos.origem='monitoramento_aprovacao'` (valor novo) → identifica que veio do fallback do Monitoramento
+- `servicos.motivo_manutencao='Manutenção via Monitoramento — IMEI XXXXXXXXXXXXXXX'` → tooltip já mostra esse texto
+- `servicos.instalacao_origem_id` / `servicos.vistoria_origem_id` preservados → linka de volta à proposta original
+- `servicos.intencao_rastreador_imei` / `intencao_rastreador_rastreador_id` → IMEI esperado e (quando aplicável) o UUID do rastreador já vinculado
+
+A regra "uma origem = um serviço vivo" (`mem://logic/operations/servicos-um-canonico-por-origem`) continua intacta: o serviço original `instalacao`/`vistoria_entrada` é **fechado** (status terminal não-positivo, ex. `cancelada` com motivo "convertido para manutenção") **no mesmo commit** em que o novo `vistoria_manutencao` é criado.
+
+### Pré-condição checada na busca tri-fonte
+
+Operador digita IMEI → busca local + Softruck + Rede:
+
+| Resultado | O que cria |
+|---|---|
+| Em estoque local | Vincula rastreador ao veículo (`useAtivarRastreador`) + cria `vistoria_manutencao` agendada |
+| Já instalado neste mesmo veículo | Só cria `vistoria_manutencao` (vínculo já existe) |
+| Instalado em OUTRO veículo ativo | **Bloqueia** com alerta — não cria nada |
+| Existe só na Softruck/Rede | "Cadastrar e vincular" → cria linha em `rastreadores` + vincula + cria serviço |
+| Não encontrado | Cria `vistoria_manutencao` com IMEI esperado mas sem vínculo (técnico cadastra em campo) |
+
+### App do instalador
+
+Como o serviço agora é genuinamente `vistoria_manutencao`, ele entra pelo branch **já existente** do app do instalador para esse tipo (sub-fluxo `Settings` indigo, sem "Cadastrar novo rastreador" obrigatório).
+
+Adições mínimas dentro do branch:
+- Banner topo com IMEI esperado (lido de `servicos.intencao_rastreador_imei`)
+- Foto obrigatória `tipo='rastreador_existente'`
+- Botão de escape **"Não é esse rastreador / precisei substituir"** → libera fluxo de "Cadastrar novo rastreador" + grava novo IMEI no vínculo
+
+### Guards DB — passam naturalmente
+
+- `trg_guard_instalacao_concluida_exige_rastreador` — **não se aplica** (o serviço não é mais `instalacao`)
+- `trg_guard_veiculo_ativo_exige_rastreador` — passa porque o vínculo do rastreador foi criado/confirmado no ato pelo Monitoramento
+- `trg_guard_servico_autovistoria_concluida` — não se aplica (não é autovistoria)
+- `trg_guard_cobertura_rf_exige_decisao_cadastro` — intocado
+
+### O que **não** muda (invariantes preservados)
+
+- Detecção automática Diesel / FIPE ≥ 30k / Moto ≥ 9k — intocada
+- `dispensa_rastreador` — intocado
+- Fluxos paralelos: Troca, Substituição, Revistoria, Adesão, Inclusão, sub-FIPE, autovistoria 2 fotos+360°, Cadastro, SGA, `ativar-associado`, `cobertura_360_ativada_v3`
+- Aba Manutenção interna (`vistoria_manutencao` criada manualmente) — segue funcionando igual; filtramos por `origem` quando precisar diferenciar
+
+### Migration mínima
+
+Em `servicos`:
+- `intencao_rastreador_imei TEXT NULL`
+- `intencao_rastreador_rastreador_id UUID NULL REFERENCES rastreadores(id)`
+- Adicionar valor `'monitoramento_aprovacao'` ao enum/text de `origem` (ou usar `solicitado_por_modulo`)
 
 ### Arquivos envolvidos
 
-- **novo** `supabase/functions/hinova-listar-modelos/index.ts`
-- `supabase/functions/sga-hinova-sync/index.ts` (loop de retry)
-- `supabase/functions/_shared/hinova-payloads.ts` (campo + render condicional)
-- 1 migration adicionando `veiculos.codigo_modelo_hinova`
+- Migration (colunas + valor de origem)
+- **Novo** `src/components/monitoramento/MarcarManutencaoDialog.tsx` (reaproveita visual do `VincularRastreadorForm`)
+- **Novo** `src/hooks/useBuscarRastreadorTriFonte.ts`
+- **Novo** `src/hooks/useConverterParaManutencao.ts` — encerra o serviço antigo + cria `vistoria_manutencao` + (opcional) chama `useAtivarRastreador`
+- `src/components/monitoramento/AprovacaoInstalacaoDetalhe.tsx` — botão "Tratar como Manutenção" + dialog
+- App do instalador (`src/pages/instalador/...`, `src/components/servicos-campo/`) — banner IMEI esperado + foto `rastreador_existente` + botão escape no branch `vistoria_manutencao`
 - 1 leaf de memória + update do índice
 
-### Fora do escopo
+### Memória a salvar (após aprovar)
 
-- Não tocar nas regras de RENAVAM 0KM (`aguardando_placa_definitiva`) — já corretas.
-- Não tocar no fluxo de associado (já sincronizado).
-- Sem UI nova nesta rodada — o `codigo_modelo_hinova` pode ser editado pelo Drawer do veículo na rodada seguinte se for necessário.
+`mem://logic/operations/intencao-rastreador-fallback-monitoramento`:
+> "Botão 'Tratar como Manutenção' no Monitoramento converte o serviço de `instalacao`/`vistoria_entrada` para `vistoria_manutencao` (badge indigo + ícone Settings — já canônico em `ServicoTipoBadge`). Usa motor de busca tri-fonte (local + Softruck + Rede) por IMEI; vincula imediatamente se achar em estoque; só cria o serviço se já for o mesmo veículo; bloqueia se for outro veículo ativo. Diferencia da manutenção interna pela `origem='monitoramento_aprovacao'`. Serviço antigo é fechado no mesmo commit (1-origem-1-serviço-vivo). App do instalador entra pelo branch existente de `vistoria_manutencao` + banner IMEI esperado + foto `rastreador_existente` + escape para cadastro normal. Guards DB passam naturalmente. Não afeta Troca, Substituição, Revistoria, Adesão, sub-FIPE, autovistoria, SGA, ativar-associado."
+
+### Fora de escopo
+
+- Inventar badge/cor novos (usamos o indigo/Settings já existente)
+- Nova rota no app do instalador (só adições no branch `vistoria_manutencao` já existente)
+- Mexer em `dispensa_rastreador` ou detecção automática FIPE/Diesel
+
+Confirma esse desenho final (badge canônico `vistoria_manutencao` indigo, sem cor nova) pra eu mudar pra build e executar?
