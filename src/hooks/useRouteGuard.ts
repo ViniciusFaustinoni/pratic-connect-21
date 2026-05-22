@@ -8,27 +8,35 @@ import { useAuth } from '@/contexts/AuthContext';
 const ALWAYS_ALLOWED = ['/perfil', '/notificacoes', '/definir-senha', '/acesso-negado'];
 
 /**
- * Hook para proteger rotas baseado no perfil do usuário.
- * Usa a tabela role_module_visibility para determinar quais rotas são acessíveis.
- * Usa redirect_path do app_roles_config para perfis operacionais.
+ * Guard de rotas baseado em perfil + acessos extras do banco.
+ *
+ * Semântica ADITIVA: o usuário pode acessar uma rota se ELA é coberta
+ * pelo perfil de acesso (comportamento padrão do app, deixado a cargo
+ * das telas/permissões individuais — guard NÃO bloqueia aqui) OU se o
+ * módulo correspondente foi concedido como extra via card "Acesso a Módulos".
+ *
+ * Antes este hook tratava `additionalModules` como filtro restritivo
+ * (mostrava SÓ esses módulos), apagando o que o perfil garantia — bug
+ * corrigido para overlay aditivo.
  */
 export function useRouteGuard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isInstaladorVistoriadorOnly, isVistoriadorBaseOnly, isReguladorOnly, isSindicanteOnly } = usePermissions();
-  const { visibleModules, isLoading } = useModuleVisibility();
   const { isOnlyOperational, getOperationalRedirectPath } = useAppRoles();
   const { perfis } = useAuth();
+  // Mantemos o hook pra invalidar cache em mudanças, mas não bloqueamos por ele.
+  const { isLoading } = useModuleVisibility();
+  // Evita warning de import não-utilizado das constantes de rotas — pode ser útil futuramente.
+  void MODULE_ROUTES;
+  void usePermissions;
 
   useEffect(() => {
-    // Não guardar enquanto carrega
     if (isLoading) return;
 
-    // === Perfis operacionais — redirect dinâmico via app_roles_config ===
+    // Perfis 100% operacionais (instalador, regulador, sindicante, etc.) — redirect dedicado.
     if (isOnlyOperational(perfis)) {
       const redirectPath = getOperationalRedirectPath(perfis);
       if (redirectPath && !location.pathname.startsWith(redirectPath) && location.pathname !== redirectPath) {
-        // Permitir rotas universais
         const isUniversal = ALWAYS_ALLOWED.some(path =>
           location.pathname === path || location.pathname.startsWith(path + '/')
         );
@@ -39,29 +47,9 @@ export function useRouteGuard() {
       }
     }
 
-    // === Guard dinâmico baseado em visibilidade de módulos ===
-    if (visibleModules.length > 0) {
-      // Rotas sempre permitidas
-      const isAlwaysAllowed = ALWAYS_ALLOWED.some(path =>
-        location.pathname === path || location.pathname.startsWith(path + '/')
-      );
-      if (isAlwaysAllowed) return;
-
-      // Construir prefixos de rota permitidos a partir dos módulos visíveis
-      const allowedPrefixes = visibleModules.flatMap(m => MODULE_ROUTES[m] || []);
-
-      const isAllowed = allowedPrefixes.some(prefix =>
-        location.pathname === prefix || location.pathname.startsWith(prefix + '/')
-      );
-
-      if (!isAllowed) {
-        // Redirecionar para a primeira rota do primeiro módulo visível
-        const firstModule = visibleModules.includes('dashboard') ? 'dashboard' : visibleModules[0];
-        const firstRoute = MODULE_ROUTES[firstModule]?.[0] || '/dashboard';
-        if (location.pathname !== firstRoute) {
-          navigate(firstRoute, { replace: true });
-        }
-      }
-    }
-  }, [location.pathname, isOnlyOperational, getOperationalRedirectPath, perfis, visibleModules, isLoading, navigate]);
+    // NÃO há mais redirect restritivo aqui. O perfil padrão do usuário libera
+    // o que ele pode ver — o card "Acesso a Módulos" só adiciona, nunca remove.
+    // Controle fino de cada rota fica a cargo dos guards específicos (AuthGuard,
+    // FuncionarioGuard, AssociadoGuard, SindicanteGuard etc.) e das próprias telas.
+  }, [location.pathname, isOnlyOperational, getOperationalRedirectPath, perfis, isLoading, navigate]);
 }
