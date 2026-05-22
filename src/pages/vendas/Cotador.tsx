@@ -234,6 +234,7 @@ const normalizarAno = (anoAPI: string): number => {
 
 // Função estimativa de FIPE — centralizada em src/utils/fipe.ts
 import { estimarValorFipe } from '@/utils/fipe';
+import { PerguntaZeroKmGate } from '@/components/cotacoes/PerguntaZeroKmGate';
 
 // mapearPlanosParaExibicao REMOVIDO — dados vêm direto do hook usePlanosCotacao
 
