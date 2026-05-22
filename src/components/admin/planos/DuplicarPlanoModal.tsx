@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy, Loader2, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useDuplicatePlan } from '@/hooks/usePlansAdmin';
 import { useRegioes } from '@/hooks/useRegioes';
 
