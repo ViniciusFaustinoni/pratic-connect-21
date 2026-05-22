@@ -295,7 +295,25 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                       <span className="text-sm">Assinado em {new Date(solicitacao.termo_cancelamento_assinado_em).toLocaleString('pt-BR')}</span>
                     </div>
                   ) : solicitacao.termo_cancelamento_enviado_em ? (
-                    <p className="text-sm text-amber-600">Enviado em {new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR')} — aguardando assinatura</p>
+                    <div className="space-y-2">
+                      <p className="text-sm text-amber-600">Enviado em {new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR')} — aguardando assinatura</p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => syncTermo.verificarAgora()}
+                          disabled={syncTermo.verificando}
+                        >
+                          {syncTermo.verificando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                          Verificar assinatura agora
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {syncTermo.ultimaVerificacao
+                            ? `Última verificação: ${syncTermo.ultimaVerificacao.toLocaleTimeString('pt-BR')}`
+                            : 'Sincronizando com Autentique…'}
+                        </span>
+                      </div>
+                    </div>
                   ) : (
                     <Button
                       onClick={() => enviarTermo.mutate(solicitacao.id)}
