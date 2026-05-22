@@ -219,3 +219,6 @@ verify_jwt = false
 
 [functions.consultar-nome-por-cpf]
 verify_jwt = false
+
+[functions.abrir-servico-instalacao-suspenso]
+verify_jwt = false

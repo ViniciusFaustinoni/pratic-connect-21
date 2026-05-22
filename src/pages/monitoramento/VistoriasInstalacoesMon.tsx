@@ -1,7 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ListChecks, Hand, History, Map as MapIcon } from 'lucide-react';
+import { ListChecks, Hand, History, Map as MapIcon, ShieldOff } from 'lucide-react';
 import ServicosCampoUnificado from './ServicosCampoUnificado';
 import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
+import { useVeiculosSuspensos } from '@/hooks/useVeiculosSuspensos';
+import { Badge } from '@/components/ui/badge';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -9,10 +11,12 @@ import AlertaImprevistosPendentes from '@/components/monitoramento/AlertaImprevi
 
 const AtribuicaoManualTab = lazy(() => import('@/components/monitoramento/AtribuicaoManualTab'));
 const HistoricoAtribuicoesTab = lazy(() => import('@/components/monitoramento/HistoricoAtribuicoesTab'));
+const VeiculosSuspensosTab = lazy(() => import('./VeiculosSuspensosTab'));
 const MapaTab = lazy(() => import('./Mapa'));
 
 export default function VistoriasInstalacoesMon() {
   const { data: manualAtiva } = useConfigAtribuicaoManual();
+  const { data: suspensos } = useVeiculosSuspensos();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const defaultTab = tabFromUrl || (manualAtiva ? 'atribuicao-manual' : 'servicos');
@@ -46,10 +50,20 @@ export default function VistoriasInstalacoesMon() {
               <ListChecks className="h-4 w-4" />
               <span className="hidden sm:inline">Serviços</span>
             </TabsTrigger>
+            <TabsTrigger value="suspensos" className="gap-2 shrink-0">
+              <ShieldOff className="h-4 w-4" />
+              <span className="hidden sm:inline">Veículos Suspensos</span>
+              {suspensos && suspensos.length > 0 && (
+                <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                  {suspensos.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="mapa" className="gap-2 shrink-0">
               <MapIcon className="h-4 w-4" />
               <span className="hidden sm:inline">Mapa</span>
             </TabsTrigger>
+            
             
             <TabsTrigger value="historico" className="gap-2 shrink-0">
               <History className="h-4 w-4" />
@@ -69,6 +83,13 @@ export default function VistoriasInstalacoesMon() {
         <TabsContent value="servicos">
           <ServicosCampoUnificado />
         </TabsContent>
+
+        <TabsContent value="suspensos">
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <VeiculosSuspensosTab />
+          </Suspense>
+        </TabsContent>
+
 
         <TabsContent value="mapa">
           <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
