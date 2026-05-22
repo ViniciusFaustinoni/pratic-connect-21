@@ -108,7 +108,7 @@ type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: str
 interface InstaladorChecklistProps {
   /** Quando passado, sobrepõe o id da rota — usado quando a tela é embedada em modal (ex.: Coordenador de Monitoramento). */
   servicoIdProp?: string;
-  /** Callback de saída — substitui o exitToList() quando embedado. */
+  /** Callback de saída — substitui o navigate('/instalador') quando embedado. */
   onClose?: () => void;
 }
 
@@ -118,7 +118,7 @@ export default function InstaladorChecklist({ servicoIdProp, onClose }: Instalad
   const navigate = useNavigate();
   const exitToList = () => {
     if (onClose) onClose();
-    else exitToList();
+    else navigate('/instalador');
   };
   
   const [etapaAtual, setEtapaAtual] = useState(1);
