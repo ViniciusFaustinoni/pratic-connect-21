@@ -497,6 +497,11 @@ export default function CotadorPage() {
         if ((cot as any).valor_adesao != null) setValorAdesaoCustom(Number((cot as any).valor_adesao));
         if (cot.nome_solicitante) setNomeAssociado(cot.nome_solicitante);
 
+        // Gate 0KM: pré-preenche SOMENTE com boolean explícito
+        if (typeof (cot as any).veiculo_zero_km === 'boolean') {
+          setIsZeroKm((cot as any).veiculo_zero_km);
+        }
+
         setEdicaoTrocaCarregada(true);
       } catch (e: any) {
         console.error('[edicao-troca] erro ao carregar cotação:', e);
