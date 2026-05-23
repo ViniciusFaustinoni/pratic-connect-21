@@ -2078,10 +2078,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             // Bloquear navegação: usuário fica no dialog para tentar de novo
             return;
           }
+        } else if (origemSubstituicao && novaCotacao?.id) {
+          // Vincular cotação à solicitação de substituição (não-bloqueante: erro logado).
+          try {
+            const { error: vinculoErr } = await supabase
+              .from('solicitacoes_substituicao_placa' as any)
+              .update({ cotacao_id: novaCotacao.id, status: 'cotacao_criada' })
+              .eq('id', origemSubstituicao.solicitacaoId);
+            if (vinculoErr) throw vinculoErr;
+          } catch (e) {
+            console.error('[substituicao:vincular-cotacao]', e);
+            toast.error('Cotação criada, mas não foi possível vinculá-la à substituição. Faça a vinculação manualmente.');
+          }
+          toast.success('Cotação de substituição criada com sucesso!');
+          navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
         } else {
           toast.success('Cotação criada com sucesso!');
           navigate('/vendas/cotacoes');
         }
+
       }
       // Cotação criada/atualizada com sucesso → descartar rascunho local
       draft.clearOnSubmit();
