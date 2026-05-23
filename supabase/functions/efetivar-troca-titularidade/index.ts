@@ -1088,15 +1088,13 @@ serve(async (req) => {
       }
 
       if (!codigoAssociadoNovo) {
-        // Upsert idempotente: se Hinova devolver "CPF já existe", busca o codigo
-        // existente e atualiza em vez de falhar (corrige fila SGA travada como
-        // e8af6e01… na troca 87b49126… — MARCUS / CPF 12493649737).
-        const cadAss = await cadastrarOuAtualizarAssociadoHinova(supabase, {
-          nome: dadosNovoTitular.nome,
-          cpf: cpfLimpo,
-          email: dadosNovoTitular.email || undefined,
-          telefone_celular: (dadosNovoTitular.telefone || '').replace(/\D/g, '') || undefined,
-        });
+        // Upsert idempotente + payload completo (Hinova exige endereço/estado).
+        // Carrega associado local e usa buildAssociadoPayload — mesmo padrão do retry.
+        const { data: assRow } = await supabase
+          .from('associados').select('*').eq('id', novoAssociadoId).maybeSingle();
+        if (!assRow) throw new Error(`Associado local ${novoAssociadoId} não encontrado para payload SGA`);
+        const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
+        const cadAss = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
         if (!cadAss.ok || !cadAss.codigo) {
           throw new Error(`SGA cadastrarOuAtualizarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
         }
