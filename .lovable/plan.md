@@ -1,50 +1,55 @@
 ## Diagnóstico
 
-A tela **Monitoramento › Fila de Vistorias** (`src/pages/monitoramento/FilaVistorias.tsx`) concatena três fontes (`vistorias`, `servicos`, `vistorias_evento`) sem reconhecer quando vistoria e serviço se referem ao mesmo evento físico. Resultado confirmado no banco para o Rodrigo (LME3A49):
+**Estado atual** (`associados.id = 26ac0b58-5e09-45cb-9b7b-3fda59e97176`, veículo `LSA7A65`):
 
-- `vistorias.id = 3e90c622…` (modalidade `presencial`, `agendada`, sem técnico) — congela no agendamento original.
-- `servicos.id = 77083b8a…` (`vistoria_entrada`, `concluida`, técnico WALLACE NUNES, `vistoria_origem_id = 3e90c622…`) — estado vivo.
+| Campo | Valor gravado | Valor correto (Sergio) |
+|---|---|---|
+| nome | AURELIANO BARRETO DE AZEVEDO | SERGIO BARRETO DE AZEVEDO |
+| cpf | 71319506704 | 06980117750 |
+| rg | 055722599 | 108750191 |
+| cnh_numero | 03305983606 | 08962659984 |
+| data_nascimento | 1959-06-16 | 1973-08-28 |
+| email | sergiobarreto393@gmail.com | (mantém) |
+| telefone | 22999939488 | (mantém) |
 
-A duplicação é puramente de leitura — backend está correto.
+Veículo `LSA7A65` (id `91975902-…`) e contrato em vigor já estão amarrados ao `associado_id` `26ac0b58…` — nada precisa ser remapeado, só reescrever os 5 campos de identidade no próprio registro.
 
-## Correção
+**Como o erro passou** (`supabase/functions/contrato-gerar/index.ts` linhas ~507 e 595): hoje a proteção anti-colisão só compara **nome** (`nomesCoincidem`) — quando coincide CPF mas o nome diverge ela apenas alerta e segue. E o bloqueio anti-sequestro só dispara quando `veiculos.associado_id` é **diferente** do `associadoId` resolvido. Como a 2ª cotação caiu no mesmo CPF antigo (Aureliano) e o sobrenome bateu, nenhuma das duas barreiras travou.
 
-Aplicar dedup dentro do `useMemo` de `vistorias` em `FilaVistorias.tsx`. Backend e triggers permanecem intactos.
+## Correção pontual (Sergio)
 
-### Regra de consolidação (em ordem)
+1. UPDATE em `public.associados` no registro `26ac0b58-5e09-45cb-9b7b-3fda59e97176`:
+   - `nome='SERGIO BARRETO DE AZEVEDO'`, `cpf='06980117750'`, `rg='108750191'`, `cnh_numero='08962659984'`, `data_nascimento='1973-08-28'`
+   - email/telefone/status/id intocados → todos os FKs (contratos, veiculos, instalacoes, cotações, fila monitoramento, dashboards) seguem apontando para o mesmo registro e passam a exibir Sergio automaticamente.
+2. INSERT em `public.logs_auditoria`:
+   - `acao='correcao_identidade_associado'`, `modulo='cadastro'`, `tabela='associados'`, `registro_id='26ac0b58…'`
+   - `dados_anteriores`/`dados_novos` = snapshot dos 5 campos
+   - `descricao` = referência ao caso (placa LSA7A65, contrato em vigor, mesma classe do precedente Luiz Fernando — erro de digitação numa cotação cancelada que sobreviveu e foi reusada).
+3. **Sem fila SGA** automática nesta operação — Sergio já está com `status='aguardando_instalacao'`, qualquer sync futura usa a identidade nova; se o operador quiser empurrar manualmente, usa `/configuracoes/integracoes/sga-hinova?placa=LSA7A65`.
+4. **Não tocar** em `contratos`, `veiculos`, `instalacoes`, `cotacoes`, `vistorias` — todos já apontam corretamente; trocar identidade no associado já reflete em cascata.
 
-1. **Vínculo canônico direto** — `servicos.vistoria_origem_id` = `vistorias.id`. Quando casa, descartar a vistoria.
-2. **Fallback por instalação** — `servicos.instalacao_origem_id` = `vistorias.instalacao_id`. Quando casa, descartar a vistoria.
-3. **Último recurso (legados)** — agrupar o array final por `clienteId + placa + tipo_canônico` (`presencial`/`auto_vistoria`/`ponto_fixo` ≡ `instalacao_like`). Quando o grupo tem mais de um item, manter o de maior prioridade de status, com **vivos > terminais** (`em_rota` > `em_andamento` > `aguardando_analise` > `agendada` > `auto_vistoria_pendente` > `pendente` > `reprovada` > `aprovada`), desempate por `createdAt` mais recente.
+> Execução: 1 migration de dados (UPDATE + INSERT envelopados em transação) via tool de insert.
 
-### Quem prevalece
+## Reforço estrutural (anti-reuso cruzado)
 
-Sempre o registro com estado operacional vivo (vindo de `servicos`). A vistoria original é removida — sua data/técnico/status estavam congelados.
+Editar `supabase/functions/contrato-gerar/index.ts` para fechar a brecha do "mesmo CPF, nomes parecidos":
 
-### Garantias
+1. **Comparação CPF↔associado da placa** — nos 3 ramos que hoje fazem `BLOQUEIO-DONO` (linhas ~595, ~735, ~880), trazer também `associados.cpf` no SELECT do veículo e, **antes** do check `data.associado_id !== associadoId`, comparar `associadoDaPlaca.cpf` vs `cpfNormalizado` (CPF do solicitante). Se diferem → retornar 409 `code: 'PLACA_CPF_DIVERGENTE'` com mensagem pedindo tratamento manual (Substituição/Troca). Exceção mantida: `placaLiberadaPorTrocaTitularidade`.
+2. **Bloquear cotação que tenta reusar associado existente com identidade divergente** — no trecho de `associadoExistente` (linha ~497): hoje, se `mesmoTitular` é false, só loga e segue sem sincronizar PII. Trocar esse caminho por **erro duro** 409 `code: 'IDENTIDADE_DIVERGENTE_MESMO_CPF'` quando (a) nomes não coincidem **e** (b) já há contrato/veículo vinculado ao associado → operador é forçado a abrir o caso. Continuar permitindo silenciosamente o caso "associado novo sem histórico" (perfil ainda vazio).
+3. **Memória canônica** atualizar `mem://constraints/contracts/no-cross-owner-vehicle-reuse` registrando que a comparação agora é CPF-first com fallback de nome, e que a 2ª camada (`IDENTIDADE_DIVERGENTE_MESMO_CPF`) protege contra reuso silencioso quando o associado original carrega histórico operacional.
 
-- Vistorias **sem serviço associado** (sinistros recém-abertos, eventos puros, vistoria agendada que ainda não materializou serviço) permanecem visíveis.
-- Eventos de outros associados não são afetados — chave de agrupamento inclui `clienteId + placa`.
-- Contadores no topo (`pendentes`, `emCampo`, `aguardandoAnalise`, `autoVistoria`, `concluidasHoje`) já derivam do array `vistorias` — passam a refletir a contagem deduplicada automaticamente, sem alteração separada.
+Nenhuma outra função/edge precisa mudar — `contrato-gerar` é a porta única de criação de contrato/veículo.
 
-### Passos
+## Validação pós-execução
 
-1. **`src/pages/monitoramento/FilaVistorias.tsx`** — único arquivo tocado, somente o `useMemo` que monta `vistorias` (linhas ~185–271):
-   - Construir `Set<string>` de `vistoria_origem_id` e `instalacao_origem_id` consumidos a partir de `servicosRaw`.
-   - Filtrar `vistoriasRaw` antes do `.map(...)` removendo entradas cujo `id` ou `instalacao_id` esteja consumido.
-   - Após concatenar os três blocos, rodar o fallback (cliente+placa+tipo canônico) com a prioridade de status acima.
-   - Manter a ordenação final por `createdAt` desc.
-
-### Validação
-
-- Fila de Vistorias → Rodrigo (LME3A49 / VEN-2026-00064) aparece **1 linha**, estado vivo (concluída, WALLACE NUNES, 25/05).
-- Contadores no topo refletem a contagem deduplicada.
-- VEN-2026-00071 e VEN-2026-00072 continuam visíveis e únicos.
-- Pelo menos uma vistoria/sinistro sem serviço materializado continua aparecendo.
+- `SELECT nome, cpf, rg, cnh_numero, data_nascimento FROM associados WHERE id='26ac0b58…'` → Sergio.
+- Tela do associado, card no Monitoramento, Fila de Vistorias, dashboards → todos exibem Sergio (sem code change, é leitura do mesmo id).
+- `logs_auditoria` traz a linha `correcao_identidade_associado`.
+- Tentativa simulada: nova cotação com CPF diferente apontando para `LSA7A65` → 409 `PLACA_CPF_DIVERGENTE`. Cotação com mesmo CPF mas nome divergente sobre associado com contrato → 409 `IDENTIDADE_DIVERGENTE_MESMO_CPF`.
+- Contrato em vigor segue válido (mesmo `associado_id`, mesma assinatura).
 
 ## Fora de escopo
 
-- `useServicosCampoUnificado` (já dedupa corretamente).
-- Triggers de materialização e a tabela `vistorias`.
-- Geração do protocolo `VEN-…` (segue trigger DB existente).</parameter>
-</invoke>
+- Limpar/cancelar a cotação original que continha o erro (já está cancelada).
+- Saneamento retroativo de outros associados — sem indício de outros casos; reforço já trata os próximos.
+- Mexer no fluxo de Troca de Titularidade (exceção legítima continua intacta).
