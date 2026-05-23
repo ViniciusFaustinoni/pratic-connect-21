@@ -14,6 +14,7 @@
 // Roda via pg_cron a cada 15 minutos.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { sendMetaTemplate } from '../_shared/send-meta-template.ts';
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -133,7 +134,7 @@ Deno.serve(async (req) => {
 
         // 1.1) Auditoria persistente (logs_auditoria)
         try {
-          await admin.from('logs_auditoria').insert({
+          await insertAuditLog(admin as any, {
             acao: 'cancelar',
             modulo: 'cotacoes',
             tabela: 'solicitacoes_troca_titularidade',

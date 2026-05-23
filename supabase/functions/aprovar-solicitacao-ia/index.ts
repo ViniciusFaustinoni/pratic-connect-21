@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -671,7 +672,7 @@ serve(async (req) => {
         console.log("[aprovar-solicitacao-ia] Cenário A: vistoria dispensada, rastreador permanece.");
 
         // Registrar log de dispensa
-        await supabaseAdmin.from("logs_auditoria").insert({
+        await insertAuditLog(supabaseAdmin as any, {
           acao: "troca_titularidade_vistoria_dispensada",
           modulo: "solicitacoes",
           descricao: `Vistoria dispensada na troca de titularidade. Veículo ativo: ${veiculoAtivo}. Dias desde cancelamento: ${diasDesdeCancelamento}. Prazo configurado: ${prazoDias} dias.`,
@@ -708,7 +709,7 @@ serve(async (req) => {
         // Se há pendência de rastreador, registrar antes de prosseguir
         if (!veiculoAtivo && pendenciaRastreador) {
           console.log("[aprovar-solicitacao-ia] Pendência de rastreador detectada no cenário B.");
-          await supabaseAdmin.from("logs_auditoria").insert({
+          await insertAuditLog(supabaseAdmin as any, {
             acao: "troca_titularidade_pendencia_rastreador",
             modulo: "solicitacoes",
             descricao: `Troca de titularidade com veículo cancelado e pendência de rastreador.`,

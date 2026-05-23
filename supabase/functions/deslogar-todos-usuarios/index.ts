@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0';
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -123,7 +124,7 @@ Deno.serve(async (req) => {
       null;
     const userAgent = req.headers.get('user-agent') ?? null;
 
-    await admin.from('logs_auditoria').insert({
+    await insertAuditLog(admin as any, {
       usuario_id: callerId,
       usuario_nome: callerNome,
       ip_address: ip,

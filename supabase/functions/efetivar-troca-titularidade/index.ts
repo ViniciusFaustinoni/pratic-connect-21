@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 import {
+import { insertAuditLog } from '../_shared/auditLog.ts';
   alterarAssociadoHinova,
   alterarSituacaoVeiculoHinova,
   buscarAssociadoComVeiculosPorCpf,
@@ -912,7 +913,7 @@ serve(async (req) => {
       );
       // Log de defesa — usa 'criar' (compatível com CHECK atual do logs_auditoria.acao)
       // e prefixa a descrição para facilitar busca futura.
-      await supabase.from("logs_auditoria").insert({
+      await insertAuditLog(supabase as any, {
         acao: "criar",
         modulo: "associados",
         tabela: "associados_historico",
@@ -939,7 +940,7 @@ serve(async (req) => {
     }
 
     // 13. Log de auditoria
-    await supabase.from("logs_auditoria").insert({
+    await insertAuditLog(supabase as any, {
       acao: "troca_titularidade_efetivada",
       modulo: "solicitacoes",
       descricao: `Troca de titularidade efetivada (Cenário ${cenario}). Novo titular: ${dadosNovoTitular.nome}. Contrato: ${novoContrato.numero}.`,
@@ -994,7 +995,7 @@ serve(async (req) => {
         console.log(`[efetivar-troca] WhatsApp novo titular: ${sendData.success ? "enviado" : "falhou"}`, sendData.error || "");
       } else {
         console.log("[efetivar-troca] Novo titular sem telefone — notificação WhatsApp não enviada");
-        await supabase.from("logs_auditoria").insert({
+        await insertAuditLog(supabase as any, {
           acao: "troca_titularidade_notificacao_ignorada",
           modulo: "solicitacoes",
           descricao: `Novo titular ${dadosNovoTitular.nome} sem telefone cadastrado — notificação WhatsApp não enviada.`,

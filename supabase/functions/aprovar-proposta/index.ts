@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { translateDbError } from "../_shared/db-error-translator.ts";
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -358,7 +359,7 @@ serve(async (req) => {
         const motivos = results.map((r) => r.via).join(',');
         console.warn('[aprovar-proposta] BLOQUEIO caminho_publico_incompleto:', { contrato_id, motivos });
         try {
-          await supabase.from('logs_auditoria').insert({
+          await insertAuditLog(supabase as any, {
             acao: 'aprovar_proposta_bloqueado_caminho_incompleto',
             modulo: 'contratos',
             tabela: 'contratos',
@@ -1027,7 +1028,7 @@ serve(async (req) => {
           .update({ cadastro_aprovado: false, aprovado_por: null, aprovado_em: null })
           .eq('id', contrato_id);
         try {
-          await supabase.from('logs_auditoria').insert({
+          await insertAuditLog(supabase as any, {
             acao: 'aprovar_proposta_bloqueado_sem_agendamento',
             modulo: 'contratos',
             tabela: 'contratos',
@@ -1056,7 +1057,7 @@ serve(async (req) => {
           .update({ cadastro_aprovado: false, aprovado_por: null, aprovado_em: null })
           .eq('id', contrato_id);
         try {
-          await supabase.from('logs_auditoria').insert({
+          await insertAuditLog(supabase as any, {
             acao: 'aprovar_proposta_bloqueado_sem_instalacao',
             modulo: 'contratos',
             tabela: 'contratos',

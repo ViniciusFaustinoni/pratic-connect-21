@@ -4,6 +4,7 @@
 // canônico (concluir-instalacao-prestador → fn_reativar_cobertura_pos_instalacao).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -188,7 +189,7 @@ serve(async (req) => {
       });
     }
 
-    await supabase.from('logs_auditoria').insert({
+    await insertAuditLog(supabase as any, {
       usuario_id: userId,
       acao: 'abrir_servico_vistoria_interna_suspenso',
       tabela: 'servicos',

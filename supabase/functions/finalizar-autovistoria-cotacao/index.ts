@@ -12,6 +12,7 @@
 // apenas retorna os ids existentes (não duplica).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -329,7 +330,7 @@ Deno.serve(async (req) => {
     }
 
     // 8. Auditoria (best effort)
-    await supabase.from('logs_auditoria').insert({
+    await insertAuditLog(supabase as any, {
       acao: 'autovistoria_materializada',
       modulo: 'vistorias',
       tabela: 'vistorias',

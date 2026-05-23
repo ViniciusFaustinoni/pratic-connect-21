@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -206,7 +207,7 @@ Deno.serve(async (req) => {
     }
 
     // Auditoria
-    await supabase.from('logs_auditoria').insert({
+    await insertAuditLog(supabase as any, {
       usuario_id: profile.id,
       usuario_nome: profile.nome,
       acao: 'suspensao_manual',

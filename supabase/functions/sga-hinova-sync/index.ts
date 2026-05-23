@@ -19,6 +19,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
+import { insertAuditLog } from '../_shared/auditLog.ts';
   getHinovaCreds,
   autenticarHinova,
   buscarAssociadoComVeiculosPorCpf,
@@ -280,7 +281,7 @@ serve(async (req) => {
       const { data: p } = await supabase.from('profiles').select('nome, email').eq('id', req_body.usuario_id).maybeSingle();
       nomeAud = p?.nome || p?.email || 'Sistema';
     }
-    await supabase.from('logs_auditoria').insert({
+    await insertAuditLog(supabase as any, {
       usuario_id: req_body.usuario_id || null, usuario_nome: nomeAud,
       acao: 'decisao_sga', modulo: 'diretoria', tabela: 'sga_sync_logs',
       registro_id: veiculo_id,
