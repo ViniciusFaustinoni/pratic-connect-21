@@ -1,45 +1,41 @@
-## Raiz do erro
+## Contexto
 
-A cadeia de falha do KOU6D37 é:
+No modal `ModalDetalhesSubstituicao` (acessado na fila Substituição em `/vendas/cotacoes`), quando o status é `aguardando_termo`, o card "Termo de Cancelamento do veículo …" exibe hoje o botão **"Enviar Termo de Cancelamento"**. Esse botão dispara a edge `enviar-termo-cancelamento-substituicao`, criando um termo de cancelamento separado.
 
-1. UI chama `criar-solicitacao-substituicao` (POST) → retorna **502**.
-2. Dentro dela, na linha 61, há `admin.functions.invoke('importar-associado-sga', { body: { cpf } })` usando o client com **service role**.
-3. `importar-associado-sga` (linhas 116–120) exige `Authorization: Bearer <user JWT>` e faz `userClient.auth.getUser()`. Sem esse header → retorna **401 "Não autenticado"**.
-4. `supabase-js`'s `functions.invoke()` **NÃO** propaga automaticamente o service role key como `Authorization`; ele só manda `apikey`. Resultado: a chamada interna chega sem JWT de usuário → 401.
-5. `criar-solicitacao-substituicao` empacota a falha como `"Falha ao importar associado do SGA: Edge Function returned a non-2xx status code"` e responde **502** → toast vermelho que o usuário vê.
+Isso ficou obsoleto: a substituição passou a usar um **único termo unificado** (template já configurado em `templates_contrato.is_default_substituicao=true`). Esse termo já é injetado automaticamente pelo `autentique-create-by-token` quando o cliente abre o link público de uma cotação com `tipo_entrada='substituicao_placa'`.
 
-Confirmação nos logs analytics (timestamps 11:18:09 / 11:18:25):
-```
-POST 401 importar-associado-sga
-POST 502 criar-solicitacao-substituicao
-```
+Portanto, o passo "enviar termo de cancelamento" não deve mais existir nesse fluxo. O caminho canônico é: **criar a cotação de substituição → cliente abre o link público → assina o termo unificado de substituição**.
 
-O 400 em `/rest/v1/contratos` da segunda screenshot é ruído independente (query select malformada em outro componente) e não tem relação com este fluxo.
+## Objetivo
 
-## Correção (cirúrgica, 1 arquivo)
+Trocar o comportamento do botão principal do card quando `status === 'aguardando_termo'` para que, em vez de enviar um termo de cancelamento separado, ele crie a cotação de substituição (aproveitando nome/email/telefone do associado) e leve o operador ao cotador para finalizar e gerar o link público.
 
-**`supabase/functions/criar-solicitacao-substituicao/index.ts`** — propagar o `Authorization` do request original para o invoke aninhado:
+## Mudanças
 
-```ts
-const authHeader = req.headers.get('Authorization') || '';
-// ...
-const impResp = await admin.functions.invoke('importar-associado-sga', {
-  body: { cpf },
-  headers: authHeader ? { Authorization: authHeader } : undefined,
-});
-```
+### 1. `src/components/substituicao/ModalDetalhesSubstituicao.tsx`
 
-Mesmo tratamento para o invoke de `sga-buscar-associado-completo` (linha 43) caso essa função também exija JWT — confirmar no código dela e, se exigir, propagar igual.
+- No bloco `status === 'aguardando_termo'`: substituir o botão "Enviar Termo de Cancelamento" por um botão **"Criar Cotação de Substituição"** que chama o `handleCriarCotacao` já existente (navega para `/vendas/cotador` com `tipo_entrada=substituicao`, `associado_id`, `veiculo_antigo_id/placa/modelo`, `solicitacao_substituicao_id`).
+- Atualizar o título do card de "Termo de Cancelamento do veículo …" para algo coerente, ex: **"Nova Cotação de Substituição"**, com uma linha curta explicando que o termo de substituição unificado será assinado pelo cliente dentro do link público da cotação.
+- Remover (no modal) o uso visual de `useEnviarTermoCancelamentoSubstituicao` e do polling `useSyncTermoCancelamento` quando o fluxo nasce já como cotação. Manter os blocos `termo_enviado` / `termo_assinado` apenas como **visualização legada** (read-only) para solicitações antigas que já foram enviadas pelo fluxo anterior — sem botão de reenvio/verificação — para não quebrar registros em andamento.
+- Manter o bloco "Nova Cotação para o veículo substituto" (status `termo_assinado` / `cotacao_criada`) intacto.
 
-Sem mudanças no front, sem mudanças no `importar-associado-sga` (regra de auth "qualquer usuário autenticado pode disparar import" continua válida).
+### 2. Status flow
+
+Quando o operador clicar em "Criar Cotação de Substituição" no estado `aguardando_termo`, o caminho continua sendo finalizar a cotação no cotador. O `solicitacoes_substituicao_placa.status` pode permanecer `aguardando_termo` até a cotação ser vinculada (não muda nada no backend nesta entrega — apenas o rótulo na UI pode mostrar "Aguardando criação da cotação" se quisermos clareza, mas sem migração).
+
+### Fora de escopo (não tocar agora)
+
+- Edge `enviar-termo-cancelamento-substituicao` permanece no projeto como fallback para registros legados, mas deixa de ser chamada pelo modal.
+- Não cria edge nova nem altera schema.
+- Solicitações já em `termo_enviado` (cenários em andamento hoje) continuam visíveis em modo somente-leitura.
 
 ## Validação
 
-1. Redeploy automático da edge.
-2. Repetir o fluxo "Substituição de Placa" com KOU6D37 → modal deve avançar para "Detalhes da Substituição".
-3. Conferir logs: POST 200 nas duas edges.
+1. Abrir uma solicitação de substituição em `aguardando_termo` (placa KOU6D37) → modal mostra "Criar Cotação de Substituição" no lugar do antigo botão de termo.
+2. Clicar → navega para `/vendas/cotador?tipo_entrada=substituicao&associado_id=…&veiculo_antigo_id=…&solicitacao_substituicao_id=…`.
+3. Finalizar a cotação no cotador → link público gerado normalmente → cliente abre o link → `autentique-create-by-token` detecta `tipo_entrada='substituicao_placa'` e usa o template `is_default_substituicao` (termo unificado).
+4. Solicitações antigas em `termo_enviado` continuam aparecendo no modal sem o botão de envio, apenas mostrando o status.
 
-## Fora de escopo
+## Memória a atualizar (após aplicar)
 
-- Investigar o GET 400 em `/rest/v1/contratos` (origem diferente, abrir em outra rodada se persistir).
-- Refatorar todos os outros invokes server-to-server do projeto (auditoria separada, não bloqueia este fix).
+Adicionar nota em `mem://logic/operations/` registrando que "substituição usa termo unificado no link público; modal não envia mais termo de cancelamento separado".

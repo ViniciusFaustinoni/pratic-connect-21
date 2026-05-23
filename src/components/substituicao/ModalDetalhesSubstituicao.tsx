@@ -1,12 +1,10 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Send, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
-import { useSolicitacaoSubstituicao, useEnviarTermoCancelamentoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
+import { Loader2, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
+import { useSolicitacaoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
 import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,28 +29,15 @@ function fmtMoney(v?: number | null) {
 export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }: Props) {
   const navigate = useNavigate();
   const { data: sol, isLoading } = useSolicitacaoSubstituicao(solicitacaoId);
-  const enviar = useEnviarTermoCancelamentoSubstituicao();
-  const [confirmando, setConfirmando] = useState(false);
 
-  // Polling do termo (fallback para o webhook Autentique).
+  // Polling do termo legado — só ativo para solicitações que já enviaram termo
+  // de cancelamento separado pelo fluxo antigo (substituído pelo termo unificado
+  // assinado no link público da cotação).
   const syncTermo = useSyncTermoCancelamento({
     tipo: 'substituicao',
     solicitacaoId: sol?.id,
     enabled: open && !!sol && sol.status === 'termo_enviado' && !sol.termo_cancelamento_assinado_em,
   });
-
-  const handleEnviar = async (force: boolean) => {
-    if (!sol) return;
-    setConfirmando(true);
-    try {
-      await enviar.mutateAsync({ solicitacao_id: sol.id, force_resend: force });
-      toast.success(force ? 'Termo reenviado' : 'Termo de cancelamento enviado');
-    } catch (e: any) {
-      toast.error(e?.message || 'Falha ao enviar termo');
-    } finally {
-      setConfirmando(false);
-    }
-  };
 
   const handleCriarCotacao = () => {
     if (!sol) return;
@@ -123,80 +108,67 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
               </CardContent>
             </Card>
 
-            {/* Termo */}
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                <div className="text-sm font-semibold">Termo de Cancelamento do veículo {sol.veiculo_antigo_placa}</div>
-
-                {sol.status === 'aguardando_termo' && (
-                  <Button onClick={() => handleEnviar(false)} disabled={confirmando} className="w-full">
-                    {confirmando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                    Enviar Termo de Cancelamento
-                  </Button>
-                )}
-
-                {sol.status === 'termo_enviado' && (
-                  <>
-                    <div className="flex items-center gap-2 p-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs">
-                      <Clock className="h-4 w-4 text-blue-600 shrink-0" />
-                      Aguardando assinatura. Enviado em {sol.termo_cancelamento_enviado_em && format(new Date(sol.termo_cancelamento_enviado_em), "dd/MM/yyyy HH:mm", { locale: ptBR })}.
-                      {sol.termo_reenvios_count > 0 && ` · ${sol.termo_reenvios_count} reenvio(s)`}
-                    </div>
-                    <div className="flex gap-2">
-                      {sol.termo_cancelamento_url && (
-                        <Button variant="outline" size="sm" asChild>
-                          <a href={sol.termo_cancelamento_url} target="_blank" rel="noreferrer">
-                            <ExternalLink className="h-3 w-3 mr-1" /> Abrir Autentique
-                          </a>
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm" onClick={() => handleEnviar(true)} disabled={confirmando}>
-                        {confirmando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
-                        Reenviar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => syncTermo.verificarAgora()}
-                        disabled={syncTermo.verificando}
-                      >
-                        {syncTermo.verificando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                        Verificar assinatura agora
-                      </Button>
-                    </div>
-                    {syncTermo.ultimaVerificacao && (
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        Última verificação: {syncTermo.ultimaVerificacao.toLocaleTimeString('pt-BR')}
-                      </p>
-                    )}
-                  </>
-                )}
-
-                {(sol.status === 'termo_assinado' || sol.status === 'cotacao_criada' || sol.status === 'efetivada') && (
-                  <div className="flex items-center gap-2 p-2 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    Termo assinado{sol.termo_cancelamento_assinado_em ? ` em ${format(new Date(sol.termo_cancelamento_assinado_em), "dd/MM/yyyy HH:mm", { locale: ptBR })}` : ''}.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Nova Cotação */}
-            {(sol.status === 'termo_assinado' || sol.status === 'cotacao_criada') && (
+            {/* Nova Cotação de Substituição (termo unificado é assinado no link público) */}
+            {(sol.status === 'aguardando_termo' || sol.status === 'termo_assinado' || sol.status === 'cotacao_criada') && (
               <Card>
                 <CardContent className="p-4 space-y-3">
-                  <div className="text-sm font-semibold">Nova Cotação para o veículo substituto</div>
+                  <div className="text-sm font-semibold">Nova Cotação de Substituição</div>
+                  <p className="text-xs text-muted-foreground">
+                    A substituição usa um único termo unificado, assinado pelo cliente dentro do link público desta cotação.
+                  </p>
                   {sol.cotacao_id ? (
                     <Button variant="outline" className="w-full" onClick={() => { onOpenChange(false); navigate(`/vendas/cotacoes?cotacao=${sol.cotacao_id}`); }}>
                       Abrir cotação
                     </Button>
                   ) : (
                     <Button className="w-full" onClick={handleCriarCotacao}>
-                      Criar Nova Cotação (aproveitando dados do associado)
+                      Criar Cotação de Substituição
                     </Button>
                   )}
                 </CardContent>
               </Card>
+            )}
+
+            {/* Visualização legada: solicitações antigas que enviaram termo de cancelamento separado */}
+            {sol.status === 'termo_enviado' && (
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <div className="text-sm font-semibold">Termo de Cancelamento (fluxo legado)</div>
+                  <div className="flex items-center gap-2 p-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs">
+                    <Clock className="h-4 w-4 text-blue-600 shrink-0" />
+                    Aguardando assinatura. Enviado em {sol.termo_cancelamento_enviado_em && format(new Date(sol.termo_cancelamento_enviado_em), "dd/MM/yyyy HH:mm", { locale: ptBR })}.
+                    {sol.termo_reenvios_count > 0 && ` · ${sol.termo_reenvios_count} reenvio(s)`}
+                  </div>
+                  {sol.termo_cancelamento_url && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={sol.termo_cancelamento_url} target="_blank" rel="noreferrer">
+                        <ExternalLink className="h-3 w-3 mr-1" /> Abrir Autentique
+                      </a>
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => syncTermo.verificarAgora()}
+                    disabled={syncTermo.verificando}
+                  >
+                    {syncTermo.verificando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                    Verificar assinatura agora
+                  </Button>
+                  {syncTermo.ultimaVerificacao && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Última verificação: {syncTermo.ultimaVerificacao.toLocaleTimeString('pt-BR')}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {(sol.status === 'termo_assinado' || sol.status === 'efetivada') && sol.termo_cancelamento_assinado_em && (
+              <div className="flex items-center gap-2 p-2 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                Termo (legado) assinado em {format(new Date(sol.termo_cancelamento_assinado_em), "dd/MM/yyyy HH:mm", { locale: ptBR })}.
+              </div>
             )}
           </div>
         )}
