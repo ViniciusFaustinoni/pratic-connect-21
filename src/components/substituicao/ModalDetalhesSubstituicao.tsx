@@ -42,15 +42,15 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
   const handleCriarCotacao = () => {
     if (!sol) return;
     const params = new URLSearchParams({
-      associado_id: sol.associado_id || '',
       tipo_entrada: 'substituicao',
+      associado_id: sol.associado_id || '',
       veiculo_antigo_id: sol.veiculo_antigo_id || '',
       veiculo_antigo_placa: sol.veiculo_antigo_placa,
       veiculo_antigo_modelo: `${sol.veiculo_antigo_snapshot?.marca || ''} ${sol.veiculo_antigo_snapshot?.modelo || ''}`.trim(),
       solicitacao_substituicao_id: sol.id,
     });
     onOpenChange(false);
-    navigate(`/vendas/cotador?${params.toString()}`);
+    navigate(`/vendas/cotacoes?${params.toString()}`);
   };
 
   return (
