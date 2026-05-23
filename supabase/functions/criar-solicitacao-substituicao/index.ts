@@ -58,7 +58,14 @@ Deno.serve(async (req) => {
     if (cpf.length !== 11) return json(400, { error: 'CPF do associado SGA inválido' });
 
     // 2. Importa associado para base local (idempotente)
-    const impResp = await admin.functions.invoke('importar-associado-sga', { body: { cpf } });
+    // IMPORTANTE: importar-associado-sga exige Authorization (JWT de usuário).
+    // functions.invoke() do supabase-js NÃO propaga service-role como Authorization,
+    // então repassamos o header original do request para evitar 401.
+    const authHeader = req.headers.get('Authorization') || '';
+    const impResp = await admin.functions.invoke('importar-associado-sga', {
+      body: { cpf },
+      headers: authHeader ? { Authorization: authHeader } : undefined,
+    });
     if (impResp.error) {
       return json(502, { error: 'Falha ao importar associado do SGA: ' + impResp.error.message });
     }
