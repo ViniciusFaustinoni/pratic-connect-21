@@ -237,8 +237,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [tipoPlacaSelecionado, setTipoPlacaSelecionado] = useState<string>('');
 
   // Tipo da cotação (informativo) — enviado no campo observação do veículo no SGA
-  const [tipoCotacao, setTipoCotacao] = useState<string>(origemTroca ? 'troca_titularidade' : 'adesao');
+  const [tipoCotacao, setTipoCotacao] = useState<string>(
+    origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : 'adesao')
+  );
   const [tipoCotacaoOutro, setTipoCotacaoOutro] = useState<string>('');
+
   // Observação livre que viaja junto ao tipo no campo `observacao` do veículo no SGA
   const [observacaoSga, setObservacaoSga] = useState<string>('');
   
