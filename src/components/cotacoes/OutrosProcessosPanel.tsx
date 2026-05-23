@@ -109,6 +109,17 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
     if (item.cotacao_token) window.open(`/cotacao/${item.cotacao_token}`, '_blank');
   };
 
+  const handleCopiarLink = async (item: OutroProcessoItem) => {
+    if (!item.cotacao_token) return;
+    const url = `https://app.praticcar.org/cotacao/${item.cotacao_token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copiado para a área de transferência');
+    } catch {
+      toast.error('Não foi possível copiar o link');
+    }
+  };
+
   const handleVerDetalhe = (item: OutroProcessoItem) => {
     if (item.tipo === 'troca_titularidade') {
       setDrawerItem(item);
