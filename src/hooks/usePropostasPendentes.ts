@@ -1885,7 +1885,7 @@ export function useSolicitarDocumentos() {
         console.warn('[useSolicitarDocumentos] Erro ao notificar vendedor (não crítico):', vendErr);
       }
 
-      await supabase.from('logs_auditoria').insert({
+      const _logPayload = {
         usuario_id: profile.id,
         usuario_nome: (profile as any)?.nome || (profile as any)?.email || 'Cadastro',
         acao: 'documentos_solicitados_criados',
@@ -1902,7 +1902,21 @@ export function useSolicitarDocumentos() {
           notificacao_resultado: notificacaoResultado,
           notificacao_erro: notificacaoErro,
         },
-      } as any);
+      };
+      const { error: _logErr } = await supabase.from('logs_auditoria').insert(_logPayload as any);
+      if (_logErr) {
+        console.error('[FALHA_LOG_AUDITORIA]', _logErr, _logPayload);
+        await supabase.from('logs_auditoria').insert({
+          usuario_id: profile.id,
+          usuario_nome: (profile as any)?.nome || 'Cadastro',
+          acao: 'criar',
+          modulo: 'cadastro',
+          tabela: 'documentos_solicitados',
+          registro_id: contratoId,
+          descricao: `[FALHA_LOG_AUDITORIA] documentos_solicitados_criados: ${(_logErr as any)?.message ?? String(_logErr)}`,
+          dados_novos: { erro: _logErr, payload_original: _logPayload },
+        } as any);
+      }
 
       return { contratoId, associadoId, linkPendencias };
     },
