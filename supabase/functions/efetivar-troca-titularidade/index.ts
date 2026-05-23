@@ -114,9 +114,13 @@ serve(async (req) => {
           if (!assRow) throw new Error(`Associado local ${troca.novo_associado_id} não encontrado para payload SGA`);
           const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
           const cad = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
+          if (cad.motivo === 'codigo_associado_nao_encontrado') {
+            throw new Error(`[CODIGO_ASSOCIADO_NAO_ENCONTRADO] ${cad.mensagem}`);
+          }
           if (!cad.ok || !cad.codigo) throw new Error(`SGA cadastrarOuAtualizarAssociado: ${cad.errors.join("; ") || cad.mensagem}`);
           sgaCodAss = cad.codigo;
           console.log(`[retry-sga][SGA] associado ${cad.codigo} via ${cad.via}`);
+
         }
         await supabase.from("associados").update({
           codigo_hinova: sgaCodAss, sincronizado_hinova: true, sincronizado_hinova_em: new Date().toISOString(),
@@ -177,14 +181,26 @@ serve(async (req) => {
         });
       } catch (sgaErr) {
         const msg = (sgaErr as Error)?.message || String(sgaErr);
-        console.error("[retry-sga] Falha:", msg);
+        const acaoManual = msg.startsWith('[CODIGO_ASSOCIADO_NAO_ENCONTRADO]');
+        const sgaStatusUpd = acaoManual ? 'falha_manual_codigo_nao_encontrado' : 'falha';
+        console.error("[retry-sga] Falha:", msg, acaoManual ? '(ação manual)' : '');
         await supabase.from("solicitacoes_troca_titularidade").update({
-          sga_status: "falha", sga_erro: msg,
+          sga_status: sgaStatusUpd, sga_erro: msg,
         }).eq("id", solicitacao_id);
-        return new Response(JSON.stringify({ success: false, error: msg, sga_status: "falha" }), {
+        // Marca fila pendente mais recente como falha_permanente quando exige ação manual,
+        // para o cron-sga-retry não retentar em loop.
+        if (acaoManual) {
+          await supabase.from('sga_sync_queue')
+            .update({ status: 'falha_permanente', erro_ultimo: msg })
+            .eq('origem', 'troca_titularidade')
+            .eq('associado_id', troca.novo_associado_id)
+            .in('status', ['pendente', 'processando']);
+        }
+        return new Response(JSON.stringify({ success: false, error: msg, sga_status: sgaStatusUpd, acao_manual: acaoManual }), {
           status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
     }
 
     console.log(`[efetivar-troca] Iniciando efetivação para solicitação ${solicitacao_id}`);
@@ -1095,11 +1111,15 @@ serve(async (req) => {
         if (!assRow) throw new Error(`Associado local ${novoAssociadoId} não encontrado para payload SGA`);
         const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
         const cadAss = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
+        if (cadAss.motivo === 'codigo_associado_nao_encontrado') {
+          throw new Error(`[CODIGO_ASSOCIADO_NAO_ENCONTRADO] ${cadAss.mensagem}`);
+        }
         if (!cadAss.ok || !cadAss.codigo) {
           throw new Error(`SGA cadastrarOuAtualizarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
         }
         codigoAssociadoNovo = cadAss.codigo;
         console.log(`[efetivar-troca][SGA] associado ${cadAss.codigo} via ${cadAss.via}`);
+
       } else {
         // Atualiza dados do associado existente (telefone/email)
         await alterarAssociadoHinova(supabase, {
@@ -1200,16 +1220,18 @@ serve(async (req) => {
       sgaStatus = 'sincronizado';
       console.log('[efetivar-troca][SGA] ✅ Sincronização concluída');
     } catch (sgaErr) {
-      sgaStatus = 'pendente';
       sgaErro = (sgaErr as Error)?.message || String(sgaErr);
-      console.error('[efetivar-troca][SGA] ⚠️ Falha (não bloqueante):', sgaErro);
+      const acaoManual = sgaErro.startsWith('[CODIGO_ASSOCIADO_NAO_ENCONTRADO]');
+      sgaStatus = acaoManual ? 'falha_manual_codigo_nao_encontrado' : 'pendente';
+      console.error('[efetivar-troca][SGA] ⚠️ Falha (não bloqueante):', sgaErro, acaoManual ? '(ação manual)' : '');
 
-      // Enfileira retry
+      // Enfileira na sga_sync_queue. Quando exige ação manual (CPF existe no Hinova
+      // mas /buscar não retorna), grava como falha_permanente para o cron não retentar.
       await supabase.from('sga_sync_queue').insert({
         veiculo_id: veiculoId,
         associado_id: novoAssociadoId,
-        status: 'pendente',
-        etapa_parou: 'troca_titularidade',
+        status: acaoManual ? 'falha_permanente' : 'pendente',
+        etapa_parou: acaoManual ? 'troca_titularidade:codigo_associado_nao_encontrado' : 'troca_titularidade',
         erro_ultimo: sgaErro,
         origem: 'troca_titularidade',
         codigo_associado_hinova: sgaCodigoAssociadoNovo,
@@ -1218,6 +1240,7 @@ serve(async (req) => {
         if (error) console.warn('[efetivar-troca][SGA] enqueue retry falhou:', error.message);
       });
     }
+
 
     // 16. Atualiza solicitacoes_troca_titularidade — marca como efetivada
     await supabase.from('solicitacoes_troca_titularidade').update({

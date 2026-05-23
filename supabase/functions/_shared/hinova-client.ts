@@ -1357,7 +1357,10 @@ function isCpfDuplicadoError(res: CadastroResultado): boolean {
 export async function cadastrarOuAtualizarAssociadoHinova(
   supabase: any,
   payload: Record<string, unknown>,
-): Promise<CadastroResultado & { via: 'cadastro' | 'atualizacao' | null }> {
+): Promise<CadastroResultado & {
+  via: 'cadastro' | 'atualizacao' | null;
+  motivo?: 'codigo_associado_nao_encontrado';
+}> {
   // 1) Tenta cadastrar
   const cad = await cadastrarAssociadoHinova(supabase, payload);
   if (cad.ok && cad.codigo) {
@@ -1378,8 +1381,15 @@ export async function cadastrarOuAtualizarAssociadoHinova(
   try {
     const busca = await buscarAssociadoComVeiculosPorCpf(supabase, cpf);
     if (!busca.codigo_associado) {
-      // SGA disse "já existe" mas busca não acha — contradição. Devolve erro original.
-      return { ...cad, via: null };
+      // SGA disse "já existe" mas busca não retornou (404/406). Geralmente acontece quando
+      // o associado existe no Hinova mas não tem veículos vinculados. Sinaliza motivo
+      // controlado para o caller marcar a fila como falha_permanente (ação manual no SGA).
+      return {
+        ...cad,
+        via: null,
+        motivo: 'codigo_associado_nao_encontrado',
+        mensagem: cad.mensagem || 'CPF já cadastrado no SGA mas /buscar não retornou — preencher codigo_hinova manualmente via painel SGA.',
+      };
     }
 
     const { cpf: _cpfIgnored, ...rest } = payload;
@@ -1403,6 +1413,15 @@ export async function cadastrarOuAtualizarAssociadoHinova(
     // Alteração falhou — devolve o erro da alteração, não do cadastro
     return { ...upd, via: null };
   } catch (e: any) {
+    if (e instanceof HinovaNotFoundError) {
+      // Mesma contradição: SGA disse duplicado, busca 404. Trata como ação manual.
+      return {
+        ...cad,
+        via: null,
+        motivo: 'codigo_associado_nao_encontrado',
+        mensagem: cad.mensagem || 'CPF já cadastrado no SGA mas /buscar não retornou — preencher codigo_hinova manualmente via painel SGA.',
+      };
+    }
     return {
       ok: false,
       codigo: null,
@@ -1414,6 +1433,7 @@ export async function cadastrarOuAtualizarAssociadoHinova(
     };
   }
 }
+
 
 /**
  * POST /veiculo/cadastrar
