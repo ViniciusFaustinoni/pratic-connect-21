@@ -133,6 +133,17 @@ export default function Cotacoes() {
   const [cotacaoParaContinuar, setCotacaoParaContinuar] = useState<CotacaoWithRelations | null>(null);
   const [cotacaoConfirmarDuplicar, setCotacaoConfirmarDuplicar] = useState<CotacaoWithRelations | null>(null);
   const [ignorarPlacaIds, setIgnorarPlacaIds] = useState<string[]>([]);
+  const [substituicaoCtx, setSubstituicaoCtx] = useState<{
+    solicitacaoId: string;
+    associadoId: string;
+    veiculoAntigoId: string;
+    veiculoAntigoPlaca: string;
+    veiculoAntigoModelo: string;
+    nome: string;
+    telefone: string;
+    email: string;
+  } | null>(null);
+
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('em_andamento');
   const [outerTab, setOuterTab] = useState<'cotacoes' | 'outros'>('cotacoes');
