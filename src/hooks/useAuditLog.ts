@@ -64,13 +64,28 @@ export async function registrarLog(params: LogParams): Promise<void> {
     const { error } = await supabase
       .from('logs_auditoria')
       .insert([logData] as never[]);
-    
+
     if (error) {
-      console.error('[AuditLog] Erro ao registrar:', error);
+      // Vigia universal: tenta gravar fallback rastreável com acao='criar'.
+      console.error('[FALHA_LOG_AUDITORIA]', error, logData);
+      const fallback = {
+        usuario_id: logData.usuario_id,
+        usuario_nome: logData.usuario_nome,
+        acao: 'criar' as const,
+        modulo: logData.modulo ?? 'configuracoes',
+        descricao: `[FALHA_LOG_AUDITORIA] ${logData.acao}: ${(error as { message?: string })?.message ?? String(error)}`,
+        tabela: logData.tabela,
+        registro_id: logData.registro_id,
+        dados_novos: { erro: error, payload_original: logData } as Record<string, unknown>,
+      };
+      const { error: fbErr } = await supabase
+        .from('logs_auditoria')
+        .insert([fallback] as never[]);
+      if (fbErr) console.error('[FALHA_LOG_AUDITORIA_FALLBACK]', fbErr);
     }
   } catch (error) {
     // Silenciosamente falha para não afetar operação principal
-    console.error('[AuditLog] Erro inesperado:', error);
+    console.error('[FALHA_LOG_AUDITORIA_EXCEPTION]', error);
   }
 }
 
