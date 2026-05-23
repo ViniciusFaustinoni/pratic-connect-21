@@ -1317,6 +1317,105 @@ export async function cadastrarAssociadoHinova(
 }
 
 /**
+ * Detecta se a resposta do `/associado/cadastrar` indica que o CPF já existe
+ * no SGA. Mantemos como regex em texto livre porque a Hinova não retorna um
+ * código de erro estruturado para este caso.
+ *
+ * DÍVIDA TÉCNICA: Se a Hinova mudar a mensagem (já aconteceu com outros
+ * provedores), o regex falha e o cadastro vira erro hard. Quando isso for
+ * recorrente, migrar a detecção pra código de erro do payload se passar a
+ * existir.
+ */
+function isCpfDuplicadoError(res: CadastroResultado): boolean {
+  const blob = [
+    res.mensagem ?? '',
+    ...(res.errors || []),
+    typeof res.raw === 'string' ? res.raw : JSON.stringify(res.raw ?? ''),
+  ].join(' | ').toLowerCase();
+  return /j[áa]\s+existe[^|]*cpf|cpf[^|]*j[áa]\s+cadastrad/i.test(blob);
+}
+
+/**
+ * Upsert idempotente de associado no SGA Hinova.
+ *
+ * Caminho canônico para sincronizar associado quando o CPF pode já existir
+ * (ex.: troca de titularidade onde o novo titular já é associado, retry da
+ * fila SGA após primeira falha por duplicidade, etc.).
+ *
+ * Fluxo:
+ *   1. Tenta `cadastrarAssociadoHinova` (POST /associado/cadastrar).
+ *   2. Sucesso → retorna `{ via: 'cadastro' }`.
+ *   3. Falha cuja mensagem casa com `isCpfDuplicadoError` → busca o
+ *      `codigo_associado` existente via `buscarAssociadoComVeiculosPorCpf`
+ *      e atualiza via `alterarAssociadoHinova` → retorna `{ via: 'atualizacao' }`.
+ *   4. Qualquer outra falha (incluindo busca/alteração quebrando) → devolve
+ *      `{ ok: false }` com o erro original preservado — nada é mascarado.
+ *
+ * Não envia `cpf` no `alterarAssociadoHinova` (alterar CPF exige passar
+ * `codigo_associado` E o CPF novo; aqui só atualizamos dados auxiliares).
+ */
+export async function cadastrarOuAtualizarAssociadoHinova(
+  supabase: any,
+  payload: Record<string, unknown>,
+): Promise<CadastroResultado & { via: 'cadastro' | 'atualizacao' | null }> {
+  // 1) Tenta cadastrar
+  const cad = await cadastrarAssociadoHinova(supabase, payload);
+  if (cad.ok && cad.codigo) {
+    return { ...cad, via: 'cadastro' };
+  }
+
+  // 2) Se NÃO for CPF duplicado, propaga o erro original
+  if (!isCpfDuplicadoError(cad)) {
+    return { ...cad, via: null };
+  }
+
+  // 3) CPF duplicado → busca o codigo_associado existente e atualiza
+  const cpf = String(payload.cpf || '').replace(/\D/g, '');
+  if (cpf.length !== 11) {
+    return { ...cad, via: null };
+  }
+
+  try {
+    const busca = await buscarAssociadoComVeiculosPorCpf(supabase, cpf);
+    if (!busca.codigo_associado) {
+      // SGA disse "já existe" mas busca não acha — contradição. Devolve erro original.
+      return { ...cad, via: null };
+    }
+
+    const { cpf: _cpfIgnored, ...rest } = payload;
+    const upd = await alterarAssociadoHinova(supabase, {
+      codigo_associado: busca.codigo_associado,
+      ...rest,
+    });
+
+    if (upd.ok) {
+      return {
+        ok: true,
+        codigo: busca.codigo_associado,
+        status: upd.status,
+        raw: upd.raw,
+        mensagem: upd.mensagem ?? 'atualizado (CPF já existia)',
+        errors: [],
+        via: 'atualizacao',
+      };
+    }
+
+    // Alteração falhou — devolve o erro da alteração, não do cadastro
+    return { ...upd, via: null };
+  } catch (e: any) {
+    return {
+      ok: false,
+      codigo: null,
+      status: cad.status,
+      raw: cad.raw,
+      mensagem: `falha no upsert: ${String(e?.message || e)}`,
+      errors: [...cad.errors, String(e?.message || e)],
+      via: null,
+    };
+  }
+}
+
+/**
  * POST /veiculo/cadastrar
  * Aceita supabase (recomendado, com retry) ou HinovaSession (legado).
  */

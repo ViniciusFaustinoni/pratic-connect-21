@@ -2,17 +2,18 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 import {
-import { insertAuditLog } from '../_shared/auditLog.ts';
   alterarAssociadoHinova,
   alterarSituacaoVeiculoHinova,
   buscarAssociadoComVeiculosPorCpf,
   buscarVeiculoPorChassi,
   cadastrarAssociadoHinova,
+  cadastrarOuAtualizarAssociadoHinova,
   cadastrarHistoricoAtendimentoHinova,
   cadastrarVeiculoHinova,
   getHinovaSession,
   HinovaNotFoundError,
 } from "../_shared/hinova-client.ts";
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 
 const corsHeaders = {
@@ -101,14 +102,15 @@ serve(async (req) => {
           if (!(e instanceof HinovaNotFoundError)) throw e;
         }
         if (!sgaCodAss) {
-          const cad = await cadastrarAssociadoHinova(supabase, {
+          const cad = await cadastrarOuAtualizarAssociadoHinova(supabase, {
             nome: dadosNovo.nome,
             cpf: cpfLimpo,
             email: dadosNovo.email || undefined,
             telefone_celular: (dadosNovo.telefone || "").replace(/\D/g, "") || undefined,
           });
-          if (!cad.ok || !cad.codigo) throw new Error(`SGA cadastrarAssociado: ${cad.errors.join("; ") || cad.mensagem}`);
+          if (!cad.ok || !cad.codigo) throw new Error(`SGA cadastrarOuAtualizarAssociado: ${cad.errors.join("; ") || cad.mensagem}`);
           sgaCodAss = cad.codigo;
+          console.log(`[retry-sga][SGA] associado ${cad.codigo} via ${cad.via}`);
         }
         await supabase.from("associados").update({
           codigo_hinova: sgaCodAss, sincronizado_hinova: true, sincronizado_hinova_em: new Date().toISOString(),
