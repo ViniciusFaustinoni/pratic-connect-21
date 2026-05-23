@@ -1,12 +1,10 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Send, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
-import { useSolicitacaoSubstituicao, useEnviarTermoCancelamentoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
+import { Loader2, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
+import { useSolicitacaoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
 import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,28 +29,15 @@ function fmtMoney(v?: number | null) {
 export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }: Props) {
   const navigate = useNavigate();
   const { data: sol, isLoading } = useSolicitacaoSubstituicao(solicitacaoId);
-  const enviar = useEnviarTermoCancelamentoSubstituicao();
-  const [confirmando, setConfirmando] = useState(false);
 
-  // Polling do termo (fallback para o webhook Autentique).
+  // Polling do termo legado — só ativo para solicitações que já enviaram termo
+  // de cancelamento separado pelo fluxo antigo (substituído pelo termo unificado
+  // assinado no link público da cotação).
   const syncTermo = useSyncTermoCancelamento({
     tipo: 'substituicao',
     solicitacaoId: sol?.id,
     enabled: open && !!sol && sol.status === 'termo_enviado' && !sol.termo_cancelamento_assinado_em,
   });
-
-  const handleEnviar = async (force: boolean) => {
-    if (!sol) return;
-    setConfirmando(true);
-    try {
-      await enviar.mutateAsync({ solicitacao_id: sol.id, force_resend: force });
-      toast.success(force ? 'Termo reenviado' : 'Termo de cancelamento enviado');
-    } catch (e: any) {
-      toast.error(e?.message || 'Falha ao enviar termo');
-    } finally {
-      setConfirmando(false);
-    }
-  };
 
   const handleCriarCotacao = () => {
     if (!sol) return;
