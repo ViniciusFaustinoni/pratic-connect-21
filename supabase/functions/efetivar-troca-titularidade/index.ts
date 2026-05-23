@@ -1220,16 +1220,18 @@ serve(async (req) => {
       sgaStatus = 'sincronizado';
       console.log('[efetivar-troca][SGA] ✅ Sincronização concluída');
     } catch (sgaErr) {
-      sgaStatus = 'pendente';
       sgaErro = (sgaErr as Error)?.message || String(sgaErr);
-      console.error('[efetivar-troca][SGA] ⚠️ Falha (não bloqueante):', sgaErro);
+      const acaoManual = sgaErro.startsWith('[CODIGO_ASSOCIADO_NAO_ENCONTRADO]');
+      sgaStatus = acaoManual ? 'falha_manual_codigo_nao_encontrado' : 'pendente';
+      console.error('[efetivar-troca][SGA] ⚠️ Falha (não bloqueante):', sgaErro, acaoManual ? '(ação manual)' : '');
 
-      // Enfileira retry
+      // Enfileira na sga_sync_queue. Quando exige ação manual (CPF existe no Hinova
+      // mas /buscar não retorna), grava como falha_permanente para o cron não retentar.
       await supabase.from('sga_sync_queue').insert({
         veiculo_id: veiculoId,
         associado_id: novoAssociadoId,
-        status: 'pendente',
-        etapa_parou: 'troca_titularidade',
+        status: acaoManual ? 'falha_permanente' : 'pendente',
+        etapa_parou: acaoManual ? 'troca_titularidade:codigo_associado_nao_encontrado' : 'troca_titularidade',
         erro_ultimo: sgaErro,
         origem: 'troca_titularidade',
         codigo_associado_hinova: sgaCodigoAssociadoNovo,
@@ -1238,6 +1240,7 @@ serve(async (req) => {
         if (error) console.warn('[efetivar-troca][SGA] enqueue retry falhou:', error.message);
       });
     }
+
 
     // 16. Atualiza solicitacoes_troca_titularidade — marca como efetivada
     await supabase.from('solicitacoes_troca_titularidade').update({
