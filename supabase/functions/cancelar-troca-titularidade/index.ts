@@ -204,6 +204,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: msg,
+        etapa: (anyErr as { etapa?: string } | null)?.etapa ?? null,
         code: anyErr?.code ?? null,
         details: anyErr?.details ?? null,
         hint: anyErr?.hint ?? null,
