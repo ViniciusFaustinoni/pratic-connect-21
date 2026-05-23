@@ -19,6 +19,7 @@ interface EtapaAssinaturaContratoProps {
   clienteEmail: string;
   onContratoAssinado: () => void;
   readOnly?: boolean;
+  isSubstituicao?: boolean;
   // Dados iniciais do contrato (vindos do hook pai)
   contratoInicial?: {
     id: string;
@@ -39,8 +40,11 @@ export function EtapaAssinaturaContrato({
   clienteEmail,
   onContratoAssinado,
   readOnly = false,
+  isSubstituicao = false,
   contratoInicial,
 }: EtapaAssinaturaContratoProps) {
+  const rotuloProposta = isSubstituicao ? 'Proposta de Substituição' : 'Proposta de Filiação';
+  const rotuloPropostaUpper = isSubstituicao ? 'SUA PROPOSTA DE SUBSTITUIÇÃO' : 'SUA PROPOSTA DE FILIAÇÃO';
   // ═══ ESTADOS ATÔMICOS INDEPENDENTES ═══
   const [contratoId, setContratoId] = useState<string | null>(contratoInicial?.id || null);
   const [contratoNumero, setContratoNumero] = useState<string | null>(contratoInicial?.numero || null);
@@ -788,9 +792,9 @@ export function EtapaAssinaturaContrato({
           <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
             <FileSignature className="h-7 w-7 text-primary" />
           </div>
-          <CardTitle className="text-xl">Assinatura Digital da Proposta de Filiação</CardTitle>
+          <CardTitle className="text-xl">Assinatura Digital da {rotuloProposta}</CardTitle>
           <CardDescription>
-            Proposta de Filiação {contratoNumero && <span className="font-medium text-foreground">{contratoNumero}</span>}
+            {rotuloProposta} {contratoNumero && <span className="font-medium text-foreground">{contratoNumero}</span>}
           </CardDescription>
         </CardHeader>
 
@@ -801,7 +805,7 @@ export function EtapaAssinaturaContrato({
               <Mail className="h-8 w-8 text-white animate-bounce" />
             </div>
             <p className="text-3xl md:text-4xl font-extrabold text-white uppercase leading-tight animate-pulse">
-              SUA PROPOSTA DE FILIAÇÃO ESTÁ NO SEU E-MAIL PARA ASSINATURA!
+              {rotuloPropostaUpper} ESTÁ NO SEU E-MAIL PARA ASSINATURA!
             </p>
           </div>
 

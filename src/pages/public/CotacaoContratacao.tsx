@@ -1045,6 +1045,7 @@ export default function CotacaoContratacao() {
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
                     onContratoAssinado={() => handleContratoAssinado(3)}
+                    isSubstituicao={isSubstituicao}
                     readOnly={isEtapaConcluida(2)}
                     contratoInicial={contratoFallback ? {
                       id: contratoFallback.id,
