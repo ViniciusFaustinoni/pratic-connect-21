@@ -59,17 +59,25 @@ Deno.serve(async (req) => {
 
     // 2. Importa associado para base local (idempotente)
     // IMPORTANTE: importar-associado-sga exige Authorization (JWT de usuário).
-    // functions.invoke() do supabase-js NÃO propaga service-role como Authorization,
-    // então repassamos o header original do request para evitar 401.
+    // supabase-js functions.invoke() sobrescreve Authorization com a chave do client
+    // (service-role), então usamos fetch direto para garantir o JWT do usuário.
     const authHeader = req.headers.get('Authorization') || '';
-    const impResp = await admin.functions.invoke('importar-associado-sga', {
-      body: { cpf },
-      headers: authHeader ? { Authorization: authHeader } : undefined,
+    const impHttp = await fetch(`${SUPABASE_URL}/functions/v1/importar-associado-sga`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: ANON_KEY,
+        Authorization: authHeader || `Bearer ${ANON_KEY}`,
+      },
+      body: JSON.stringify({ cpf }),
     });
-    if (impResp.error) {
-      return json(502, { error: 'Falha ao importar associado do SGA: ' + impResp.error.message });
+    const impText = await impHttp.text();
+    if (!impHttp.ok) {
+      return json(502, { error: `Falha ao importar associado do SGA (${impHttp.status}): ${impText.slice(0, 300)}` });
     }
-    const associadoLocalId = (impResp.data as any)?.associado_id as string | null;
+    let impData: any = {};
+    try { impData = JSON.parse(impText); } catch { /* ignore */ }
+    const associadoLocalId = impData?.associado_id as string | null;
     if (!associadoLocalId) return json(500, { error: 'Import SGA não retornou associado_id' });
 
     // Localiza veículo local pela placa (após import)
