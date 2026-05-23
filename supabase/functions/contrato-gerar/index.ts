@@ -908,7 +908,7 @@ serve(async (req) => {
       if (placaLimpaNovo) {
         const { data: placaJaExiste } = await supabase
           .from('veiculos')
-          .select('id, associado_id')
+          .select('id, associado_id, associados(cpf, nome)')
           .eq('placa', placaLimpaNovo)
           .maybeSingle();
         if (placaJaExiste && placaJaExiste.associado_id && placaJaExiste.associado_id !== associadoId) {
@@ -916,16 +916,22 @@ serve(async (req) => {
             supabase, placaLimpaNovo, (cotacao as any).dados_extras,
           );
           if (!liberadoPorTroca) {
+            const cpfDono = (placaJaExiste as any)?.associados?.cpf || null;
+            const nomeDono = (placaJaExiste as any)?.associados?.nome || '(desconhecido)';
+            const cpfDivergente = cpfDono && cpfDono !== cpfNormalizado;
             console.error(
-              `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id}, ` +
-              `mas o solicitante novo é ${associadoId} (cotação ${cotacao_id}).`
+              `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id} ` +
+              `(cpf_dono=${cpfDono}, cpf_solicitante=${cpfNormalizado}, divergente=${cpfDivergente}, cotação ${cotacao_id}).`
             );
             return new Response(
               JSON.stringify({
                 success: false,
-                error: `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
-                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+                error: cpfDivergente
+                  ? `A placa ${placaLimpaNovo} já está vinculada ao associado "${nomeDono}" (CPF diferente do solicitante). ` +
+                    `Trate manualmente: use Substituição/Troca de Titularidade ou confirme se a placa está correta.`
+                  : `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
+                    `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: cpfDivergente ? 'PLACA_CPF_DIVERGENTE' : 'PLACA_DE_OUTRO_ASSOCIADO',
               }),
               { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
