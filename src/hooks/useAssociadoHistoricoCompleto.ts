@@ -48,6 +48,9 @@ const tipoDbParaTimeline: Record<string, TipoEvento> = {
   'ressalva_declinada_monitoramento': 'ressalva_declinada_monitoramento',
   'protecao_360_aprovada_monitoramento': 'protecao_360_aprovada_monitoramento',
   'protecao_360_reprovada_monitoramento': 'protecao_360_reprovada_monitoramento',
+  // Troca de titularidade — reaproveita os ícones de carro de adicionar/remover veículo
+  'troca_titularidade_saida': 'veiculo_removido',
+  'troca_titularidade_entrada': 'veiculo_adicionado',
 };
 
 export function useAssociadoHistoricoCompleto(associadoId: string | undefined) {
