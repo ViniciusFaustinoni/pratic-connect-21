@@ -133,6 +133,17 @@ export default function Cotacoes() {
   const [cotacaoParaContinuar, setCotacaoParaContinuar] = useState<CotacaoWithRelations | null>(null);
   const [cotacaoConfirmarDuplicar, setCotacaoConfirmarDuplicar] = useState<CotacaoWithRelations | null>(null);
   const [ignorarPlacaIds, setIgnorarPlacaIds] = useState<string[]>([]);
+  const [substituicaoCtx, setSubstituicaoCtx] = useState<{
+    solicitacaoId: string;
+    associadoId: string;
+    veiculoAntigoId: string;
+    veiculoAntigoPlaca: string;
+    veiculoAntigoModelo: string;
+    nome: string;
+    telefone: string;
+    email: string;
+  } | null>(null);
+
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('em_andamento');
   const [outerTab, setOuterTab] = useState<'cotacoes' | 'outros'>('cotacoes');
@@ -267,12 +278,24 @@ export default function Cotacoes() {
       searchParams.delete('lead');
       setSearchParams(searchParams, { replace: true });
     } else if (tipoEntrada === 'substituicao' || tipoEntrada === 'inclusao') {
-      // Substituição/Inclusão: abrir modal de cotação direto
-      // Os dados do associado/veículo antigo serão salvos em dados_extras na cotação
+      // Substituição/Inclusão: abrir modal de cotação direto com contexto
+      if (tipoEntrada === 'substituicao') {
+        setSubstituicaoCtx({
+          solicitacaoId: searchParams.get('solicitacao_substituicao_id') || '',
+          associadoId: associadoId || '',
+          veiculoAntigoId: searchParams.get('veiculo_antigo_id') || '',
+          veiculoAntigoPlaca: searchParams.get('veiculo_antigo_placa') || '',
+          veiculoAntigoModelo: searchParams.get('veiculo_antigo_modelo') || '',
+          nome: searchParams.get('associado_nome') || '',
+          telefone: searchParams.get('associado_telefone') || '',
+          email: searchParams.get('associado_email') || '',
+        });
+      }
       setShowCotacaoForm(true);
-      // Limpar params após abrir
+      // Limpar params após capturar
       const newParams = new URLSearchParams();
       setSearchParams(newParams, { replace: true });
+
     } else if (novoParam === 'true') {
       setNovaEntradaMounted(true);
       setShowNovaEntrada(true);
@@ -1371,11 +1394,37 @@ export default function Cotacoes() {
                 setCotacaoParaDuplicar(null);
                 setCotacaoParaContinuar(null);
                 setIgnorarPlacaIds([]);
+                setSubstituicaoCtx(null);
               }
             }}
             leadId={leadIdFromUrl || undefined}
             ignorarPlacaDuplicadaIds={ignorarPlacaIds}
-            cotacaoBase={cotacaoParaDuplicar ? {
+            origemSubstituicao={substituicaoCtx ? {
+              solicitacaoId: substituicaoCtx.solicitacaoId,
+              associadoId: substituicaoCtx.associadoId,
+              veiculoAntigoId: substituicaoCtx.veiculoAntigoId,
+              veiculoAntigoPlaca: substituicaoCtx.veiculoAntigoPlaca,
+              veiculoAntigoModelo: substituicaoCtx.veiculoAntigoModelo,
+            } : null}
+            cotacaoBase={substituicaoCtx ? {
+              valor_fipe: 0,
+              valor_adicional: 0,
+              valor_adesao: null,
+              validade_dias: 30,
+              veiculo_marca: null,
+              veiculo_modelo: null,
+              veiculo_ano: null,
+              veiculo_placa: null,
+              codigo_fipe: null,
+              categoria: null,
+              regiao: null,
+              nome_solicitante: substituicaoCtx.nome || null,
+              telefone1_solicitante: substituicaoCtx.telefone || null,
+              email_solicitante: substituicaoCtx.email || null,
+              lead_id: null,
+              plano_id: null,
+              dados_extras: null,
+            } : cotacaoParaDuplicar ? {
               valor_fipe: cotacaoParaDuplicar.valor_fipe,
               valor_adicional: cotacaoParaDuplicar.valor_adicional,
               valor_adesao: cotacaoParaDuplicar.valor_adesao,
@@ -1394,6 +1443,7 @@ export default function Cotacoes() {
               plano_id: cotacaoParaDuplicar.plano_id,
               dados_extras: cotacaoParaDuplicar.dados_extras as any,
             } : null}
+
             cotacaoParaEditar={cotacaoParaContinuar ? {
               id: cotacaoParaContinuar.id,
               valor_fipe: cotacaoParaContinuar.valor_fipe,

@@ -41,6 +41,7 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
 
   const handleCriarCotacao = () => {
     if (!sol) return;
+    const snap = sol.associado_snapshot || {};
     const params = new URLSearchParams({
       tipo_entrada: 'substituicao',
       associado_id: sol.associado_id || '',
@@ -48,10 +49,14 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
       veiculo_antigo_placa: sol.veiculo_antigo_placa,
       veiculo_antigo_modelo: `${sol.veiculo_antigo_snapshot?.marca || ''} ${sol.veiculo_antigo_snapshot?.modelo || ''}`.trim(),
       solicitacao_substituicao_id: sol.id,
+      associado_nome: snap.nome || '',
+      associado_telefone: snap.telefone || '',
+      associado_email: snap.email || '',
     });
     onOpenChange(false);
     navigate(`/vendas/cotacoes?${params.toString()}`);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

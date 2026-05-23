@@ -152,9 +152,22 @@ export interface CotacaoFormDialogProps {
     associadoAntigoId: string;
     veiculoOrigemId: string;
   } | null;
+  /**
+   * Quando presente, marca a cotação como originada de uma Substituição de Placa.
+   * Trava `tipo_entrada='substituicao_placa'`, injeta metadados em `dados_extras`
+   * e vincula a `solicitacoes_substituicao_placa.cotacao_id` após criar.
+   */
+  origemSubstituicao?: {
+    solicitacaoId: string;
+    associadoId: string;
+    veiculoAntigoId: string;
+    veiculoAntigoPlaca: string;
+    veiculoAntigoModelo: string;
+  } | null;
 }
 
-export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess, origemTroca }: CotacaoFormDialogProps) {
+export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess, origemTroca, origemSubstituicao }: CotacaoFormDialogProps) {
+
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const updateCotacao = useUpdateCotacao();
@@ -224,8 +237,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [tipoPlacaSelecionado, setTipoPlacaSelecionado] = useState<string>('');
 
   // Tipo da cotação (informativo) — enviado no campo observação do veículo no SGA
-  const [tipoCotacao, setTipoCotacao] = useState<string>(origemTroca ? 'troca_titularidade' : 'adesao');
+  const [tipoCotacao, setTipoCotacao] = useState<string>(
+    origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : 'adesao')
+  );
   const [tipoCotacaoOutro, setTipoCotacaoOutro] = useState<string>('');
+
   // Observação livre que viaja junto ao tipo no campo `observacao` do veículo no SGA
   const [observacaoSga, setObservacaoSga] = useState<string>('');
   
@@ -1771,7 +1787,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           cenario_adesao: cenarioExterno,
         } : {}),
         // Tipo da cotação (informativo) — coluna direta + espelho em dados_extras
-        tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as any,
+        tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as any,
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
@@ -1794,7 +1810,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             coberturasRemovidas: p.coberturasRemovidas || [],
           })),
           // Tipo da cotação (informativo) espelhado
-          tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as string,
+          tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as string,
           ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
             ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
             : {}),
@@ -1805,8 +1821,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             associado_antigo_id: origemTroca.associadoAntigoId,
             veiculo_origem_id: origemTroca.veiculoOrigemId,
           } : {}),
+          // Marcação de origem para Substituição de Placa (quando aplicável)
+          ...(origemSubstituicao ? {
+            solicitacao_substituicao_id: origemSubstituicao.solicitacaoId,
+            associado_id: origemSubstituicao.associadoId,
+            veiculo_antigo_id: origemSubstituicao.veiculoAntigoId,
+            veiculo_antigo_placa: origemSubstituicao.veiculoAntigoPlaca,
+            veiculo_antigo_modelo: origemSubstituicao.veiculoAntigoModelo,
+          } : {}),
         },
       };
+
 
       if (isEditando && cotacaoParaEditar) {
         // Modo edição: atualizar cotação existente
@@ -2053,10 +2078,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             // Bloquear navegação: usuário fica no dialog para tentar de novo
             return;
           }
+        } else if (origemSubstituicao && novaCotacao?.id) {
+          // Vincular cotação à solicitação de substituição (não-bloqueante: erro logado).
+          try {
+            const { error: vinculoErr } = await supabase
+              .from('solicitacoes_substituicao_placa' as any)
+              .update({ cotacao_id: novaCotacao.id, status: 'cotacao_criada' })
+              .eq('id', origemSubstituicao.solicitacaoId);
+            if (vinculoErr) throw vinculoErr;
+          } catch (e) {
+            console.error('[substituicao:vincular-cotacao]', e);
+            toast.error('Cotação criada, mas não foi possível vinculá-la à substituição. Faça a vinculação manualmente.');
+          }
+          toast.success('Cotação de substituição criada com sucesso!');
+          navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
         } else {
           toast.success('Cotação criada com sucesso!');
           navigate('/vendas/cotacoes');
         }
+
       }
       // Cotação criada/atualizada com sucesso → descartar rascunho local
       draft.clearOnSubmit();
@@ -2119,13 +2159,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] max-h-[90dvh] max-sm:max-h-[100dvh] flex flex-col overflow-hidden p-0" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6">
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             <Zap className="h-5 w-5 text-primary" />
             Cotação Rápida
+            {origemSubstituicao && (
+              <Badge variant="secondary" className="ml-2">
+                Substituição de Placa · {origemSubstituicao.veiculoAntigoPlaca}
+              </Badge>
+            )}
+            {origemTroca && (
+              <Badge variant="secondary" className="ml-2">Troca de Titularidade</Badge>
+            )}
           </DialogTitle>
           <DialogDescription>
-            {lead ? `Cotação para ${lead.nome}` : 'Faça uma cotação em segundos'}
+            {origemSubstituicao
+              ? `Substituindo ${origemSubstituicao.veiculoAntigoModelo || origemSubstituicao.veiculoAntigoPlaca} — informe os dados do novo veículo`
+              : (lead ? `Cotação para ${lead.nome}` : 'Faça uma cotação em segundos')}
           </DialogDescription>
+
         </DialogHeader>
 
         <Form {...form}>
@@ -2839,7 +2890,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               <Select
                 value={tipoCotacao}
                 onValueChange={setTipoCotacao}
-                disabled={!!origemTroca}
+                disabled={!!origemTroca || !!origemSubstituicao}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
