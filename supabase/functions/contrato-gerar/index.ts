@@ -508,17 +508,40 @@ serve(async (req) => {
       });
 
       // ═══════════════════════════════════════════════════════════════
-      // PROTEÇÃO ANTI-COLISÃO: só sincroniza PII se o nome do solicitante
-      // realmente bate com o nome do associado existente. Evita poluir o
-      // cadastro de outra pessoa quando dois titulares compartilham CPF
-      // por engano (ex.: digitação errada do operador).
+      // PROTEÇÃO ANTI-COLISÃO (CPF compartilhado, nomes divergentes)
+      // — Se o associado existente já tem histórico operacional
+      // (contrato ou veículo vinculado) e os nomes NÃO coincidem,
+      // BLOQUEIA a cotação. Antes só logava warning, o que permitiu
+      // o caso LSA7A65 (Aureliano/Sergio — sobrenome igual mascarando
+      // titular diferente). Fluxo exige tratamento manual.
       // ═══════════════════════════════════════════════════════════════
       const mesmoTitular = nomesCoincidem(associadoExistente.nome, nomeFinal);
       if (!mesmoTitular) {
+        const [{ count: contratosCount }, { count: veiculosCount }] = await Promise.all([
+          supabase.from('contratos').select('id', { count: 'exact', head: true }).eq('associado_id', associadoId),
+          supabase.from('veiculos').select('id', { count: 'exact', head: true }).eq('associado_id', associadoId),
+        ]);
+        if ((contratosCount ?? 0) > 0 || (veiculosCount ?? 0) > 0) {
+          console.error(
+            `[BLOQUEIO-IDENTIDADE] CPF=${cpfNormalizado} associado_id=${associadoId} ` +
+            `nome_db="${associadoExistente.nome}" nome_cot="${nomeFinal}" ` +
+            `(cotação ${cotacao_id}) — associado já tem histórico, bloqueando reuso.`
+          );
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `O CPF ${cpfNormalizado} já está vinculado a outro titular no sistema ("${associadoExistente.nome}"). ` +
+                     `O nome desta cotação ("${nomeFinal}") é diferente. Trate manualmente no Cadastro antes de gerar o contrato — ` +
+                     `pode ser erro de digitação de CPF ou a identidade do associado precisa ser corrigida.`,
+              code: 'IDENTIDADE_DIVERGENTE_MESMO_CPF',
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
         console.warn(
           `[ALERTA-COLISAO] CPF=${cpfNormalizado} associado_id=${associadoId} ` +
           `nome_db="${associadoExistente.nome}" nome_cot="${nomeFinal}" ` +
-          `(cotação ${cotacao_id}) — PII NÃO será sincronizada.`
+          `(cotação ${cotacao_id}) — associado sem histórico, PII NÃO será sincronizada.`
         );
       }
 
@@ -586,7 +609,7 @@ serve(async (req) => {
       if (placaLimpa) {
         const { data } = await supabase
           .from('veiculos')
-          .select('id, associado_id')
+          .select('id, associado_id, associados(cpf, nome)')
           .eq('placa', placaLimpa)
           .maybeSingle();
 
@@ -597,16 +620,23 @@ serve(async (req) => {
             supabase, placaLimpa, (cotacao as any).dados_extras,
           );
           if (!liberadoPorTroca) {
+            const cpfDono = (data as any)?.associados?.cpf || null;
+            const nomeDono = (data as any)?.associados?.nome || '(desconhecido)';
+            const cpfDivergente = cpfDono && cpfDono !== cpfNormalizado;
             console.error(
-              `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
-              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+              `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id} ` +
+              `(cpf_dono=${cpfDono}, cpf_solicitante=${cpfNormalizado}, ` +
+              `divergente=${cpfDivergente}, cotação ${cotacao_id}).`
             );
             return new Response(
               JSON.stringify({
                 success: false,
-                error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
-                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+                error: cpfDivergente
+                  ? `A placa ${placaLimpa} já está vinculada ao associado "${nomeDono}" (CPF diferente do solicitante). ` +
+                    `Trate manualmente: use Substituição/Troca de Titularidade ou confirme se a placa está correta.`
+                  : `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
+                    `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: cpfDivergente ? 'PLACA_CPF_DIVERGENTE' : 'PLACA_DE_OUTRO_ASSOCIADO',
               }),
               { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
@@ -725,7 +755,7 @@ serve(async (req) => {
         if (placaLimpaEmail) {
           const { data } = await supabase
             .from('veiculos')
-            .select('id, associado_id')
+            .select('id, associado_id, associados(cpf, nome)')
             .eq('placa', placaLimpaEmail)
             .maybeSingle();
 
@@ -735,16 +765,22 @@ serve(async (req) => {
               supabase, placaLimpaEmail, (cotacao as any).dados_extras,
             );
             if (!liberadoPorTroca) {
+              const cpfDono = (data as any)?.associados?.cpf || null;
+              const nomeDono = (data as any)?.associados?.nome || '(desconhecido)';
+              const cpfDivergente = cpfDono && cpfDono !== cpfNormalizado;
               console.error(
-                `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id}, ` +
-                `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+                `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id} ` +
+                `(cpf_dono=${cpfDono}, cpf_solicitante=${cpfNormalizado}, divergente=${cpfDivergente}, cotação ${cotacao_id}).`
               );
               return new Response(
                 JSON.stringify({
                   success: false,
-                  error: `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
-                         `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-                  code: 'PLACA_DE_OUTRO_ASSOCIADO',
+                  error: cpfDivergente
+                    ? `A placa ${placaLimpaEmail} já está vinculada ao associado "${nomeDono}" (CPF diferente do solicitante). ` +
+                      `Trate manualmente: use Substituição/Troca de Titularidade ou confirme se a placa está correta.`
+                    : `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
+                      `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                  code: cpfDivergente ? 'PLACA_CPF_DIVERGENTE' : 'PLACA_DE_OUTRO_ASSOCIADO',
                 }),
                 { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
               );
@@ -872,7 +908,7 @@ serve(async (req) => {
       if (placaLimpaNovo) {
         const { data: placaJaExiste } = await supabase
           .from('veiculos')
-          .select('id, associado_id')
+          .select('id, associado_id, associados(cpf, nome)')
           .eq('placa', placaLimpaNovo)
           .maybeSingle();
         if (placaJaExiste && placaJaExiste.associado_id && placaJaExiste.associado_id !== associadoId) {
@@ -880,16 +916,22 @@ serve(async (req) => {
             supabase, placaLimpaNovo, (cotacao as any).dados_extras,
           );
           if (!liberadoPorTroca) {
+            const cpfDono = (placaJaExiste as any)?.associados?.cpf || null;
+            const nomeDono = (placaJaExiste as any)?.associados?.nome || '(desconhecido)';
+            const cpfDivergente = cpfDono && cpfDono !== cpfNormalizado;
             console.error(
-              `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id}, ` +
-              `mas o solicitante novo é ${associadoId} (cotação ${cotacao_id}).`
+              `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id} ` +
+              `(cpf_dono=${cpfDono}, cpf_solicitante=${cpfNormalizado}, divergente=${cpfDivergente}, cotação ${cotacao_id}).`
             );
             return new Response(
               JSON.stringify({
                 success: false,
-                error: `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
-                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+                error: cpfDivergente
+                  ? `A placa ${placaLimpaNovo} já está vinculada ao associado "${nomeDono}" (CPF diferente do solicitante). ` +
+                    `Trate manualmente: use Substituição/Troca de Titularidade ou confirme se a placa está correta.`
+                  : `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
+                    `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: cpfDivergente ? 'PLACA_CPF_DIVERGENTE' : 'PLACA_DE_OUTRO_ASSOCIADO',
               }),
               { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
