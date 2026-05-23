@@ -1111,11 +1111,15 @@ serve(async (req) => {
         if (!assRow) throw new Error(`Associado local ${novoAssociadoId} não encontrado para payload SGA`);
         const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
         const cadAss = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
+        if (cadAss.motivo === 'codigo_associado_nao_encontrado') {
+          throw new Error(`[CODIGO_ASSOCIADO_NAO_ENCONTRADO] ${cadAss.mensagem}`);
+        }
         if (!cadAss.ok || !cadAss.codigo) {
           throw new Error(`SGA cadastrarOuAtualizarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
         }
         codigoAssociadoNovo = cadAss.codigo;
         console.log(`[efetivar-troca][SGA] associado ${cadAss.codigo} via ${cadAss.via}`);
+
       } else {
         // Atualiza dados do associado existente (telefone/email)
         await alterarAssociadoHinova(supabase, {
