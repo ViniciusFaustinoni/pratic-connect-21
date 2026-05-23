@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, Pencil, ChevronRight, User, MessageCircle, MailWarning, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, Pencil, ChevronRight, User, MessageCircle, MailWarning, Trash2, Copy } from 'lucide-react';
 import { useExcluirCotacao } from '@/hooks/useCotacoes';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -106,6 +107,17 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
 
   const handleAbrirCotacao = (item: OutroProcessoItem) => {
     if (item.cotacao_token) window.open(`/cotacao/${item.cotacao_token}`, '_blank');
+  };
+
+  const handleCopiarLink = async (item: OutroProcessoItem) => {
+    if (!item.cotacao_token) return;
+    const url = `https://app.praticcar.org/cotacao/${item.cotacao_token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copiado para a área de transferência');
+    } catch {
+      toast.error('Não foi possível copiar o link');
+    }
   };
 
   const handleVerDetalhe = (item: OutroProcessoItem) => {
@@ -367,11 +379,19 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                         )}
 
                         {item.cotacao_token && (
-                          <Tooltip><TooltipTrigger asChild>
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleAbrirCotacao(item); }}>
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>
+                          <>
+                            <Tooltip><TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleAbrirCotacao(item); }}>
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>
+
+                            <Tooltip><TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleCopiarLink(item); }}>
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger><TooltipContent>Copiar link público para enviar ao associado</TooltipContent></Tooltip>
+                          </>
                         )}
 
                         {podeExcluirOrfa(item) && (permissions.cotacao.canDelete || permissions.cotacao.viewScope === 'all') && (
