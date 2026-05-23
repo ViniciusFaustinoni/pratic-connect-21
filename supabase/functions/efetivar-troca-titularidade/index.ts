@@ -866,7 +866,8 @@ serve(async (req) => {
       .eq("id", solicitacao.associado_id)
       .maybeSingle();
 
-    await supabase.from("associados_historico").insert([
+    // 12.a Payload dos eventos de histórico (saída + entrada)
+    const historicoTrocaPayload = [
       {
         associado_id: solicitacao.associado_id,
         tipo: "troca_titularidade_saida",
@@ -889,7 +890,53 @@ serve(async (req) => {
           cenario,
         },
       },
-    ]);
+    ];
+
+    // 12.b INSERT com try/catch — falha NÃO bloqueia a troca, mas é registrada em logs_auditoria
+    // para evitar silenciamento (caso histórico do CHECK constraint defasado).
+    try {
+      const { error: histErr } = await supabase
+        .from("associados_historico")
+        .insert(historicoTrocaPayload);
+      if (histErr) throw histErr;
+    } catch (histCatch: any) {
+      console.error(
+        "[efetivar-troca][FALHA_REGISTRO_HISTORICO_TROCA]",
+        {
+          solicitacao_id,
+          erro: histCatch?.message,
+          codigo: histCatch?.code,
+          details: histCatch?.details,
+          hint: histCatch?.hint,
+        },
+      );
+      // Log de defesa — usa 'criar' (compatível com CHECK atual do logs_auditoria.acao)
+      // e prefixa a descrição para facilitar busca futura.
+      await supabase.from("logs_auditoria").insert({
+        acao: "criar",
+        modulo: "associados",
+        tabela: "associados_historico",
+        descricao: `[FALHA_REGISTRO_HISTORICO_TROCA] Insert em associados_historico falhou na efetivação da troca ${solicitacao_id}: ${histCatch?.message || "erro desconhecido"}`,
+        dados_novos: {
+          solicitacao_id,
+          erro: {
+            message: histCatch?.message,
+            code: histCatch?.code,
+            details: histCatch?.details,
+            hint: histCatch?.hint,
+          },
+          payload: historicoTrocaPayload,
+        },
+      }).then(({ error: logErr }) => {
+        if (logErr) {
+          console.error(
+            "[efetivar-troca][FALHA_REGISTRO_LOG_AUDITORIA] log de defesa também falhou",
+            logErr,
+          );
+        }
+      });
+      // Não relançar — passos 13+ (auditoria principal, WhatsApp, SGA) seguem.
+    }
 
     // 13. Log de auditoria
     await supabase.from("logs_auditoria").insert({
