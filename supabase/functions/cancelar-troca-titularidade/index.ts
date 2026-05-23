@@ -103,16 +103,62 @@ Deno.serve(async (req) => {
       if (updErr) lancarComEtapa(updErr);
     } catch (e) { lancarComEtapa(e); }
 
-    // Etapa 2: limpar flag em_troca_titularidade (best-effort)
+    // Etapa 2: limpar flags da troca no veículo (best-effort)
     etapaAtual = 'limpar_veiculo';
     if (sol.veiculo_id) {
       try {
         await admin
           .from('veiculos')
-          .update({ em_troca_titularidade: false })
+          .update({
+            em_troca_titularidade: false,
+            troca_titularidade_id: null,
+            troca_titularidade_iniciada_em: null,
+          })
           .eq('id', sol.veiculo_id);
       } catch (vErr) {
-        console.warn('[cancelar-troca] limpar em_troca_titularidade falhou:', vErr);
+        console.warn('[cancelar-troca] limpar flags veículo falhou:', vErr);
+      }
+    }
+
+    // Etapa 2.1: religar cobertura SOMENTE se a suspensão foi causada pela própria troca
+    etapaAtual = 'religar_cobertura';
+    if (sol.veiculo_id) {
+      try {
+        const { data: veicSusp } = await admin
+          .from('veiculos')
+          .select('cobertura_suspensa, cobertura_suspensa_motivo')
+          .eq('id', sol.veiculo_id)
+          .maybeSingle();
+        if (veicSusp?.cobertura_suspensa && veicSusp?.cobertura_suspensa_motivo === 'troca_titularidade_em_andamento') {
+          const { error: relErr } = await admin
+            .from('veiculos')
+            .update({
+              cobertura_suspensa: false,
+              cobertura_suspensa_em: null,
+              cobertura_suspensa_motivo: null,
+            })
+            .eq('id', sol.veiculo_id);
+          if (relErr) console.warn('[cancelar-troca] religar cobertura falhou:', relErr);
+          else console.log('[cancelar-troca] cobertura religada (motivo=troca_titularidade_em_andamento)');
+        } else {
+          console.log('[cancelar-troca] religação ignorada (motivo=', veicSusp?.cobertura_suspensa_motivo, ', suspensa=', veicSusp?.cobertura_suspensa, ')');
+        }
+      } catch (relEx) {
+        console.warn('[cancelar-troca] religar cobertura exception:', relEx);
+      }
+    }
+
+    // Etapa 2.2: revogar termo no Autentique (best-effort)
+    etapaAtual = 'revogar_termo';
+    if (sol.termo_cancelamento_autentique_id) {
+      try {
+        const { error: cancelErr } = await admin.functions.invoke('autentique-cancel', {
+          body: { documentId: sol.termo_cancelamento_autentique_id },
+        });
+        if (cancelErr) console.warn('[cancelar-troca] revogar termo Autentique falhou:', cancelErr);
+        else console.log('[cancelar-troca] termo Autentique revogado:', sol.termo_cancelamento_autentique_id);
+      } catch (acEx) {
+        console.warn('[cancelar-troca] revogar termo Autentique exception:', acEx);
       }
     }
 
