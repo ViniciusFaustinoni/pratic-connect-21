@@ -508,17 +508,40 @@ serve(async (req) => {
       });
 
       // ═══════════════════════════════════════════════════════════════
-      // PROTEÇÃO ANTI-COLISÃO: só sincroniza PII se o nome do solicitante
-      // realmente bate com o nome do associado existente. Evita poluir o
-      // cadastro de outra pessoa quando dois titulares compartilham CPF
-      // por engano (ex.: digitação errada do operador).
+      // PROTEÇÃO ANTI-COLISÃO (CPF compartilhado, nomes divergentes)
+      // — Se o associado existente já tem histórico operacional
+      // (contrato ou veículo vinculado) e os nomes NÃO coincidem,
+      // BLOQUEIA a cotação. Antes só logava warning, o que permitiu
+      // o caso LSA7A65 (Aureliano/Sergio — sobrenome igual mascarando
+      // titular diferente). Fluxo exige tratamento manual.
       // ═══════════════════════════════════════════════════════════════
       const mesmoTitular = nomesCoincidem(associadoExistente.nome, nomeFinal);
       if (!mesmoTitular) {
+        const [{ count: contratosCount }, { count: veiculosCount }] = await Promise.all([
+          supabase.from('contratos').select('id', { count: 'exact', head: true }).eq('associado_id', associadoId),
+          supabase.from('veiculos').select('id', { count: 'exact', head: true }).eq('associado_id', associadoId),
+        ]);
+        if ((contratosCount ?? 0) > 0 || (veiculosCount ?? 0) > 0) {
+          console.error(
+            `[BLOQUEIO-IDENTIDADE] CPF=${cpfNormalizado} associado_id=${associadoId} ` +
+            `nome_db="${associadoExistente.nome}" nome_cot="${nomeFinal}" ` +
+            `(cotação ${cotacao_id}) — associado já tem histórico, bloqueando reuso.`
+          );
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `O CPF ${cpfNormalizado} já está vinculado a outro titular no sistema ("${associadoExistente.nome}"). ` +
+                     `O nome desta cotação ("${nomeFinal}") é diferente. Trate manualmente no Cadastro antes de gerar o contrato — ` +
+                     `pode ser erro de digitação de CPF ou a identidade do associado precisa ser corrigida.`,
+              code: 'IDENTIDADE_DIVERGENTE_MESMO_CPF',
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
         console.warn(
           `[ALERTA-COLISAO] CPF=${cpfNormalizado} associado_id=${associadoId} ` +
           `nome_db="${associadoExistente.nome}" nome_cot="${nomeFinal}" ` +
-          `(cotação ${cotacao_id}) — PII NÃO será sincronizada.`
+          `(cotação ${cotacao_id}) — associado sem histórico, PII NÃO será sincronizada.`
         );
       }
 
