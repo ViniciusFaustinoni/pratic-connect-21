@@ -37,6 +37,42 @@ async function aguardarVistoriaPersistida(cotacaoId: string): Promise<boolean> {
   return false;
 }
 
+/**
+ * Variante para o fluxo pós-autovistoria (acima FIPE) onde a edge
+ * `agendar-vistoria-completa` grava o agendamento em `cotacoes.vistoria_completa_*`
+ * (e tenta materializar `instalacoes`), SEM criar uma nova linha em `vistorias` —
+ * a autovistoria existente já ocupa esse slot. Aceita qualquer um dos três sinais.
+ */
+async function aguardarAgendamentoCompletaPersistido(cotacaoId: string): Promise<boolean> {
+  const intervalos = [250, 500, 1000];
+  for (let i = 0; i < intervalos.length; i++) {
+    const [{ data: cot }, { data: inst }, { data: vist }] = await Promise.all([
+      publicSupabase
+        .from('cotacoes')
+        .select('vistoria_completa_data_agendada')
+        .eq('id', cotacaoId)
+        .maybeSingle(),
+      publicSupabase
+        .from('instalacoes')
+        .select('id, data_agendada')
+        .eq('cotacao_id', cotacaoId)
+        .not('data_agendada', 'is', null)
+        .limit(1),
+      publicSupabase
+        .from('vistorias')
+        .select('id, data_agendada')
+        .eq('cotacao_id', cotacaoId)
+        .not('data_agendada', 'is', null)
+        .limit(1),
+    ]);
+    if ((cot as any)?.vistoria_completa_data_agendada) return true;
+    if (inst && inst.length > 0) return true;
+    if (vist && vist.length > 0) return true;
+    await new Promise((r) => setTimeout(r, intervalos[i]));
+  }
+  return false;
+}
+
 // Interface para resultado da edge function de agendamento presencial
 interface AgendarPresencialResponse {
   success: boolean;
