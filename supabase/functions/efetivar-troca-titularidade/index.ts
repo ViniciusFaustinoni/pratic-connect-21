@@ -181,14 +181,26 @@ serve(async (req) => {
         });
       } catch (sgaErr) {
         const msg = (sgaErr as Error)?.message || String(sgaErr);
-        console.error("[retry-sga] Falha:", msg);
+        const acaoManual = msg.startsWith('[CODIGO_ASSOCIADO_NAO_ENCONTRADO]');
+        const sgaStatusUpd = acaoManual ? 'falha_manual_codigo_nao_encontrado' : 'falha';
+        console.error("[retry-sga] Falha:", msg, acaoManual ? '(ação manual)' : '');
         await supabase.from("solicitacoes_troca_titularidade").update({
-          sga_status: "falha", sga_erro: msg,
+          sga_status: sgaStatusUpd, sga_erro: msg,
         }).eq("id", solicitacao_id);
-        return new Response(JSON.stringify({ success: false, error: msg, sga_status: "falha" }), {
+        // Marca fila pendente mais recente como falha_permanente quando exige ação manual,
+        // para o cron-sga-retry não retentar em loop.
+        if (acaoManual) {
+          await supabase.from('sga_sync_queue')
+            .update({ status: 'falha_permanente', erro_ultimo: msg })
+            .eq('origem', 'troca_titularidade')
+            .eq('associado_id', troca.novo_associado_id)
+            .in('status', ['pendente', 'processando']);
+        }
+        return new Response(JSON.stringify({ success: false, error: msg, sga_status: sgaStatusUpd, acao_manual: acaoManual }), {
           status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
     }
 
     console.log(`[efetivar-troca] Iniciando efetivação para solicitação ${solicitacao_id}`);
