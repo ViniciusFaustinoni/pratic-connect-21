@@ -1787,7 +1787,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           cenario_adesao: cenarioExterno,
         } : {}),
         // Tipo da cotação (informativo) — coluna direta + espelho em dados_extras
-        tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as any,
+        tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as any,
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
@@ -1810,7 +1810,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             coberturasRemovidas: p.coberturasRemovidas || [],
           })),
           // Tipo da cotação (informativo) espelhado
-          tipo_entrada: (origemTroca ? 'troca_titularidade' : (tipoCotacao || 'adesao')) as string,
+          tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as string,
           ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
             ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
             : {}),
@@ -1821,8 +1821,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             associado_antigo_id: origemTroca.associadoAntigoId,
             veiculo_origem_id: origemTroca.veiculoOrigemId,
           } : {}),
+          // Marcação de origem para Substituição de Placa (quando aplicável)
+          ...(origemSubstituicao ? {
+            solicitacao_substituicao_id: origemSubstituicao.solicitacaoId,
+            associado_id: origemSubstituicao.associadoId,
+            veiculo_antigo_id: origemSubstituicao.veiculoAntigoId,
+            veiculo_antigo_placa: origemSubstituicao.veiculoAntigoPlaca,
+            veiculo_antigo_modelo: origemSubstituicao.veiculoAntigoModelo,
+          } : {}),
         },
       };
+
 
       if (isEditando && cotacaoParaEditar) {
         // Modo edição: atualizar cotação existente
