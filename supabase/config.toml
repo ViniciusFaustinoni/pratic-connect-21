@@ -222,3 +222,6 @@ verify_jwt = false
 
 [functions.abrir-servico-instalacao-suspenso]
 verify_jwt = false
+
+[functions.importar-associado-sga]
+verify_jwt = false
