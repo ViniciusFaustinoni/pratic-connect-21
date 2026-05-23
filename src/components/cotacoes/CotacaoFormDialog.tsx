@@ -152,9 +152,22 @@ export interface CotacaoFormDialogProps {
     associadoAntigoId: string;
     veiculoOrigemId: string;
   } | null;
+  /**
+   * Quando presente, marca a cotação como originada de uma Substituição de Placa.
+   * Trava `tipo_entrada='substituicao_placa'`, injeta metadados em `dados_extras`
+   * e vincula a `solicitacoes_substituicao_placa.cotacao_id` após criar.
+   */
+  origemSubstituicao?: {
+    solicitacaoId: string;
+    associadoId: string;
+    veiculoAntigoId: string;
+    veiculoAntigoPlaca: string;
+    veiculoAntigoModelo: string;
+  } | null;
 }
 
-export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess, origemTroca }: CotacaoFormDialogProps) {
+export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess, origemTroca, origemSubstituicao }: CotacaoFormDialogProps) {
+
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const updateCotacao = useUpdateCotacao();
