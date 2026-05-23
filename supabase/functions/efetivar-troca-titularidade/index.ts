@@ -114,9 +114,13 @@ serve(async (req) => {
           if (!assRow) throw new Error(`Associado local ${troca.novo_associado_id} não encontrado para payload SGA`);
           const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
           const cad = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
+          if (cad.motivo === 'codigo_associado_nao_encontrado') {
+            throw new Error(`[CODIGO_ASSOCIADO_NAO_ENCONTRADO] ${cad.mensagem}`);
+          }
           if (!cad.ok || !cad.codigo) throw new Error(`SGA cadastrarOuAtualizarAssociado: ${cad.errors.join("; ") || cad.mensagem}`);
           sgaCodAss = cad.codigo;
           console.log(`[retry-sga][SGA] associado ${cad.codigo} via ${cad.via}`);
+
         }
         await supabase.from("associados").update({
           codigo_hinova: sgaCodAss, sincronizado_hinova: true, sincronizado_hinova_em: new Date().toISOString(),
