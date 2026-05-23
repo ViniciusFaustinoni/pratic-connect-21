@@ -1394,11 +1394,37 @@ export default function Cotacoes() {
                 setCotacaoParaDuplicar(null);
                 setCotacaoParaContinuar(null);
                 setIgnorarPlacaIds([]);
+                setSubstituicaoCtx(null);
               }
             }}
             leadId={leadIdFromUrl || undefined}
             ignorarPlacaDuplicadaIds={ignorarPlacaIds}
-            cotacaoBase={cotacaoParaDuplicar ? {
+            origemSubstituicao={substituicaoCtx ? {
+              solicitacaoId: substituicaoCtx.solicitacaoId,
+              associadoId: substituicaoCtx.associadoId,
+              veiculoAntigoId: substituicaoCtx.veiculoAntigoId,
+              veiculoAntigoPlaca: substituicaoCtx.veiculoAntigoPlaca,
+              veiculoAntigoModelo: substituicaoCtx.veiculoAntigoModelo,
+            } : null}
+            cotacaoBase={substituicaoCtx ? {
+              valor_fipe: 0,
+              valor_adicional: 0,
+              valor_adesao: null,
+              validade_dias: 30,
+              veiculo_marca: null,
+              veiculo_modelo: null,
+              veiculo_ano: null,
+              veiculo_placa: null,
+              codigo_fipe: null,
+              categoria: null,
+              regiao: null,
+              nome_solicitante: substituicaoCtx.nome || null,
+              telefone1_solicitante: substituicaoCtx.telefone || null,
+              email_solicitante: substituicaoCtx.email || null,
+              lead_id: null,
+              plano_id: null,
+              dados_extras: null,
+            } : cotacaoParaDuplicar ? {
               valor_fipe: cotacaoParaDuplicar.valor_fipe,
               valor_adicional: cotacaoParaDuplicar.valor_adicional,
               valor_adesao: cotacaoParaDuplicar.valor_adesao,
@@ -1417,6 +1443,7 @@ export default function Cotacoes() {
               plano_id: cotacaoParaDuplicar.plano_id,
               dados_extras: cotacaoParaDuplicar.dados_extras as any,
             } : null}
+
             cotacaoParaEditar={cotacaoParaContinuar ? {
               id: cotacaoParaContinuar.id,
               valor_fipe: cotacaoParaContinuar.valor_fipe,
