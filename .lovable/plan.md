@@ -1,55 +1,91 @@
-## Diagnóstico
+## Objetivo
 
-**Estado atual** (`associados.id = 26ac0b58-5e09-45cb-9b7b-3fda59e97176`, veículo `LSA7A65`):
+Corrigir os 3 buracos da edge `cancelar-troca-titularidade` antes do próximo teste e aplicar correções retroativas no KOU6D37 e nos 2 documentos Autentique já cancelados. Os pontos 4–7 da auditoria ficam registrados como dívida técnica e NÃO entram nesta entrega.
 
-| Campo | Valor gravado | Valor correto (Sergio) |
-|---|---|---|
-| nome | AURELIANO BARRETO DE AZEVEDO | SERGIO BARRETO DE AZEVEDO |
-| cpf | 71319506704 | 06980117750 |
-| rg | 055722599 | 108750191 |
-| cnh_numero | 03305983606 | 08962659984 |
-| data_nascimento | 1959-06-16 | 1973-08-28 |
-| email | sergiobarreto393@gmail.com | (mantém) |
-| telefone | 22999939488 | (mantém) |
+---
 
-Veículo `LSA7A65` (id `91975902-…`) e contrato em vigor já estão amarrados ao `associado_id` `26ac0b58…` — nada precisa ser remapeado, só reescrever os 5 campos de identidade no próprio registro.
+## Fix 1 — Limpeza completa dos campos do veículo
 
-**Como o erro passou** (`supabase/functions/contrato-gerar/index.ts` linhas ~507 e 595): hoje a proteção anti-colisão só compara **nome** (`nomesCoincidem`) — quando coincide CPF mas o nome diverge ela apenas alerta e segue. E o bloqueio anti-sequestro só dispara quando `veiculos.associado_id` é **diferente** do `associadoId` resolvido. Como a 2ª cotação caiu no mesmo CPF antigo (Aureliano) e o sobrenome bateu, nenhuma das duas barreiras travou.
+**Arquivo:** `supabase/functions/cancelar-troca-titularidade/index.ts`, etapa `limpar_veiculo` (hoje só zera `em_troca_titularidade`).
 
-## Correção pontual (Sergio)
+Atualizar o UPDATE em `veiculos` para também zerar:
+- `troca_titularidade_id = null`
+- `troca_titularidade_iniciada_em = null`
 
-1. UPDATE em `public.associados` no registro `26ac0b58-5e09-45cb-9b7b-3fda59e97176`:
-   - `nome='SERGIO BARRETO DE AZEVEDO'`, `cpf='06980117750'`, `rg='108750191'`, `cnh_numero='08962659984'`, `data_nascimento='1973-08-28'`
-   - email/telefone/status/id intocados → todos os FKs (contratos, veiculos, instalacoes, cotações, fila monitoramento, dashboards) seguem apontando para o mesmo registro e passam a exibir Sergio automaticamente.
-2. INSERT em `public.logs_auditoria`:
-   - `acao='correcao_identidade_associado'`, `modulo='cadastro'`, `tabela='associados'`, `registro_id='26ac0b58…'`
-   - `dados_anteriores`/`dados_novos` = snapshot dos 5 campos
-   - `descricao` = referência ao caso (placa LSA7A65, contrato em vigor, mesma classe do precedente Luiz Fernando — erro de digitação numa cotação cancelada que sobreviveu e foi reusada).
-3. **Sem fila SGA** automática nesta operação — Sergio já está com `status='aguardando_instalacao'`, qualquer sync futura usa a identidade nova; se o operador quiser empurrar manualmente, usa `/configuracoes/integracoes/sga-hinova?placa=LSA7A65`.
-4. **Não tocar** em `contratos`, `veiculos`, `instalacoes`, `cotacoes`, `vistorias` — todos já apontam corretamente; trocar identidade no associado já reflete em cascata.
+Manter como best-effort (try/catch com warn) — não bloqueia o cancelamento, mesma política atual.
 
-> Execução: 1 migration de dados (UPDATE + INSERT envelopados em transação) via tool de insert.
+**Retroativo (migração de dados):** UPDATE no veículo `9e42bc9b…` (KOU6D37) zerando `troca_titularidade_id` e `troca_titularidade_iniciada_em` (que ainda apontam para `af5d46d0…`). Auditar antes/depois via SELECT no log de aplicação.
 
-## Reforço estrutural (anti-reuso cruzado)
+---
 
-Editar `supabase/functions/contrato-gerar/index.ts` para fechar a brecha do "mesmo CPF, nomes parecidos":
+## Fix 2 — Religação da cobertura
 
-1. **Comparação CPF↔associado da placa** — nos 3 ramos que hoje fazem `BLOQUEIO-DONO` (linhas ~595, ~735, ~880), trazer também `associados.cpf` no SELECT do veículo e, **antes** do check `data.associado_id !== associadoId`, comparar `associadoDaPlaca.cpf` vs `cpfNormalizado` (CPF do solicitante). Se diferem → retornar 409 `code: 'PLACA_CPF_DIVERGENTE'` com mensagem pedindo tratamento manual (Substituição/Troca). Exceção mantida: `placaLiberadaPorTrocaTitularidade`.
-2. **Bloquear cotação que tenta reusar associado existente com identidade divergente** — no trecho de `associadoExistente` (linha ~497): hoje, se `mesmoTitular` é false, só loga e segue sem sincronizar PII. Trocar esse caminho por **erro duro** 409 `code: 'IDENTIDADE_DIVERGENTE_MESMO_CPF'` quando (a) nomes não coincidem **e** (b) já há contrato/veículo vinculado ao associado → operador é forçado a abrir o caso. Continuar permitindo silenciosamente o caso "associado novo sem histórico" (perfil ainda vazio).
-3. **Memória canônica** atualizar `mem://constraints/contracts/no-cross-owner-vehicle-reuse` registrando que a comparação agora é CPF-first com fallback de nome, e que a 2ª camada (`IDENTIDADE_DIVERGENTE_MESMO_CPF`) protege contra reuso silencioso quando o associado original carrega histórico operacional.
+**Contexto descoberto:** quando a troca suspende cobertura (via `autentique-webhook` e `autentique-sync-termo-cancelamento`), grava `veiculos.cobertura_suspensa_motivo = 'troca_titularidade_em_andamento'`. Esse campo é a prova segura de que a suspensão foi causada pela troca — exatamente o critério que você pediu.
 
-Nenhuma outra função/edge precisa mudar — `contrato-gerar` é a porta única de criação de contrato/veículo.
+Acrescentar nova etapa `religar_cobertura` na edge, depois do `limpar_veiculo`:
 
-## Validação pós-execução
+- SELECT em `veiculos` para ler `cobertura_suspensa` e `cobertura_suspensa_motivo`
+- Se `cobertura_suspensa = true` AND `cobertura_suspensa_motivo = 'troca_titularidade_em_andamento'`:
+  - UPDATE `cobertura_suspensa = false`, `cobertura_suspensa_em = null`, `cobertura_suspensa_motivo = null`
+- Qualquer outro motivo (inadimplência, instalação pendente, manual) → NÃO toca. Loga `religação ignorada (motivo=X)`.
 
-- `SELECT nome, cpf, rg, cnh_numero, data_nascimento FROM associados WHERE id='26ac0b58…'` → Sergio.
-- Tela do associado, card no Monitoramento, Fila de Vistorias, dashboards → todos exibem Sergio (sem code change, é leitura do mesmo id).
-- `logs_auditoria` traz a linha `correcao_identidade_associado`.
-- Tentativa simulada: nova cotação com CPF diferente apontando para `LSA7A65` → 409 `PLACA_CPF_DIVERGENTE`. Cotação com mesmo CPF mas nome divergente sobre associado com contrato → 409 `IDENTIDADE_DIVERGENTE_MESMO_CPF`.
-- Contrato em vigor segue válido (mesmo `associado_id`, mesma assinatura).
+Best-effort com warn, igual às outras etapas.
 
-## Fora de escopo
+**Retroativo:** mesmo critério aplicado no `9e42bc9b…` (MARCOS / KOU6D37) — religar somente se o motivo for `troca_titularidade_em_andamento`. Se for outro motivo, parar e reportar para decisão manual.
 
-- Limpar/cancelar a cotação original que continha o erro (já está cancelada).
-- Saneamento retroativo de outros associados — sem indício de outros casos; reforço já trata os próximos.
-- Mexer no fluxo de Troca de Titularidade (exceção legítima continua intacta).
+---
+
+## Fix 3 — Revogação do termo no Autentique
+
+**Contexto descoberto:** já existe a edge `autentique-cancel` que faz `mutation { deleteDocument(id: "...") }`. Não precisa reimplementar GraphQL.
+
+Acrescentar nova etapa `revogar_termo` na edge:
+
+- Ler `termo_cancelamento_autentique_id` da solicitação (já está no SELECT inicial — incluir o campo).
+- Se houver ID, chamar `autentique-cancel` via `admin.functions.invoke('autentique-cancel', { body: { documentId } })`.
+- Best-effort com warn — não bloqueia. Loga sucesso/falha com o ID do documento.
+
+**Retroativo:** invocar `autentique-cancel` manualmente para:
+- `a740c4cc…` (solicitação `af5d46d0…`)
+- `c3a7b0e2…` (solicitação `77979cf3…`)
+
+Confirmar no painel Autentique que os 2 documentos saíram do estado "pendente".
+
+---
+
+## Detalhes técnicos
+
+### Ordem das etapas na edge (após o fix)
+```
+1. update_solicitacao  (status=cancelada, reprovado_*)
+2. limpar_veiculo      (em_troca_titularidade=false, troca_titularidade_id=null, troca_titularidade_iniciada_em=null)
+3. religar_cobertura   (NOVA — condicional ao motivo)
+4. revogar_termo       (NOVA — invoca autentique-cancel)
+5. cancelar_cotacao    (espelho, rotaciona token)
+6. cancelar_contrato   (derivado)
+7. whatsapp            (best-effort)
+```
+
+### Migração retroativa (SQL via insert tool)
+Dois UPDATEs no `veiculos` para `9e42bc9b…`:
+- Limpeza dos 2 campos de troca (sempre).
+- Religação de cobertura SOMENTE se `cobertura_suspensa_motivo = 'troca_titularidade_em_andamento'` (WHERE clause garante segurança).
+
+Antes de rodar: SELECT do estado atual para registro. Depois: SELECT de validação.
+
+### Autentique retroativo
+Duas chamadas isoladas a `autentique-cancel` com os 2 documentos. Pode ser feito via `supabase--curl_edge_functions`.
+
+### O que NÃO está nesta entrega (dívida técnica registrada)
+- Trigger `trg_auditoria_generica` em `solicitacoes_troca_titularidade`
+- Front duplicando POST por clique
+- Investigação do `termo_whatsapp_status=falhou` nos 2 envios
+- Refatoração do schema (`reprovado_*` vs campos próprios de cancelamento)
+
+---
+
+## Validação pós-deploy
+
+1. KOU6D37 (`9e42bc9b…`): `em_troca_titularidade=false`, `troca_titularidade_id=null`, `troca_titularidade_iniciada_em=null`, `cobertura_suspensa=false` (se motivo era troca).
+2. Documentos `a740c4cc…` e `c3a7b0e2…` removidos/cancelados no painel Autentique.
+3. Próximo teste de troca cancelada deve, sozinho, deixar todos esses campos limpos + revogar o termo, sem ação manual.
