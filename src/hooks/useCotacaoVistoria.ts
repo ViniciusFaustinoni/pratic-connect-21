@@ -379,7 +379,7 @@ export function useAgendarVistoriaCompleta() {
         throw new Error(data?.error || 'Erro ao agendar vistoria');
       }
 
-      const confirmou = await aguardarVistoriaPersistida(cotacaoId);
+      const confirmou = await aguardarAgendamentoCompletaPersistido(cotacaoId);
       if (!confirmou) {
         throw new Error('Não conseguimos confirmar o registro do agendamento. Tente novamente.');
       }
