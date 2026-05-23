@@ -278,12 +278,24 @@ export default function Cotacoes() {
       searchParams.delete('lead');
       setSearchParams(searchParams, { replace: true });
     } else if (tipoEntrada === 'substituicao' || tipoEntrada === 'inclusao') {
-      // Substituição/Inclusão: abrir modal de cotação direto
-      // Os dados do associado/veículo antigo serão salvos em dados_extras na cotação
+      // Substituição/Inclusão: abrir modal de cotação direto com contexto
+      if (tipoEntrada === 'substituicao') {
+        setSubstituicaoCtx({
+          solicitacaoId: searchParams.get('solicitacao_substituicao_id') || '',
+          associadoId: associadoId || '',
+          veiculoAntigoId: searchParams.get('veiculo_antigo_id') || '',
+          veiculoAntigoPlaca: searchParams.get('veiculo_antigo_placa') || '',
+          veiculoAntigoModelo: searchParams.get('veiculo_antigo_modelo') || '',
+          nome: searchParams.get('associado_nome') || '',
+          telefone: searchParams.get('associado_telefone') || '',
+          email: searchParams.get('associado_email') || '',
+        });
+      }
       setShowCotacaoForm(true);
-      // Limpar params após abrir
+      // Limpar params após capturar
       const newParams = new URLSearchParams();
       setSearchParams(newParams, { replace: true });
+
     } else if (novoParam === 'true') {
       setNovaEntradaMounted(true);
       setShowNovaEntrada(true);
