@@ -770,7 +770,9 @@ serve(async (req) => {
     });
 
     // 8.1 Cancelar antigo proprietário se ficou sem vínculos ativos
-    // (assinou termo de cancelamento do único veículo → status canônico = 'cancelado')
+    // (regra canônica em fn_cancelar_associado_se_orfao: considera o UNIVERSO
+    // TOTAL do associado — contratos ativo/assinado/pendente + veículos fora
+    // de cancelado/vendido/transferido. Só cancela quando ambos = 0.)
     try {
       const { data: cancelado, error: cancErr } = await supabase.rpc(
         "fn_cancelar_associado_se_orfao",
@@ -781,13 +783,57 @@ serve(async (req) => {
       );
       if (cancErr) {
         console.warn("[efetivar-troca] fn_cancelar_associado_se_orfao:", cancErr.message);
+        await insertAuditLog(supabase as any, {
+          acao: 'criar',
+          modulo: 'associados',
+          descricao: `[FALHA_CANCELAR_ORFAO_POS_TROCA] rpc fn_cancelar_associado_se_orfao falhou: ${cancErr.message}`,
+          registro_id: solicitacao.associado_id,
+          tabela: 'associados',
+          dados_novos: {
+            solicitacao_id,
+            associado_id: solicitacao.associado_id,
+            cenario,
+            erro: { message: cancErr.message, code: (cancErr as { code?: string }).code ?? null, details: (cancErr as { details?: string }).details ?? null },
+          },
+        });
       } else {
+        // Read-back: confere status REAL no banco, não confia só no booleano.
+        const { data: assocReal } = await supabase
+          .from('associados')
+          .select('status')
+          .eq('id', solicitacao.associado_id)
+          .maybeSingle();
+        const statusReal = (assocReal as { status?: string } | null)?.status ?? 'desconhecido';
         console.log(
-          `[efetivar-troca] Antigo proprietário ${solicitacao.associado_id}: ${cancelado ? "cancelado (sem vínculos)" : "mantido ativo (ainda possui vínculos)"}`,
+          `[efetivar-troca] Antigo proprietário ${solicitacao.associado_id}: rpc retornou ${cancelado ? 'cancelou' : 'manteve'} → status real='${statusReal}'`,
         );
+        // Inconsistência rara: rpc disse que cancelou mas status não bateu.
+        if (cancelado === true && statusReal !== 'cancelado') {
+          await insertAuditLog(supabase as any, {
+            acao: 'criar',
+            modulo: 'associados',
+            descricao: `[FALHA_CANCELAR_ORFAO_POS_TROCA] rpc retornou true mas status real='${statusReal}' (esperado 'cancelado')`,
+            registro_id: solicitacao.associado_id,
+            tabela: 'associados',
+            dados_novos: { solicitacao_id, associado_id: solicitacao.associado_id, status_real: statusReal },
+          });
+        }
       }
     } catch (e) {
-      console.warn("[efetivar-troca] erro cancelamento antigo:", (e as Error)?.message);
+      const msg = (e as Error)?.message ?? String(e);
+      console.warn("[efetivar-troca] erro cancelamento antigo:", msg);
+      try {
+        await insertAuditLog(supabase as any, {
+          acao: 'criar',
+          modulo: 'associados',
+          descricao: `[FALHA_CANCELAR_ORFAO_POS_TROCA] exception: ${msg}`,
+          registro_id: solicitacao.associado_id,
+          tabela: 'associados',
+          dados_novos: { solicitacao_id, associado_id: solicitacao.associado_id, exception: msg },
+        });
+      } catch (logErr) {
+        console.warn('[efetivar-troca] insertAuditLog FALHA_CANCELAR_ORFAO falhou:', logErr);
+      }
     }
 
     // 9. Sincronizar/Criar cliente ASAAS
@@ -1036,16 +1082,20 @@ serve(async (req) => {
       }
 
       if (!codigoAssociadoNovo) {
-        const cadAss = await cadastrarAssociadoHinova(supabase, {
+        // Upsert idempotente: se Hinova devolver "CPF já existe", busca o codigo
+        // existente e atualiza em vez de falhar (corrige fila SGA travada como
+        // e8af6e01… na troca 87b49126… — MARCUS / CPF 12493649737).
+        const cadAss = await cadastrarOuAtualizarAssociadoHinova(supabase, {
           nome: dadosNovoTitular.nome,
           cpf: cpfLimpo,
           email: dadosNovoTitular.email || undefined,
           telefone_celular: (dadosNovoTitular.telefone || '').replace(/\D/g, '') || undefined,
         });
         if (!cadAss.ok || !cadAss.codigo) {
-          throw new Error(`SGA cadastrarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
+          throw new Error(`SGA cadastrarOuAtualizarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
         }
         codigoAssociadoNovo = cadAss.codigo;
+        console.log(`[efetivar-troca][SGA] associado ${cadAss.codigo} via ${cadAss.via}`);
       } else {
         // Atualiza dados do associado existente (telefone/email)
         await alterarAssociadoHinova(supabase, {
