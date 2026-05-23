@@ -59,15 +59,27 @@ export function useDiretoria() {
         .eq('chave', chave);
       if (error) throw error;
       
-      // Log de auditoria
-      await supabase.from('logs_auditoria').insert({
+      // Log de auditoria — com vigia universal
+      const _logPayload = {
         usuario_id: profile?.id,
         usuario_nome: profile?.nome,
         acao: 'configuracao',
         modulo: 'diretoria',
         descricao: `Alterou configuração: ${chave}`,
         dados_novos: { chave, valor }
-      });
+      };
+      const { error: _logErr } = await supabase.from('logs_auditoria').insert(_logPayload as any);
+      if (_logErr) {
+        console.error('[FALHA_LOG_AUDITORIA]', _logErr, _logPayload);
+        await supabase.from('logs_auditoria').insert({
+          usuario_id: profile?.id,
+          usuario_nome: profile?.nome ?? 'sistema',
+          acao: 'criar',
+          modulo: 'configuracoes',
+          descricao: `[FALHA_LOG_AUDITORIA] configuracao: ${(_logErr as any)?.message ?? String(_logErr)}`,
+          dados_novos: { erro: _logErr, payload_original: _logPayload },
+        } as any);
+      }
     },
     onSuccess: () => {
       toast.success('Configuração salva!');
