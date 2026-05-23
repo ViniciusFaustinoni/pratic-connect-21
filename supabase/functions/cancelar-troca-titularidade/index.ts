@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const { data: sol, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, status, associado_antigo_id, veiculo_id, cotacao_id')
+      .select('id, status, associado_antigo_id, veiculo_id, cotacao_id, termo_cancelamento_autentique_id')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (solErr) throw solErr;
