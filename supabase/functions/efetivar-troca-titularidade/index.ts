@@ -14,6 +14,7 @@ import {
   HinovaNotFoundError,
 } from "../_shared/hinova-client.ts";
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import { buildAssociadoPayload } from '../_shared/hinova-payloads.ts';
 
 
 const corsHeaders = {
@@ -102,12 +103,17 @@ serve(async (req) => {
           if (!(e instanceof HinovaNotFoundError)) throw e;
         }
         if (!sgaCodAss) {
-          const cad = await cadastrarOuAtualizarAssociadoHinova(supabase, {
-            nome: dadosNovo.nome,
-            cpf: cpfLimpo,
-            email: dadosNovo.email || undefined,
-            telefone_celular: (dadosNovo.telefone || "").replace(/\D/g, "") || undefined,
-          });
+          // Hinova exige endereço completo (logradouro/bairro/cidade/estado/cep) no /associado/cadastrar.
+          // Carrega o associado local e usa buildAssociadoPayload (canônico do sga-hinova-sync) em vez
+          // de montar payload truncado (corrige "O campo ESTADO ... inválido" no retry da fila e8af6e01…).
+          const { data: assRow } = await supabase
+            .from('associados')
+            .select('*')
+            .eq('id', troca.novo_associado_id)
+            .maybeSingle();
+          if (!assRow) throw new Error(`Associado local ${troca.novo_associado_id} não encontrado para payload SGA`);
+          const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
+          const cad = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
           if (!cad.ok || !cad.codigo) throw new Error(`SGA cadastrarOuAtualizarAssociado: ${cad.errors.join("; ") || cad.mensagem}`);
           sgaCodAss = cad.codigo;
           console.log(`[retry-sga][SGA] associado ${cad.codigo} via ${cad.via}`);
@@ -770,7 +776,9 @@ serve(async (req) => {
     });
 
     // 8.1 Cancelar antigo proprietário se ficou sem vínculos ativos
-    // (assinou termo de cancelamento do único veículo → status canônico = 'cancelado')
+    // (regra canônica em fn_cancelar_associado_se_orfao: considera o UNIVERSO
+    // TOTAL do associado — contratos ativo/assinado/pendente + veículos fora
+    // de cancelado/vendido/transferido. Só cancela quando ambos = 0.)
     try {
       const { data: cancelado, error: cancErr } = await supabase.rpc(
         "fn_cancelar_associado_se_orfao",
@@ -781,13 +789,57 @@ serve(async (req) => {
       );
       if (cancErr) {
         console.warn("[efetivar-troca] fn_cancelar_associado_se_orfao:", cancErr.message);
+        await insertAuditLog(supabase as any, {
+          acao: 'criar',
+          modulo: 'associados',
+          descricao: `[FALHA_CANCELAR_ORFAO_POS_TROCA] rpc fn_cancelar_associado_se_orfao falhou: ${cancErr.message}`,
+          registro_id: solicitacao.associado_id,
+          tabela: 'associados',
+          dados_novos: {
+            solicitacao_id,
+            associado_id: solicitacao.associado_id,
+            cenario,
+            erro: { message: cancErr.message, code: (cancErr as { code?: string }).code ?? null, details: (cancErr as { details?: string }).details ?? null },
+          },
+        });
       } else {
+        // Read-back: confere status REAL no banco, não confia só no booleano.
+        const { data: assocReal } = await supabase
+          .from('associados')
+          .select('status')
+          .eq('id', solicitacao.associado_id)
+          .maybeSingle();
+        const statusReal = (assocReal as { status?: string } | null)?.status ?? 'desconhecido';
         console.log(
-          `[efetivar-troca] Antigo proprietário ${solicitacao.associado_id}: ${cancelado ? "cancelado (sem vínculos)" : "mantido ativo (ainda possui vínculos)"}`,
+          `[efetivar-troca] Antigo proprietário ${solicitacao.associado_id}: rpc retornou ${cancelado ? 'cancelou' : 'manteve'} → status real='${statusReal}'`,
         );
+        // Inconsistência rara: rpc disse que cancelou mas status não bateu.
+        if (cancelado === true && statusReal !== 'cancelado') {
+          await insertAuditLog(supabase as any, {
+            acao: 'criar',
+            modulo: 'associados',
+            descricao: `[FALHA_CANCELAR_ORFAO_POS_TROCA] rpc retornou true mas status real='${statusReal}' (esperado 'cancelado')`,
+            registro_id: solicitacao.associado_id,
+            tabela: 'associados',
+            dados_novos: { solicitacao_id, associado_id: solicitacao.associado_id, status_real: statusReal },
+          });
+        }
       }
     } catch (e) {
-      console.warn("[efetivar-troca] erro cancelamento antigo:", (e as Error)?.message);
+      const msg = (e as Error)?.message ?? String(e);
+      console.warn("[efetivar-troca] erro cancelamento antigo:", msg);
+      try {
+        await insertAuditLog(supabase as any, {
+          acao: 'criar',
+          modulo: 'associados',
+          descricao: `[FALHA_CANCELAR_ORFAO_POS_TROCA] exception: ${msg}`,
+          registro_id: solicitacao.associado_id,
+          tabela: 'associados',
+          dados_novos: { solicitacao_id, associado_id: solicitacao.associado_id, exception: msg },
+        });
+      } catch (logErr) {
+        console.warn('[efetivar-troca] insertAuditLog FALHA_CANCELAR_ORFAO falhou:', logErr);
+      }
     }
 
     // 9. Sincronizar/Criar cliente ASAAS
@@ -1036,16 +1088,18 @@ serve(async (req) => {
       }
 
       if (!codigoAssociadoNovo) {
-        const cadAss = await cadastrarAssociadoHinova(supabase, {
-          nome: dadosNovoTitular.nome,
-          cpf: cpfLimpo,
-          email: dadosNovoTitular.email || undefined,
-          telefone_celular: (dadosNovoTitular.telefone || '').replace(/\D/g, '') || undefined,
-        });
+        // Upsert idempotente + payload completo (Hinova exige endereço/estado).
+        // Carrega associado local e usa buildAssociadoPayload — mesmo padrão do retry.
+        const { data: assRow } = await supabase
+          .from('associados').select('*').eq('id', novoAssociadoId).maybeSingle();
+        if (!assRow) throw new Error(`Associado local ${novoAssociadoId} não encontrado para payload SGA`);
+        const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
+        const cadAss = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
         if (!cadAss.ok || !cadAss.codigo) {
-          throw new Error(`SGA cadastrarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
+          throw new Error(`SGA cadastrarOuAtualizarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
         }
         codigoAssociadoNovo = cadAss.codigo;
+        console.log(`[efetivar-troca][SGA] associado ${cadAss.codigo} via ${cadAss.via}`);
       } else {
         // Atualiza dados do associado existente (telefone/email)
         await alterarAssociadoHinova(supabase, {
