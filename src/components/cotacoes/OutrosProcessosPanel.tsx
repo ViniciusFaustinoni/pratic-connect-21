@@ -379,11 +379,19 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                         )}
 
                         {item.cotacao_token && (
-                          <Tooltip><TooltipTrigger asChild>
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleAbrirCotacao(item); }}>
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>
+                          <>
+                            <Tooltip><TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleAbrirCotacao(item); }}>
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>
+
+                            <Tooltip><TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleCopiarLink(item); }}>
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger><TooltipContent>Copiar link público para enviar ao associado</TooltipContent></Tooltip>
+                          </>
                         )}
 
                         {podeExcluirOrfa(item) && (permissions.cotacao.canDelete || permissions.cotacao.viewScope === 'all') && (
