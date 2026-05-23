@@ -75,18 +75,36 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const reprovadoPor = prof?.id ?? null;
 
-    const { error: updErr } = await admin
-      .from('solicitacoes_troca_titularidade')
-      .update({
-        status: 'cancelada',
-        motivo_reprovacao: motivoFinal,
-        reprovado_por: reprovadoPor,
-        reprovado_em: new Date().toISOString(),
-      })
-      .eq('id', solicitacao_id);
-    if (updErr) throw updErr;
+    // Etapa 1: cancelar a solicitação. Cascateia para o contrato derivado
+    // via trigger trg_troca_cancelada_cancela_contrato_orfao.
+    let etapaAtual = 'update_solicitacao';
+    const lancarComEtapa = (err: unknown): never => {
+      const se = (err ?? {}) as { message?: string; details?: string; hint?: string; code?: string };
+      const wrap = new Error(
+        `[etapa=${etapaAtual}] ${se.message || se.details || 'erro desconhecido'}`,
+      );
+      (wrap as unknown as Record<string, unknown>).code = se.code ?? null;
+      (wrap as unknown as Record<string, unknown>).details = se.details ?? null;
+      (wrap as unknown as Record<string, unknown>).hint = se.hint ?? null;
+      (wrap as unknown as Record<string, unknown>).etapa = etapaAtual;
+      throw wrap;
+    };
 
-    // Limpa flag em_troca_titularidade do veículo (best-effort)
+    try {
+      const { error: updErr } = await admin
+        .from('solicitacoes_troca_titularidade')
+        .update({
+          status: 'cancelada',
+          motivo_reprovacao: motivoFinal,
+          reprovado_por: reprovadoPor,
+          reprovado_em: new Date().toISOString(),
+        })
+        .eq('id', solicitacao_id);
+      if (updErr) lancarComEtapa(updErr);
+    } catch (e) { lancarComEtapa(e); }
+
+    // Etapa 2: limpar flag em_troca_titularidade (best-effort)
+    etapaAtual = 'limpar_veiculo';
     if (sol.veiculo_id) {
       try {
         await admin
@@ -98,9 +116,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CANÔNICO: troca cancelada => cotação derivada morre junto + link público invalidado.
-    // Sem isso, o novo titular continua acessando o token_publico mesmo após o cancelamento
-    // (caso reportado: COT-20260521-002944030-565 / VInicius Faustinoni).
+    // Etapa 3: cancelar a cotação derivada e invalidar o link público.
+    etapaAtual = 'cancelar_cotacao';
     if (sol.cotacao_id) {
       try {
         const novoToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
@@ -122,9 +139,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CANÔNICO: troca cancelada => contrato derivado (se o novo titular já
-    // tinha assinado) também precisa ser cancelado. Sem isso fica órfão em
-    // `status=assinado` poluindo a fila de Propostas Pendentes do Cadastro.
+    // Etapa 4: cancelar contrato derivado (caso novo titular já tenha assinado).
+    etapaAtual = 'cancelar_contrato';
     try {
       const { error: ctrErr } = await admin
         .from('contratos')
@@ -188,6 +204,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: msg,
+        etapa: (anyErr as { etapa?: string } | null)?.etapa ?? null,
         code: anyErr?.code ?? null,
         details: anyErr?.details ?? null,
         hint: anyErr?.hint ?? null,
