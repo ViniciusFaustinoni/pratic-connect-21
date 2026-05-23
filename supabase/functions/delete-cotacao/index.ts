@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -345,7 +346,7 @@ Deno.serve(async (req) => {
       .eq('user_id', userId)
       .single()
 
-    await adminClient.from('logs_auditoria').insert({
+    await insertAuditLog(adminClient as any, {
       usuario_id: profile?.id || userId,
       usuario_nome: profile?.nome || 'Diretor',
       acao: 'excluir',

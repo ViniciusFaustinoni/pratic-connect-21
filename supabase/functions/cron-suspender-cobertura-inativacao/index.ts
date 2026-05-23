@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -198,7 +199,7 @@ Deno.serve(async (req) => {
       }
 
       // Auditoria — logs_auditoria + associados_historico
-      await supabase.from('logs_auditoria').insert({
+      await insertAuditLog(supabase as any, {
         acao: 'suspensao_automatica',
         modulo: 'monitoramento',
         descricao: `Cobertura suspensa: instalação não realizada no prazo (${prazoHoras}h, UF=${uf ?? 'N/D'})`,

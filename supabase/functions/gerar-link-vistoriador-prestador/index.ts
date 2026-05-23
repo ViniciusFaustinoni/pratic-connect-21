@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -392,7 +393,7 @@ _Dúvidas? Entre em contato com o coordenador._`
           if (profile?.nome) nomeAtribuidor = profile.nome
         }
 
-        await supabase.from('logs_auditoria').insert({
+        await insertAuditLog(supabase as any, {
           usuario_id: atribuido_por,
           usuario_nome: nomeAtribuidor,
           acao: 'atribuir',
