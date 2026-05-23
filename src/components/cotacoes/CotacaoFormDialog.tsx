@@ -2159,13 +2159,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] max-h-[90dvh] max-sm:max-h-[100dvh] flex flex-col overflow-hidden p-0" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6">
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             <Zap className="h-5 w-5 text-primary" />
             Cotação Rápida
+            {origemSubstituicao && (
+              <Badge variant="secondary" className="ml-2">
+                Substituição de Placa · {origemSubstituicao.veiculoAntigoPlaca}
+              </Badge>
+            )}
+            {origemTroca && (
+              <Badge variant="secondary" className="ml-2">Troca de Titularidade</Badge>
+            )}
           </DialogTitle>
           <DialogDescription>
-            {lead ? `Cotação para ${lead.nome}` : 'Faça uma cotação em segundos'}
+            {origemSubstituicao
+              ? `Substituindo ${origemSubstituicao.veiculoAntigoModelo || origemSubstituicao.veiculoAntigoPlaca} — informe os dados do novo veículo`
+              : (lead ? `Cotação para ${lead.nome}` : 'Faça uma cotação em segundos')}
           </DialogDescription>
+
         </DialogHeader>
 
         <Form {...form}>
