@@ -175,9 +175,24 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error('[cancelar-troca]', e);
-    const msg = e instanceof Error ? e.message : 'erro';
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    // PostgrestError / objetos do supabase-js NÃO são instâncias de Error —
+    // o catch precisa extrair .message/.details/.code manualmente, senão o
+    // front recebe só "erro" (caso 1779495932139).
+    const anyErr = e as { message?: string; details?: string; hint?: string; code?: string } | null;
+    const msg =
+      (e instanceof Error && e.message) ||
+      anyErr?.message ||
+      anyErr?.details ||
+      anyErr?.hint ||
+      'erro desconhecido';
+    return new Response(
+      JSON.stringify({
+        error: msg,
+        code: anyErr?.code ?? null,
+        details: anyErr?.details ?? null,
+        hint: anyErr?.hint ?? null,
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 });
