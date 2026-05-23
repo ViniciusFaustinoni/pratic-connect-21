@@ -14,6 +14,7 @@ import {
   HinovaNotFoundError,
 } from "../_shared/hinova-client.ts";
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import { buildAssociadoPayload } from '../_shared/hinova-payloads.ts';
 
 
 const corsHeaders = {
@@ -102,12 +103,17 @@ serve(async (req) => {
           if (!(e instanceof HinovaNotFoundError)) throw e;
         }
         if (!sgaCodAss) {
-          const cad = await cadastrarOuAtualizarAssociadoHinova(supabase, {
-            nome: dadosNovo.nome,
-            cpf: cpfLimpo,
-            email: dadosNovo.email || undefined,
-            telefone_celular: (dadosNovo.telefone || "").replace(/\D/g, "") || undefined,
-          });
+          // Hinova exige endereço completo (logradouro/bairro/cidade/estado/cep) no /associado/cadastrar.
+          // Carrega o associado local e usa buildAssociadoPayload (canônico do sga-hinova-sync) em vez
+          // de montar payload truncado (corrige "O campo ESTADO ... inválido" no retry da fila e8af6e01…).
+          const { data: assRow } = await supabase
+            .from('associados')
+            .select('*')
+            .eq('id', troca.novo_associado_id)
+            .maybeSingle();
+          if (!assRow) throw new Error(`Associado local ${troca.novo_associado_id} não encontrado para payload SGA`);
+          const payloadA = buildAssociadoPayload(assRow as any, { data_contrato_iso: assRow.created_at ?? null });
+          const cad = await cadastrarOuAtualizarAssociadoHinova(supabase, payloadA);
           if (!cad.ok || !cad.codigo) throw new Error(`SGA cadastrarOuAtualizarAssociado: ${cad.errors.join("; ") || cad.mensagem}`);
           sgaCodAss = cad.codigo;
           console.log(`[retry-sga][SGA] associado ${cad.codigo} via ${cad.via}`);
