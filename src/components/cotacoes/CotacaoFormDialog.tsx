@@ -2879,7 +2879,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               <Select
                 value={tipoCotacao}
                 onValueChange={setTipoCotacao}
-                disabled={!!origemTroca}
+                disabled={!!origemTroca || !!origemSubstituicao}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
