@@ -609,7 +609,7 @@ serve(async (req) => {
       if (placaLimpa) {
         const { data } = await supabase
           .from('veiculos')
-          .select('id, associado_id')
+          .select('id, associado_id, associados(cpf, nome)')
           .eq('placa', placaLimpa)
           .maybeSingle();
 
@@ -620,16 +620,23 @@ serve(async (req) => {
             supabase, placaLimpa, (cotacao as any).dados_extras,
           );
           if (!liberadoPorTroca) {
+            const cpfDono = (data as any)?.associados?.cpf || null;
+            const nomeDono = (data as any)?.associados?.nome || '(desconhecido)';
+            const cpfDivergente = cpfDono && cpfDono !== cpfNormalizado;
             console.error(
-              `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
-              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+              `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id} ` +
+              `(cpf_dono=${cpfDono}, cpf_solicitante=${cpfNormalizado}, ` +
+              `divergente=${cpfDivergente}, cotação ${cotacao_id}).`
             );
             return new Response(
               JSON.stringify({
                 success: false,
-                error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
-                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+                error: cpfDivergente
+                  ? `A placa ${placaLimpa} já está vinculada ao associado "${nomeDono}" (CPF diferente do solicitante). ` +
+                    `Trate manualmente: use Substituição/Troca de Titularidade ou confirme se a placa está correta.`
+                  : `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
+                    `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: cpfDivergente ? 'PLACA_CPF_DIVERGENTE' : 'PLACA_DE_OUTRO_ASSOCIADO',
               }),
               { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
