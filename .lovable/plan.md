@@ -1,96 +1,50 @@
 ## Diagnóstico
 
-A seção **"Acesso a Módulos"** do formulário Editar Usuário (Configurações › Usuários e Acessos) tem dois bugs encadeados, confirmados por inspeção do código e por consulta direta ao banco.
+A tela **Monitoramento › Fila de Vistorias** (`src/pages/monitoramento/FilaVistorias.tsx`) concatena três fontes (`vistorias`, `servicos`, `vistorias_evento`) sem reconhecer quando vistoria e serviço se referem ao mesmo evento físico. Resultado confirmado no banco para o Rodrigo (LME3A49):
 
-### Bug 1 — chave errada gravada
+- `vistorias.id = 3e90c622…` (modalidade `presencial`, `agendada`, sem técnico) — congela no agendamento original.
+- `servicos.id = 77083b8a…` (`vistoria_entrada`, `concluida`, técnico WALLACE NUNES, `vistoria_origem_id = 3e90c622…`) — estado vivo.
 
-`UsuarioForm.tsx` (ModuleAccessCard) grava em `user_module_visibility.user_id` o valor do `id` vindo de `useParams()`, que é o **`profiles.id`**. Confirmado em banco: todas as linhas existentes apontam para `profiles.id`, não para `profiles.user_id`.
+A duplicação é puramente de leitura — backend está correto.
 
-Já o hook `useModuleVisibility` (consumido pelo `AppSidebar` e pelo `useRouteGuard`) consulta a tabela pela chave do usuário logado vinda de `useAuth().user.id`, que é o **`auth.users.id`**.
+## Correção
 
-Resultado: o toast diz "salvo", mas nenhum acesso chega ao usuário em runtime.
+Aplicar dedup dentro do `useMemo` de `vistorias` em `FilaVistorias.tsx`. Backend e triggers permanecem intactos.
 
-### Bug 2 — semântica invertida (substitui em vez de somar)
+### Regra de consolidação (em ordem)
 
-No `AppSidebar.tsx` (linha 646) e no `useRouteGuard.ts` (linha 43):
+1. **Vínculo canônico direto** — `servicos.vistoria_origem_id` = `vistorias.id`. Quando casa, descartar a vistoria.
+2. **Fallback por instalação** — `servicos.instalacao_origem_id` = `vistorias.instalacao_id`. Quando casa, descartar a vistoria.
+3. **Último recurso (legados)** — agrupar o array final por `clienteId + placa + tipo_canônico` (`presencial`/`auto_vistoria`/`ponto_fixo` ≡ `instalacao_like`). Quando o grupo tem mais de um item, manter o de maior prioridade de status, com **vivos > terminais** (`em_rota` > `em_andamento` > `aguardando_analise` > `agendada` > `auto_vistoria_pendente` > `pendente` > `reprovada` > `aprovada`), desempate por `createdAt` mais recente.
 
-```
-if (visibleModules.length > 0) {
-  baseGroups = baseGroups.filter(g => visibleModules.includes(g.id));
-}
-```
+### Quem prevalece
 
-Assim que **qualquer** linha existe para o usuário em `user_module_visibility`, o sidebar passa a mostrar **somente** esses módulos — apagando o que o perfil já concedia. O comportamento correto é overlay aditivo: o card adiciona módulos por cima do que o perfil garante, sem nunca remover nada do perfil.
+Sempre o registro com estado operacional vivo (vindo de `servicos`). A vistoria original é removida — sua data/técnico/status estavam congelados.
 
----
+### Garantias
 
-## Plano de correção
+- Vistorias **sem serviço associado** (sinistros recém-abertos, eventos puros, vistoria agendada que ainda não materializou serviço) permanecem visíveis.
+- Eventos de outros associados não são afetados — chave de agrupamento inclui `clienteId + placa`.
+- Contadores no topo (`pendentes`, `emCampo`, `aguardandoAnalise`, `autoVistoria`, `concluidasHoje`) já derivam do array `vistorias` — passam a refletir a contagem deduplicada automaticamente, sem alteração separada.
 
-### Passo 1 — Corrigir a chave gravada (`UsuarioForm.tsx`)
+### Passos
 
-No `ModuleAccessCard`:
+1. **`src/pages/monitoramento/FilaVistorias.tsx`** — único arquivo tocado, somente o `useMemo` que monta `vistorias` (linhas ~185–271):
+   - Construir `Set<string>` de `vistoria_origem_id` e `instalacao_origem_id` consumidos a partir de `servicosRaw`.
+   - Filtrar `vistoriasRaw` antes do `.map(...)` removendo entradas cujo `id` ou `instalacao_id` esteja consumido.
+   - Após concatenar os três blocos, rodar o fallback (cliente+placa+tipo canônico) com a prioridade de status acima.
+   - Manter a ordenação final por `createdAt` desc.
 
-- Receber também o `authUserId` (o `usuario.user_id` já carregado pelo `useQuery` do formulário pai), além do `profileId`.
-- Trocar o `upsert` para usar `user_id: authUserId`.
-- Trocar a query interna (`useQuery` do card) para filtrar por `authUserId`.
-- Manter `onConflict: 'user_id,module_id'` (já existe constraint).
-- Mostrar o card como "carregando" enquanto o `authUserId` ainda não chegou (evita upsert com `undefined`).
+### Validação
 
-### Passo 2 — Migração de dados (preserva o que já foi marcado)
+- Fila de Vistorias → Rodrigo (LME3A49 / VEN-2026-00064) aparece **1 linha**, estado vivo (concluída, WALLACE NUNES, 25/05).
+- Contadores no topo refletem a contagem deduplicada.
+- VEN-2026-00071 e VEN-2026-00072 continuam visíveis e únicos.
+- Pelo menos uma vistoria/sinistro sem serviço materializado continua aparecendo.
 
-Migração que converte todas as linhas atuais de `user_module_visibility` cujo `user_id` corresponde a um `profiles.id` para o `profiles.user_id` (auth.users.id) correspondente.
+## Fora de escopo
 
-- Idempotente: faz `UPDATE ... FROM profiles WHERE user_module_visibility.user_id = profiles.id`.
-- Trata conflito `(user_id, module_id)` mantendo a versão mais recente (`updated_at` maior vence; demais são deletadas antes do update).
-- Linhas que já estão coerentes (já apontam para `profiles.user_id`) ficam intactas.
-
-Assim, todos os acessos marcados antes da correção passam a funcionar imediatamente — sem precisar remarcar nada.
-
-### Passo 3 — Tornar o overlay aditivo
-
-Em `src/hooks/useModuleVisibility.ts`, renomear semanticamente o retorno para `additionalModules` (manter `visibleModules` como alias depreciado durante a transição interna, se necessário, mas idealmente trocar de uma vez todos os consumidores).
-
-Ajustar os dois pontos de consumo para usar **união** com o que o perfil já concede:
-
-- **`src/components/layout/AppSidebar.tsx`** (linha 646):
-  - Remover o filtro restritivo.
-  - Em vez disso, quando um grupo NÃO passa pelo filtro de permissões do perfil mas o seu `g.id` está em `additionalModules`, incluí-lo mesmo assim. Para os itens internos desse grupo extra, assumir acesso de leitura (badge "Acesso adicional" opcional, ou simplesmente listar todos os itens do grupo).
-  - Mesma lógica em `visibleMainItems` (Dashboard) e em `showConfigModule` (Configurações): a presença do módulo em `additionalModules` libera, mas a ausência **não** restringe quem já tinha pelo perfil.
-
-- **`src/hooks/useRouteGuard.ts`** (linha 43):
-  - Em vez de redirecionar quando a rota não está em `visibleModules`, montar a união (rotas cobertas pelo perfil + rotas em `additionalModules`) e só redirecionar quando a rota não estiver em nenhum dos dois conjuntos.
-  - Manter rotas `ALWAYS_ALLOWED` e a rota de perfis operacionais como hoje.
-
-Resultado: o card volta a ser uma ferramenta de "conceder acessos extras a um usuário específico sem precisar trocar o perfil dele".
-
-### Passo 4 — UX do card (texto + estado "Já incluso no perfil")
-
-Em `ModuleAccessCard`:
-
-- Atualizar `CardDescription` para:
-  > "Conceda módulos adicionais a este usuário, além dos já liberados pelo perfil de acesso. Desmarcar aqui não remove acessos concedidos pelo perfil — para isso, ajuste o perfil acima."
-
-- Para cada módulo da lista, calcular se ele já é concedido pelos `formData.perfis` atuais do usuário (cruzando com `app_roles_config.permissions` via `getPermissionsForRoles` de `useAppRoles`, mapeando permissão → `module_id`).
-- Quando o módulo já vem do perfil:
-  - Mostrar um badge "Já incluso no perfil" ao lado do nome.
-  - Desabilitar o `Switch` (mantendo-o visualmente "ligado", já que o usuário enxerga o módulo).
-  - Esconder o toggle de "pode editar" (irrelevante quando o acesso vem do perfil).
-- Quando o módulo NÃO vem do perfil, comportamento normal (toggle ativo, salva extras).
-
-### Passo 5 — Validação manual
-
-- Logar como **admin@teste.com**, editar um Analista de Monitoramento, marcar "Cadastro" no card → salvar.
-- Logar como esse analista → confirmar que vê Monitoramento (perfil) **e** Cadastro (extra), e que `/cadastro/*` não redireciona.
-- Voltar como admin, desmarcar "Cadastro" → salvar.
-- Re-logar como o analista → confirmar que volta a ver só Monitoramento.
-- Conferir um usuário pré-existente que já tinha extras configurados antes da correção → confirmar que continua com o acesso após a migração (sem precisar remarcar).
-
----
-
-## Arquivos impactados
-
-- `src/pages/configuracoes/UsuarioForm.tsx` — passa `authUserId` ao card, texto novo, estado "já incluso no perfil"
-- `src/hooks/useModuleVisibility.ts` — semântica aditiva (`additionalModules`)
-- `src/components/layout/AppSidebar.tsx` — união com permissões do perfil
-- `src/hooks/useRouteGuard.ts` — união com permissões do perfil
-- Migração SQL — backfill de `user_id` em `user_module_visibility` (de `profiles.id` para `profiles.user_id`), com deduplicação por `(user_id, module_id)`
+- `useServicosCampoUnificado` (já dedupa corretamente).
+- Triggers de materialização e a tabela `vistorias`.
+- Geração do protocolo `VEN-…` (segue trigger DB existente).</parameter>
+</invoke>

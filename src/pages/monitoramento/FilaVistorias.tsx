@@ -183,8 +183,28 @@ export default function FilaVistorias() {
 
   // Transformar dados - combinar vistorias + serviços de manutenção/retirada
   const vistorias: VistoriaFila[] = useMemo(() => {
-    // Mapear vistorias tradicionais
-    const vistoriasTransformadas: VistoriaFila[] = (vistoriasRaw || []).map((v: Vistoria) => {
+    // ========== DEDUP CANÔNICO ==========
+    // Um mesmo evento físico pode existir como vistoria + servico materializado.
+    // O servico é a fonte viva (técnico, datas, status atualizados).
+    // A vistoria correspondente fica "congelada" no agendamento original.
+    // Regra: se há par, mantemos só o servico (lado vivo).
+    // Ver mem://logic/operations/servicos-um-canonico-por-origem
+    const vistoriaOrigemIdsConsumidos = new Set<string>();
+    const instalacaoOrigemIdsConsumidos = new Set<string>();
+    (servicosRaw || []).forEach((s: any) => {
+      if (s.vistoria_origem_id) vistoriaOrigemIdsConsumidos.add(s.vistoria_origem_id);
+      if (s.instalacao_origem_id) instalacaoOrigemIdsConsumidos.add(s.instalacao_origem_id);
+    });
+
+    // Mapear vistorias tradicionais (filtrando as já representadas por um servico vivo)
+    const vistoriasTransformadas: VistoriaFila[] = (vistoriasRaw || [])
+      .filter((v: Vistoria) => {
+        const raw = v as any;
+        if (vistoriaOrigemIdsConsumidos.has(v.id)) return false;
+        if (raw.instalacao_id && instalacaoOrigemIdsConsumidos.has(raw.instalacao_id)) return false;
+        return true;
+      })
+      .map((v: Vistoria) => {
       const raw = v as any;
       const clienteNome = v.associado?.nome || v.veiculo?.associado?.nome || raw.cotacao?.nome_solicitante || 'Cliente não identificado';
       const clienteId = v.associado?.id || v.veiculo?.associado?.id || '';
@@ -264,8 +284,49 @@ export default function FilaVistorias() {
       };
     });
 
-    // Combinar e ordenar por data de criação (mais recentes primeiro)
-    return [...vistoriasTransformadas, ...servicosTransformados, ...eventosTransformados].sort(
+    // ========== FALLBACK DEDUP (legado sem vistoria_origem_id) ==========
+    // Agrupa por cliente+placa+tipo canônico (vistoria_entrada ≡ presencial/instalacao).
+    // Mantém o de maior prioridade de status: vivo > terminal.
+    // Ver mem://logic/operations/vistoria-entrada-equivale-instalacao
+    const STATUS_PRIORITY: Record<string, number> = {
+      em_rota: 1,
+      em_andamento: 2,
+      aguardando_analise: 3,
+      agendada: 4,
+      auto_vistoria_pendente: 5,
+      pendente: 6,
+      reprovada: 20,
+      aprovada: 21,
+    };
+    const tipoCanonico = (t: TipoVistoria) =>
+      t === 'auto_vistoria' || t === 'presencial' || t === 'ponto_fixo' ? 'instalacao_like' : t;
+    const combinados = [...vistoriasTransformadas, ...servicosTransformados, ...eventosTransformados];
+    const grupos = new Map<string, VistoriaFila[]>();
+    for (const item of combinados) {
+      const chave = item.clienteId && item.placa && item.placa !== '---'
+        ? `${item.clienteId}|${item.placa}|${tipoCanonico(item.tipo)}`
+        : `__solo__${item.id}`;
+      const arr = grupos.get(chave);
+      if (arr) arr.push(item);
+      else grupos.set(chave, [item]);
+    }
+    const deduplicados: VistoriaFila[] = [];
+    for (const grupo of grupos.values()) {
+      if (grupo.length === 1) {
+        deduplicados.push(grupo[0]);
+        continue;
+      }
+      const sorted = [...grupo].sort((a, b) => {
+        const pa = STATUS_PRIORITY[a.status] ?? 99;
+        const pb = STATUS_PRIORITY[b.status] ?? 99;
+        if (pa !== pb) return pa - pb;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      deduplicados.push(sorted[0]);
+    }
+
+    // Ordenar por data de criação (mais recentes primeiro)
+    return deduplicados.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   }, [vistoriasRaw, servicosRaw, vistoriasEventoRaw]);
