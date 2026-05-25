@@ -699,6 +699,7 @@ export function useAtribuirServicoPrestador() {
             valor,
             atribuido_por: profileId,
             skip_whatsapp: true,
+            escopo,
           },
         });
 
