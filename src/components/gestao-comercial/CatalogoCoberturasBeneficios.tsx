@@ -534,6 +534,26 @@ export function CatalogoCoberturasBeneficios() {
   const [benSort, setBenSort] = useState<'default' | 'az' | 'za'>('default');
   const [cobAttrFilter, setCobAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
   const [benAttrFilter, setBenAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
+  const [highlightCobId, setHighlightCobId] = useState<string | null>(null);
+  const [highlightBenId, setHighlightBenId] = useState<string | null>(null);
+
+  const triggerHighlight = (kind: 'cob' | 'ben', id: string) => {
+    if (kind === 'cob') setHighlightCobId(id);
+    else setHighlightBenId(id);
+    window.setTimeout(() => {
+      if (kind === 'cob') setHighlightCobId(prev => (prev === id ? null : prev));
+      else setHighlightBenId(prev => (prev === id ? null : prev));
+    }, 3000);
+  };
+
+  const cobNames = useMemo(
+    () => coberturas.map((c: any) => ({ id: c.id, nome: c.nome })),
+    [coberturas]
+  );
+  const benNames = useMemo(
+    () => benefits.map((b: any) => ({ id: b.id, nome: b.name })),
+    [benefits]
+  );
 
   const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio', attrFilter: 'todos' | 'atribuidos' | 'nao_atribuidos', attrMap: Record<string, string>) => {
     let filtered = items;
@@ -545,7 +565,7 @@ export function CatalogoCoberturasBeneficios() {
     }
     if (search.trim()) {
       const term = search.toLowerCase();
-      filtered = items.filter(item => {
+      filtered = filtered.filter(item => {
         const nome = (type === 'cobertura' ? item.nome : item.name) || '';
         const desc = (type === 'cobertura' ? item.descricao : item.description) || '';
         return nome.toLowerCase().includes(term) || desc.toLowerCase().includes(term);
