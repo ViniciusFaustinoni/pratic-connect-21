@@ -225,7 +225,8 @@ export function ImportarCobrancaCsv() {
     try {
       const { data: initData, error: initErr } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
         body: {
-          template_nome: TEMPLATE_NOME,
+          template_nome: templateNome,
+          var_mapping: varMapping,
           template_v2: usarTemplateV2,
           init_only: true,
           is_first_chunk: true,
