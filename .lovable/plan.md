@@ -1,79 +1,92 @@
-## Teste E2E — Atribuição Prestador com seletor de escopo
 
-Vou rodar dois cenários espelhados (mesma fluxo, escopos opostos) e ao final fazer checagem no banco para confirmar o estado canônico.
+## O que aconteceu com LSA7A65 (COT-20260521-150643240-471)
 
-### Pré-requisitos que vou checar antes de começar
+Cronologia reconstituída a partir de `logs_auditoria`, `servicos`, `instalacoes`, `instalacao_prestador_links` e `agendamentos_base`:
 
-1. Login como diretor (`admin@teste.com`) no preview.
-2. Identificar **2 serviços de campo** elegíveis na fila de Atribuição Manual ou no Mapa:
-   - **Caso A:** serviço `vistoria_entrada` de sub-FIPE (default sugerido: Somente Fotos).
-   - **Caso B:** serviço `instalacao` de veículo que exige rastreador (default sugerido: Fotos + Instalação).
-3. Identificar 1 prestador externo ativo com telefone cadastrado.
+| Hora (BRT) | Ator | Evento |
+|---|---|---|
+| 21/05 15:23 | Sistema | `criar-instalacao-pos-pagamento` cria `instalacoes` (a5dabcef…) + `servicos` (673ac27a…) tipo `instalacao` agendados p/ 25/05 manhã, e cria `agendamentos_base` correspondente |
+| 21/05 15:31 | Sistema | Contrato vira `cadastro_aprovado=true` (vistoria base presencial agendada) |
+| 22/05 09:27 | [TESTE] Vistoriador | Cria `vistorias` (em_analise) ligada à instalação |
+| **25/05 11:05** | Coordenador (59ca886d…) | Atribui ao prestador externo LEONARDO TORINO MATOSO → `instalacao_prestador_links` (60110112…) criado, escopo `fotos_instalacao`, **status `em_rota`** (LEONARDO aceitou às 11:05:49 e iniciou rota às 11:05:53) |
+| **25/05 11:11** | Kleytonn (9670a9fc…) | `realocar_servico('fila', motivo='PRESTADOR FAZENDO AGORA')` |
+| 25/05 11:12 | Kleytonn | `realocar_servico('fila', motivo='PRESTADOR')` |
+| 25/05 11:14 | Kleytonn | `realocar_servico('fila', motivo='PRESTADOR')` (data → 26/05, depois 25/05 manhã de novo) |
 
-Se não houver candidatos prontos, paro e peço orientação (não vou criar cotação fake só para testar).
+## Estado atual (anomalia)
 
-### Cenário A — Sub-FIPE com escopo "Somente Fotos"
+- `servicos.673ac27a…`: `status='agendada'`, `profissional_id=NULL`, sem `rota_id`, sem `local_vistoria` — tecnicamente "na fila"
+- `instalacoes.a5dabcef…`: `status='agendada'`, `instalador_responsavel_id=NULL`, `vistoriador_prestador_id=NULL`
+- `veiculos.LSA7A65`: `status='instalacao_pendente'` (correto)
+- `agendamentos_base`: **0 registros vivos** para essa instalação (todos foram cancelados pelo `realocar_servico`)
+- `instalacao_prestador_links.60110112…`: **ainda `em_rota`**, com `aceito_em` e `em_rota_em` preenchidos — link ativo apontando para o LEONARDO
 
-**Passo 1.** Monitoramento › Serviços de Campo › Atribuição Manual → abrir o serviço sub-FIPE.
-**Passo 2.** Selecionar o prestador. Conferir que o seletor de escopo aparece com **default "Somente Fotos"**.
-**Passo 3.** Manter "Somente Fotos" e clicar Gerar Link. Capturar screenshot do dialog de resultado.
-**Passo 4.** Abrir o link público gerado em nova aba. Validar visualmente que:
-   - Cards de fotos + vídeo 360° aparecem.
-   - **NÃO aparece** o card "IMEI do Rastreador Instalado".
-   - **NÃO aparece** etapa "Teste de Comunicação".
-**Passo 5.** Voltar ao painel — confirmar `servicos.status='agendada'` e `prestador_id` preenchido.
+## Onde o serviço "sumiu"
 
-### Cenário B — Mesmo serviço (ou outro elegível) com escopo "Fotos + Instalação"
+1. **Atribuição Manual (Monitoramento)** lê de `agendamentos_base` filtrando contratos com `aprovado_em` (regra canônica `mem://logic/operations/atribuicao-manual-gate-cadastro-aprovado`). Como o `realocar_servico` **cancelou** o `agendamentos_base` existente e **não criou** um novo no destino `fila`, o serviço desapareceu da fila visível.
+2. **Mapa / `PrestadoresAtivos`** ainda vê o link `em_rota` do LEONARDO e mostra ele "executando", mas a instalação por trás está sem profissional → estado fantasma.
+3. **Aprovação de Associados** não recebe (instalação não foi concluída e não há vistoria fechada).
 
-**Passo 6.** Repetir a partir do Passo 1 em outro serviço, agora **trocando o default** ou pegando um `instalacao`.
-**Passo 7.** No dialog, escolher "Fotos + Instalação". Se o veículo exigir rastreador e estiver sem, conferir que o aviso amarelo "exige rastreador" **não aparece** (porque escolheu fotos+instalação).
-**Passo 8.** Gerar link e abrir. Validar visualmente:
-   - Cards de fotos + vídeo 360° aparecem.
-   - **Aparece** o card "IMEI do Rastreador Instalado" (obrigatório).
-   - **Aparece** etapa "Teste de Comunicação".
+## Causa raiz no `realocar_servico`
 
-### Cenário C (extra rápido) — Aviso de rastreador
+A função pública `public.realocar_servico` (235 linhas):
 
-**Passo 9.** Em um serviço de veículo que exige rastreador (Diesel / Carro≥30k / Moto≥9k) sem rastreador vinculado, escolher "Somente Fotos" e validar que o **aviso amarelo aparece** ("Este veículo exige rastreador; a instalação precisará ser agendada depois") mas **não bloqueia** Gerar Link.
+- limpa `instalacoes.vistoriador_prestador_id` e `instalador_responsavel_id` ✅
+- limpa `servicos.profissional_id` ✅
+- cancela todos `agendamentos_base` da instalação (linhas 136–143) ✅
+- só cria novo `agendamentos_base` quando destino = `'base'` (linhas 163–179)
+- **NUNCA toca em `instalacao_prestador_links`** ❌
+- não recria nem reabre `agendamentos_base` para destino `'fila'` ou `'rota'` ❌
 
-### Checagem de banco ao final
+Resultado: link do prestador fica vivo (rompe a regra canônica `mem://logic/operations/atribuicao-prestador-status-sync`) e, quando destino é `fila`, o serviço some da fila operacional do Monitoramento.
 
-Para cada link gerado nos cenários A e B, rodar via `supabase--read_query`:
+## Plano de correção
 
-```sql
--- Caso A — esperado escopo='somente_fotos' em vistoria_prestador_links
-SELECT id, escopo, servico_id, prestador_id, status, expires_at
-FROM vistoria_prestador_links
-WHERE id = '<id_caso_A>';
+### 1. Saneamento do caso LSA7A65 (migration única)
 
--- Caso B — esperado escopo='fotos_instalacao' em instalacao_prestador_links
-SELECT id, escopo, instalacao_id, prestador_id, status, expires_at
-FROM instalacao_prestador_links
-WHERE id = '<id_caso_B>';
+- Cancelar `instalacao_prestador_links.60110112-3c21-45f0-8389-51ed3c4756f0` (`status='cancelado'`, marcando `recusa_motivo='realocado_para_fila_em_25/05'`) para o trigger canônico cuidar do reflexo.
+- Reabrir um `agendamentos_base` para `instalacao_id = a5dabcef…` com `status='agendado'`, `data_agendada=2026-05-25`, `horario='09:00'`, sem `oficina_id` nem `atendido_por` (representando "fila do Monitoramento"). Modelo já usado pelo branch destino=`base`, adaptado sem oficina.
+- Log em `associados_historico` com ação `saneamento_lsa7a65`.
 
--- Confirmar servicos roteados pelo gate correto
-SELECT id, tipo, status, prestador_id, updated_at
-FROM servicos
-WHERE id IN ('<servico_A>','<servico_B>');
+### 2. Patch estrutural em `public.realocar_servico`
+
+Migration que substitui a função `realocar_servico` adicionando:
+
+- **Cancelamento do link prestador ativo** sempre que o destino NÃO é `'profissional'` apontando para o mesmo prestador:
+  ```sql
+  UPDATE public.instalacao_prestador_links
+     SET status = 'cancelado',
+         updated_at = now(),
+         recusa_motivo = COALESCE(recusa_motivo,'') ||
+           ' [realocado para ' || _destino || ' por ' || _uid::text || ': ' || _motivo || ']'
+   WHERE instalacao_id = _servico.instalacao_origem_id
+     AND status IN ('pendente','aceito','em_rota','chegou','iniciada');
+  ```
+  Isso reaproveita o trigger canônico que já devolve serviço à fila quando link é cancelado, mantendo consistência.
+
+- **Recriação de `agendamentos_base` para destino `'fila'` e `'rota'`** (sem `oficina_id`/`atendido_por`), espelhando o padrão já existente para `'base'`. Sem essa entrada, `useServicosParaAtribuir` não enxerga o serviço.
+
+- Manter compatibilidade com chamadas existentes (mesma assinatura, mesmo retorno JSON).
+
+### 3. Regressões a validar manualmente após deploy
+
+- Realocar um serviço de prestador → `fila`: link some do mapa, serviço reaparece em Atribuição Manual.
+- Realocar mesmo serviço → `profissional` (mesmo prestador): link **não** é cancelado (caminho oposto).
+- Realocar → `base`: comportamento atual preservado (cria agendamento na oficina).
+- Realocar → `rota`: novo agendamento_base sem oficina é criado e fica visível na rota.
+
+### 4. Memória
+
+Adicionar memória `mem://logic/operations/realocar-servico-cancela-link-prestador` documentando que `realocar_servico` cancela o `instalacao_prestador_links` ativo e sempre garante 1 `agendamentos_base` vivo por destino — virando regra canônica para complementar `mem://logic/operations/atribuicao-prestador-status-sync` e `mem://logic/operations/dedupe-agendamentos-rule`.
+
+### Detalhes técnicos (resumo para revisão)
+
+```text
+realocar_servico(destino)
+├── 'profissional' → mantém link se _profissional_id == link.prestador_id; senão cancela
+├── 'fila'         → cancela link + cria agendamentos_base sem oficina/atendido_por
+├── 'rota'         → cancela link + cria agendamentos_base sem oficina, com obs "Rota X"
+└── 'base'         → cancela link + cria agendamentos_base com oficina (já existente)
 ```
 
-Critérios de aceite:
-- Coluna `escopo` persistida com o valor escolhido (não null).
-- Caso A roteou para `vistoria_prestador_links` (não criou registro em `instalacao_prestador_links`).
-- Caso B roteou para `instalacao_prestador_links`.
-- `servicos.status='agendada'` nos dois casos.
-
-### Entregáveis
-
-Relatório consolidado com:
-- Screenshots dos dialogs e dos links públicos (mostrando presença/ausência do card IMEI).
-- Resultado das queries.
-- Lista de divergências encontradas (se houver), com hipótese de causa — **sem aplicar fixes durante o teste**; se aparecer bug, paro e reporto para você decidir.
-
-### Fora de escopo deste teste
-
-- Concluir a vistoria de ponta a ponta no link público (exigiria upload real de fotos do prestador).
-- Validar `concluir-instalacao-prestador` quando `escopo='somente_fotos'` — fica para teste separado se você pedir.
-- Aprovação no Monitoramento pós-conclusão.
-
-Se você quiser ampliar para esses pontos, me avise antes de aprovar.
+Nada na UI muda; só DB. Sem mudança em rotas, hooks ou componentes.
