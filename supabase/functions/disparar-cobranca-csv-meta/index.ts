@@ -247,6 +247,8 @@ serve(async (req) => {
           valor_total: valorTotalRemessa,
           status: "processando",
           criado_por: userId,
+          template_nome: templateNomeBase,
+          var_mapping_snapshot: Object.keys(varMapping).length > 0 ? varMapping : null,
         })
         .select("id")
         .single();
