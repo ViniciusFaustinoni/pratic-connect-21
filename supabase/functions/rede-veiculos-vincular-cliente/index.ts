@@ -278,16 +278,20 @@ serve(async (req) => {
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
     // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo/ =====
-    // Padrão canônico Rede Veículos para endpoints que aceitam payload via "json":
-    //   - URL COM barra final (`/vincularClienteVeiculo/`) — sem a barra o PHP perde
+    // Padrão canônico Rede Veículos descoberto via teste binário:
+    //   - URL COM barra final (`/vincularClienteVeiculo/`). Sem a barra o PHP perde
     //     $_REQUEST['json'] e devolve "JSON não informado".
-    //   - application/x-www-form-urlencoded com um único campo `json=<stringify>`.
-    //   - NADA de campos flat (cpfCnpj/imei/placa) — eles já estão dentro do payload
-    //     e foram remendo de uma hipótese errada (a falta de CPF/IMEI vinha do PHP
-    //     não parsear o body sem a barra final).
-    // Mesmo formato usado em atualizarDadosCliente/, ativarVeiculo/ e
-    // informarVeiculoAdimplente/, todos em produção.
+    //   - application/x-www-form-urlencoded (NÃO multipart — multipart também
+    //     devolveu "JSON não informado").
+    //   - DEVE conter os 3 campos flat (cpfCnpj, imei, placa) + o campo `json`
+    //     com o payload completo. Sem os flat, devolve "CPF/CNPJ e/ou IMEI não
+    //     foram informados", mesmo com eles presentes dentro do json.
+    // Esse formato é específico desta rota; atualizarDadosCliente/ e ativarVeiculo/
+    // aceitam só `json`. Não generalizar.
     const formBody = new URLSearchParams();
+    formBody.append('cpfCnpj', cpfCnpjLimpo);
+    formBody.append('imei', imeiLimpo);
+    formBody.append('placa', (veiculo.placa || '').toUpperCase());
     formBody.append('json', JSON.stringify(payload));
 
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
