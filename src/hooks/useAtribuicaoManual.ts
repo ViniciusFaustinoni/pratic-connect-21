@@ -627,6 +627,13 @@ export interface AtribuirPrestadorParams {
    * Default: 'fotos_instalacao' quando servico.tipo='instalacao'; senão 'somente_fotos'.
    */
   escopo?: EscopoAtribuicaoPrestador;
+  /**
+   * Default `true` — dispara automaticamente o template Meta
+   * `prestador_nova_instalacao_v2` para o WhatsApp do prestador.
+   * Passe `false` apenas quando o coordenador for enviar o link manualmente
+   * pelo dialog (registra no `whatsapp_mensagens` mesmo assim).
+   */
+  enviarWhatsApp?: boolean;
 }
 
 export interface AtribuirPrestadorResult {
