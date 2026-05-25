@@ -63,6 +63,7 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
   const handleBack = () => {
     setSelectedPrestador(null);
     setValor('');
+    setEscopo('fotos_instalacao');
   };
 
   return (
