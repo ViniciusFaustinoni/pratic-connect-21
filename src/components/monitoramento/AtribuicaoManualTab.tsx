@@ -429,6 +429,8 @@ export default function AtribuicaoManualTab() {
         prestadorTelefone: prest?.telefone,
       });
       setValorPrestador('');
+      // Default sugerido pelo tipo do serviço; coordenador pode trocar no diálogo.
+      setEscopoPrestador(servico?.tipo === 'instalacao' ? 'fotos_instalacao' : 'somente_fotos');
     } else {
       const vistoriadorId = overId.replace('vist-', '');
       const servico = active.data.current;
