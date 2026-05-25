@@ -45,11 +45,20 @@ const PERMISSION_TO_MODULE: Record<string, string> = {
   canDeleteTemplate: 'documentos',
 };
 
-function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perfis: string[] }) {
-  const queryClient = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const [localChanges, setLocalChanges] = useState<Record<string, { visible: boolean; can_edit: boolean }>>({});
+type ModuleChange = { visible: boolean; can_edit: boolean };
+type ModuleChanges = Record<string, ModuleChange>;
 
+function ModuleAccessCard({
+  userId,
+  perfis,
+  pendingChanges,
+  onPendingChange,
+}: {
+  userId: string | undefined;
+  perfis: string[];
+  pendingChanges: ModuleChanges;
+  onPendingChange: (next: ModuleChanges) => void;
+}) {
   const { data: userVisibility, isLoading } = useQuery({
     queryKey: ['user-module-visibility', userId],
     queryFn: async () => {
@@ -64,62 +73,26 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
     enabled: !!userId,
   });
 
-  // Construir estado efetivo: banco + edições locais
-  const getModuleState = useCallback((mod: string) => {
-    if (localChanges[mod]) return localChanges[mod];
+  // Estado efetivo = banco + alterações pendentes (controladas pelo form pai)
+  const getModuleState = useCallback((mod: string): ModuleChange => {
+    if (pendingChanges[mod]) return pendingChanges[mod];
     const row = userVisibility?.find(r => r.module_id === mod);
     return { visible: row?.visible ?? false, can_edit: row?.can_edit ?? true };
-  }, [userVisibility, localChanges]);
+  }, [userVisibility, pendingChanges]);
 
   const toggleVisible = (mod: string) => {
     const current = getModuleState(mod);
-    setLocalChanges(prev => ({
-      ...prev,
-      [mod]: { ...current, visible: !current.visible }
-    }));
+    onPendingChange({ ...pendingChanges, [mod]: { ...current, visible: !current.visible } });
   };
 
   const toggleCanEdit = (mod: string) => {
     const current = getModuleState(mod);
-    setLocalChanges(prev => ({
-      ...prev,
-      [mod]: { ...current, can_edit: !current.can_edit }
-    }));
-  };
-
-  const hasChanges = Object.keys(localChanges).length > 0;
-
-  const handleSave = async () => {
-    if (!userId || !hasChanges) return;
-    setSaving(true);
-    try {
-      const upsertData = Object.entries(localChanges).map(([module_id, state]) => ({
-        user_id: userId,
-        module_id,
-        visible: state.visible,
-        can_edit: state.can_edit,
-        updated_at: new Date().toISOString(),
-      }));
-
-      const { error } = await (supabase as any)
-        .from('user_module_visibility')
-        .upsert(upsertData, { onConflict: 'user_id,module_id' });
-      if (error) throw error;
-
-      queryClient.invalidateQueries({ queryKey: ['user-module-visibility', userId] });
-      queryClient.invalidateQueries({ queryKey: ['module-visibility'] });
-      setLocalChanges({});
-      toast.success('Acessos do usuário atualizados!');
-    } catch (err: any) {
-      toast.error('Erro ao salvar acessos: ' + (err.message || ''));
-    } finally {
-      setSaving(false);
-    }
+    onPendingChange({ ...pendingChanges, [mod]: { ...current, can_edit: !current.can_edit } });
   };
 
   const allModules = Object.keys(MODULE_LABELS);
 
-  // Conjunto de módulos JÁ liberados pelo perfil — overlay aditivo no card.
+  // Módulos já liberados pelo perfil — overlay aditivo no card.
   const { getPermissionsForRoles } = useAppRoles();
   const modulesFromPerfil = React.useMemo(() => {
     const set = new Set<string>();
@@ -128,7 +101,6 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
       const m = PERMISSION_TO_MODULE[p];
       if (m) set.add(m);
     });
-    // Diretor / Admin Master / Desenvolvedor liberam tudo na prática.
     if ((perfis || []).some(p => ['diretor', 'admin_master', 'desenvolvedor'].includes(p))) {
       allModules.forEach(m => set.add(m));
     }
@@ -151,24 +123,25 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
     );
   }
 
+  const pendingCount = Object.keys(pendingChanges).length;
+
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Eye className="w-5 h-5" />
               Acesso a Módulos
             </CardTitle>
             <CardDescription>
-              Conceda módulos adicionais a este usuário, além dos já liberados pelo perfil de acesso. Desmarcar aqui não remove acessos concedidos pelo perfil — para isso, ajuste o perfil acima.
+              Conceda módulos adicionais a este usuário, além dos já liberados pelo perfil. As alterações são salvas junto com o botão <strong>Salvar alterações</strong> do formulário — não há save separado.
             </CardDescription>
           </div>
-          {hasChanges && (
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              Salvar acessos
-            </Button>
+          {pendingCount > 0 && (
+            <Badge variant="outline" className="border-amber-500/50 text-amber-500 bg-amber-500/10 shrink-0">
+              {pendingCount} pendente{pendingCount > 1 ? 's' : ''}
+            </Badge>
           )}
         </div>
       </CardHeader>
@@ -182,7 +155,7 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {allModules.map(mod => {
                 const state = getModuleState(mod);
-                const isChanged = !!localChanges[mod];
+                const isChanged = !!pendingChanges[mod];
                 const fromPerfil = modulesFromPerfil.has(mod);
                 const effectiveOn = state.visible || fromPerfil;
                 return (
@@ -212,6 +185,7 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
                     </div>
                     {!fromPerfil && state.visible && (
                       <button
+                        type="button"
                         onClick={() => toggleCanEdit(mod)}
                         className={`p-1 rounded transition-colors ${
                           state.can_edit ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground hover:bg-muted'
