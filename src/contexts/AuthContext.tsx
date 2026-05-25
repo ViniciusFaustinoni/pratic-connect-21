@@ -268,8 +268,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // Invalidar queries dependentes de usuário ao detectar novo login
         if (newUserId) {
-          queryClient.invalidateQueries({ queryKey: ['module-visibility', newUserId] });
-          queryClient.invalidateQueries({ queryKey: ['module-item-visibility', newUserId] });
+          queryClient.invalidateQueries({ queryKey: ['module-visibility'] });
+          queryClient.invalidateQueries({ queryKey: ['module-item-visibility'] });
           queryClient.invalidateQueries({ queryKey: ['app-roles-config'] });
         }
 
