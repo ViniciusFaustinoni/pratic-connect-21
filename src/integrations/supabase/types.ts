@@ -9025,6 +9025,170 @@ export type Database = {
           },
         ]
       }
+      contrato_retificacoes: {
+        Row: {
+          assinado_em: string | null
+          associado_id: string
+          autentique_documento_id: string | null
+          autentique_short_link: string | null
+          autentique_signer_public_id: string | null
+          autentique_url: string | null
+          campos_alterados: Json
+          contrato_id: string
+          created_at: string
+          criado_por: string | null
+          enviado_em: string | null
+          erro_mensagem: string | null
+          id: string
+          motivo: string
+          pdf_assinado_url: string | null
+          snapshot_anterior: Json
+          snapshot_novo: Json
+          status: string
+          updated_at: string
+          versao: number
+          visualizado_em: string | null
+        }
+        Insert: {
+          assinado_em?: string | null
+          associado_id: string
+          autentique_documento_id?: string | null
+          autentique_short_link?: string | null
+          autentique_signer_public_id?: string | null
+          autentique_url?: string | null
+          campos_alterados?: Json
+          contrato_id: string
+          created_at?: string
+          criado_por?: string | null
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          motivo: string
+          pdf_assinado_url?: string | null
+          snapshot_anterior?: Json
+          snapshot_novo?: Json
+          status?: string
+          updated_at?: string
+          versao: number
+          visualizado_em?: string | null
+        }
+        Update: {
+          assinado_em?: string | null
+          associado_id?: string
+          autentique_documento_id?: string | null
+          autentique_short_link?: string | null
+          autentique_signer_public_id?: string | null
+          autentique_url?: string | null
+          campos_alterados?: Json
+          contrato_id?: string
+          created_at?: string
+          criado_por?: string | null
+          enviado_em?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          motivo?: string
+          pdf_assinado_url?: string | null
+          snapshot_anterior?: Json
+          snapshot_novo?: Json
+          status?: string
+          updated_at?: string
+          versao?: number
+          visualizado_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contrato_retificacoes_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       contratos: {
         Row: {
           adesao_cobranca_id: string | null
