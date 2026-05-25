@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AppRoleConfig {
@@ -21,9 +22,11 @@ export interface AppRoleConfig {
 /**
  * Hook centralizado que busca app_roles_config do banco.
  * Fonte única de verdade para roles/perfis no sistema.
- * Stale time de 30min — dados raramente mudam.
+ * Mantém cache curto + Realtime para propagar mudanças de permissões
+ * sem exigir logout/refresh manual da sessão ativa.
  */
 export function useAppRoles() {
+  const queryClient = useQueryClient();
   const { data: roles = [], isLoading } = useQuery({
     queryKey: ['app-roles-config'],
     queryFn: async () => {
@@ -38,8 +41,26 @@ export function useAppRoles() {
         permissions: Array.isArray(r.permissions) ? r.permissions : [],
       })) as AppRoleConfig[];
     },
-    staleTime: 30 * 60 * 1000, // 30 min
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('app-roles-config-realtime')
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'app_roles_config' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['app-roles-config'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   /** Label para exibição de um role */
   const getRoleLabel = (role: string): string => {

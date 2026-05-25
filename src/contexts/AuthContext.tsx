@@ -148,6 +148,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
   }, []);
 
+  const refreshPerfis = useCallback(async (userId: string): Promise<PerfilAcesso[]> => {
+    PERFIS_PROMISES.delete(userId);
+    const updatedPerfis = await fetchPerfis(userId);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['app-roles-config'] }),
+      queryClient.invalidateQueries({ queryKey: ['module-visibility'] }),
+      queryClient.invalidateQueries({ queryKey: ['module-item-visibility'] }),
+    ]);
+    return updatedPerfis;
+  }, [fetchPerfis, queryClient]);
+
   // ============================================
   // USEEFFECT: INICIALIZAÇÃO E LISTENER
   // ============================================
@@ -257,8 +268,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // Invalidar queries dependentes de usuário ao detectar novo login
         if (newUserId) {
-          queryClient.invalidateQueries({ queryKey: ['module-visibility', newUserId] });
-          queryClient.invalidateQueries({ queryKey: ['module-item-visibility', newUserId] });
+          queryClient.invalidateQueries({ queryKey: ['module-visibility'] });
+          queryClient.invalidateQueries({ queryKey: ['module-item-visibility'] });
           queryClient.invalidateQueries({ queryKey: ['app-roles-config'] });
         }
 
@@ -329,6 +340,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
       subscription.unsubscribe();
     };
   }, [fetchProfile, fetchPerfis]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let cancelled = false;
+
+    const syncPerfis = async () => {
+      const updatedPerfis = await refreshPerfis(user.id);
+      if (cancelled) return updatedPerfis;
+      setPerfis(updatedPerfis);
+      return updatedPerfis;
+    };
+
+    const channel = supabase
+      .channel(`auth-user-roles-${user.id}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'user_roles', filter: `user_id=eq.${user.id}` },
+        () => {
+          void syncPerfis();
+        }
+      )
+      .subscribe();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncPerfis();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      supabase.removeChannel(channel);
+    };
+  }, [refreshPerfis, user?.id]);
 
   // ============================================
   // MÉTODOS DE AUTENTICAÇÃO
