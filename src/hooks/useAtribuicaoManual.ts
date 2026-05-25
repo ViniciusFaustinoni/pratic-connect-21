@@ -662,7 +662,7 @@ export function useAtribuirServicoPrestador() {
       const usaInstalacao = escopo === 'fotos_instalacao';
 
 
-      if (isInstalacao) {
+      if (usaInstalacao) {
         // Get instalacao_id
         let instalacaoId = servico.instalacao_origem_id;
         if (!instalacaoId) {
