@@ -202,15 +202,20 @@ serve(async (req) => {
       }
 
       // Passo 1 — inativar o veículo no registro do titular antigo.
+      // Tolerar "mesma situação" como sucesso (já está inativo de execução anterior).
       const rs = await alterarSituacaoParaVeiculoHinova(supabase, codVeicRem, 2);
-      if (!rs.ok) {
+      const veicJaInativo = !rs.ok && /mesma que o ve.culo se encontra/i.test(
+        (rs.mensagem || '') + ' ' + rs.errors.join(' '),
+      );
+      if (!rs.ok && !veicJaInativo) {
         await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto', 'error',
           { codVeicRem, codAssocRem, situacao: 2, contexto, troca_id: troca.id },
           rs.raw, rs.mensagem || rs.errors.join('; ') || `HTTP ${rs.status}`);
         return { ok: false, reason: `Hinova respondeu erro: ${rs.mensagem || rs.errors.join('; ')}` };
       }
-      await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto', 'success',
-        { codVeicRem, codAssocRem, situacao: 2, contexto, troca_id: troca.id, placa },
+      await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto',
+        rs.ok ? 'success' : 'info',
+        { codVeicRem, codAssocRem, situacao: 2, contexto, troca_id: troca.id, placa, ja_inativo: veicJaInativo },
         rs.raw);
 
       // Passo 2 — se o titular antigo está órfão localmente (sem veículo/contrato
