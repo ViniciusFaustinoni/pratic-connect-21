@@ -1,6 +1,6 @@
 ---
 name: fluxo-cotacao-ativacao
-description: Mapa canônico do fluxo de uma cotação até a ativação do associado neste projeto (Praticcar). Use ao mexer em qualquer etapa entre criação da cotação e ativação — link público, contrato, autovistoria, instalação, Cadastro, Monitoramento, ativar-associado, sync SGA — ou ao diagnosticar travas no funil (status_contratacao, cadastro_aprovado, veiculos.status, status_contratacao=ativo). Triggers: "fluxo de cotação", "ativação", "cadastro aprovado", "aprovar-proposta", "ativar-associado", "propostas pendentes", "aguardando aprovação", "troca de titularidade", "substituição de placa", "sub-FIPE", "autovistoria", "instalação", "Monitoramento aprovou mas...", "veículo travado em instalacao_pendente", "cotação travada em".
+description: "Mapa canônico do fluxo de uma cotação até a ativação do associado neste projeto (Praticcar). Use ao mexer em qualquer etapa entre criação da cotação e ativação — link público, contrato, autovistoria, instalação, Cadastro, Monitoramento, ativar-associado, sync SGA — ou ao diagnosticar travas no funil (status_contratacao, cadastro_aprovado, veiculos.status). Triggers: fluxo de cotação, ativação, cadastro aprovado, aprovar-proposta, ativar-associado, propostas pendentes, aguardando aprovação, troca de titularidade, substituição de placa, sub-FIPE, autovistoria, instalação, Monitoramento aprovou mas, veículo travado em instalacao_pendente, cotação travada em."
 ---
 
 # Fluxo Cotação → Ativação (Praticcar)
