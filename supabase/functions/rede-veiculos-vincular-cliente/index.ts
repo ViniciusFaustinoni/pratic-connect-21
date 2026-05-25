@@ -277,25 +277,29 @@ serve(async (req) => {
 
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
-    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
-    // API espera multipart/form-data (mesmo formato da desvincularClienteVeiculo,
-    // que está em produção e funciona). URLSearchParams/x-www-form-urlencoded fazia
-    // o PHP descartar o body — respondia "CPF/IMEI não informados" e "JSON não informado".
-    // SEM barra final na URL — barra causa 301/307 e PHP perde o body.
-    const formBody = new FormData();
+    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo/ =====
+    // URL DEVE terminar com `/` — sem a barra o servidor responde 301 e o body
+    // é perdido no redirect (testado: devolve "JSON não informado" / "CPF/IMEI
+    // não informados").
+    // Formato exato do body ainda precisa ser confirmado com a Rede Veículos
+    // (ver bloco abaixo). Mantemos urlencoded + flat + json, padrão dos demais
+    // endpoints da plataforma.
+    const formBody = new URLSearchParams();
     formBody.append('cpfCnpj', cpfCnpjLimpo);
     formBody.append('imei', imeiLimpo);
     formBody.append('placa', (veiculo.placa || '').toUpperCase());
     formBody.append('json', JSON.stringify(payload));
 
-    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo`, {
+    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
       headers: {
-        // Não setar Content-Type manualmente — runtime injeta o boundary correto do multipart.
         'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formBody,
     });
+
+    console.log('[RedeVeiculos Vincular] HTTP status:', apiResponse.status);
 
 
     const responseText = await apiResponse.text();
