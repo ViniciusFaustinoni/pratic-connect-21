@@ -289,30 +289,45 @@ export function AgendamentoVistoria({
                   <Label className="flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
                     Escolha a data
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      (prazo de {prazoHoras}h{endereco.estado ? ` para ${endereco.estado.toUpperCase()}` : ''})
+                    </span>
                   </Label>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                    {datasDisponiveis.map((data) => {
-                      const isHoje = format(data, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-                      return (
-                        <Button
-                          key={data.toISOString()}
-                          variant={dataSelecionada?.toDateString() === data.toDateString() ? 'default' : 'outline'}
-                          className={cn(
-                            'flex flex-col h-auto py-2',
-                            dataSelecionada?.toDateString() === data.toDateString() && 'ring-2 ring-primary'
-                          )}
-                          onClick={() => setDataSelecionada(data)}
-                        >
-                          <span className="text-xs opacity-70">
-                            {isHoje ? 'Hoje' : format(data, 'EEE', { locale: ptBR })}
-                          </span>
-                          <span className="text-lg font-bold">{format(data, 'd')}</span>
-                          <span className="text-xs opacity-70">{format(data, 'MMM', { locale: ptBR })}</span>
-                        </Button>
-                      );
-                    })}
-                  </div>
+                  {datasDisponiveis.length === 0 ? (
+                    <div className="flex items-start gap-2 text-sm bg-destructive/10 text-destructive rounded-md p-3 border border-destructive/30">
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      <span>
+                        Nenhuma data disponível dentro do prazo de {prazoHoras} horas
+                        {endereco.estado ? ` para ${endereco.estado.toUpperCase()}` : ''}.
+                        Entre em contato com a central para agendar.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                      {datasDisponiveis.map((data) => {
+                        const isHoje = format(data, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                        return (
+                          <Button
+                            key={data.toISOString()}
+                            variant={dataSelecionada?.toDateString() === data.toDateString() ? 'default' : 'outline'}
+                            className={cn(
+                              'flex flex-col h-auto py-2',
+                              dataSelecionada?.toDateString() === data.toDateString() && 'ring-2 ring-primary'
+                            )}
+                            onClick={() => setDataSelecionada(data)}
+                          >
+                            <span className="text-xs opacity-70">
+                              {isHoje ? 'Hoje' : format(data, 'EEE', { locale: ptBR })}
+                            </span>
+                            <span className="text-lg font-bold">{format(data, 'd')}</span>
+                            <span className="text-xs opacity-70">{format(data, 'MMM', { locale: ptBR })}</span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+
 
                 {/* Seleção de Período */}
                 {dataSelecionada && (
