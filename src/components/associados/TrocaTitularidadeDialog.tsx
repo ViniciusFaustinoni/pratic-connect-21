@@ -96,12 +96,10 @@ export function TrocaTitularidadeDialog({
     });
   }
 
-  // Fallback local: usado quando SGA falha ou não retorna veículos
-  const fallback = useTrocaTitularidadeFallbackLocal(associadoId, open);
-  const fallbackPayload = fallback.data?.payload;
+  // Lista de fallback derivada do mesmo payload local (edge function bypassa RLS)
   const veiculosFallback: VeiculoOpcao[] = (fallbackPayload?.veiculos || [])
     .map((v) => {
-      const id = fallback.data?.placaParaId.get(normPlaca(v.placa));
+      const id = placaParaIdSvc?.get(normPlaca(v.placa));
       if (!id) return null;
       return {
         id,
