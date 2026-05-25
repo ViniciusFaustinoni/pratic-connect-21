@@ -149,6 +149,7 @@ serve(async (req) => {
           const codGrupo = await getConfiguracaoNumero(supabase, "sga_codigo_grupo_produto_padrao", 0);
           const basePayloadVeiculo = {
             codigo_associado: sgaCodAss,
+            codigo_tipo_veiculo: 1,
             placa: vehicleData?.placa,
             chassi: vehicleData?.chassi,
             renavam: vehicleData?.renavam || undefined,
@@ -193,7 +194,7 @@ serve(async (req) => {
                 marca: String(vehicleData?.marca || '').trim(),
                 texto: String(vehicleData?.modelo || '').trim(),
                 ano: (vehicleData as any)?.ano_modelo || (vehicleData as any)?.ano_fabricacao || null,
-                tipo_veiculo: null,
+                tipo_veiculo: 1,
               });
               const melhor = escolherMelhorModeloHinova(
                 lookup.items,
@@ -1262,6 +1263,7 @@ serve(async (req) => {
         const codigoGrupoProduto = await getConfiguracaoNumero(supabase, 'sga_codigo_grupo_produto_padrao', 0);
         const basePayloadVeiculo = {
           codigo_associado: codigoAssociadoNovo,
+          codigo_tipo_veiculo: 1,
           placa: veiculoPlaca,
           chassi: veiculoChassi,
           renavam: veiculoData?.renavam || undefined,
@@ -1308,7 +1310,7 @@ serve(async (req) => {
               marca: String(veiculoData?.marca || '').trim(),
               texto: String(veiculoData?.modelo || '').trim(),
               ano: veiculoData?.ano_modelo || veiculoData?.ano_fabricacao || null,
-              tipo_veiculo: null,
+              tipo_veiculo: 1,
             });
             const melhor = escolherMelhorModeloHinova(
               lookup.items,
