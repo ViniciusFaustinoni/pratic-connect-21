@@ -211,6 +211,62 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
                 Termo (legado) assinado em {format(new Date(sol.termo_cancelamento_assinado_em), "dd/MM/yyyy HH:mm", { locale: ptBR })}.
               </div>
             )}
+
+            {/* Cancelar substituição — libera placa/associado para novos processos */}
+            {podeCancelar && (
+              <div className="pt-2 border-t flex justify-end">
+                <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Cancelar substituição
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar Substituição de Placa?</AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-2 text-sm">
+                          <p>
+                            A solicitação ficará marcada como <strong>cancelada</strong> e o veículo <strong>{sol?.veiculo_antigo_placa}</strong> voltará a ficar disponível para nova substituição, troca ou cotação avulsa.
+                          </p>
+                          {sol?.cotacao_id && (
+                            <p className="text-amber-700 dark:text-amber-400">
+                              A cotação vinculada também será cancelada (se ainda estiver em fase pré-assinatura).
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            O registro permanece no banco para fins de auditoria — apenas o estado funcional é encerrado.
+                          </p>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-2">
+                      <Label htmlFor="motivo-cancel-subst" className="text-xs">Motivo (opcional)</Label>
+                      <Textarea
+                        id="motivo-cancel-subst"
+                        placeholder="Ex.: cliente desistiu, placa errada, etc."
+                        value={motivoCancel}
+                        onChange={(e) => setMotivoCancel(e.target.value.slice(0, 280))}
+                        rows={3}
+                      />
+                      <p className="text-[10px] text-muted-foreground text-right">{motivoCancel.length}/280</p>
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={cancelarMut.isPending}>Voltar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(e) => { e.preventDefault(); handleConfirmarCancelamento(); }}
+                        disabled={cancelarMut.isPending}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {cancelarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                        Confirmar cancelamento
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
