@@ -492,7 +492,7 @@ export function InstalacaoDetailDrawer({
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const url = `https://pratic-connect-21.lovable.app/prestador/instalacao/${prestadorLink.token}`;
+                          const url = `https://app.praticcar.org/prestador/instalacao/${prestadorLink.token}`;
                           navigator.clipboard.writeText(url);
                           toast({ title: 'Link copiado!' });
                         }}
