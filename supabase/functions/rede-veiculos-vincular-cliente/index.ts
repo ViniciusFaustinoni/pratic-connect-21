@@ -277,31 +277,31 @@ serve(async (req) => {
 
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
-    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo/ =====
-    // Padrão canônico Rede Veículos descoberto via teste binário:
-    //   - URL COM barra final (`/vincularClienteVeiculo/`). Sem a barra o PHP perde
-    //     $_REQUEST['json'] e devolve "JSON não informado".
-    //   - application/x-www-form-urlencoded (NÃO multipart — multipart também
-    //     devolveu "JSON não informado").
-    //   - DEVE conter os 3 campos flat (cpfCnpj, imei, placa) + o campo `json`
-    //     com o payload completo. Sem os flat, devolve "CPF/CNPJ e/ou IMEI não
-    //     foram informados", mesmo com eles presentes dentro do json.
-    // Esse formato é específico desta rota; atualizarDadosCliente/ e ativarVeiculo/
-    // aceitam só `json`. Não generalizar.
-    const formBody = new URLSearchParams();
+    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
+    // Mesmo formato canônico do `desvincularClienteVeiculo` (em produção):
+    //   - multipart/form-data (NUNCA setar Content-Type manualmente — o runtime
+    //     injeta o boundary correto)
+    //   - URL SEM barra final
+    //   - Campos flat (cpfCnpj, imei, placa) + campo `json` com o payload completo
+    // Histórico de testes binários: trailing slash + urlencoded e multipart sem
+    // slash já foram testados e devolveram "JSON não informado" / "CPF/IMEI não
+    // informados". Esta configuração espelha exatamente o endpoint irmão que
+    // funciona.
+    const formBody = new FormData();
     formBody.append('cpfCnpj', cpfCnpjLimpo);
     formBody.append('imei', imeiLimpo);
     formBody.append('placa', (veiculo.placa || '').toUpperCase());
     formBody.append('json', JSON.stringify(payload));
 
-    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
+    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formBody,
     });
+
+    console.log('[RedeVeiculos Vincular] HTTP status:', apiResponse.status);
 
 
     const responseText = await apiResponse.text();
