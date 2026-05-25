@@ -264,3 +264,73 @@ async function requeue(supabase: any, veiculoId: string, associadoId: string | n
     });
   }
 }
+
+/**
+ * Resolve o `codigo_sga_voluntario` esperado do NOVO titular para uma troca
+ * efetivada local. Caminho: veículo → troca efetivada vinculada (por placa/chassi
+ * ou veiculo_id) → cotacao_id → contrato do novo associado → vendedor →
+ * profiles.codigo_sga_voluntario. Fallback: contrato ativo mais recente do
+ * novo associado. Retorna 0 quando não conseguir resolver (não-bloqueante).
+ */
+async function resolverVoluntarioNovoTitular(
+  supabase: any,
+  veiculoLocalId: string,
+  associadoLocalId: string | null,
+): Promise<number> {
+  try {
+    // Localiza a troca efetivada mais recente para este veículo
+    const { data: troca } = await supabase
+      .from('solicitacoes_troca_titularidade')
+      .select('id, cotacao_id, novo_associado_id')
+      .eq('veiculo_id', veiculoLocalId)
+      .eq('status', 'efetivada')
+      .order('efetivada_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const novoAssocId = troca?.novo_associado_id || associadoLocalId;
+    if (!novoAssocId) return 0;
+
+    // 1) Contrato gerado pela cotação da troca
+    if (troca?.cotacao_id) {
+      const { data: c } = await supabase
+        .from('contratos')
+        .select('vendedor_id')
+        .eq('cotacao_id', troca.cotacao_id)
+        .eq('associado_id', novoAssocId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (c?.vendedor_id) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('codigo_sga_voluntario')
+          .eq('id', c.vendedor_id)
+          .maybeSingle();
+        const v = Number.parseInt(String(prof?.codigo_sga_voluntario ?? ''), 10);
+        if (Number.isFinite(v) && v > 0) return v;
+      }
+    }
+
+    // 2) Fallback: contrato ativo mais recente do novo associado
+    const { data: c2 } = await supabase
+      .from('contratos')
+      .select('vendedor_id')
+      .eq('associado_id', novoAssocId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (c2?.vendedor_id) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('codigo_sga_voluntario')
+        .eq('id', c2.vendedor_id)
+        .maybeSingle();
+      const v = Number.parseInt(String(prof?.codigo_sga_voluntario ?? ''), 10);
+      if (Number.isFinite(v) && v > 0) return v;
+    }
+  } catch (e) {
+    console.warn('[resolverVoluntarioNovoTitular] erro:', (e as any)?.message || e);
+  }
+  return 0;
+}
