@@ -22,7 +22,8 @@ export interface AppRoleConfig {
 /**
  * Hook centralizado que busca app_roles_config do banco.
  * Fonte única de verdade para roles/perfis no sistema.
- * Stale time de 30min — dados raramente mudam.
+ * Mantém cache curto + Realtime para propagar mudanças de permissões
+ * sem exigir logout/refresh manual da sessão ativa.
  */
 export function useAppRoles() {
   const queryClient = useQueryClient();
