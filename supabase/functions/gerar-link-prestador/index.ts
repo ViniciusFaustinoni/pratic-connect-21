@@ -130,6 +130,7 @@ Deno.serve(async (req) => {
           prestador_id: prestadorIdFinal,
           valor,
           atribuido_por,
+          escopo,
         })
         .select('id, token')
         .single()
