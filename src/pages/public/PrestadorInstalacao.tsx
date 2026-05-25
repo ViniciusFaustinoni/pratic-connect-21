@@ -382,7 +382,12 @@ export default function PrestadorInstalacao() {
     [todasFotos, fotosCombinadasMap]
   );
   const fotosMinimoAtingido = fotosPreenchidas >= Math.min(fotosObrigatoriasCount, 10);
-  const imeiOk = /^\d{14,16}$/.test(imeiRastreador.replace(/\D/g, ''));
+  // Escopo da atribuição (escolhido pelo coordenador no momento da atribuição).
+  // 'somente_fotos' esconde a etapa de IMEI e não exige rastreador físico.
+  const escopoLink: 'somente_fotos' | 'fotos_instalacao' =
+    (link as any)?.escopo === 'somente_fotos' ? 'somente_fotos' : 'fotos_instalacao';
+  const exigeImei = escopoLink === 'fotos_instalacao';
+  const imeiOk = !exigeImei || /^\d{14,16}$/.test(imeiRastreador.replace(/\D/g, ''));
   const todasUploadConcluidas = upload.totalPendentes === 0;
 
   const canFinalize = checklistComplete && fotosMinimoAtingido && !!assinaturaUrl && imeiOk && todasUploadConcluidas;
