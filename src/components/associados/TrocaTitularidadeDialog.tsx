@@ -216,8 +216,9 @@ export function TrocaTitularidadeDialog({
     try {
       const fresh = await refetchLocais();
       const veiculoSelecionado = veiculos.find(v => v.id === veiculoId);
+      const freshVeiculos = (fresh.data as any)?.payload?.veiculos as Array<{ placa: string }> | undefined;
       const placaFallback = veiculoSelecionado?.placa
-        || (fresh.data || []).find(l => l.id === veiculoId)?.placa
+        || freshVeiculos?.find((v) => placaParaIdSvc?.get(normPlaca(v.placa)) === veiculoId)?.placa
         || null;
       const result = await criar.mutateAsync({
         associado_antigo_id: associadoId,
