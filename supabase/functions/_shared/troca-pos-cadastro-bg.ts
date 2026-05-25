@@ -69,10 +69,12 @@ export async function runPosCadastroBackground(admin: SupabaseClient, sol: Solic
     let vendedorAtribuido: { profile_id: string; nome: string; telefone: string | null } | null = null;
 
     if (sol.criado_por) {
+      // `criado_por` historicamente referencia profiles.id, mas há registros
+      // antigos com auth.users.id — aceitar ambos por defesa.
       const { data: profCriador } = await admin
         .from('profiles')
         .select('id, user_id, tipo, nome, telefone')
-        .eq('user_id', sol.criado_por)
+        .or(`id.eq.${sol.criado_por},user_id.eq.${sol.criado_por}`)
         .maybeSingle();
       if (profCriador && ['vendedor', 'agencia', 'consultor_externo'].includes(profCriador.tipo || '')) {
         vendedorAuthUserId = profCriador.user_id;
