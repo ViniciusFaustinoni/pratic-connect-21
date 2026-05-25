@@ -650,7 +650,7 @@ export default function SinistroAnalise() {
         : 'valor a conferir';
 
       const linkPag = linkAtivo?.token
-        ? `https://pratic-connect-21.lovable.app/evento/${linkAtivo.token}`
+        ? `https://app.praticcar.org/evento/${linkAtivo.token}`
         : null;
 
       if (!linkPag) { toast.error('Link do evento não encontrado. Gere um novo link.'); setReenviandoPagamento(false); return; }
