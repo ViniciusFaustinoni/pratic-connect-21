@@ -73,7 +73,7 @@ function DeleteConfirmDialog({ open, onClose, onConfirm, itemName, isPending }: 
 
 // ── Cobertura Sheet ──
 
-function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () => void; item?: any }) {
+function CoberturaSheet({ open, onClose, item, existingNames, onCreated }: { open: boolean; onClose: () => void; item?: any; existingNames: { id: string; nome: string }[]; onCreated?: (id: string) => void }) {
   const qc = useQueryClient();
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -85,6 +85,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
     carencia_dias: '0',
     carencia_multiplicador: '1',
   });
+  const [confirmDup, setConfirmDup] = useState(false);
 
   const { state: eligState, setState: setEligState } = useEligibilityState('cobertura', item?.id);
 
@@ -110,6 +111,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         carencia_multiplicador: parseFloat(carenciaConfig.carencia_multiplicador) || 1,
       };
       let entityId = item?.id;
+      let createdId: string | null = null;
       if (entityId) {
         const { error } = await supabase.from('coberturas').update(payload).eq('id', entityId);
         if (error) throw error;
@@ -121,18 +123,34 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         }).select().single();
         if (error) throw error;
         entityId = data.id;
+        createdId = data.id;
       }
       // Save eligibility rules
       await saveEligibilityRules('cobertura', entityId, eligState);
+      // Garantir lista fresca antes de fechar o sheet
+      await qc.refetchQueries({ queryKey: ['coberturas'] });
+      await qc.refetchQueries({ queryKey: ['entity_eligibility_rules'] });
+      return { createdId, nome };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['coberturas'] });
-      qc.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
-      toast.success('Cobertura salva');
+    onSuccess: ({ createdId, nome }) => {
+      toast.success(createdId ? `Cobertura "${nome}" criada` : `Cobertura "${nome}" salva`);
+      if (createdId) onCreated?.(createdId);
       onClose();
     },
     onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe uma cobertura com esse nome' : 'Erro ao salvar'),
   });
+
+  const handleSalvar = () => {
+    if (!item) {
+      const nomeNorm = nome.trim().toLowerCase();
+      const colide = existingNames.some(e => (e.nome || '').trim().toLowerCase() === nomeNorm);
+      if (colide) {
+        setConfirmDup(true);
+        return;
+      }
+    }
+    mutation.mutate();
+  };
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -151,11 +169,28 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-            <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!nome.trim() || mutation.isPending}>
+            <Button className="flex-1" onClick={handleSalvar} disabled={!nome.trim() || mutation.isPending}>
               {mutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Salvar
             </Button>
           </div>
         </div>
+
+        <AlertDialog open={confirmDup} onOpenChange={setConfirmDup}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cobertura com nome igual já existe</AlertDialogTitle>
+              <AlertDialogDescription>
+                Já existe uma cobertura chamada <strong>"{nome}"</strong>. Deseja criar mesmo assim?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setConfirmDup(false); mutation.mutate(); }}>
+                Criar mesmo assim
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
