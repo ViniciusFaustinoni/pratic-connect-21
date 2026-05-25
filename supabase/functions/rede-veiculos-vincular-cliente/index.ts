@@ -288,7 +288,8 @@ serve(async (req) => {
     formBody.append('placa', (veiculo.placa || '').toUpperCase());
     formBody.append('json', JSON.stringify(payload));
 
-    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
+    // IMPORTANTE: SEM barra final — a barra causa 301/307 redirect e o PHP perde o body multipart
+    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo`, {
       method: 'POST',
       headers: {
         // NÃO setar Content-Type — fetch monta o boundary do multipart sozinho
