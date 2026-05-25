@@ -322,7 +322,7 @@ export function ImportarCobrancaCsv() {
     setEtapa('concluido');
     if (erros === 0) toast.success(`Envio concluído: ${sucesso} mensagens enviadas.`);
     else toast.warning(`Envio finalizado: ${sucesso} ok, ${erros} com erro.`);
-  }, [resultado, arquivo, usarTemplateV2]);
+  }, [resultado, arquivo, usarTemplateV2, templateNome, varMapping]);
 
   // ====== ETAPA 1: UPLOAD ======
   if (etapa === 'upload') {
