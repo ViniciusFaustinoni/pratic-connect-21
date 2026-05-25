@@ -1582,7 +1582,13 @@ export async function alterarSituacaoParaVeiculoHinova(
  */
 export async function alterarVeiculoHinova(
   supabaseOrSession: any,
-  payload: { codigo_veiculo: number; codigo_associado?: number; transferir_agregados?: number[]; [k: string]: unknown },
+  payload: {
+    codigo_veiculo: number;
+    codigo_associado?: number;
+    codigo_voluntario?: number;
+    transferir_agregados?: number[];
+    [k: string]: unknown;
+  },
 ): Promise<{ ok: boolean; status: number; raw: any; mensagem: string | null; errors: string[] }> {
   const { ok, status, txt, data } = await hinovaPostAuth(
     supabaseOrSession, '/alterar/veiculo', payload, 'alterarVeiculo',
@@ -1594,6 +1600,34 @@ export async function alterarVeiculoHinova(
     mensagem: data?.mensagem ?? null,
     errors: extractErrors(data),
   };
+}
+
+/**
+ * Normaliza o `codigo_voluntario` retornado por busca de veículo no Hinova.
+ * Cobre variantes conhecidas do payload e cai em 0 quando ausente — assim os
+ * fluxos de troca de titularidade comparam "atual vs esperado" sem quebrar
+ * caso a Hinova mude o nome do campo.
+ */
+export function extractCodigoVoluntario(found: any): number {
+  if (!found || typeof found !== 'object') return 0;
+  const candidates = [
+    found.codigo_voluntario,
+    found.codigo_voluntario_atual,
+    found.codigo_volutario, // typo defensivo observado em alguns retornos legacy
+    found.voluntario?.codigo,
+    found.voluntario?.codigo_voluntario,
+  ];
+  for (const c of candidates) {
+    const n = Number.parseInt(String(c ?? ''), 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
+}
+
+/** Sleep com jitter — usado em retry/backoff de re-consulta pós-/alterar/veiculo. */
+export function sleepJitter(minMs = 2000, maxMs = 3000): Promise<void> {
+  const ms = Math.floor(minMs + Math.random() * Math.max(0, maxMs - minMs));
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 /** POST /veiculo/foto/cadastrar — máx 50 fotos por chamada */
