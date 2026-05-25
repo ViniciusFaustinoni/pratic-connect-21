@@ -196,7 +196,11 @@ export function useAprovarTrocaCadastro() {
         if (ok) return { success: true, silent: true };
         throw error;
       }
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) {
+        const e: any = new Error(data.error);
+        e.code = data.code ?? data.codigo ?? null;
+        throw e;
+      }
       return data;
     },
       onSuccess: (data: any) => {
@@ -206,7 +210,10 @@ export function useAprovarTrocaCadastro() {
         ? 'Aprovada — processamento em segundo plano'
         : 'Cadastro aprovado — enviada ao Monitoramento');
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: async (e: any) => {
+      const { toastErroEdge } = await import('@/lib/ui/toastErroEdge');
+      await toastErroEdge(e, 'Aprovar cadastro da troca');
+    },
   });
 }
 
