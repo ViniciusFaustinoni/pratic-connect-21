@@ -763,7 +763,7 @@ export default function PrestadorInstalacao() {
                 {!checklistComplete && 'Complete o checklist • '}
                 {!fotosMinimoAtingido && `Envie ao menos ${Math.min(fotosObrigatoriasCount, 10)} fotos • `}
                 {!assinaturaUrl && 'Capture a assinatura • '}
-                {!imeiOk && 'Informe o IMEI do rastreador'}
+                {exigeImei && !imeiOk && 'Informe o IMEI do rastreador'}
                 {checklistComplete && fotosMinimoAtingido && assinaturaUrl && imeiOk && !todasUploadConcluidas &&
                   `Aguardando envio de ${upload.totalPendentes} foto(s)…`}
               </p>
