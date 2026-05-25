@@ -277,23 +277,26 @@ serve(async (req) => {
 
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
-    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
-    // Mesmo formato canônico do `desvincularClienteVeiculo` (em produção):
-    //   - multipart/form-data (NUNCA setar Content-Type manualmente — o runtime
-    //     injeta o boundary correto)
-    //   - URL SEM barra final
-    //   - Campos flat (cpfCnpj, imei, placa) + campo `json` com o payload completo
-    // Histórico de testes binários: trailing slash + urlencoded e multipart sem
-    // slash já foram testados e devolveram "JSON não informado" / "CPF/IMEI não
-    // informados". Esta configuração espelha exatamente o endpoint irmão que
-    // funciona.
+    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo/ =====
+    // URL DEVE terminar com `/` — sem a barra o servidor responde 301 e o body
+    // é perdido no redirect (testado: devolve "JSON não informado" / "CPF/IMEI
+    // não informados").
+    // Formato exato do body ainda precisa ser confirmado com a Rede Veículos
+    // (ver bloco abaixo). Mantemos urlencoded + flat + json, padrão dos demais
+    // endpoints da plataforma.
+    const formBody = new URLSearchParams();
+    formBody.append('cpfCnpj', cpfCnpjLimpo);
+    formBody.append('imei', imeiLimpo);
+    formBody.append('placa', (veiculo.placa || '').toUpperCase());
+    formBody.append('json', JSON.stringify(payload));
+
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify(payload),
+      body: formBody,
     });
 
     console.log('[RedeVeiculos Vincular] HTTP status:', apiResponse.status);
