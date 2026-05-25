@@ -75,47 +75,79 @@ interface Props {
 export function RetificarTermoModal({ open, onOpenChange, associado, contrato, veiculo }: Props) {
   const { mutate: retificar, isPending } = useRetificarTermo();
   const { data: retificacoes } = useRetificacoesContrato(contrato?.id);
+  const { data: ocrPrefill } = useRetificacaoPrefillOCR(contrato?.id);
   const [aba, setAba] = useState<'editar' | 'historico'>('editar');
+
+  // Merge não-destrutivo: BD sempre vence; OCR só preenche quando BD está vazio.
+  // Exceção canônica: chassi NUNCA vem de OCR.
+  const mergeBdOcr = (bd: any, ocrKey: PrefillCampo) => {
+    if (bd !== undefined && bd !== null && bd !== '') return bd;
+    const v = ocrPrefill?.prefill?.[ocrKey];
+    return v ?? '';
+  };
+
+  // Quais campos foram efetivamente preenchidos pelo OCR (BD estava vazio)?
+  const fonteAplicada = (bd: any, campo: PrefillCampo): FonteOCR | undefined => {
+    if (bd !== undefined && bd !== null && bd !== '') return undefined;
+    return ocrPrefill?.fontes?.[campo];
+  };
 
   const defaults: FormValues = useMemo(() => ({
     motivo: '',
-    nome: associado?.nome ?? '',
-    rg: associado?.rg ?? '',
-    data_nascimento: associado?.data_nascimento ?? '',
-    cnh_numero: associado?.cnh_numero ?? '',
-    cnh_categoria: associado?.cnh_categoria ?? '',
-    cnh_validade: associado?.cnh_validade ?? '',
+    nome: mergeBdOcr(associado?.nome, 'nome'),
+    rg: mergeBdOcr(associado?.rg, 'rg'),
+    data_nascimento: mergeBdOcr(associado?.data_nascimento, 'data_nascimento'),
+    cnh_numero: mergeBdOcr(associado?.cnh_numero, 'cnh_numero'),
+    cnh_categoria: mergeBdOcr(associado?.cnh_categoria, 'cnh_categoria'),
+    cnh_validade: mergeBdOcr(associado?.cnh_validade, 'cnh_validade'),
     email: associado?.email ?? '',
     telefone: associado?.telefone ?? '',
-    cep: associado?.cep ?? '',
-    logradouro: associado?.logradouro ?? '',
-    numero: associado?.numero ?? '',
-    bairro: associado?.bairro ?? '',
-    cidade: associado?.cidade ?? '',
-    uf: associado?.uf ?? '',
-    placa: veiculo?.placa ?? '',
-    chassi: veiculo?.chassi ?? '',
-    renavam: veiculo?.renavam ?? '',
-    marca: veiculo?.marca ?? '',
-    modelo: veiculo?.modelo ?? '',
-    ano_fabricacao: veiculo?.ano_fabricacao ?? undefined,
-    ano_modelo: veiculo?.ano_modelo ?? undefined,
-    cor: veiculo?.cor ?? '',
-    combustivel: veiculo?.combustivel ?? '',
+    cep: mergeBdOcr(associado?.cep, 'cep'),
+    logradouro: mergeBdOcr(associado?.logradouro, 'logradouro'),
+    numero: mergeBdOcr(associado?.numero, 'numero'),
+    bairro: mergeBdOcr(associado?.bairro, 'bairro'),
+    cidade: mergeBdOcr(associado?.cidade, 'cidade'),
+    uf: mergeBdOcr(associado?.uf, 'uf'),
+    placa: mergeBdOcr(veiculo?.placa, 'placa'),
+    chassi: veiculo?.chassi ?? '', // sempre manual
+    renavam: mergeBdOcr(veiculo?.renavam, 'renavam'),
+    marca: mergeBdOcr(veiculo?.marca, 'marca'),
+    modelo: mergeBdOcr(veiculo?.modelo, 'modelo'),
+    ano_fabricacao: veiculo?.ano_fabricacao ?? (ocrPrefill?.prefill?.ano_fabricacao as number | undefined) ?? undefined,
+    ano_modelo: veiculo?.ano_modelo ?? (ocrPrefill?.prefill?.ano_modelo as number | undefined) ?? undefined,
+    cor: mergeBdOcr(veiculo?.cor, 'cor'),
+    combustivel: mergeBdOcr(veiculo?.combustivel, 'combustivel'),
     tipo_placa: veiculo?.tipo_placa ?? '',
     veiculo_categoria: contrato?.veiculo_categoria ?? '',
     dia_vencimento: contrato?.dia_vencimento ?? undefined,
-  }), [associado, contrato, veiculo]);
+  }), [associado, contrato, veiculo, ocrPrefill]);
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: defaults,
-  });
-
-  useEffect(() => {
-    if (open) form.reset(defaults);
+  // Mapa de origem por campo, para badges
+  const origens: Partial<Record<PrefillCampo, FonteOCR | undefined>> = useMemo(() => ({
+    nome: fonteAplicada(associado?.nome, 'nome'),
+    rg: fonteAplicada(associado?.rg, 'rg'),
+    data_nascimento: fonteAplicada(associado?.data_nascimento, 'data_nascimento'),
+    cnh_numero: fonteAplicada(associado?.cnh_numero, 'cnh_numero'),
+    cnh_categoria: fonteAplicada(associado?.cnh_categoria, 'cnh_categoria'),
+    cnh_validade: fonteAplicada(associado?.cnh_validade, 'cnh_validade'),
+    cep: fonteAplicada(associado?.cep, 'cep'),
+    logradouro: fonteAplicada(associado?.logradouro, 'logradouro'),
+    numero: fonteAplicada(associado?.numero, 'numero'),
+    bairro: fonteAplicada(associado?.bairro, 'bairro'),
+    cidade: fonteAplicada(associado?.cidade, 'cidade'),
+    uf: fonteAplicada(associado?.uf, 'uf'),
+    placa: fonteAplicada(veiculo?.placa, 'placa'),
+    renavam: fonteAplicada(veiculo?.renavam, 'renavam'),
+    marca: fonteAplicada(veiculo?.marca, 'marca'),
+    modelo: fonteAplicada(veiculo?.modelo, 'modelo'),
+    ano_fabricacao: fonteAplicada(veiculo?.ano_fabricacao, 'ano_fabricacao'),
+    ano_modelo: fonteAplicada(veiculo?.ano_modelo, 'ano_modelo'),
+    cor: fonteAplicada(veiculo?.cor, 'cor'),
+    combustivel: fonteAplicada(veiculo?.combustivel, 'combustivel'),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, associado?.id, contrato?.id, veiculo?.id]);
+  }), [associado, veiculo, ocrPrefill]);
+
+  const camposAutoPreenchidos = Object.values(origens).filter(Boolean).length;
 
 
   const onSubmit = (v: FormValues) => {
