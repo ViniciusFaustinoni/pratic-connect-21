@@ -923,21 +923,24 @@ serve(async (req) => {
             const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
               const codVeicRem = Number(r.found.codigo_veiculo);
-              const autoInat = await tentarAutoInativarVeiculoRemoto({
+              const transf = await tentarTransferirVeiculoRemoto({
                 veiculoLocalId: _vid,
                 associadoLocalId: _aid,
                 codVeicRem,
                 codAssocRem,
+                codigoAssociadoNovo: codigoAssociadoHinova!,
                 placa: placaLimpa,
+                chassi: chassiLimpo,
                 contexto: 'placa',
               });
-              if (autoInat.ok) {
-                // Veículo remoto inativado — segue fluxo deixando codigoVeiculoHinova=null
-                // para que "6.d Cadastrar se não existe" registre vinculado ao novo titular.
+              if (transf.ok) {
+                // Veículo agora aponta para o novo titular no Hinova — reutiliza
+                // o codigo_veiculo existente, pulando o cadastro novo (6.d).
+                codigoVeiculoHinova = transf.codigoVeiculoRemoto;
               } else {
-                const msg = autoInat.reason === 'sem_troca_local'
-                  ? `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}).`
-                  : `Auto-inativação falhou: ${autoInat.reason}`;
+                const msg = transf.reason === 'sem_troca_local'
+                  ? `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}) e não há troca de titularidade efetivada local. Revisar manualmente.`
+                  : `Falha na troca de titularidade via /alterar/veiculo: ${transf.reason}`;
                 await logSync(_vid, _aid, 'conflito_placa', 'error',
                   { placa: placaLimpa }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
                 await setStatusSga(_vid, 'erro_sincronizacao');
@@ -968,25 +971,28 @@ serve(async (req) => {
             const codAssocRem = Number(r.found.codigo_associado || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
               const codVeicRem = Number(r.found.codigo_veiculo);
-              const autoInat = await tentarAutoInativarVeiculoRemoto({
+              const transf = await tentarTransferirVeiculoRemoto({
                 veiculoLocalId: _vid,
                 associadoLocalId: _aid,
                 codVeicRem,
                 codAssocRem,
-                placa: placaLimpa || chassiLimpo,
+                codigoAssociadoNovo: codigoAssociadoHinova!,
+                placa: placaLimpa,
+                chassi: chassiLimpo,
                 contexto: 'chassi',
               });
-              if (!autoInat.ok) {
-                const msg = autoInat.reason === 'sem_troca_local'
-                  ? `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}).`
-                  : `Auto-inativação falhou: ${autoInat.reason}`;
+              if (transf.ok) {
+                codigoVeiculoHinova = transf.codigoVeiculoRemoto;
+              } else {
+                const msg = transf.reason === 'sem_troca_local'
+                  ? `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}) e não há troca de titularidade efetivada local. Revisar manualmente.`
+                  : `Falha na troca de titularidade via /alterar/veiculo: ${transf.reason}`;
                 await logSync(_vid, _aid, 'conflito_chassi', 'error',
                   { chassi: chassiLimpo }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
                 await setStatusSga(_vid, 'erro_sincronizacao');
                 await markQueueFalhaPermanente(_vid, _aid, msg);
                 return;
               }
-              // Auto-inativado: deixa codigoVeiculoHinova null para cadastro novo
             } else {
               codigoVeiculoHinova = Number(r.found.codigo_veiculo);
               await logSync(_vid, _aid, 'buscar_veiculo_chassi', 'success',
