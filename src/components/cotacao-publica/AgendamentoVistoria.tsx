@@ -113,6 +113,19 @@ export function AgendamentoVistoria({
   // (Auto-complete por ViaCEP agora é feito por useEnriquecerEndereco)
 
 
+  // Reset data se ela sair da janela quando UF/prazo mudar
+  useEffect(() => {
+    if (!dataSelecionada) return;
+    const aindaValida = datasDisponiveis.some(
+      (d) => d.toDateString() === dataSelecionada.toDateString(),
+    );
+    if (!aindaValida) {
+      setDataSelecionada(null);
+      setPeriodoSelecionado(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prazoHoras, datasDisponiveis.length]);
+
   // Reset período se mudar a data e o período selecionado não estiver disponível
   useEffect(() => {
     if (dataSelecionada && periodoSelecionado) {
