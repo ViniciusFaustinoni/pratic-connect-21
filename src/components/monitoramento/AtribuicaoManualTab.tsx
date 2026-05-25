@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult, useServicosTravados } from '@/hooks/useAtribuicaoManual';
+import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult, useServicosTravados, EscopoAtribuicaoPrestador } from '@/hooks/useAtribuicaoManual';
 import { useVistoriadoresPrestadores } from '@/hooks/useVistoriadoresPrestadores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
