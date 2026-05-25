@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,7 +73,7 @@ function DeleteConfirmDialog({ open, onClose, onConfirm, itemName, isPending }: 
 
 // ── Cobertura Sheet ──
 
-function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () => void; item?: any }) {
+function CoberturaSheet({ open, onClose, item, existingNames, onCreated }: { open: boolean; onClose: () => void; item?: any; existingNames: { id: string; nome: string }[]; onCreated?: (id: string) => void }) {
   const qc = useQueryClient();
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -85,6 +85,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
     carencia_dias: '0',
     carencia_multiplicador: '1',
   });
+  const [confirmDup, setConfirmDup] = useState(false);
 
   const { state: eligState, setState: setEligState } = useEligibilityState('cobertura', item?.id);
 
@@ -110,6 +111,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         carencia_multiplicador: parseFloat(carenciaConfig.carencia_multiplicador) || 1,
       };
       let entityId = item?.id;
+      let createdId: string | null = null;
       if (entityId) {
         const { error } = await supabase.from('coberturas').update(payload).eq('id', entityId);
         if (error) throw error;
@@ -121,18 +123,34 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         }).select().single();
         if (error) throw error;
         entityId = data.id;
+        createdId = data.id;
       }
       // Save eligibility rules
       await saveEligibilityRules('cobertura', entityId, eligState);
+      // Garantir lista fresca antes de fechar o sheet
+      await qc.refetchQueries({ queryKey: ['coberturas'] });
+      await qc.refetchQueries({ queryKey: ['entity_eligibility_rules'] });
+      return { createdId, nome };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['coberturas'] });
-      qc.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
-      toast.success('Cobertura salva');
+    onSuccess: ({ createdId, nome }) => {
+      toast.success(createdId ? `Cobertura "${nome}" criada` : `Cobertura "${nome}" salva`);
+      if (createdId) onCreated?.(createdId);
       onClose();
     },
     onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe uma cobertura com esse nome' : 'Erro ao salvar'),
   });
+
+  const handleSalvar = () => {
+    if (!item) {
+      const nomeNorm = nome.trim().toLowerCase();
+      const colide = existingNames.some(e => (e.nome || '').trim().toLowerCase() === nomeNorm);
+      if (colide) {
+        setConfirmDup(true);
+        return;
+      }
+    }
+    mutation.mutate();
+  };
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -151,11 +169,28 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-            <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!nome.trim() || mutation.isPending}>
+            <Button className="flex-1" onClick={handleSalvar} disabled={!nome.trim() || mutation.isPending}>
               {mutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Salvar
             </Button>
           </div>
         </div>
+
+        <AlertDialog open={confirmDup} onOpenChange={setConfirmDup}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cobertura com nome igual já existe</AlertDialogTitle>
+              <AlertDialogDescription>
+                Já existe uma cobertura chamada <strong>"{nome}"</strong>. Deseja criar mesmo assim?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setConfirmDup(false); mutation.mutate(); }}>
+                Criar mesmo assim
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
@@ -163,7 +198,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
 
 // ── Beneficio Sheet ──
 
-function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () => void; item?: any }) {
+function BeneficioSheet({ open, onClose, item, existingNames, onCreated }: { open: boolean; onClose: () => void; item?: any; existingNames: { id: string; nome: string }[]; onCreated?: (id: string) => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -175,6 +210,7 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
     carencia_dias: '0',
     carencia_multiplicador: '1',
   });
+  const [confirmDup, setConfirmDup] = useState(false);
 
   const { state: eligState, setState: setEligState } = useEligibilityState('beneficio', item?.id);
 
@@ -200,6 +236,7 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         carencia_multiplicador: parseFloat(carenciaConfig.carencia_multiplicador) || 1,
       };
       let entityId = item?.id;
+      let createdId: string | null = null;
       if (entityId) {
         const { error } = await supabase.from('benefits').update(payload).eq('id', entityId);
         if (error) throw error;
@@ -211,18 +248,33 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         }).select().single();
         if (error) throw error;
         entityId = data.id;
+        createdId = data.id;
       }
       // Save eligibility rules
       await saveEligibilityRules('beneficio', entityId, eligState);
+      await qc.refetchQueries({ queryKey: ['benefits'] });
+      await qc.refetchQueries({ queryKey: ['entity_eligibility_rules'] });
+      return { createdId, name };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['benefits'] });
-      qc.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
-      toast.success('Benefício salvo');
+    onSuccess: ({ createdId, name }) => {
+      toast.success(createdId ? `Benefício "${name}" criado` : `Benefício "${name}" salvo`);
+      if (createdId) onCreated?.(createdId);
       onClose();
     },
     onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe um benefício com esse nome' : 'Erro ao salvar'),
   });
+
+  const handleSalvar = () => {
+    if (!item) {
+      const nomeNorm = name.trim().toLowerCase();
+      const colide = existingNames.some(e => (e.nome || '').trim().toLowerCase() === nomeNorm);
+      if (colide) {
+        setConfirmDup(true);
+        return;
+      }
+    }
+    mutation.mutate();
+  };
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -241,11 +293,28 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-            <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!name.trim() || mutation.isPending}>
+            <Button className="flex-1" onClick={handleSalvar} disabled={!name.trim() || mutation.isPending}>
               {mutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Salvar
             </Button>
           </div>
         </div>
+
+        <AlertDialog open={confirmDup} onOpenChange={setConfirmDup}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Benefício com nome igual já existe</AlertDialogTitle>
+              <AlertDialogDescription>
+                Já existe um benefício chamado <strong>"{name}"</strong>. Deseja criar mesmo assim?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setConfirmDup(false); mutation.mutate(); }}>
+                Criar mesmo assim
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
@@ -320,7 +389,72 @@ function RulesIndicator({ entityType, entityId }: { entityType: 'cobertura' | 'b
 
 // ── Item List ──
 
-function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMap }: {
+function ItemRow({ item, planoNome, type, isHighlighted, onEdit, onToggle, onDelete, onDuplicate }: {
+  item: any;
+  planoNome?: string;
+  type: 'cobertura' | 'beneficio';
+  isHighlighted: boolean;
+  onEdit: (item: any) => void;
+  onToggle: (id: string, active: boolean) => void;
+  onDelete: (item: any) => void;
+  onDuplicate: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const getActive = (it: any) => type === 'cobertura' ? it.ativo !== false : it.is_active !== false;
+  const getValor = (it: any) => type === 'cobertura' ? (it.valor || 0) : (it.preco_sugerido || 0);
+  const getNome = (it: any) => type === 'cobertura' ? it.nome : it.name;
+  const getDesc = (it: any) => type === 'cobertura' ? it.descricao : it.description;
+
+  useEffect(() => {
+    if (isHighlighted && ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isHighlighted]);
+
+  return (
+    <div
+      ref={ref}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-all group ${
+        isHighlighted ? 'ring-2 ring-primary bg-primary/10 shadow-sm' : ''
+      }`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-medium truncate">{getNome(item)}</p>
+          <RulesIndicator entityType={type} entityId={item.id} />
+          {planoNome ? (
+            <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-600 hover:bg-emerald-600 text-white">{planoNome}</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground">Sem plano</Badge>
+          )}
+          {isHighlighted && (
+            <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-primary text-primary-foreground">Novo</Badge>
+          )}
+        </div>
+        {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
+      </div>
+      <span className="text-sm font-semibold text-primary shrink-0">
+        R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+      </span>
+      <Switch
+        checked={getActive(item)}
+        onCheckedChange={(checked) => onToggle(item.id, checked)}
+        className="shrink-0"
+      />
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMap, highlightId }: {
   items: any[];
   onEdit: (item: any) => void;
   onToggle: (id: string, active: boolean) => void;
@@ -328,52 +462,25 @@ function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMa
   onDuplicate: (id: string) => void;
   type: 'cobertura' | 'beneficio';
   attrMap: Record<string, string>;
+  highlightId?: string | null;
 }) {
-  const getActive = (item: any) => type === 'cobertura' ? item.ativo !== false : item.is_active !== false;
-  const getValor = (item: any) => type === 'cobertura' ? (item.valor || 0) : (item.preco_sugerido || 0);
-  const getNome = (item: any) => type === 'cobertura' ? item.nome : item.name;
-  const getDesc = (item: any) => type === 'cobertura' ? item.descricao : item.description;
-
   if (!items.length) return <p className="text-sm text-muted-foreground py-8 text-center">Nenhum item cadastrado</p>;
 
   return (
     <div className="space-y-1">
-      {items.map(item => {
-        const planoNome = attrMap[item.id];
-        return (
-          <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors group">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="text-sm font-medium truncate">{getNome(item)}</p>
-                <RulesIndicator entityType={type} entityId={item.id} />
-                {planoNome ? (
-                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-600 hover:bg-emerald-600 text-white">{planoNome}</Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground">Sem plano</Badge>
-                )}
-              </div>
-              {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
-            </div>
-            <span className="text-sm font-semibold text-primary shrink-0">
-              R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </span>
-            <Switch
-              checked={getActive(item)}
-              onCheckedChange={(checked) => onToggle(item.id, checked)}
-              className="shrink-0"
-            />
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        );
-      })}
+      {items.map(item => (
+        <ItemRow
+          key={item.id}
+          item={item}
+          planoNome={attrMap[item.id]}
+          type={type}
+          isHighlighted={highlightId === item.id}
+          onEdit={onEdit}
+          onToggle={onToggle}
+          onDelete={onDelete}
+          onDuplicate={onDuplicate}
+        />
+      ))}
     </div>
   );
 }
@@ -427,6 +534,26 @@ export function CatalogoCoberturasBeneficios() {
   const [benSort, setBenSort] = useState<'default' | 'az' | 'za'>('default');
   const [cobAttrFilter, setCobAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
   const [benAttrFilter, setBenAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
+  const [highlightCobId, setHighlightCobId] = useState<string | null>(null);
+  const [highlightBenId, setHighlightBenId] = useState<string | null>(null);
+
+  const triggerHighlight = (kind: 'cob' | 'ben', id: string) => {
+    if (kind === 'cob') setHighlightCobId(id);
+    else setHighlightBenId(id);
+    window.setTimeout(() => {
+      if (kind === 'cob') setHighlightCobId(prev => (prev === id ? null : prev));
+      else setHighlightBenId(prev => (prev === id ? null : prev));
+    }, 3000);
+  };
+
+  const cobNames = useMemo(
+    () => coberturas.map((c: any) => ({ id: c.id, nome: c.nome })),
+    [coberturas]
+  );
+  const benNames = useMemo(
+    () => benefits.map((b: any) => ({ id: b.id, nome: b.name })),
+    [benefits]
+  );
 
   const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio', attrFilter: 'todos' | 'atribuidos' | 'nao_atribuidos', attrMap: Record<string, string>) => {
     let filtered = items;
@@ -438,7 +565,7 @@ export function CatalogoCoberturasBeneficios() {
     }
     if (search.trim()) {
       const term = search.toLowerCase();
-      filtered = items.filter(item => {
+      filtered = filtered.filter(item => {
         const nome = (type === 'cobertura' ? item.nome : item.name) || '';
         const desc = (type === 'cobertura' ? item.descricao : item.description) || '';
         return nome.toLowerCase().includes(term) || desc.toLowerCase().includes(term);
@@ -515,6 +642,7 @@ export function CatalogoCoberturasBeneficios() {
             items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura', cobAttrFilter, cobAttrMap)}
             type="cobertura"
             attrMap={cobAttrMap}
+            highlightId={highlightCobId}
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
@@ -554,6 +682,7 @@ export function CatalogoCoberturasBeneficios() {
             items={filterAndSort(benefits, benSearch, benSort, 'beneficio', benAttrFilter, benAttrMap)}
             type="beneficio"
             attrMap={benAttrMap}
+            highlightId={highlightBenId}
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
@@ -566,8 +695,8 @@ export function CatalogoCoberturasBeneficios() {
         </TabsContent>
       </Tabs>
 
-      {cobSheet.open && <CoberturaSheet open item={cobSheet.item} onClose={() => setCobSheet({ open: false })} />}
-      {benSheet.open && <BeneficioSheet open item={benSheet.item} onClose={() => setBenSheet({ open: false })} />}
+      {cobSheet.open && <CoberturaSheet open item={cobSheet.item} existingNames={cobNames} onCreated={(id) => triggerHighlight('cob', id)} onClose={() => setCobSheet({ open: false })} />}
+      {benSheet.open && <BeneficioSheet open item={benSheet.item} existingNames={benNames} onCreated={(id) => triggerHighlight('ben', id)} onClose={() => setBenSheet({ open: false })} />}
 
       <DeleteConfirmDialog
         open={deleteDialog.open}
