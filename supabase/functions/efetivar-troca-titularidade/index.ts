@@ -16,7 +16,7 @@ import {
   listarModelosHinova,
 } from "../_shared/hinova-client.ts";
 import { insertAuditLog } from '../_shared/auditLog.ts';
-import { buildAssociadoPayload, buildVeiculoPayload, variantesCodigoFipe, type VeiculoCtx } from '../_shared/hinova-payloads.ts';
+import { buildAssociadoPayload, variantesCodigoFipe } from '../_shared/hinova-payloads.ts';
 
 
 const corsHeaders = {
