@@ -1,51 +1,47 @@
-## Retificar Termo de Filiação — pré-preenchimento por OCR + scroll do modal
+## Objetivo
 
-### Contexto
-`RetificarTermoModal.tsx` hoje monta `defaults` apenas a partir de `associado` / `contrato` / `veiculo` que vêm do BD. Quando o cadastro original entrou com OCR parcial ou divergente, o BD tem as colunas vazias e o modal mostra Nome/RG/Data de nascimento/CNH/etc. em branco — o usuário precisa redigitar tudo.
+Permitir cancelar a Substituição de Placa direto pelo `ModalDetalhesSubstituicao`, deixando a placa/associado livres para iniciar novos processos (nova substituição, troca, cotação avulsa) — sem apagar a solicitação, só marcando como `cancelada` e registrando em `logs_auditoria`.
 
-Já existe OCR persistido em `contratos_documentos.ocr_resultado.dados` por tipo (`cnh`, `crlv`, `comprovante_residencia`, `nota_fiscal_veiculo`), com campos canônicos (nome, rg, data_nascimento, cnh_numero/categoria/validade, cep, logradouro, número, bairro, cidade, uf, placa, renavam, marca, modelo, ano_fabricacao/modelo, cor, combustivel — chassi também aparece, mas não pode ser usado automaticamente: regra canônica do projeto = chassi sempre manual).
+## Comportamento
 
-Bug #2: dentro do `DialogContent` com `flex-col max-h-[90vh]`, a `<ScrollArea className="flex-1 pr-3">` não rola porque o viewport do Radix ScrollArea precisa de `min-h-0` no flex item (e/ou `h-full` no viewport) para respeitar o limite do pai. Hoje o conteúdo cresce e empurra o footer pra fora da janela, sem barra de rolagem.
+**Disponibilidade do botão** — só aparece quando `status` ∈ `aguardando_termo | termo_enviado | termo_assinado | cotacao_criada`. Em `efetivada` ou `cancelada` o botão não é exibido (substituição já consumada / já cancelada).
 
-### Mudanças propostas
+**Confirmação** — `AlertDialog` com:
+- Aviso explicando que a operação será marcada como cancelada, a cotação vinculada (se houver e ainda não estiver assinada/paga) também será cancelada, e a placa volta a ficar disponível.
+- Campo `motivo` (textarea opcional, máx 280 chars).
 
-#### 1. Novo hook `useRetificacaoPrefillOCR(contrato_id)`
-- Arquivo: `src/hooks/useRetificacaoPrefillOCR.ts`
-- Busca `contratos_documentos` por `contrato_id` (todos os `tipo`), seleciona `ocr_resultado.dados`
-- Mapeia para a forma do form do modal, com prioridade por tipo:
-  - **Associado**: `cnh.nome`, `cnh.rg`, `cnh.data_nascimento`, `cnh.numero_registro` → `cnh_numero`, `cnh.categoria`, `cnh.validade`; `comprovante_residencia.{cep,logradouro,numero,bairro,cidade,uf}` (fallback de cada campo: CRLV → comprovante)
-  - **Veículo**: `crlv.{placa,renavam,marca,modelo,ano_fabricacao,ano_modelo,cor,combustivel}` (fallback NF para 0KM)
-  - **NUNCA preencher `chassi`** (constraint `mem://constraints/operations/chassi-sempre-manual`)
-- Devolve `{ prefill: Partial<FormValues>, camposPorFonte: Record<keyof FormValues, 'cnh'|'crlv'|'comprovante'|'nf'> }` para a UI indicar a origem.
+**Efeitos colaterais** (na ordem):
+1. Se houver `cotacao_id` vinculada e a cotação ainda estiver em fase pré-assinatura (status_contratacao ∈ `lead, em_negociacao, aguardando_documentos, aguardando_termo, aguardando_pagamento`), marcar cotação como `cancelada` + `motivo_cancelamento='Substituição cancelada manualmente'`. Se a cotação já avançou (assinada / pagamento ok / cadastro / monitoramento / ativo), **bloquear o cancelamento** com mensagem orientando seguir o fluxo de cancelamento de contrato (a substituição não pode mais ser desfeita por aqui).
+2. UPDATE em `solicitacoes_substituicao_placa`: `status='cancelada'`, `cancelada_em=now()`, `cancelada_por=auth.uid()`, `motivo_cancelamento=<input>`.
+3. INSERT em `logs_auditoria` via helper `insertAuditLog` (entidade `solicitacao_substituicao`, ação `cancelar`, descrição com placa + motivo + cotacao_id afetada).
+4. Não toca Autentique (termo de cancelamento legado, se enviado, expira naturalmente — não há risco porque só efeitos no banco contam).
 
-#### 2. Patch em `RetificarTermoModal.tsx`
-- Consumir o hook e construir `defaults` como **merge não-destrutivo**:
-  ```
-  campo = valor_do_BD ?? valor_do_OCR ?? ''
-  ```
-  (BD sempre vence; OCR só preenche quando BD vazio — coerente com regra "OCR não vence dado humano".)
-- Em cada `<Field>` cujo valor saiu do OCR, mostrar microbadge `auto · CNH`/`auto · CRLV` ao lado do Label (ícone `Sparkles`) e estilo `text-xs text-muted-foreground`.
-- Botão pequeno "Repreencher do OCR" no topo do form (após Motivo), que faz `form.reset({ ...defaults, motivo: form.getValues('motivo') })` puxando OCR novamente.
-- `motivo` placeholder ganha exemplo "OCR preencheu RG errado…" (já tem, manter).
-- Chassi continua manual — nada de OCR injetado.
+**Liberação para novos processos** — como `criar-solicitacao-substituicao` só reaproveita solicitações com status `aguardando_termo | termo_enviado | termo_assinado | cotacao_criada`, marcar como `cancelada` já permite imediatamente uma nova substituição/troca para a mesma placa sem migration adicional.
 
-#### 3. Fix de scroll
-- Substituir `<ScrollArea className="flex-1 pr-3">…</ScrollArea>` por `<div className="flex-1 min-h-0 overflow-y-auto pr-3">…</div>`.
-  - `min-h-0` é o que falta hoje para o flex item respeitar o limite do `max-h-[90vh]`.
-  - Mantém a aparência (sem barrinha estilizada do Radix, mas com scroll funcional). Se o usuário preferir manter a `ScrollArea` estilizada, alternativa é wrappear: `<div className="flex-1 min-h-0"><ScrollArea className="h-full pr-3">…</ScrollArea></div>` — escolherei esta segunda forma para preservar o visual atual.
+## Implementação
 
-### Arquivos tocados
-- **Criado**: `src/hooks/useRetificacaoPrefillOCR.ts`
-- **Alterado**: `src/components/associados/detalhe/RetificarTermoModal.tsx` (merge OCR + badge origem + fix scroll)
+**Nova edge function** `supabase/functions/cancelar-solicitacao-substituicao/index.ts`
+- Body: `{ solicitacao_id: string, motivo?: string }`
+- Service-role client + `auth.uid()` via header (padrão das demais).
+- Faz as 3 etapas acima de forma sequencial; rollback nominal só logado (sem transação cross-tabela, mas idempotente — segundo cancelamento devolve `200 { ja_cancelada: true }`).
+- Migration de schema: adicionar colunas `cancelada_em timestamptz`, `cancelada_por uuid`, `motivo_cancelamento text` em `solicitacoes_substituicao_placa` se ainda não existirem.
 
-### Fora de escopo
-- Não mexer no edge `retificar-termo-filiacao` nem na persistência — só UI.
-- Não alterar OCR pipeline.
-- Não reintroduzir OCR de chassi.
-- Sem migration.
+**Hook** `src/hooks/useSolicitacoesSubstituicao.ts`
+- Acrescentar `useCancelarSolicitacaoSubstituicao()` invocando a edge, invalidando `['solicitacao-substituicao', id]` e `['outros-processos']`.
 
-### Smoke tests
-1. Abrir modal num associado com nome vazio no BD mas com CNH OCR aprovada → campo Nome vem pré-preenchido com badge `auto · CNH`.
-2. Abrir modal num associado com nome correto no BD → BD vence, sem badge.
-3. Scrollar lista até o accordion "Contrato" → footer "Salvar e enviar para assinatura" permanece fixo, scroll funciona dentro do modal.
-4. Chassi continua exigindo digitação manual mesmo com CRLV legível.
+**UI** `src/components/substituicao/ModalDetalhesSubstituicao.tsx`
+- Botão `variant="destructive" size="sm"` "Cancelar substituição" no rodapé do modal, dentro de um `AlertDialog` com textarea de motivo.
+- Toast de sucesso/erro + fecha modal automaticamente após sucesso.
+
+## Fora de escopo
+
+- Não cancela termos Autentique (sem chamada à API externa).
+- Não mexe em SGA/Hinova (substituição ainda não foi efetivada).
+- Não toca em contratos/veículos ativos — se a cotação já virou contrato, o botão bloqueia.
+
+## Arquivos
+
+- Criar: `supabase/functions/cancelar-solicitacao-substituicao/index.ts`
+- Migration: adicionar `cancelada_em`/`cancelada_por`/`motivo_cancelamento` em `solicitacoes_substituicao_placa`
+- Editar: `src/hooks/useSolicitacoesSubstituicao.ts`
+- Editar: `src/components/substituicao/ModalDetalhesSubstituicao.tsx`

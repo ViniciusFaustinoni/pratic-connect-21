@@ -80,3 +80,31 @@ export function useEnviarTermoCancelamentoSubstituicao() {
     },
   });
 }
+
+export function useCancelarSolicitacaoSubstituicao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { solicitacao_id: string; motivo?: string }) => {
+      const { data, error } = await supabase.functions.invoke('cancelar-solicitacao-substituicao', {
+        body: vars,
+      });
+      if (error) {
+        let msg: string | undefined;
+        try {
+          const anyErr = error as any;
+          if (anyErr?.context && typeof anyErr.context.json === 'function') {
+            const body = await anyErr.context.json();
+            msg = body?.error;
+          }
+        } catch { /* ignore */ }
+        throw new Error(msg || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as { ok?: boolean; ja_cancelada?: boolean; cotacao_cancelada?: boolean };
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['solicitacao-substituicao', vars.solicitacao_id] });
+      qc.invalidateQueries({ queryKey: ['outros-processos'] });
+    },
+  });
+}

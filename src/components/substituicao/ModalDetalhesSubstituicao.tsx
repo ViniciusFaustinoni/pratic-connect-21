@@ -1,11 +1,26 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
-import { useSolicitacaoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Loader2, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw, XCircle } from 'lucide-react';
+import { useSolicitacaoSubstituicao, useCancelarSolicitacaoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
 import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -29,15 +44,34 @@ function fmtMoney(v?: number | null) {
 export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }: Props) {
   const navigate = useNavigate();
   const { data: sol, isLoading } = useSolicitacaoSubstituicao(solicitacaoId);
+  const cancelarMut = useCancelarSolicitacaoSubstituicao();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [motivoCancel, setMotivoCancel] = useState('');
 
-  // Polling do termo legado — só ativo para solicitações que já enviaram termo
-  // de cancelamento separado pelo fluxo antigo (substituído pelo termo unificado
-  // assinado no link público da cotação).
   const syncTermo = useSyncTermoCancelamento({
     tipo: 'substituicao',
     solicitacaoId: sol?.id,
     enabled: open && !!sol && sol.status === 'termo_enviado' && !sol.termo_cancelamento_assinado_em,
   });
+
+  const podeCancelar = !!sol && ['aguardando_termo', 'termo_enviado', 'termo_assinado', 'cotacao_criada'].includes(sol.status);
+
+  const handleConfirmarCancelamento = async () => {
+    if (!sol) return;
+    try {
+      const r = await cancelarMut.mutateAsync({ solicitacao_id: sol.id, motivo: motivoCancel.trim() || undefined });
+      if (r?.ja_cancelada) {
+        toast.info('Solicitação já estava cancelada');
+      } else {
+        toast.success(r?.cotacao_cancelada ? 'Substituição e cotação canceladas' : 'Substituição cancelada');
+      }
+      setCancelOpen(false);
+      setMotivoCancel('');
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao cancelar substituição');
+    }
+  };
 
   const handleCriarCotacao = () => {
     if (!sol) return;
@@ -56,6 +90,8 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
     onOpenChange(false);
     navigate(`/vendas/cotacoes?${params.toString()}`);
   };
+
+
 
 
   return (
@@ -173,6 +209,62 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
               <div className="flex items-center gap-2 p-2 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                 Termo (legado) assinado em {format(new Date(sol.termo_cancelamento_assinado_em), "dd/MM/yyyy HH:mm", { locale: ptBR })}.
+              </div>
+            )}
+
+            {/* Cancelar substituição — libera placa/associado para novos processos */}
+            {podeCancelar && (
+              <div className="pt-2 border-t flex justify-end">
+                <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Cancelar substituição
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar Substituição de Placa?</AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-2 text-sm">
+                          <p>
+                            A solicitação ficará marcada como <strong>cancelada</strong> e o veículo <strong>{sol?.veiculo_antigo_placa}</strong> voltará a ficar disponível para nova substituição, troca ou cotação avulsa.
+                          </p>
+                          {sol?.cotacao_id && (
+                            <p className="text-amber-700 dark:text-amber-400">
+                              A cotação vinculada também será cancelada (se ainda estiver em fase pré-assinatura).
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            O registro permanece no banco para fins de auditoria — apenas o estado funcional é encerrado.
+                          </p>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-2">
+                      <Label htmlFor="motivo-cancel-subst" className="text-xs">Motivo (opcional)</Label>
+                      <Textarea
+                        id="motivo-cancel-subst"
+                        placeholder="Ex.: cliente desistiu, placa errada, etc."
+                        value={motivoCancel}
+                        onChange={(e) => setMotivoCancel(e.target.value.slice(0, 280))}
+                        rows={3}
+                      />
+                      <p className="text-[10px] text-muted-foreground text-right">{motivoCancel.length}/280</p>
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={cancelarMut.isPending}>Voltar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(e) => { e.preventDefault(); handleConfirmarCancelamento(); }}
+                        disabled={cancelarMut.isPending}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {cancelarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                        Confirmar cancelamento
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </div>

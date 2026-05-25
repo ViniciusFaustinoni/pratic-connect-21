@@ -29816,6 +29816,7 @@ export type Database = {
           associado_id: string | null
           associado_snapshot: Json
           cancelada_em: string | null
+          cancelada_por: string | null
           consultor_id: string | null
           cotacao_id: string | null
           created_at: string
@@ -29843,6 +29844,7 @@ export type Database = {
           associado_id?: string | null
           associado_snapshot?: Json
           cancelada_em?: string | null
+          cancelada_por?: string | null
           consultor_id?: string | null
           cotacao_id?: string | null
           created_at?: string
@@ -29870,6 +29872,7 @@ export type Database = {
           associado_id?: string | null
           associado_snapshot?: Json
           cancelada_em?: string | null
+          cancelada_por?: string | null
           consultor_id?: string | null
           cotacao_id?: string | null
           created_at?: string
