@@ -29,6 +29,7 @@ import {
   cadastrarVeiculoHinova,
   alterarSituacaoParaVeiculoHinova,
   alterarSituacaoAssociadoHinova,
+  alterarVeiculoHinova,
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
   HinovaNotFoundError,
