@@ -133,6 +133,44 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
                 <p className="text-sm font-semibold">{selectedPrestador.nome}</p>
                 <Button variant="ghost" size="sm" onClick={handleBack} className="text-xs h-7">Voltar</Button>
               </div>
+
+              <div>
+                <label className="text-xs font-medium mb-1.5 block">Escopo da visita</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEscopo('somente_fotos')}
+                    className={cn(
+                      'flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[11px] transition',
+                      escopo === 'somente_fotos'
+                        ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                        : 'border-border bg-background hover:bg-muted'
+                    )}
+                  >
+                    <Camera className="h-4 w-4" />
+                    <span className="font-medium">Somente Fotos</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEscopo('fotos_instalacao')}
+                    className={cn(
+                      'flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[11px] transition',
+                      escopo === 'fotos_instalacao'
+                        ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                        : 'border-border bg-background hover:bg-muted'
+                    )}
+                  >
+                    <Wrench className="h-4 w-4" />
+                    <span className="font-medium">Fotos + Instalação</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {escopo === 'somente_fotos'
+                    ? 'Link público mostrará apenas roteiro de fotos + vídeo 360°.'
+                    : 'Link público incluirá cadastro de IMEI e fotos do rastreador instalado.'}
+                </p>
+              </div>
+
               <div>
                 <label className="text-xs font-medium mb-1 block">Valor (R$) <span className="text-muted-foreground font-normal">(opcional)</span></label>
                 <Input
