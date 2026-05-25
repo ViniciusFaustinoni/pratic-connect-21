@@ -18,8 +18,8 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import {
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import {
   getHinovaCreds,
   autenticarHinova,
   buscarAssociadoComVeiculosPorCpf,
@@ -164,6 +164,81 @@ serve(async (req) => {
   async function setStatusSga(veiculo_id: string, status: string) {
     try { await supabase.from('veiculos').update({ status_sga: status }).eq('id', veiculo_id); }
     catch (e) { console.error('[setStatusSga]', e); }
+  }
+
+  /**
+   * Quando a placa/chassi do veículo local já está cadastrada em OUTRO codigo_associado
+   * no Hinova, só auto-inativa o veículo remoto (situação 2) se houver prova local
+   * (`solicitacoes_troca_titularidade.status='efetivada'`) de que aquela placa foi
+   * legitimamente transferida. Trocas legadas/externas continuam exigindo intervenção
+   * manual no painel SGA.
+   */
+  async function tentarAutoInativarVeiculoRemoto(args: {
+    veiculoLocalId: string;
+    associadoLocalId: string;
+    codVeicRem: number;
+    codAssocRem: number;
+    placa: string;
+    contexto: 'placa' | 'chassi';
+  }): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const { veiculoLocalId, associadoLocalId, codVeicRem, codAssocRem, placa, contexto } = args;
+    try {
+      const { data: troca, error: trErr } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id, associado_antigo_id, novo_associado_id, efetivada_em')
+        .eq('veiculo_id', veiculoLocalId)
+        .eq('status', 'efetivada')
+        .order('efetivada_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (trErr) {
+        return { ok: false, reason: `consulta troca local falhou: ${trErr.message}` };
+      }
+      if (!troca) {
+        await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto', 'skipped',
+          { codVeicRem, codAssocRem, contexto },
+          { motivo: 'sem solicitacoes_troca_titularidade efetivada local' });
+        return { ok: false, reason: 'sem_troca_local' };
+      }
+
+      const rs = await alterarSituacaoParaVeiculoHinova(supabase, codVeicRem, 2);
+      if (!rs.ok) {
+        await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto', 'error',
+          { codVeicRem, codAssocRem, situacao: 2, contexto, troca_id: troca.id },
+          rs.raw, rs.mensagem || rs.errors.join('; ') || `HTTP ${rs.status}`);
+        return { ok: false, reason: `Hinova respondeu erro: ${rs.mensagem || rs.errors.join('; ')}` };
+      }
+
+      await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto', 'success',
+        { codVeicRem, codAssocRem, situacao: 2, contexto, troca_id: troca.id, placa },
+        rs.raw);
+
+      // Auditoria
+      try {
+        await insertAuditLog(supabase, {
+          acao: 'atualizar',
+          modulo: 'configuracoes',
+          tabela: 'veiculos',
+          registro_id: veiculoLocalId,
+          descricao: `[SGA] Auto-inativação canônica do veículo remoto cod=${codVeicRem} (assoc anterior=${codAssocRem}) — placa ${placa} liberada via troca de titularidade ${troca.id}.`,
+          dados_novos: {
+            placa,
+            contexto,
+            codigo_veiculo_remoto: codVeicRem,
+            codigo_associado_remoto: codAssocRem,
+            troca_id: troca.id,
+            associado_antigo_id: troca.associado_antigo_id,
+            novo_associado_id: troca.novo_associado_id,
+          },
+        });
+      } catch (e: any) {
+        console.warn('[auto_inativar_veiculo_remoto][audit]', e?.message || e);
+      }
+
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, reason: `exceção: ${e?.message || e}` };
+    }
   }
 
   // ---- Carregamento de credenciais e códigos da conta ----
@@ -755,16 +830,33 @@ serve(async (req) => {
           if (r.found?.codigo_veiculo) {
             const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
-              const msg = `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}).`;
-              await logSync(_vid, _aid, 'conflito_placa', 'error',
-                { placa: placaLimpa }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: r.found.codigo_veiculo }, msg);
-              await setStatusSga(_vid, 'erro_sincronizacao');
-              await markQueueFalhaPermanente(_vid, _aid, msg);
-              return;
+              const codVeicRem = Number(r.found.codigo_veiculo);
+              const autoInat = await tentarAutoInativarVeiculoRemoto({
+                veiculoLocalId: _vid,
+                associadoLocalId: _aid,
+                codVeicRem,
+                codAssocRem,
+                placa: placaLimpa,
+                contexto: 'placa',
+              });
+              if (autoInat.ok) {
+                // Veículo remoto inativado — segue fluxo deixando codigoVeiculoHinova=null
+                // para que "6.d Cadastrar se não existe" registre vinculado ao novo titular.
+              } else {
+                const msg = autoInat.reason === 'sem_troca_local'
+                  ? `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}).`
+                  : `Auto-inativação falhou: ${autoInat.reason}`;
+                await logSync(_vid, _aid, 'conflito_placa', 'error',
+                  { placa: placaLimpa }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
+                await setStatusSga(_vid, 'erro_sincronizacao');
+                await markQueueFalhaPermanente(_vid, _aid, msg);
+                return;
+              }
+            } else {
+              codigoVeiculoHinova = Number(r.found.codigo_veiculo);
+              await logSync(_vid, _aid, 'buscar_veiculo_placa', 'success',
+                { placa: placaLimpa }, { codigo_veiculo: codigoVeiculoHinova });
             }
-            codigoVeiculoHinova = Number(r.found.codigo_veiculo);
-            await logSync(_vid, _aid, 'buscar_veiculo_placa', 'success',
-              { placa: placaLimpa }, { codigo_veiculo: codigoVeiculoHinova });
           }
         } catch (e: any) {
           if (!(e instanceof HinovaNotFoundError)) {
@@ -783,16 +875,31 @@ serve(async (req) => {
           if (r.found?.codigo_veiculo) {
             const codAssocRem = Number(r.found.codigo_associado || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
-              const msg = `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}).`;
-              await logSync(_vid, _aid, 'conflito_chassi', 'error',
-                { chassi: chassiLimpo }, { codigo_associado_remoto: codAssocRem }, msg);
-              await setStatusSga(_vid, 'erro_sincronizacao');
-              await markQueueFalhaPermanente(_vid, _aid, msg);
-              return;
+              const codVeicRem = Number(r.found.codigo_veiculo);
+              const autoInat = await tentarAutoInativarVeiculoRemoto({
+                veiculoLocalId: _vid,
+                associadoLocalId: _aid,
+                codVeicRem,
+                codAssocRem,
+                placa: placaLimpa || chassiLimpo,
+                contexto: 'chassi',
+              });
+              if (!autoInat.ok) {
+                const msg = autoInat.reason === 'sem_troca_local'
+                  ? `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}).`
+                  : `Auto-inativação falhou: ${autoInat.reason}`;
+                await logSync(_vid, _aid, 'conflito_chassi', 'error',
+                  { chassi: chassiLimpo }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
+                await setStatusSga(_vid, 'erro_sincronizacao');
+                await markQueueFalhaPermanente(_vid, _aid, msg);
+                return;
+              }
+              // Auto-inativado: deixa codigoVeiculoHinova null para cadastro novo
+            } else {
+              codigoVeiculoHinova = Number(r.found.codigo_veiculo);
+              await logSync(_vid, _aid, 'buscar_veiculo_chassi', 'success',
+                { chassi: chassiLimpo }, { codigo_veiculo: codigoVeiculoHinova });
             }
-            codigoVeiculoHinova = Number(r.found.codigo_veiculo);
-            await logSync(_vid, _aid, 'buscar_veiculo_chassi', 'success',
-              { chassi: chassiLimpo }, { codigo_veiculo: codigoVeiculoHinova });
           }
         } catch (e: any) {
           if (!(e instanceof HinovaNotFoundError)) {
