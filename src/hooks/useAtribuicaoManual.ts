@@ -612,12 +612,21 @@ export function useAtribuirServicoManual() {
   });
 }
 
+export type EscopoAtribuicaoPrestador = 'somente_fotos' | 'fotos_instalacao';
+
 export interface AtribuirPrestadorParams {
   servicoId: string;
   prestadorId: string;
   prestadorNome: string;
   prestadorTelefone?: string | null;
   valor: number;
+  /**
+   * Escolha do coordenador de Monitoramento:
+   * - 'fotos_instalacao': link público mostra etapas de IMEI/instalação do rastreador
+   * - 'somente_fotos': link público mostra apenas roteiro de fotos + vídeo 360°
+   * Default: 'fotos_instalacao' quando servico.tipo='instalacao'; senão 'somente_fotos'.
+   */
+  escopo?: EscopoAtribuicaoPrestador;
 }
 
 export interface AtribuirPrestadorResult {
