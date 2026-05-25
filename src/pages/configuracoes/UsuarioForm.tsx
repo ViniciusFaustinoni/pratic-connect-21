@@ -896,6 +896,11 @@ export default function UsuarioForm() {
               <Button type="submit" className="w-full" disabled={saveUser.isPending}>
                 {saveUser.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 {isEditing ? 'Salvar alterações' : 'Criar usuário'}
+                {Object.keys(moduleChanges).length > 0 && (
+                  <Badge variant="outline" className="ml-2 border-amber-300 text-amber-100 bg-amber-500/30">
+                    +{Object.keys(moduleChanges).length} módulo(s)
+                  </Badge>
+                )}
               </Button>
               <Button type="button" variant="outline" onClick={() => navigate('/configuracoes/usuarios-acessos')} className="w-full">
                 Cancelar
