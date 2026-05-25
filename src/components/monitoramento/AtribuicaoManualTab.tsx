@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText, ExternalLink, MoreVertical, RotateCcw, UserCog, AlertTriangle } from 'lucide-react';
+import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText, ExternalLink, MoreVertical, RotateCcw, UserCog, AlertTriangle, Camera } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
