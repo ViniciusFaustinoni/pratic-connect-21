@@ -28,7 +28,13 @@ Deno.serve(async (req) => {
       atribuido_por,
       reenviar,
       skip_whatsapp,
+      escopo: escopoIn,
     } = body
+
+    // Escopo da atribuição: define se o link público exigirá IMEI/instalação
+    // ('fotos_instalacao') ou apenas roteiro de fotos+vídeo ('somente_fotos').
+    const escopo: 'somente_fotos' | 'fotos_instalacao' =
+      escopoIn === 'somente_fotos' ? 'somente_fotos' : 'fotos_instalacao'
 
     const prestadorIdFinal = vistoriador_prestador_id || prestador_id
 
