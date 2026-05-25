@@ -2146,6 +2146,29 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         console.error(error);
       }
 
+      // ⛔ Caso especial: trigger de idempotência da Troca de Titularidade
+      // (Camada 2). Mensagem vem como `COTACAO_TROCA_DUPLICADA:<id>:<numero>`.
+      // Mostra toast acionável com botão para abrir a cotação já existente.
+      const msgRaw: string = error?.message || '';
+      const matchDup = msgRaw.match(/COTACAO_TROCA_DUPLICADA:([0-9a-f-]{36}):([^\s]*)/i);
+      if (matchDup) {
+        const cotacaoExistenteId = matchDup[1];
+        const numeroExistente = matchDup[2] || '';
+        const label = numeroExistente ? `(${numeroExistente})` : '';
+        toast.error(
+          `Já existe uma cotação em andamento para esta troca ${label}. Abra a existente em vez de criar nova.`,
+          {
+            duration: Infinity,
+            closeButton: true,
+            action: {
+              label: 'Abrir cotação existente',
+              onClick: () => navigate(`/vendas/cotacoes?abrir=${cotacaoExistenteId}`),
+            },
+          }
+        );
+        return;
+      }
+
       const ctx = isEditando ? 'atualizar cotação' : 'criar cotação';
       const msg = descreverErroSupabase(error, { contexto: ctx });
       toast.error(msg);
