@@ -7,8 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useVistoriadoresPrestadores } from '@/hooks/useVistoriadoresPrestadores';
-import { useAtribuirServicoPrestador, AtribuirPrestadorResult } from '@/hooks/useAtribuicaoManual';
+import { useAtribuirServicoPrestador, AtribuirPrestadorResult, EscopoAtribuicaoPrestador } from '@/hooks/useAtribuicaoManual';
 import { LinkPrestadorResultDialog } from '@/components/monitoramento/LinkPrestadorResultDialog';
+import { Camera, Wrench } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AtribuirPrestadorPopoverProps {
   servicoId: string;
@@ -18,6 +20,7 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
   const [open, setOpen] = useState(false);
   const [selectedPrestador, setSelectedPrestador] = useState<{ id: string; nome: string; telefone?: string | null } | null>(null);
   const [valor, setValor] = useState('');
+  const [escopo, setEscopo] = useState<EscopoAtribuicaoPrestador>('fotos_instalacao');
   const [linkResult, setLinkResult] = useState<AtribuirPrestadorResult | null>(null);
 
   const { data: prestadores, isLoading } = useVistoriadoresPrestadores();
