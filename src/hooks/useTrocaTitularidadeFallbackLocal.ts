@@ -4,12 +4,9 @@ import type { SgaAssociadoCompleto } from './useBuscaSGA';
 
 /**
  * Fallback local para o fluxo de Troca de Titularidade.
- * Quando o SGA está indisponível ou não retorna o associado/veículos,
- * monta um payload no shape `SgaAssociadoCompleto` a partir das tabelas
- * locais (`associados`, `veiculos`, `cobrancas`).
- *
- * Inclui também um Map placa → UUID local (já que aqui não dependemos
- * de placas SGA → espelho local).
+ * Roda via edge function `troca-titularidade-detalhe-associado` (service role)
+ * para que vendedores CLT/externo/agência consigam enxergar o antigo titular
+ * mesmo quando RLS o esconde do escopo deles.
  */
 export interface FallbackLocalResult {
   payload: SgaAssociadoCompleto;
@@ -27,34 +24,21 @@ export function useTrocaTitularidadeFallbackLocal(
   return useQuery<FallbackLocalResult>({
     queryKey: ['troca-tit-fallback-local', associadoId],
     queryFn: async () => {
-      const [assocRes, veicRes, cobRes] = await Promise.all([
-        supabase
-          .from('associados')
-          .select('id, nome, cpf, email, telefone, codigo_hinova')
-          .eq('id', associadoId!)
-          .maybeSingle(),
-        supabase
-          .from('veiculos')
-          .select('id, placa, marca, modelo, ano_modelo, ano_fabricacao, status, ativo')
-          .eq('associado_id', associadoId!)
-          .neq('status', 'cancelado'),
-        supabase
-          .from('cobrancas')
-          .select('id, veiculo_id, status, valor_final, valor, data_vencimento, data_emissao, linha_digitavel, boleto_url, nosso_numero')
-          .eq('associado_id', associadoId!)
-          .in('status', ['aberto', 'vencido', 'pendente', 'em_aberto']),
-      ]);
-
-      const assoc = assocRes.data as any;
-      const veiculosLocais = (veicRes.data || []).filter((v: any) => v.ativo !== false);
-      const cobrancas = cobRes.data || [];
+      const { data, error } = await supabase.functions.invoke(
+        'troca-titularidade-detalhe-associado',
+        { body: { associadoId } },
+      );
+      if (error) throw error;
+      const assoc = (data as any)?.associado ?? null;
+      const veiculosLocais = ((data as any)?.veiculos ?? []) as any[];
+      const cobrancas = ((data as any)?.cobrancas ?? []) as any[];
 
       const placaParaId = new Map<string, string>();
-      for (const v of veiculosLocais as any[]) {
+      for (const v of veiculosLocais) {
         if (v.placa) placaParaId.set(normPlaca(v.placa), v.id);
       }
 
-      const veiculos = (veiculosLocais as any[]).map((v) => {
+      const veiculos = veiculosLocais.map((v) => {
         const cobsDoVeic = cobrancas.filter((c: any) => c.veiculo_id === v.id);
         const saldo = cobsDoVeic.reduce(
           (s: number, c: any) => s + Number(c.valor_final ?? c.valor ?? 0),
