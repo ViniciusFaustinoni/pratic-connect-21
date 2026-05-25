@@ -35398,35 +35398,20 @@ export type Database = {
         Returns: string
       }
       rank_status_contratacao: { Args: { p: string }; Returns: number }
-      realocar_servico:
-        | {
-            Args: {
-              _categoria?: string
-              _destino: string
-              _motivo: string
-              _nova_data?: string
-              _novo_periodo?: string
-              _oficina_id?: string
-              _profissional_id?: string
-              _rota_id?: string
-              _servico_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              _categoria?: string
-              _destino: string
-              _motivo: string
-              _nova_data?: string
-              _novo_periodo?: string
-              _oficina_id?: string
-              _profissional_id?: string
-              _rota_id?: string
-              _servico_id: string
-            }
-            Returns: Json
-          }
+      realocar_servico: {
+        Args: {
+          _categoria?: string
+          _destino: string
+          _motivo: string
+          _nova_data?: string
+          _novo_periodo?: string
+          _oficina_id?: string
+          _profissional_id?: string
+          _rota_id?: string
+          _servico_id: string
+        }
+        Returns: Json
+      }
       reatribuir_servico_admin: {
         Args: {
           _categoria?: string

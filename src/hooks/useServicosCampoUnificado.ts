@@ -171,22 +171,32 @@ export function useServicosCampoUnificado(filters: ServicosCampoFilters = {}) {
     };
     const priorityOf = (s: Servico) => STATUS_PRIORITY[s.status] ?? 99;
 
-    // Agrupa. Chave de origem (instalacao_origem_id/vistoria_origem_id) tem
-    // prioridade sobre (associado+veiculo+tipo) — assim instalacao e
-    // vistoria_entrada da MESMA visita física colapsam num único card,
-    // mesmo se o tipo textual diferir.
+    // Agrupa. Regra canônica: vistoria_entrada ≡ instalacao (mesma visita física).
+    // Para esses dois tipos, agrupamos SEMPRE por (associado+veiculo+'instalacao'),
+    // independente de instalacao_origem_id/vistoria_origem_id — porque a autovistoria
+    // do cliente e a instalação técnica nascem com origens materializadas diferentes
+    // mas representam o mesmo evento, e devem aparecer como UM card só.
     // Ver mem://logic/operations/vistoria-entrada-equivale-instalacao
+    // Para outros tipos de vistoria (manutencao, periodica, sinistro, etc.),
+    // mantemos origem materializada como chave primária — uma manutenção pode
+    // coexistir legitimamente com uma vistoria_entrada do mesmo veículo.
     const tipoCanonico = (t: string | null | undefined) =>
       t === 'vistoria_entrada' ? 'instalacao' : (t || 'desconhecido');
+    const ehInstalacaoOuEntrada = (t: string | null | undefined) =>
+      t === 'instalacao' || t === 'vistoria_entrada';
 
     const grupos = new Map<string, Servico[]>();
     for (const s of servicos) {
       const sa = s as any;
-      // 1) Origem materializada manda em tudo
       let k: string | null = null;
-      if (sa.instalacao_origem_id) k = `inst:${sa.instalacao_origem_id}`;
+      // 1) instalacao/vistoria_entrada → SEMPRE chave lógica por associado+veiculo
+      if (ehInstalacaoOuEntrada(s.tipo) && s.associado_id && s.veiculo_id) {
+        k = `evt:${s.associado_id}|${s.veiculo_id}|instalacao`;
+      }
+      // 2) Demais tipos: origem materializada manda
+      else if (sa.instalacao_origem_id) k = `inst:${sa.instalacao_origem_id}`;
       else if (sa.vistoria_origem_id) k = `vist:${sa.vistoria_origem_id}`;
-      // 2) Fallback: associado+veiculo+tipo canônico (instalacao≡vistoria_entrada)
+      // 3) Fallback final: chave lógica por associado+veiculo+tipo
       else if (s.associado_id && s.veiculo_id && s.tipo) {
         k = `lg:${s.associado_id}|${s.veiculo_id}|${tipoCanonico(s.tipo)}`;
       } else {

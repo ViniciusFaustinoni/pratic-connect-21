@@ -1,88 +1,102 @@
+## Diagnóstico (código + banco, sem palpite)
 
-## Objetivo
+### #2 — "Could not choose the best candidate function" ao realocar
 
-Na tela **Financeiro › Cobranças › Emissão › Importar CSV**, permitir que o operador escolha **qualquer template Meta** (`status=APPROVED` + `disparo_habilitado=true`) e mapeie manualmente cada `{{n}}` do corpo a uma **fonte de dados do CSV** ou um texto fixo, antes de disparar o lote. Boletos continuam vindo do CSV (mesmo agrupamento por matrícula).
-
-## Escopo (frontend + edge)
-
-### 1) Picker de template (UI)
-
-Arquivo: `src/components/financeiro/ImportarCobrancaCsv.tsx` (etapa `preview`).
-
-- Acima do botão "Disparar envio", novo bloco **"Template Meta"**:
-  - `Select` com lista de templates `APPROVED + disparo_habilitado=true` (fetch direto de `whatsapp_meta_templates`, ordenado por `nome`). Default: `cobranca_inadimplencia_pratic` (mantém o comportamento atual).
-  - Toggle **"Usar v2 (botão URL com 2ª via)"** só aparece quando o template selecionado tem `botoes` com um botão `type='URL'` dinâmico (regex `{{1}}` no `url`). Para o template canônico mantém o default `true`.
-  - Preview compacto do `corpo` (com `{{n}}` destacados) e `header_texto` quando houver.
-
-### 2) Mapeamento de variáveis
-
-Mesmo bloco, abaixo do select:
-
-- Parser de `{{n}}` no `corpo` (e em `header_texto` se `header_tipo='text'`) gera a lista de variáveis a preencher.
-- Para cada `{{n}}`, um `Select` de **fonte**:
-  - `nome` — nome do destinatário
-  - `primeiro_nome` — primeiro token do nome
-  - `matricula`
-  - `valor_total` — somatório dos boletos do destinatário (BRL)
-  - `lista_boletos` — texto agrupado (formato atual: `• Placa X — venc. dd/mm/aaaa\n  <linha>`)
-  - `placa_primeira` — primeira placa
-  - `vencimento_primeiro` — primeira data
-  - `linha_digitavel_primeira`
-  - `valor_primeiro_boleto`
-  - `qtd_boletos`
-  - `texto_fixo` — abre `Input` ao lado para digitar o texto literal
-- Heurística inicial: tenta preencher por nome ({{1}}→nome, {{2}}→lista_boletos quando há múltiplos boletos / valor_total quando há 1, etc.) usando `variaveis_exemplo` como dica visual de placeholder.
-- Validação: bloqueia "Disparar" enquanto houver `{{n}}` sem fonte (ou `texto_fixo` vazio).
-
-Helper novo: `src/lib/cobranca/templateVarsMapper.ts`
-- `parseVariaveisTemplate(corpo, header)` → `string[]` com índices únicos
-- `montarValoresParaDestinatario(destinatario, mapping)` → `Record<varIndex, string>` (executado server-side; mas exporto o tipo pra UI exibir preview).
-
-### 3) Preview de mensagem por destinatário
-
-Painel "Pré-visualização": pega o 1º destinatário válido, aplica o `mapping` no `corpo` substituindo `{{n}}` e mostra como ficará a mensagem real. Atualiza ao trocar template/mapping.
-
-### 4) Edge `disparar-cobranca-csv-meta`
-
-Arquivo: `supabase/functions/disparar-cobranca-csv-meta/index.ts`.
-
-- Novos campos no `body` (validados): `template_nome` (já existe — passa a ser canônico), `var_mapping: Record<string, {source: string; texto?: string}>`, `template_v2_button: boolean`.
-- Carrega o template do DB (uma vez por chamada) para validar:
-  - Existe? `APPROVED`? `disparo_habilitado=true`? Caso contrário, 400 `template_invalido`.
-  - Conta `{{n}}` no corpo e exige `var_mapping` completo. Falta de mapping → 400 `mapping_incompleto`.
-- Substitui o trecho hard-coded de `components.body.parameters` por loop sobre o mapping, montando os parâmetros na ordem `{{1}}…{{N}}` via helper compartilhado (movo o `montarValoresParaDestinatario` para `_shared/cobranca-var-mapper.ts`).
-- Botão URL dinâmico: se `template_v2_button=true` E template tem botão URL `{{1}}`, mantém a injeção atual do `sufixoHinova` (link 2ª via). Caso contrário, omite o componente `button`.
-- Comportamento de **bloco extra** (quando lista de boletos não cabe num único parâmetro): preserva-se **apenas** quando a variável mapeada para "lista_boletos" estoura o limite Meta de 1024 chars — quebra em blocos como hoje, mas só o 1º bloco leva o botão. Para outros templates sem `lista_boletos`, envia 1 mensagem por destinatário.
-- `template_nome_fallback` removido — não há mais fallback automático para `cobranca_inadimplencia_pratic` quando o operador escolheu outro template. Se v2 falhar e v1 não estiver mapeado, retorna erro do destinatário com `erro_codigo='template_v2_falhou'`.
-- Mantém **integral** a regra de dedup do mesmo dia (`mem://logic/billing/dedup-cobranca-mesmo-dia`), reconciliação `cobrancas`, lote/idempotência e flag `disparo_habilitado`.
-
-### 5) Auditoria
-
-- `cobranca_csv_lotes`: gravar `template_nome` e `var_mapping_snapshot` (jsonb) — migration adiciona as 2 colunas (`text` + `jsonb`, nullable). Aparece como tooltip no card "Lote ativo".
-
-## Arquivos tocados
+Existem **duas funções `public.realocar_servico` ativas no banco** (`pg_proc`):
 
 ```text
-src/components/financeiro/ImportarCobrancaCsv.tsx            (UI: picker + mapping + preview)
-src/components/financeiro/TemplateMetaPicker.tsx             (novo, isolável)
-src/lib/cobranca/templateVarsMapper.ts                       (novo, util puro)
-supabase/functions/_shared/cobranca-var-mapper.ts            (novo, util compartilhado)
-supabase/functions/disparar-cobranca-csv-meta/index.ts       (validação + render dinâmico)
-supabase/migrations/<ts>_lote_template_snapshot.sql          (2 colunas em cobranca_csv_lotes)
+A) (_servico_id uuid, _motivo text, _destino text, _categoria text,
+    _nova_data date, _novo_periodo text,
+    _profissional_id uuid, _rota_id uuid, _oficina_id uuid)        ← antiga
+
+B) (_servico_id uuid, _destino text, _motivo text, _categoria text,
+    _profissional_id uuid, _rota_id uuid, _oficina_id uuid,
+    _nova_data date, _novo_periodo text)                           ← nova
 ```
 
-## Fora de escopo
+Mesma aridade (9 params), mesmos nomes — só a ordem mudou. Quando o front chama via `supabase.rpc('realocar_servico', { _servico_id, _destino, _motivo, ... })` (named params), o Postgres tem 2 candidatas válidas e devolve `42883`.
 
-- Edição de templates Meta (continua sendo só leitura nesta tela; gestão segue em WhatsApp › Templates).
-- Disparo sem boletos / 1 msg por destinatário sem CSV.
-- Mudanças no `LoteAtivoCobrancas.tsx` além de exibir o nome do template usado.
+A nova (B) entrou na migration `supabase/migrations/20260525142831_8fb86ad4-6abe-42e5-85f3-1d9e229b762a.sql` (saneamento LSA7A65 de 25/05) com `CREATE OR REPLACE`, mas como a **assinatura mudou de ordem**, o `OR REPLACE` criou uma segunda função em vez de substituir a anterior. A antiga (A) ficou órfã.
 
-## Riscos / mitigação
+Call-sites do front (confirmado por `rg`):
+- `src/hooks/useRealocarInstalacao.ts:85` → `{ _servico_id, _motivo, _destino, _categoria, _nova_data, _novo_periodo, _profissional_id, _rota_id, _oficina_id }`
+- `src/components/servicos-campo/RealocarServicoSimplesDialog.tsx:55` → `{ _servico_id, _destino, _motivo, _nova_data, _novo_periodo, _profissional_id }`
 
-- **Template marketing acidental**: filtro de query é `status='APPROVED' AND disparo_habilitado=true`; categoria MARKETING não é bloqueada explicitamente porque já há toggle de `disparo_habilitado`. Se quiser, posso restringir a `categoria='UTILITY'` — confirmar.
-- **Variável faltando**: validação na UI + 400 server-side cobrem.
-- **Limite 1024 char Meta**: já tratado pela quebra em blocos; mantemos para `lista_boletos`.
+Wrappers DB que dependem da função (`liberar_servico_para_reatribuicao`, `reatribuir_servico_admin`): chamam com named params também, então hoje **também estão quebrados** por baixo (mesma ambiguidade). DROP da (A) restaura ambos.
 
-## Memória a atualizar pós-implementação
+A assinatura (B) cobre 100% dos casos atuais — todos os parâmetros nomeados nos call-sites existem nela.
 
-`mem://features/billing/csv-cobranca-meta-disparo` — registrar que o template é agora selecionável + mapping manual, e que o fallback automático foi removido.
+### #1 — Duplicação na aba Serviços (KVV7538)
+
+`SELECT` confirmou 2 linhas em `servicos` para o mesmo veículo (`MAURO ROBERTO SILVA DE LIMA`, KVV7538):
+
+| id | tipo | status | origem | instalacao_origem_id | vistoria_origem_id |
+|---|---|---|---|---|---|
+| f140ae0d… | `vistoria_entrada` | `cancelada` | NULL | NULL | `d03f6b41…` |
+| 13e22d3a… | `instalacao` | `agendada` | `instalacao` | `c155da26…` | NULL |
+
+São **o mesmo evento físico** (memória core: `vistoria_entrada ≡ instalacao`). O 1º nasceu da autovistoria do cliente, o 2º do agendamento da instalação técnica.
+
+O dedup em `src/hooks/useServicosCampoUnificado.ts:182-198` (`servicosDeduplicados`) agrupa **por origem materializada primeiro**:
+
+```text
+chave = vist:d03f6b41…   (vistoria_entrada)
+chave = inst:c155da26…   (instalacao)
+```
+
+Como cada um tem sua própria origem (id diferente), caem em chaves distintas → 2 cards na UI. O fallback lógico `lg:associado|veiculo|tipoCanonico` (que colapsa `vistoria_entrada`→`instalacao`) **só dispara quando ambas origens são NULL**, então não resgata esse caso.
+
+Resultado: o card cancelado fica visível ao lado do agendado, polui a Atribuição Manual / aba Serviços e foi o que o usuário viu no print.
+
+---
+
+## Plano de fix
+
+### Parte A — Banco: remover a assinatura antiga (resolve #2 e wrappers)
+
+Uma migration única que:
+
+1. `DROP FUNCTION public.realocar_servico(uuid, text, text, text, date, text, uuid, uuid, uuid);` — derruba a assinatura (A).
+2. Verifica via `pg_proc` que sobrou exatamente 1 função com nome `realocar_servico` e que sua assinatura bate com (B). Se não bater, `RAISE EXCEPTION` aborta a migration.
+3. Testa idempotência: roda `SELECT public.realocar_servico(_servico_id := '00000000-0000-0000-0000-000000000000', _destino := 'fila', _motivo := 'noop', _categoria := 'teste')` em bloco `BEGIN…EXCEPTION WHEN OTHERS THEN…END` apenas para validar que o despacho não dá mais 42883; qualquer outro erro (servico inexistente etc.) é esperado e ignorado nesse smoke.
+
+Nenhuma mudança na lógica de `realocar_servico` (B) — ela já é a versão correta usada pelo saneamento LSA7A65.
+
+### Parte B — Front: corrigir o dedup para colapsar instalação ↔ vistoria_entrada
+
+Único arquivo: `src/hooks/useServicosCampoUnificado.ts`, função `servicosDeduplicados` (linhas 182-198).
+
+Trocar a regra de chave para:
+
+```text
+Para tipo ∈ {instalacao, vistoria_entrada}:
+  chave = `evt:${associado_id}|${veiculo_id}|instalacao`
+  (ignora instalacao_origem_id / vistoria_origem_id para fins de agrupamento)
+
+Para os outros tipos (revistoria, vistoria_saida, vistoria_sinistro,
+vistoria_periodica, vistoria_manutencao, vistoria_retirada):
+  manter a chave atual baseada em origem materializada → fallback lógico.
+```
+
+Justificativa: a memória core `vistoria_entrada ≡ instalacao` é estrita — qualquer combinação dos dois tipos para o mesmo veículo+associado é a MESMA visita física, independente de quais origens foram materializadas. Esse caso (KVV7538) prova que confiar na origem isolada quebra. Para os outros tipos de vistoria, origem materializada continua sendo o sinal mais confiável (uma manutenção pode coexistir com uma vistoria_entrada do mesmo veículo).
+
+Comportamento esperado pós-fix na aba Serviços do KVV7538:
+- Um único card (a `instalacao` agendada, que tem prioridade mais alta no `STATUS_PRIORITY`)
+- A `vistoria_entrada` cancelada vai para `tentativas_anteriores` do mesmo card (visível como badge "1x reagendado" ou similar)
+
+Nenhuma mudança em `useServicos`, `ServicosTable`, nem nos contadores de métricas — a saída do hook continua expondo o mesmo shape.
+
+### Não entra neste deploy
+
+- Saneamento histórico de outros casos com duplicação parecida (se existirem) — primeiro confirma-se o fix com KVV7538, depois roda uma query de dimensionamento em deploy separado.
+- Mudança na lógica de criação de `servicos` (ex.: cancelar `vistoria_entrada` automaticamente quando a `instalacao` é agendada). Isso é assunto canônico de `mem://logic/operations/servicos-um-canonico-por-origem` e o dedup de UI resolve o sintoma; mexer na regra de criação amplia escopo.
+
+---
+
+## Verificação pós-deploy
+
+1. **#2 (RPC):** Abrir o `RealocarServicoSimplesDialog` no KVV7538 (instalação agendada), preencher motivo, clicar "Reagendar e enviar para fila" → toast verde "Serviço realocado" e nenhum erro 42883 no console/network.
+2. **#1 (dedup):** Recarregar `/monitoramento/vistorias-instalacoes-mon`, filtrar `KVV7538` → "Mostrando **1** serviço(s)" e apenas a `instalacao` visível (badge ou nota indicando 1 tentativa anterior).
+3. **Wrappers DB:** Chamar `SELECT public.liberar_servico_para_reatribuicao(...)` em qualquer serviço de teste do painel — não deve mais dar 42883.
+
+Reporta o resultado dos 3 pontos antes de eu propor saneamento histórico ou qualquer extensão.
