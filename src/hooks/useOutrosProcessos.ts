@@ -164,6 +164,20 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       search,
     ],
     queryFn: async (): Promise<OutroProcessoItem[]> => {
+      // Resolve profile.id para filtros em tabelas que guardam profile.id em criado_por/consultor_id.
+      // `effectiveVendedorId` e `consultorId` chegam aqui como auth.users.id (igual ao cotacoes.vendedor_id).
+      async function authUidToProfileId(authUid: string | null | undefined): Promise<string | null> {
+        if (!authUid) return null;
+        const { data } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', authUid)
+          .maybeSingle();
+        return (data as any)?.id ?? null;
+      }
+      const selfProfileId = effectiveScope === 'own' ? await authUidToProfileId(effectiveVendedorId) : null;
+      const targetProfileId = effectiveScope !== 'own' ? await authUidToProfileId(consultorId) : null;
+
       // Expande tipos canônicos com seus aliases (ainda gravados no banco).
       const ALIASES: Record<string, string[]> = {
         inclusao_veiculo: ['inclusao_veiculo', 'inclusao'],
