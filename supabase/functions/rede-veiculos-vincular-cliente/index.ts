@@ -278,22 +278,24 @@ serve(async (req) => {
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
     // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
-    // A API retorna "JSON não informado" se não receber o campo "json" em
-    // multipart/form-data contendo o payload serializado completo.
-    const formData = new FormData();
-    formData.append('json', JSON.stringify(payload));
-    // A API Rede Veículos exige cpfCnpj e imei como campos separados no
-    // multipart/form-data (não basta estarem dentro do "json").
-    formData.append('cpfCnpj', cpfCnpjLimpo);
-    formData.append('imei', imeiLimpo);
+    // A API Rede Veículos espera application/x-www-form-urlencoded com o payload
+    // completo serializado no campo "json" + cpfCnpj e imei como campos separados
+    // (mesmo padrão usado em /ativarVeiculo). Multipart/form-data faz o parser
+    // do servidor responder "O CPF/CNPJ e/ou IMEI não foram informados".
+    const formBody = new URLSearchParams();
+    formBody.append('json', JSON.stringify(payload));
+    formBody.append('cpfCnpj', cpfCnpjLimpo);
+    formBody.append('imei', imeiLimpo);
 
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: formData,
+      body: formBody,
     });
+
 
     const responseText = await apiResponse.text();
     console.log('[RedeVeiculos Vincular] Resposta API:', responseText);
