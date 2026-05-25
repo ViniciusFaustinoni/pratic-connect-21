@@ -553,7 +553,19 @@ export default function UsuarioForm() {
         </div>
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); saveUser.mutate(); }}>
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        // Guard: salvar sem perfis remove TODAS as roles do usuário (causa do bug do MATHEUS).
+        if (isEditing && formData.perfis.length === 0) {
+          const ok = window.confirm(
+            'Atenção: você está salvando este usuário SEM nenhum perfil de acesso. ' +
+            'Isso vai remover todas as roles atuais e o usuário pode sumir de telas como Equipe de Monitoramento. ' +
+            '\n\nDeseja continuar mesmo assim?'
+          );
+          if (!ok) return;
+        }
+        saveUser.mutate();
+      }}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna Principal */}
           <div className="lg:col-span-2 space-y-6">
