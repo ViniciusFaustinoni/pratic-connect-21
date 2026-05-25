@@ -648,7 +648,9 @@ export function useAtribuirServicoPrestador() {
 
   return useMutation({
     mutationFn: async (params: AtribuirPrestadorParams): Promise<AtribuirPrestadorResult> => {
-      const { servicoId, prestadorId, valor, escopo: escopoIn } = params;
+      const { servicoId, prestadorId, valor, escopo: escopoIn, enviarWhatsApp } = params;
+      // Default: dispara o template Meta automaticamente (canal canônico).
+      const skipWhats = enviarWhatsApp === false;
 
       // 1) Determine type: check if it's an instalação or vistoria service
       const { data: servico, error: sErr } = await supabase
