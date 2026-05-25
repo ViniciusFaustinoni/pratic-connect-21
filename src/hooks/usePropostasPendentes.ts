@@ -1708,9 +1708,12 @@ export function useAprovarProposta() {
       // Forçar refetch imediato das propostas pendentes
       await queryClient.refetchQueries({ queryKey: ['propostas-pendentes'] });
     },
-    onError: (error: Error) => {
+    onError: async (error: any) => {
       console.error('Erro ao aprovar proposta:', error);
-      toast.error(error.message || 'Erro ao aprovar proposta. Tente novamente.');
+      // Toast persistente + code visível para 409s conhecidos
+      // (link_publico_incompleto, sem_agendamento, requer_rastreador_fisico, etc.)
+      const { toastErroEdge } = await import('@/lib/ui/toastErroEdge');
+      await toastErroEdge(error, 'Aprovar proposta');
     },
   });
 }
