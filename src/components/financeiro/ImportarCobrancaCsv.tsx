@@ -33,7 +33,7 @@ async function lerArquivoComoCsv(file: File): Promise<string> {
   return await file.text();
 }
 
-const TEMPLATE_NOME = 'cobranca_inadimplencia_pratic';
+const TEMPLATE_NOME_DEFAULT = 'cobranca_inadimplencia_pratic';
 const MAX_CSV_MB = 50;
 const MAX_CSV_BYTES = MAX_CSV_MB * 1024 * 1024;
 
