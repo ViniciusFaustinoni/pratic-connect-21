@@ -79,13 +79,10 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
           if (cfg.max && cfg.max < 99999999) newState.fipeMax = String(cfg.max);
           if (cfg.intervalo) newState.fipeIntervalo = String(cfg.intervalo);
           if (Array.isArray(cfg.faixas)) {
-            const valMap: Record<number, string> = {};
-            const cfgMin = cfg.min || 0;
-            const cfgIntervalo = cfg.intervalo || 5000;
+            const valMap: Record<string, string> = {};
             cfg.faixas.forEach((f: any) => {
               if (f.valor != null && f.de != null) {
-                const relativeIndex = Math.round((f.de - cfgMin) / cfgIntervalo);
-                if (relativeIndex >= 0) valMap[relativeIndex] = String(f.valor);
+                valMap[String(f.de)] = String(f.valor);
               }
             });
             newState.fipeValoresFaixa = valMap;
