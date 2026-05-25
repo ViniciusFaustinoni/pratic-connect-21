@@ -164,6 +164,20 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       search,
     ],
     queryFn: async (): Promise<OutroProcessoItem[]> => {
+      // Resolve profile.id para filtros em tabelas que guardam profile.id em criado_por/consultor_id.
+      // `effectiveVendedorId` e `consultorId` chegam aqui como auth.users.id (igual ao cotacoes.vendedor_id).
+      async function authUidToProfileId(authUid: string | null | undefined): Promise<string | null> {
+        if (!authUid) return null;
+        const { data } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', authUid)
+          .maybeSingle();
+        return (data as any)?.id ?? null;
+      }
+      const selfProfileId = effectiveScope === 'own' ? await authUidToProfileId(effectiveVendedorId) : null;
+      const targetProfileId = effectiveScope !== 'own' ? await authUidToProfileId(consultorId) : null;
+
       // Expande tipos canônicos com seus aliases (ainda gravados no banco).
       const ALIASES: Record<string, string[]> = {
         inclusao_veiculo: ['inclusao_veiculo', 'inclusao'],
@@ -383,17 +397,19 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
 
       // 6) Solicitações de substituição SEM cotação ainda (cotacao_id IS NULL)
       let substItems: OutroProcessoItem[] = [];
-      if (tipos.includes('substituicao_placa')) {
+      const ownScopeBlocked = effectiveScope === 'own' && !!effectiveVendedorId && !selfProfileId;
+      const targetScopeBlocked = effectiveScope !== 'own' && !!consultorId && !targetProfileId;
+      if (tipos.includes('substituicao_placa') && !ownScopeBlocked && !targetScopeBlocked) {
         let sq = (supabase as any)
           .from('solicitacoes_substituicao_placa')
           .select('id, associado_id, veiculo_antigo_placa, veiculo_antigo_snapshot, associado_snapshot, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, consultor_id, criado_por, created_at, updated_at')
           .is('cotacao_id', null)
           .order('created_at', { ascending: false })
           .limit(200);
-        if (effectiveScope === 'own' && effectiveVendedorId) {
-          sq = sq.or(`consultor_id.eq.${effectiveVendedorId},criado_por.eq.${effectiveVendedorId}`);
-        } else if (consultorId) {
-          sq = sq.or(`consultor_id.eq.${consultorId},criado_por.eq.${consultorId}`);
+        if (effectiveScope === 'own' && selfProfileId) {
+          sq = sq.or(`consultor_id.eq.${selfProfileId},criado_por.eq.${selfProfileId}`);
+        } else if (targetProfileId) {
+          sq = sq.or(`consultor_id.eq.${targetProfileId},criado_por.eq.${targetProfileId}`);
         }
         const { data: substs } = await sq;
         const consultorIds = Array.from(new Set((substs || []).map((s: any) => s.consultor_id || s.criado_por).filter(Boolean)));
@@ -474,17 +490,17 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       // 7) Solicitações de troca de titularidade SEM cotação ainda (cotacao_id IS NULL)
       // A cotação só é criada manualmente após o termo de cancelamento ser assinado.
       let trocaSemCotacaoItems: OutroProcessoItem[] = [];
-      if (tipos.includes('troca_titularidade')) {
+      if (tipos.includes('troca_titularidade') && !ownScopeBlocked && !targetScopeBlocked) {
         let tq = (supabase as any)
           .from('solicitacoes_troca_titularidade')
           .select('id, status, cotacao_id, veiculo_id, novo_titular_dados, associado_antigo_id, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, aprovado_cadastro_em, aprovado_monitoramento_em, efetivada_em, reprovado_em, motivo_reprovacao, criado_por, created_at, updated_at')
           .is('cotacao_id', null)
           .order('created_at', { ascending: false })
           .limit(200);
-        if (effectiveScope === 'own' && effectiveVendedorId) {
-          tq = tq.eq('criado_por', effectiveVendedorId);
-        } else if (consultorId) {
-          tq = tq.eq('criado_por', consultorId);
+        if (effectiveScope === 'own' && selfProfileId) {
+          tq = tq.eq('criado_por', selfProfileId);
+        } else if (targetProfileId) {
+          tq = tq.eq('criado_por', targetProfileId);
         }
         const { data: trocasSC } = await tq;
         const trocasSCList = (trocasSC || []) as any[];
