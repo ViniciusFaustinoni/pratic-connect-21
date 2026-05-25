@@ -129,6 +129,36 @@ function normLinha(s: string): string {
   return (s || "").replace(/\D/g, "");
 }
 
+function formatBRL(v: number): string {
+  return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+// Resolve UMA variável conforme mapping da UI. Mesmo vocabulário de templateVarsMapper.ts.
+function resolverValorVar(
+  entry: { source: string; texto?: string } | undefined,
+  d: DestinatarioIn,
+  blocoBoletos: string,
+): string {
+  if (!entry) return "";
+  const primeiro = (d.boletos || [])[0];
+  switch (entry.source) {
+    case "nome": return d.nome || "";
+    case "primeiro_nome": return d.primeiro_nome || primeiroNome(d.nome);
+    case "matricula": return d.matricula || "";
+    case "valor_total":
+      return formatBRL((d.boletos || []).reduce((s, b) => s + (b.valor || 0), 0));
+    case "lista_boletos": return blocoBoletos;
+    case "placa_primeira": return primeiro?.placa || "";
+    case "vencimento_primeiro": return primeiro?.vencimento || "";
+    case "linha_digitavel_primeira":
+      return (primeiro?.linha_digitavel || "").replace(/\D/g, "");
+    case "valor_primeiro_boleto": return formatBRL(primeiro?.valor || 0);
+    case "qtd_boletos": return String((d.boletos || []).length);
+    case "texto_fixo": return entry.texto || "";
+    default: return "";
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
