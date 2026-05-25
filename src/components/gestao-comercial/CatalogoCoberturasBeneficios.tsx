@@ -695,8 +695,8 @@ export function CatalogoCoberturasBeneficios() {
         </TabsContent>
       </Tabs>
 
-      {cobSheet.open && <CoberturaSheet open item={cobSheet.item} onClose={() => setCobSheet({ open: false })} />}
-      {benSheet.open && <BeneficioSheet open item={benSheet.item} onClose={() => setBenSheet({ open: false })} />}
+      {cobSheet.open && <CoberturaSheet open item={cobSheet.item} existingNames={cobNames} onCreated={(id) => triggerHighlight('cob', id)} onClose={() => setCobSheet({ open: false })} />}
+      {benSheet.open && <BeneficioSheet open item={benSheet.item} existingNames={benNames} onCreated={(id) => triggerHighlight('ben', id)} onClose={() => setBenSheet({ open: false })} />}
 
       <DeleteConfirmDialog
         open={deleteDialog.open}
