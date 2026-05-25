@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -101,8 +101,14 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    values: defaults,
+    defaultValues: defaults,
   });
+
+  useEffect(() => {
+    if (open) form.reset(defaults);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, associado?.id, contrato?.id, veiculo?.id]);
+
 
   const onSubmit = (v: FormValues) => {
     if (!contrato?.id) return;
