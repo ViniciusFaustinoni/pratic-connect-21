@@ -287,7 +287,7 @@ serve(async (req) => {
     // slash já foram testados e devolveram "JSON não informado" / "CPF/IMEI não
     // informados". Esta configuração espelha exatamente o endpoint irmão que
     // funciona.
-    const formBody = new FormData();
+    const formBody = new URLSearchParams();
     formBody.append('cpfCnpj', cpfCnpjLimpo);
     formBody.append('imei', imeiLimpo);
     formBody.append('placa', (veiculo.placa || '').toUpperCase());
@@ -297,6 +297,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formBody,
     });
