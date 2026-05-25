@@ -695,6 +695,43 @@ export default function AtribuicaoManualTab() {
             </Badge>
 
             <div>
+              <label className="text-sm font-medium mb-1.5 block">Escopo da visita</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEscopoPrestador('somente_fotos')}
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-sm transition',
+                    escopoPrestador === 'somente_fotos'
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                      : 'border-border bg-background hover:bg-muted'
+                  )}
+                >
+                  <Camera className="h-4 w-4" />
+                  <span className="font-medium">Somente Fotos</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEscopoPrestador('fotos_instalacao')}
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-sm transition',
+                    escopoPrestador === 'fotos_instalacao'
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                      : 'border-border bg-background hover:bg-muted'
+                  )}
+                >
+                  <Wrench className="h-4 w-4" />
+                  <span className="font-medium">Fotos + Instalação</span>
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                {escopoPrestador === 'somente_fotos'
+                  ? 'Link público mostrará apenas roteiro de fotos + vídeo 360°.'
+                  : 'Link público incluirá cadastro de IMEI e fotos do rastreador instalado.'}
+              </p>
+            </div>
+
+            <div>
               <label className="text-sm font-medium mb-1 block">Valor (R$) <span className="text-muted-foreground font-normal">(opcional)</span></label>
               <Input
                 type="number"
