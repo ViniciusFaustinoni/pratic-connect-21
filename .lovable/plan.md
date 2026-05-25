@@ -1,69 +1,79 @@
-# Escolha de escopo na atribuição de Prestador
+## Teste E2E — Atribuição Prestador com seletor de escopo
 
-## Problema
+Vou rodar dois cenários espelhados (mesma fluxo, escopos opostos) e ao final fazer checagem no banco para confirmar o estado canônico.
 
-Hoje, ao atribuir um serviço de campo a um técnico tipo PRESTADOR, o sistema decide sozinho qual link público gerar:
+### Pré-requisitos que vou checar antes de começar
 
-- Se `servicos.tipo='instalacao'` → chama `gerar-link-prestador` (link com etapas de instalação de rastreador)
-- Se `servicos.tipo='vistoria_*'` → chama `gerar-link-vistoriador-prestador` (link só fotos)
+1. Login como diretor (`admin@teste.com`) no preview.
+2. Identificar **2 serviços de campo** elegíveis na fila de Atribuição Manual ou no Mapa:
+   - **Caso A:** serviço `vistoria_entrada` de sub-FIPE (default sugerido: Somente Fotos).
+   - **Caso B:** serviço `instalacao` de veículo que exige rastreador (default sugerido: Fotos + Instalação).
+3. Identificar 1 prestador externo ativo com telefone cadastrado.
 
-O coordenador de Monitoramento não tem controle. Em casos como Troca de Titularidade (onde ele pode querer aproveitar a visita para instalar rastreador novo) ou sub-FIPE com suspeita técnica (onde quer vistoria só fotos mesmo havendo instalação prevista), o caminho está travado pelo `tipo` do serviço.
+Se não houver candidatos prontos, paro e peço orientação (não vou criar cotação fake só para testar).
 
-## Objetivo
+### Cenário A — Sub-FIPE com escopo "Somente Fotos"
 
-No momento da atribuição ao prestador, o coordenador escolhe explicitamente o escopo, e essa escolha define o link público que o prestador receberá.
+**Passo 1.** Monitoramento › Serviços de Campo › Atribuição Manual → abrir o serviço sub-FIPE.
+**Passo 2.** Selecionar o prestador. Conferir que o seletor de escopo aparece com **default "Somente Fotos"**.
+**Passo 3.** Manter "Somente Fotos" e clicar Gerar Link. Capturar screenshot do dialog de resultado.
+**Passo 4.** Abrir o link público gerado em nova aba. Validar visualmente que:
+   - Cards de fotos + vídeo 360° aparecem.
+   - **NÃO aparece** o card "IMEI do Rastreador Instalado".
+   - **NÃO aparece** etapa "Teste de Comunicação".
+**Passo 5.** Voltar ao painel — confirmar `servicos.status='agendada'` e `prestador_id` preenchido.
 
-## Comportamento desejado
+### Cenário B — Mesmo serviço (ou outro elegível) com escopo "Fotos + Instalação"
 
-### UI — `AtribuirPrestadorPopover` (mapa) e equivalente em Atribuição Manual
+**Passo 6.** Repetir a partir do Passo 1 em outro serviço, agora **trocando o default** ou pegando um `instalacao`.
+**Passo 7.** No dialog, escolher "Fotos + Instalação". Se o veículo exigir rastreador e estiver sem, conferir que o aviso amarelo "exige rastreador" **não aparece** (porque escolheu fotos+instalação).
+**Passo 8.** Gerar link e abrir. Validar visualmente:
+   - Cards de fotos + vídeo 360° aparecem.
+   - **Aparece** o card "IMEI do Rastreador Instalado" (obrigatório).
+   - **Aparece** etapa "Teste de Comunicação".
 
-Após selecionar o prestador, antes do botão "Gerar Link", aparecem dois cartões de escolha (radio):
+### Cenário C (extra rápido) — Aviso de rastreador
 
-- **Somente Fotos** — vistoria sem mexer no rastreador. Link público mostra apenas o roteiro de fotos + vídeo 360°.
-- **Fotos + Instalação** — vistoria + instalação/troca de rastreador. Link público inclui etapas de cadastro de IMEI, teste de comunicação e fotos do equipamento instalado.
+**Passo 9.** Em um serviço de veículo que exige rastreador (Diesel / Carro≥30k / Moto≥9k) sem rastreador vinculado, escolher "Somente Fotos" e validar que o **aviso amarelo aparece** ("Este veículo exige rastreador; a instalação precisará ser agendada depois") mas **não bloqueia** Gerar Link.
 
-Default sugerido pelo serviço atual (sem travar):
+### Checagem de banco ao final
 
-| Origem | Default |
-|---|---|
-| `servicos.tipo='instalacao'` | Fotos + Instalação |
-| `servicos.tipo='vistoria_entrada'` (sub-FIPE / autovistoria materializada) | Somente Fotos |
-| `servicos.tipo='vistoria_manutencao'` ou outras vistorias | Somente Fotos |
-| Veículo exige rastreador (Diesel / Carro≥30k / Moto≥9k) E ainda sem rastreador vinculado | Fotos + Instalação |
+Para cada link gerado nos cenários A e B, rodar via `supabase--read_query`:
 
-O coordenador pode trocar livremente — o default é só sugestão. Quando o veículo exige rastreador e ele escolhe "Somente Fotos", exibir aviso amarelo "Este veículo exige rastreador; a instalação precisará ser agendada depois" (não bloqueia).
+```sql
+-- Caso A — esperado escopo='somente_fotos' em vistoria_prestador_links
+SELECT id, escopo, servico_id, prestador_id, status, expires_at
+FROM vistoria_prestador_links
+WHERE id = '<id_caso_A>';
 
-### Backend
+-- Caso B — esperado escopo='fotos_instalacao' em instalacao_prestador_links
+SELECT id, escopo, instalacao_id, prestador_id, status, expires_at
+FROM instalacao_prestador_links
+WHERE id = '<id_caso_B>';
 
-`useAtribuirServicoPrestador` passa a receber `escopo: 'somente_fotos' | 'fotos_instalacao'` e roteia direto, ignorando `servico.tipo`:
+-- Confirmar servicos roteados pelo gate correto
+SELECT id, tipo, status, prestador_id, updated_at
+FROM servicos
+WHERE id IN ('<servico_A>','<servico_B>');
+```
 
-- `escopo='fotos_instalacao'` → `gerar-link-prestador` (precisa de `instalacao_id`; se serviço não tem, materializa/busca instalação ativa para o par associado+veículo — lógica que já existe no fallback de hoje).
-- `escopo='somente_fotos'` → `gerar-link-vistoriador-prestador` (link de vistoria pura, sem etapas de IMEI/instalação).
+Critérios de aceite:
+- Coluna `escopo` persistida com o valor escolhido (não null).
+- Caso A roteou para `vistoria_prestador_links` (não criou registro em `instalacao_prestador_links`).
+- Caso B roteou para `instalacao_prestador_links`.
+- `servicos.status='agendada'` nos dois casos.
 
-Persistir a escolha em campo novo no link gerado (`instalacao_prestador_links.escopo` ou tabela equivalente de `vistoria_prestador_links`) para que:
+### Entregáveis
 
-1. A página pública (`PrestadorInstalacao.tsx` / equivalente vistoria-só) renderize as etapas corretas a partir do registro do link, não de heurística.
-2. Aprovação de Associados saiba se aquele evento conclui instalação física (guard `trg_guard_instalacao_concluida_exige_rastreador`) ou é só vistoria (sem reabrir cobertura).
+Relatório consolidado com:
+- Screenshots dos dialogs e dos links públicos (mostrando presença/ausência do card IMEI).
+- Resultado das queries.
+- Lista de divergências encontradas (se houver), com hipótese de causa — **sem aplicar fixes durante o teste**; se aparecer bug, paro e reporto para você decidir.
 
-### Regras canônicas preservadas
+### Fora de escopo deste teste
 
-- Autovistoria do cliente continua independente — esta escolha vale só para atribuição a prestador externo.
-- `vistoria_entrada ≡ instalacao` continua: se escolher "Fotos + Instalação" sobre um serviço `vistoria_entrada`, o sistema garante que o registro `instalacoes` exista (já é o comportamento do fallback atual).
-- Guards de rastreador obrigatório (DB triggers) seguem como última linha de defesa — só vão acionar se o coordenador escolher "Somente Fotos" indevidamente.
+- Concluir a vistoria de ponta a ponta no link público (exigiria upload real de fotos do prestador).
+- Validar `concluir-instalacao-prestador` quando `escopo='somente_fotos'` — fica para teste separado se você pedir.
+- Aprovação no Monitoramento pós-conclusão.
 
-## Arquivos afetados
-
-- `src/components/mapa/AtribuirPrestadorPopover.tsx` — adicionar seletor de escopo + aviso
-- `src/components/monitoramento/AtribuicaoManualTab.tsx` — mesmo seletor onde houver botão de atribuir prestador
-- `src/hooks/useAtribuicaoManual.ts` — `AtribuirPrestadorParams` ganha `escopo`; roteamento por escopo em vez de `servico.tipo`
-- `supabase/functions/gerar-link-prestador/index.ts` — gravar `escopo='fotos_instalacao'` no link
-- `supabase/functions/gerar-link-vistoriador-prestador/index.ts` — gravar `escopo='somente_fotos'` no link
-- `src/pages/public/PrestadorInstalacao.tsx` — ler escopo do link e renderizar etapas correspondentes (esconder bloco de IMEI/instalação quando `somente_fotos`)
-- Migration: adicionar coluna `escopo text` em `instalacao_prestador_links` e `vistoria_prestador_links` (default mapeado do estado atual por backfill)
-
-## Validação
-
-1. Atribuir prestador a um serviço `vistoria_entrada` de sub-FIPE com escopo "Somente Fotos" → link público mostra só fotos + vídeo.
-2. Atribuir o mesmo tipo de serviço com escopo "Fotos + Instalação" → link público mostra fotos + etapas de IMEI/instalação; ao concluir, `instalacoes` fecha.
-3. Atribuir Troca de Titularidade com "Fotos + Instalação" → instalação física é registrada e rastreador novo é vinculado.
-4. Atribuir veículo que exige rastreador escolhendo "Somente Fotos" → aviso aparece, link gera, mas o veículo não pode ser ativado (guard DB) até instalação posterior.
+Se você quiser ampliar para esses pontos, me avise antes de aprovar.
