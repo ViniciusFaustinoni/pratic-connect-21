@@ -389,7 +389,72 @@ function RulesIndicator({ entityType, entityId }: { entityType: 'cobertura' | 'b
 
 // ── Item List ──
 
-function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMap }: {
+function ItemRow({ item, planoNome, type, isHighlighted, onEdit, onToggle, onDelete, onDuplicate }: {
+  item: any;
+  planoNome?: string;
+  type: 'cobertura' | 'beneficio';
+  isHighlighted: boolean;
+  onEdit: (item: any) => void;
+  onToggle: (id: string, active: boolean) => void;
+  onDelete: (item: any) => void;
+  onDuplicate: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const getActive = (it: any) => type === 'cobertura' ? it.ativo !== false : it.is_active !== false;
+  const getValor = (it: any) => type === 'cobertura' ? (it.valor || 0) : (it.preco_sugerido || 0);
+  const getNome = (it: any) => type === 'cobertura' ? it.nome : it.name;
+  const getDesc = (it: any) => type === 'cobertura' ? it.descricao : it.description;
+
+  useEffect(() => {
+    if (isHighlighted && ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isHighlighted]);
+
+  return (
+    <div
+      ref={ref}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-all group ${
+        isHighlighted ? 'ring-2 ring-primary bg-primary/10 shadow-sm' : ''
+      }`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-medium truncate">{getNome(item)}</p>
+          <RulesIndicator entityType={type} entityId={item.id} />
+          {planoNome ? (
+            <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-600 hover:bg-emerald-600 text-white">{planoNome}</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground">Sem plano</Badge>
+          )}
+          {isHighlighted && (
+            <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-primary text-primary-foreground">Novo</Badge>
+          )}
+        </div>
+        {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
+      </div>
+      <span className="text-sm font-semibold text-primary shrink-0">
+        R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+      </span>
+      <Switch
+        checked={getActive(item)}
+        onCheckedChange={(checked) => onToggle(item.id, checked)}
+        className="shrink-0"
+      />
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMap, highlightId }: {
   items: any[];
   onEdit: (item: any) => void;
   onToggle: (id: string, active: boolean) => void;
@@ -397,52 +462,25 @@ function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMa
   onDuplicate: (id: string) => void;
   type: 'cobertura' | 'beneficio';
   attrMap: Record<string, string>;
+  highlightId?: string | null;
 }) {
-  const getActive = (item: any) => type === 'cobertura' ? item.ativo !== false : item.is_active !== false;
-  const getValor = (item: any) => type === 'cobertura' ? (item.valor || 0) : (item.preco_sugerido || 0);
-  const getNome = (item: any) => type === 'cobertura' ? item.nome : item.name;
-  const getDesc = (item: any) => type === 'cobertura' ? item.descricao : item.description;
-
   if (!items.length) return <p className="text-sm text-muted-foreground py-8 text-center">Nenhum item cadastrado</p>;
 
   return (
     <div className="space-y-1">
-      {items.map(item => {
-        const planoNome = attrMap[item.id];
-        return (
-          <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors group">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="text-sm font-medium truncate">{getNome(item)}</p>
-                <RulesIndicator entityType={type} entityId={item.id} />
-                {planoNome ? (
-                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-600 hover:bg-emerald-600 text-white">{planoNome}</Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground">Sem plano</Badge>
-                )}
-              </div>
-              {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
-            </div>
-            <span className="text-sm font-semibold text-primary shrink-0">
-              R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </span>
-            <Switch
-              checked={getActive(item)}
-              onCheckedChange={(checked) => onToggle(item.id, checked)}
-              className="shrink-0"
-            />
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        );
-      })}
+      {items.map(item => (
+        <ItemRow
+          key={item.id}
+          item={item}
+          planoNome={attrMap[item.id]}
+          type={type}
+          isHighlighted={highlightId === item.id}
+          onEdit={onEdit}
+          onToggle={onToggle}
+          onDelete={onDelete}
+          onDuplicate={onDuplicate}
+        />
+      ))}
     </div>
   );
 }
