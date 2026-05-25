@@ -147,19 +147,71 @@ serve(async (req) => {
             await alterarSituacaoVeiculoHinova(supabase, codVeicAtual, codCanc).catch(e => console.warn("[retry-sga] cancelar veic antigo:", e?.message || e));
           }
           const codGrupo = await getConfiguracaoNumero(supabase, "sga_codigo_grupo_produto_padrao", 0);
-          const cadVeic = await cadastrarVeiculoHinova(supabase, {
+          const basePayloadVeiculo = {
             codigo_associado: sgaCodAss,
             placa: vehicleData?.placa,
             chassi: vehicleData?.chassi,
             renavam: vehicleData?.renavam || undefined,
             marca: vehicleData?.marca || undefined,
             modelo: vehicleData?.modelo || undefined,
-            ano_fabricacao: vehicleData?.ano || undefined,
-            ano_modelo: vehicleData?.ano || undefined,
+            ano_fabricacao: vehicleData?.ano_fabricacao || undefined,
+            ano_modelo: vehicleData?.ano_modelo || undefined,
             cor: vehicleData?.cor || undefined,
             valor_fipe: vehicleData?.valor_fipe || undefined,
             codigo_grupo_produto: codGrupo || undefined,
-          });
+          };
+
+          let cadVeic;
+          const codigoModeloPersistido = Number((vehicleData as any)?.codigo_modelo_hinova || 0) || null;
+          if (codigoModeloPersistido) {
+            cadVeic = await cadastrarVeiculoHinova(supabase, {
+              ...basePayloadVeiculo,
+              codigo_modelo: codigoModeloPersistido,
+            });
+          }
+
+          if (!(cadVeic?.ok && cadVeic?.codigo)) {
+            const variantesFipe = variantesCodigoFipe((vehicleData as any)?.codigo_fipe || null);
+            for (const variante of variantesFipe) {
+              cadVeic = await cadastrarVeiculoHinova(supabase, {
+                ...basePayloadVeiculo,
+                codigo_fipe: variante,
+              });
+              if (cadVeic.ok && cadVeic.codigo) break;
+
+              const detalhe = `${(cadVeic.errors || []).join(' ')} ${cadVeic.mensagem || ''}`.toLowerCase();
+              const ehErroDeModelo = detalhe.includes('modelo enviado') || (detalhe.includes('modelo') && detalhe.includes('encontrado'));
+              if (!ehErroDeModelo) break;
+            }
+          }
+
+          if (!(cadVeic?.ok && cadVeic?.codigo)) {
+            const detalhe = `${(cadVeic?.errors || []).join(' ')} ${cadVeic?.mensagem || ''}`.toLowerCase();
+            const ehErroDeModelo = detalhe.includes('modelo enviado') || (detalhe.includes('modelo') && detalhe.includes('encontrado'));
+            if (ehErroDeModelo) {
+              const lookup = await listarModelosHinova(supabase, {
+                marca: String(vehicleData?.marca || '').trim(),
+                texto: String(vehicleData?.modelo || '').trim(),
+                ano: (vehicleData as any)?.ano_modelo || (vehicleData as any)?.ano_fabricacao || null,
+                tipo_veiculo: null,
+              });
+              const melhor = escolherMelhorModeloHinova(
+                lookup.items,
+                String(vehicleData?.modelo || ''),
+                (vehicleData as any)?.ano_modelo || (vehicleData as any)?.ano_fabricacao || null,
+              );
+              if (melhor?.codigo_modelo) {
+                cadVeic = await cadastrarVeiculoHinova(supabase, {
+                  ...basePayloadVeiculo,
+                  codigo_modelo: melhor.codigo_modelo,
+                });
+                if (cadVeic.ok && cadVeic.codigo) {
+                  await supabase.from('veiculos').update({ codigo_modelo_hinova: melhor.codigo_modelo }).eq('id', troca.veiculo_id);
+                }
+              }
+            }
+          }
+
           if (!cadVeic.ok || !cadVeic.codigo) throw new Error(`SGA cadastrarVeiculo: ${cadVeic.errors.join("; ") || cadVeic.mensagem}`);
           sgaCodVeic = cadVeic.codigo;
         } else {
