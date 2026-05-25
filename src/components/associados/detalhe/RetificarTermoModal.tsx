@@ -410,11 +410,20 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
   );
 }
 
-function Field({ label, ...rest }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+function Field({ label, fonte, ...rest }: { label: string; fonte?: FonteOCR } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <Label>{label}</Label>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <Label className="mb-0">{label}</Label>
+        {fonte && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary/80">
+            <Sparkles className="h-3 w-3" />
+            auto · {FONTE_LABEL[fonte]}
+          </span>
+        )}
+      </div>
       <Input {...rest} />
     </div>
   );
 }
+
