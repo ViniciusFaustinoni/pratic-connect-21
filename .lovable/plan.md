@@ -1,92 +1,56 @@
+# Diagnóstico — Link do prestador caindo em `/app/login`
 
-## O que aconteceu com LSA7A65 (COT-20260521-150643240-471)
+## O que os logs mostram (caso LSA7A65)
 
-Cronologia reconstituída a partir de `logs_auditoria`, `servicos`, `instalacoes`, `instalacao_prestador_links` e `agendamentos_base`:
+- 25/05 11:05:08 — `instalacao_prestador_links` `60110112…` foi criado com `escopo='fotos_instalacao'`, `status='em_rota'`, `prestador_id=845886a4…` (LEONARDO TORINO MATOSO).
+- 25/05 11:05:49 — Link `aceito_em` registrado (Leonardo aceitou no celular dele).
+- 25/05 11:11–11:14 — Kleytonn rodou `realocar_servico('fila')` 3× → link ficou `status='cancelada'`.
+- `whatsapp_mensagens` / `whatsapp_logs` **não têm nenhum registro** dessa atribuição → a edge `gerar-link-prestador` foi chamada com `skip_whatsapp=true`, então o template oficial nunca foi disparado.
+- O `auth_logs` mostra que `leonardomatoso2014@gmail.com` (e-mail pessoal do prestador, que **também é associado**) só foi `user_signedup` às 14:24 UTC (≈11:24 BRT) e fez vários `login` por password depois disso — exatamente o que aparece na tela do print (Área do Associado, e-mail preenchido).
 
-| Hora (BRT) | Ator | Evento |
-|---|---|---|
-| 21/05 15:23 | Sistema | `criar-instalacao-pos-pagamento` cria `instalacoes` (a5dabcef…) + `servicos` (673ac27a…) tipo `instalacao` agendados p/ 25/05 manhã, e cria `agendamentos_base` correspondente |
-| 21/05 15:31 | Sistema | Contrato vira `cadastro_aprovado=true` (vistoria base presencial agendada) |
-| 22/05 09:27 | [TESTE] Vistoriador | Cria `vistorias` (em_analise) ligada à instalação |
-| **25/05 11:05** | Coordenador (59ca886d…) | Atribui ao prestador externo LEONARDO TORINO MATOSO → `instalacao_prestador_links` (60110112…) criado, escopo `fotos_instalacao`, **status `em_rota`** (LEONARDO aceitou às 11:05:49 e iniciou rota às 11:05:53) |
-| **25/05 11:11** | Kleytonn (9670a9fc…) | `realocar_servico('fila', motivo='PRESTADOR FAZENDO AGORA')` |
-| 25/05 11:12 | Kleytonn | `realocar_servico('fila', motivo='PRESTADOR')` |
-| 25/05 11:14 | Kleytonn | `realocar_servico('fila', motivo='PRESTADOR')` (data → 26/05, depois 25/05 manhã de novo) |
+## Onde está o bug no código
 
-## Estado atual (anomalia)
+### 1. `skip_whatsapp: true` hardcoded
+`src/hooks/useAtribuicaoManual.ts`
+- linha **701** (escopo fotos+instalação) e linha **792** (somente fotos) chamam `gerar-link-prestador` com `skip_whatsapp: true`.
+- Comentário na linha 822 admite: *"Link gerado (sem WhatsApp automático)"*.
+- Resultado: a edge cria o link mas **nunca dispara o template `prestador_nova_instalacao_v2`**. O coordenador tem que copiar/colar manualmente — e foi isso que aconteceu.
 
-- `servicos.673ac27a…`: `status='agendada'`, `profissional_id=NULL`, sem `rota_id`, sem `local_vistoria` — tecnicamente "na fila"
-- `instalacoes.a5dabcef…`: `status='agendada'`, `instalador_responsavel_id=NULL`, `vistoriador_prestador_id=NULL`
-- `veiculos.LSA7A65`: `status='instalacao_pendente'` (correto)
-- `agendamentos_base`: **0 registros vivos** para essa instalação (todos foram cancelados pelo `realocar_servico`)
-- `instalacao_prestador_links.60110112…`: **ainda `em_rota`**, com `aceito_em` e `em_rota_em` preenchidos — link ativo apontando para o LEONARDO
+### 2. Domínio errado no botão "Copiar Link"
+`src/components/instalacoes/InstalacaoDetailDrawer.tsx` linha **495**:
+```
+const url = `https://pratic-connect-21.lovable.app/prestador/instalacao/${prestadorLink.token}`;
+```
+Viola o Core de memória *Production URL is strictly `https://app.praticcar.org`*. Outros pontos do código (`SinistroAnalise.tsx`, `EventoLinkCard.tsx`, `Documentos.tsx`) têm o mesmo problema — provavelmente herança histórica.
 
-## Onde o serviço "sumiu"
+### 3. Por que o prestador caiu em `/app/login`
+A rota `/prestador/instalacao/:token` é pública e usa `publicSupabase` — se aberta no domínio certo, **não exige login**. Hipóteses prováveis (a serem confirmadas no print):
 
-1. **Atribuição Manual (Monitoramento)** lê de `agendamentos_base` filtrando contratos com `aprovado_em` (regra canônica `mem://logic/operations/atribuicao-manual-gate-cadastro-aprovado`). Como o `realocar_servico` **cancelou** o `agendamentos_base` existente e **não criou** um novo no destino `fila`, o serviço desapareceu da fila visível.
-2. **Mapa / `PrestadoresAtivos`** ainda vê o link `em_rota` do LEONARDO e mostra ele "executando", mas a instalação por trás está sem profissional → estado fantasma.
-3. **Aprovação de Associados** não recebe (instalação não foi concluída e não há vistoria fechada).
-
-## Causa raiz no `realocar_servico`
-
-A função pública `public.realocar_servico` (235 linhas):
-
-- limpa `instalacoes.vistoriador_prestador_id` e `instalador_responsavel_id` ✅
-- limpa `servicos.profissional_id` ✅
-- cancela todos `agendamentos_base` da instalação (linhas 136–143) ✅
-- só cria novo `agendamentos_base` quando destino = `'base'` (linhas 163–179)
-- **NUNCA toca em `instalacao_prestador_links`** ❌
-- não recria nem reabre `agendamentos_base` para destino `'fila'` ou `'rota'` ❌
-
-Resultado: link do prestador fica vivo (rompe a regra canônica `mem://logic/operations/atribuicao-prestador-status-sync`) e, quando destino é `fila`, o serviço some da fila operacional do Monitoramento.
+- a) Coordenador copiou via "Copiar Link" do drawer → URL com domínio `pratic-connect-21.lovable.app`. O prestador abriu no celular, o navegador ou um PWA instalado interceptou e jogou no `/app/login` (já que ele é também associado e tem o app instalado).
+- b) Coordenador enviou texto sem o link completo (Meta wa.me trunca/encoda); o prestador acessou `app.praticcar.org` puro → redirect `/` → `/dashboard` → guard manda para login. Mas pela rota atual `/` vai para `/dashboard`, e dashboard exige login → cai em login interno e não em `/app/login`. Menos provável.
+- c) O prestador, depois de aceitar a tarefa pelo link real (`aceito_em` às 11:05:49 mostra que o link FUNCIONOU uma vez), perdeu a sessão / fechou o navegador, reabriu via deep-link e o PWA do Associado capturou a navegação.
 
 ## Plano de correção
 
-### 1. Saneamento do caso LSA7A65 (migration única)
+### Etapa 1 — Confirmar com você
+Antes de mexer, preciso saber **qual destes fluxos** o coordenador usou no caso LSA7A65, porque a correção muda:
+1. Botão "Atribuir" da **Atribuição Manual** (Monitoramento) ou do **Mapa** → mostra `LinkPrestadorResultDialog` com "Abrir no WhatsApp" / "Copiar Link"
+2. Botão **"Reenviar"** no `InstalacaoDetailDrawer` (este sim já chama `gerar-link-prestador` sem `skip_whatsapp` e dispara o template)
+3. Botão **"Copiar Link"** no `InstalacaoDetailDrawer` (URL com domínio errado)
 
-- Cancelar `instalacao_prestador_links.60110112-3c21-45f0-8389-51ed3c4756f0` (`status='cancelado'`, marcando `recusa_motivo='realocado_para_fila_em_25/05'`) para o trigger canônico cuidar do reflexo.
-- Reabrir um `agendamentos_base` para `instalacao_id = a5dabcef…` com `status='agendado'`, `data_agendada=2026-05-25`, `horario='09:00'`, sem `oficina_id` nem `atendido_por` (representando "fila do Monitoramento"). Modelo já usado pelo branch destino=`base`, adaptado sem oficina.
-- Log em `associados_historico` com ação `saneamento_lsa7a65`.
+### Etapa 2 — Correções (após confirmação)
+- **Fix A** (sempre): trocar `pratic-connect-21.lovable.app` por `app.praticcar.org` no `InstalacaoDetailDrawer.tsx:495` e nos outros 4 lugares listados.
+- **Fix B** (se for o fluxo 1): remover `skip_whatsapp: true` das duas chamadas em `useAtribuicaoManual.ts` (linhas 701 e 792) **ou** adicionar toggle no popover/dialog ("Enviar WhatsApp automaticamente: ✅"). Hoje o template `prestador_nova_instalacao_v2` é o canal canônico — coordenador colando wa.me manual é fonte de erro recorrente (sem rastreabilidade em `whatsapp_mensagens`).
+- **Fix C** (defesa em profundidade): em `PrestadorInstalacao.tsx`, quando token inválido/expirado, **nunca** deixar redirect cair em `/app/login` — sempre mostrar tela de erro pública explicando "link inválido/expirado, fale com o coordenador".
 
-### 2. Patch estrutural em `public.realocar_servico`
+### Etapa 3 — Saneamento do LSA7A65
+Aplicar manualmente apenas se necessário (a correção da `realocar_servico` da última loop já republicou a tarefa na fila). Verificar se o serviço/agendamento está visível em Atribuição Manual antes de mexer.
 
-Migration que substitui a função `realocar_servico` adicionando:
+### Etapa 4 — Memória
+Atualizar `mem://logic/operations/atribuicao-prestador-escopo-canonico` com:
+- "Atribuição manual SEMPRE dispara template Meta `prestador_nova_instalacao_v2` (sem `skip_whatsapp`). Coordenador colando wa.me manual é ANTI-PADRÃO — quebra rastreabilidade em `whatsapp_mensagens`."
+- "Toda URL de link público de prestador usa `app.praticcar.org` — `pratic-connect-21.lovable.app` é proibido (Core)."
 
-- **Cancelamento do link prestador ativo** sempre que o destino NÃO é `'profissional'` apontando para o mesmo prestador:
-  ```sql
-  UPDATE public.instalacao_prestador_links
-     SET status = 'cancelado',
-         updated_at = now(),
-         recusa_motivo = COALESCE(recusa_motivo,'') ||
-           ' [realocado para ' || _destino || ' por ' || _uid::text || ': ' || _motivo || ']'
-   WHERE instalacao_id = _servico.instalacao_origem_id
-     AND status IN ('pendente','aceito','em_rota','chegou','iniciada');
-  ```
-  Isso reaproveita o trigger canônico que já devolve serviço à fila quando link é cancelado, mantendo consistência.
-
-- **Recriação de `agendamentos_base` para destino `'fila'` e `'rota'`** (sem `oficina_id`/`atendido_por`), espelhando o padrão já existente para `'base'`. Sem essa entrada, `useServicosParaAtribuir` não enxerga o serviço.
-
-- Manter compatibilidade com chamadas existentes (mesma assinatura, mesmo retorno JSON).
-
-### 3. Regressões a validar manualmente após deploy
-
-- Realocar um serviço de prestador → `fila`: link some do mapa, serviço reaparece em Atribuição Manual.
-- Realocar mesmo serviço → `profissional` (mesmo prestador): link **não** é cancelado (caminho oposto).
-- Realocar → `base`: comportamento atual preservado (cria agendamento na oficina).
-- Realocar → `rota`: novo agendamento_base sem oficina é criado e fica visível na rota.
-
-### 4. Memória
-
-Adicionar memória `mem://logic/operations/realocar-servico-cancela-link-prestador` documentando que `realocar_servico` cancela o `instalacao_prestador_links` ativo e sempre garante 1 `agendamentos_base` vivo por destino — virando regra canônica para complementar `mem://logic/operations/atribuicao-prestador-status-sync` e `mem://logic/operations/dedupe-agendamentos-rule`.
-
-### Detalhes técnicos (resumo para revisão)
-
-```text
-realocar_servico(destino)
-├── 'profissional' → mantém link se _profissional_id == link.prestador_id; senão cancela
-├── 'fila'         → cancela link + cria agendamentos_base sem oficina/atendido_por
-├── 'rota'         → cancela link + cria agendamentos_base sem oficina, com obs "Rota X"
-└── 'base'         → cancela link + cria agendamentos_base com oficina (já existente)
-```
-
-Nada na UI muda; só DB. Sem mudança em rotas, hooks ou componentes.
+## Riscos
+- Remover `skip_whatsapp` no fluxo manual envia o template para o prestador sem que o coordenador veja a prévia. Mitigação: deixar `skip_whatsapp` opcional no dialog (default = enviar).
+- Trocar domínio em SinistroAnalise/EventoLinkCard/Documentos pode afetar outros fluxos — fazer em PR separado.
