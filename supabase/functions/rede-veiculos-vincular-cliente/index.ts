@@ -277,22 +277,24 @@ serve(async (req) => {
 
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
-    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
-    // API espera multipart/form-data (mesmo formato da desvincularClienteVeiculo,
-    // que está em produção e funciona). URLSearchParams/x-www-form-urlencoded fazia
-    // o PHP descartar o body — respondia "CPF/IMEI não informados" e "JSON não informado".
-    // SEM barra final na URL — barra causa 301/307 e PHP perde o body.
-    const formBody = new FormData();
-    formBody.append('cpfCnpj', cpfCnpjLimpo);
-    formBody.append('imei', imeiLimpo);
-    formBody.append('placa', (veiculo.placa || '').toUpperCase());
+    // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo/ =====
+    // Padrão canônico Rede Veículos para endpoints que aceitam payload via "json":
+    //   - URL COM barra final (`/vincularClienteVeiculo/`) — sem a barra o PHP perde
+    //     $_REQUEST['json'] e devolve "JSON não informado".
+    //   - application/x-www-form-urlencoded com um único campo `json=<stringify>`.
+    //   - NADA de campos flat (cpfCnpj/imei/placa) — eles já estão dentro do payload
+    //     e foram remendo de uma hipótese errada (a falta de CPF/IMEI vinha do PHP
+    //     não parsear o body sem a barra final).
+    // Mesmo formato usado em atualizarDadosCliente/, ativarVeiculo/ e
+    // informarVeiculoAdimplente/, todos em produção.
+    const formBody = new URLSearchParams();
     formBody.append('json', JSON.stringify(payload));
 
-    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo`, {
+    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
       headers: {
-        // Não setar Content-Type manualmente — runtime injeta o boundary correto do multipart.
         'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formBody,
     });
