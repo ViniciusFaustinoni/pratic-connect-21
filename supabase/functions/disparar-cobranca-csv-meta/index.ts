@@ -159,9 +159,15 @@ serve(async (req) => {
     // Quando template_v2=true, usamos o template Meta com botão URL dinâmico (1 link por mensagem).
     // Se nenhum boleto do destinatário tem link válido, fazemos fallback automático para v1.
     const templateV2: boolean = body.template_v2 === true;
+    // Nome canônico do template a usar (escolhido na UI). Se ausente, mantém compat antiga.
     const templateNomeBase: string = body.template_nome
       || (templateV2 ? "cobranca_inadimplencia_pratic_v2" : "cobranca_inadimplencia_pratic");
-    const templateNomeFallback = "cobranca_inadimplencia_pratic";
+    // Fallback automático (v1) APENAS quando o operador escolheu o template canônico v2.
+    const templateNomeFallback = templateNomeBase === "cobranca_inadimplencia_pratic_v2"
+      ? "cobranca_inadimplencia_pratic"
+      : templateNomeBase;
+    // Mapeamento manual de variáveis enviado pela UI: { "1": {source: "primeiro_nome"}, "2": {source: "lista_boletos"}, ... }
+    const varMapping: Record<string, { source: string; texto?: string }> = body.var_mapping || {};
     const destinatarios: DestinatarioIn[] = body.destinatarios || [];
     const isFirstChunk: boolean = body.is_first_chunk === true;
     const isLastChunk: boolean = body.is_last_chunk === true;
