@@ -148,6 +148,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
   }, []);
 
+  const refreshPerfis = useCallback(async (userId: string) => {
+    PERFIS_PROMISES.delete(userId);
+    const updatedPerfis = await fetchPerfis(userId);
+    setPerfis(updatedPerfis);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['app-roles-config'] }),
+      queryClient.invalidateQueries({ queryKey: ['module-visibility'] }),
+      queryClient.invalidateQueries({ queryKey: ['module-item-visibility'] }),
+    ]);
+  }, [fetchPerfis, queryClient]);
+
   // ============================================
   // USEEFFECT: INICIALIZAÇÃO E LISTENER
   // ============================================
@@ -329,6 +340,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
       subscription.unsubscribe();
     };
   }, [fetchProfile, fetchPerfis]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let cancelled = false;
+
+    const syncPerfis = async () => {
+      const updatedPerfis = await refreshPerfis(user.id);
+      if (cancelled) return;
+      return updatedPerfis;
+    };
+
+    const channel = supabase
+      .channel(`auth-user-roles-${user.id}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'user_roles', filter: `user_id=eq.${user.id}` },
+        () => {
+          void syncPerfis();
+        }
+      )
+      .subscribe();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncPerfis();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      supabase.removeChannel(channel);
+    };
+  }, [refreshPerfis, user?.id]);
 
   // ============================================
   // MÉTODOS DE AUTENTICAÇÃO
