@@ -461,6 +461,7 @@ export default function AtribuicaoManualTab() {
         prestadorNome: prestadorConfirmDialog.prestadorNome,
         prestadorTelefone: prestadorConfirmDialog.prestadorTelefone,
         valor,
+        escopo: escopoPrestador,
       });
       setPrestadorConfirmDialog(null);
       setLinkResult(result);
