@@ -234,7 +234,7 @@ serve(async (req) => {
 
       const { data: troca, error: trErr } = await supabase
         .from('solicitacoes_troca_titularidade')
-        .select('id, associado_antigo_id, novo_associado_id, veiculo_id, efetivada_em')
+        .select('id, associado_antigo_id, novo_associado_id, veiculo_id, cotacao_id, efetivada_em')
         .in('veiculo_id', veiculoIds)
         .eq('status', 'efetivada')
         .order('efetivada_em', { ascending: false })
