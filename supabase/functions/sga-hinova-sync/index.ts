@@ -30,6 +30,8 @@ import {
   alterarSituacaoParaVeiculoHinova,
   alterarSituacaoAssociadoHinova,
   alterarVeiculoHinova,
+  extractCodigoVoluntario,
+  sleepJitter,
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
   HinovaNotFoundError,
@@ -232,7 +234,7 @@ serve(async (req) => {
 
       const { data: troca, error: trErr } = await supabase
         .from('solicitacoes_troca_titularidade')
-        .select('id, associado_antigo_id, novo_associado_id, veiculo_id, efetivada_em')
+        .select('id, associado_antigo_id, novo_associado_id, veiculo_id, cotacao_id, efetivada_em')
         .in('veiculo_id', veiculoIds)
         .eq('status', 'efetivada')
         .order('efetivada_em', { ascending: false })
@@ -249,16 +251,25 @@ serve(async (req) => {
       }
 
       // (2) Idempotência: re-consulta antes de alterar.
+      let codVolunRem = 0;
       try {
         const recheck = contexto === 'chassi' && chassi
           ? await buscarVeiculoPorChassi(supabase, chassi)
           : await buscarVeiculoPorPlaca(supabase, placaLimpaCmp);
         const codAssocAtual = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
         const codVeicAtual = Number(recheck.found?.codigo_veiculo || 0) || codVeicRem;
-        if (codAssocAtual && codAssocAtual === codigoAssociadoNovo) {
+        codVolunRem = extractCodigoVoluntario(recheck.found);
+
+        // Resolver voluntário esperado do novo titular para decidir idempotência completa
+        const codVolunNovoPre = await resolverVoluntarioNovoTitular(
+          supabase, veiculoLocalId, troca.novo_associado_id, troca.cotacao_id,
+        );
+        const assocOk = codAssocAtual && codAssocAtual === codigoAssociadoNovo;
+        const volunOk = !codVolunNovoPre || codVolunRem === codVolunNovoPre;
+        if (assocOk && volunOk) {
           await logSync(veiculoLocalId, associadoLocalId, 'transferir_vinculo_veiculo', 'info',
-            { contexto, placa, chassi, codigo_veiculo: codVeicAtual, codigo_associado: codAssocAtual, troca_id: troca.id },
-            { motivo: 'idempotente — placa/chassi já vinculada ao novo titular no Hinova' });
+            { contexto, placa, chassi, codigo_veiculo: codVeicAtual, codigo_associado: codAssocAtual, codigo_voluntario: codVolunRem, codigo_voluntario_esperado: codVolunNovoPre, troca_id: troca.id },
+            { motivo: 'idempotente — placa/chassi já vinculada ao novo titular (e voluntário) no Hinova' });
           return { ok: true, codigoVeiculoRemoto: codVeicAtual };
         }
       } catch (e: any) {
@@ -280,27 +291,56 @@ serve(async (req) => {
         enviarAgregados = String(cfg?.valor || '').toLowerCase() === 'true';
       } catch { /* default false */ }
 
+      // (3b) Resolver voluntário esperado do novo titular
+      const codVolunNovo = await resolverVoluntarioNovoTitular(
+        supabase, veiculoLocalId, troca.novo_associado_id, troca.cotacao_id,
+      );
+      const enviouVoluntario = codVolunNovo > 0 && codVolunNovo !== codVolunRem;
+
       const payload: Record<string, unknown> = {
         codigo_veiculo: codVeicRem,
         codigo_associado: codigoAssociadoNovo,
       };
+      if (enviouVoluntario) payload.codigo_voluntario = codVolunNovo;
       if (enviarAgregados) {
-        // TODO: quando validação manual confirmar que agregados precisam ser
-        // enviados explicitamente, coletar códigos remotos dos agregados aqui.
-        // Por enquanto envia array vazio para fixar a chave no payload sem efeito.
         payload.transferir_agregados = [];
       }
 
       const ra = await alterarVeiculoHinova(supabase, payload);
       if (!ra.ok) {
         await logSync(veiculoLocalId, associadoLocalId, 'transferir_vinculo_veiculo', 'error',
-          { codVeicRem, codAssocAntigo: codAssocRem, codAssocNovo: codigoAssociadoNovo, contexto, placa, chassi, troca_id: troca.id, enviar_agregados: enviarAgregados },
+          { codVeicRem, codAssocAntigo: codAssocRem, codAssocNovo: codigoAssociadoNovo, codVolunAntigo: codVolunRem, codVolunNovo, enviou_voluntario: enviouVoluntario, contexto, placa, chassi, troca_id: troca.id, enviar_agregados: enviarAgregados },
           ra.raw, ra.mensagem || ra.errors.join('; ') || `HTTP ${ra.status}`);
         return { ok: false, reason: `Hinova rejeitou alteração: ${ra.mensagem || ra.errors.join('; ') || `HTTP ${ra.status}`}` };
       }
 
+      // (4) Re-consulta com retry/backoff (cache observado no caso Bruna)
+      let confirmado = false;
+      let confirmacaoPendente = false;
+      let ultimoCodAssoc = 0;
+      let ultimoCodVolun = 0;
+      for (let tentativa = 1; tentativa <= 3; tentativa++) {
+        try {
+          const recheck = contexto === 'chassi' && chassi
+            ? await buscarVeiculoPorChassi(supabase, chassi)
+            : await buscarVeiculoPorPlaca(supabase, placaLimpaCmp);
+          ultimoCodAssoc = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
+          ultimoCodVolun = extractCodigoVoluntario(recheck.found);
+          const okAssoc = ultimoCodAssoc === codigoAssociadoNovo;
+          const okVolun = !enviouVoluntario || ultimoCodVolun === codVolunNovo;
+          confirmado = okAssoc && okVolun;
+          if (confirmado) break;
+        } catch (e: any) {
+          if (!(e instanceof HinovaNotFoundError)) {
+            console.warn(`[transferir_vinculo_veiculo][reconsulta t${tentativa}]`, e?.message || e);
+          }
+        }
+        if (tentativa < 3) await sleepJitter(2000, 3000);
+      }
+      if (!confirmado) confirmacaoPendente = true;
+
       await logSync(veiculoLocalId, associadoLocalId, 'transferir_vinculo_veiculo', 'success',
-        { codVeicRem, codAssocAntigo: codAssocRem, codAssocNovo: codigoAssociadoNovo, contexto, placa, chassi, troca_id: troca.id, enviar_agregados: enviarAgregados },
+        { codVeicRem, codAssocAntigo: codAssocRem, codAssocNovo: codigoAssociadoNovo, codVolunAntigo: codVolunRem, codVolunNovo, enviou_voluntario: enviouVoluntario, contexto, placa, chassi, troca_id: troca.id, enviar_agregados: enviarAgregados, confirmado, confirmacao_pendente: confirmacaoPendente, ultimo_codigo_associado: ultimoCodAssoc, ultimo_codigo_voluntario: ultimoCodVolun },
         ra.raw);
 
       try {
@@ -309,7 +349,7 @@ serve(async (req) => {
           modulo: 'configuracoes',
           tabela: 'veiculos',
           registro_id: veiculoLocalId,
-          descricao: `[SGA] Troca de titularidade na Hinova via /alterar/veiculo: veículo cod=${codVeicRem} reapontado de associado cod=${codAssocRem} para cod=${codigoAssociadoNovo} (placa ${placa || chassi}, troca ${troca.id}).`,
+          descricao: `[SGA] Troca de titularidade na Hinova via /alterar/veiculo: veículo cod=${codVeicRem} reapontado de associado cod=${codAssocRem} para cod=${codigoAssociadoNovo}${enviouVoluntario ? `, voluntario ${codVolunRem} → ${codVolunNovo}` : ''} (placa ${placa || chassi}, troca ${troca.id}).`,
           dados_novos: {
             placa,
             chassi,
@@ -317,6 +357,11 @@ serve(async (req) => {
             codigo_veiculo_remoto: codVeicRem,
             codigo_associado_antigo: codAssocRem,
             codigo_associado_novo: codigoAssociadoNovo,
+            codigo_voluntario_antigo: codVolunRem,
+            codigo_voluntario_novo: codVolunNovo,
+            enviou_voluntario: enviouVoluntario,
+            confirmado,
+            confirmacao_pendente: confirmacaoPendente,
             troca_id: troca.id,
             associado_antigo_id: troca.associado_antigo_id,
             novo_associado_id: troca.novo_associado_id,
@@ -331,6 +376,61 @@ serve(async (req) => {
     } catch (e: any) {
       return { ok: false, reason: `exceção: ${e?.message || e}` };
     }
+  }
+
+  /**
+   * Resolve `codigo_sga_voluntario` esperado do NOVO titular para a troca.
+   * Caminho: troca.cotacao_id → contrato do novo associado → vendedor →
+   * profiles.codigo_sga_voluntario. Fallback: contrato ativo mais recente do
+   * novo associado. Retorna 0 quando não conseguir resolver (não-bloqueante).
+   */
+  async function resolverVoluntarioNovoTitular(
+    sb: any,
+    veiculoLocalId: string,
+    novoAssociadoId: string | null,
+    cotacaoId: string | null,
+  ): Promise<number> {
+    try {
+      if (!novoAssociadoId) return 0;
+      if (cotacaoId) {
+        const { data: c } = await sb
+          .from('contratos')
+          .select('vendedor_id')
+          .eq('cotacao_id', cotacaoId)
+          .eq('associado_id', novoAssociadoId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (c?.vendedor_id) {
+          const { data: prof } = await sb
+            .from('profiles')
+            .select('codigo_sga_voluntario')
+            .eq('id', c.vendedor_id)
+            .maybeSingle();
+          const v = Number.parseInt(String(prof?.codigo_sga_voluntario ?? ''), 10);
+          if (Number.isFinite(v) && v > 0) return v;
+        }
+      }
+      const { data: c2 } = await sb
+        .from('contratos')
+        .select('vendedor_id')
+        .eq('associado_id', novoAssociadoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (c2?.vendedor_id) {
+        const { data: prof } = await sb
+          .from('profiles')
+          .select('codigo_sga_voluntario')
+          .eq('id', c2.vendedor_id)
+          .maybeSingle();
+        const v = Number.parseInt(String(prof?.codigo_sga_voluntario ?? ''), 10);
+        if (Number.isFinite(v) && v > 0) return v;
+      }
+    } catch (e) {
+      console.warn('[resolverVoluntarioNovoTitular] erro:', (e as any)?.message || e);
+    }
+    return 0;
   }
 
   // ---- Carregamento de credenciais e códigos da conta ----

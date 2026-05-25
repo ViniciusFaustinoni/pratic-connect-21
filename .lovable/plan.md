@@ -1,65 +1,127 @@
-# Plano: troca de titularidade na Hinova via `/alterar/veiculo`
+## Objetivo
 
-## Problema
-Sync atual usa inativação (`alterarSituacaoParaVeiculoHinova` situação 2) para tentar liberar a placa quando ela já existe na Hinova vinculada a outro `codigo_associado`. A Hinova **não** libera o índice de placa via inativação — o vínculo persiste, sync entra em `falha_permanente`, operador tem que mexer no painel SGA.
+Estender o fluxo de troca de titularidade na Hinova para também transferir o **voluntário (consultor)** quando ele mudou na troca, e tornar a confirmação pós-alteração mais robusta com **retry/backoff** na re-consulta — sem mudar o critério primário de sucesso (resposta `Alterado` + `errors:[]`).
 
-## Solução
-Endpoint oficial `POST /alterar/veiculo` permite trocar o `codigo_associado` vinculado a um `codigo_veiculo` existente, com `transferir_agregados` opcional. É o caminho nativo para troca de titularidade.
+Aplicar nos dois caminhos canônicos:
+- `supabase/functions/sga-hinova-sync/index.ts` (função interna `transferir_vinculo_veiculo`)
+- `supabase/functions/oneoff-sga-liberar-placa-troca/index.ts`
 
-## Mudanças
+E no client compartilhado:
+- `supabase/functions/_shared/hinova-client.ts` (helper de busca/payload de alteração — `codigo_voluntario` já é aceito pelo `/alterar/veiculo`, só precisa ser propagado).
 
-### 1. `supabase/functions/_shared/hinova-client.ts`
-Adicionar `alterarVeiculoHinova(supabase, payload)` → `POST /alterar/veiculo` via `hinovaPostAuth`.
+---
 
-### 2. `supabase/functions/sga-hinova-sync/index.ts`
-Substituir `tentarAutoInativarVeiculoRemoto` por `tentarTransferirVeiculoRemoto`:
+## 1. Resolver o voluntário esperado da troca
 
-- **Match por placa/chassi do conflito** (não pelo `veiculo_id` da fila):
-  buscar `solicitacoes_troca_titularidade` JOIN `veiculos` por placa/chassi em conflito + `status='efetivada'`.
-- **Idempotência**: re-consultar `/buscar` por placa/chassi. Se já retornou novo `codigo_associado` = código do novo titular local, pular `alterar/veiculo` e devolver `ok` com `codigoVeiculoHinova` resolvido.
-- **Transferir agregados**: parametrizado via `configuracoes.chave='sga_alterar_veiculo_enviar_agregados'` (default `false` = omite). Permite ligar via DB após validação manual sem redeploy.
-- Em sucesso, devolver `codigoVeiculoHinova = codVeicRem` para o caller pular o `cadastrarVeiculoHinova` (linha 974).
-- Remover sequência de inativar veículo + inativar associado órfão + recheck. Tudo isso vira uma única chamada idempotente.
+Para cada troca efetivada (linha de `solicitacoes_troca_titularidade`):
 
-### 3. `supabase/functions/oneoff-sga-liberar-placa-troca/index.ts`
-Reescrever: localiza veículo local + troca efetivada, chama `alterarVeiculoHinova` (com idempotência), reenfileira `sga_sync_queue`, audita.
+1. Localizar o **vendedor do novo titular** seguindo a cadeia já usada no `sga-hinova-sync` para cadastro:
+   - `solicitacoes_troca_titularidade.cotacao_id` → `contratos` ativo gerado para o `novo_associado_id` → `contratos.vendedor_id` → `profiles.codigo_sga_voluntario`.
+   - Fallback: contrato ativo mais recente do `novo_associado_id` que aponte para esse veículo.
+2. `codigoVoluntarioNovo = parseInt(profiles.codigo_sga_voluntario)`.
+3. Se o novo titular não tiver vendedor com `codigo_sga_voluntario` válido, **não bloqueia** a troca — apenas loga `warning: voluntario_nao_resolvido` e segue só com `codigo_associado` no payload (comportamento atual).
 
-### 4. `supabase/functions/cron-liberar-placas-presas/index.ts`
-**Não confundir** com o cron homônimo que existe (cuida de cotações com `placa_reservada_ate` expirada). Mantemos esse intocado; nossa lógica vai num novo cron `cron-sga-reenfileirar-trocas-presas`:
+## 2. Capturar voluntário atual na busca da Hinova
 
-- Varre `sga_sync_queue` `status='falha_permanente'` com `etapa_parou IN ('conflito_placa','conflito_chassi')`.
-- Para cada fila, confirma existência de `solicitacoes_troca_titularidade.efetivada` para aquela placa/chassi (mesmo critério do sync).
-- Reenfileira `status='pendente'`, `tentativas=0`, `erro_ultimo=null`, `proximo_reenvio_em=now()`.
-- Roda diariamente (não agendamos cron novo agora — só edge sob demanda; o `cron-sga-retry` existente já varre `pendente` e despacha).
+Hoje a etapa `hinova_busca` extrai apenas `codigo_veiculo` e `codigo_associado_atual`. Estender para:
 
-### 5. `supabase/functions/oneoff-sga-inativar-veiculo-remoto/index.ts`
-Responder **410 Gone** com mensagem orientando o novo fluxo. Arquivo preservado.
+- Ler também `codigo_voluntario` (ou `codigo_voluntario_atual`/equivalente) do payload retornado por `buscarVeiculoPorPlaca`/`buscarVeiculoPorChassi`. Tratar como número (0 se ausente).
+- Incluir `codigo_voluntario_atual` no log do step `hinova_busca` (e equivalente no oneoff).
 
-### 6. Memória
-- Atualizar Core: caminho de troca de titularidade na Hinova passa a ser `/alterar/veiculo`. Placa presa só vira ação manual quando NÃO há troca efetivada local.
-- Nova memória `mem://logic/integrations/sga-alterar-veiculo-troca-titularidade` documentando o helper + flag de agregados + idempotência.
+## 3. Decidir envio do `codigo_voluntario`
 
-## Validações manuais ANTES do rollout
-1. **Caso da Bruna**: rodar `oneoff-sga-liberar-placa-troca` com `placa=RFL7J00`, confirmar:
-   - `alterarVeiculoHinova` retorna `ok` com mensagem "alterado".
-   - `buscarVeiculoPorPlaca('RFL7J00')` passa a devolver `codigo_associado` da Bruna.
-   - Log `alterar_vinculo_veiculo success` em `sga_sync_logs`.
-2. **Comportamento dos agregados**: rodar manualmente em um veículo COM ao menos 1 agregado:
-   - Cenário A (omitir parâmetro): ver se agregados acompanham ou ficam órfãos.
-   - Se ficarem órfãos: ligar flag `sga_alterar_veiculo_enviar_agregados=true` E adicionar coleta dos códigos de agregados no payload (TODO se cenário ocorrer).
-   - Se acompanharem por default: manter flag `false`.
+Após a busca:
 
-## Pós-validação
-- Reenfileirar manualmente (via SQL ou função `sga-reenfileirar-trocas-presas`) as `sga_sync_queue` em `falha_permanente` com `etapa_parou` em conflito_placa/chassi que tenham troca efetivada local.
+- Se `codigoVoluntarioNovo` resolvido **e** diferente de `codigo_voluntario_atual` → incluir `codigo_voluntario: codigoVoluntarioNovo` no payload de `/alterar/veiculo`.
+- Se forem iguais (ou novo não resolvido) → **omitir** o campo (comportamento idêntico ao atual nessa dimensão).
 
-## Arquivos
-- `supabase/functions/_shared/hinova-client.ts` — adicionar helper
-- `supabase/functions/sga-hinova-sync/index.ts` — substituir helper + ajustar caller (linhas 176–301 e 883–968)
-- `supabase/functions/oneoff-sga-liberar-placa-troca/index.ts` — reescrever
-- `supabase/functions/oneoff-sga-inativar-veiculo-remoto/index.ts` — 410 deprecated
-- Memória + Core do projeto
+Atualizar a checagem de **idempotência** (passo "já está com o novo titular?") para considerar tanto `codigo_associado` quanto `codigo_voluntario`: só pula a chamada de alteração se **ambos** já batem com o esperado. Se associado bate mas voluntário diverge, segue com alteração enviando só `codigo_voluntario` (+ `codigo_veiculo`).
 
-## Fora de escopo
-- Não alterar `efetivar-troca-titularidade`.
-- Sem migração de schema.
-- Não mexer no fluxo de conflito sem troca local — segue `falha_permanente`.
+## 4. Reportar voluntário nos steps
+
+- Step `hinova_busca`: acrescentar `codigo_voluntario_atual`.
+- Step `alterar_veiculo`: acrescentar `codigo_voluntario_antigo`, `codigo_voluntario_novo`, `enviou_voluntario` (boolean), espelhando o que já é feito hoje para o associado.
+- Auditoria (`insertAuditLog.dados_novos`) e `logSync` ganham os mesmos campos.
+
+## 5. Re-consulta com retry/backoff (Opção 1)
+
+Substituir a re-consulta única atual por loop:
+
+```text
+para tentativa de 1 a 3:
+  recheck = buscarVeiculoPorPlaca(placa)  // ou por chassi quando for o caso
+  ok_assoc = recheck.codigo_associado == codAssocNovo
+  ok_volun = (!enviou_voluntario) || recheck.codigo_voluntario == codigoVoluntarioNovo
+  confirmado = ok_assoc && ok_volun
+  se confirmado: break
+  se tentativa < 3: aguardar 2.5s (jitter 2000–3000ms)
+```
+
+Logar cada tentativa em um step próprio `reconsultar_placa` com `tentativa`, `codigo_associado_atual`, `codigo_voluntario_atual`, `confirmado`.
+
+Se as 3 tentativas falharem:
+- Não tratar como erro funcional. Marcar `confirmado: false`.
+- Adicionar `confirmacao_pendente: true` no resultado.
+- Log final extra `confirmacao_pendente_pos_alteracao` com `motivo: 'Hinova aceitou /alterar/veiculo mas índice ainda não propagou (cache observado no caso Bruna)'`.
+- Reenfileirar a fila normalmente (já faz hoje) — próximo ciclo do cron valida.
+
+O critério primário de sucesso permanece sendo `ra.ok` (resposta `Alterado` + `errors:[]`) — retry serve apenas para enriquecer o relatório.
+
+## 6. Não mudar
+
+- `transferir_agregados` continua atrás da flag `sga_alterar_veiculo_enviar_agregados` (omitido por default).
+- Nenhuma mudança em `sga_sync_queue`, triggers ou tabelas.
+- `oneoff-sga-inativar-veiculo-remoto` segue marcada como deprecada (410).
+
+---
+
+## Detalhes técnicos
+
+### Arquivos a alterar
+
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/_shared/hinova-client.ts` | `alterarVeiculoHinova` aceita `codigo_voluntario` opcional (apenas garantir que o número passa pelo payload sem coerção). Helper utilitário `extractCodigoVoluntario(found)` que normaliza nomes alternativos vindos da Hinova. |
+| `supabase/functions/sga-hinova-sync/index.ts` | Função `transferir_vinculo_veiculo`: resolver `codigoVoluntarioNovo` a partir da troca, capturar atual no recheck, decidir envio, loop de re-consulta com backoff, logs e auditoria estendidos. |
+| `supabase/functions/oneoff-sga-liberar-placa-troca/index.ts` | Mesmo conjunto de mudanças, replicando steps + resposta JSON com `codigo_voluntario_antigo`, `codigo_voluntario_novo`, `enviou_voluntario`, `confirmacao_pendente`. |
+
+### Resolução do voluntário (pseudo-código)
+
+```ts
+async function resolverVoluntarioNovoTitular(supabase, troca): Promise<number | null> {
+  // 1) Cotação vinculada à troca → contrato gerado → vendedor
+  if (troca.cotacao_id) {
+    const { data: c } = await supabase.from('contratos')
+      .select('vendedor_id, profiles:vendedor_id(codigo_sga_voluntario)')
+      .eq('cotacao_id', troca.cotacao_id)
+      .eq('associado_id', troca.novo_associado_id)
+      .order('created_at', { ascending: false })
+      .limit(1).maybeSingle();
+    const v = parseInt(c?.profiles?.codigo_sga_voluntario || '', 10);
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+  // 2) Fallback: contrato ativo mais recente do novo associado
+  // (mesma query sem o filtro cotacao_id)
+  return null;
+}
+```
+
+### Backoff
+
+Função utilitária local: `sleepJitter(min=2000, max=3000)` usando `setTimeout` em `Promise`.
+
+---
+
+## Plano de validação manual (sem alterar nada em produção até passar)
+
+1. **Caso Bruna (RFL7J00)** — re-rodar `oneoff-sga-liberar-placa-troca` com a nova versão. Esperado:
+   - `hinova_busca`: traz `codigo_voluntario_atual` (do Douglas).
+   - `alterar_veiculo`: payload inclui `codigo_voluntario` da Bruna se diferente.
+   - `reconsultar_placa`: pelo menos uma das 3 tentativas marca `confirmado: true`. Se nenhuma confirmar, resposta vem com `confirmacao_pendente: true` e o log explicando o cache da Hinova.
+2. **Teste de agregado** — segue a sequência já planejada (intocada).
+3. Só após esses dois passos: marcar `oneoff-sga-inativar-veiculo-remoto` como 410 (já feito) e reenfileirar as `falha_permanente` do padrão.
+
+## Riscos
+
+- Nome do campo retornado pela Hinova para o voluntário pode variar (`codigo_voluntario` vs `codigo_volutario_atual` etc.) — o helper `extractCodigoVoluntario` cobre as variantes conhecidas e cai em `0` quando ausente, sem quebrar o fluxo.
+- Se o novo titular não tiver vendedor cadastrado, voluntário não é enviado — coerente com a regra "se igual, omitir" e evita propagar valores inválidos.
