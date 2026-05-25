@@ -59,6 +59,8 @@ import { TIPO_ENTRADA_SHORT_LABELS } from '@/components/associados/detalhe/Orige
 import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
 import { AlertSuspensaoNaoInstalacao } from '@/components/associados/AlertSuspensaoNaoInstalacao';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
+import { RetificarTermoModal } from '@/components/associados/detalhe/RetificarTermoModal';
+
 
 // New redesign components
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
@@ -182,6 +184,8 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [activeTab, setActiveTab] = useState('resumo');
   const [reativacaoWizardOpen, setReativacaoWizardOpen] = useState(false);
   const [trocaTitularidadeOpen, setTrocaTitularidadeOpen] = useState(false);
+  const [retificarTermoOpen, setRetificarTermoOpen] = useState(false);
+
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
@@ -568,7 +572,9 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         onSincronizar={() => sincronizarStatusMutation.mutate({ associadoId: id!, forcarAtualizacao: true })}
         onExcluir={(tipo) => { setTipoExclusao(tipo as TipoExclusao); setExcluirDialogOpen(true); }}
         onTrocaTitularidade={() => setTrocaTitularidadeOpen(true)}
+        onRetificarTermo={contrato?.id ? () => setRetificarTermoOpen(true) : undefined}
         setActiveTab={setActiveTab}
+
         isReativando={isReativando}
         isSincronizando={sincronizarStatusMutation.isPending}
       />
@@ -1483,6 +1489,18 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           associadoNome={associado.nome}
         />
       )}
+
+      {/* Modal Retificar Termo de Filiação */}
+      {contrato?.id && (
+        <RetificarTermoModal
+          open={retificarTermoOpen}
+          onOpenChange={setRetificarTermoOpen}
+          associado={associado}
+          contrato={contrato}
+          veiculo={veiculos?.[0] ?? null}
+        />
+      )}
+
 
       {/* Alterar forma de pagamento */}
       {alterarFormaState && (
