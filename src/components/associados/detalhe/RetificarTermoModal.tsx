@@ -225,9 +225,28 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
           >Histórico ({retificacoes?.length ?? 0})</button>
         </div>
 
-        <ScrollArea className="flex-1 pr-3">
+        <div className="flex-1 min-h-0">
+          <ScrollArea className="h-full pr-3">
           {aba === 'editar' && (
             <form id="retificar-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
+              {camposAutoPreenchidos > 0 && (
+                <div className="flex items-start justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex items-start gap-2 text-sm">
+                    <Sparkles className="h-4 w-4 mt-0.5 text-primary" />
+                    <div>
+                      <p className="font-medium">{camposAutoPreenchidos} campo(s) pré-preenchido(s) a partir do OCR dos documentos</p>
+                      <p className="text-xs text-muted-foreground">
+                        Revise — chassi é sempre manual. Campos já preenchidos no cadastro não foram sobrescritos.
+                      </p>
+                    </div>
+                  </div>
+                  <Button type="button" size="sm" variant="ghost" onClick={reaplicarOCR}>
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Repreencher
+                  </Button>
+                </div>
+              )}
+
               <div>
                 <Label>Motivo da retificação *</Label>
                 <Textarea
@@ -245,20 +264,20 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
                   <AccordionTrigger>Dados do associado</AccordionTrigger>
                   <AccordionContent>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Nome" {...form.register('nome')} />
-                      <Field label="RG" {...form.register('rg')} />
-                      <Field label="Data de nascimento" type="date" {...form.register('data_nascimento')} />
-                      <Field label="CNH (nº)" {...form.register('cnh_numero')} />
-                      <Field label="CNH categoria" {...form.register('cnh_categoria')} />
-                      <Field label="CNH validade" type="date" {...form.register('cnh_validade')} />
+                      <Field label="Nome" fonte={origens.nome} {...form.register('nome')} />
+                      <Field label="RG" fonte={origens.rg} {...form.register('rg')} />
+                      <Field label="Data de nascimento" type="date" fonte={origens.data_nascimento} {...form.register('data_nascimento')} />
+                      <Field label="CNH (nº)" fonte={origens.cnh_numero} {...form.register('cnh_numero')} />
+                      <Field label="CNH categoria" fonte={origens.cnh_categoria} {...form.register('cnh_categoria')} />
+                      <Field label="CNH validade" type="date" fonte={origens.cnh_validade} {...form.register('cnh_validade')} />
                       <Field label="E-mail" type="email" {...form.register('email')} />
                       <Field label="Telefone" {...form.register('telefone')} />
-                      <Field label="CEP" {...form.register('cep')} />
-                      <Field label="Logradouro" {...form.register('logradouro')} />
-                      <Field label="Número" {...form.register('numero')} />
-                      <Field label="Bairro" {...form.register('bairro')} />
-                      <Field label="Cidade" {...form.register('cidade')} />
-                      <Field label="UF" maxLength={2} {...form.register('uf')} />
+                      <Field label="CEP" fonte={origens.cep} {...form.register('cep')} />
+                      <Field label="Logradouro" fonte={origens.logradouro} {...form.register('logradouro')} />
+                      <Field label="Número" fonte={origens.numero} {...form.register('numero')} />
+                      <Field label="Bairro" fonte={origens.bairro} {...form.register('bairro')} />
+                      <Field label="Cidade" fonte={origens.cidade} {...form.register('cidade')} />
+                      <Field label="UF" maxLength={2} fonte={origens.uf} {...form.register('uf')} />
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -267,15 +286,16 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
                   <AccordionTrigger>Veículo</AccordionTrigger>
                   <AccordionContent>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Placa" {...form.register('placa')} />
+                      <Field label="Placa" fonte={origens.placa} {...form.register('placa')} />
                       <Field label="Chassi" {...form.register('chassi')} />
-                      <Field label="Renavam" {...form.register('renavam')} />
-                      <Field label="Marca" {...form.register('marca')} />
-                      <Field label="Modelo" {...form.register('modelo')} />
-                      <Field label="Ano fabricação" type="number" {...form.register('ano_fabricacao')} />
-                      <Field label="Ano modelo" type="number" {...form.register('ano_modelo')} />
-                      <Field label="Cor" {...form.register('cor')} />
-                      <Field label="Combustível" {...form.register('combustivel')} />
+                      <Field label="Renavam" fonte={origens.renavam} {...form.register('renavam')} />
+                      <Field label="Marca" fonte={origens.marca} {...form.register('marca')} />
+                      <Field label="Modelo" fonte={origens.modelo} {...form.register('modelo')} />
+                      <Field label="Ano fabricação" type="number" fonte={origens.ano_fabricacao} {...form.register('ano_fabricacao')} />
+                      <Field label="Ano modelo" type="number" fonte={origens.ano_modelo} {...form.register('ano_modelo')} />
+                      <Field label="Cor" fonte={origens.cor} {...form.register('cor')} />
+                      <Field label="Combustível" fonte={origens.combustivel} {...form.register('combustivel')} />
+
                       <div>
                         <Label>Tipo de placa</Label>
                         <Select
