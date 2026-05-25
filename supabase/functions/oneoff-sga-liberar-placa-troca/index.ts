@@ -25,6 +25,8 @@ import { insertAuditLog } from '../_shared/auditLog.ts';
 import {
   buscarVeiculoPorPlaca,
   alterarVeiculoHinova,
+  extractCodigoVoluntario,
+  sleepJitter,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
