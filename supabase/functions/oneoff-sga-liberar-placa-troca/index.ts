@@ -92,11 +92,25 @@ serve(async (req) => {
     }
     const codVeicRem = Number(r.found.codigo_veiculo);
     const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
-    log('hinova_busca', { codigo_veiculo: codVeicRem, codigo_associado_atual: codAssocRem });
+    const codVolunRem = extractCodigoVoluntario(r.found);
+    log('hinova_busca', {
+      codigo_veiculo: codVeicRem,
+      codigo_associado_atual: codAssocRem,
+      codigo_voluntario_atual: codVolunRem,
+    });
 
-    // (2) Idempotência: já está com o novo titular?
-    if (codAssocRem && codAssocRem === codAssocNovo) {
-      log('idempotente', { motivo: 'placa já vinculada ao novo titular no Hinova' });
+    // (1b) Resolver voluntário esperado do novo titular (via troca → contrato → vendedor)
+    const codVolunNovo = await resolverVoluntarioNovoTitular(supabase, vLocal.id, vLocal.associado_id);
+    log('resolver_voluntario', {
+      codigo_voluntario_novo: codVolunNovo,
+      resolvido: codVolunNovo > 0,
+    });
+
+    // (2) Idempotência: já está com o novo titular E com o voluntário esperado?
+    const associadoOk = codAssocRem && codAssocRem === codAssocNovo;
+    const voluntarioOk = !codVolunNovo || codVolunRem === codVolunNovo;
+    if (associadoOk && voluntarioOk) {
+      log('idempotente', { motivo: 'placa já vinculada ao novo titular (e voluntário) no Hinova' });
       await requeue(supabase, vLocal.id, vLocal.associado_id);
       log('requeue', { ok: true });
       return new Response(JSON.stringify({
@@ -105,15 +119,19 @@ serve(async (req) => {
         idempotente: true,
         codigo_veiculo: codVeicRem,
         codigo_associado: codAssocRem,
+        codigo_voluntario: codVolunRem,
         steps,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // (3) Alterar vínculo via /alterar/veiculo
+    const enviouVoluntario = codVolunNovo > 0 && codVolunNovo !== codVolunRem;
     const payload: Record<string, unknown> = {
       codigo_veiculo: codVeicRem,
-      codigo_associado: codAssocNovo,
     };
+    // Só envia associado se ainda divergir (permite "só voluntário" se associado já estiver ok)
+    if (!associadoOk) payload.codigo_associado = codAssocNovo;
+    if (enviouVoluntario) payload.codigo_voluntario = codVolunNovo;
     if (enviarAgregados) {
       // TODO pós-validação manual: coletar códigos dos agregados remotos.
       payload.transferir_agregados = [];
@@ -122,6 +140,12 @@ serve(async (req) => {
     log('alterar_veiculo', {
       ok: ra.ok, status: ra.status, mensagem: ra.mensagem, errors: ra.errors,
       enviar_agregados: enviarAgregados,
+      codigo_associado_antigo: codAssocRem,
+      codigo_associado_novo: codAssocNovo,
+      codigo_voluntario_antigo: codVolunRem,
+      codigo_voluntario_novo: codVolunNovo,
+      enviou_voluntario: enviouVoluntario,
+      payload_keys: Object.keys(payload),
     });
     if (!ra.ok) {
       return new Response(JSON.stringify({
@@ -131,15 +155,40 @@ serve(async (req) => {
       }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // (4) Re-consultar placa para confirmar
+    // (4) Re-consultar placa com retry/backoff (cache observado no caso Bruna)
     let confirmado = false;
-    try {
-      const recheck = await buscarVeiculoPorPlaca(supabase, placaRaw);
-      const codAtual = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
-      confirmado = codAtual === codAssocNovo;
-      log('reconsultar_placa', { confirmado, codigo_associado_atual: codAtual });
-    } catch (e: any) {
-      log('reconsultar_placa', { confirmado: false, detail: String(e?.message || e) });
+    let confirmacaoPendente = false;
+    let ultimoCodAssoc = 0;
+    let ultimoCodVolun = 0;
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      try {
+        const recheck = await buscarVeiculoPorPlaca(supabase, placaRaw);
+        ultimoCodAssoc = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
+        ultimoCodVolun = extractCodigoVoluntario(recheck.found);
+        const okAssoc = ultimoCodAssoc === codAssocNovo;
+        const okVolun = !enviouVoluntario || ultimoCodVolun === codVolunNovo;
+        confirmado = okAssoc && okVolun;
+        log('reconsultar_placa', {
+          tentativa,
+          confirmado,
+          codigo_associado_atual: ultimoCodAssoc,
+          codigo_voluntario_atual: ultimoCodVolun,
+          ok_assoc: okAssoc,
+          ok_volun: okVolun,
+        });
+        if (confirmado) break;
+      } catch (e: any) {
+        log('reconsultar_placa', { tentativa, confirmado: false, detail: String(e?.message || e) });
+      }
+      if (tentativa < 3) await sleepJitter(2000, 3000);
+    }
+    if (!confirmado) {
+      confirmacaoPendente = true;
+      log('confirmacao_pendente_pos_alteracao', {
+        motivo: 'Hinova aceitou /alterar/veiculo mas índice ainda não propagou (cache observado no caso Bruna)',
+        ultimo_codigo_associado: ultimoCodAssoc,
+        ultimo_codigo_voluntario: ultimoCodVolun,
+      });
     }
 
     // (5) Reenfileira
@@ -152,16 +201,20 @@ serve(async (req) => {
       modulo: 'configuracoes',
       tabela: 'veiculos',
       registro_id: vLocal.id,
-      descricao: `[SGA one-off] Troca de titularidade Hinova via /alterar/veiculo: placa ${placaRaw}, cod_veiculo=${codVeicRem}, ${codAssocRem} → ${codAssocNovo}. Motivo: ${motivo}`,
+      descricao: `[SGA one-off] Troca de titularidade Hinova via /alterar/veiculo: placa ${placaRaw}, cod_veiculo=${codVeicRem}, assoc ${codAssocRem} → ${codAssocNovo}${enviouVoluntario ? `, voluntario ${codVolunRem} → ${codVolunNovo}` : ''}. Motivo: ${motivo}`,
       dados_novos: {
         placa: placaRaw,
         codigo_veiculo: codVeicRem,
         codigo_associado_antigo: codAssocRem,
         codigo_associado_novo: codAssocNovo,
+        codigo_voluntario_antigo: codVolunRem,
+        codigo_voluntario_novo: codVolunNovo,
+        enviou_voluntario: enviouVoluntario,
         associado_local_id: vLocal.associado_id,
         associado_local_nome: assocLocal?.nome,
         enviar_agregados: enviarAgregados,
         confirmado,
+        confirmacao_pendente: confirmacaoPendente,
         motivo,
         steps,
       },
@@ -173,7 +226,11 @@ serve(async (req) => {
       codigo_veiculo: codVeicRem,
       codigo_associado_antigo: codAssocRem,
       codigo_associado_novo: codAssocNovo,
+      codigo_voluntario_antigo: codVolunRem,
+      codigo_voluntario_novo: codVolunNovo,
+      enviou_voluntario: enviouVoluntario,
       confirmado,
+      confirmacao_pendente: confirmacaoPendente,
       enviar_agregados: enviarAgregados,
       steps,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
