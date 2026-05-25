@@ -755,16 +755,33 @@ serve(async (req) => {
           if (r.found?.codigo_veiculo) {
             const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
-              const msg = `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}).`;
-              await logSync(_vid, _aid, 'conflito_placa', 'error',
-                { placa: placaLimpa }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: r.found.codigo_veiculo }, msg);
-              await setStatusSga(_vid, 'erro_sincronizacao');
-              await markQueueFalhaPermanente(_vid, _aid, msg);
-              return;
+              const codVeicRem = Number(r.found.codigo_veiculo);
+              const autoInat = await tentarAutoInativarVeiculoRemoto({
+                veiculoLocalId: _vid,
+                associadoLocalId: _aid,
+                codVeicRem,
+                codAssocRem,
+                placa: placaLimpa,
+                contexto: 'placa',
+              });
+              if (autoInat.ok) {
+                // Veículo remoto inativado — segue fluxo deixando codigoVeiculoHinova=null
+                // para que "6.d Cadastrar se não existe" registre vinculado ao novo titular.
+              } else {
+                const msg = autoInat.reason === 'sem_troca_local'
+                  ? `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}).`
+                  : `Auto-inativação falhou: ${autoInat.reason}`;
+                await logSync(_vid, _aid, 'conflito_placa', 'error',
+                  { placa: placaLimpa }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
+                await setStatusSga(_vid, 'erro_sincronizacao');
+                await markQueueFalhaPermanente(_vid, _aid, msg);
+                return;
+              }
+            } else {
+              codigoVeiculoHinova = Number(r.found.codigo_veiculo);
+              await logSync(_vid, _aid, 'buscar_veiculo_placa', 'success',
+                { placa: placaLimpa }, { codigo_veiculo: codigoVeiculoHinova });
             }
-            codigoVeiculoHinova = Number(r.found.codigo_veiculo);
-            await logSync(_vid, _aid, 'buscar_veiculo_placa', 'success',
-              { placa: placaLimpa }, { codigo_veiculo: codigoVeiculoHinova });
           }
         } catch (e: any) {
           if (!(e instanceof HinovaNotFoundError)) {
