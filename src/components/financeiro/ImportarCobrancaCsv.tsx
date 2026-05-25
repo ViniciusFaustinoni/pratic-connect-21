@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { parseCsvInadimplentes, type ParseResultado, type DestinatarioParsed } from '@/lib/cobranca/parseCsvInadimplentes';
 import { baixarTemplateCobrancasXlsx } from '@/lib/cobranca/templateCobrancas';
+import { TemplateMetaPicker } from './TemplateMetaPicker';
+import type { VarMapping } from '@/lib/cobranca/templateVarsMapper';
 
 async function lerArquivoComoCsv(file: File): Promise<string> {
   const nome = file.name.toLowerCase();
