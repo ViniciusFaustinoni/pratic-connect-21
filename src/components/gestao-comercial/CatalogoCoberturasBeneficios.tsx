@@ -682,6 +682,7 @@ export function CatalogoCoberturasBeneficios() {
             items={filterAndSort(benefits, benSearch, benSort, 'beneficio', benAttrFilter, benAttrMap)}
             type="beneficio"
             attrMap={benAttrMap}
+            highlightId={highlightBenId}
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
