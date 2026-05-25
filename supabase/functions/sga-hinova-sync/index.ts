@@ -30,6 +30,8 @@ import {
   alterarSituacaoParaVeiculoHinova,
   alterarSituacaoAssociadoHinova,
   alterarVeiculoHinova,
+  extractCodigoVoluntario,
+  sleepJitter,
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
   HinovaNotFoundError,
