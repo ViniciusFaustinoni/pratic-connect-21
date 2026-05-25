@@ -217,10 +217,11 @@ serve(async (req) => {
       try {
         await insertAuditLog(supabase, {
           acao: 'atualizar',
-          tipo: 'sga_hinova_sync',
-          entidade_id: veiculoLocalId,
+          modulo: 'configuracoes',
+          tabela: 'veiculos',
+          registro_id: veiculoLocalId,
           descricao: `[SGA] Auto-inativação canônica do veículo remoto cod=${codVeicRem} (assoc anterior=${codAssocRem}) — placa ${placa} liberada via troca de titularidade ${troca.id}.`,
-          dados_alteracao: {
+          dados_novos: {
             placa,
             contexto,
             codigo_veiculo_remoto: codVeicRem,
