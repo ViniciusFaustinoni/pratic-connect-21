@@ -280,6 +280,40 @@ serve(async (req) => {
       console.warn("[efetivar-troca] fallback novo_associado falhou:", (e as Error)?.message);
     }
 
+    try {
+      const cotacaoId = (solicitacao as any).cotacao_id
+        || (await supabase
+          .from("solicitacoes_troca_titularidade")
+          .select("cotacao_id")
+          .eq("id", solicitacao_id)
+          .maybeSingle()).data?.cotacao_id;
+
+      if (cotacaoId) {
+        const { data: cotacaoReal } = await supabase
+          .from("cotacoes")
+          .select("nome_solicitante, cliente_cpf, email_solicitante, telefone1_solicitante")
+          .eq("id", cotacaoId)
+          .maybeSingle();
+
+        if (cotacaoReal) {
+          if (!dadosNovoTitular.cpf && cotacaoReal.cliente_cpf) {
+            dadosNovoTitular.cpf = String(cotacaoReal.cliente_cpf).replace(/\D/g, "");
+          }
+          if (!dadosNovoTitular.nome && cotacaoReal.nome_solicitante) {
+            dadosNovoTitular.nome = cotacaoReal.nome_solicitante;
+          }
+          if (!dadosNovoTitular.email && cotacaoReal.email_solicitante) {
+            dadosNovoTitular.email = cotacaoReal.email_solicitante;
+          }
+          if (!dadosNovoTitular.telefone && cotacaoReal.telefone1_solicitante) {
+            dadosNovoTitular.telefone = cotacaoReal.telefone1_solicitante;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca] fallback cotacao falhou:", (e as Error)?.message);
+    }
+
     if (!dadosNovoTitular?.cpf) {
       return new Response(JSON.stringify({ success: false, error: "Dados do novo titular incompletos (CPF obrigatório)" }), {
         status: 400,
