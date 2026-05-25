@@ -1,0 +1,2 @@
+UPDATE public.veiculos SET combustivel='flex', updated_at=now() WHERE id='db5fdd06-c70b-4b17-bca2-ea5541712fad';
+UPDATE public.sga_sync_queue SET status='pendente', proximo_reenvio_em=now(), erro_ultimo=NULL WHERE id='11cf66af-a911-4fb4-a380-07dd5070a0e1';
