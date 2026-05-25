@@ -397,17 +397,19 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
 
       // 6) Solicitações de substituição SEM cotação ainda (cotacao_id IS NULL)
       let substItems: OutroProcessoItem[] = [];
-      if (tipos.includes('substituicao_placa')) {
+      const ownScopeBlocked = effectiveScope === 'own' && !!effectiveVendedorId && !selfProfileId;
+      const targetScopeBlocked = effectiveScope !== 'own' && !!consultorId && !targetProfileId;
+      if (tipos.includes('substituicao_placa') && !ownScopeBlocked && !targetScopeBlocked) {
         let sq = (supabase as any)
           .from('solicitacoes_substituicao_placa')
           .select('id, associado_id, veiculo_antigo_placa, veiculo_antigo_snapshot, associado_snapshot, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, consultor_id, criado_por, created_at, updated_at')
           .is('cotacao_id', null)
           .order('created_at', { ascending: false })
           .limit(200);
-        if (effectiveScope === 'own' && effectiveVendedorId) {
-          sq = sq.or(`consultor_id.eq.${effectiveVendedorId},criado_por.eq.${effectiveVendedorId}`);
-        } else if (consultorId) {
-          sq = sq.or(`consultor_id.eq.${consultorId},criado_por.eq.${consultorId}`);
+        if (effectiveScope === 'own' && selfProfileId) {
+          sq = sq.or(`consultor_id.eq.${selfProfileId},criado_por.eq.${selfProfileId}`);
+        } else if (targetProfileId) {
+          sq = sq.or(`consultor_id.eq.${targetProfileId},criado_por.eq.${targetProfileId}`);
         }
         const { data: substs } = await sq;
         const consultorIds = Array.from(new Set((substs || []).map((s: any) => s.consultor_id || s.criado_por).filter(Boolean)));
