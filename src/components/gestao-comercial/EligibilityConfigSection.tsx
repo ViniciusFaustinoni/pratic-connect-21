@@ -286,19 +286,22 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
               <div className="ml-6 space-y-1.5">
                 <Label className="text-xs text-muted-foreground">{faixas.length} faixa(s) de preço:</Label>
                 <div className="grid gap-1.5">
-                  {faixas.map(f => (
-                    <div key={f.index} className="flex items-center gap-2">
-                      <span className="text-[11px] text-muted-foreground whitespace-nowrap min-w-[180px]">
-                        {formatarMoeda(f.de)} – {formatarMoeda(f.ate)}
-                      </span>
-                      <Input
-                        type="number" step="0.01" placeholder="Valor (R$)"
-                        value={state.fipeValoresFaixa[f.index] || ''}
-                        onChange={e => update({ fipeValoresFaixa: { ...state.fipeValoresFaixa, [f.index]: e.target.value } })}
-                        className="max-w-[140px] h-8 text-xs"
-                      />
-                    </div>
-                  ))}
+                  {faixas.map(f => {
+                    const key = String(f.de);
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap min-w-[180px]">
+                          {formatarMoeda(f.de)} – {formatarMoeda(f.ate)}
+                        </span>
+                        <Input
+                          type="number" step="0.01" placeholder="Valor (R$)"
+                          value={state.fipeValoresFaixa[key] || ''}
+                          onChange={e => update({ fipeValoresFaixa: { ...state.fipeValoresFaixa, [key]: e.target.value } })}
+                          className="max-w-[140px] h-8 text-xs"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
