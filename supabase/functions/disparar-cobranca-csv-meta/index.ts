@@ -683,15 +683,24 @@ serve(async (req) => {
 
         for (let i = 0; i < blocos.length; i++) {
           const bloco = blocos[i];
-          const components: any[] = [
-            {
-              type: "body",
-              parameters: [
-                { type: "text", text: sanitizeMetaParam(nome) },
-                { type: "text", text: sanitizeMetaParam(bloco) },
-              ],
-            },
-          ];
+          // Monta os parameters do body. Se a UI mandou var_mapping, resolve cada {{n}}
+          // por essa ordem. Caso contrário, mantém o legado de 2 parâmetros (nome + bloco).
+          let bodyParameters: Array<{ type: "text"; text: string }>;
+          const mappingKeys = Object.keys(varMapping)
+            .filter((k) => /^\d+$/.test(k))
+            .sort((a, b) => Number(a) - Number(b));
+          if (mappingKeys.length > 0) {
+            bodyParameters = mappingKeys.map((k) => ({
+              type: "text" as const,
+              text: sanitizeMetaParam(resolverValorVar(varMapping[k], dest, bloco)),
+            }));
+          } else {
+            bodyParameters = [
+              { type: "text", text: sanitizeMetaParam(nome) },
+              { type: "text", text: sanitizeMetaParam(bloco) },
+            ];
+          }
+          const components: any[] = [{ type: "body", parameters: bodyParameters }];
           // No v2: adiciona o componente button URL dinâmico apenas no PRIMEIRO bloco
           // (apenas a 1ª mensagem leva o botão; blocos seguintes do mesmo destinatário ficam só com texto).
           if (usarV2ParaEste && i === 0 && sufixoHinova) {
