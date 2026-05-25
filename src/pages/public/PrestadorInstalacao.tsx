@@ -406,7 +406,22 @@ export default function PrestadorInstalacao() {
           escopo: escopoLink,
         },
       });
-      if (error) throw error;
+      // Quando a edge devolve 4xx/5xx, supabase-js empacota a resposta em FunctionsHttpError
+      // e NÃO popula `data`. Sem ler o body, o usuário só vê "Edge Function returned a non-2xx status code".
+      if (error) {
+        let detalhe = (error as any)?.message || 'Erro ao concluir';
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) detalhe = body.error;
+          } else if (ctx && typeof ctx.text === 'function') {
+            const txt = await ctx.text();
+            try { const parsed = JSON.parse(txt); if (parsed?.error) detalhe = parsed.error; } catch { if (txt) detalhe = txt; }
+          }
+        } catch { /* mantém detalhe original */ }
+        throw new Error(detalhe);
+      }
       if (data && !data.success) throw new Error(data.error || 'Erro ao concluir');
       queryClient.invalidateQueries({ queryKey: ['prestador-link', token] });
       toast.success('Instalação concluída com sucesso!');
