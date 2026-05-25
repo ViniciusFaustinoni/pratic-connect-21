@@ -16,10 +16,18 @@ import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileSignature, Loader2, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { FileSignature, Loader2, ExternalLink, CheckCircle2, Sparkles, RefreshCw } from 'lucide-react';
 import { useRetificarTermo, useRetificacoesContrato } from '@/hooks/useRetificarTermo';
+import { useRetificacaoPrefillOCR, type FonteOCR, type PrefillCampo } from '@/hooks/useRetificacaoPrefillOCR';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+const FONTE_LABEL: Record<FonteOCR, string> = {
+  cnh: 'CNH',
+  crlv: 'CRLV',
+  comprovante: 'Comprov.',
+  nf: 'NF',
+};
 
 const schema = z.object({
   motivo: z.string().trim().min(10, 'Descreva o motivo (mínimo 10 caracteres)'),
@@ -67,37 +75,79 @@ interface Props {
 export function RetificarTermoModal({ open, onOpenChange, associado, contrato, veiculo }: Props) {
   const { mutate: retificar, isPending } = useRetificarTermo();
   const { data: retificacoes } = useRetificacoesContrato(contrato?.id);
+  const { data: ocrPrefill } = useRetificacaoPrefillOCR(contrato?.id);
   const [aba, setAba] = useState<'editar' | 'historico'>('editar');
+
+  // Merge não-destrutivo: BD sempre vence; OCR só preenche quando BD está vazio.
+  // Exceção canônica: chassi NUNCA vem de OCR.
+  const mergeBdOcr = (bd: any, ocrKey: PrefillCampo) => {
+    if (bd !== undefined && bd !== null && bd !== '') return bd;
+    const v = ocrPrefill?.prefill?.[ocrKey];
+    return v ?? '';
+  };
+
+  // Quais campos foram efetivamente preenchidos pelo OCR (BD estava vazio)?
+  const fonteAplicada = (bd: any, campo: PrefillCampo): FonteOCR | undefined => {
+    if (bd !== undefined && bd !== null && bd !== '') return undefined;
+    return ocrPrefill?.fontes?.[campo];
+  };
 
   const defaults: FormValues = useMemo(() => ({
     motivo: '',
-    nome: associado?.nome ?? '',
-    rg: associado?.rg ?? '',
-    data_nascimento: associado?.data_nascimento ?? '',
-    cnh_numero: associado?.cnh_numero ?? '',
-    cnh_categoria: associado?.cnh_categoria ?? '',
-    cnh_validade: associado?.cnh_validade ?? '',
+    nome: mergeBdOcr(associado?.nome, 'nome'),
+    rg: mergeBdOcr(associado?.rg, 'rg'),
+    data_nascimento: mergeBdOcr(associado?.data_nascimento, 'data_nascimento'),
+    cnh_numero: mergeBdOcr(associado?.cnh_numero, 'cnh_numero'),
+    cnh_categoria: mergeBdOcr(associado?.cnh_categoria, 'cnh_categoria'),
+    cnh_validade: mergeBdOcr(associado?.cnh_validade, 'cnh_validade'),
     email: associado?.email ?? '',
     telefone: associado?.telefone ?? '',
-    cep: associado?.cep ?? '',
-    logradouro: associado?.logradouro ?? '',
-    numero: associado?.numero ?? '',
-    bairro: associado?.bairro ?? '',
-    cidade: associado?.cidade ?? '',
-    uf: associado?.uf ?? '',
-    placa: veiculo?.placa ?? '',
-    chassi: veiculo?.chassi ?? '',
-    renavam: veiculo?.renavam ?? '',
-    marca: veiculo?.marca ?? '',
-    modelo: veiculo?.modelo ?? '',
-    ano_fabricacao: veiculo?.ano_fabricacao ?? undefined,
-    ano_modelo: veiculo?.ano_modelo ?? undefined,
-    cor: veiculo?.cor ?? '',
-    combustivel: veiculo?.combustivel ?? '',
+    cep: mergeBdOcr(associado?.cep, 'cep'),
+    logradouro: mergeBdOcr(associado?.logradouro, 'logradouro'),
+    numero: mergeBdOcr(associado?.numero, 'numero'),
+    bairro: mergeBdOcr(associado?.bairro, 'bairro'),
+    cidade: mergeBdOcr(associado?.cidade, 'cidade'),
+    uf: mergeBdOcr(associado?.uf, 'uf'),
+    placa: mergeBdOcr(veiculo?.placa, 'placa'),
+    chassi: veiculo?.chassi ?? '', // sempre manual
+    renavam: mergeBdOcr(veiculo?.renavam, 'renavam'),
+    marca: mergeBdOcr(veiculo?.marca, 'marca'),
+    modelo: mergeBdOcr(veiculo?.modelo, 'modelo'),
+    ano_fabricacao: veiculo?.ano_fabricacao ?? (ocrPrefill?.prefill?.ano_fabricacao as number | undefined) ?? undefined,
+    ano_modelo: veiculo?.ano_modelo ?? (ocrPrefill?.prefill?.ano_modelo as number | undefined) ?? undefined,
+    cor: mergeBdOcr(veiculo?.cor, 'cor'),
+    combustivel: mergeBdOcr(veiculo?.combustivel, 'combustivel'),
     tipo_placa: veiculo?.tipo_placa ?? '',
     veiculo_categoria: contrato?.veiculo_categoria ?? '',
     dia_vencimento: contrato?.dia_vencimento ?? undefined,
-  }), [associado, contrato, veiculo]);
+  }), [associado, contrato, veiculo, ocrPrefill]);
+
+  // Mapa de origem por campo, para badges
+  const origens: Partial<Record<PrefillCampo, FonteOCR | undefined>> = useMemo(() => ({
+    nome: fonteAplicada(associado?.nome, 'nome'),
+    rg: fonteAplicada(associado?.rg, 'rg'),
+    data_nascimento: fonteAplicada(associado?.data_nascimento, 'data_nascimento'),
+    cnh_numero: fonteAplicada(associado?.cnh_numero, 'cnh_numero'),
+    cnh_categoria: fonteAplicada(associado?.cnh_categoria, 'cnh_categoria'),
+    cnh_validade: fonteAplicada(associado?.cnh_validade, 'cnh_validade'),
+    cep: fonteAplicada(associado?.cep, 'cep'),
+    logradouro: fonteAplicada(associado?.logradouro, 'logradouro'),
+    numero: fonteAplicada(associado?.numero, 'numero'),
+    bairro: fonteAplicada(associado?.bairro, 'bairro'),
+    cidade: fonteAplicada(associado?.cidade, 'cidade'),
+    uf: fonteAplicada(associado?.uf, 'uf'),
+    placa: fonteAplicada(veiculo?.placa, 'placa'),
+    renavam: fonteAplicada(veiculo?.renavam, 'renavam'),
+    marca: fonteAplicada(veiculo?.marca, 'marca'),
+    modelo: fonteAplicada(veiculo?.modelo, 'modelo'),
+    ano_fabricacao: fonteAplicada(veiculo?.ano_fabricacao, 'ano_fabricacao'),
+    ano_modelo: fonteAplicada(veiculo?.ano_modelo, 'ano_modelo'),
+    cor: fonteAplicada(veiculo?.cor, 'cor'),
+    combustivel: fonteAplicada(veiculo?.combustivel, 'combustivel'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [associado, veiculo, ocrPrefill]);
+
+  const camposAutoPreenchidos = Object.values(origens).filter(Boolean).length;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -107,7 +157,14 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
   useEffect(() => {
     if (open) form.reset(defaults);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, associado?.id, contrato?.id, veiculo?.id]);
+  }, [open, associado?.id, contrato?.id, veiculo?.id, ocrPrefill]);
+
+  const reaplicarOCR = () => {
+    const motivoAtual = form.getValues('motivo');
+    form.reset({ ...defaults, motivo: motivoAtual });
+  };
+
+
 
 
   const onSubmit = (v: FormValues) => {
@@ -168,9 +225,28 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
           >Histórico ({retificacoes?.length ?? 0})</button>
         </div>
 
-        <ScrollArea className="flex-1 pr-3">
+        <div className="flex-1 min-h-0">
+          <ScrollArea className="h-full pr-3">
           {aba === 'editar' && (
             <form id="retificar-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
+              {camposAutoPreenchidos > 0 && (
+                <div className="flex items-start justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex items-start gap-2 text-sm">
+                    <Sparkles className="h-4 w-4 mt-0.5 text-primary" />
+                    <div>
+                      <p className="font-medium">{camposAutoPreenchidos} campo(s) pré-preenchido(s) a partir do OCR dos documentos</p>
+                      <p className="text-xs text-muted-foreground">
+                        Revise — chassi é sempre manual. Campos já preenchidos no cadastro não foram sobrescritos.
+                      </p>
+                    </div>
+                  </div>
+                  <Button type="button" size="sm" variant="ghost" onClick={reaplicarOCR}>
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Repreencher
+                  </Button>
+                </div>
+              )}
+
               <div>
                 <Label>Motivo da retificação *</Label>
                 <Textarea
@@ -188,20 +264,20 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
                   <AccordionTrigger>Dados do associado</AccordionTrigger>
                   <AccordionContent>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Nome" {...form.register('nome')} />
-                      <Field label="RG" {...form.register('rg')} />
-                      <Field label="Data de nascimento" type="date" {...form.register('data_nascimento')} />
-                      <Field label="CNH (nº)" {...form.register('cnh_numero')} />
-                      <Field label="CNH categoria" {...form.register('cnh_categoria')} />
-                      <Field label="CNH validade" type="date" {...form.register('cnh_validade')} />
+                      <Field label="Nome" fonte={origens.nome} {...form.register('nome')} />
+                      <Field label="RG" fonte={origens.rg} {...form.register('rg')} />
+                      <Field label="Data de nascimento" type="date" fonte={origens.data_nascimento} {...form.register('data_nascimento')} />
+                      <Field label="CNH (nº)" fonte={origens.cnh_numero} {...form.register('cnh_numero')} />
+                      <Field label="CNH categoria" fonte={origens.cnh_categoria} {...form.register('cnh_categoria')} />
+                      <Field label="CNH validade" type="date" fonte={origens.cnh_validade} {...form.register('cnh_validade')} />
                       <Field label="E-mail" type="email" {...form.register('email')} />
                       <Field label="Telefone" {...form.register('telefone')} />
-                      <Field label="CEP" {...form.register('cep')} />
-                      <Field label="Logradouro" {...form.register('logradouro')} />
-                      <Field label="Número" {...form.register('numero')} />
-                      <Field label="Bairro" {...form.register('bairro')} />
-                      <Field label="Cidade" {...form.register('cidade')} />
-                      <Field label="UF" maxLength={2} {...form.register('uf')} />
+                      <Field label="CEP" fonte={origens.cep} {...form.register('cep')} />
+                      <Field label="Logradouro" fonte={origens.logradouro} {...form.register('logradouro')} />
+                      <Field label="Número" fonte={origens.numero} {...form.register('numero')} />
+                      <Field label="Bairro" fonte={origens.bairro} {...form.register('bairro')} />
+                      <Field label="Cidade" fonte={origens.cidade} {...form.register('cidade')} />
+                      <Field label="UF" maxLength={2} fonte={origens.uf} {...form.register('uf')} />
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -210,15 +286,16 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
                   <AccordionTrigger>Veículo</AccordionTrigger>
                   <AccordionContent>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Placa" {...form.register('placa')} />
+                      <Field label="Placa" fonte={origens.placa} {...form.register('placa')} />
                       <Field label="Chassi" {...form.register('chassi')} />
-                      <Field label="Renavam" {...form.register('renavam')} />
-                      <Field label="Marca" {...form.register('marca')} />
-                      <Field label="Modelo" {...form.register('modelo')} />
-                      <Field label="Ano fabricação" type="number" {...form.register('ano_fabricacao')} />
-                      <Field label="Ano modelo" type="number" {...form.register('ano_modelo')} />
-                      <Field label="Cor" {...form.register('cor')} />
-                      <Field label="Combustível" {...form.register('combustivel')} />
+                      <Field label="Renavam" fonte={origens.renavam} {...form.register('renavam')} />
+                      <Field label="Marca" fonte={origens.marca} {...form.register('marca')} />
+                      <Field label="Modelo" fonte={origens.modelo} {...form.register('modelo')} />
+                      <Field label="Ano fabricação" type="number" fonte={origens.ano_fabricacao} {...form.register('ano_fabricacao')} />
+                      <Field label="Ano modelo" type="number" fonte={origens.ano_modelo} {...form.register('ano_modelo')} />
+                      <Field label="Cor" fonte={origens.cor} {...form.register('cor')} />
+                      <Field label="Combustível" fonte={origens.combustivel} {...form.register('combustivel')} />
+
                       <div>
                         <Label>Tipo de placa</Label>
                         <Select
@@ -312,7 +389,9 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
               ))}
             </div>
           )}
-        </ScrollArea>
+          </ScrollArea>
+        </div>
+
 
         <Separator />
         <DialogFooter>
@@ -331,11 +410,20 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
   );
 }
 
-function Field({ label, ...rest }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+function Field({ label, fonte, ...rest }: { label: string; fonte?: FonteOCR } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <Label>{label}</Label>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <Label className="mb-0">{label}</Label>
+        {fonte && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary/80">
+            <Sparkles className="h-3 w-3" />
+            auto · {FONTE_LABEL[fonte]}
+          </span>
+        )}
+      </div>
       <Input {...rest} />
     </div>
   );
 }
+

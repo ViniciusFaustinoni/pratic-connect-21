@@ -1,55 +1,51 @@
-## Correção canônica: `status_contratacao='ativo'` só via caminho canônico do veículo
+## Retificar Termo de Filiação — pré-preenchimento por OCR + scroll do modal
 
 ### Contexto
-`COT-20260525-141428960-119` (substituição KOU6D37→LTB4J74) pulou Cadastro/Monitoramento e foi direto pra "Criar senha" porque `recompute_cotacao_status_contratacao` promove `status_contratacao='ativo'` quando `associado.status='ativo'` + `contrato.status IN ('assinado','ativo')`. Em substituição/inclusão o associado já está ativo de outro veículo, então o atalho dispara assim que o termo é assinado.
+`RetificarTermoModal.tsx` hoje monta `defaults` apenas a partir de `associado` / `contrato` / `veiculo` que vêm do BD. Quando o cadastro original entrou com OCR parcial ou divergente, o BD tem as colunas vazias e o modal mostra Nome/RG/Data de nascimento/CNH/etc. em branco — o usuário precisa redigitar tudo.
 
-### Passo 1 — Patch `recompute_cotacao_status_contratacao`
-Remover o atalho baseado em `associado.status`. Promoção a `'ativo'` exige TODAS as condições do contrato/veículo desta cotação:
-- `contratos.cadastro_aprovado = true`
-- `contratos.aprovado_em IS NOT NULL`
-- `contratos.status = 'ativo'` (escrito por `ativar-associado`, não basta `'assinado'`)
-- `veiculos.status = 'ativo'`
+Já existe OCR persistido em `contratos_documentos.ocr_resultado.dados` por tipo (`cnh`, `crlv`, `comprovante_residencia`, `nota_fiscal_veiculo`), com campos canônicos (nome, rg, data_nascimento, cnh_numero/categoria/validade, cep, logradouro, número, bairro, cidade, uf, placa, renavam, marca, modelo, ano_fabricacao/modelo, cor, combustivel — chassi também aparece, mas não pode ser usado automaticamente: regra canônica do projeto = chassi sempre manual).
 
-Sem isso, cai nas branches existentes (`pagamento_ok`, `contrato_assinado`, `aguardando_aprovacao_cadastro`, etc.).
+Bug #2: dentro do `DialogContent` com `flex-col max-h-[90vh]`, a `<ScrollArea className="flex-1 pr-3">` não rola porque o viewport do Radix ScrollArea precisa de `min-h-0` no flex item (e/ou `h-full` no viewport) para respeitar o limite do pai. Hoje o conteúdo cresce e empurra o footer pra fora da janela, sem barra de rolagem.
 
-### Passo 2 — Guard `trg_guard_cotacao_ativo_exige_caminho_canonico`
-`BEFORE UPDATE` em `cotacoes`. Bloqueia transição para `status_contratacao='ativo'` quando o contrato vinculado não tem `cadastro_aprovado=true` + `aprovado_em IS NOT NULL` + `status='ativo'`. Última linha de defesa caso outra função/edge tente o atalho.
+### Mudanças propostas
 
-### Passo 3 — Backfill da cotação afetada
-```sql
-UPDATE cotacoes
-SET status_contratacao = 'contrato_assinado'
-WHERE id = 'f020bc1a-adb8-4dfb-a690-160ceaea49c4';
-```
-Retorna à fila do Cadastro. Loga em `logs_auditoria` (`acao='atualizar'`, descrição `[BACKFILL] COT-20260525-141428960-119 revertida de ativo para contrato_assinado — atalho recompute_cotacao corrigido`).
+#### 1. Novo hook `useRetificacaoPrefillOCR(contrato_id)`
+- Arquivo: `src/hooks/useRetificacaoPrefillOCR.ts`
+- Busca `contratos_documentos` por `contrato_id` (todos os `tipo`), seleciona `ocr_resultado.dados`
+- Mapeia para a forma do form do modal, com prioridade por tipo:
+  - **Associado**: `cnh.nome`, `cnh.rg`, `cnh.data_nascimento`, `cnh.numero_registro` → `cnh_numero`, `cnh.categoria`, `cnh.validade`; `comprovante_residencia.{cep,logradouro,numero,bairro,cidade,uf}` (fallback de cada campo: CRLV → comprovante)
+  - **Veículo**: `crlv.{placa,renavam,marca,modelo,ano_fabricacao,ano_modelo,cor,combustivel}` (fallback NF para 0KM)
+  - **NUNCA preencher `chassi`** (constraint `mem://constraints/operations/chassi-sempre-manual`)
+- Devolve `{ prefill: Partial<FormValues>, camposPorFonte: Record<keyof FormValues, 'cnh'|'crlv'|'comprovante'|'nf'> }` para a UI indicar a origem.
 
-### Passo 4 — Auditoria (somente leitura, REPORTA antes de qualquer correção em massa)
-```sql
-SELECT c.id, c.numero_cotacao, c.tipo, c.status_contratacao,
-       ct.id contrato_id, ct.status contrato_status,
-       ct.cadastro_aprovado, ct.aprovado_em,
-       v.placa, v.status veiculo_status
-FROM cotacoes c
-LEFT JOIN contratos ct ON ct.cotacao_id = c.id
-LEFT JOIN veiculos v ON v.id = ct.veiculo_id
-WHERE c.status_contratacao = 'ativo'
-  AND (ct.cadastro_aprovado IS DISTINCT FROM true
-       OR ct.aprovado_em IS NULL
-       OR ct.status <> 'ativo'
-       OR v.status <> 'ativo')
-ORDER BY c.created_at DESC;
-```
-**Pausa para revisão humana antes de corrigir em massa** (decisão por linha: voltar a `contrato_assinado`, `aguardando_aprovacao_cadastro` ou manter se for caso legítimo legado).
+#### 2. Patch em `RetificarTermoModal.tsx`
+- Consumir o hook e construir `defaults` como **merge não-destrutivo**:
+  ```
+  campo = valor_do_BD ?? valor_do_OCR ?? ''
+  ```
+  (BD sempre vence; OCR só preenche quando BD vazio — coerente com regra "OCR não vence dado humano".)
+- Em cada `<Field>` cujo valor saiu do OCR, mostrar microbadge `auto · CNH`/`auto · CRLV` ao lado do Label (ícone `Sparkles`) e estilo `text-xs text-muted-foreground`.
+- Botão pequeno "Repreencher do OCR" no topo do form (após Motivo), que faz `form.reset({ ...defaults, motivo: form.getValues('motivo') })` puxando OCR novamente.
+- `motivo` placeholder ganha exemplo "OCR preencheu RG errado…" (já tem, manter).
+- Chassi continua manual — nada de OCR injetado.
 
-### Passo 5 — Memória
-Criar `mem://logic/operations/recompute-cotacao-respeita-caminho-canonico-do-veiculo` documentando: `associados.status='ativo'` é ruído em substituição/inclusão; única promoção legítima de `status_contratacao='ativo'` é via `ativar-associado` após Monitoramento aprovar instalação/vistoria do veículo desta cotação. Adicionar entrada no `mem://index.md`.
+#### 3. Fix de scroll
+- Substituir `<ScrollArea className="flex-1 pr-3">…</ScrollArea>` por `<div className="flex-1 min-h-0 overflow-y-auto pr-3">…</div>`.
+  - `min-h-0` é o que falta hoje para o flex item respeitar o limite do `max-h-[90vh]`.
+  - Mantém a aparência (sem barrinha estilizada do Radix, mas com scroll funcional). Se o usuário preferir manter a `ScrollArea` estilizada, alternativa é wrappear: `<div className="flex-1 min-h-0"><ScrollArea className="h-full pr-3">…</ScrollArea></div>` — escolherei esta segunda forma para preservar o visual atual.
 
-### Smoke tests pós-patch
-1. **Substituição com associado ativo**: assinar termo → conferir que `status_contratacao` vai para `contrato_assinado` (não `ativo`) e link público mostra "Aguardando análise".
-2. **Cadastro aprova + Monitoramento aprova + `ativar-associado`**: conferir que `status_contratacao` chega a `ativo` e link público libera "Criar senha".
-3. **UPDATE direto** `cotacoes SET status_contratacao='ativo'` sem caminho canônico → guard bloqueia (erro esperado).
-4. **Inclusão de veículo novo** (associado já ativo) → confere que segue Cadastro→Monitoramento sem atalho.
+### Arquivos tocados
+- **Criado**: `src/hooks/useRetificacaoPrefillOCR.ts`
+- **Alterado**: `src/components/associados/detalhe/RetificarTermoModal.tsx` (merge OCR + badge origem + fix scroll)
 
-### Escopo
-- **Inclui**: função `recompute_cotacao_status_contratacao`, novo trigger guard, backfill 1 linha, query de auditoria, memória.
-- **Não inclui**: `ativar-associado`, `efetivar-substituicao`, guards já existentes, correção em massa (depende do resultado da auditoria).
+### Fora de escopo
+- Não mexer no edge `retificar-termo-filiacao` nem na persistência — só UI.
+- Não alterar OCR pipeline.
+- Não reintroduzir OCR de chassi.
+- Sem migration.
+
+### Smoke tests
+1. Abrir modal num associado com nome vazio no BD mas com CNH OCR aprovada → campo Nome vem pré-preenchido com badge `auto · CNH`.
+2. Abrir modal num associado com nome correto no BD → BD vence, sem badge.
+3. Scrollar lista até o accordion "Contrato" → footer "Salvar e enviar para assinatura" permanece fixo, scroll funciona dentro do modal.
+4. Chassi continua exigindo digitação manual mesmo com CRLV legível.
