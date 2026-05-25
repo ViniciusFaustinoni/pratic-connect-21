@@ -278,20 +278,21 @@ serve(async (req) => {
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
     // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
-    // A API Rede Veículos espera application/x-www-form-urlencoded com o payload
-    // completo serializado no campo "json" + cpfCnpj e imei como campos separados
-    // (mesmo padrão usado em /ativarVeiculo). Multipart/form-data faz o parser
-    // do servidor responder "O CPF/CNPJ e/ou IMEI não foram informados".
-    const formBody = new URLSearchParams();
-    formBody.append('json', JSON.stringify(payload));
+    // A API espera multipart/form-data com cpfCnpj e imei FLAT no nível raiz
+    // (mesmo padrão do /desvincularClienteVeiculo que funciona). O payload
+    // aninhado (equipamento/veiculo/cliente/permissoes) vai no campo "json".
+    // URL-encoded faz o parser PHP cair em "CPF/CNPJ e/ou IMEI não informados".
+    const formBody = new FormData();
     formBody.append('cpfCnpj', cpfCnpjLimpo);
     formBody.append('imei', imeiLimpo);
+    formBody.append('placa', (veiculo.placa || '').toUpperCase());
+    formBody.append('json', JSON.stringify(payload));
 
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
       headers: {
+        // NÃO setar Content-Type — fetch monta o boundary do multipart sozinho
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formBody,
     });
