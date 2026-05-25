@@ -30,7 +30,8 @@ export interface EligibilityState {
   fipeMin: string;
   fipeMax: string;
   fipeIntervalo: string;
-  fipeValoresFaixa: Record<number, string>;
+  /** Chave = `de` (FIPE inicial da faixa em R$) como string. Mantém o valor colado ao range absoluto, não à posição na lista. */
+  fipeValoresFaixa: Record<string, string>;
   selRegioes: Set<string>;
   selUso: Set<string>;
   selPlaca: Set<string>;
@@ -78,13 +79,10 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
           if (cfg.max && cfg.max < 99999999) newState.fipeMax = String(cfg.max);
           if (cfg.intervalo) newState.fipeIntervalo = String(cfg.intervalo);
           if (Array.isArray(cfg.faixas)) {
-            const valMap: Record<number, string> = {};
-            const cfgMin = cfg.min || 0;
-            const cfgIntervalo = cfg.intervalo || 5000;
+            const valMap: Record<string, string> = {};
             cfg.faixas.forEach((f: any) => {
               if (f.valor != null && f.de != null) {
-                const relativeIndex = Math.round((f.de - cfgMin) / cfgIntervalo);
-                if (relativeIndex >= 0) valMap[relativeIndex] = String(f.valor);
+                valMap[String(f.de)] = String(f.valor);
               }
             });
             newState.fipeValoresFaixa = valMap;
@@ -142,7 +140,7 @@ export async function saveEligibilityRules(entityType: EntityType, entityId: str
       for (let i = 0; i < Math.min(numFaixas, 50); i++) {
         const de = min + i * intervalo;
         const ate = de + intervalo;
-        faixas.push({ de, ate, valor: parseFloat(state.fipeValoresFaixa[i] || '0') || 0 });
+        faixas.push({ de, ate, valor: parseFloat(state.fipeValoresFaixa[String(de)] || '0') || 0 });
       }
       ruleConfig.faixas = faixas;
     }
@@ -288,19 +286,22 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
               <div className="ml-6 space-y-1.5">
                 <Label className="text-xs text-muted-foreground">{faixas.length} faixa(s) de preço:</Label>
                 <div className="grid gap-1.5">
-                  {faixas.map(f => (
-                    <div key={f.index} className="flex items-center gap-2">
-                      <span className="text-[11px] text-muted-foreground whitespace-nowrap min-w-[180px]">
-                        {formatarMoeda(f.de)} – {formatarMoeda(f.ate)}
-                      </span>
-                      <Input
-                        type="number" step="0.01" placeholder="Valor (R$)"
-                        value={state.fipeValoresFaixa[f.index] || ''}
-                        onChange={e => update({ fipeValoresFaixa: { ...state.fipeValoresFaixa, [f.index]: e.target.value } })}
-                        className="max-w-[140px] h-8 text-xs"
-                      />
-                    </div>
-                  ))}
+                  {faixas.map(f => {
+                    const key = String(f.de);
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap min-w-[180px]">
+                          {formatarMoeda(f.de)} – {formatarMoeda(f.ate)}
+                        </span>
+                        <Input
+                          type="number" step="0.01" placeholder="Valor (R$)"
+                          value={state.fipeValoresFaixa[key] || ''}
+                          onChange={e => update({ fipeValoresFaixa: { ...state.fipeValoresFaixa, [key]: e.target.value } })}
+                          className="max-w-[140px] h-8 text-xs"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
