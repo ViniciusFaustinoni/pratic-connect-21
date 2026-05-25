@@ -666,10 +666,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                       <Alert className="border-warning/40 bg-warning/10">
                         <Info className="h-4 w-4 text-warning" />
                         <AlertTitle className="text-xs font-bold uppercase tracking-wide text-warning">
-                          Inclua o CPF do associado anterior
+                          Localize o associado anterior
                         </AlertTitle>
                         <AlertDescription className="text-xs leading-relaxed">
-                          Busque pelo CPF do <strong>dono atual</strong> (quem está vendendo o veículo) para localizar o cadastro a ser transferido.
+                          Busque pelo <strong>nome, CPF ou placa</strong> do <strong>dono atual</strong> (quem está vendendo o veículo) para localizar o cadastro a ser transferido.
                         </AlertDescription>
                       </Alert>
                     </div>
