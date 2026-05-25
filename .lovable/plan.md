@@ -1,47 +1,62 @@
-## Objetivo
+## Por que não aparece nada hoje
 
-Permitir cancelar a Substituição de Placa direto pelo `ModalDetalhesSubstituicao`, deixando a placa/associado livres para iniciar novos processos (nova substituição, troca, cotação avulsa) — sem apagar a solicitação, só marcando como `cancelada` e registrando em `logs_auditoria`.
+O modal de Troca de Titularidade usa os mesmos hooks de busca dos outros fluxos:
 
-## Comportamento
+- `useAssociadoSearch` consulta direto a tabela `associados`.
+- `useBuscaPlaca` consulta SGA, mas é complementada por dados locais em vários pontos.
 
-**Disponibilidade do botão** — só aparece quando `status` ∈ `aguardando_termo | termo_enviado | termo_assinado | cotacao_criada`. Em `efetivada` ou `cancelada` o botão não é exibido (substituição já consumada / já cancelada).
+As RLS atuais da tabela `associados` (e `veiculos`) só liberam, para vendedor **não-gestor** (CLT, externo, agência), os registros retornados por `get_vendedor_associado_ids(auth.uid())` — ou seja, **apenas os associados/veículos vinculados a ele mesmo**.
 
-**Confirmação** — `AlertDialog` com:
-- Aviso explicando que a operação será marcada como cancelada, a cotação vinculada (se houver e ainda não estiver assinada/paga) também será cancelada, e a placa volta a ficar disponível.
-- Campo `motivo` (textarea opcional, máx 280 chars).
+Na Troca de Titularidade, o vendedor está procurando o **antigo dono do veículo**, que via de regra **não é cliente dele** (foi vendido por outro vendedor/canal). Resultado:
 
-**Efeitos colaterais** (na ordem):
-1. Se houver `cotacao_id` vinculada e a cotação ainda estiver em fase pré-assinatura (status_contratacao ∈ `lead, em_negociacao, aguardando_documentos, aguardando_termo, aguardando_pagamento`), marcar cotação como `cancelada` + `motivo_cancelamento='Substituição cancelada manualmente'`. Se a cotação já avançou (assinada / pagamento ok / cadastro / monitoramento / ativo), **bloquear o cancelamento** com mensagem orientando seguir o fluxo de cancelamento de contrato (a substituição não pode mais ser desfeita por aqui).
-2. UPDATE em `solicitacoes_substituicao_placa`: `status='cancelada'`, `cancelada_em=now()`, `cancelada_por=auth.uid()`, `motivo_cancelamento=<input>`.
-3. INSERT em `logs_auditoria` via helper `insertAuditLog` (entidade `solicitacao_substituicao`, ação `cancelar`, descrição com placa + motivo + cotacao_id afetada).
-4. Não toca Autentique (termo de cancelamento legado, se enviado, expira naturalmente — não há risco porque só efeitos no banco contam).
+- Busca por **nome** → SQL direto na tabela `associados` → RLS filtra tudo → "Nenhum associado encontrado".
+- Busca por **CPF de 11 dígitos** → tenta local (vazio por RLS) → cai no fallback SGA, mas só se o CPF for exato.
+- Busca por **placa** → vai no SGA, mas se o associado retornado não estiver no escopo do vendedor, qualquer enriquecimento local também fica vazio.
 
-**Liberação para novos processos** — como `criar-solicitacao-substituicao` só reaproveita solicitações com status `aguardando_termo | termo_enviado | termo_assinado | cotacao_criada`, marcar como `cancelada` já permite imediatamente uma nova substituição/troca para a mesma placa sem migration adicional.
+Isso é uma trava de privacidade boa para o resto do sistema (vendedor não pode varrer base alheia), mas **bloqueia o caso legítimo da Troca de Titularidade**, onde ele precisa achar o vendedor anterior para transferir.
 
-## Implementação
+## O que mudar
 
-**Nova edge function** `supabase/functions/cancelar-solicitacao-substituicao/index.ts`
-- Body: `{ solicitacao_id: string, motivo?: string }`
-- Service-role client + `auth.uid()` via header (padrão das demais).
-- Faz as 3 etapas acima de forma sequencial; rollback nominal só logado (sem transação cross-tabela, mas idempotente — segundo cancelamento devolve `200 { ja_cancelada: true }`).
-- Migration de schema: adicionar colunas `cancelada_em timestamptz`, `cancelada_por uuid`, `motivo_cancelamento text` em `solicitacoes_substituicao_placa` se ainda não existirem.
+Criar um caminho de busca dedicado para a Troca de Titularidade, executado server-side com `service_role`, devolvendo só o mínimo necessário e auditando o acesso.
 
-**Hook** `src/hooks/useSolicitacoesSubstituicao.ts`
-- Acrescentar `useCancelarSolicitacaoSubstituicao()` invocando a edge, invalidando `['solicitacao-substituicao', id]` e `['outros-processos']`.
+### 1. Edge function `buscar-associado-troca-titularidade`
 
-**UI** `src/components/substituicao/ModalDetalhesSubstituicao.tsx`
-- Botão `variant="destructive" size="sm"` "Cancelar substituição" no rodapé do modal, dentro de um `AlertDialog` com textarea de motivo.
-- Toast de sucesso/erro + fecha modal automaticamente após sucesso.
+- Body: `{ termo: string }` (nome, CPF parcial/completo, ou placa).
+- Autenticação obrigatória via JWT do usuário.
+- Aceita perfis: `funcionario_interno` (já enxergam tudo, mas mantém para uniformidade), `vendedor` (CLT, externo, agência) e Diretoria.
+- Estratégia:
+  - Detecta se o termo é CPF (11 dígitos), placa (regex Mercosul/antiga) ou texto.
+  - Texto → busca em `associados` por `nome ilike` (limit 15), sem filtro de vendedor.
+  - CPF → busca local; se vazio, chama `sga-buscar-associado-completo`.
+  - Placa → chama `sga-buscar-associado-por-placa` (já existe) + fallback local.
+- Retorna apenas: `id`, `nome`, `cpf` (mascarado: `***.***.***-XX`), `telefone` (últimos 4), `codigo_hinova`, `status`, e a lista de veículos com `placa`, `marca`, `modelo`.
+- Insere `logs_auditoria` (`acao='consultar'`, descrição `[BUSCA_TROCA_TITULARIDADE] termo=...`).
+
+### 2. Novo hook `useBuscaAssociadoTrocaTitularidade(termo)`
+
+- Wrapper React Query que chama a edge function só quando `selectedTipo === 'troca_titularidade'` e termo ≥ 2 chars.
+- Mesma interface dos resultados existentes (`AssociadoSearchResult` + `placaResults`) para reaproveitar a UI atual.
+
+### 3. Ajuste em `OutrasEntradasMenu.tsx`
+
+- Quando `selectedTipo === 'troca_titularidade'`:
+  - **Não** chamar `useAssociadoSearch` nem `useBuscaPlaca` direto; usar o novo hook.
+  - Mesclar associados + placas no mesmo painel já existente.
+  - Manter o alerta amarelo, mas atualizar o texto para refletir que agora a busca aceita nome, CPF ou placa.
+- Demais fluxos (Inclusão, Substituição, Migração) continuam exatamente como hoje — não afeta o escopo de privacidade deles.
+
+### 4. Sem mudanças em RLS
+
+Não vamos afrouxar as policies de `associados`/`veiculos`. Toda a exceção fica concentrada na edge function, com escopo "Troca de Titularidade" e auditoria.
+
+## Arquivos a criar/editar
+
+- `supabase/functions/buscar-associado-troca-titularidade/index.ts` (novo)
+- `src/hooks/useBuscaAssociadoTrocaTitularidade.ts` (novo)
+- `src/components/vendas/OutrasEntradasMenu.tsx` (editar bloco de troca de titularidade)
 
 ## Fora de escopo
 
-- Não cancela termos Autentique (sem chamada à API externa).
-- Não mexe em SGA/Hinova (substituição ainda não foi efetivada).
-- Não toca em contratos/veículos ativos — se a cotação já virou contrato, o botão bloqueia.
-
-## Arquivos
-
-- Criar: `supabase/functions/cancelar-solicitacao-substituicao/index.ts`
-- Migration: adicionar `cancelada_em`/`cancelada_por`/`motivo_cancelamento` em `solicitacoes_substituicao_placa`
-- Editar: `src/hooks/useSolicitacoesSubstituicao.ts`
-- Editar: `src/components/substituicao/ModalDetalhesSubstituicao.tsx`
+- Não alterar RLS global.
+- Não alterar fluxos de Inclusão, Substituição, Migração, Indicador.
+- Não mudar a lógica do `efetivar-troca-titularidade` nem o bloqueio anti-sequestro.
