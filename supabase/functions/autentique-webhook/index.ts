@@ -508,7 +508,89 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      // ── RETIFICAÇÃO DE TERMO DE FILIAÇÃO ─────────────────────────────
+      // Documento de retificação versionada (não toca em contratos.pdf_assinado_url)
+      const { data: retific } = await supabase
+        .from('contrato_retificacoes')
+        .select('id, contrato_id, associado_id, versao, status, motivo')
+        .eq('autentique_documento_id', documentId)
+        .maybeSingle();
+      if (retific) {
+        const wasSigned = (eventType === 'signature.accepted') ||
+          (eventType === 'signature.updated' && payload.event?.data?.signed);
+        if (wasSigned && retific.status !== 'assinado') {
+          try {
+            const autentiqueApiKey = Deno.env.get('AUTENTIQUE_API_KEY');
+            let publicUrl: string | null = null;
+            if (autentiqueApiKey) {
+              const q = `query GetDocument($id: UUID!){ document(id:$id){ files{ signed } } }`;
+              const r = await fetch(AUTENTIQUE_API_URL, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${autentiqueApiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: q, variables: { id: documentId } }),
+              });
+              const j = await r.json();
+              const signedUrl = j?.data?.document?.files?.signed;
+              if (signedUrl) {
+                const pdfResp = await fetch(signedUrl);
+                if (pdfResp.ok) {
+                  const bytes = new Uint8Array(await (await pdfResp.blob()).arrayBuffer());
+                  const fname = `${retific.associado_id}/retificacao_${retific.contrato_id}_v${retific.versao}_${Date.now()}.pdf`;
+                  const { error: upErr } = await supabase.storage
+                    .from('contratos-assinados')
+                    .upload(fname, bytes, { contentType: 'application/pdf', upsert: false });
+                  if (!upErr) {
+                    publicUrl = supabase.storage.from('contratos-assinados').getPublicUrl(fname).data.publicUrl;
+                  }
+                }
+              }
+            }
+            await supabase.from('contrato_retificacoes').update({
+              status: 'assinado',
+              assinado_em: payload.event?.data?.signed || new Date().toISOString(),
+              pdf_assinado_url: publicUrl,
+              updated_at: new Date().toISOString(),
+            }).eq('id', retific.id);
+
+            // Buscar cotacao_id do contrato para anexar em contratos_documentos
+            if (publicUrl) {
+              const { data: contratoRow } = await supabase
+                .from('contratos')
+                .select('cotacao_id, numero')
+                .eq('id', retific.contrato_id)
+                .maybeSingle();
+              if (contratoRow?.cotacao_id) {
+                await supabase.from('contratos_documentos').insert({
+                  cotacao_id: contratoRow.cotacao_id,
+                  tipo: 'retificacao_termo_filiacao',
+                  arquivo_nome: `Retificação Termo Filiação ${contratoRow.numero} v${retific.versao}.pdf`,
+                  arquivo_url: publicUrl,
+                  status: 'aprovado',
+                  observacao: `Retificação v${retific.versao} — Motivo: ${retific.motivo}`,
+                });
+              }
+              if (retific.associado_id) {
+                await supabase.from('associados_historico').insert({
+                  associado_id: retific.associado_id,
+                  tipo: 'documento_anexado',
+                  descricao: `Retificação v${retific.versao} do Termo de Filiação assinada`,
+                  contrato_id: retific.contrato_id,
+                  metadata: { arquivo_url: publicUrl, via: 'autentique', retificacao_id: retific.id },
+                });
+              }
+            }
+            console.log('[autentique-webhook] ✓ Retificação assinada:', retific.id);
+          } catch (rErr: any) {
+            console.error('[autentique-webhook] erro retificação:', rErr?.message);
+          }
+        }
+        return new Response(JSON.stringify({ received: true, retificacao_id: retific.id }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
+
 
     // FALLBACK: Se não encontrou pelo documento_id, tentar buscar por email do signatário
     if (!contrato) {
