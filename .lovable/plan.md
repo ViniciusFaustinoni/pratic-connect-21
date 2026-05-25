@@ -1,56 +1,55 @@
-## Causa raiz
+## Correção canônica: `status_contratacao='ativo'` só via caminho canônico do veículo
 
-`src/components/cotacao-publica/AgendamentoVistoria.tsx` (linhas 96-122) gera a lista de datas com regra **hard-coded**: "hoje (se ainda houver período) + próximos dias úteis até completar **3 datas fixas**, pulando domingos e datas bloqueadas". Não há **nenhuma** consulta ao SLA por UF.
+### Contexto
+`COT-20260525-141428960-119` (substituição KOU6D37→LTB4J74) pulou Cadastro/Monitoramento e foi direto pra "Criar senha" porque `recompute_cotacao_status_contratacao` promove `status_contratacao='ativo'` quando `associado.status='ativo'` + `contrato.status IN ('assinado','ativo')`. Em substituição/inclusão o associado já está ativo de outro veículo, então o atalho dispara assim que o termo é assinado.
 
-O prazo real está em `configuracoes`:
-- `prazo_instalacao_horas_rj` = **48**
-- `prazo_instalacao_horas_sp` = **72**
-- `prazo_instalacao_autovistoria_horas` = **72** (default/fallback)
+### Passo 1 — Patch `recompute_cotacao_status_contratacao`
+Remover o atalho baseado em `associado.status`. Promoção a `'ativo'` exige TODAS as condições do contrato/veículo desta cotação:
+- `contratos.cadastro_aprovado = true`
+- `contratos.aprovado_em IS NOT NULL`
+- `contratos.status = 'ativo'` (escrito por `ativar-associado`, não basta `'assinado'`)
+- `veiculos.status = 'ativo'`
 
-Esses valores hoje são lidos **apenas** pelo `supabase/functions/cron-suspender-cobertura-inativacao/index.ts` (linhas 25-32) para suspender cobertura. O agendador público nunca os consulta — por isso aparecem datas além da janela permitida.
+Sem isso, cai nas branches existentes (`pagamento_ok`, `contrato_assinado`, `aguardando_aprovacao_cadastro`, etc.).
 
-Consequência prática para o RJ: o link oferece hoje + 2 dias úteis (até ~3 dias corridos), quando o SLA permite apenas as datas que caem dentro de 48h a partir de "agora".
+### Passo 2 — Guard `trg_guard_cotacao_ativo_exige_caminho_canonico`
+`BEFORE UPDATE` em `cotacoes`. Bloqueia transição para `status_contratacao='ativo'` quando o contrato vinculado não tem `cadastro_aprovado=true` + `aprovado_em IS NOT NULL` + `status='ativo'`. Última linha de defesa caso outra função/edge tente o atalho.
 
-## Correção proposta (apenas frontend público, sem mexer na regra de suspensão)
+### Passo 3 — Backfill da cotação afetada
+```sql
+UPDATE cotacoes
+SET status_contratacao = 'contrato_assinado'
+WHERE id = 'f020bc1a-adb8-4dfb-a690-160ceaea49c4';
+```
+Retorna à fila do Cadastro. Loga em `logs_auditoria` (`acao='atualizar'`, descrição `[BACKFILL] COT-20260525-141428960-119 revertida de ativo para contrato_assinado — atalho recompute_cotacao corrigido`).
 
-### 1. `src/hooks/useConteudosSistema.ts` (ou hook análogo já consumindo `useConfiguracoesAll`)
-Adicionar 3 seletores tipados sobre o cache global existente:
-- `usePrazoInstalacaoHorasRJ()` → default 48
-- `usePrazoInstalacaoHorasSP()` → default 72
-- `usePrazoInstalacaoHorasDefault()` → default 72
+### Passo 4 — Auditoria (somente leitura, REPORTA antes de qualquer correção em massa)
+```sql
+SELECT c.id, c.numero_cotacao, c.tipo, c.status_contratacao,
+       ct.id contrato_id, ct.status contrato_status,
+       ct.cadastro_aprovado, ct.aprovado_em,
+       v.placa, v.status veiculo_status
+FROM cotacoes c
+LEFT JOIN contratos ct ON ct.cotacao_id = c.id
+LEFT JOIN veiculos v ON v.id = ct.veiculo_id
+WHERE c.status_contratacao = 'ativo'
+  AND (ct.cadastro_aprovado IS DISTINCT FROM true
+       OR ct.aprovado_em IS NULL
+       OR ct.status <> 'ativo'
+       OR v.status <> 'ativo')
+ORDER BY c.created_at DESC;
+```
+**Pausa para revisão humana antes de corrigir em massa** (decisão por linha: voltar a `contrato_assinado`, `aguardando_aprovacao_cadastro` ou manter se for caso legítimo legado).
 
-Sem nova rede — apenas leitura do cache `configuracoes/all`.
+### Passo 5 — Memória
+Criar `mem://logic/operations/recompute-cotacao-respeita-caminho-canonico-do-veiculo` documentando: `associados.status='ativo'` é ruído em substituição/inclusão; única promoção legítima de `status_contratacao='ativo'` é via `ativar-associado` após Monitoramento aprovar instalação/vistoria do veículo desta cotação. Adicionar entrada no `mem://index.md`.
 
-### 2. `src/lib/agendamento/janelaInstalacao.ts` (novo helper puro)
-Função `gerarDatasDentroDoPrazo({ agora, prazoHoras, datasBloqueadas, pularDomingo, periodosPorHora })`:
-- Calcula `deadline = agora + prazoHoras`.
-- Itera dia a dia a partir de hoje até `deadline` (inclusive o dia em que `deadline` cai, mesmo que a hora exata extrapole — usuário escolhe período, não hora).
-- Filtra: domingo, datas bloqueadas, dias sem nenhum período disponível (regra atual de `getPeriodosDisponivelsPorHora`).
-- Remove o teto fixo de 3 datas — agora o teto é o **prazo**.
-- Mantém regra "após 16h, D+1 é ocultado" só quando ainda sobra outra data válida dentro do prazo; senão mantém para não esvaziar o calendário.
+### Smoke tests pós-patch
+1. **Substituição com associado ativo**: assinar termo → conferir que `status_contratacao` vai para `contrato_assinado` (não `ativo`) e link público mostra "Aguardando análise".
+2. **Cadastro aprova + Monitoramento aprova + `ativar-associado`**: conferir que `status_contratacao` chega a `ativo` e link público libera "Criar senha".
+3. **UPDATE direto** `cotacoes SET status_contratacao='ativo'` sem caminho canônico → guard bloqueia (erro esperado).
+4. **Inclusão de veículo novo** (associado já ativo) → confere que segue Cadastro→Monitoramento sem atalho.
 
-### 3. `src/components/cotacao-publica/AgendamentoVistoria.tsx`
-- Resolver UF: usar `endereco.estado` (já capturado por ViaCEP); fallback para UF do contrato/cotação se disponível; senão `default` (72h).
-- Mapear UF → prazo: `RJ → prazoRJ`, `SP → prazoSP`, demais → `prazoDefault`.
-- Substituir o bloco das linhas 96-122 pela chamada ao novo helper.
-- Quando o usuário ainda não escolheu o CEP/estado, exibir aviso curto ("Preencha o endereço para liberar as datas disponíveis") e suprimir o seletor de data até `endereco.estado` existir — evita oferecer datas que depois somem.
-- Quando o cálculo retornar zero datas (caso extremo: hoje pós-16h, amanhã bloqueado, prazo 48h estourado), mostrar mensagem "Sem agenda disponível dentro do prazo — entre em contato" em vez de calendário vazio.
-
-### 4. Espelhar no fluxo equivalente
-Aplicar o mesmo helper em `src/components/cotacao-publica/AgendamentoVistoriaCompleta.tsx` se ele também gerar lista própria (verificar antes de editar; reutilizar via prop).
-
-### 5. Memory
-Atualizar `mem://logic/operations/suspensao-cobertura-48h` (ou criar leaf `mem://logic/operations/janela-agendamento-publico-por-uf`) registrando que o agendamento público lê `prazo_instalacao_horas_{uf}` da mesma fonte do cron de suspensão — qualquer mudança da regra de 48h/72h deve continuar valendo nos dois lados.
-
-## Fora de escopo
-
-- Não mexer no `cron-suspender-cobertura-inativacao` nem na regra de suspensão pós-aprovação.
-- Não mexer em agendamentos internos (Monitoramento/Coordenação) — só no link público.
-- Não tocar em vagas por período (`useVagasPeriodo`), apenas no gerador de datas.
-
-## Validação
-
-1. Subir; abrir link público de cotação com endereço RJ → calendário deve mostrar **só** datas dentro de 48h a partir de agora (geralmente hoje + amanhã, ou só amanhã se passou das 16h).
-2. Trocar endereço para SP → reaparecem até 72h de janela.
-3. UF não mapeado (ex.: MG) → 72h (default).
-4. Bloquear data de amanhã em `datas_bloqueadas` no RJ pós-16h → mensagem "sem agenda disponível".
+### Escopo
+- **Inclui**: função `recompute_cotacao_status_contratacao`, novo trigger guard, backfill 1 linha, query de auditoria, memória.
+- **Não inclui**: `ativar-associado`, `efetivar-substituicao`, guards já existentes, correção em massa (depende do resultado da auditoria).
