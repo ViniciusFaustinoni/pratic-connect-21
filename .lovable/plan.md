@@ -1,79 +1,67 @@
+# Por que falhou no Alan Thiago (KQB4683)
 
-## Diagnóstico — por que o modal aparece vazio
+Investiguei como admin. Histórico real da placa KQB4683 / IMEI 865011030213996 em `rastreadores_api_logs`:
 
-O modal `ModalDetalhesTroca` (aba **Dados**) renderiza `VeiculoCompletoCard`, que só consulta tabelas **locais**:
+- 18:13 / 18:54 → "O CPF/CNPJ e/ou IMEI não foram informados."
+- 18:57 → 20:29 → "JSON não informado"
+- Após o último fix (mudança de `URLSearchParams` para `FormData` multipart): chamei via curl agora como admin e a Rede Veículos respondeu **`JSON não informado`** novamente.
 
-| Bloco do modal | Hook | Fonte | Por que vem vazio na Troca |
+Ou seja: o caso do Alan não é dado faltando — CPF (`11604313706`) e IMEI estão corretos. O problema é o **formato do POST** enviado para `/vincularClienteVeiculo`.
+
+# Causa raiz
+
+Comparei `vincular` com as 3 funções da MESMA plataforma que estão funcionando em produção:
+
+| Função | URL | Body | Funciona? |
 |---|---|---|---|
-| Documentos do associado | `useDocumentosAssociadoCompleto(completo.associado.id)` | `documentos` + `contratos_documentos` filtrados pelo **associado atual do veículo** | O `veiculos.associado_id` ainda aponta para o **titular antigo** (Gabriel). Os documentos que o **novo titular (Anderson)** acabou de enviar no link público estão em `contratos_documentos` da **nova cotação** (`solicitacao.cotacao_id`) — nunca são lidos. |
-| Fotos da vistoria | `useFotosVistoriaPorVeiculo(veiculoId)` | `vistorias.veiculo_id` local | Veículo entrou no sistema via import SGA — fotos históricas vivem no Hinova. Em Troca a autovistoria é dispensada, então não há foto nova local. |
-| Vídeo 360° | `useVideos360PorVeiculo` | `vistorias.video_360_url` local | Idem. |
-| Histórico do veículo | `useEventosVeiculo` | `sinistros` + `assistencias` locais | Eventos antigos ficaram no SGA (não foram importados). |
-| Rastreador | `useVeiculoCompleto` → `rastreadores.veiculo_id` | local | Quando o veículo veio do SGA sem vínculo prévio na nossa tabela, fica "Sem rastreador instalado." mesmo se houver dispositivo ativo na Softtruck/Rede. |
+| `atualizarDadosCliente/` | **com barra** | `URLSearchParams` só com `json=<stringify>` | ✅ |
+| `ativarVeiculo/` | **com barra** | `URLSearchParams` só com `json=<stringify>` | ✅ |
+| `informarVeiculoAdimplente/` | **com barra** | `URLSearchParams` só com `json=<stringify>` | ✅ |
+| `desvincularClienteVeiculo` | sem barra | `FormData` flat (sem `json`) | ✅ |
+| `vincularClienteVeiculo` | **sem barra** | misto: flat + `json` em `URLSearchParams` (versão original) / `FormData` (último fix) | ❌ |
 
-Resumo: o card foi desenhado para cotações **novas**, onde tudo nasce local. Na Troca, o veículo é **legado** e o operador precisa de visão cross-sistemas. Nada disso é bug pontual do Anderson — é o comportamento padrão hoje.
+A função `vincular` é a única que destoa do padrão dominante. O comentário "barra causa 301/307 e PHP perde o body" que justificou retirar a barra foi uma hipótese errada — as outras 3 rotas no mesmo backend respondem corretamente com barra. Sem a barra, o PHP da Rede Veículos não popula `$_REQUEST['json']` e devolve "JSON não informado".
 
----
+# O que vou mudar (e onde)
 
-## Escopo deste deploy (somente leitura, sem mudar fluxo de aprovação)
+### 1. `supabase/functions/rede-veiculos-vincular-cliente/index.ts` (bloco 280–296)
 
-### Camada 1 — Frontend (consumo)
+Alinhar exatamente ao padrão `atualizarDadosCliente`:
 
-Reescrever `VeiculoCompletoCard.tsx` para receber, opcionalmente, contexto da Troca (`solicitacaoId`, `cotacaoId`, `novoAssociadoTemp`) e renderizar 3 blocos extras + corrigir o bloco de documentos. `ModalDetalhesTroca` passa esses props.
+- URL: `${baseUrl}/vincularClienteVeiculo/` (com barra)
+- Body: `URLSearchParams` com **um único campo** `json=<JSON.stringify(payload)>`
+- Header: `Content-Type: application/x-www-form-urlencoded`
+- Remover os campos flat (`cpfCnpj`, `imei`, `placa`) — eles já estão dentro do payload JSON e foram a "remendo" feito quando a API reclamava de CPF/IMEI; o problema real era a falta da barra, não a falta dos campos flat.
 
-1. **Documentos — fix duplo de fonte**
-   - Manter docs locais do associado atual (legado do antigo titular, se existir).
-   - **NOVO:** adicionar `useDocumentosCotacao(cotacaoId)` lendo `contratos_documentos` por `cotacao_id` (uploads do novo titular no link público).
-   - Renderizar os dois blocos com headers separados: "Documentos do antigo titular" e "Documentos enviados pelo novo titular".
+Atualizar o comentário acima do `fetch` para registrar a regra correta e prevenir reincidência.
 
-2. **Bloco SGA Hinova (novo)** — consome `sga-buscar-associado-completo` via novo hook `useSgaVeiculoSnapshot(placa)`:
-   - Situação financeira do veículo (INADIMPLENTE / ADIMPLENTE / sem sinal).
-   - Boletos vencidos e a vencer (lista com vencimento, valor, status).
-   - Histórico de eventos/sinistros do veículo no Hinova (quando o endpoint expõe).
-   - Lista de fotos cadastradas no SGA (links/thumbs quando a API retorna URL; senão badge "X fotos no SGA"). Não baixar binário, só listar metadados.
-   - Estados: loading / erro / "veículo não encontrado no SGA" / dados.
+### 2. `src/hooks/useAtivarRastreador.ts` (linhas 82–93)
 
-3. **Bloco Plataforma de Rastreamento (novo)** — consome:
-   - `softruck-buscar-dispositivo` por placa ou chassi
-   - `rede-veiculos-buscar-dispositivo` por placa
-   
-   Mostra: plataforma encontrada, IMEI, status do dispositivo, última comunicação, vínculo com cliente na plataforma. Se nenhum dos dois retornar, exibe "Sem rastreador conhecido nas plataformas". Permite ao Monitoramento decidir entre "fotos+rastreador novo" vs "só fotos" com base real.
+Hoje, quando o edge devolve 400, o hook joga `error.message || 'Erro na integração...'` — que vira o genérico "Edge Function returned a non-2xx status code" na tela. A mensagem real (`"JSON não informado"`, `"CPF/CNPJ duplicado"`, etc.) está em `data.error`, mas é descartada.
 
-4. **Nota visual** acima dos blocos atuais ("Fotos da vistoria", "Vídeo 360°", "Histórico"): quando a coleção local estiver vazia E o bloco SGA tiver dados correspondentes, mostrar mini-link "Ver no SGA" em vez do "Sem … registrados" seco. Isso evita a leitura errada de "não tem nada".
+Mudança: quando `FunctionsHttpError` ocorrer, ler `await error.context.json()` (ou cair em `data?.error`) e propagar a mensagem real. Mesma correção que já aplicamos em outros pontos via `toastErroEdge`.
 
-### Camada 2 — Backend (apenas o que falta)
+Isso garante que o próximo problema da Rede Veículos (se houver) seja diagnosticável de cara, sem precisar abrir `rastreadores_api_logs`.
 
-Avaliar e, se necessário, criar/adaptar **uma única edge function** `sga-snapshot-veiculo`:
-- Input: `{ placa }` ou `{ chassi }`
-- Saída agregada: `{ veiculo, situacao_financeira, boletos[], eventos[], fotos[] }`
-- Reaproveita as funções existentes (`sga-buscar-associado-completo`, `sga-listar-boletos-associado`, `sga-verificar-veiculo`, helpers de mídia). Se já houver uma edge equivalente, não criar — só consumir.
+### 3. Validação pós-deploy (sem mexer em DB)
 
-Antes de criar: confirmar com o usuário se já existe (regra de "não duplicar"). Provavelmente vai dar para reaproveitar `sga-buscar-associado-completo` direto com o CPF do antigo titular — nesse caso a Camada 2 é zero código novo.
+Antes de avisar o usuário:
+- `curl` direto no edge com o payload do Alan e confirmar status 200 + `idCliente`/`idVeiculo`/`idEquipamento`.
+- Conferir em `rastreadores_api_logs` que entrou linha `status='sucesso'` para `vincularClienteVeiculo`.
+- Confirmar que `rastreadores.id_plataforma` e `veiculos.rede_veiculos_*` ficaram preenchidos.
 
----
+Se o curl ainda falhar com outra mensagem, a mensagem virá no body do 400 e eu reporto antes de tocar o front.
 
-## O que NÃO entra
+# Por que isso não se repete em outros associados
 
-- Não muda nenhuma lógica de aprovação/reprovação.
-- Não muda RPC de banco nem trigger.
-- Não mexe no fluxo de Cadastro (`/cadastro/aprovacoes`) — só na fila de Monitoramento da Troca. Se o usuário quiser propagar o enriquecimento para Cadastro num próximo deploy, faz separado.
-- Não faz download/cópia automática das fotos do SGA para o nosso storage. Só lista/linka.
-- Não toca em cotação nova (FIPE acima/abaixo) — fluxo comum já tem os dados locais.
+- O fix está no transporte HTTP de **toda** chamada `vincularClienteVeiculo`, não no dado do Alan. Qualquer associado que precise ser vinculado pela primeira vez na Rede Veículos passa por esse mesmo caminho.
+- O fix do hook expõe erros reais da plataforma em tempo de clique. Se a Rede Veículos mudar regra (ex.: passar a exigir CEP), o operador vê o motivo na hora em vez de um genérico.
+- Atualizo o memory `mem://integrations/tracking/provider-logic-consolidated-v2` com a regra "endpoints Rede Veículos que aceitam `json` em form-urlencoded EXIGEM barra final" para travar a reincidência em revisões futuras de código.
 
----
+# O que NÃO vou mexer
 
-## Validação
+- Nenhuma migration. O problema é 100% código de edge function + tratamento de erro no front.
+- Nenhuma mudança de regra de elegibilidade, vínculo de veículo, status do rastreador, ou estado do Alan no banco — o registro do Alan já está consistente (rastreador `instalado`, `veiculo_id` apontando para KQB4683).
+- Nada nas outras funções da Rede Veículos — elas já estão certas.
 
-1. Abrir a Troca do Anderson (KPJ4994) no Monitoramento e confirmar:
-   - Documentos do novo titular aparecem (os que ele subiu no link público).
-   - Bloco SGA mostra situação financeira do veículo e boletos do antigo titular Gabriel.
-   - Bloco Plataforma mostra dispositivo Softtruck/Rede se houver (placa KPJ4994).
-   - Se SGA estiver fora do ar, blocos mostram erro tratado em vez de sumirem.
-2. Abrir uma Troca de teste com veículo sem rastreador conhecido → bloco Plataforma mostra "Sem dispositivo conhecido" claramente, e não "erro".
-3. Abrir uma cotação **comum** (não Troca) → nada muda visualmente (props opcionais não passados).
-
----
-
-## Pergunta antes de executar
-
-Quer que eu **(A)** entregue tudo (fix de docs + bloco SGA + bloco Plataforma) num único PR, ou **(B)** parta primeiro só pelo fix de documentos do novo titular (causa mais grave, é dado dele que está sumindo) e depois faça os blocos SGA/Plataforma em segundo deploy?
+Aprovando, executo na sequência: edge → hook → curl de validação → relatório.
