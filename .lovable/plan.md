@@ -1,62 +1,54 @@
-## Por que não aparece nada hoje
+# Plan — "Outros Processos" desde a criação
 
-O modal de Troca de Titularidade usa os mesmos hooks de busca dos outros fluxos:
+## Diagnóstico
 
-- `useAssociadoSearch` consulta direto a tabela `associados`.
-- `useBuscaPlaca` consulta SGA, mas é complementada por dados locais em vários pontos.
+O hook `src/hooks/useOutrosProcessos.ts` **já carrega** trocas e substituições sem cotação (blocos 6 e 7, linhas 384–579). O problema é só de **chave de filtro**:
 
-As RLS atuais da tabela `associados` (e `veiculos`) só liberam, para vendedor **não-gestor** (CLT, externo, agência), os registros retornados por `get_vendedor_associado_ids(auth.uid())` — ou seja, **apenas os associados/veículos vinculados a ele mesmo**.
+- `solicitacoes_troca_titularidade.criado_por` guarda **`profiles.id`** (memória canônica do projeto).
+- `solicitacoes_substituicao_placa.criado_por` / `consultor_id` — mesma convenção.
+- Os filtros em escopo `own` usam `effectiveVendedorId`, que é o **`auth.users.id`** (igual ao usado em `cotacoes.vendedor_id`).
 
-Na Troca de Titularidade, o vendedor está procurando o **antigo dono do veículo**, que via de regra **não é cliente dele** (foi vendido por outro vendedor/canal). Resultado:
+Resultado: para o consultor (escopo `own`), os blocos 6 e 7 nunca casam → a troca da THAÍS (KPJ4994) não aparece enquanto não houver cotação. Para supervisor/diretor (escopo `team`/`all`), os filtros são bypassados → eles veem normalmente. Bate com o sintoma relatado.
 
-- Busca por **nome** → SQL direto na tabela `associados` → RLS filtra tudo → "Nenhum associado encontrado".
-- Busca por **CPF de 11 dígitos** → tenta local (vazio por RLS) → cai no fallback SGA, mas só se o CPF for exato.
-- Busca por **placa** → vai no SGA, mas se o associado retornado não estiver no escopo do vendedor, qualquer enriquecimento local também fica vazio.
+## Mudança proposta (uma só, frontend)
 
-Isso é uma trava de privacidade boa para o resto do sistema (vendedor não pode varrer base alheia), mas **bloqueia o caso legítimo da Troca de Titularidade**, onde ele precisa achar o vendedor anterior para transferir.
+Em `src/hooks/useOutrosProcessos.ts`, dentro do `queryFn`, **resolver uma vez** o `profile.id` do vendedor logado e usar nos filtros de solicitações sem cotação. Sem mexer em `cotacoes` (continua filtrando por `vendedor_id` = auth uid, que é o correto).
 
-## O que mudar
+### Passos
 
-Criar um caminho de busca dedicado para a Troca de Titularidade, executado server-side com `service_role`, devolvendo só o mínimo necessário e auditando o acesso.
+1. **Resolver profile.id quando escopo own**
+   - Logo no início do `queryFn`, se `effectiveScope === 'own' && effectiveVendedorId`, fazer um `select id from profiles where user_id = effectiveVendedorId`.
+   - Guardar em `selfProfileId`.
+   - Idem para `consultorId` quando vier (escopo team/all com filtro de consultor) — resolver o profile.id dele em `targetProfileId`.
 
-### 1. Edge function `buscar-associado-troca-titularidade`
+2. **Bloco 6 (substituições sem cotação, linhas 393–397)**
+   - Substituir `effectiveVendedorId` / `consultorId` por `selfProfileId` / `targetProfileId` no `.or('consultor_id.eq.X,criado_por.eq.X')`.
+   - Manter o `.or(...)` (cobre os dois campos).
 
-- Body: `{ termo: string }` (nome, CPF parcial/completo, ou placa).
-- Autenticação obrigatória via JWT do usuário.
-- Aceita perfis: `funcionario_interno` (já enxergam tudo, mas mantém para uniformidade), `vendedor` (CLT, externo, agência) e Diretoria.
-- Estratégia:
-  - Detecta se o termo é CPF (11 dígitos), placa (regex Mercosul/antiga) ou texto.
-  - Texto → busca em `associados` por `nome ilike` (limit 15), sem filtro de vendedor.
-  - CPF → busca local; se vazio, chama `sga-buscar-associado-completo`.
-  - Placa → chama `sga-buscar-associado-por-placa` (já existe) + fallback local.
-- Retorna apenas: `id`, `nome`, `cpf` (mascarado: `***.***.***-XX`), `telefone` (últimos 4), `codigo_hinova`, `status`, e a lista de veículos com `placa`, `marca`, `modelo`.
-- Insere `logs_auditoria` (`acao='consultar'`, descrição `[BUSCA_TROCA_TITULARIDADE] termo=...`).
+3. **Bloco 7 (trocas sem cotação, linhas 484–488)**
+   - Substituir `.eq('criado_por', effectiveVendedorId)` / `.eq('criado_por', consultorId)` por `.eq('criado_por', selfProfileId)` / `.eq('criado_por', targetProfileId)`.
 
-### 2. Novo hook `useBuscaAssociadoTrocaTitularidade(termo)`
+4. **Vendedor_id do item de saída (linha 543)**
+   - Já está correto (`prof?.user_id`) — o `profMap` é populado por `profiles.id` (linha 518), então o `user_id` do profile vai pro item. Sem mudança.
 
-- Wrapper React Query que chama a edge function só quando `selectedTipo === 'troca_titularidade'` e termo ≥ 2 chars.
-- Mesma interface dos resultados existentes (`AssociadoSearchResult` + `placaResults`) para reaproveitar a UI atual.
+5. **Curto-circuito defensivo**
+   - Se `selfProfileId` não resolver (perfil não encontrado), pular os blocos 6/7 para `own` em vez de listar tudo — evita vazamento. Mesmo trato para `targetProfileId`.
 
-### 3. Ajuste em `OutrasEntradasMenu.tsx`
+### Fora de escopo
 
-- Quando `selectedTipo === 'troca_titularidade'`:
-  - **Não** chamar `useAssociadoSearch` nem `useBuscaPlaca` direto; usar o novo hook.
-  - Mesclar associados + placas no mesmo painel já existente.
-  - Manter o alerta amarelo, mas atualizar o texto para refletir que agora a busca aceita nome, CPF ou placa.
-- Demais fluxos (Inclusão, Substituição, Migração) continuam exatamente como hoje — não afeta o escopo de privacidade deles.
+- Não alterar `cotacoes.vendedor_id` nem o bloco 1 do hook.
+- Não retroagir trocas antigas com `vendedor_id` faltando (caso da THAÍS já tem `criado_por`, que é o que importa aqui).
+- Não tocar em `troca-pos-cadastro-bg.ts` — patch já aplicado em mensagem anterior cobre cotações futuras.
+- Não tocar em UI/colunas/labels — `ProcessoCard` e `etapa_label` já cobrem os rótulos pedidos no PRD.
 
-### 4. Sem mudanças em RLS
+## Validação manual
 
-Não vamos afrouxar as policies de `associados`/`veiculos`. Toda a exceção fica concentrada na edge function, com escopo "Troca de Titularidade" e auditoria.
+1. Login `vendedorctl@teste.com` (THAÍS) → `/vendas/cotacoes` → aba "Outros Processos".
+   - Deve aparecer troca do KPJ4994 (Gabriel → Anderson) com etapa **"Termo pendente"** (ou "Aguardando novo titular" se o Anderson já assinou).
+2. Login como supervisor → mesma troca continua aparecendo (escopo `all` inalterado).
+3. Criar nova substituição como consultor → aparece imediatamente na aba dele, mesmo antes da cotação.
+4. Quando a cotação nascer (via `vincular-cotacao-troca`), a linha "subst-..." ou "troca-..." some e a linha por `cotacao_id` toma o lugar — o item ainda aparece porque `cotacoes.vendedor_id` agora é populado corretamente (patch A já em produção).
 
-## Arquivos a criar/editar
+## Arquivo tocado
 
-- `supabase/functions/buscar-associado-troca-titularidade/index.ts` (novo)
-- `src/hooks/useBuscaAssociadoTrocaTitularidade.ts` (novo)
-- `src/components/vendas/OutrasEntradasMenu.tsx` (editar bloco de troca de titularidade)
-
-## Fora de escopo
-
-- Não alterar RLS global.
-- Não alterar fluxos de Inclusão, Substituição, Migração, Indicador.
-- Não mudar a lógica do `efetivar-troca-titularidade` nem o bloqueio anti-sequestro.
+- `src/hooks/useOutrosProcessos.ts` (somente o `queryFn`).
