@@ -714,27 +714,29 @@ export default function PrestadorInstalacao() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-800 bg-slate-900 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-white flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-blue-400" />
-                  IMEI do Rastreador Instalado
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  placeholder="Digite os 15 dígitos do IMEI"
-                  value={imeiRastreador}
-                  onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                  className="w-full h-11 px-3 bg-slate-950 border border-slate-700 rounded-md text-base font-mono text-white placeholder:text-slate-500"
-                />
-                <p className="text-xs text-slate-400">
-                  Informe o IMEI do equipamento físico que você acabou de instalar. Sem isso a instalação não pode ser concluída.
-                </p>
-              </CardContent>
-            </Card>
+            {exigeImei && (
+              <Card className="border-slate-800 bg-slate-900 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-white flex items-center gap-2">
+                    <Cpu className="h-4 w-4 text-blue-400" />
+                    IMEI do Rastreador Instalado
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="Digite os 15 dígitos do IMEI"
+                    value={imeiRastreador}
+                    onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-700 rounded-md text-base font-mono text-white placeholder:text-slate-500"
+                  />
+                  <p className="text-xs text-slate-400">
+                    Informe o IMEI do equipamento físico que você acabou de instalar. Sem isso a instalação não pode ser concluída.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
