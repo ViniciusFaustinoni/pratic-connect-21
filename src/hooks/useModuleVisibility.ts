@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -13,10 +14,15 @@ import { useAuth } from '@/contexts/AuthContext';
  * o perfil de acesso dele já garante. Consumidores (AppSidebar, useRouteGuard)
  * devem usar a UNIÃO entre o que o perfil libera e esta lista — nunca tratá-la
  * como filtro restritivo.
+ *
+ * Propagação em tempo real: assina canal Realtime filtrado por `user_id`,
+ * invalidando a query sempre que o admin alterar o card "Acesso a Módulos".
+ * Sem isso, a sessão do usuário-alvo ficava com snapshot velho por até 5 min.
  */
 export function useModuleVisibility() {
   const { profile } = useAuth();
   const profileId = profile?.id;
+  const queryClient = useQueryClient();
 
   const { data: visibilityResult = { additionalModules: [], editableModules: [] }, isLoading } = useQuery({
     queryKey: ['module-visibility', profileId],
@@ -37,8 +43,27 @@ export function useModuleVisibility() {
       return { additionalModules, editableModules };
     },
     enabled: !!profileId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!profileId) return;
+    const channel = supabase
+      .channel(`user-module-visibility-${profileId}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'user_module_visibility', filter: `user_id=eq.${profileId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['module-visibility', profileId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profileId, queryClient]);
 
   return {
     additionalModules: visibilityResult.additionalModules,
