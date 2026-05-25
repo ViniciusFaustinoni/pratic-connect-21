@@ -360,6 +360,7 @@ export default function AtribuicaoManualTab() {
   // Prestador assignment states
   const [prestadorConfirmDialog, setPrestadorConfirmDialog] = useState<{ servico: any; prestadorId: string; prestadorNome: string; prestadorTelefone?: string | null } | null>(null);
   const [valorPrestador, setValorPrestador] = useState('');
+  const [escopoPrestador, setEscopoPrestador] = useState<EscopoAtribuicaoPrestador>('fotos_instalacao');
   const [linkResult, setLinkResult] = useState<AtribuirPrestadorResult | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
