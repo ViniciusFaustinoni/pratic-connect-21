@@ -48,10 +48,12 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
         prestadorNome: selectedPrestador.nome,
         prestadorTelefone: selectedPrestador.telefone,
         valor: valorNum,
+        escopo,
       });
       setOpen(false);
       setSelectedPrestador(null);
       setValor('');
+      setEscopo('fotos_instalacao');
       setLinkResult(result);
     } catch {
       // handled by mutation
