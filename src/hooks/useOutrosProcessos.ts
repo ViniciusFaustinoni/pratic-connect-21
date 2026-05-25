@@ -490,17 +490,17 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       // 7) Solicitações de troca de titularidade SEM cotação ainda (cotacao_id IS NULL)
       // A cotação só é criada manualmente após o termo de cancelamento ser assinado.
       let trocaSemCotacaoItems: OutroProcessoItem[] = [];
-      if (tipos.includes('troca_titularidade')) {
+      if (tipos.includes('troca_titularidade') && !ownScopeBlocked && !targetScopeBlocked) {
         let tq = (supabase as any)
           .from('solicitacoes_troca_titularidade')
           .select('id, status, cotacao_id, veiculo_id, novo_titular_dados, associado_antigo_id, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, aprovado_cadastro_em, aprovado_monitoramento_em, efetivada_em, reprovado_em, motivo_reprovacao, criado_por, created_at, updated_at')
           .is('cotacao_id', null)
           .order('created_at', { ascending: false })
           .limit(200);
-        if (effectiveScope === 'own' && effectiveVendedorId) {
-          tq = tq.eq('criado_por', effectiveVendedorId);
-        } else if (consultorId) {
-          tq = tq.eq('criado_por', consultorId);
+        if (effectiveScope === 'own' && selfProfileId) {
+          tq = tq.eq('criado_por', selfProfileId);
+        } else if (targetProfileId) {
+          tq = tq.eq('criado_por', targetProfileId);
         }
         const { data: trocasSC } = await tq;
         const trocasSCList = (trocasSC || []) as any[];
