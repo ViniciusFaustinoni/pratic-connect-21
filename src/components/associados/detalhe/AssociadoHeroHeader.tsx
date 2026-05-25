@@ -2,8 +2,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   Phone, Mail, MessageCircle, Edit, Pause, Play, Map,
   MoreHorizontal, XCircle, DollarSign, AlertTriangle, Shield,
-  ArrowLeftRight, Loader2, Radio, RefreshCw, FileCheck, Users,
+  ArrowLeftRight, Loader2, Radio, RefreshCw, FileCheck, Users, FileSignature,
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -44,7 +45,9 @@ interface AssociadoHeroHeaderProps {
   onSincronizar: () => void;
   onExcluir: (tipo: string) => void;
   onTrocaTitularidade?: () => void;
+  onRetificarTermo?: () => void;
   setActiveTab: (tab: string) => void;
+
   // Loading states
   isReativando: boolean;
   isSincronizando: boolean;
@@ -263,9 +266,12 @@ export function AssociadoHeroHeader({
                     <DropdownMenuItem onClick={() => onExcluir('exclusao_diretoria')} className="text-destructive focus:text-destructive">
                       <AlertTriangle className="mr-2 h-4 w-4" /> Excluir por Diretoria
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExcluir('busca_apreensao')} className="text-red-900 focus:text-red-900">
-                      <Shield className="mr-2 h-4 w-4" /> Busca e Apreensão
-                    </DropdownMenuItem>
+                    {(permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor) && onRetificarTermo && (
+                      <DropdownMenuItem onClick={onRetificarTermo}>
+                        <FileSignature className="mr-2 h-4 w-4" /> Retificar Termo de Filiação
+                      </DropdownMenuItem>
+                    )}
+
                   </>
                 )}
               </DropdownMenuContent>
