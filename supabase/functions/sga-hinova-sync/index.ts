@@ -378,7 +378,61 @@ serve(async (req) => {
     }
   }
 
-  // ---- Carregamento de credenciais e códigos da conta ----
+  /**
+   * Resolve `codigo_sga_voluntario` esperado do NOVO titular para a troca.
+   * Caminho: troca.cotacao_id → contrato do novo associado → vendedor →
+   * profiles.codigo_sga_voluntario. Fallback: contrato ativo mais recente do
+   * novo associado. Retorna 0 quando não conseguir resolver (não-bloqueante).
+   */
+  async function resolverVoluntarioNovoTitular(
+    sb: any,
+    veiculoLocalId: string,
+    novoAssociadoId: string | null,
+    cotacaoId: string | null,
+  ): Promise<number> {
+    try {
+      if (!novoAssociadoId) return 0;
+      if (cotacaoId) {
+        const { data: c } = await sb
+          .from('contratos')
+          .select('vendedor_id')
+          .eq('cotacao_id', cotacaoId)
+          .eq('associado_id', novoAssociadoId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (c?.vendedor_id) {
+          const { data: prof } = await sb
+            .from('profiles')
+            .select('codigo_sga_voluntario')
+            .eq('id', c.vendedor_id)
+            .maybeSingle();
+          const v = Number.parseInt(String(prof?.codigo_sga_voluntario ?? ''), 10);
+          if (Number.isFinite(v) && v > 0) return v;
+        }
+      }
+      const { data: c2 } = await sb
+        .from('contratos')
+        .select('vendedor_id')
+        .eq('associado_id', novoAssociadoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (c2?.vendedor_id) {
+        const { data: prof } = await sb
+          .from('profiles')
+          .select('codigo_sga_voluntario')
+          .eq('id', c2.vendedor_id)
+          .maybeSingle();
+        const v = Number.parseInt(String(prof?.codigo_sga_voluntario ?? ''), 10);
+        if (Number.isFinite(v) && v > 0) return v;
+      }
+    } catch (e) {
+      console.warn('[resolverVoluntarioNovoTitular] erro:', (e as any)?.message || e);
+    }
+    return 0;
+  }
+
   let codigoConta = Number.parseInt(Deno.env.get('HINOVA_CODIGO_CONTA') || '', 10);
   let codigoRegional = Number.parseInt(Deno.env.get('HINOVA_CODIGO_REGIONAL') || '', 10);
   let codigoCooperativa = Number.parseInt(Deno.env.get('HINOVA_CODIGO_COOPERATIVA') || '', 10);
