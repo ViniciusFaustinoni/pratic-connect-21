@@ -716,7 +716,12 @@ export default function UsuarioForm() {
             </Card>
 
             {/* Acesso a Módulos — editável, por usuário */}
-            <ModuleAccessCard userId={isEditing ? id : undefined} perfis={formData.perfis} />
+            <ModuleAccessCard
+              userId={isEditing ? id : undefined}
+              perfis={formData.perfis}
+              pendingChanges={moduleChanges}
+              onPendingChange={setModuleChanges}
+            />
 
             {/* Configurações de Campo */}
             {formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p)) && (
