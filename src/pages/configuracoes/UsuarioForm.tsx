@@ -497,8 +497,12 @@ export default function UsuarioForm() {
     },
     onSuccess: () => {
       setFieldErrors({});
+      setModuleChanges({});
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+      queryClient.invalidateQueries({ queryKey: ['user-module-visibility', id] });
+      queryClient.invalidateQueries({ queryKey: ['module-visibility'] });
+      queryClient.invalidateQueries({ queryKey: ['profissionais-equipe'] });
       navigate('/configuracoes/usuarios-acessos');
     },
     onError: (error: any) => {
