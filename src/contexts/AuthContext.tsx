@@ -148,15 +148,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
   }, []);
 
-  const refreshPerfis = useCallback(async (userId: string) => {
+  const refreshPerfis = useCallback(async (userId: string): Promise<PerfilAcesso[]> => {
     PERFIS_PROMISES.delete(userId);
     const updatedPerfis = await fetchPerfis(userId);
-    setPerfis(updatedPerfis);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['app-roles-config'] }),
       queryClient.invalidateQueries({ queryKey: ['module-visibility'] }),
       queryClient.invalidateQueries({ queryKey: ['module-item-visibility'] }),
     ]);
+    return updatedPerfis;
   }, [fetchPerfis, queryClient]);
 
   // ============================================
@@ -348,7 +348,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const syncPerfis = async () => {
       const updatedPerfis = await refreshPerfis(user.id);
-      if (cancelled) return;
+      if (cancelled) return updatedPerfis;
+      setPerfis(updatedPerfis);
       return updatedPerfis;
     };
 
