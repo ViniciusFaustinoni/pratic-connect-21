@@ -707,7 +707,7 @@ export function useAtribuirServicoPrestador() {
             vistoriador_prestador_id: prestadorId,
             valor,
             atribuido_por: profileId,
-            skip_whatsapp: true,
+            skip_whatsapp: skipWhats,
             escopo,
           },
         });
