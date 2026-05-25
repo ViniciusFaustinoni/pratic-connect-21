@@ -90,20 +90,40 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   // Search hooks (only for non-migracao types)
   // Substituição usa busca por placa primária; outros tipos buscam por associado
   const isSubstituicao = selectedTipo === 'substituicao';
+  const isTrocaTitularidade = selectedTipo === 'troca_titularidade';
   // Detecta formato de placa (Mercosul AAA0A00 ou antiga AAA0000) para
   // não disparar busca textual local com os dígitos da placa (gera ruído).
   const PLACA_REGEX_INPUT = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
   const termoUpperLimpo = (searchTerm || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   const termoEhPlaca = PLACA_REGEX_INPUT.test(termoUpperLimpo);
-  const { data: associadoResults, isLoading: loadingAssociados } = useAssociadoSearch(
-    selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao && !termoEhPlaca ? searchTerm : ''
+
+  // Troca de Titularidade: usa edge function que bypassa RLS — vendedor
+  // precisa achar o antigo dono, que normalmente não é dele.
+  const buscaTroca = useBuscaAssociadoTrocaTitularidade(
+    searchTerm,
+    !!isTrocaTitularidade,
   );
+
+  const { data: associadoResultsLocal, isLoading: loadingAssociadosLocal } = useAssociadoSearch(
+    selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao && !termoEhPlaca && !isTrocaTitularidade ? searchTerm : ''
+  );
+  const associadoResults = isTrocaTitularidade ? (buscaTroca.data?.associados ?? []) : associadoResultsLocal;
+  const loadingAssociados = isTrocaTitularidade ? buscaTroca.isLoading : loadingAssociadosLocal;
+
   const buscaPlaca = useBuscaPlaca(
-    selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
+    selectedTipo && selectedTipo !== 'migracao' && !isTrocaTitularidade ? searchTerm : ''
   );
-  const { data: placaResultsSga, isLoading: loadingPlacasSga, refetch: refetchPlaca } = buscaPlaca;
-  const placaErroTransitorio = buscaPlaca.erroTransitorio;
-  const placaMotivoTransitorio = buscaPlaca.motivoTransitorio;
+  const placaResultsSga = isTrocaTitularidade
+    ? (buscaTroca.data?.placas ?? [])
+    : (buscaPlaca.data ?? []);
+  const loadingPlacasSga = isTrocaTitularidade ? buscaTroca.isLoading : buscaPlaca.isLoading;
+  const refetchPlaca = isTrocaTitularidade ? buscaTroca.refetch : buscaPlaca.refetch;
+  const placaErroTransitorio = isTrocaTitularidade
+    ? !!buscaTroca.data?.erroTransitorio
+    : buscaPlaca.erroTransitorio;
+  const placaMotivoTransitorio = isTrocaTitularidade
+    ? (buscaTroca.data?.motivoTransitorio ?? null)
+    : buscaPlaca.motivoTransitorio;
 
   // Fallback/complemento local: encontra veículos ATIVOS na nossa base
   // (com associado ativo) quando o SGA está fora ou ainda não sincronizou.
