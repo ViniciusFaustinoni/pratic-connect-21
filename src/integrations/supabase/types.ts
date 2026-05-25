@@ -6439,12 +6439,14 @@ export type Database = {
           nome_arquivo: string
           observacao: string | null
           status: string
+          template_nome: string | null
           total_associados: number
           total_associados_atingidos: number
           total_boletos: number
           total_enviados: number
           updated_at: string
           valor_total: number
+          var_mapping_snapshot: Json | null
         }
         Insert: {
           created_at?: string
@@ -6453,12 +6455,14 @@ export type Database = {
           nome_arquivo: string
           observacao?: string | null
           status?: string
+          template_nome?: string | null
           total_associados?: number
           total_associados_atingidos?: number
           total_boletos?: number
           total_enviados?: number
           updated_at?: string
           valor_total?: number
+          var_mapping_snapshot?: Json | null
         }
         Update: {
           created_at?: string
@@ -6467,12 +6471,14 @@ export type Database = {
           nome_arquivo?: string
           observacao?: string | null
           status?: string
+          template_nome?: string | null
           total_associados?: number
           total_associados_atingidos?: number
           total_boletos?: number
           total_enviados?: number
           updated_at?: string
           valor_total?: number
+          var_mapping_snapshot?: Json | null
         }
         Relationships: []
       }
