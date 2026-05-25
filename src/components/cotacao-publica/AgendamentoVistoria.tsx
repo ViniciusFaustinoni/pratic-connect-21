@@ -7,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle, Sun, Sunset, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { maskCEP, maskTelefone } from '@/lib/validations';
@@ -16,8 +16,9 @@ import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 import { useEnriquecerEndereco } from '@/hooks/useEnriquecerEndereco';
+import { usePrazosInstalacaoPublic } from '@/hooks/usePrazosInstalacaoPublic';
+import { gerarDatasDentroDoPrazo, resolverPrazoHoras } from '@/lib/agendamento/janelaInstalacao';
 import { 
-  isDomingo, 
   getPeriodosDisponivelsPorHora, 
   PERIODOS_DISPONIVEIS,
   LIMITE_VAGAS_POR_PERIODO,
@@ -90,36 +91,19 @@ export function AgendamentoVistoria({
   const dataFormatada = dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : null;
   const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodo(dataFormatada);
 
-  // === LÓGICA DE DATAS ===
+  // === LÓGICA DE DATAS (limitada ao SLA por UF) ===
   const { set: datasBloqueadasSet } = useDatasBloqueadasSet();
-  
-  // Gerar hoje (se houver períodos) + próximos dias úteis (pula domingos e datas bloqueadas)
+  const prazos = usePrazosInstalacaoPublic();
+
+  // UF vem do endereço (ViaCEP/comprovante). Sem UF, usa default (72h).
+  const prazoHoras = resolverPrazoHoras(endereco.estado, prazos);
+
   const hoje = new Date();
-  const datasDisponiveis: Date[] = [];
-
-  // Regra: após 16h, o dia seguinte (D+1) não é ofertado — pulamos para D+2
-  const pularDiaSeguinte = hoje.getHours() >= 16;
-
-  // Incluir hoje se não for domingo, não estiver bloqueado E se ainda houver períodos disponíveis
-  if (!isDomingo(hoje) && !datasBloqueadasSet.has(format(hoje, 'yyyy-MM-dd'))) {
-    const periodosHoje = getPeriodosDisponivelsPorHora(hoje);
-    if (periodosHoje.length > 0) {
-      datasDisponiveis.push(hoje);
-    }
-  }
-
-  // Continuar com dias futuros até ter no máximo 3 datas (hoje + 2 dias)
-  // Após 16h, começa em D+2 (oculta o dia seguinte)
-  let dia = addDays(hoje, pularDiaSeguinte ? 2 : 1);
-  const maxDatas = 3;
-  let guard = 0;
-  while (datasDisponiveis.length < maxDatas && guard < 60) {
-    if (!isDomingo(dia) && !datasBloqueadasSet.has(format(dia, 'yyyy-MM-dd'))) {
-      datasDisponiveis.push(new Date(dia));
-    }
-    dia = addDays(dia, 1);
-    guard++;
-  }
+  const datasDisponiveis: Date[] = gerarDatasDentroDoPrazo({
+    agora: hoje,
+    prazoHoras,
+    datasBloqueadas: datasBloqueadasSet,
+  });
 
   // Períodos disponíveis para a data selecionada (considera hora atual para hoje)
   const periodosParaDataSelecionada = dataSelecionada 
@@ -128,6 +112,19 @@ export function AgendamentoVistoria({
 
   // (Auto-complete por ViaCEP agora é feito por useEnriquecerEndereco)
 
+
+  // Reset data se ela sair da janela quando UF/prazo mudar
+  useEffect(() => {
+    if (!dataSelecionada) return;
+    const aindaValida = datasDisponiveis.some(
+      (d) => d.toDateString() === dataSelecionada.toDateString(),
+    );
+    if (!aindaValida) {
+      setDataSelecionada(null);
+      setPeriodoSelecionado(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prazoHoras, datasDisponiveis.length]);
 
   // Reset período se mudar a data e o período selecionado não estiver disponível
   useEffect(() => {
@@ -305,30 +302,45 @@ export function AgendamentoVistoria({
                   <Label className="flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
                     Escolha a data
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      (prazo de {prazoHoras}h{endereco.estado ? ` para ${endereco.estado.toUpperCase()}` : ''})
+                    </span>
                   </Label>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                    {datasDisponiveis.map((data) => {
-                      const isHoje = format(data, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-                      return (
-                        <Button
-                          key={data.toISOString()}
-                          variant={dataSelecionada?.toDateString() === data.toDateString() ? 'default' : 'outline'}
-                          className={cn(
-                            'flex flex-col h-auto py-2',
-                            dataSelecionada?.toDateString() === data.toDateString() && 'ring-2 ring-primary'
-                          )}
-                          onClick={() => setDataSelecionada(data)}
-                        >
-                          <span className="text-xs opacity-70">
-                            {isHoje ? 'Hoje' : format(data, 'EEE', { locale: ptBR })}
-                          </span>
-                          <span className="text-lg font-bold">{format(data, 'd')}</span>
-                          <span className="text-xs opacity-70">{format(data, 'MMM', { locale: ptBR })}</span>
-                        </Button>
-                      );
-                    })}
-                  </div>
+                  {datasDisponiveis.length === 0 ? (
+                    <div className="flex items-start gap-2 text-sm bg-destructive/10 text-destructive rounded-md p-3 border border-destructive/30">
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      <span>
+                        Nenhuma data disponível dentro do prazo de {prazoHoras} horas
+                        {endereco.estado ? ` para ${endereco.estado.toUpperCase()}` : ''}.
+                        Entre em contato com a central para agendar.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                      {datasDisponiveis.map((data) => {
+                        const isHoje = format(data, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                        return (
+                          <Button
+                            key={data.toISOString()}
+                            variant={dataSelecionada?.toDateString() === data.toDateString() ? 'default' : 'outline'}
+                            className={cn(
+                              'flex flex-col h-auto py-2',
+                              dataSelecionada?.toDateString() === data.toDateString() && 'ring-2 ring-primary'
+                            )}
+                            onClick={() => setDataSelecionada(data)}
+                          >
+                            <span className="text-xs opacity-70">
+                              {isHoje ? 'Hoje' : format(data, 'EEE', { locale: ptBR })}
+                            </span>
+                            <span className="text-lg font-bold">{format(data, 'd')}</span>
+                            <span className="text-xs opacity-70">{format(data, 'MMM', { locale: ptBR })}</span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+
 
                 {/* Seleção de Período */}
                 {dataSelecionada && (

@@ -1,64 +1,56 @@
-## Problema observado
+## Causa raiz
 
-ALESSANDRA PAULA KLEIZ não enxerga módulos liberados depois que o usuário dela foi criado. No screenshot vejo que ela tem só o perfil **Analista de Cadastro** e, no card "Acesso a Módulos", os toggles extras estão desligados. Os módulos marcados como "Já incluso no perfil" (Dashboard, Cadastro, Eventos/Sinistros, Oficinas, Documentos) vêm das `permissions` do perfil dela em `app_roles_config`.
+`src/components/cotacao-publica/AgendamentoVistoria.tsx` (linhas 96-122) gera a lista de datas com regra **hard-coded**: "hoje (se ainda houver período) + próximos dias úteis até completar **3 datas fixas**, pulando domingos e datas bloqueadas". Não há **nenhuma** consulta ao SLA por UF.
 
-## Causa raiz — comprovada no código
+O prazo real está em `configuracoes`:
+- `prazo_instalacao_horas_rj` = **48**
+- `prazo_instalacao_horas_sp` = **72**
+- `prazo_instalacao_autovistoria_horas` = **72** (default/fallback)
 
-Existem **três fontes** que alimentam o sidebar/guards. Só **uma** propaga em tempo real; as outras duas exigem reload manual:
+Esses valores hoje são lidos **apenas** pelo `supabase/functions/cron-suspender-cobertura-inativacao/index.ts` (linhas 25-32) para suspender cobertura. O agendador público nunca os consulta — por isso aparecem datas além da janela permitida.
 
-### 1. Acesso a Módulos (toggle no card) — `user_module_visibility`
-`src/hooks/useModuleVisibility.ts:27-66` — staleTime 30s, `refetchOnWindowFocus: true` e canal Realtime filtrado por `user_id`. Funciona, propaga em segundos. Sem problema.
+Consequência prática para o RJ: o link oferece hoje + 2 dias úteis (até ~3 dias corridos), quando o SLA permite apenas as datas que caem dentro de 48h a partir de "agora".
 
-### 2. Perfis de acesso atribuídos — `user_roles` (problema)
-`src/contexts/AuthContext.tsx:130-149` define `fetchPerfis`, chamado **uma única vez** dentro de `loadUserData` (linhas 193-200). `setPerfis` só roda no login. Não há `useQuery`, não há subscription Realtime, não há refetch on focus. Se o admin adicionar "Analista de Eventos" agora, a sessão ativa da Alessandra só pega isso depois de logout/refresh do navegador.
+## Correção proposta (apenas frontend público, sem mexer na regra de suspensão)
 
-### 3. Permissões do perfil — `app_roles_config.permissions` (problema)
-`src/hooks/useAppRoles.ts:27-42`:
-```ts
-useQuery({
-  queryKey: ['app-roles-config'],
-  queryFn: ...,
-  staleTime: 30 * 60 * 1000, // 30 min
-});
-```
-Sem `refetchOnWindowFocus`, sem Realtime. `usePermissions` (`src/hooks/usePermissions.ts:107`) deriva `canManageSinistros`, `canManageOficinas` etc. via `getPermissionsForRoles(roles)` — que lê dessas permissões cacheadas por 30 min. `AppSidebar.tsx:606` filtra grupos com `permissions.hasPermission(group.permission)`; se a permission nova ainda não chegou no cache, o grupo continua oculto.
+### 1. `src/hooks/useConteudosSistema.ts` (ou hook análogo já consumindo `useConfiguracoesAll`)
+Adicionar 3 seletores tipados sobre o cache global existente:
+- `usePrazoInstalacaoHorasRJ()` → default 48
+- `usePrazoInstalacaoHorasSP()` → default 72
+- `usePrazoInstalacaoHorasDefault()` → default 72
 
-### Onde o cache é invalidado hoje
-`src/contexts/AuthContext.tsx:260-263` só invalida ao **trocar de usuário** (login novo):
-```ts
-queryClient.invalidateQueries({ queryKey: ['app-roles-config'] });
-```
-Para a Alessandra já logada, nada dispara essa invalidação quando o admin salva mudanças em outro navegador.
+Sem nova rede — apenas leitura do cache `configuracoes/all`.
 
-## Conclusão
-A regra "Acesso a Módulos realtime" do `mem://index.md` está cumprida — mas só para o caminho `user_module_visibility`. Os dois outros caminhos (atribuição de perfil e edição das permissões do perfil) ficam presos em cache local até reload. É por aí que Alessandra "perde" módulos liberados depois.
+### 2. `src/lib/agendamento/janelaInstalacao.ts` (novo helper puro)
+Função `gerarDatasDentroDoPrazo({ agora, prazoHoras, datasBloqueadas, pularDomingo, periodosPorHora })`:
+- Calcula `deadline = agora + prazoHoras`.
+- Itera dia a dia a partir de hoje até `deadline` (inclusive o dia em que `deadline` cai, mesmo que a hora exata extrapole — usuário escolhe período, não hora).
+- Filtra: domingo, datas bloqueadas, dias sem nenhum período disponível (regra atual de `getPeriodosDisponivelsPorHora`).
+- Remove o teto fixo de 3 datas — agora o teto é o **prazo**.
+- Mantém regra "após 16h, D+1 é ocultado" só quando ainda sobra outra data válida dentro do prazo; senão mantém para não esvaziar o calendário.
 
-## Plano de correção
+### 3. `src/components/cotacao-publica/AgendamentoVistoria.tsx`
+- Resolver UF: usar `endereco.estado` (já capturado por ViaCEP); fallback para UF do contrato/cotação se disponível; senão `default` (72h).
+- Mapear UF → prazo: `RJ → prazoRJ`, `SP → prazoSP`, demais → `prazoDefault`.
+- Substituir o bloco das linhas 96-122 pela chamada ao novo helper.
+- Quando o usuário ainda não escolheu o CEP/estado, exibir aviso curto ("Preencha o endereço para liberar as datas disponíveis") e suprimir o seletor de data até `endereco.estado` existir — evita oferecer datas que depois somem.
+- Quando o cálculo retornar zero datas (caso extremo: hoje pós-16h, amanhã bloqueado, prazo 48h estourado), mostrar mensagem "Sem agenda disponível dentro do prazo — entre em contato" em vez de calendário vazio.
 
-### A. `src/hooks/useAppRoles.ts` — fechar o gap das permissões do perfil
-- Baixar `staleTime` para 60 s.
-- Adicionar `refetchOnWindowFocus: true`.
-- Adicionar um `useEffect` com canal Realtime em `public.app_roles_config` (sem filtro — é tabela pequena) que invalida `['app-roles-config']` em qualquer INSERT/UPDATE/DELETE.
+### 4. Espelhar no fluxo equivalente
+Aplicar o mesmo helper em `src/components/cotacao-publica/AgendamentoVistoriaCompleta.tsx` se ele também gerar lista própria (verificar antes de editar; reutilizar via prop).
 
-### B. `src/contexts/AuthContext.tsx` — fechar o gap da atribuição de perfis
-- Adicionar `useEffect` (após o de auth state) que, quando há `user.id`, abre um canal Realtime em `public.user_roles` com filtro `user_id=eq.{user.id}` e, em qualquer mudança:
-  - limpa a memoização interna `PERFIS_PROMISES.delete(user.id)`,
-  - rebusca via `fetchPerfis(user.id)`,
-  - chama `setPerfis(...)` com o resultado,
-  - invalida `['module-visibility', user.id]` e `['module-item-visibility', user.id]` para reavaliar overlays dependentes.
-- Adicionar listener leve em `document.visibilitychange`: quando a aba volta para foco, refazer o mesmo refetch de perfis (defesa em camadas para casos em que o Realtime cai).
+### 5. Memory
+Atualizar `mem://logic/operations/suspensao-cobertura-48h` (ou criar leaf `mem://logic/operations/janela-agendamento-publico-por-uf`) registrando que o agendamento público lê `prazo_instalacao_horas_{uf}` da mesma fonte do cron de suspensão — qualquer mudança da regra de 48h/72h deve continuar valendo nos dois lados.
 
-### C. Validação manual após implementar
-Conectar como admin em uma aba e como Alessandra em outra; em uma terceira aba (ou no SQL editor):
-1. Atribuir um novo perfil para ela em `user_roles` → conferir que o grupo correspondente aparece no sidebar da aba dela em poucos segundos, sem F5.
-2. Editar `app_roles_config.permissions` do perfil `analista_cadastro` adicionando, por ex., `canManageSinistros` → conferir que "Eventos" passa a aparecer sem F5.
-3. Remover ambos e conferir que somem.
+## Fora de escopo
 
-Observações:
-- Não vou alterar `useModuleVisibility` (já está correto) nem `useRouteGuard` (já é aditivo desde a correção anterior).
-- Atualizar a regra Core em `mem://index.md` para refletir que a propagação realtime agora cobre as **três** fontes (user_module_visibility, user_roles, app_roles_config), não só a primeira.
+- Não mexer no `cron-suspender-cobertura-inativacao` nem na regra de suspensão pós-aprovação.
+- Não mexer em agendamentos internos (Monitoramento/Coordenação) — só no link público.
+- Não tocar em vagas por período (`useVagasPeriodo`), apenas no gerador de datas.
 
-### Arquivos a editar
-- `src/hooks/useAppRoles.ts`
-- `src/contexts/AuthContext.tsx`
-- `mem://index.md` (e leaf `mem://logic/access/module-visibility-realtime-propagation` para incluir as duas novas fontes)
+## Validação
+
+1. Subir; abrir link público de cotação com endereço RJ → calendário deve mostrar **só** datas dentro de 48h a partir de agora (geralmente hoje + amanhã, ou só amanhã se passou das 16h).
+2. Trocar endereço para SP → reaparecem até 72h de janela.
+3. UF não mapeado (ex.: MG) → 72h (default).
+4. Bloquear data de amanhã em `datas_bloqueadas` no RJ pós-16h → mensagem "sem agenda disponível".
