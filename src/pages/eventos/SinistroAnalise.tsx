@@ -543,7 +543,7 @@ export default function SinistroAnalise() {
       }
 
       // 2. Buscar dados para calcular coparticipação
-      const link = `https://pratic-connect-21.lovable.app/evento/${linkData.token}`;
+      const link = `https://app.praticcar.org/evento/${linkData.token}`;
       const nome = nomeAssociado?.split(' ')[0] || 'Associado';
 
       let cotaTexto = "";
