@@ -239,6 +239,8 @@ serve(async (req) => {
       return { ok: false, reason: `exceção: ${e?.message || e}` };
     }
   }
+
+  // ---- Carregamento de credenciais e códigos da conta ----
   let codigoConta = Number.parseInt(Deno.env.get('HINOVA_CODIGO_CONTA') || '', 10);
   let codigoRegional = Number.parseInt(Deno.env.get('HINOVA_CODIGO_REGIONAL') || '', 10);
   let codigoCooperativa = Number.parseInt(Deno.env.get('HINOVA_CODIGO_COOPERATIVA') || '', 10);
