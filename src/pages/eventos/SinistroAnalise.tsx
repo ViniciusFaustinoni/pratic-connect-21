@@ -488,7 +488,7 @@ export default function SinistroAnalise() {
     }
     setEnviandoLinkAgendamento(true);
     try {
-      const link = `https://pratic-connect-21.lovable.app/evento/${(linkEvento as any).token}`;
+      const link = `https://app.praticcar.org/evento/${(linkEvento as any).token}`;
       const nome = associado.nome?.split(' ')[0] || 'Associado';
       const mensagem = `Olá ${nome}!\n\nAs informações do seu sinistro ${sinistro.protocolo} foram recebidas com sucesso!\n\nAgora, para darmos andamento ao processo de reparo, você precisa agendar a vistoria presencial do regulador.\n\nAcesse o link abaixo para escolher a data e horário:\n${link}\n\nO regulador irá até o endereço que você informar para avaliar os danos.\n\nPRATICCAR`;
       const { error } = await supabase.functions.invoke('whatsapp-send-text', {
