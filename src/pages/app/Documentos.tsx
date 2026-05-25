@@ -111,7 +111,7 @@ export default function Documentos() {
   }), [associado, veiculo]);
 
   // URL de verificação para QR Code
-  const urlVerificacao = `https://pratic-connect-21.lovable.app/verificar/${carteirinhaData.codigoVerificacao}`;
+  const urlVerificacao = `https://app.praticcar.org/verificar/${carteirinhaData.codigoVerificacao}`;
 
   // Boletos pagos para comprovantes (últimos 3)
   const boletosPagos = useMemo(() => {

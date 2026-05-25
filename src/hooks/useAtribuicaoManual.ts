@@ -627,6 +627,13 @@ export interface AtribuirPrestadorParams {
    * Default: 'fotos_instalacao' quando servico.tipo='instalacao'; senão 'somente_fotos'.
    */
   escopo?: EscopoAtribuicaoPrestador;
+  /**
+   * Default `true` — dispara automaticamente o template Meta
+   * `prestador_nova_instalacao_v2` para o WhatsApp do prestador.
+   * Passe `false` apenas quando o coordenador for enviar o link manualmente
+   * pelo dialog (registra no `whatsapp_mensagens` mesmo assim).
+   */
+  enviarWhatsApp?: boolean;
 }
 
 export interface AtribuirPrestadorResult {
@@ -641,7 +648,9 @@ export function useAtribuirServicoPrestador() {
 
   return useMutation({
     mutationFn: async (params: AtribuirPrestadorParams): Promise<AtribuirPrestadorResult> => {
-      const { servicoId, prestadorId, valor, escopo: escopoIn } = params;
+      const { servicoId, prestadorId, valor, escopo: escopoIn, enviarWhatsApp } = params;
+      // Default: dispara o template Meta automaticamente (canal canônico).
+      const skipWhats = enviarWhatsApp === false;
 
       // 1) Determine type: check if it's an instalação or vistoria service
       const { data: servico, error: sErr } = await supabase
@@ -698,7 +707,7 @@ export function useAtribuirServicoPrestador() {
             vistoriador_prestador_id: prestadorId,
             valor,
             atribuido_por: profileId,
-            skip_whatsapp: true,
+            skip_whatsapp: skipWhats,
             escopo,
           },
         });
@@ -789,7 +798,7 @@ export function useAtribuirServicoPrestador() {
             vistoriador_prestador_id: prestadorId,
             valor,
             atribuido_por: profileId,
-            skip_whatsapp: true,
+            skip_whatsapp: skipWhats,
           },
         });
 
@@ -819,7 +828,7 @@ export function useAtribuirServicoPrestador() {
           profissional_id: prestadorId,
           tipo_atribuicao: 'manual_prestador',
           atribuido_por: profileId,
-          observacoes: `Atribuição a prestador externo ${params.prestadorNome} — Valor: R$ ${valor.toFixed(2)} — Link gerado (sem WhatsApp automático)`,
+          observacoes: `Atribuição a prestador externo ${params.prestadorNome} — Valor: R$ ${valor.toFixed(2)} — Link gerado${skipWhats ? ' (sem WhatsApp automático)' : ' + template Meta disparado'}`,
         } as any);
       } catch (logErr) {
         console.error('Erro ao registrar log de atribuição prestador:', logErr);

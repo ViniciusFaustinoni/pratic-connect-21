@@ -54,7 +54,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
   const statusFinal = isExpirado ? 'expirado' : (linkAtivo?.status || 'sem_link');
   const config = statusConfig[statusFinal];
 
-  const siteUrl = 'https://pratic-connect-21.lovable.app';
+  const siteUrl = 'https://app.praticcar.org';
   const linkUrl = linkAtivo?.token ? `${siteUrl}/evento/${linkAtivo.token}` : '';
 
   const handleCopy = () => {
