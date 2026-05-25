@@ -30,7 +30,8 @@ export interface EligibilityState {
   fipeMin: string;
   fipeMax: string;
   fipeIntervalo: string;
-  fipeValoresFaixa: Record<number, string>;
+  /** Chave = `de` (FIPE inicial da faixa em R$) como string. Mantém o valor colado ao range absoluto, não à posição na lista. */
+  fipeValoresFaixa: Record<string, string>;
   selRegioes: Set<string>;
   selUso: Set<string>;
   selPlaca: Set<string>;
