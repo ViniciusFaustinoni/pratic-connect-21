@@ -389,7 +389,9 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
               ))}
             </div>
           )}
-        </ScrollArea>
+          </ScrollArea>
+        </div>
+
 
         <Separator />
         <DialogFooter>
