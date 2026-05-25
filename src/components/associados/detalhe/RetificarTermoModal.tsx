@@ -149,6 +149,23 @@ export function RetificarTermoModal({ open, onOpenChange, associado, contrato, v
 
   const camposAutoPreenchidos = Object.values(origens).filter(Boolean).length;
 
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: defaults,
+  });
+
+  useEffect(() => {
+    if (open) form.reset(defaults);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, associado?.id, contrato?.id, veiculo?.id, ocrPrefill]);
+
+  const reaplicarOCR = () => {
+    const motivoAtual = form.getValues('motivo');
+    form.reset({ ...defaults, motivo: motivoAtual });
+  };
+
+
+
 
   const onSubmit = (v: FormValues) => {
     if (!contrato?.id) return;
