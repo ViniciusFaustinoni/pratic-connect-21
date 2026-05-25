@@ -1,0 +1,1 @@
+UPDATE public.veiculos SET combustivel='gasolina', codigo_sga_combustivel=2 WHERE id='ec0039cc-8803-4968-8c5e-7dc67480586f' AND combustivel IS NULL;
