@@ -641,7 +641,7 @@ export function useAtribuirServicoPrestador() {
 
   return useMutation({
     mutationFn: async (params: AtribuirPrestadorParams): Promise<AtribuirPrestadorResult> => {
-      const { servicoId, prestadorId, valor } = params;
+      const { servicoId, prestadorId, valor, escopo: escopoIn } = params;
 
       // 1) Determine type: check if it's an instalação or vistoria service
       const { data: servico, error: sErr } = await supabase
@@ -655,7 +655,12 @@ export function useAtribuirServicoPrestador() {
       const profileId = await getProfileId();
       let result: any;
 
-      const isInstalacao = servico.tipo === 'instalacao';
+      // Escopo escolhido pelo coordenador define o caminho — não mais o tipo do serviço.
+      // Default conservador quando não vier do UI: instalação → fotos+instalação; vistoria → somente fotos.
+      const escopo: EscopoAtribuicaoPrestador =
+        escopoIn ?? (servico.tipo === 'instalacao' ? 'fotos_instalacao' : 'somente_fotos');
+      const usaInstalacao = escopo === 'fotos_instalacao';
+
 
       if (isInstalacao) {
         // Get instalacao_id
