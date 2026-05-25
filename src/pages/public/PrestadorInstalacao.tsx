@@ -402,7 +402,8 @@ export default function PrestadorInstalacao() {
           checklist_data: checklist,
           fotos_vistoria: enviadasMap,
           assinatura_url: assinaturaUrl,
-          rastreador_imei: imeiRastreador.replace(/\D/g, ''),
+          rastreador_imei: exigeImei ? imeiRastreador.replace(/\D/g, '') : null,
+          escopo: escopoLink,
         },
       });
       if (error) throw error;
