@@ -45,11 +45,20 @@ const PERMISSION_TO_MODULE: Record<string, string> = {
   canDeleteTemplate: 'documentos',
 };
 
-function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perfis: string[] }) {
-  const queryClient = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const [localChanges, setLocalChanges] = useState<Record<string, { visible: boolean; can_edit: boolean }>>({});
+type ModuleChange = { visible: boolean; can_edit: boolean };
+type ModuleChanges = Record<string, ModuleChange>;
 
+function ModuleAccessCard({
+  userId,
+  perfis,
+  pendingChanges,
+  onPendingChange,
+}: {
+  userId: string | undefined;
+  perfis: string[];
+  pendingChanges: ModuleChanges;
+  onPendingChange: (next: ModuleChanges) => void;
+}) {
   const { data: userVisibility, isLoading } = useQuery({
     queryKey: ['user-module-visibility', userId],
     queryFn: async () => {
@@ -64,62 +73,26 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
     enabled: !!userId,
   });
 
-  // Construir estado efetivo: banco + edições locais
-  const getModuleState = useCallback((mod: string) => {
-    if (localChanges[mod]) return localChanges[mod];
+  // Estado efetivo = banco + alterações pendentes (controladas pelo form pai)
+  const getModuleState = useCallback((mod: string): ModuleChange => {
+    if (pendingChanges[mod]) return pendingChanges[mod];
     const row = userVisibility?.find(r => r.module_id === mod);
     return { visible: row?.visible ?? false, can_edit: row?.can_edit ?? true };
-  }, [userVisibility, localChanges]);
+  }, [userVisibility, pendingChanges]);
 
   const toggleVisible = (mod: string) => {
     const current = getModuleState(mod);
-    setLocalChanges(prev => ({
-      ...prev,
-      [mod]: { ...current, visible: !current.visible }
-    }));
+    onPendingChange({ ...pendingChanges, [mod]: { ...current, visible: !current.visible } });
   };
 
   const toggleCanEdit = (mod: string) => {
     const current = getModuleState(mod);
-    setLocalChanges(prev => ({
-      ...prev,
-      [mod]: { ...current, can_edit: !current.can_edit }
-    }));
-  };
-
-  const hasChanges = Object.keys(localChanges).length > 0;
-
-  const handleSave = async () => {
-    if (!userId || !hasChanges) return;
-    setSaving(true);
-    try {
-      const upsertData = Object.entries(localChanges).map(([module_id, state]) => ({
-        user_id: userId,
-        module_id,
-        visible: state.visible,
-        can_edit: state.can_edit,
-        updated_at: new Date().toISOString(),
-      }));
-
-      const { error } = await (supabase as any)
-        .from('user_module_visibility')
-        .upsert(upsertData, { onConflict: 'user_id,module_id' });
-      if (error) throw error;
-
-      queryClient.invalidateQueries({ queryKey: ['user-module-visibility', userId] });
-      queryClient.invalidateQueries({ queryKey: ['module-visibility'] });
-      setLocalChanges({});
-      toast.success('Acessos do usuário atualizados!');
-    } catch (err: any) {
-      toast.error('Erro ao salvar acessos: ' + (err.message || ''));
-    } finally {
-      setSaving(false);
-    }
+    onPendingChange({ ...pendingChanges, [mod]: { ...current, can_edit: !current.can_edit } });
   };
 
   const allModules = Object.keys(MODULE_LABELS);
 
-  // Conjunto de módulos JÁ liberados pelo perfil — overlay aditivo no card.
+  // Módulos já liberados pelo perfil — overlay aditivo no card.
   const { getPermissionsForRoles } = useAppRoles();
   const modulesFromPerfil = React.useMemo(() => {
     const set = new Set<string>();
@@ -128,7 +101,6 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
       const m = PERMISSION_TO_MODULE[p];
       if (m) set.add(m);
     });
-    // Diretor / Admin Master / Desenvolvedor liberam tudo na prática.
     if ((perfis || []).some(p => ['diretor', 'admin_master', 'desenvolvedor'].includes(p))) {
       allModules.forEach(m => set.add(m));
     }
@@ -151,24 +123,25 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
     );
   }
 
+  const pendingCount = Object.keys(pendingChanges).length;
+
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Eye className="w-5 h-5" />
               Acesso a Módulos
             </CardTitle>
             <CardDescription>
-              Conceda módulos adicionais a este usuário, além dos já liberados pelo perfil de acesso. Desmarcar aqui não remove acessos concedidos pelo perfil — para isso, ajuste o perfil acima.
+              Conceda módulos adicionais a este usuário, além dos já liberados pelo perfil. As alterações são salvas junto com o botão <strong>Salvar alterações</strong> do formulário — não há save separado.
             </CardDescription>
           </div>
-          {hasChanges && (
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              Salvar acessos
-            </Button>
+          {pendingCount > 0 && (
+            <Badge variant="outline" className="border-amber-500/50 text-amber-500 bg-amber-500/10 shrink-0">
+              {pendingCount} pendente{pendingCount > 1 ? 's' : ''}
+            </Badge>
           )}
         </div>
       </CardHeader>
@@ -182,7 +155,7 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {allModules.map(mod => {
                 const state = getModuleState(mod);
-                const isChanged = !!localChanges[mod];
+                const isChanged = !!pendingChanges[mod];
                 const fromPerfil = modulesFromPerfil.has(mod);
                 const effectiveOn = state.visible || fromPerfil;
                 return (
@@ -212,6 +185,7 @@ function ModuleAccessCard({ userId, perfis }: { userId: string | undefined; perf
                     </div>
                     {!fromPerfil && state.visible && (
                       <button
+                        type="button"
                         onClick={() => toggleCanEdit(mod)}
                         className={`p-1 rounded transition-colors ${
                           state.can_edit ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground hover:bg-muted'
@@ -346,6 +320,8 @@ export default function UsuarioForm() {
   const [novaSenha, setNovaSenha] = useState('');
   const [alterandoEmail, setAlterandoEmail] = useState(false);
   const [alterandoSenha, setAlterandoSenha] = useState(false);
+  // Estado controlado das alterações de Acesso a Módulos — salvas junto com o form.
+  const [moduleChanges, setModuleChanges] = useState<ModuleChanges>({});
 
   // Função para alterar email (admin)
   const alterarEmail = async () => {
@@ -481,6 +457,22 @@ export default function UsuarioForm() {
         if (!isVendas) {
           await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
         }
+
+        // Persistir alterações de Acesso a Módulos no MESMO save (antes era botão separado).
+        const moduleEntries = Object.entries(moduleChanges);
+        if (moduleEntries.length > 0) {
+          const upsertData = moduleEntries.map(([module_id, state]) => ({
+            user_id: id, // user_module_visibility usa profile.id (mesmo do form)
+            module_id,
+            visible: state.visible,
+            can_edit: state.can_edit,
+            updated_at: new Date().toISOString(),
+          }));
+          const { error: visErr } = await (supabase as any)
+            .from('user_module_visibility')
+            .upsert(upsertData, { onConflict: 'user_id,module_id' });
+          if (visErr) throw visErr;
+        }
       } else {
         setFieldErrors({});
         if (formData.tipo === 'associado') {
@@ -505,8 +497,12 @@ export default function UsuarioForm() {
     },
     onSuccess: () => {
       setFieldErrors({});
+      setModuleChanges({});
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+      queryClient.invalidateQueries({ queryKey: ['user-module-visibility', id] });
+      queryClient.invalidateQueries({ queryKey: ['module-visibility'] });
+      queryClient.invalidateQueries({ queryKey: ['profissionais-equipe'] });
       navigate('/configuracoes/usuarios-acessos');
     },
     onError: (error: any) => {
@@ -557,7 +553,19 @@ export default function UsuarioForm() {
         </div>
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); saveUser.mutate(); }}>
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        // Guard: salvar sem perfis remove TODAS as roles do usuário (causa do bug do MATHEUS).
+        if (isEditing && formData.perfis.length === 0) {
+          const ok = window.confirm(
+            'Atenção: você está salvando este usuário SEM nenhum perfil de acesso. ' +
+            'Isso vai remover todas as roles atuais e o usuário pode sumir de telas como Equipe de Monitoramento. ' +
+            '\n\nDeseja continuar mesmo assim?'
+          );
+          if (!ok) return;
+        }
+        saveUser.mutate();
+      }}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna Principal */}
           <div className="lg:col-span-2 space-y-6">
@@ -720,7 +728,12 @@ export default function UsuarioForm() {
             </Card>
 
             {/* Acesso a Módulos — editável, por usuário */}
-            <ModuleAccessCard userId={isEditing ? id : undefined} perfis={formData.perfis} />
+            <ModuleAccessCard
+              userId={isEditing ? id : undefined}
+              perfis={formData.perfis}
+              pendingChanges={moduleChanges}
+              onPendingChange={setModuleChanges}
+            />
 
             {/* Configurações de Campo */}
             {formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p)) && (
@@ -883,6 +896,11 @@ export default function UsuarioForm() {
               <Button type="submit" className="w-full" disabled={saveUser.isPending}>
                 {saveUser.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 {isEditing ? 'Salvar alterações' : 'Criar usuário'}
+                {Object.keys(moduleChanges).length > 0 && (
+                  <Badge variant="outline" className="ml-2 border-amber-300 text-amber-100 bg-amber-500/30">
+                    +{Object.keys(moduleChanges).length} módulo(s)
+                  </Badge>
+                )}
               </Button>
               <Button type="button" variant="outline" onClick={() => navigate('/configuracoes/usuarios-acessos')} className="w-full">
                 Cancelar
