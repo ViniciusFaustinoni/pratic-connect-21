@@ -320,6 +320,8 @@ export default function UsuarioForm() {
   const [novaSenha, setNovaSenha] = useState('');
   const [alterandoEmail, setAlterandoEmail] = useState(false);
   const [alterandoSenha, setAlterandoSenha] = useState(false);
+  // Estado controlado das alterações de Acesso a Módulos — salvas junto com o form.
+  const [moduleChanges, setModuleChanges] = useState<ModuleChanges>({});
 
   // Função para alterar email (admin)
   const alterarEmail = async () => {
