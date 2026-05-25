@@ -457,6 +457,22 @@ export default function UsuarioForm() {
         if (!isVendas) {
           await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
         }
+
+        // Persistir alterações de Acesso a Módulos no MESMO save (antes era botão separado).
+        const moduleEntries = Object.entries(moduleChanges);
+        if (moduleEntries.length > 0) {
+          const upsertData = moduleEntries.map(([module_id, state]) => ({
+            user_id: id, // user_module_visibility usa profile.id (mesmo do form)
+            module_id,
+            visible: state.visible,
+            can_edit: state.can_edit,
+            updated_at: new Date().toISOString(),
+          }));
+          const { error: visErr } = await (supabase as any)
+            .from('user_module_visibility')
+            .upsert(upsertData, { onConflict: 'user_id,module_id' });
+          if (visErr) throw visErr;
+        }
       } else {
         setFieldErrors({});
         if (formData.tipo === 'associado') {
