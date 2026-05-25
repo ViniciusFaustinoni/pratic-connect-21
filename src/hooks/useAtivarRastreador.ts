@@ -85,7 +85,18 @@ export function useAtivarRastreador() {
 
         if (error) {
           console.error('[useAtivarRastreador] Erro na integração Rede Veículos:', error);
-          throw new Error(error.message || 'Erro na integração com Rede Veículos');
+          // FunctionsHttpError esconde o body — extrai a mensagem real do edge
+          let mensagemReal: string | undefined;
+          try {
+            const ctx = (error as any)?.context;
+            if (ctx && typeof ctx.json === 'function') {
+              const body = await ctx.json();
+              mensagemReal = body?.error || body?.message;
+            }
+          } catch {
+            // ignora — usa fallback abaixo
+          }
+          throw new Error(mensagemReal || data?.error || error.message || 'Erro na integração com Rede Veículos');
         }
 
         if (!data?.success) {
