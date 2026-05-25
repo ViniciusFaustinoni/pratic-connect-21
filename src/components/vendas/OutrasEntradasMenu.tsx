@@ -9,6 +9,7 @@ import { ArrowLeftRight, Users, FileInput, PlusCircle, Search, Loader2, AlertTri
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useBuscaPlaca } from '@/hooks/useBuscaPlaca';
 import { useBuscaPlacaLocal } from '@/hooks/useBuscaPlacaLocal';
+import { useBuscaAssociadoTrocaTitularidade } from '@/hooks/useBuscaAssociadoTrocaTitularidade';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
