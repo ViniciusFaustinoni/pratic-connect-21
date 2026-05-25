@@ -1,14 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Hook que consulta a tabela user_module_item_visibility para o usuário atual.
+ * Propagação em tempo real via Realtime filtrado por user_id (ver useModuleVisibility).
  */
 export function useModuleItemVisibility() {
   // user_module_item_visibility.user_id usa profile.id (mesmo padrão de user_module_visibility)
   const { profile } = useAuth();
   const profileId = profile?.id;
+  const queryClient = useQueryClient();
 
   const { data: visibleItems = [], isLoading } = useQuery({
     queryKey: ['module-item-visibility', profileId],
@@ -28,8 +31,27 @@ export function useModuleItemVisibility() {
       )] as string[];
     },
     enabled: !!profileId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!profileId) return;
+    const channel = supabase
+      .channel(`user-module-item-visibility-${profileId}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'user_module_item_visibility', filter: `user_id=eq.${profileId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['module-item-visibility', profileId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profileId, queryClient]);
 
   const isItemVisible = (moduleId: string, itemId: string): boolean => {
     if (visibleItems.length === 0) return true;
