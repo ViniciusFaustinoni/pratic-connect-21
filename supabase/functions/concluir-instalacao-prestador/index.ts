@@ -67,7 +67,11 @@ Deno.serve(async (req) => {
     const fipe = Number(veic.valor_fipe || 0)
     const exigeRastreador = isDiesel || (isMoto ? fipe >= 9000 : fipe >= 30000)
 
-    if (exigeRastreador && !link.dispensa_rastreador && !imeiLimpo) {
+    // Quando o coordenador atribuiu como 'somente_fotos', o link público nem mostra IMEI;
+    // o evento é vistoria pura — não exige rastreador físico nem fecha instalação física.
+    const escopoLink = (link as any).escopo === 'somente_fotos' ? 'somente_fotos' : 'fotos_instalacao'
+
+    if (escopoLink !== 'somente_fotos' && exigeRastreador && !link.dispensa_rastreador && !imeiLimpo) {
       return new Response(
         JSON.stringify({ success: false, error: 'IMEI do rastreador é obrigatório para concluir esta instalação.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
