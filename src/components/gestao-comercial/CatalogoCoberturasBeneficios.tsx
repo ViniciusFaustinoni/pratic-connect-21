@@ -642,6 +642,7 @@ export function CatalogoCoberturasBeneficios() {
             items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura', cobAttrFilter, cobAttrMap)}
             type="cobertura"
             attrMap={cobAttrMap}
+            highlightId={highlightCobId}
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
