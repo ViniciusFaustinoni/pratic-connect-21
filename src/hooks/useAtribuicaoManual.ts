@@ -828,7 +828,7 @@ export function useAtribuirServicoPrestador() {
           profissional_id: prestadorId,
           tipo_atribuicao: 'manual_prestador',
           atribuido_por: profileId,
-          observacoes: `Atribuição a prestador externo ${params.prestadorNome} — Valor: R$ ${valor.toFixed(2)} — Link gerado (sem WhatsApp automático)`,
+          observacoes: `Atribuição a prestador externo ${params.prestadorNome} — Valor: R$ ${valor.toFixed(2)} — Link gerado${skipWhats ? ' (sem WhatsApp automático)' : ' + template Meta disparado'}`,
         } as any);
       } catch (logErr) {
         console.error('Erro ao registrar log de atribuição prestador:', logErr);
