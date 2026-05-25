@@ -44,17 +44,52 @@ function fmtMoney(v?: number | null) {
 export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }: Props) {
   const navigate = useNavigate();
   const { data: sol, isLoading } = useSolicitacaoSubstituicao(solicitacaoId);
+  const cancelarMut = useCancelarSolicitacaoSubstituicao();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [motivoCancel, setMotivoCancel] = useState('');
 
-  // Polling do termo legado — só ativo para solicitações que já enviaram termo
-  // de cancelamento separado pelo fluxo antigo (substituído pelo termo unificado
-  // assinado no link público da cotação).
   const syncTermo = useSyncTermoCancelamento({
     tipo: 'substituicao',
     solicitacaoId: sol?.id,
     enabled: open && !!sol && sol.status === 'termo_enviado' && !sol.termo_cancelamento_assinado_em,
   });
 
+  const podeCancelar = !!sol && ['aguardando_termo', 'termo_enviado', 'termo_assinado', 'cotacao_criada'].includes(sol.status);
+
+  const handleConfirmarCancelamento = async () => {
+    if (!sol) return;
+    try {
+      const r = await cancelarMut.mutateAsync({ solicitacao_id: sol.id, motivo: motivoCancel.trim() || undefined });
+      if (r?.ja_cancelada) {
+        toast.info('Solicitação já estava cancelada');
+      } else {
+        toast.success(r?.cotacao_cancelada ? 'Substituição e cotação canceladas' : 'Substituição cancelada');
+      }
+      setCancelOpen(false);
+      setMotivoCancel('');
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao cancelar substituição');
+    }
+  };
+
   const handleCriarCotacao = () => {
+    if (!sol) return;
+    const snap = sol.associado_snapshot || {};
+    const params = new URLSearchParams({
+      tipo_entrada: 'substituicao',
+      associado_id: sol.associado_id || '',
+      veiculo_antigo_id: sol.veiculo_antigo_id || '',
+      veiculo_antigo_placa: sol.veiculo_antigo_placa,
+      veiculo_antigo_modelo: `${sol.veiculo_antigo_snapshot?.marca || ''} ${sol.veiculo_antigo_snapshot?.modelo || ''}`.trim(),
+      solicitacao_substituicao_id: sol.id,
+      associado_nome: snap.nome || '',
+      associado_telefone: snap.telefone || '',
+      associado_email: snap.email || '',
+    });
+    onOpenChange(false);
+    navigate(`/vendas/cotacoes?${params.toString()}`);
+  };
     if (!sol) return;
     const snap = sol.associado_snapshot || {};
     const params = new URLSearchParams({
