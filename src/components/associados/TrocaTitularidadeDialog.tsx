@@ -76,28 +76,23 @@ export function TrocaTitularidadeDialog({
   const normPlaca = (p?: string | null) => (p || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
   const placas = (sgaPayload?.veiculos || []).map((v) => normPlaca(v.placa)).filter(Boolean);
 
-  const { data: veiculosLocais, refetch: refetchLocais } = useQuery({
-    queryKey: ['troca-tit-veiculos-local-by-placa', placas.join(',')],
-    queryFn: async () => {
-      if (placas.length === 0) return [] as Array<{ id: string; placa: string; marca: string; modelo: string; ano_modelo: number | null; associado_id: string }>;
-      const { data } = await supabase
-        .from('veiculos')
-        .select('id, placa, marca, modelo, ano_modelo, associado_id')
-        .in('placa', placas);
-      return data || [];
-    },
-    enabled: open && placas.length > 0,
-  });
+  // Fallback local serve TAMBÉM como fonte canônica de placa→UUID, pois
+  // roda via edge function `troca-titularidade-detalhe-associado` (service role)
+  // e enxerga o veículo mesmo quando RLS o esconde do vendedor.
+  const fallback = useTrocaTitularidadeFallbackLocal(associadoId, open);
+  const fallbackPayload = fallback.data?.payload;
+  const placaParaIdSvc = fallback.data?.placaParaId;
+  const refetchLocais = fallback.refetch;
 
   const veiculosSgaMapeados: VeiculoOpcao[] = [];
   for (const v of (sgaPayload?.veiculos || [])) {
     const placaNorm = normPlaca(v.placa);
-    const local = (veiculosLocais || []).find((l) => normPlaca(l.placa) === placaNorm);
-    if (!local) continue;
+    const id = placaParaIdSvc?.get(placaNorm);
+    if (!id) continue;
     veiculosSgaMapeados.push({
-      id: local.id,
+      id,
       placa: v.placa,
-      descricao: `${v.marca || local.marca || ''} ${v.modelo || local.modelo || ''} ${v.ano || local.ano_modelo || ''} - ${v.placa}`.trim(),
+      descricao: `${v.marca || ''} ${v.modelo || ''} ${v.ano || ''} - ${v.placa}`.trim(),
     });
   }
 
