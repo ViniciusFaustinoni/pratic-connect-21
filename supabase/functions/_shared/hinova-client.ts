@@ -1564,6 +1564,38 @@ export async function alterarSituacaoParaVeiculoHinova(
   };
 }
 
+/**
+ * POST /alterar/veiculo
+ *
+ * Endpoint oficial da Hinova para alterar dados de um veículo já cadastrado,
+ * incluindo TROCA DE TITULARIDADE (mudar o `codigo_associado` vinculado a um
+ * `codigo_veiculo`). É o caminho nativo — não exige inativar nada.
+ *
+ * Parâmetros:
+ *   - codigo_veiculo (obrigatório): veículo existente no Hinova
+ *   - codigo_associado (obrigatório p/ troca): novo titular
+ *   - transferir_agregados (opcional): array com códigos dos agregados que
+ *     devem acompanhar o veículo. Comportamento exato quando OMITIDO está em
+ *     validação manual — por enquanto o caller decide via flag.
+ *
+ * Retorno esperado: `{ mensagem: 'alterado' }` em sucesso.
+ */
+export async function alterarVeiculoHinova(
+  supabaseOrSession: any,
+  payload: { codigo_veiculo: number; codigo_associado?: number; transferir_agregados?: number[]; [k: string]: unknown },
+): Promise<{ ok: boolean; status: number; raw: any; mensagem: string | null; errors: string[] }> {
+  const { ok, status, txt, data } = await hinovaPostAuth(
+    supabaseOrSession, '/alterar/veiculo', payload, 'alterarVeiculo',
+  );
+  return {
+    ok,
+    status,
+    raw: data ?? txt.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+
 /** POST /veiculo/foto/cadastrar — máx 50 fotos por chamada */
 export interface FotoHinovaPayload {
   nome_arquivo: string;
