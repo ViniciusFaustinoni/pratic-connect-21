@@ -672,7 +672,7 @@ serve(async (req) => {
     // Copy vehicle data for the contract snapshot
     const { data: veiculoData } = await supabase
       .from("veiculos")
-      .select("placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, renavam, valor_fipe")
+      .select("placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, renavam, valor_fipe, codigo_fipe, codigo_modelo_hinova, codigo_sga_combustivel, codigo_sga_cor")
       .eq("id", veiculoId)
       .maybeSingle();
 
