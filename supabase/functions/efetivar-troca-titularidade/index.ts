@@ -1208,34 +1208,37 @@ serve(async (req) => {
 
         // 15.5 Re-cadastrar veículo no novo titular
         const codigoGrupoProduto = await getConfiguracaoNumero(supabase, 'sga_codigo_grupo_produto_padrao', 0);
-        const tipoVeiculo = Number(veiculoData?.placa && /^([A-Z]{3}\d[A-Z]\d{2}|[A-Z]{3}\d{4})$/i.test(veiculoData.placa) ? 1 : 1);
-        const ctxBase: VeiculoCtx = {
+        const basePayloadVeiculo = {
           codigo_associado: codigoAssociadoNovo,
-          codigo_voluntario: 0,
+          placa: veiculoPlaca,
+          chassi: veiculoChassi,
+          renavam: veiculoData?.renavam || undefined,
+          marca: veiculoData?.marca || undefined,
+          modelo: veiculoData?.modelo || undefined,
+          ano_fabricacao: veiculoData?.ano_fabricacao || undefined,
+          ano_modelo: veiculoData?.ano_modelo || undefined,
+          cor: veiculoData?.cor || undefined,
+          valor_fipe: veiculoData?.valor_fipe || undefined,
           codigo_grupo_produto: codigoGrupoProduto || undefined,
-          tipo_veiculo: tipoVeiculo,
-          codigo_combustivel: (veiculoData as any)?.codigo_sga_combustivel || undefined,
-          codigo_cor: (veiculoData as any)?.codigo_sga_cor || undefined,
-          codigo_modelo: (veiculoData as any)?.codigo_modelo_hinova || undefined,
         };
 
         let cadVeic;
         const codigoModeloPersistido = Number((veiculoData as any)?.codigo_modelo_hinova || 0) || null;
 
         if (codigoModeloPersistido) {
-          cadVeic = await cadastrarVeiculoHinova(
-            supabase,
-            buildVeiculoPayload(veiculoData, '', veiculoData?.valor_fipe || 0, { ...ctxBase, codigo_modelo: codigoModeloPersistido })
-          );
+          cadVeic = await cadastrarVeiculoHinova(supabase, {
+            ...basePayloadVeiculo,
+            codigo_modelo: codigoModeloPersistido,
+          });
         }
 
         if (!(cadVeic?.ok && cadVeic?.codigo)) {
           const variantesFipe = variantesCodigoFipe((veiculoData as any)?.codigo_fipe || null);
           for (const variante of variantesFipe) {
-            cadVeic = await cadastrarVeiculoHinova(
-              supabase,
-              buildVeiculoPayload(veiculoData, variante, veiculoData?.valor_fipe || 0, ctxBase)
-            );
+            cadVeic = await cadastrarVeiculoHinova(supabase, {
+              ...basePayloadVeiculo,
+              codigo_fipe: variante,
+            });
             if (cadVeic.ok && cadVeic.codigo) break;
 
             const detalhe = `${(cadVeic.errors || []).join(' ')} ${cadVeic.mensagem || ''}`.toLowerCase();
@@ -1253,7 +1256,7 @@ serve(async (req) => {
               marca: String(veiculoData?.marca || '').trim(),
               texto: String(veiculoData?.modelo || '').trim(),
               ano: veiculoData?.ano_modelo || veiculoData?.ano_fabricacao || null,
-              tipo_veiculo: tipoVeiculo,
+              tipo_veiculo: null,
             });
             const melhor = escolherMelhorModeloHinova(
               lookup.items,
@@ -1262,10 +1265,10 @@ serve(async (req) => {
             );
 
             if (melhor?.codigo_modelo) {
-              cadVeic = await cadastrarVeiculoHinova(
-                supabase,
-                buildVeiculoPayload(veiculoData, '', veiculoData?.valor_fipe || 0, { ...ctxBase, codigo_modelo: melhor.codigo_modelo })
-              );
+                cadVeic = await cadastrarVeiculoHinova(supabase, {
+                  ...basePayloadVeiculo,
+                  codigo_modelo: melhor.codigo_modelo,
+                });
 
               if (cadVeic.ok && cadVeic.codigo) {
                 await supabase
