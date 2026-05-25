@@ -29,6 +29,7 @@ import {
   cadastrarVeiculoHinova,
   alterarSituacaoParaVeiculoHinova,
   alterarSituacaoAssociadoHinova,
+  alterarVeiculoHinova,
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
   HinovaNotFoundError,
@@ -167,26 +168,72 @@ serve(async (req) => {
   }
 
   /**
-   * Quando a placa/chassi do veículo local já está cadastrada em OUTRO codigo_associado
-   * no Hinova, só auto-inativa o veículo remoto (situação 2) se houver prova local
-   * (`solicitacoes_troca_titularidade.status='efetivada'`) de que aquela placa foi
-   * legitimamente transferida. Trocas legadas/externas continuam exigindo intervenção
-   * manual no painel SGA.
+   * Quando a placa/chassi do veículo local já está cadastrada em OUTRO
+   * `codigo_associado` no Hinova, e existe uma `solicitacoes_troca_titularidade`
+   * EFETIVADA local correspondente àquela placa/chassi, executa a TROCA NATIVA
+   * via `POST /alterar/veiculo` (caminho oficial da Hinova).
+   *
+   * Comportamento:
+   *   1. Idempotência: re-consulta a placa/chassi. Se já estiver vinculada ao
+   *      `codigoAssociadoNovo`, devolve `ok` com `codigoVeiculoRemoto` sem chamar
+   *      o endpoint de alteração (evita chamadas duplicadas em retries do cron).
+   *   2. Resolve a troca efetivada local pela placa/chassi em conflito (não
+   *      pelo `veiculoLocalId` da fila) — garante match mesmo quando há recriação
+   *      do registro local ou descasamento veiculo_id ↔ identificador remoto.
+   *   3. Chama `alterarVeiculoHinova({ codigo_veiculo, codigo_associado, ... })`.
+   *      Parâmetro `transferir_agregados` controlado por flag em `configuracoes`
+   *      (default omitido — comportamento padrão sob validação manual).
+   *
+   * Retorna `{ ok: true, codigoVeiculoRemoto }` em sucesso (caller pula o
+   * cadastro novo); `{ ok: false, reason }` para conflito sem troca local
+   * (caller marca falha permanente como antes).
    */
-  async function tentarAutoInativarVeiculoRemoto(args: {
+  async function tentarTransferirVeiculoRemoto(args: {
     veiculoLocalId: string;
     associadoLocalId: string;
     codVeicRem: number;
     codAssocRem: number;
+    codigoAssociadoNovo: number;
     placa: string;
+    chassi: string;
     contexto: 'placa' | 'chassi';
-  }): Promise<{ ok: true } | { ok: false; reason: string }> {
-    const { veiculoLocalId, associadoLocalId, codVeicRem, codAssocRem, placa, contexto } = args;
+  }): Promise<{ ok: true; codigoVeiculoRemoto: number } | { ok: false; reason: string }> {
+    const {
+      veiculoLocalId, associadoLocalId,
+      codVeicRem, codAssocRem, codigoAssociadoNovo,
+      placa, chassi, contexto,
+    } = args;
     try {
+      if (!codigoAssociadoNovo) {
+        return { ok: false, reason: 'codigo_associado_novo ausente (associado local sem codigo_hinova)' };
+      }
+
+      // (1) Match da troca por placa/chassi do conflito, não por veiculo_id local.
+      // Cobre casos onde o veiculo local foi recriado ou onde o identificador
+      // em conflito difere do registro atual.
+      const idsPlaca: string[] = [];
+      const placaLimpaCmp = (placa || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (placaLimpaCmp) {
+        const { data: vs } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('placa', placaLimpaCmp);
+        for (const v of vs || []) idsPlaca.push(v.id);
+      }
+      const idsChassi: string[] = [];
+      if (chassi && chassi.length === 17) {
+        const { data: vs } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('chassi', chassi);
+        for (const v of vs || []) idsChassi.push(v.id);
+      }
+      const veiculoIds = Array.from(new Set([veiculoLocalId, ...idsPlaca, ...idsChassi]));
+
       const { data: troca, error: trErr } = await supabase
         .from('solicitacoes_troca_titularidade')
-        .select('id, associado_antigo_id, novo_associado_id, efetivada_em')
-        .eq('veiculo_id', veiculoLocalId)
+        .select('id, associado_antigo_id, novo_associado_id, veiculo_id, efetivada_em')
+        .in('veiculo_id', veiculoIds)
         .eq('status', 'efetivada')
         .order('efetivada_em', { ascending: false })
         .limit(1)
@@ -195,106 +242,92 @@ serve(async (req) => {
         return { ok: false, reason: `consulta troca local falhou: ${trErr.message}` };
       }
       if (!troca) {
-        await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto', 'skipped',
-          { codVeicRem, codAssocRem, contexto },
-          { motivo: 'sem solicitacoes_troca_titularidade efetivada local' });
+        await logSync(veiculoLocalId, associadoLocalId, 'transferir_vinculo_veiculo', 'skipped',
+          { codVeicRem, codAssocRem, contexto, placa, chassi, veiculoIds },
+          { motivo: 'sem solicitacoes_troca_titularidade efetivada para placa/chassi em conflito' });
         return { ok: false, reason: 'sem_troca_local' };
       }
 
-      // Passo 1 — inativar o veículo no registro do titular antigo.
-      // Tolerar "mesma situação" como sucesso (já está inativo de execução anterior).
-      const rs = await alterarSituacaoParaVeiculoHinova(supabase, codVeicRem, 2);
-      const veicJaInativo = !rs.ok && /mesma que o ve.culo se encontra/i.test(
-        (rs.mensagem || '') + ' ' + rs.errors.join(' '),
-      );
-      if (!rs.ok && !veicJaInativo) {
-        await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto', 'error',
-          { codVeicRem, codAssocRem, situacao: 2, contexto, troca_id: troca.id },
-          rs.raw, rs.mensagem || rs.errors.join('; ') || `HTTP ${rs.status}`);
-        return { ok: false, reason: `Hinova respondeu erro: ${rs.mensagem || rs.errors.join('; ')}` };
-      }
-      await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_veiculo_remoto',
-        rs.ok ? 'success' : 'info',
-        { codVeicRem, codAssocRem, situacao: 2, contexto, troca_id: troca.id, placa, ja_inativo: veicJaInativo },
-        rs.raw);
-
-      // Passo 2 — se o titular antigo está órfão localmente (sem veículo/contrato
-      // ativo no nosso sistema), inativá-lo também no SGA. Isso libera o índice
-      // de placas da Hinova, que continua apontando para o codigo_associado
-      // antigo mesmo após o veículo ir para situação 2.
-      let inativouAssociado = false;
+      // (2) Idempotência: re-consulta antes de alterar.
       try {
-        const associadoAntigoId = troca.associado_antigo_id as string | null;
-        if (associadoAntigoId) {
-          const [{ count: vAtivos }, { count: cAtivos }] = await Promise.all([
-            supabase.from('veiculos').select('id', { count: 'exact', head: true })
-              .eq('associado_id', associadoAntigoId).neq('status', 'cancelado'),
-            supabase.from('contratos').select('id', { count: 'exact', head: true })
-              .eq('associado_id', associadoAntigoId).eq('status', 'ativo'),
-          ]);
-          if ((vAtivos || 0) === 0 && (cAtivos || 0) === 0) {
-            const ra = await alterarSituacaoAssociadoHinova(supabase, codAssocRem, 2);
-            inativouAssociado = ra.ok;
-            await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_associado_remoto',
-              ra.ok ? 'success' : 'warning',
-              { codAssocRem, situacao: 2, contexto, troca_id: troca.id, placa },
-              ra.raw, ra.ok ? null : (ra.mensagem || ra.errors.join('; ') || `HTTP ${ra.status}`));
-          } else {
-            await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_associado_remoto', 'skipped',
-              { codAssocRem, troca_id: troca.id },
-              { motivo: 'titular antigo ainda tem veículos/contratos ativos locais', vAtivos, cAtivos });
-          }
+        const recheck = contexto === 'chassi' && chassi
+          ? await buscarVeiculoPorChassi(supabase, chassi)
+          : await buscarVeiculoPorPlaca(supabase, placaLimpaCmp);
+        const codAssocAtual = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
+        const codVeicAtual = Number(recheck.found?.codigo_veiculo || 0) || codVeicRem;
+        if (codAssocAtual && codAssocAtual === codigoAssociadoNovo) {
+          await logSync(veiculoLocalId, associadoLocalId, 'transferir_vinculo_veiculo', 'info',
+            { contexto, placa, chassi, codigo_veiculo: codVeicAtual, codigo_associado: codAssocAtual, troca_id: troca.id },
+            { motivo: 'idempotente — placa/chassi já vinculada ao novo titular no Hinova' });
+          return { ok: true, codigoVeiculoRemoto: codVeicAtual };
         }
       } catch (e: any) {
-        await logSync(veiculoLocalId, associadoLocalId, 'auto_inativar_associado_remoto', 'warning',
-          { codAssocRem, troca_id: troca.id }, null, String(e?.message || e));
-      }
-
-      // Passo 3 — re-consultar a placa para confirmar liberação antes de seguir
-      // para o cadastro do novo titular. Se a Hinova ainda mantiver o vínculo,
-      // marcar falha permanente com mensagem clara (sem loop).
-      try {
-        const recheck = await buscarVeiculoPorPlaca(supabase, placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase());
-        const stillCodAssoc = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
-        if (stillCodAssoc && stillCodAssoc === codAssocRem) {
-          const msg = `Placa ${placa} permanece vinculada ao associado ${codAssocRem} no Hinova mesmo após inativação do veículo${inativouAssociado ? ' e do associado' : ''}. Intervenção manual necessária no painel SGA.`;
-          await logSync(veiculoLocalId, associadoLocalId, 'verificar_liberacao_placa', 'error',
-            { codAssocRem, placa, inativouAssociado }, recheck.found, msg);
-          return { ok: false, reason: msg };
+        // NotFound aqui é estranho (acabou de bater conflito), mas não fatal —
+        // segue para a alteração que vai retornar erro claro caso o sumiço persista.
+        if (!(e instanceof HinovaNotFoundError)) {
+          console.warn('[transferir_vinculo_veiculo][recheck]', e?.message || e);
         }
-        await logSync(veiculoLocalId, associadoLocalId, 'verificar_liberacao_placa', 'success',
-          { codAssocRem, placa, inativouAssociado }, recheck.found || null);
-      } catch (e: any) {
-        // NotFound → placa liberada, segue. Transitório → loga e segue mesmo assim
-        // (cadastro vai retentar; se ainda houver vínculo, o conflito reaparece).
-        await logSync(veiculoLocalId, associadoLocalId, 'verificar_liberacao_placa', 'info',
-          { codAssocRem, placa }, null, String(e?.message || e));
       }
 
-      // Auditoria consolidada
+      // (3) Flag para envio de agregados (default: omitir até validação manual).
+      let enviarAgregados = false;
+      try {
+        const { data: cfg } = await supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'sga_alterar_veiculo_enviar_agregados')
+          .maybeSingle();
+        enviarAgregados = String(cfg?.valor || '').toLowerCase() === 'true';
+      } catch { /* default false */ }
+
+      const payload: Record<string, unknown> = {
+        codigo_veiculo: codVeicRem,
+        codigo_associado: codigoAssociadoNovo,
+      };
+      if (enviarAgregados) {
+        // TODO: quando validação manual confirmar que agregados precisam ser
+        // enviados explicitamente, coletar códigos remotos dos agregados aqui.
+        // Por enquanto envia array vazio para fixar a chave no payload sem efeito.
+        payload.transferir_agregados = [];
+      }
+
+      const ra = await alterarVeiculoHinova(supabase, payload);
+      if (!ra.ok) {
+        await logSync(veiculoLocalId, associadoLocalId, 'transferir_vinculo_veiculo', 'error',
+          { codVeicRem, codAssocAntigo: codAssocRem, codAssocNovo: codigoAssociadoNovo, contexto, placa, chassi, troca_id: troca.id, enviar_agregados: enviarAgregados },
+          ra.raw, ra.mensagem || ra.errors.join('; ') || `HTTP ${ra.status}`);
+        return { ok: false, reason: `Hinova rejeitou alteração: ${ra.mensagem || ra.errors.join('; ') || `HTTP ${ra.status}`}` };
+      }
+
+      await logSync(veiculoLocalId, associadoLocalId, 'transferir_vinculo_veiculo', 'success',
+        { codVeicRem, codAssocAntigo: codAssocRem, codAssocNovo: codigoAssociadoNovo, contexto, placa, chassi, troca_id: troca.id, enviar_agregados: enviarAgregados },
+        ra.raw);
+
       try {
         await insertAuditLog(supabase, {
           acao: 'atualizar',
           modulo: 'configuracoes',
           tabela: 'veiculos',
           registro_id: veiculoLocalId,
-          descricao: `[SGA] Liberação de placa ${placa} via troca ${troca.id}: veículo remoto cod=${codVeicRem} inativado${inativouAssociado ? ` e associado antigo cod=${codAssocRem} inativado` : ''}.`,
+          descricao: `[SGA] Troca de titularidade na Hinova via /alterar/veiculo: veículo cod=${codVeicRem} reapontado de associado cod=${codAssocRem} para cod=${codigoAssociadoNovo} (placa ${placa || chassi}, troca ${troca.id}).`,
           dados_novos: {
             placa,
+            chassi,
             contexto,
             codigo_veiculo_remoto: codVeicRem,
-            codigo_associado_remoto: codAssocRem,
-            inativou_associado: inativouAssociado,
+            codigo_associado_antigo: codAssocRem,
+            codigo_associado_novo: codigoAssociadoNovo,
             troca_id: troca.id,
             associado_antigo_id: troca.associado_antigo_id,
             novo_associado_id: troca.novo_associado_id,
+            enviar_agregados: enviarAgregados,
           },
         });
       } catch (e: any) {
-        console.warn('[auto_inativar_veiculo_remoto][audit]', e?.message || e);
+        console.warn('[transferir_vinculo_veiculo][audit]', e?.message || e);
       }
 
-      return { ok: true };
+      return { ok: true, codigoVeiculoRemoto: codVeicRem };
     } catch (e: any) {
       return { ok: false, reason: `exceção: ${e?.message || e}` };
     }
@@ -890,21 +923,24 @@ serve(async (req) => {
             const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
               const codVeicRem = Number(r.found.codigo_veiculo);
-              const autoInat = await tentarAutoInativarVeiculoRemoto({
+              const transf = await tentarTransferirVeiculoRemoto({
                 veiculoLocalId: _vid,
                 associadoLocalId: _aid,
                 codVeicRem,
                 codAssocRem,
+                codigoAssociadoNovo: codigoAssociadoHinova!,
                 placa: placaLimpa,
+                chassi: chassiLimpo,
                 contexto: 'placa',
               });
-              if (autoInat.ok) {
-                // Veículo remoto inativado — segue fluxo deixando codigoVeiculoHinova=null
-                // para que "6.d Cadastrar se não existe" registre vinculado ao novo titular.
+              if (transf.ok) {
+                // Veículo agora aponta para o novo titular no Hinova — reutiliza
+                // o codigo_veiculo existente, pulando o cadastro novo (6.d).
+                codigoVeiculoHinova = transf.codigoVeiculoRemoto;
               } else {
-                const msg = autoInat.reason === 'sem_troca_local'
-                  ? `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}).`
-                  : `Auto-inativação falhou: ${autoInat.reason}`;
+                const msg = transf.reason === 'sem_troca_local'
+                  ? `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}) e não há troca de titularidade efetivada local. Revisar manualmente.`
+                  : `Falha na troca de titularidade via /alterar/veiculo: ${transf.reason}`;
                 await logSync(_vid, _aid, 'conflito_placa', 'error',
                   { placa: placaLimpa }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
                 await setStatusSga(_vid, 'erro_sincronizacao');
@@ -935,25 +971,28 @@ serve(async (req) => {
             const codAssocRem = Number(r.found.codigo_associado || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
               const codVeicRem = Number(r.found.codigo_veiculo);
-              const autoInat = await tentarAutoInativarVeiculoRemoto({
+              const transf = await tentarTransferirVeiculoRemoto({
                 veiculoLocalId: _vid,
                 associadoLocalId: _aid,
                 codVeicRem,
                 codAssocRem,
-                placa: placaLimpa || chassiLimpo,
+                codigoAssociadoNovo: codigoAssociadoHinova!,
+                placa: placaLimpa,
+                chassi: chassiLimpo,
                 contexto: 'chassi',
               });
-              if (!autoInat.ok) {
-                const msg = autoInat.reason === 'sem_troca_local'
-                  ? `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}).`
-                  : `Auto-inativação falhou: ${autoInat.reason}`;
+              if (transf.ok) {
+                codigoVeiculoHinova = transf.codigoVeiculoRemoto;
+              } else {
+                const msg = transf.reason === 'sem_troca_local'
+                  ? `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}) e não há troca de titularidade efetivada local. Revisar manualmente.`
+                  : `Falha na troca de titularidade via /alterar/veiculo: ${transf.reason}`;
                 await logSync(_vid, _aid, 'conflito_chassi', 'error',
                   { chassi: chassiLimpo }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
                 await setStatusSga(_vid, 'erro_sincronizacao');
                 await markQueueFalhaPermanente(_vid, _aid, msg);
                 return;
               }
-              // Auto-inativado: deixa codigoVeiculoHinova null para cadastro novo
             } else {
               codigoVeiculoHinova = Number(r.found.codigo_veiculo);
               await logSync(_vid, _aid, 'buscar_veiculo_chassi', 'success',

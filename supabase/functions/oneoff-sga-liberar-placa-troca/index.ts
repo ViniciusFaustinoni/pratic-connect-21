@@ -1,30 +1,30 @@
 // deno-lint-ignore-file no-explicit-any
 /**
- * ONE-OFF: libera uma placa presa no Hinova para que o novo titular consiga
- * ser cadastrado. Faz exatamente o mesmo que o guard `tentarAutoInativarVeiculoRemoto`
- * do sga-hinova-sync, mas SEM exigir `solicitacoes_troca_titularidade.efetivada`
- * local — só usar para trocas legadas/externas confirmadas manualmente.
+ * ONE-OFF: executa a TROCA DE TITULARIDADE no Hinova via `POST /alterar/veiculo`
+ * para liberar uma placa hoje vinculada a outro associado.
  *
- * Passos:
+ * Caminho canônico (substitui o antigo "inativar veículo + inativar associado"):
  *   1. Busca a placa no Hinova → obtém codigo_veiculo + codigo_associado antigo.
- *   2. Inativa o veículo remoto (situação 2).
- *   3. Inativa o associado antigo no Hinova (situação 2) — sempre, já que
- *      o caso de uso pressupõe que o antigo titular não tem mais nada conosco.
- *   4. Re-consulta a placa para confirmar liberação.
- *   5. Reseta sga_sync_queue do veículo local para retentativa imediata.
+ *   2. Idempotência: se já estiver vinculada ao novo titular local, NÃO chama
+ *      `/alterar/veiculo` — apenas reenfileira a sincronização.
+ *   3. Caso contrário, chama `alterarVeiculoHinova({ codigo_veiculo, codigo_associado })`
+ *      apontando para o `codigo_hinova` do novo titular local.
+ *   4. Re-consulta a placa para confirmar a troca.
+ *   5. Reseta `sga_sync_queue` para retentativa imediata.
  *   6. Audita.
  *
- * Body: { placa: string, motivo: string }
+ * Body:
+ *   { placa: string, motivo?: string, enviar_agregados?: boolean }
  *
- * Deletar depois da validação.
+ * Validação manual obrigatória ANTES de habilitar `enviar_agregados=true` em
+ * produção (ver memória `mem://logic/integrations/sga-alterar-veiculo-troca-titularidade`).
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { insertAuditLog } from '../_shared/auditLog.ts';
 import {
   buscarVeiculoPorPlaca,
-  alterarSituacaoParaVeiculoHinova,
-  alterarSituacaoAssociadoHinova,
+  alterarVeiculoHinova,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
@@ -47,6 +47,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const placaRaw = String(body?.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const motivo = String(body?.motivo || 'one-off manual liberar placa troca').slice(0, 500);
+    const enviarAgregados = body?.enviar_agregados === true;
     if (!placaRaw) {
       return new Response(JSON.stringify({ ok: false, error: 'placa obrigatória' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -63,14 +64,25 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const assocLocal: any = vLocal.associados;
-    const codAssocLocal = Number(assocLocal?.codigo_hinova || 0);
-    log('veiculo_local', { id: vLocal.id, associado: assocLocal?.nome, codigo_hinova_novo: codAssocLocal });
+    const codAssocNovo = Number(assocLocal?.codigo_hinova || 0);
+    log('veiculo_local', { id: vLocal.id, associado: assocLocal?.nome, codigo_hinova_novo: codAssocNovo });
+
+    if (!codAssocNovo) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'associado local não tem codigo_hinova — cadastrar/sincronizar antes',
+        associado_local: { id: vLocal.associado_id, nome: assocLocal?.nome },
+        steps,
+      }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // (1) Buscar no Hinova
-    const r = await buscarVeiculoPorPlaca(supabase, placaRaw).catch((e) => { log('hinova_busca_erro', { error: String(e?.message || e) }); return null; });
+    const r = await buscarVeiculoPorPlaca(supabase, placaRaw).catch((e) => {
+      log('hinova_busca_erro', { error: String(e?.message || e) });
+      return null;
+    });
     if (!r?.found?.codigo_veiculo) {
-      log('hinova_busca', { motivo: 'placa já não está no Hinova — nada a inativar' });
-      // mesmo assim re-enfileira
+      log('hinova_busca', { motivo: 'placa não existe no Hinova — nada a alterar' });
       await requeue(supabase, vLocal.id, vLocal.associado_id);
       log('requeue', { ok: true });
       return new Response(JSON.stringify({ ok: true, placa: placaRaw, skipped: true, steps }),
@@ -78,50 +90,57 @@ serve(async (req) => {
     }
     const codVeicRem = Number(r.found.codigo_veiculo);
     const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
-    log('hinova_busca', { codigo_veiculo: codVeicRem, codigo_associado_antigo: codAssocRem });
+    log('hinova_busca', { codigo_veiculo: codVeicRem, codigo_associado_atual: codAssocRem });
 
-    if (codAssocRem && codAssocLocal && codAssocRem === codAssocLocal) {
+    // (2) Idempotência: já está com o novo titular?
+    if (codAssocRem && codAssocRem === codAssocNovo) {
+      log('idempotente', { motivo: 'placa já vinculada ao novo titular no Hinova' });
+      await requeue(supabase, vLocal.id, vLocal.associado_id);
+      log('requeue', { ok: true });
       return new Response(JSON.stringify({
-        ok: false,
-        error: 'veículo remoto já pertence ao associado local — não há conflito',
+        ok: true,
+        placa: placaRaw,
+        idempotente: true,
+        codigo_veiculo: codVeicRem,
         codigo_associado: codAssocRem,
         steps,
-      }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // (2) Inativar veículo remoto — tolerar "mesma situação" como sucesso
-    const rv = await alterarSituacaoParaVeiculoHinova(supabase, codVeicRem, 2);
-    const jaInativo = !rv.ok && /mesma que o ve.culo se encontra/i.test(
-      (rv.mensagem || '') + ' ' + rv.errors.join(' '),
-    );
-    log('inativar_veiculo_remoto', { ok: rv.ok, ja_inativo: jaInativo, mensagem: rv.mensagem, errors: rv.errors });
-    if (!rv.ok && !jaInativo) {
-      return new Response(JSON.stringify({ ok: false, error: 'Hinova rejeitou inativação do veículo', steps }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // (3) Alterar vínculo via /alterar/veiculo
+    const payload: Record<string, unknown> = {
+      codigo_veiculo: codVeicRem,
+      codigo_associado: codAssocNovo,
+    };
+    if (enviarAgregados) {
+      // TODO pós-validação manual: coletar códigos dos agregados remotos.
+      payload.transferir_agregados = [];
+    }
+    const ra = await alterarVeiculoHinova(supabase, payload);
+    log('alterar_veiculo', {
+      ok: ra.ok, status: ra.status, mensagem: ra.mensagem, errors: ra.errors,
+      enviar_agregados: enviarAgregados,
+    });
+    if (!ra.ok) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'Hinova rejeitou /alterar/veiculo',
+        status: ra.status, mensagem: ra.mensagem, errors: ra.errors, raw: ra.raw, steps,
+      }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // (3) Inativar associado antigo
-    let inativouAssoc = false;
-    if (codAssocRem) {
-      const ra = await alterarSituacaoAssociadoHinova(supabase, codAssocRem, 2);
-      inativouAssoc = ra.ok;
-      log('inativar_associado_remoto', { ok: ra.ok, mensagem: ra.mensagem, errors: ra.errors });
-    }
-
-    // (4) Re-consultar placa
-    let liberada = false;
+    // (4) Re-consultar placa para confirmar
+    let confirmado = false;
     try {
       const recheck = await buscarVeiculoPorPlaca(supabase, placaRaw);
-      const stillCodAssoc = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
-      liberada = !stillCodAssoc || stillCodAssoc !== codAssocRem;
-      log('reconsultar_placa', { liberada, codigo_associado_atual: stillCodAssoc });
+      const codAtual = Number(recheck.found?.codigo_associado || recheck.found?.codigo_associado_pf || 0);
+      confirmado = codAtual === codAssocNovo;
+      log('reconsultar_placa', { confirmado, codigo_associado_atual: codAtual });
     } catch (e: any) {
-      // NotFound = liberada
-      liberada = true;
-      log('reconsultar_placa', { liberada: true, motivo: 'placa não encontrada (liberada)', detail: String(e?.message || e) });
+      log('reconsultar_placa', { confirmado: false, detail: String(e?.message || e) });
     }
 
-    // (5) Re-enfileira
+    // (5) Reenfileira
     await requeue(supabase, vLocal.id, vLocal.associado_id);
     log('requeue', { ok: true });
 
@@ -131,16 +150,16 @@ serve(async (req) => {
       modulo: 'configuracoes',
       tabela: 'veiculos',
       registro_id: vLocal.id,
-      descricao: `[SGA one-off] Liberação placa ${placaRaw}: veículo remoto cod=${codVeicRem} inativado${inativouAssoc ? ` e associado antigo cod=${codAssocRem} inativado` : ''}. Motivo: ${motivo}`,
+      descricao: `[SGA one-off] Troca de titularidade Hinova via /alterar/veiculo: placa ${placaRaw}, cod_veiculo=${codVeicRem}, ${codAssocRem} → ${codAssocNovo}. Motivo: ${motivo}`,
       dados_novos: {
         placa: placaRaw,
-        codigo_veiculo_remoto: codVeicRem,
-        codigo_associado_remoto: codAssocRem,
-        inativou_associado: inativouAssoc,
-        placa_liberada: liberada,
+        codigo_veiculo: codVeicRem,
+        codigo_associado_antigo: codAssocRem,
+        codigo_associado_novo: codAssocNovo,
         associado_local_id: vLocal.associado_id,
         associado_local_nome: assocLocal?.nome,
-        codigo_associado_local: codAssocLocal,
+        enviar_agregados: enviarAgregados,
+        confirmado,
         motivo,
         steps,
       },
@@ -149,11 +168,11 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       ok: true,
       placa: placaRaw,
-      codigo_veiculo_remoto_inativado: codVeicRem,
-      codigo_associado_remoto: codAssocRem,
-      inativou_associado_remoto: inativouAssoc,
-      placa_liberada: liberada,
-      associado_local: { id: vLocal.associado_id, nome: assocLocal?.nome, codigo_hinova: codAssocLocal },
+      codigo_veiculo: codVeicRem,
+      codigo_associado_antigo: codAssocRem,
+      codigo_associado_novo: codAssocNovo,
+      confirmado,
+      enviar_agregados: enviarAgregados,
       steps,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e: any) {
@@ -174,7 +193,7 @@ async function requeue(supabase: any, veiculoId: string, associadoId: string | n
       status: 'pendente',
       tentativas: 0,
       erro_ultimo: null,
-      proxima_tentativa_em: nowIso,
+      proximo_reenvio_em: nowIso,
     }).eq('id', existingQ.id);
   } else {
     await supabase.from('sga_sync_queue').insert({
@@ -182,7 +201,7 @@ async function requeue(supabase: any, veiculoId: string, associadoId: string | n
       associado_id: associadoId,
       status: 'pendente',
       tentativas: 0,
-      proxima_tentativa_em: nowIso,
+      proximo_reenvio_em: nowIso,
     });
   }
 }
