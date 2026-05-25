@@ -287,20 +287,16 @@ serve(async (req) => {
     // slash já foram testados e devolveram "JSON não informado" / "CPF/IMEI não
     // informados". Esta configuração espelha exatamente o endpoint irmão que
     // funciona.
-    const formBody = new URLSearchParams();
-    formBody.append('json', JSON.stringify(payload));
-
-    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo`, {
+    const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: formBody,
-      redirect: 'manual',
+      body: JSON.stringify(payload),
     });
 
-    console.log('[RedeVeiculos Vincular] HTTP status:', apiResponse.status, 'location:', apiResponse.headers.get('location'));
+    console.log('[RedeVeiculos Vincular] HTTP status:', apiResponse.status);
 
 
     const responseText = await apiResponse.text();
