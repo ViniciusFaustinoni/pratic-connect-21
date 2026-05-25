@@ -92,7 +92,7 @@ serve(async (req) => {
       const dadosNovo = (troca.novo_titular_dados || {}) as Record<string, string>;
       const cpfLimpo = (dadosNovo.cpf || "").replace(/\D/g, "");
       const { data: vehicleData } = await supabase
-        .from("veiculos").select("placa, chassi, renavam, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe").eq("id", troca.veiculo_id).maybeSingle();
+        .from("veiculos").select("placa, chassi, renavam, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, codigo_fipe, codigo_modelo_hinova").eq("id", troca.veiculo_id).maybeSingle();
 
       let sgaCodAss: number | null = null;
       let sgaCodVeic: number | null = null;
@@ -212,7 +212,7 @@ serve(async (req) => {
             }
           }
 
-          if (!cadVeic.ok || !cadVeic.codigo) throw new Error(`SGA cadastrarVeiculo: ${cadVeic.errors.join("; ") || cadVeic.mensagem}`);
+          if (!(cadVeic?.ok && cadVeic?.codigo)) throw new Error(`SGA cadastrarVeiculo: ${(cadVeic?.errors || []).join("; ") || cadVeic?.mensagem || 'payload sem código_fipe/codigo_modelo válido'}`);
           sgaCodVeic = cadVeic.codigo;
         } else {
           sgaCodVeic = codVeicAtual;
@@ -1332,8 +1332,8 @@ serve(async (req) => {
           }
         }
 
-        if (!cadVeic.ok || !cadVeic.codigo) {
-          throw new Error(`SGA cadastrarVeiculo (novo titular) falhou: ${cadVeic.errors.join('; ') || cadVeic.mensagem || cadVeic.status}`);
+        if (!(cadVeic?.ok && cadVeic?.codigo)) {
+          throw new Error(`SGA cadastrarVeiculo (novo titular) falhou: ${(cadVeic?.errors || []).join('; ') || cadVeic?.mensagem || cadVeic?.status || 'payload sem código_fipe/codigo_modelo válido'}`);
         }
         sgaCodigoVeiculoNovo = cadVeic.codigo;
       } else {
