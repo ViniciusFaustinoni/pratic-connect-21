@@ -89,10 +89,13 @@ serve(async (req) => {
       }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // (2) Inativar veículo remoto
+    // (2) Inativar veículo remoto — tolerar "mesma situação" como sucesso
     const rv = await alterarSituacaoParaVeiculoHinova(supabase, codVeicRem, 2);
-    log('inativar_veiculo_remoto', { ok: rv.ok, mensagem: rv.mensagem, errors: rv.errors });
-    if (!rv.ok) {
+    const jaInativo = !rv.ok && /mesma que o ve.culo se encontra/i.test(
+      (rv.mensagem || '') + ' ' + rv.errors.join(' '),
+    );
+    log('inativar_veiculo_remoto', { ok: rv.ok, ja_inativo: jaInativo, mensagem: rv.mensagem, errors: rv.errors });
+    if (!rv.ok && !jaInativo) {
       return new Response(JSON.stringify({ ok: false, error: 'Hinova rejeitou inativação do veículo', steps }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
