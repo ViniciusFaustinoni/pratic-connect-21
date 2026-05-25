@@ -1,11 +1,26 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
-import { useSolicitacaoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Loader2, CheckCircle2, ExternalLink, FileText, Car, User, AlertTriangle, Clock, RefreshCw, XCircle } from 'lucide-react';
+import { useSolicitacaoSubstituicao, useCancelarSolicitacaoSubstituicao } from '@/hooks/useSolicitacoesSubstituicao';
 import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
