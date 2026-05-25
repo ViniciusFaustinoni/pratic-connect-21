@@ -800,16 +800,31 @@ serve(async (req) => {
           if (r.found?.codigo_veiculo) {
             const codAssocRem = Number(r.found.codigo_associado || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
-              const msg = `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}).`;
-              await logSync(_vid, _aid, 'conflito_chassi', 'error',
-                { chassi: chassiLimpo }, { codigo_associado_remoto: codAssocRem }, msg);
-              await setStatusSga(_vid, 'erro_sincronizacao');
-              await markQueueFalhaPermanente(_vid, _aid, msg);
-              return;
+              const codVeicRem = Number(r.found.codigo_veiculo);
+              const autoInat = await tentarAutoInativarVeiculoRemoto({
+                veiculoLocalId: _vid,
+                associadoLocalId: _aid,
+                codVeicRem,
+                codAssocRem,
+                placa: placaLimpa || chassiLimpo,
+                contexto: 'chassi',
+              });
+              if (!autoInat.ok) {
+                const msg = autoInat.reason === 'sem_troca_local'
+                  ? `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}).`
+                  : `Auto-inativação falhou: ${autoInat.reason}`;
+                await logSync(_vid, _aid, 'conflito_chassi', 'error',
+                  { chassi: chassiLimpo }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: codVeicRem }, msg);
+                await setStatusSga(_vid, 'erro_sincronizacao');
+                await markQueueFalhaPermanente(_vid, _aid, msg);
+                return;
+              }
+              // Auto-inativado: deixa codigoVeiculoHinova null para cadastro novo
+            } else {
+              codigoVeiculoHinova = Number(r.found.codigo_veiculo);
+              await logSync(_vid, _aid, 'buscar_veiculo_chassi', 'success',
+                { chassi: chassiLimpo }, { codigo_veiculo: codigoVeiculoHinova });
             }
-            codigoVeiculoHinova = Number(r.found.codigo_veiculo);
-            await logSync(_vid, _aid, 'buscar_veiculo_chassi', 'success',
-              { chassi: chassiLimpo }, { codigo_veiculo: codigoVeiculoHinova });
           }
         } catch (e: any) {
           if (!(e instanceof HinovaNotFoundError)) {
