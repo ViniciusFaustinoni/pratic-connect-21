@@ -16,10 +16,18 @@ import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileSignature, Loader2, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { FileSignature, Loader2, ExternalLink, CheckCircle2, Sparkles, RefreshCw } from 'lucide-react';
 import { useRetificarTermo, useRetificacoesContrato } from '@/hooks/useRetificarTermo';
+import { useRetificacaoPrefillOCR, type FonteOCR, type PrefillCampo } from '@/hooks/useRetificacaoPrefillOCR';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+const FONTE_LABEL: Record<FonteOCR, string> = {
+  cnh: 'CNH',
+  crlv: 'CRLV',
+  comprovante: 'Comprov.',
+  nf: 'NF',
+};
 
 const schema = z.object({
   motivo: z.string().trim().min(10, 'Descreva o motivo (mínimo 10 caracteres)'),
