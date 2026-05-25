@@ -129,6 +129,36 @@ function normLinha(s: string): string {
   return (s || "").replace(/\D/g, "");
 }
 
+function formatBRL(v: number): string {
+  return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+// Resolve UMA variável conforme mapping da UI. Mesmo vocabulário de templateVarsMapper.ts.
+function resolverValorVar(
+  entry: { source: string; texto?: string } | undefined,
+  d: DestinatarioIn,
+  blocoBoletos: string,
+): string {
+  if (!entry) return "";
+  const primeiro = (d.boletos || [])[0];
+  switch (entry.source) {
+    case "nome": return d.nome || "";
+    case "primeiro_nome": return d.primeiro_nome || primeiroNome(d.nome);
+    case "matricula": return d.matricula || "";
+    case "valor_total":
+      return formatBRL((d.boletos || []).reduce((s, b) => s + (b.valor || 0), 0));
+    case "lista_boletos": return blocoBoletos;
+    case "placa_primeira": return primeiro?.placa || "";
+    case "vencimento_primeiro": return primeiro?.vencimento || "";
+    case "linha_digitavel_primeira":
+      return (primeiro?.linha_digitavel || "").replace(/\D/g, "");
+    case "valor_primeiro_boleto": return formatBRL(primeiro?.valor || 0);
+    case "qtd_boletos": return String((d.boletos || []).length);
+    case "texto_fixo": return entry.texto || "";
+    default: return "";
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -159,9 +189,15 @@ serve(async (req) => {
     // Quando template_v2=true, usamos o template Meta com botão URL dinâmico (1 link por mensagem).
     // Se nenhum boleto do destinatário tem link válido, fazemos fallback automático para v1.
     const templateV2: boolean = body.template_v2 === true;
+    // Nome canônico do template a usar (escolhido na UI). Se ausente, mantém compat antiga.
     const templateNomeBase: string = body.template_nome
       || (templateV2 ? "cobranca_inadimplencia_pratic_v2" : "cobranca_inadimplencia_pratic");
-    const templateNomeFallback = "cobranca_inadimplencia_pratic";
+    // Fallback automático (v1) APENAS quando o operador escolheu o template canônico v2.
+    const templateNomeFallback = templateNomeBase === "cobranca_inadimplencia_pratic_v2"
+      ? "cobranca_inadimplencia_pratic"
+      : templateNomeBase;
+    // Mapeamento manual de variáveis enviado pela UI: { "1": {source: "primeiro_nome"}, "2": {source: "lista_boletos"}, ... }
+    const varMapping: Record<string, { source: string; texto?: string }> = body.var_mapping || {};
     const destinatarios: DestinatarioIn[] = body.destinatarios || [];
     const isFirstChunk: boolean = body.is_first_chunk === true;
     const isLastChunk: boolean = body.is_last_chunk === true;
@@ -211,6 +247,8 @@ serve(async (req) => {
           valor_total: valorTotalRemessa,
           status: "processando",
           criado_por: userId,
+          template_nome: templateNomeBase,
+          var_mapping_snapshot: Object.keys(varMapping).length > 0 ? varMapping : null,
         })
         .select("id")
         .single();
@@ -645,15 +683,24 @@ serve(async (req) => {
 
         for (let i = 0; i < blocos.length; i++) {
           const bloco = blocos[i];
-          const components: any[] = [
-            {
-              type: "body",
-              parameters: [
-                { type: "text", text: sanitizeMetaParam(nome) },
-                { type: "text", text: sanitizeMetaParam(bloco) },
-              ],
-            },
-          ];
+          // Monta os parameters do body. Se a UI mandou var_mapping, resolve cada {{n}}
+          // por essa ordem. Caso contrário, mantém o legado de 2 parâmetros (nome + bloco).
+          let bodyParameters: Array<{ type: "text"; text: string }>;
+          const mappingKeys = Object.keys(varMapping)
+            .filter((k) => /^\d+$/.test(k))
+            .sort((a, b) => Number(a) - Number(b));
+          if (mappingKeys.length > 0) {
+            bodyParameters = mappingKeys.map((k) => ({
+              type: "text" as const,
+              text: sanitizeMetaParam(resolverValorVar(varMapping[k], dest, bloco)),
+            }));
+          } else {
+            bodyParameters = [
+              { type: "text", text: sanitizeMetaParam(nome) },
+              { type: "text", text: sanitizeMetaParam(bloco) },
+            ];
+          }
+          const components: any[] = [{ type: "body", parameters: bodyParameters }];
           // No v2: adiciona o componente button URL dinâmico apenas no PRIMEIRO bloco
           // (apenas a 1ª mensagem leva o botão; blocos seguintes do mesmo destinatário ficam só com texto).
           if (usarV2ParaEste && i === 0 && sufixoHinova) {

@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { parseCsvInadimplentes, type ParseResultado, type DestinatarioParsed } from '@/lib/cobranca/parseCsvInadimplentes';
 import { baixarTemplateCobrancasXlsx } from '@/lib/cobranca/templateCobrancas';
+import { TemplateMetaPicker } from './TemplateMetaPicker';
+import type { VarMapping } from '@/lib/cobranca/templateVarsMapper';
 
 async function lerArquivoComoCsv(file: File): Promise<string> {
   const nome = file.name.toLowerCase();
@@ -31,7 +33,7 @@ async function lerArquivoComoCsv(file: File): Promise<string> {
   return await file.text();
 }
 
-const TEMPLATE_NOME = 'cobranca_inadimplencia_pratic';
+const TEMPLATE_NOME_DEFAULT = 'cobranca_inadimplencia_pratic';
 const MAX_CSV_MB = 50;
 const MAX_CSV_BYTES = MAX_CSV_MB * 1024 * 1024;
 
@@ -74,6 +76,9 @@ export function ImportarCobrancaCsv() {
   const [reconciliacao, setReconciliacao] = useState<PreviewReconciliacao | null>(null);
   const [textoColado, setTextoColado] = useState('');
   const [usarTemplateV2, setUsarTemplateV2] = useState(true);
+  const [templateNome, setTemplateNome] = useState<string>(TEMPLATE_NOME_DEFAULT);
+  const [varMapping, setVarMapping] = useState<VarMapping>({});
+  const [mappingValido, setMappingValido] = useState(true);
   const cancelarRef = useRef(false);
 
   const reiniciar = useCallback(() => {
@@ -220,7 +225,8 @@ export function ImportarCobrancaCsv() {
     try {
       const { data: initData, error: initErr } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
         body: {
-          template_nome: TEMPLATE_NOME,
+          template_nome: templateNome,
+          var_mapping: varMapping,
           template_v2: usarTemplateV2,
           init_only: true,
           is_first_chunk: true,
@@ -266,7 +272,8 @@ export function ImportarCobrancaCsv() {
         try {
           const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
             body: {
-              template_nome: TEMPLATE_NOME,
+              template_nome: templateNome,
+              var_mapping: varMapping,
               template_v2: usarTemplateV2,
               destinatarios: slice,
               is_first_chunk: false,
@@ -517,6 +524,26 @@ export function ImportarCobrancaCsv() {
         {/* Salvar no sistema (vínculo automático) */}
         <SalvarNoSistemaCard resultado={resultado} arquivo={arquivo} />
 
+        {/* Picker de template Meta + mapeamento de variáveis */}
+        <TemplateMetaPicker
+          templateNome={templateNome}
+          onTemplateNomeChange={setTemplateNome}
+          mapping={varMapping}
+          onMappingChange={setVarMapping}
+          usarBotaoUrl={usarTemplateV2}
+          onUsarBotaoUrlChange={setUsarTemplateV2}
+          previewDestinatario={destinatariosValidos[0] ? {
+            nome: destinatariosValidos[0].nome,
+            primeiro_nome: (destinatariosValidos[0] as any).primeiro_nome,
+            matricula: destinatariosValidos[0].matricula,
+            boletos: destinatariosValidos[0].boletos.map((b) => ({
+              placa: b.placa, vencimento: b.vencimento,
+              linha_digitavel: b.linha_digitavel, valor: b.valor, link: b.link,
+            })),
+          } : null}
+          onValidationChange={setMappingValido}
+        />
+
         {/* Botão disparar */}
         {(() => {
           const totalBoletosComLink = resultado.destinatarios.reduce(
@@ -528,55 +555,39 @@ export function ImportarCobrancaCsv() {
           ).length;
           return (
             <Card className="bg-primary/5 border-primary/30">
-              <CardContent className="p-4 space-y-4">
+              <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
                     <h3 className="font-semibold flex items-center gap-2">
                       <MessageCircle className="h-5 w-5 text-primary" />
-                      Disparar WhatsApp em massa (opcional)
+                      Disparar WhatsApp em massa
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      1 mensagem por associado agrupando todos os boletos.
-                      Template Meta:{' '}
-                      <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                        {usarTemplateV2 ? `${TEMPLATE_NOME}_v2` : TEMPLATE_NOME}
-                      </code>
+                      1 mensagem por associado · Template:{' '}
+                      <code className="text-xs bg-muted px-1 py-0.5 rounded">{templateNome}</code>
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      <strong>{totalBoletosComLink}</strong> boleto(s) com link da 2ª via ·{' '}
-                      <strong>{associadosComLink}</strong> associado(s) receberão botão dinâmico
-                    </p>
+                    {usarTemplateV2 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        <strong>{totalBoletosComLink}</strong> boleto(s) com link da 2ª via ·{' '}
+                        <strong>{associadosComLink}</strong> associado(s) receberão botão dinâmico
+                      </p>
+                    )}
                   </div>
                   <Button
                     size="lg"
                     onClick={() => setConfirmAberto(true)}
-                    disabled={destinatariosValidos.length === 0}
+                    disabled={destinatariosValidos.length === 0 || !mappingValido}
                     className="gap-2"
                   >
                     <Send className="h-4 w-4" />
                     Iniciar envio em massa
                   </Button>
                 </div>
-                <label className="flex items-start gap-3 p-3 rounded-md bg-background border cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={usarTemplateV2}
-                    onChange={(e) => setUsarTemplateV2(e.target.checked)}
-                    className="mt-1 h-4 w-4 cursor-pointer"
-                  />
-                  <div className="text-sm">
-                    <div className="font-medium">
-                      Usar template com botão dinâmico de URL (v2)
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      Quando marcado, usa <code>{TEMPLATE_NOME}_v2</code> (com botão
-                      &quot;Abrir 2ª via&quot;) para associados que tenham link Hinova.
-                      Quem não tiver link cai automaticamente no template padrão.{' '}
-                      <strong>Requer</strong> o template v2 aprovado na Meta — sem ele, o
-                      sistema usa o v1 com o link no corpo da mensagem.
-                    </div>
-                  </div>
-                </label>
+                {!mappingValido && (
+                  <p className="text-xs text-destructive">
+                    Complete o mapeamento das variáveis do template antes de disparar.
+                  </p>
+                )}
               </CardContent>
             </Card>
           );

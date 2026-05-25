@@ -1,127 +1,88 @@
+
 ## Objetivo
 
-Estender o fluxo de troca de titularidade na Hinova para também transferir o **voluntário (consultor)** quando ele mudou na troca, e tornar a confirmação pós-alteração mais robusta com **retry/backoff** na re-consulta — sem mudar o critério primário de sucesso (resposta `Alterado` + `errors:[]`).
+Na tela **Financeiro › Cobranças › Emissão › Importar CSV**, permitir que o operador escolha **qualquer template Meta** (`status=APPROVED` + `disparo_habilitado=true`) e mapeie manualmente cada `{{n}}` do corpo a uma **fonte de dados do CSV** ou um texto fixo, antes de disparar o lote. Boletos continuam vindo do CSV (mesmo agrupamento por matrícula).
 
-Aplicar nos dois caminhos canônicos:
-- `supabase/functions/sga-hinova-sync/index.ts` (função interna `transferir_vinculo_veiculo`)
-- `supabase/functions/oneoff-sga-liberar-placa-troca/index.ts`
+## Escopo (frontend + edge)
 
-E no client compartilhado:
-- `supabase/functions/_shared/hinova-client.ts` (helper de busca/payload de alteração — `codigo_voluntario` já é aceito pelo `/alterar/veiculo`, só precisa ser propagado).
+### 1) Picker de template (UI)
 
----
+Arquivo: `src/components/financeiro/ImportarCobrancaCsv.tsx` (etapa `preview`).
 
-## 1. Resolver o voluntário esperado da troca
+- Acima do botão "Disparar envio", novo bloco **"Template Meta"**:
+  - `Select` com lista de templates `APPROVED + disparo_habilitado=true` (fetch direto de `whatsapp_meta_templates`, ordenado por `nome`). Default: `cobranca_inadimplencia_pratic` (mantém o comportamento atual).
+  - Toggle **"Usar v2 (botão URL com 2ª via)"** só aparece quando o template selecionado tem `botoes` com um botão `type='URL'` dinâmico (regex `{{1}}` no `url`). Para o template canônico mantém o default `true`.
+  - Preview compacto do `corpo` (com `{{n}}` destacados) e `header_texto` quando houver.
 
-Para cada troca efetivada (linha de `solicitacoes_troca_titularidade`):
+### 2) Mapeamento de variáveis
 
-1. Localizar o **vendedor do novo titular** seguindo a cadeia já usada no `sga-hinova-sync` para cadastro:
-   - `solicitacoes_troca_titularidade.cotacao_id` → `contratos` ativo gerado para o `novo_associado_id` → `contratos.vendedor_id` → `profiles.codigo_sga_voluntario`.
-   - Fallback: contrato ativo mais recente do `novo_associado_id` que aponte para esse veículo.
-2. `codigoVoluntarioNovo = parseInt(profiles.codigo_sga_voluntario)`.
-3. Se o novo titular não tiver vendedor com `codigo_sga_voluntario` válido, **não bloqueia** a troca — apenas loga `warning: voluntario_nao_resolvido` e segue só com `codigo_associado` no payload (comportamento atual).
+Mesmo bloco, abaixo do select:
 
-## 2. Capturar voluntário atual na busca da Hinova
+- Parser de `{{n}}` no `corpo` (e em `header_texto` se `header_tipo='text'`) gera a lista de variáveis a preencher.
+- Para cada `{{n}}`, um `Select` de **fonte**:
+  - `nome` — nome do destinatário
+  - `primeiro_nome` — primeiro token do nome
+  - `matricula`
+  - `valor_total` — somatório dos boletos do destinatário (BRL)
+  - `lista_boletos` — texto agrupado (formato atual: `• Placa X — venc. dd/mm/aaaa\n  <linha>`)
+  - `placa_primeira` — primeira placa
+  - `vencimento_primeiro` — primeira data
+  - `linha_digitavel_primeira`
+  - `valor_primeiro_boleto`
+  - `qtd_boletos`
+  - `texto_fixo` — abre `Input` ao lado para digitar o texto literal
+- Heurística inicial: tenta preencher por nome ({{1}}→nome, {{2}}→lista_boletos quando há múltiplos boletos / valor_total quando há 1, etc.) usando `variaveis_exemplo` como dica visual de placeholder.
+- Validação: bloqueia "Disparar" enquanto houver `{{n}}` sem fonte (ou `texto_fixo` vazio).
 
-Hoje a etapa `hinova_busca` extrai apenas `codigo_veiculo` e `codigo_associado_atual`. Estender para:
+Helper novo: `src/lib/cobranca/templateVarsMapper.ts`
+- `parseVariaveisTemplate(corpo, header)` → `string[]` com índices únicos
+- `montarValoresParaDestinatario(destinatario, mapping)` → `Record<varIndex, string>` (executado server-side; mas exporto o tipo pra UI exibir preview).
 
-- Ler também `codigo_voluntario` (ou `codigo_voluntario_atual`/equivalente) do payload retornado por `buscarVeiculoPorPlaca`/`buscarVeiculoPorChassi`. Tratar como número (0 se ausente).
-- Incluir `codigo_voluntario_atual` no log do step `hinova_busca` (e equivalente no oneoff).
+### 3) Preview de mensagem por destinatário
 
-## 3. Decidir envio do `codigo_voluntario`
+Painel "Pré-visualização": pega o 1º destinatário válido, aplica o `mapping` no `corpo` substituindo `{{n}}` e mostra como ficará a mensagem real. Atualiza ao trocar template/mapping.
 
-Após a busca:
+### 4) Edge `disparar-cobranca-csv-meta`
 
-- Se `codigoVoluntarioNovo` resolvido **e** diferente de `codigo_voluntario_atual` → incluir `codigo_voluntario: codigoVoluntarioNovo` no payload de `/alterar/veiculo`.
-- Se forem iguais (ou novo não resolvido) → **omitir** o campo (comportamento idêntico ao atual nessa dimensão).
+Arquivo: `supabase/functions/disparar-cobranca-csv-meta/index.ts`.
 
-Atualizar a checagem de **idempotência** (passo "já está com o novo titular?") para considerar tanto `codigo_associado` quanto `codigo_voluntario`: só pula a chamada de alteração se **ambos** já batem com o esperado. Se associado bate mas voluntário diverge, segue com alteração enviando só `codigo_voluntario` (+ `codigo_veiculo`).
+- Novos campos no `body` (validados): `template_nome` (já existe — passa a ser canônico), `var_mapping: Record<string, {source: string; texto?: string}>`, `template_v2_button: boolean`.
+- Carrega o template do DB (uma vez por chamada) para validar:
+  - Existe? `APPROVED`? `disparo_habilitado=true`? Caso contrário, 400 `template_invalido`.
+  - Conta `{{n}}` no corpo e exige `var_mapping` completo. Falta de mapping → 400 `mapping_incompleto`.
+- Substitui o trecho hard-coded de `components.body.parameters` por loop sobre o mapping, montando os parâmetros na ordem `{{1}}…{{N}}` via helper compartilhado (movo o `montarValoresParaDestinatario` para `_shared/cobranca-var-mapper.ts`).
+- Botão URL dinâmico: se `template_v2_button=true` E template tem botão URL `{{1}}`, mantém a injeção atual do `sufixoHinova` (link 2ª via). Caso contrário, omite o componente `button`.
+- Comportamento de **bloco extra** (quando lista de boletos não cabe num único parâmetro): preserva-se **apenas** quando a variável mapeada para "lista_boletos" estoura o limite Meta de 1024 chars — quebra em blocos como hoje, mas só o 1º bloco leva o botão. Para outros templates sem `lista_boletos`, envia 1 mensagem por destinatário.
+- `template_nome_fallback` removido — não há mais fallback automático para `cobranca_inadimplencia_pratic` quando o operador escolheu outro template. Se v2 falhar e v1 não estiver mapeado, retorna erro do destinatário com `erro_codigo='template_v2_falhou'`.
+- Mantém **integral** a regra de dedup do mesmo dia (`mem://logic/billing/dedup-cobranca-mesmo-dia`), reconciliação `cobrancas`, lote/idempotência e flag `disparo_habilitado`.
 
-## 4. Reportar voluntário nos steps
+### 5) Auditoria
 
-- Step `hinova_busca`: acrescentar `codigo_voluntario_atual`.
-- Step `alterar_veiculo`: acrescentar `codigo_voluntario_antigo`, `codigo_voluntario_novo`, `enviou_voluntario` (boolean), espelhando o que já é feito hoje para o associado.
-- Auditoria (`insertAuditLog.dados_novos`) e `logSync` ganham os mesmos campos.
+- `cobranca_csv_lotes`: gravar `template_nome` e `var_mapping_snapshot` (jsonb) — migration adiciona as 2 colunas (`text` + `jsonb`, nullable). Aparece como tooltip no card "Lote ativo".
 
-## 5. Re-consulta com retry/backoff (Opção 1)
-
-Substituir a re-consulta única atual por loop:
+## Arquivos tocados
 
 ```text
-para tentativa de 1 a 3:
-  recheck = buscarVeiculoPorPlaca(placa)  // ou por chassi quando for o caso
-  ok_assoc = recheck.codigo_associado == codAssocNovo
-  ok_volun = (!enviou_voluntario) || recheck.codigo_voluntario == codigoVoluntarioNovo
-  confirmado = ok_assoc && ok_volun
-  se confirmado: break
-  se tentativa < 3: aguardar 2.5s (jitter 2000–3000ms)
+src/components/financeiro/ImportarCobrancaCsv.tsx            (UI: picker + mapping + preview)
+src/components/financeiro/TemplateMetaPicker.tsx             (novo, isolável)
+src/lib/cobranca/templateVarsMapper.ts                       (novo, util puro)
+supabase/functions/_shared/cobranca-var-mapper.ts            (novo, util compartilhado)
+supabase/functions/disparar-cobranca-csv-meta/index.ts       (validação + render dinâmico)
+supabase/migrations/<ts>_lote_template_snapshot.sql          (2 colunas em cobranca_csv_lotes)
 ```
 
-Logar cada tentativa em um step próprio `reconsultar_placa` com `tentativa`, `codigo_associado_atual`, `codigo_voluntario_atual`, `confirmado`.
+## Fora de escopo
 
-Se as 3 tentativas falharem:
-- Não tratar como erro funcional. Marcar `confirmado: false`.
-- Adicionar `confirmacao_pendente: true` no resultado.
-- Log final extra `confirmacao_pendente_pos_alteracao` com `motivo: 'Hinova aceitou /alterar/veiculo mas índice ainda não propagou (cache observado no caso Bruna)'`.
-- Reenfileirar a fila normalmente (já faz hoje) — próximo ciclo do cron valida.
+- Edição de templates Meta (continua sendo só leitura nesta tela; gestão segue em WhatsApp › Templates).
+- Disparo sem boletos / 1 msg por destinatário sem CSV.
+- Mudanças no `LoteAtivoCobrancas.tsx` além de exibir o nome do template usado.
 
-O critério primário de sucesso permanece sendo `ra.ok` (resposta `Alterado` + `errors:[]`) — retry serve apenas para enriquecer o relatório.
+## Riscos / mitigação
 
-## 6. Não mudar
+- **Template marketing acidental**: filtro de query é `status='APPROVED' AND disparo_habilitado=true`; categoria MARKETING não é bloqueada explicitamente porque já há toggle de `disparo_habilitado`. Se quiser, posso restringir a `categoria='UTILITY'` — confirmar.
+- **Variável faltando**: validação na UI + 400 server-side cobrem.
+- **Limite 1024 char Meta**: já tratado pela quebra em blocos; mantemos para `lista_boletos`.
 
-- `transferir_agregados` continua atrás da flag `sga_alterar_veiculo_enviar_agregados` (omitido por default).
-- Nenhuma mudança em `sga_sync_queue`, triggers ou tabelas.
-- `oneoff-sga-inativar-veiculo-remoto` segue marcada como deprecada (410).
+## Memória a atualizar pós-implementação
 
----
-
-## Detalhes técnicos
-
-### Arquivos a alterar
-
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/_shared/hinova-client.ts` | `alterarVeiculoHinova` aceita `codigo_voluntario` opcional (apenas garantir que o número passa pelo payload sem coerção). Helper utilitário `extractCodigoVoluntario(found)` que normaliza nomes alternativos vindos da Hinova. |
-| `supabase/functions/sga-hinova-sync/index.ts` | Função `transferir_vinculo_veiculo`: resolver `codigoVoluntarioNovo` a partir da troca, capturar atual no recheck, decidir envio, loop de re-consulta com backoff, logs e auditoria estendidos. |
-| `supabase/functions/oneoff-sga-liberar-placa-troca/index.ts` | Mesmo conjunto de mudanças, replicando steps + resposta JSON com `codigo_voluntario_antigo`, `codigo_voluntario_novo`, `enviou_voluntario`, `confirmacao_pendente`. |
-
-### Resolução do voluntário (pseudo-código)
-
-```ts
-async function resolverVoluntarioNovoTitular(supabase, troca): Promise<number | null> {
-  // 1) Cotação vinculada à troca → contrato gerado → vendedor
-  if (troca.cotacao_id) {
-    const { data: c } = await supabase.from('contratos')
-      .select('vendedor_id, profiles:vendedor_id(codigo_sga_voluntario)')
-      .eq('cotacao_id', troca.cotacao_id)
-      .eq('associado_id', troca.novo_associado_id)
-      .order('created_at', { ascending: false })
-      .limit(1).maybeSingle();
-    const v = parseInt(c?.profiles?.codigo_sga_voluntario || '', 10);
-    if (Number.isFinite(v) && v > 0) return v;
-  }
-  // 2) Fallback: contrato ativo mais recente do novo associado
-  // (mesma query sem o filtro cotacao_id)
-  return null;
-}
-```
-
-### Backoff
-
-Função utilitária local: `sleepJitter(min=2000, max=3000)` usando `setTimeout` em `Promise`.
-
----
-
-## Plano de validação manual (sem alterar nada em produção até passar)
-
-1. **Caso Bruna (RFL7J00)** — re-rodar `oneoff-sga-liberar-placa-troca` com a nova versão. Esperado:
-   - `hinova_busca`: traz `codigo_voluntario_atual` (do Douglas).
-   - `alterar_veiculo`: payload inclui `codigo_voluntario` da Bruna se diferente.
-   - `reconsultar_placa`: pelo menos uma das 3 tentativas marca `confirmado: true`. Se nenhuma confirmar, resposta vem com `confirmacao_pendente: true` e o log explicando o cache da Hinova.
-2. **Teste de agregado** — segue a sequência já planejada (intocada).
-3. Só após esses dois passos: marcar `oneoff-sga-inativar-veiculo-remoto` como 410 (já feito) e reenfileirar as `falha_permanente` do padrão.
-
-## Riscos
-
-- Nome do campo retornado pela Hinova para o voluntário pode variar (`codigo_voluntario` vs `codigo_volutario_atual` etc.) — o helper `extractCodigoVoluntario` cobre as variantes conhecidas e cai em `0` quando ausente, sem quebrar o fluxo.
-- Se o novo titular não tiver vendedor cadastrado, voluntário não é enviado — coerente com a regra "se igual, omitir" e evita propagar valores inválidos.
+`mem://features/billing/csv-cobranca-meta-disparo` — registrar que o template é agora selecionável + mapping manual, e que o fallback automático foi removido.
