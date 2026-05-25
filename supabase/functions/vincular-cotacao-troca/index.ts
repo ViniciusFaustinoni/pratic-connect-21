@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     // Validar cotação + cross-check via dados_extras (segurança da chamada anon)
     const { data: cot, error: cotErr } = await admin
       .from('cotacoes')
-      .select('id, status, veiculo_placa, tipo_entrada, dados_extras')
+      .select('id, status, veiculo_placa, tipo_entrada, dados_extras, nome_solicitante, email_solicitante, telefone1_solicitante, cliente_cpf')
       .eq('id', cotacao_id)
       .maybeSingle();
     if (cotErr) throw cotErr;
@@ -95,10 +95,26 @@ Deno.serve(async (req) => {
     // Aqui apenas vinculamos a cotação. O status permanece `aguardando_cadastro`
     // (setado em autentique-webhook quando o termo de cancelamento é assinado).
     // O operador do Cadastro aprova manualmente em /cadastro/aprovacoes-troca.
+    const snapshotAtual = ((sol.novo_titular_dados as Record<string, unknown> | null) || {}) as Record<string, string>;
+    const snapshotCotacao = {
+      nome: snapshotAtual.nome || cot.nome_solicitante || undefined,
+      cpf: (snapshotAtual.cpf || cot.cliente_cpf || '').replace(/\D/g, '') || undefined,
+      email: snapshotAtual.email || cot.email_solicitante || undefined,
+      telefone: snapshotAtual.telefone || cot.telefone1_solicitante || undefined,
+    };
+
+    const novoTitularDados = Object.fromEntries(
+      Object.entries({
+        ...snapshotAtual,
+        ...snapshotCotacao,
+      }).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    );
+
     const { error: updErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         cotacao_id,
+        novo_titular_dados: novoTitularDados,
         updated_at: new Date().toISOString(),
       })
       .eq('id', solicitacao_id);
