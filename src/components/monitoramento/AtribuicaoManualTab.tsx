@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult, useServicosTravados } from '@/hooks/useAtribuicaoManual';
+import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult, useServicosTravados, EscopoAtribuicaoPrestador } from '@/hooks/useAtribuicaoManual';
 import { useVistoriadoresPrestadores } from '@/hooks/useVistoriadoresPrestadores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText, ExternalLink, MoreVertical, RotateCcw, UserCog, AlertTriangle } from 'lucide-react';
+import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText, ExternalLink, MoreVertical, RotateCcw, UserCog, AlertTriangle, Camera } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
@@ -360,6 +360,7 @@ export default function AtribuicaoManualTab() {
   // Prestador assignment states
   const [prestadorConfirmDialog, setPrestadorConfirmDialog] = useState<{ servico: any; prestadorId: string; prestadorNome: string; prestadorTelefone?: string | null } | null>(null);
   const [valorPrestador, setValorPrestador] = useState('');
+  const [escopoPrestador, setEscopoPrestador] = useState<EscopoAtribuicaoPrestador>('fotos_instalacao');
   const [linkResult, setLinkResult] = useState<AtribuirPrestadorResult | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -428,6 +429,8 @@ export default function AtribuicaoManualTab() {
         prestadorTelefone: prest?.telefone,
       });
       setValorPrestador('');
+      // Default sugerido pelo tipo do serviço; coordenador pode trocar no diálogo.
+      setEscopoPrestador(servico?.tipo === 'instalacao' ? 'fotos_instalacao' : 'somente_fotos');
     } else {
       const vistoriadorId = overId.replace('vist-', '');
       const servico = active.data.current;
@@ -458,6 +461,7 @@ export default function AtribuicaoManualTab() {
         prestadorNome: prestadorConfirmDialog.prestadorNome,
         prestadorTelefone: prestadorConfirmDialog.prestadorTelefone,
         valor,
+        escopo: escopoPrestador,
       });
       setPrestadorConfirmDialog(null);
       setLinkResult(result);
@@ -689,6 +693,43 @@ export default function AtribuicaoManualTab() {
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
               Prestador Externo — Link será gerado sem envio automático de WhatsApp
             </Badge>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Escopo da visita</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEscopoPrestador('somente_fotos')}
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-sm transition',
+                    escopoPrestador === 'somente_fotos'
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                      : 'border-border bg-background hover:bg-muted'
+                  )}
+                >
+                  <Camera className="h-4 w-4" />
+                  <span className="font-medium">Somente Fotos</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEscopoPrestador('fotos_instalacao')}
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-sm transition',
+                    escopoPrestador === 'fotos_instalacao'
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                      : 'border-border bg-background hover:bg-muted'
+                  )}
+                >
+                  <Wrench className="h-4 w-4" />
+                  <span className="font-medium">Fotos + Instalação</span>
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                {escopoPrestador === 'somente_fotos'
+                  ? 'Link público mostrará apenas roteiro de fotos + vídeo 360°.'
+                  : 'Link público incluirá cadastro de IMEI e fotos do rastreador instalado.'}
+              </p>
+            </div>
 
             <div>
               <label className="text-sm font-medium mb-1 block">Valor (R$) <span className="text-muted-foreground font-normal">(opcional)</span></label>

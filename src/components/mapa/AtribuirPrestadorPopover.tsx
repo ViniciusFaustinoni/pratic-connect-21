@@ -7,8 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useVistoriadoresPrestadores } from '@/hooks/useVistoriadoresPrestadores';
-import { useAtribuirServicoPrestador, AtribuirPrestadorResult } from '@/hooks/useAtribuicaoManual';
+import { useAtribuirServicoPrestador, AtribuirPrestadorResult, EscopoAtribuicaoPrestador } from '@/hooks/useAtribuicaoManual';
 import { LinkPrestadorResultDialog } from '@/components/monitoramento/LinkPrestadorResultDialog';
+import { Camera, Wrench } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AtribuirPrestadorPopoverProps {
   servicoId: string;
@@ -18,6 +20,7 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
   const [open, setOpen] = useState(false);
   const [selectedPrestador, setSelectedPrestador] = useState<{ id: string; nome: string; telefone?: string | null } | null>(null);
   const [valor, setValor] = useState('');
+  const [escopo, setEscopo] = useState<EscopoAtribuicaoPrestador>('fotos_instalacao');
   const [linkResult, setLinkResult] = useState<AtribuirPrestadorResult | null>(null);
 
   const { data: prestadores, isLoading } = useVistoriadoresPrestadores();
@@ -45,10 +48,12 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
         prestadorNome: selectedPrestador.nome,
         prestadorTelefone: selectedPrestador.telefone,
         valor: valorNum,
+        escopo,
       });
       setOpen(false);
       setSelectedPrestador(null);
       setValor('');
+      setEscopo('fotos_instalacao');
       setLinkResult(result);
     } catch {
       // handled by mutation
@@ -58,6 +63,7 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
   const handleBack = () => {
     setSelectedPrestador(null);
     setValor('');
+    setEscopo('fotos_instalacao');
   };
 
   return (
@@ -128,6 +134,44 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
                 <p className="text-sm font-semibold">{selectedPrestador.nome}</p>
                 <Button variant="ghost" size="sm" onClick={handleBack} className="text-xs h-7">Voltar</Button>
               </div>
+
+              <div>
+                <label className="text-xs font-medium mb-1.5 block">Escopo da visita</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEscopo('somente_fotos')}
+                    className={cn(
+                      'flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[11px] transition',
+                      escopo === 'somente_fotos'
+                        ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                        : 'border-border bg-background hover:bg-muted'
+                    )}
+                  >
+                    <Camera className="h-4 w-4" />
+                    <span className="font-medium">Somente Fotos</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEscopo('fotos_instalacao')}
+                    className={cn(
+                      'flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[11px] transition',
+                      escopo === 'fotos_instalacao'
+                        ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                        : 'border-border bg-background hover:bg-muted'
+                    )}
+                  >
+                    <Wrench className="h-4 w-4" />
+                    <span className="font-medium">Fotos + Instalação</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {escopo === 'somente_fotos'
+                    ? 'Link público mostrará apenas roteiro de fotos + vídeo 360°.'
+                    : 'Link público incluirá cadastro de IMEI e fotos do rastreador instalado.'}
+                </p>
+              </div>
+
               <div>
                 <label className="text-xs font-medium mb-1 block">Valor (R$) <span className="text-muted-foreground font-normal">(opcional)</span></label>
                 <Input

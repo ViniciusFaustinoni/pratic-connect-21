@@ -15721,6 +15721,7 @@ export type Database = {
           created_at: string | null
           dispensa_rastreador: boolean
           em_rota_em: string | null
+          escopo: string
           expires_at: string
           foto_comprovante_url: string | null
           fotos_vistoria: Json | null
@@ -15750,6 +15751,7 @@ export type Database = {
           created_at?: string | null
           dispensa_rastreador?: boolean
           em_rota_em?: string | null
+          escopo?: string
           expires_at?: string
           foto_comprovante_url?: string | null
           fotos_vistoria?: Json | null
@@ -15779,6 +15781,7 @@ export type Database = {
           created_at?: string | null
           dispensa_rastreador?: boolean
           em_rota_em?: string | null
+          escopo?: string
           expires_at?: string
           foto_comprovante_url?: string | null
           fotos_vistoria?: Json | null
@@ -32074,6 +32077,7 @@ export type Database = {
           concluida_em: string | null
           created_at: string
           em_rota_em: string | null
+          escopo: string
           foto_comprovante_url: string | null
           fotos_vistoria: Json | null
           id: string
@@ -32104,6 +32108,7 @@ export type Database = {
           concluida_em?: string | null
           created_at?: string
           em_rota_em?: string | null
+          escopo?: string
           foto_comprovante_url?: string | null
           fotos_vistoria?: Json | null
           id?: string
@@ -32134,6 +32139,7 @@ export type Database = {
           concluida_em?: string | null
           created_at?: string
           em_rota_em?: string | null
+          escopo?: string
           foto_comprovante_url?: string | null
           fotos_vistoria?: Json | null
           id?: string

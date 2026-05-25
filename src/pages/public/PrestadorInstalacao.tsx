@@ -382,7 +382,12 @@ export default function PrestadorInstalacao() {
     [todasFotos, fotosCombinadasMap]
   );
   const fotosMinimoAtingido = fotosPreenchidas >= Math.min(fotosObrigatoriasCount, 10);
-  const imeiOk = /^\d{14,16}$/.test(imeiRastreador.replace(/\D/g, ''));
+  // Escopo da atribuição (escolhido pelo coordenador no momento da atribuição).
+  // 'somente_fotos' esconde a etapa de IMEI e não exige rastreador físico.
+  const escopoLink: 'somente_fotos' | 'fotos_instalacao' =
+    (link as any)?.escopo === 'somente_fotos' ? 'somente_fotos' : 'fotos_instalacao';
+  const exigeImei = escopoLink === 'fotos_instalacao';
+  const imeiOk = !exigeImei || /^\d{14,16}$/.test(imeiRastreador.replace(/\D/g, ''));
   const todasUploadConcluidas = upload.totalPendentes === 0;
 
   const canFinalize = checklistComplete && fotosMinimoAtingido && !!assinaturaUrl && imeiOk && todasUploadConcluidas;
@@ -397,7 +402,8 @@ export default function PrestadorInstalacao() {
           checklist_data: checklist,
           fotos_vistoria: enviadasMap,
           assinatura_url: assinaturaUrl,
-          rastreador_imei: imeiRastreador.replace(/\D/g, ''),
+          rastreador_imei: exigeImei ? imeiRastreador.replace(/\D/g, '') : null,
+          escopo: escopoLink,
         },
       });
       if (error) throw error;
@@ -708,27 +714,29 @@ export default function PrestadorInstalacao() {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-800 bg-slate-900 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-white flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-blue-400" />
-                  IMEI do Rastreador Instalado
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  placeholder="Digite os 15 dígitos do IMEI"
-                  value={imeiRastreador}
-                  onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                  className="w-full h-11 px-3 bg-slate-950 border border-slate-700 rounded-md text-base font-mono text-white placeholder:text-slate-500"
-                />
-                <p className="text-xs text-slate-400">
-                  Informe o IMEI do equipamento físico que você acabou de instalar. Sem isso a instalação não pode ser concluída.
-                </p>
-              </CardContent>
-            </Card>
+            {exigeImei && (
+              <Card className="border-slate-800 bg-slate-900 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-white flex items-center gap-2">
+                    <Cpu className="h-4 w-4 text-blue-400" />
+                    IMEI do Rastreador Instalado
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="Digite os 15 dígitos do IMEI"
+                    value={imeiRastreador}
+                    onChange={(e) => setImeiRastreador(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-700 rounded-md text-base font-mono text-white placeholder:text-slate-500"
+                  />
+                  <p className="text-xs text-slate-400">
+                    Informe o IMEI do equipamento físico que você acabou de instalar. Sem isso a instalação não pode ser concluída.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
@@ -755,7 +763,7 @@ export default function PrestadorInstalacao() {
                 {!checklistComplete && 'Complete o checklist • '}
                 {!fotosMinimoAtingido && `Envie ao menos ${Math.min(fotosObrigatoriasCount, 10)} fotos • `}
                 {!assinaturaUrl && 'Capture a assinatura • '}
-                {!imeiOk && 'Informe o IMEI do rastreador'}
+                {exigeImei && !imeiOk && 'Informe o IMEI do rastreador'}
                 {checklistComplete && fotosMinimoAtingido && assinaturaUrl && imeiOk && !todasUploadConcluidas &&
                   `Aguardando envio de ${upload.totalPendentes} foto(s)…`}
               </p>

@@ -612,12 +612,21 @@ export function useAtribuirServicoManual() {
   });
 }
 
+export type EscopoAtribuicaoPrestador = 'somente_fotos' | 'fotos_instalacao';
+
 export interface AtribuirPrestadorParams {
   servicoId: string;
   prestadorId: string;
   prestadorNome: string;
   prestadorTelefone?: string | null;
   valor: number;
+  /**
+   * Escolha do coordenador de Monitoramento:
+   * - 'fotos_instalacao': link público mostra etapas de IMEI/instalação do rastreador
+   * - 'somente_fotos': link público mostra apenas roteiro de fotos + vídeo 360°
+   * Default: 'fotos_instalacao' quando servico.tipo='instalacao'; senão 'somente_fotos'.
+   */
+  escopo?: EscopoAtribuicaoPrestador;
 }
 
 export interface AtribuirPrestadorResult {
@@ -632,7 +641,7 @@ export function useAtribuirServicoPrestador() {
 
   return useMutation({
     mutationFn: async (params: AtribuirPrestadorParams): Promise<AtribuirPrestadorResult> => {
-      const { servicoId, prestadorId, valor } = params;
+      const { servicoId, prestadorId, valor, escopo: escopoIn } = params;
 
       // 1) Determine type: check if it's an instalação or vistoria service
       const { data: servico, error: sErr } = await supabase
@@ -646,9 +655,14 @@ export function useAtribuirServicoPrestador() {
       const profileId = await getProfileId();
       let result: any;
 
-      const isInstalacao = servico.tipo === 'instalacao';
+      // Escopo escolhido pelo coordenador define o caminho — não mais o tipo do serviço.
+      // Default conservador quando não vier do UI: instalação → fotos+instalação; vistoria → somente fotos.
+      const escopo: EscopoAtribuicaoPrestador =
+        escopoIn ?? (servico.tipo === 'instalacao' ? 'fotos_instalacao' : 'somente_fotos');
+      const usaInstalacao = escopo === 'fotos_instalacao';
 
-      if (isInstalacao) {
+
+      if (usaInstalacao) {
         // Get instalacao_id
         let instalacaoId = servico.instalacao_origem_id;
         if (!instalacaoId) {
@@ -685,6 +699,7 @@ export function useAtribuirServicoPrestador() {
             valor,
             atribuido_por: profileId,
             skip_whatsapp: true,
+            escopo,
           },
         });
 
