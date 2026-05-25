@@ -140,7 +140,7 @@ export async function saveEligibilityRules(entityType: EntityType, entityId: str
       for (let i = 0; i < Math.min(numFaixas, 50); i++) {
         const de = min + i * intervalo;
         const ate = de + intervalo;
-        faixas.push({ de, ate, valor: parseFloat(state.fipeValoresFaixa[i] || '0') || 0 });
+        faixas.push({ de, ate, valor: parseFloat(state.fipeValoresFaixa[String(de)] || '0') || 0 });
       }
       ruleConfig.faixas = faixas;
     }
