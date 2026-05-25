@@ -7,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle, Sun, Sunset, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { maskCEP, maskTelefone } from '@/lib/validations';
@@ -16,8 +16,9 @@ import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 import { useEnriquecerEndereco } from '@/hooks/useEnriquecerEndereco';
+import { usePrazosInstalacaoPublic } from '@/hooks/usePrazosInstalacaoPublic';
+import { gerarDatasDentroDoPrazo, resolverPrazoHoras } from '@/lib/agendamento/janelaInstalacao';
 import { 
-  isDomingo, 
   getPeriodosDisponivelsPorHora, 
   PERIODOS_DISPONIVEIS,
   LIMITE_VAGAS_POR_PERIODO,
@@ -90,36 +91,19 @@ export function AgendamentoVistoria({
   const dataFormatada = dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : null;
   const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodo(dataFormatada);
 
-  // === LÓGICA DE DATAS ===
+  // === LÓGICA DE DATAS (limitada ao SLA por UF) ===
   const { set: datasBloqueadasSet } = useDatasBloqueadasSet();
-  
-  // Gerar hoje (se houver períodos) + próximos dias úteis (pula domingos e datas bloqueadas)
+  const prazos = usePrazosInstalacaoPublic();
+
+  // UF vem do endereço (ViaCEP/comprovante). Sem UF, usa default (72h).
+  const prazoHoras = resolverPrazoHoras(endereco.estado, prazos);
+
   const hoje = new Date();
-  const datasDisponiveis: Date[] = [];
-
-  // Regra: após 16h, o dia seguinte (D+1) não é ofertado — pulamos para D+2
-  const pularDiaSeguinte = hoje.getHours() >= 16;
-
-  // Incluir hoje se não for domingo, não estiver bloqueado E se ainda houver períodos disponíveis
-  if (!isDomingo(hoje) && !datasBloqueadasSet.has(format(hoje, 'yyyy-MM-dd'))) {
-    const periodosHoje = getPeriodosDisponivelsPorHora(hoje);
-    if (periodosHoje.length > 0) {
-      datasDisponiveis.push(hoje);
-    }
-  }
-
-  // Continuar com dias futuros até ter no máximo 3 datas (hoje + 2 dias)
-  // Após 16h, começa em D+2 (oculta o dia seguinte)
-  let dia = addDays(hoje, pularDiaSeguinte ? 2 : 1);
-  const maxDatas = 3;
-  let guard = 0;
-  while (datasDisponiveis.length < maxDatas && guard < 60) {
-    if (!isDomingo(dia) && !datasBloqueadasSet.has(format(dia, 'yyyy-MM-dd'))) {
-      datasDisponiveis.push(new Date(dia));
-    }
-    dia = addDays(dia, 1);
-    guard++;
-  }
+  const datasDisponiveis: Date[] = gerarDatasDentroDoPrazo({
+    agora: hoje,
+    prazoHoras,
+    datasBloqueadas: datasBloqueadasSet,
+  });
 
   // Períodos disponíveis para a data selecionada (considera hora atual para hoje)
   const periodosParaDataSelecionada = dataSelecionada 
