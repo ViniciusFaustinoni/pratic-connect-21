@@ -753,8 +753,10 @@ export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, on
         fotoLocalInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? fotoLocalInstalacaoResolvida || undefined : undefined,
       });
       exitToList();
-    } catch (err) {
-      toast.error('Erro ao concluir instalação');
+    } catch (err: any) {
+      console.error('[InstaladorChecklist] Concluir falhou:', err);
+      const msg = err?.message || err?.error_description || err?.details || err?.hint;
+      toast.error(msg ? `Erro ao concluir: ${msg}` : 'Erro ao concluir instalação');
     }
   };
 
