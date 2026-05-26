@@ -28,10 +28,10 @@ export function useMarcasModelos() {
     queryKey: ['marcas_modelos'],
     queryFn: async () => {
       // marcas_modelos tem >12k linhas — varrer paginado, senão PostgREST corta em 1000.
-      const data = await fetchAllPaginated<MarcaModelo>((from, to) =>
+      const data = await fetchAllPaginated<any>((from, to) =>
         supabase.from('marcas_modelos').select('*').order('marca').order('modelo').range(from, to),
       );
-      return data;
+      return data as MarcaModelo[];
     },
   });
 }
