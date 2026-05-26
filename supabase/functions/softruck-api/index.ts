@@ -461,7 +461,7 @@ serve(async (req) => {
               brand: marca?.substring(0, 20),
               model: modelo?.substring(0, 20),
               year: ano?.substring(0, 10),
-              color: mapVehicleColor(cor ?? null),
+              color: mapVehicleColor(cor ?? null, { action: 'criar-veiculo', placa, chassi }),
               code: codigo?.substring(0, 16),
               description: descricao?.substring(0, 20),
             },
@@ -509,7 +509,7 @@ serve(async (req) => {
         if (marca) attrs.brand = marca.substring(0, 20);
         if (modelo) attrs.model = modelo.substring(0, 20);
         if (ano) attrs.year = ano.substring(0, 10);
-        if (cor) attrs.color = cor.substring(0, 7);
+        if (cor) attrs.color = mapVehicleColor(cor, { action: 'atualizar-veiculo', placa, chassi, veiculoId });
         if (tipo) attrs.type = tipo;
         if (descricao) attrs.description = descricao.substring(0, 20);
 
