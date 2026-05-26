@@ -83,6 +83,33 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
       placaOutra: conflitoLocal.placaOutra,
     };
   }
+  // ===== 0) Estoque local: rastreador já cadastrado e identificado =====
+  // Se o IMEI existe localmente como Softruck/Rede em estoque (ou já apontado para este veículo),
+  // não precisamos depender das APIs externas — é fonte canônica.
+  try {
+    const { data: rLocal0 } = await supabase
+      .from('rastreadores')
+      .select('id, veiculo_id, status, plataforma')
+      .eq('imei', imeiSan)
+      .maybeSingle();
+    if (rLocal0) {
+      const plataforma = (rLocal0.plataforma || '').toLowerCase();
+      const status = (rLocal0.status || '').toLowerCase();
+      const livre = !rLocal0.veiculo_id || rLocal0.veiculo_id === veiculoIdAlvo
+        || ['estoque', 'em_estoque', 'disponivel', 'disponível'].includes(status);
+      const origem: ValidacaoOrigem | null =
+        plataforma === 'rede_veiculos' ? 'rede_veiculos'
+        : plataforma === 'softruck' ? 'softruck'
+        : null;
+      if (origem && livre) {
+        console.log(TAG, 'estoque_local_ok', { imei: mascararImei(imeiSan), plataforma, status });
+        return { ok: true, origem, rastreadorId: rLocal0.id };
+      }
+    }
+  } catch (e) {
+    console.warn(TAG, 'estoque_local_falhou', e);
+  }
+
 
   let softruckFalhou = false;
   let softruckPlacaEncontrada = false;
