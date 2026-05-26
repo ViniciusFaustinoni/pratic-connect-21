@@ -313,19 +313,22 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.novo_titular_dados?.cpf)} • {solicitacao.novo_titular_dados?.email || '-'} • {formatPhone(solicitacao.novo_titular_dados?.telefone)}</p>
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
-                {modo === 'monitoramento' && solicitacao.veiculo_id && veiculoCompleto?.associado?.id && (
-                  <VincularRastreadorExistenteCard
-                    veiculoId={solicitacao.veiculo_id}
-                    associadoId={veiculoCompleto.associado.id}
-                    associadoEmail={(veiculoCompleto.associado as any)?.email}
-                    exigeRastreador={veiculoExigeRastreador}
-                    jaTemRastreador={jaTemRastreador}
-                    origemContexto="troca_titularidade"
-                    origemRefId={solicitacao.id}
-                    onVinculado={() => {
-                      qc.invalidateQueries({ queryKey: ['veiculo-completo', solicitacao.veiculo_id] });
-                      qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+                {modo === 'monitoramento' && precisaValidarImei && (
+                  <ValidarImeiPorPlacaCard
+                    placa={veiculoCompleto?.veiculo?.placa || null}
+                    imei={imeiInput}
+                    onChange={(v) => {
+                      setImeiInput(v);
+                      if (imeiValidado) {
+                        setImeiValidado(false);
+                        setOrigemValidacao(null);
+                      }
+                      if (erroValidacao) setErroValidacao(null);
                     }}
+                    validando={validandoImei}
+                    validado={imeiValidado}
+                    origem={origemValidacao}
+                    erro={erroValidacao}
                   />
                 )}
                 {solicitacao.cotacao ? (
