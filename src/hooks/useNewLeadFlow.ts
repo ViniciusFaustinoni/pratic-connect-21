@@ -143,6 +143,7 @@ export function useNewLeadFlow() {
         placa: plateResult.vehicleData?.placa || plateText,
         marca: plateResult.vehicleData?.marca || '',
         modelo: plateResult.vehicleData?.modelo || '',
+        marca_modelo: plateResult.vehicleData?.marca_modelo || '',
         ano: plateResult.vehicleData?.ano || '',
         cor: plateResult.vehicleData?.cor || '',
         combustivel: plateResult.vehicleData?.combustivel || '',
@@ -159,6 +160,7 @@ export function useNewLeadFlow() {
           ? parseFloat(plateResult.fipeData.valor.replace(/[^\d,]/g, '').replace(',', '.'))
           : plateResult.fipeData.valor,
         mesReferencia: plateResult.fipeData.mesReferencia || '',
+        descricao: plateResult.fipeData.descricao || '',
       } : null;
 
       updateState({ processingStatus: { ...state.processingStatus, plate: 'done' } });
