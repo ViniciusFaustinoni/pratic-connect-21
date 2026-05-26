@@ -4,7 +4,6 @@ import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 import {
   alterarAssociadoHinova,
   alterarVeiculoHinova,
-  alterarVeiculoHinova,
   buscarAssociadoComVeiculosPorCpf,
   buscarVeiculoPorChassi,
   buscarVeiculoPorPlaca,
