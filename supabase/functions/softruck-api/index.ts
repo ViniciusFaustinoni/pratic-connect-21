@@ -197,56 +197,97 @@ async function softruckRequest(
 
 // ========== MAPEAMENTOS ==========
 
-// Cores hexadecimais aceitas pela API Softruck
+// ⚠️ ENUM FECHADO DA API SOFTRUCK — 14 hex válidos. Qualquer hex fora desta lista é REJEITADO.
+//   #FF9800 laranja · #FF5722 vermelho · #795548 marrom · #9E9E9E cinza ·
+//   #8BC34A verde · #2196F3 azul · #FFC107 amarelo · #FFEB3B amarelo alt. ·
+//   #FFFFFF branco · #9C27B0 roxo · #C2185B vinho/pink · #212121 preto ·
+//   #F8BBD0 rosa · #E1C699 bege/champagne.
+// NÃO criar hex novo aqui — escolher o mais próximo dentre esses 14.
+// Decisões de aproximação documentadas inline (PRATA→cinza, DOURADO→amarelo, AZUL MARINHO→azul).
 const SOFTRUCK_COLORS: Record<string, string> = {
-  'branco': '#FFFFFF',
-  'white': '#FFFFFF',
-  'preto': '#212121',
-  'black': '#212121',
-  'prata': '#9E9E9E',
-  'silver': '#9E9E9E',
-  'cinza': '#9E9E9E',
-  'gray': '#9E9E9E',
-  'grey': '#9E9E9E',
-  'vermelho': '#FF5722',
-  'red': '#FF5722',
-  'azul': '#2196F3',
-  'blue': '#2196F3',
-  'verde': '#8BC34A',
-  'green': '#8BC34A',
-  'amarelo': '#FFC107',
-  'yellow': '#FFC107',
-  'laranja': '#FF9800',
-  'orange': '#FF9800',
-  'marrom': '#795548',
-  'brown': '#795548',
-  'bege': '#E1C699',
-  'beige': '#E1C699',
-  'rosa': '#F8BBD0',
-  'pink': '#F8BBD0',
-  'roxo': '#9C27B0',
-  'purple': '#9C27B0',
-  'vinho': '#C2185B',
-  'wine': '#C2185B',
-  'bordeaux': '#C2185B',
-  'dourado': '#FFC107',
-  'gold': '#FFC107',
-  'champagne': '#E1C699',
+  // BRANCO
+  'branco': '#FFFFFF', 'branca': '#FFFFFF', 'white': '#FFFFFF',
+  'branca perolizada': '#FFFFFF', 'branco perolizado': '#FFFFFF',
+  'branca pero': '#FFFFFF', 'branco pero': '#FFFFFF',
+  'perola': '#FFFFFF', 'perolizado': '#FFFFFF', 'perolizada': '#FFFFFF',
+  // PRETO
+  'preto': '#212121', 'preta': '#212121', 'black': '#212121',
+  'preta met': '#212121', 'preto met': '#212121',
+  'preta metalica': '#212121', 'preto metalico': '#212121',
+  'preta perolizada': '#212121', 'preto perolizado': '#212121',
+  // PRATA → cinza (Softruck não tem hex próprio para prata)
+  'prata': '#9E9E9E', 'silver': '#9E9E9E',
+  'prateado': '#9E9E9E', 'prateada': '#9E9E9E',
+  // CINZA
+  'cinza': '#9E9E9E', 'gray': '#9E9E9E', 'grey': '#9E9E9E',
+  'cinza perolizado': '#9E9E9E', 'cinza perolizada': '#9E9E9E',
+  'cinza pero': '#9E9E9E',
+  'cinza claro': '#9E9E9E', 'cinza escuro': '#9E9E9E',
+  'grafite': '#9E9E9E', 'chumbo': '#9E9E9E',
+  // VERMELHO
+  'vermelho': '#FF5722', 'vermelha': '#FF5722', 'red': '#FF5722',
+  'vermelha perolizada': '#FF5722', 'vermelho perolizado': '#FF5722',
+  'vermelha pero': '#FF5722', 'vermelho pero': '#FF5722',
+  // AZUL → Softruck não distingue tons; todos vão pra #2196F3
+  'azul': '#2196F3', 'blue': '#2196F3',
+  'azul perolizado': '#2196F3', 'azul perolizada': '#2196F3', 'azul pero': '#2196F3',
+  'azul marinho': '#2196F3', 'azul escuro': '#2196F3', 'azul claro': '#2196F3',
+  // VERDE
+  'verde': '#8BC34A', 'green': '#8BC34A',
+  'verde escuro': '#8BC34A', 'verde claro': '#8BC34A', 'verde militar': '#8BC34A',
+  // AMARELO
+  'amarelo': '#FFC107', 'amarela': '#FFC107', 'yellow': '#FFC107',
+  // DOURADO → amarelo (Softruck não tem hex próprio para dourado)
+  'dourado': '#FFC107', 'dourada': '#FFC107', 'gold': '#FFC107',
+  // LARANJA
+  'laranja': '#FF9800', 'orange': '#FF9800',
+  // MARROM
+  'marrom': '#795548', 'brown': '#795548', 'cafe': '#795548',
+  // BEGE / CHAMPAGNE
+  'bege': '#E1C699', 'beige': '#E1C699',
+  'champagne': '#E1C699', 'champanhe': '#E1C699',
+  // ROSA
+  'rosa': '#F8BBD0', 'pink': '#F8BBD0',
+  // ROXO
+  'roxo': '#9C27B0', 'roxa': '#9C27B0', 'purple': '#9C27B0',
+  'violeta': '#9C27B0', 'lilas': '#9C27B0',
+  // VINHO
+  'vinho': '#C2185B', 'wine': '#C2185B',
+  'bordeaux': '#C2185B', 'bordo': '#C2185B',
 };
 
-function mapVehicleColor(cor: string | null): string {
-  if (!cor) return '#9E9E9E'; // Cinza como padrão
-  
-  // Se já é hexadecimal válido, retornar
-  if (/^#[0-9A-Fa-f]{6}$/.test(cor)) {
-    return cor.toUpperCase();
-  }
-  
-  // Normalizar: lowercase, remover acentos
+type ColorCtx = { action: string; placa?: string; chassi?: string; veiculoId?: string };
+
+function mapVehicleColor(cor: string | null, ctx?: ColorCtx): string {
+  if (!cor) return '#9E9E9E';
+
+  // Hex já válido — devolve sem tocar
+  if (/^#[0-9A-Fa-f]{6}$/.test(cor)) return cor.toUpperCase();
+
   const normalized = cor.toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
-  return SOFTRUCK_COLORS[normalized] || '#9E9E9E';
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\./g, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  // 1) match completo
+  if (SOFTRUCK_COLORS[normalized]) return SOFTRUCK_COLORS[normalized];
+
+  // 2) fallback pela primeira palavra (cobre "azul X", "preta Y", etc.)
+  const first = normalized.split(' ')[0];
+  if (first && SOFTRUCK_COLORS[first]) {
+    console.warn('[softruck-api][color-fallback-firstword]', JSON.stringify({
+      original: cor, normalized, matched: first, hex: SOFTRUCK_COLORS[first], ctx,
+    }));
+    return SOFTRUCK_COLORS[first];
+  }
+
+  // 3) Cor não catalogada — alerta operacional. Toda entrada nessa branch é cor nova
+  //    que ninguém viu ainda; sem o log, vira cinza silencioso no painel da Softruck.
+  console.error('[softruck-api][color-unmapped]', JSON.stringify({
+    original: cor, normalized, default_hex: '#9E9E9E', ctx,
+  }));
+  return '#9E9E9E';
 }
 
 function mapVehicleType(combustivel: string | null): string {
