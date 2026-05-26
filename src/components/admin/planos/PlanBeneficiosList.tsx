@@ -25,6 +25,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAll } from '@/lib/supabase/fetchAll';
 import { useCreateBenefit, useUpdateBenefit, useDeleteBenefit } from '@/hooks/usePlansAdmin';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 import { CarenciaConfigSection } from './CarenciaConfigSection';
@@ -195,37 +196,60 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
     enabled: !!planId,
   });
 
-  // Query all available benefits for assignment dialog
+  // Debounce server-side search to avoid hammering on each keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(assignSearch.trim()), 300);
+    return () => clearTimeout(id);
+  }, [assignSearch]);
+
+  // Query all available benefits for assignment dialog.
+  // Usa fetchAll para furar o cap default de 1000 linhas do PostgREST
+  // (benefits tem >1700 linhas — itens pós-1000 ficavam invisíveis no modal).
   const { data: beneficiosDisponiveis = [], isLoading: loadingDisponiveis } = useQuery({
-    queryKey: ['beneficios-disponiveis-all', planId],
+    queryKey: ['beneficios-disponiveis-all', planId, debouncedSearch],
     queryFn: async () => {
-      // Get all active benefits
-      const { data: allBenefits, error: bErr } = await supabase
-        .from('benefits')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (bErr) throw bErr;
+      const allBenefits = await fetchAll<any>(
+        (from, to) => {
+          let q = supabase
+            .from('benefits')
+            .select('*')
+            .eq('is_active', true)
+            .order('name')
+            .range(from, to);
+          if (debouncedSearch.length >= 2) {
+            q = q.ilike('name', `%${debouncedSearch}%`);
+          }
+          return q;
+        },
+        { label: 'benefits-disponiveis' }
+      );
 
       // Get bindings of THIS plan only — we want to show every other benefit
       // (including ones already linked to other plans; the 1:1 DB constraint
       // will surface a unique violation on insert if there is a real conflict).
-      const { data: planBindings, error: vErr } = await supabase
-        .from('planos_beneficios')
-        .select('benefit_id')
-        .eq('plano_id', planId);
-      if (vErr) throw vErr;
+      const planBindings = await fetchAll<{ benefit_id: string }>(
+        (from, to) =>
+          supabase
+            .from('planos_beneficios')
+            .select('benefit_id')
+            .eq('plano_id', planId)
+            .range(from, to),
+        { label: 'planos_beneficios-by-plan' }
+      );
 
-      const assignedToThisPlan = new Set((planBindings || []).map((v: any) => v.benefit_id));
-      return (allBenefits || [])
-        .filter((b: any) => !assignedToThisPlan.has(b.id));
+      const assignedToThisPlan = new Set(planBindings.map((v) => v.benefit_id));
+      return allBenefits.filter((b: any) => !assignedToThisPlan.has(b.id));
     },
     enabled: assignOpen,
   });
 
-  const filteredDisponiveis = beneficiosDisponiveis.filter((b: any) =>
-    b.name.toLowerCase().includes(assignSearch.toLowerCase())
-  );
+  // Filtro client-side só como complemento (server já filtrou quando >=2 chars)
+  const filteredDisponiveis = debouncedSearch.length >= 2
+    ? beneficiosDisponiveis
+    : beneficiosDisponiveis.filter((b: any) =>
+        b.name.toLowerCase().includes(assignSearch.toLowerCase())
+      );
 
   const handleAssign = async () => {
     if (assignSelected.size === 0) return;

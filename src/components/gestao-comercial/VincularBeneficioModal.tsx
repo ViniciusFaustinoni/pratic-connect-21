@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAll } from '@/lib/supabase/fetchAll';
 import { toast } from 'sonner';
 
 interface VincularBeneficioModalProps {
@@ -30,19 +31,22 @@ export function VincularBeneficioModal({ open, onClose, planoId }: VincularBenef
   const { data: availableBenefits, isLoading } = useQuery({
     queryKey: ['benefits-disponiveis-global', planoId],
     queryFn: async () => {
-      const { data: vinculados } = await supabase
-        .from('planos_beneficios')
-        .select('benefit_id');
+      const vinculados = await fetchAll<{ benefit_id: string | null }>(
+        (from, to) => supabase.from('planos_beneficios').select('benefit_id').range(from, to),
+        { label: 'planos_beneficios-global' }
+      );
+      const idsVinculados = vinculados.map((v) => v.benefit_id).filter(Boolean) as string[];
 
-      const idsVinculados = vinculados?.map(v => v.benefit_id).filter(Boolean) || [];
-
-      let query = supabase.from('benefits').select('*').eq('is_active', true).order('name');
-      if (idsVinculados.length > 0) {
-        query = query.not('id', 'in', `(${idsVinculados.join(',')})`);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAll<any>(
+        (from, to) => {
+          let q = supabase.from('benefits').select('*').eq('is_active', true).order('name').range(from, to);
+          if (idsVinculados.length > 0) {
+            q = q.not('id', 'in', `(${idsVinculados.join(',')})`);
+          }
+          return q;
+        },
+        { label: 'benefits-disponiveis-global' }
+      );
       return data;
     },
     enabled: open && !!planoId,
