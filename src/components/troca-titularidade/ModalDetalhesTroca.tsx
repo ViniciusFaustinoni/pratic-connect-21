@@ -31,6 +31,8 @@ import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 import { useVeiculoCompleto } from '@/hooks/useVeiculoDetalhes';
 import { exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
 import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
+import { ValidarImeiPorPlacaCard } from './ValidarImeiPorPlacaCard';
+import { validarImeiPorPlaca, type ValidacaoOrigem } from '@/lib/troca-titularidade/validarImeiPorPlaca';
 
 interface Props {
   open: boolean;
@@ -67,6 +69,13 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [sgaLiberado, setSgaLiberado] = useState(false);
   const [activeTab, setActiveTab] = useState('dados');
 
+  // Validação placa ↔ IMEI (Monitoramento, veículo elegível a rastreador).
+  const [imeiInput, setImeiInput] = useState('');
+  const [validandoImei, setValidandoImei] = useState(false);
+  const [imeiValidado, setImeiValidado] = useState(false);
+  const [origemValidacao, setOrigemValidacao] = useState<ValidacaoOrigem | null>(null);
+  const [erroValidacao, setErroValidacao] = useState<string | null>(null);
+
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
@@ -78,10 +87,63 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const veiculoExigeRastreador = veiculoCompleto?.veiculo ? exigeInstalacaoTecnica(veiculoCompleto.veiculo as any) : false;
   const jaTemRastreador = !!veiculoCompleto?.rastreador;
   const precisaVinculoRastreador = modo === 'monitoramento' && veiculoExigeRastreador && !jaTemRastreador;
+  // Quando o veículo já exige rastreador no Monitoramento, agora a aprovação
+  // depende da validação placa ↔ IMEI (substitui o card de busca livre por IMEI
+  // no contexto de Troca de Titularidade).
+  const precisaValidarImei = precisaVinculoRastreador;
+
+  /**
+   * Garante a validação placa ↔ IMEI antes de qualquer mutação de decisão do
+   * Monitoramento (aprovar, solicitar vistoria, agendar manutenção). Retorna
+   * `true` quando pode prosseguir, `false` quando deve abortar.
+   */
+  const garantirImeiValidado = async (): Promise<boolean> => {
+    if (!precisaValidarImei) return true;
+    if (imeiValidado) return true;
+    if (!solicitacao?.veiculo_id) return false;
+    if (!imeiInput.trim()) {
+      setErroValidacao('Informe o IMEI instalado no veículo.');
+      toast.error('Informe o IMEI instalado no veículo.');
+      return false;
+    }
+    setValidandoImei(true);
+    setErroValidacao(null);
+    try {
+      const placa = veiculoCompleto?.veiculo?.placa as string | undefined;
+      const res = await validarImeiPorPlaca({
+        placa,
+        imei: imeiInput,
+        veiculoIdAlvo: solicitacao.veiculo_id,
+      });
+      if (res.ok === false) {
+        setErroValidacao(res.mensagem);
+        toast.error(res.mensagem);
+        return false;
+      }
+      // Sucesso: registrar vínculo lógico local (se rastreador conhecido) para
+      // que a Fase 4 da troca aponte para o rastreador correto.
+      if (res.rastreadorId) {
+        await supabase
+          .from('rastreadores')
+          .update({ veiculo_id: solicitacao.veiculo_id })
+          .eq('id', res.rastreadorId);
+        qc.invalidateQueries({ queryKey: ['veiculo-completo', solicitacao.veiculo_id] });
+      }
+      setImeiValidado(true);
+      setOrigemValidacao(res.origem);
+      toast.success(`IMEI validado (${res.origem === 'softruck' ? 'Softruck' : 'Rede Veículos'}).`);
+      return true;
+    } catch (e) {
+      console.error('[VALIDACAO_IMEI_PLACA] erro inesperado', e);
+      setErroValidacao('Não foi possível validar o IMEI agora. Tente novamente em alguns minutos.');
+      toast.error('Não foi possível validar o IMEI agora. Tente novamente em alguns minutos.');
+      return false;
+    } finally {
+      setValidandoImei(false);
+    }
+  };
 
   // Polling do termo (fallback para o webhook Autentique, que não chega).
-  // Ativa enquanto o modal está aberto, o termo foi enviado e ainda não foi
-  // marcado como assinado. Ver `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica`.
   const precisaSyncTermo = !!solicitacao
     && !!solicitacao.termo_cancelamento_enviado_em
     && !solicitacao.termo_cancelamento_assinado_em
@@ -132,6 +194,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
   const handleAprovar = async () => {
     if (!solicitacao) return;
+    if (modo === 'monitoramento' && !(await garantirImeiValidado())) return;
     if (modo === 'cadastro') {
       await aprovarCadastro.mutateAsync({ solicitacao_id: solicitacao.id, observacao });
     } else {
@@ -142,6 +205,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
   const handleSolicitarVistoria = async (tipo: 'somente_fotos' | 'fotos_com_rastreador') => {
     if (!solicitacao) return;
+    if (!(await garantirImeiValidado())) return;
     await aprovarMonitoramento.mutateAsync({
       solicitacao_id: solicitacao.id,
       acao: 'solicitar_vistoria',
@@ -149,6 +213,11 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
       tipo_vistoria_troca: tipo,
     });
     onOpenChange(false);
+  };
+
+  const handleAbrirManutencao = async () => {
+    if (!(await garantirImeiValidado())) return;
+    setManutencaoOpen(true);
   };
 
   const handleReprovar = async () => {
@@ -244,19 +313,22 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.novo_titular_dados?.cpf)} • {solicitacao.novo_titular_dados?.email || '-'} • {formatPhone(solicitacao.novo_titular_dados?.telefone)}</p>
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
-                {modo === 'monitoramento' && solicitacao.veiculo_id && veiculoCompleto?.associado?.id && (
-                  <VincularRastreadorExistenteCard
-                    veiculoId={solicitacao.veiculo_id}
-                    associadoId={veiculoCompleto.associado.id}
-                    associadoEmail={(veiculoCompleto.associado as any)?.email}
-                    exigeRastreador={veiculoExigeRastreador}
-                    jaTemRastreador={jaTemRastreador}
-                    origemContexto="troca_titularidade"
-                    origemRefId={solicitacao.id}
-                    onVinculado={() => {
-                      qc.invalidateQueries({ queryKey: ['veiculo-completo', solicitacao.veiculo_id] });
-                      qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+                {modo === 'monitoramento' && precisaValidarImei && (
+                  <ValidarImeiPorPlacaCard
+                    placa={veiculoCompleto?.veiculo?.placa || null}
+                    imei={imeiInput}
+                    onChange={(v) => {
+                      setImeiInput(v);
+                      if (imeiValidado) {
+                        setImeiValidado(false);
+                        setOrigemValidacao(null);
+                      }
+                      if (erroValidacao) setErroValidacao(null);
                     }}
+                    validando={validandoImei}
+                    validado={imeiValidado}
+                    origem={origemValidacao}
+                    erro={erroValidacao}
                   />
                 )}
                 {solicitacao.cotacao ? (
@@ -421,7 +493,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <Button variant="outline" onClick={() => setManutencaoOpen(true)} disabled={aprovarMonitoramento.isPending}>
+                      <Button variant="outline" onClick={handleAbrirManutencao} disabled={aprovarMonitoramento.isPending || validandoImei}>
                         <Wrench className="h-4 w-4 mr-2" />
                         Agendar manutenção
                       </Button>
