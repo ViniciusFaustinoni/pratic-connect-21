@@ -1,46 +1,65 @@
-## Bug atual
+## Diagnóstico (código real)
 
-`src/components/troca-titularidade/ModalDetalhesTroca.tsx:518` amarra `bloqueadoPorRastreador` a `precisaVinculoRastreador` (= `!jaTemRastreador`), mas o vínculo só é gravado dentro de `garantirImeiValidado` (linhas 125-131), que só roda no clique do Aprovar (linha 197). Botão nunca habilita → paradoxo.
+Arquivo único afetado: `src/components/admin/planos/PlanBeneficiosList.tsx`
 
-Nova UX: validação acontece **no próprio card do IMEI**, com botão explícito **Validar**. Aprovar só libera depois.
+### Erro 2 — Benefício criado para o plano não aparece na lista de "Atribuir Existente"
 
-## Mudanças
+Lógica atual (linhas 210-225):
 
-### 1. `src/components/troca-titularidade/ValidarImeiPorPlacaCard.tsx`
+```ts
+// Get all existing bindings with plan names
+const { data: allBindings, error: vErr } = await supabase
+  .from('planos_beneficios')
+  .select('benefit_id, planos:plano_id(nome)');
+...
+// Exclude benefits already assigned to ANY plan
+const assignedIds = new Set(Array.from(vinculoMap.keys()));
+return (allBenefits || [])
+  .filter((b: any) => !assignedIds.has(b.id));
+```
 
-- Trocar `Props.onChange` por par `onChange` + `onValidar` (callback do clique). Novos estados são controlados pelo pai (`validando`, `validado`, `origem`, `erro`).
-- Adicionar `<Button>` "Validar" dentro do card, ao lado/embaixo do input.
-  - `disabled = validando || validado || imei.replace(/\D/g,'').length < 15 || disabled`
-  - Label: "Validar" → "Validando…" (com spinner) → some quando `validado=true` (substituído pelo badge verde existente).
-- Estado visual já presente cobre:
-  - `validando` → spinner + texto "Validando IMEI nas plataformas externas…"
-  - `validado` → badge verde "Validado em Softruck/Rede Veículos"
-  - `erro` → Alert vermelho com mensagem (já existe)
-- Sem mudança em prop `placa`, `imei`, `disabled`.
+O filtro exclui qualquer benefício que tenha vínculo em `planos_beneficios` com QUALQUER plano. Como a regra canônica é 1:1 (memória `Plan uniqueness` / `Decoupled items`), todo benefício criado já nasce vinculado a um plano — então a lista quase sempre vem vazia. O benefício que o usuário criou "para esse plano" já tem vínculo e é descartado. O único que sobrou no print ("Rastreador/Monitoramento - Select Premium - Aplicativo") é um caso órfão (sem registro em `planos_beneficios`).
 
-### 2. `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+A intenção real desta tela é "atribuir um benefício existente a ESTE plano". Então deve excluir apenas o que já está vinculado a `planId` atual — não a outros planos. Benefícios vinculados a outros planos não podem ser reaproveitados (regra 1:1), mas a fonte de verdade para isso já é a unicidade no banco; a UI deve mostrar candidatos não-vinculados ao plano atual e a operação `insert` em `planos_beneficios` falharia se houvesse conflito.
 
-- Estados `imeiInput`, `validandoImei`, `imeiValidado`, `origemValidacao`, `erroValidacao` já existem (linhas 73-77) — manter.
-- Extrair o miolo de `garantirImeiValidado` (linhas 100-144) para uma função `validarImeiAgora()` chamável pelo card. Mantém set de estados, toast, gravação em `rastreadores` (linhas 125-131) e `qc.invalidateQueries`.
-- Passar para o card (linhas 317-330):
-  - `onValidar={validarImeiAgora}`
-  - `onChange` reseta `imeiValidado=false`, `origemValidacao=null`, `erroValidacao=null` (linhas 321-327 já fazem parte disso — só ajustar).
-- Linha 518: `const bloqueadoPorRastreador = precisaValidarImei && !imeiValidado;`
-- Linha 526-527 (`motivoBloqueio`): texto vira **"Valide o IMEI do rastreador antes de aprovar."**
-- `handleAprovar` (linha 195): manter chamada a `garantirImeiValidado` como **camada de segurança secundária** — função fica idempotente (retorna `true` imediatamente quando `imeiValidado=true`, comportamento já existente na linha 102).
-- `handleSolicitarVistoria` e `handleAbrirManutencao`: idem, `garantirImeiValidado` permanece como guarda. Sem alteração.
+### Erro 1 — Modal aparece cortado horizontalmente
 
-### 3. Fora de escopo
+DialogContent (linha 355):
 
-- Nada de backend, edge function, hook de mutação, schema.
-- Sem alteração em `validarImeiPorPlaca` (lib), `rastreadores.plataforma`, nem na escrita de vínculo (continua gravando no momento da validação).
+```tsx
+<DialogContent className="max-w-md max-h-[80vh]" onInteractOutside={(e) => e.preventDefault()}>
+```
 
-## Verificação manual
+Lista (linha 369):
+```tsx
+<div className="max-h-[40vh] overflow-y-auto space-y-1 border rounded-lg p-2">
+```
 
-Caso GABRIEL → Anderson, placa **KPJ4994**, IMEI **354522186314659**:
+Rodapé (linhas 396-409): `flex items-center justify-between` com "0 selecionado(s)" + Cancelar + "Vincular Selecionados" não cabe em `max-w-md` em viewports estreitos — o botão "Vincular Selecionados" estoura, força overflow horizontal no DialogContent e o usuário vê o título do botão cortado + uma scrollbar horizontal embaixo (visível no print). A lista interna também só tem `overflow-y-auto`, sem `overflow-x-hidden`, então qualquer nome longo (ex.: "Rastreador/Monitoramento - Select Premium - Aplicativo") também empurra a largura mesmo com `truncate` se o ancestral não tiver `min-w-0`.
 
-1. Abrir aprovação → IMEI vazio, badge ausente, **Validar** disabled, **Aprovar** disabled (tooltip "Valide o IMEI…").
-2. Digitar IMEI → **Validar** habilita aos 15 dígitos; **Aprovar** segue disabled.
-3. Clicar **Validar** → spinner "Validando…" → badge verde "Validado em Softruck" (ou Rede) → **Aprovar** habilita.
-4. Apagar/digitar outro IMEI → `imeiValidado` reseta → badge some → **Aprovar** trava de novo.
-5. Falha de validação → Alert vermelho no card com mensagem específica; **Aprovar** segue disabled.
+## Correções
+
+Apenas no arquivo `src/components/admin/planos/PlanBeneficiosList.tsx`:
+
+**Fix Erro 2 (queryFn `beneficios-disponiveis-all`, linhas 199-228):**
+- Trocar o `select` de bindings por `.eq('plano_id', planId)` para trazer só vínculos do plano atual.
+- Filtrar `allBenefits` excluindo apenas os IDs vinculados a este plano.
+- Atualizar comentários para refletir a nova semântica.
+
+**Fix Erro 1 (DialogContent, linhas 354-411):**
+- Ampliar largura: `max-w-md` → `max-w-lg w-[calc(100vw-2rem)]` e adicionar `overflow-hidden` para impedir scroll horizontal externo.
+- Lista interna: adicionar `overflow-x-hidden` em complemento ao `overflow-y-auto`.
+- Garantir truncamento: adicionar `min-w-0` no `<label>` da linha 380 (já existe no filho `flex items-center gap-2 min-w-0 flex-1`, mas o label pai precisa também).
+- Rodapé (linha 396): trocar para `flex flex-wrap items-center justify-between gap-2 pt-1` para os botões quebrarem linha em telas estreitas em vez de transbordar.
+
+## Fora de escopo
+
+- Nenhuma mudança em hooks, edge functions, schema, RLS ou regra de unicidade 1:1 (continua sendo enforçada no banco).
+- Nenhuma mudança no fluxo de criar/excluir benefício, no inline form, em coberturas, eligibility, ou no botão "Novo Benefício".
+
+## Verificação manual após implementar
+
+1. Abrir Editar Plano do "Select Basic - Até 30 Mil com rastreador" → clicar "Atribuir Existente".
+2. Modal abre dentro da viewport, sem scrollbar horizontal e com botão "Vincular Selecionados" inteiro visível.
+3. Lista mostra benefícios não vinculados a este plano (inclusive os recém-criados para outros planos que ficaram órfãos, e qualquer benefício sem vínculo).
+4. Selecionar um item e vincular: se já estiver vinculado a outro plano via regra 1:1, o insert falha com erro de unicidade do banco (comportamento pré-existente).
