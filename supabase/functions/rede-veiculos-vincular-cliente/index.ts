@@ -19,6 +19,8 @@ interface Associado {
   nome: string;
   cpf: string | null;
   telefone: string | null;
+  telefone_secundario: string | null;
+  whatsapp: string | null;
   email: string;
   cep: string | null;
   logradouro: string | null;
@@ -38,6 +40,9 @@ interface Veiculo {
   chassi: string | null;
   renavam: string | null;
   combustivel: string | null;
+  codigo_fipe: string | null;
+  valor_fipe: number | null;
+  aguardando_placa_definitiva: boolean | null;
   rede_veiculos_cliente_id: string | null;
   rede_veiculos_veiculo_id: string | null;
 }
@@ -160,6 +165,9 @@ serve(async (req) => {
         chassi, 
         renavam, 
         combustivel,
+        codigo_fipe,
+        valor_fipe,
+        aguardando_placa_definitiva,
         rede_veiculos_cliente_id,
         rede_veiculos_veiculo_id
       `)
@@ -180,6 +188,8 @@ serve(async (req) => {
         nome,
         cpf,
         telefone,
+        telefone_secundario,
+        whatsapp,
         email,
         cep,
         logradouro,
@@ -234,8 +244,18 @@ serve(async (req) => {
     console.log('[RedeVeiculos Vincular] Autenticado, ambiente:', plataforma.ambiente_atual);
 
     // ===== 6. Montar payload para API Rede Veículos (v2 — estrutura oficial) =====
-    // Doc oficial: campos aninhados em { dados: {...} } dentro de equipamento/veiculo/cliente.
-    // Body urlencoded com chave `json` contendo o objeto serializado.
+    // Doc oficial:
+    //  - Campos aninhados em { dados: {...} } dentro de equipamento/veiculo/cliente.
+    //  - Booleanos SEMPRE como string "S"/"N" (nunca true/false).
+    //  - Endereço PLANO dentro de cliente.dados (sem objeto endereco aninhado).
+    //  - Emails separados: emailContato + emailAlertas (sem chave "email" genérica).
+    //  - Bloco `permissoes` fica DENTRO de cliente (não no nível raiz) com chaves
+    //    canônicas: acessoWeb, alterarDadosNaoAutorizado, pushNotificationsGeral,
+    //    pushNotificationsBateria, alertasPlataformaGeral, alertasPlataformaBateria,
+    //    alertasPlataformaExclusao, acessoHistoricoSomente24h.
+    // Body urlencoded com SOMENTE a chave `json` contendo o objeto serializado.
+    const sn = (v: unknown): 'S' | 'N' => (v === true || v === 'S' || v === 's' ? 'S' : 'N');
+
     const cpfCnpjLimpo = formatarCpfCnpj(associado.cpf);
     const imeiLimpo = (rastreador.imei || '').replace(/\D/g, '');
 
@@ -255,15 +275,7 @@ serve(async (req) => {
     }
     const tipoRede = mapTipoVeiculoRede(tipoCanonico);
 
-    const enderecoLimpo = associado.logradouro ? {
-      cep: associado.cep?.replace(/\D/g, '') || '',
-      logradouro: associado.logradouro || '',
-      numero: associado.numero || 'S/N',
-      bairro: associado.bairro || '',
-      cidade: associado.cidade || '',
-      uf: associado.uf || '',
-    } : undefined;
-
+    // ---- veiculo.dados ----
     const veiculoDados: Record<string, unknown> = {
       tipo: tipoRede,
       marca: veiculo.marca || 'NI',
@@ -271,39 +283,72 @@ serve(async (req) => {
       placa: (veiculo.placa || '').toUpperCase(),
       cor: veiculo.cor || 'NI',
       ano: String(veiculo.ano_modelo || new Date().getFullYear()),
+      ZeroKM: sn(veiculo.aguardando_placa_definitiva),
     };
     if (veiculo.chassi) veiculoDados.chassi = veiculo.chassi;
     if (veiculo.renavam) veiculoDados.renavam = veiculo.renavam;
+    if (veiculo.codigo_fipe) veiculoDados.codigoFipe = veiculo.codigo_fipe;
+    if (veiculo.valor_fipe != null) veiculoDados.valorFipe = String(veiculo.valor_fipe);
+
+    // ---- cliente.dados (endereço PLANO, sem objeto aninhado) ----
+    const celularLimpo = formatarTelefone(associado.telefone);
+    const whatsappLimpo = formatarTelefone(associado.whatsapp);
+    const telefoneFixoLimpo = formatarTelefone(associado.telefone_secundario);
+    const enderecoCompleto = [associado.logradouro, associado.numero]
+      .filter((p) => p && String(p).trim().length > 0)
+      .join(', ')
+      .trim();
 
     const clienteDados: Record<string, unknown> = {
       cpfCnpj: cpfCnpjLimpo,
       nome: associado.nome,
     };
-    const celularLimpo = formatarTelefone(associado.telefone);
     if (celularLimpo) clienteDados.celular = celularLimpo;
-    if (associado.email) clienteDados.email = associado.email;
-    if (enderecoLimpo) clienteDados.endereco = enderecoLimpo;
+    if (telefoneFixoLimpo) clienteDados.telefone = telefoneFixoLimpo;
+    if (whatsappLimpo) clienteDados.whatsapp = whatsappLimpo;
+    // A doc tem dois campos de email — sem chave "email" genérica.
+    if (associado.email) {
+      clienteDados.emailContato = associado.email;
+      clienteDados.emailAlertas = associado.email;
+    }
+    if (associado.cep) clienteDados.cep = associado.cep.replace(/\D/g, '');
+    if (enderecoCompleto) clienteDados.enderecoCompleto = enderecoCompleto;
+    if (associado.bairro) clienteDados.bairro = associado.bairro;
+    if (associado.cidade) clienteDados.cidade = associado.cidade;
+    if (associado.uf) clienteDados.uf = associado.uf;
+
+    // ---- cliente.permissoes (chaves oficiais da doc, defaults conservadores) ----
+    const clientePermissoes = {
+      acessoWeb: 'S',
+      alterarDadosNaoAutorizado: 'S',
+      pushNotificationsGeral: 'S',
+      pushNotificationsBateria: 'N',
+      alertasPlataformaGeral: 'S',
+      alertasPlataformaBateria: 'N',
+      alertasPlataformaExclusao: 'N',
+      acessoHistoricoSomente24h: 'N',
+    };
+
+    // ---- equipamento.dados (booleanos como "S"/"N") ----
+    const equipamentoDados: Record<string, unknown> = {
+      imei: imeiLimpo,
+      localInstalacao: localInstalacao,
+      ignicaoVirtual: 'N',
+      positivoPosChave: 'N',
+      possuiBloqueio: sn(possuiBloqueio),
+      bloqueioLiberadoCliente: 'N',
+    };
 
     const payload = {
-      equipamento: {
-        dados: {
-          imei: imeiLimpo,
-          localInstalacao: localInstalacao,
-          possuiBloqueio: possuiBloqueio,
-        },
-      },
+      equipamento: { dados: equipamentoDados },
       veiculo: { dados: veiculoDados },
-      cliente: { dados: clienteDados },
-      permissoes: {
-        acessoWeb: true,
-        pushNotifications: true,
-        alertaVelocidade: true,
-        alertaCercaVirtual: true,
-        alertaIgnicao: true,
+      cliente: {
+        dados: clienteDados,
+        permissoes: clientePermissoes,
       },
     };
 
-    console.log('[RedeVeiculos Vincular] Payload v2 montado:', JSON.stringify(payload, null, 2));
+    console.log('[RedeVeiculos Vincular] Payload v2 (doc-compliant):', JSON.stringify(payload, null, 2));
 
     // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo/ =====
     // URL DEVE terminar com `/` (sem barra → 301 e body perdido).
