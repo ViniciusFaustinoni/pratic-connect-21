@@ -63,8 +63,9 @@ export function useFilaServicos() {
           created_at,
           expires_at,
           servico:servicos!fila_servicos_servico_id_fkey(
-            id, tipo, logradouro, bairro, cidade, data_agendada,
-            associado:associados!servicos_associado_id_fkey(nome)
+            id, tipo, logradouro, bairro, cidade, data_agendada, contrato_id, origem,
+            associado:associados!servicos_associado_id_fkey(nome),
+            contrato:contratos!servicos_contrato_id_fkey(aprovado_em, origem_troca_titularidade_id)
           ),
           profissional:profiles!fila_servicos_profissional_id_fkey(id, nome)
         `)
@@ -73,7 +74,18 @@ export function useFilaServicos() {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return (data || []) as unknown as FilaServico[];
+
+      // Gate canônico Cadastro→Monitoramento: oculta itens cujo serviço pertence
+      // a contrato não aprovado (exceto troca de titularidade). Itens sem contrato
+      // vinculado continuam visíveis. Ver mem://logic/operations/atribuicao-manual-gate-cadastro-aprovado
+      const filtrados = ((data || []) as any[]).filter((row) => {
+        const s = row.servico;
+        if (!s || !s.contrato_id) return true;
+        if (s.origem === 'troca_titularidade') return true;
+        return !!s.contrato?.aprovado_em || !!s.contrato?.origem_troca_titularidade_id;
+      });
+
+      return filtrados as unknown as FilaServico[];
     },
     // Sem polling: realtime acima já invalida em qualquer mudança em fila_servicos.
     refetchOnWindowFocus: true,

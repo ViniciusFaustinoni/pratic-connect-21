@@ -106,7 +106,7 @@ export function useServicosAtribuidos(opts: UseServicosAtribuidosOpts) {
       // 3. Buscar serviços
       let query = supabase
         .from('servicos')
-        .select('id, data_agendada, hora_agendada, periodo, tipo, status, bairro, cidade, uf, profissional_id, associado_id, veiculo_id')
+        .select('id, data_agendada, hora_agendada, periodo, tipo, status, bairro, cidade, uf, profissional_id, associado_id, veiculo_id, contrato_id, origem')
         .in('profissional_id', profissionaisIds)
         .in('status', STATUS_VALIDOS as any)
         .order('data_agendada', { ascending: false })
@@ -123,9 +123,31 @@ export function useServicosAtribuidos(opts: UseServicosAtribuidosOpts) {
         query = query.eq('status', status as any);
       }
 
-      const { data: servicos, error } = await query;
+      const { data: servicosRaw, error } = await query;
       if (error) throw error;
-      if (!servicos?.length) return [];
+      if (!servicosRaw?.length) return [];
+
+      // Gate canônico Cadastro→Monitoramento: filtrar serviços de contratos não
+      // aprovados (exceto troca de titularidade). Ver mem://logic/operations/atribuicao-manual-gate-cadastro-aprovado
+      const contratoIds = Array.from(
+        new Set((servicosRaw as any[]).map((s) => s.contrato_id).filter(Boolean))
+      ) as string[];
+      const aprovadoMap = new Map<string, boolean>();
+      if (contratoIds.length > 0) {
+        const { data: contratosData } = await supabase
+          .from('contratos')
+          .select('id, aprovado_em, origem_troca_titularidade_id')
+          .in('id', contratoIds);
+        for (const c of (contratosData || []) as any[]) {
+          aprovadoMap.set(c.id, !!c.aprovado_em || !!c.origem_troca_titularidade_id);
+        }
+      }
+      const servicos = (servicosRaw as any[]).filter((s) => {
+        if (!s.contrato_id) return true;
+        if (s.origem === 'troca_titularidade') return true;
+        return aprovadoMap.get(s.contrato_id) === true;
+      });
+      if (!servicos.length) return [];
 
       // 4. Buscar dados de associados e veículos
       const associadoIds = Array.from(new Set(servicos.map(s => s.associado_id).filter(Boolean))) as string[];
