@@ -134,6 +134,12 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     momento: 'D-6 do vencimento — lembrete com desconto',
     gatilho: 'executar-regua-cobranca',
     variaveis: ['nome', 'vencimento', 'linha_digitavel'],
+    deprecated: 'Use d_6_lembrete_desconto_v2.',
+  },
+  d_6_lembrete_desconto_v2: {
+    momento: 'D-6 do vencimento — lembrete com 5% de desconto (manchete de urgência)',
+    gatilho: 'executar-regua-cobranca',
+    variaveis: ['nome', 'vencimento', 'linha_digitavel'],
   },
   d0_boleto_vence_hoje_v1: {
     momento: 'D-0 — boleto vence hoje',
