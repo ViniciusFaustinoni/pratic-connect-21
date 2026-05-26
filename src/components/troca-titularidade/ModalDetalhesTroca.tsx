@@ -493,7 +493,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <Button variant="outline" onClick={() => setManutencaoOpen(true)} disabled={aprovarMonitoramento.isPending}>
+                      <Button variant="outline" onClick={handleAbrirManutencao} disabled={aprovarMonitoramento.isPending || validandoImei}>
                         <Wrench className="h-4 w-4 mr-2" />
                         Agendar manutenção
                       </Button>
