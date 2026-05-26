@@ -702,6 +702,17 @@ export function useAssociadoActions() {
 
   const cancelarAssociado = useMutation({
     mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      // 0. Bloqueio canônico: se houver troca de titularidade em andamento, fluxo é troca, não cancelamento direto
+      const { data: trocasAbertas } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id, status')
+        .eq('associado_antigo_id', id)
+        .not('status', 'in', '(efetivada,reprovada,cancelada,expirada)')
+        .limit(1);
+      if (trocasAbertas && trocasAbertas.length > 0) {
+        throw new Error('TROCA_TITULARIDADE_EM_ANDAMENTO');
+      }
+
       // 1. Usar orquestrador para inativar + desvincular todos os veículos Rede Veículos
       try {
         const result = await supabase.functions.invoke('rede-veiculos-inativar-cliente-completo', {
@@ -753,6 +764,8 @@ export function useAssociadoActions() {
       }
 
       // 3. Atualizar status do associado
+      //    A trigger DB trg_cascata_cancelamento_associado cancela em cascata
+      //    contratos ativos + veículos ativos + desativa coberturas total/R-F + audit log.
       const { error } = await supabase.from('associados').update({
         status: 'cancelado' as StatusAssociado,
         motivo_bloqueio: motivo,
@@ -762,9 +775,15 @@ export function useAssociadoActions() {
     },
     onSuccess: () => {
       invalidateAll();
-      toast.success('Associado cancelado');
+      toast.success('Associado cancelado (contrato e veículos cancelados em cascata)');
     },
-    onError: () => toast.error('Erro ao cancelar associado'),
+    onError: (err: any) => {
+      if (err?.message === 'TROCA_TITULARIDADE_EM_ANDAMENTO') {
+        toast.error('Há uma troca de titularidade em andamento. Conclua ou cancele a troca antes de cancelar o associado.');
+      } else {
+        toast.error('Erro ao cancelar associado');
+      }
+    },
   });
 
   const atualizarDados = useMutation({
