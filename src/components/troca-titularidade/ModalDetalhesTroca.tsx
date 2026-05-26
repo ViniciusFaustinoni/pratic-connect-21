@@ -115,7 +115,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
         imei: imeiInput,
         veiculoIdAlvo: solicitacao.veiculo_id,
       });
-      if (!res.ok) {
+      if (res.ok === false) {
         setErroValidacao(res.mensagem);
         toast.error(res.mensagem);
         return false;
