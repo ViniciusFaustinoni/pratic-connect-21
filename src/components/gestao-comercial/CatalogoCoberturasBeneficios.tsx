@@ -14,6 +14,7 @@ import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useDuplicateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated } from '@/lib/data/fetchAllPaginated';
 import { toast } from 'sonner';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
 import { useRulesForEntity } from '@/hooks/useEntityEligibilityRules';
@@ -497,20 +498,20 @@ export function CatalogoCoberturasBeneficios() {
   const duplicateCob = useDuplicateCobertura();
   const duplicateBen = useDuplicateBenefit();
 
-  // Attribution maps
+  // Attribution maps — paginado para não cair no cap silencioso de 1000 linhas do PostgREST
   const { data: cobAttrData = [] } = useQuery({
     queryKey: ['planos_coberturas_attr'],
-    queryFn: async () => {
-      const { data } = await supabase.from('planos_coberturas').select('cobertura_id, planos(nome)');
-      return data || [];
-    },
+    queryFn: () =>
+      fetchAllPaginated<any>((from, to) =>
+        supabase.from('planos_coberturas').select('cobertura_id, planos(nome)').range(from, to),
+      ),
   });
   const { data: benAttrData = [] } = useQuery({
     queryKey: ['planos_beneficios_attr'],
-    queryFn: async () => {
-      const { data } = await supabase.from('planos_beneficios').select('benefit_id, planos(nome)');
-      return data || [];
-    },
+    queryFn: () =>
+      fetchAllPaginated<any>((from, to) =>
+        supabase.from('planos_beneficios').select('benefit_id, planos(nome)').range(from, to),
+      ),
   });
 
   const cobAttrMap = useMemo(() => {
