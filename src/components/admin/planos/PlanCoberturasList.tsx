@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAll } from '@/lib/supabase/fetchAll';
 import { useCreateCobertura, useUpdateCobertura, useDeleteCobertura } from '@/hooks/usePlansAdmin';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules } from '@/components/gestao-comercial/EligibilityConfigSection';
 import { CarenciaConfigSection } from './CarenciaConfigSection';
@@ -279,37 +280,53 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
   };
 
-  // Query for ALL active coberturas with their current plan binding
+  // Debounce server-side search (coberturas tem ~2900 linhas, cap default 1000)
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(assignSearch.trim()), 300);
+    return () => clearTimeout(id);
+  }, [assignSearch]);
+
+  // Query for ALL active coberturas with their current plan binding.
+  // fetchAll fura o cap default de 1000 linhas do PostgREST.
   const { data: coberturasDisponiveis = [], isLoading: loadingDisponiveis } = useQuery({
-    queryKey: ['coberturas-disponiveis-all', planId],
+    queryKey: ['coberturas-disponiveis-all', planId, debouncedSearch],
     queryFn: async () => {
-      // Fetch all active coberturas
-      const { data: allCoberturas, error: errCob } = await supabase
-        .from('coberturas')
-        .select('*')
-        .eq('ativo', true)
-        .order('nome');
-      if (errCob) throw errCob;
+      const allCoberturas = await fetchAll<any>(
+        (from, to) => {
+          let q = supabase
+            .from('coberturas')
+            .select('*')
+            .eq('ativo', true)
+            .order('nome')
+            .range(from, to);
+          if (debouncedSearch.length >= 2) {
+            q = q.ilike('nome', `%${debouncedSearch}%`);
+          }
+          return q;
+        },
+        { label: 'coberturas-disponiveis' }
+      );
 
-      // Fetch all bindings with plan name
-      const { data: vinculos, error: errVinc } = await supabase
-        .from('planos_coberturas')
-        .select('cobertura_id, plano_id, planos(nome)');
-      if (errVinc) throw errVinc;
-
-      const vinculoMap = new Map((vinculos || []).map((v: any) => [v.cobertura_id, v]));
+      // planos_coberturas tem >2200 linhas — paginar para não truncar a lista de já-vinculados
+      const vinculos = await fetchAll<{ cobertura_id: string }>(
+        (from, to) =>
+          supabase.from('planos_coberturas').select('cobertura_id').range(from, to),
+        { label: 'planos_coberturas-global' }
+      );
 
       // Exclude coberturas already assigned to ANY plan
-      const assignedIds = new Set((vinculos || []).map((v: any) => v.cobertura_id));
-      return (allCoberturas || [])
-        .filter((c: any) => !assignedIds.has(c.id));
+      const assignedIds = new Set(vinculos.map((v) => v.cobertura_id));
+      return allCoberturas.filter((c: any) => !assignedIds.has(c.id));
     },
     enabled: assignOpen,
   });
 
-  const filteredDisponiveis = coberturasDisponiveis.filter((c: any) =>
-    c.nome.toLowerCase().includes(assignSearch.toLowerCase())
-  );
+  const filteredDisponiveis = debouncedSearch.length >= 2
+    ? coberturasDisponiveis
+    : coberturasDisponiveis.filter((c: any) =>
+        c.nome.toLowerCase().includes(assignSearch.toLowerCase())
+      );
 
   const handleAssign = async () => {
     if (assignSelected.size === 0) return;

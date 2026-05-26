@@ -1,90 +1,68 @@
-## Diagnóstico — caso VINICIUS DE ANDRADE BARROS SANTOS (HOA1B39)
+## Diagnóstico raiz
 
-### Estado atual no banco
-| Entidade | Status | Atualizado | Observação |
-|---|---|---|---|
-| `associados` (id `5955e32d…`) | **cancelado** | 26/05 18:50 | `motivo_bloqueio='cancelamento '`, `data_cancelamento=18:50` |
-| `contratos` (`CTR-20260428144839-0VKRQO`) | **ativo** | 26/05 13:37 | `cadastro_aprovado=true` |
-| `veiculos` (HOA1B39) | **ativo** | 22/05 08:31 | `codigo_hinova=35885` |
+PostgREST aplica teto **default de 1000 linhas** por resposta. Em catálogos grandes da gestão comercial, qualquer `.select('*')` sem `.range()` corta o resultado silenciosamente. Filtros client-side rodam SÓ no que foi baixado — itens além da posição 1000 viram invisíveis.
 
-### Cronologia (logs_auditoria)
-1. **26/05 13:36** — Hotfix anterior (loop de rebobinamento) restaurou associado: `em_analise → aguardando_instalacao` (HOA1B39 / VINICIUS).
-2. **26/05 13:37** — Sistema executou `ativar-associado` → contrato e associado viraram **ativos**.
-3. **26/05 18:50** — Usuário **"Teste"** (`37beadcf-284b-4a2c-88a0-6efa8cae60d9`) clicou em "Cancelar associado" no painel → SÓ o associado virou `cancelado`. Contrato e veículo seguem ativos.
+**Tamanhos atuais (motivo do bug):**
 
-Não há solicitação de troca de titularidade nem substituição relacionada — foi cancelamento direto via UI.
+| Tabela                     | Linhas |
+|----------------------------|-------:|
+| `coberturas`               |  2.887 |
+| `planos_coberturas`        |  2.263 |
+| `benefits`                 |  1.777 |
+| `planos_beneficios`        |  1.334 |
+| `marcas_modelos`           | 12.606 |
+| `entity_eligibility_rules` | 21.439 |
 
-### Causa raiz (código)
+O benefício *"Rastreador/Monitoramento - até 30 mil"* fica na linha **1030** alfabética de `benefits` → cai fora do corte → some do modal.
 
-**Arquivo: `src/hooks/useAssociados.ts`, função `cancelarAssociado` (linhas 703–768)**
+## Pontos afetados na Gestão Comercial
 
-Esse hook faz, nessa ordem:
-1. Inativa cliente na Rede Veículos via orquestrador `rede-veiculos-inativar-cliente-completo`.
-2. Desassocia rastreadores Softruck e zera `veiculo_id` / `status='estoque'` em `rastreadores`.
-3. `UPDATE associados SET status='cancelado', motivo_bloqueio=motivo`.
+Quatro modais com o mesmo padrão (todos passíveis do bug agora):
 
-**Não há `UPDATE` em `contratos` nem em `veiculos`.** Por isso o contrato/veículo seguem `ativo` após o cancelamento.
+1. `src/components/admin/planos/PlanBeneficiosList.tsx` — *Atribuir Benefícios Existentes* (lê `benefits` + `planos_beneficios` do plano)
+2. `src/components/admin/planos/PlanCoberturasList.tsx` — *Atribuir Coberturas Existentes* (lê `coberturas` + todos os `planos_coberturas`)
+3. `src/components/gestao-comercial/VincularBeneficioModal.tsx` — lê `benefits` + `planos_beneficios` global
+4. `src/components/diretoria/VincularCoberturaModal.tsx` — lê `coberturas` + `planos_coberturas` global
 
-### Cascata em triggers DB — também não cobre
+Bug secundário nos modais 2/3/4: o cálculo de "já vinculados" usa `planos_coberturas`/`planos_beneficios` sem `.range()` → a lista de ids vinculados também é truncada → itens já vinculados aparecem como disponíveis (e a inserção quebra no UNIQUE).
 
-Triggers em `associados`:
-- `trigger_estorno_cancelamento` (BEFORE UPDATE quando `status='cancelado'`) → só faz estorno/dedução de **comissão** de adesão; não toca em contrato nem veículo.
-- `trg_sync_contrato_status_assoc` → só dispara quando `new.status='ativo'`, não no caminho de cancelamento.
-- Demais triggers só fazem auditoria/histórico/recompute de cotação.
+## Correção canônica
 
-### Por que isso é um problema geral, não só do VINICIUS
+Centralizar o fix num helper único e usar nos 4 modais.
 
-- Esse hook é a única função `cancelarAssociado` do sistema; usada em `ContratoDetalhe.tsx`, `InstalacoesList.tsx`, `InstalacaoDetalhe.tsx`.
-- Qualquer operador que clicar "Cancelar associado" deixa contrato + veículo + cobertura ativos no banco — desalinhando do canônico de cancelamento (ver `mem://features/billing/cancellation-workflow-constraints`).
-- Vai bater nos guards `trg_guard_cotacao_ativo_exige_caminho_canonico` e em qualquer auditoria que cruze status do trio.
+### 1) Helper compartilhado `src/lib/supabase/fetchAll.ts` (novo)
+- `fetchAll<T>(builder, pageSize = 1000)` faz paginação por `.range()` até esgotar (`data.length < pageSize`).
+- Aceita qualquer `PostgrestFilterBuilder` (`.from(...).select(...).eq(...).order(...)`).
+- Retorna `T[]` consolidado. Sempre usa `count: 'exact'` opcional para alarme se cruzar limite muito alto (5 chamadas → log).
+- Substitui o padrão `supabase.from(x).select('*')` em catálogos grandes.
 
----
+### 2) Refatorar os 4 modais
+- **PlanBeneficiosList** e **PlanCoberturasList**:
+  - `fetchAll` para `benefits`/`coberturas` ativos.
+  - `fetchAll` para `planos_beneficios`/`planos_coberturas` (lista de ids).
+  - **Busca server-side opcional**: quando `assignSearch` tiver ≥ 2 chars, aplicar `.ilike('name'|'nome', '%termo%')` direto na query para evitar baixar 2k linhas a cada digitação. Debounce 300 ms.
+  - Mantém filtro client-side só como complemento.
+- **VincularBeneficioModal** / **VincularCoberturaModal**:
+  - Mesma troca: `fetchAll` na lista de vínculos globais e no catálogo; `.ilike` server-side com debounce.
 
-## Plano
+### 3) Guard de regressão
+- ESLint rule custom simples em `eslint.config.js` ou comentário/marcador no helper: qualquer `from('benefits'|'coberturas'|'planos_coberturas'|'planos_beneficios'|'marcas_modelos'|'entity_eligibility_rules').select(...)` sem `.range(`, `.limit(`, `.eq('id'`, `.in('id'`, `.maybeSingle()`, `.single()` ou `count: 'exact', head: true` deve falhar lint.
+- Sem inventar AST complexo: regra grep-based no script `scripts/check-supabase-pagination.ts` rodando em CI como parte do build (lista de tabelas-alvo configurável).
 
-### Etapa 1 — Saneamento pontual do VINICIUS (sem migration de schema)
+### 4) Memória de projeto
+- Criar `mem://logic/data/supabase-default-1000-row-cap` documentando: tabelas-alvo, helper canônico `fetchAll`, e a regra "catálogo grande nunca usa `.select('*')` cru".
+- Adicionar entrada Core no `mem://index.md`.
 
-Decidir, com você, qual o estado canônico esperado:
+## O que NÃO entra neste loop
+- `marcas_modelos` (já usa `.range` paginada em `useMarcasModelos`) — só entra no script de guard.
+- `entity_eligibility_rules` — usa sempre `.in('plano_id'/'item_id', ...)` nas leituras; varredura confirma. Guard cobre.
+- Telas operacionais (cotação, monitoramento, propostas) — não fazem fetch de catálogo cru, lêem por `id`.
 
-**A.** Reverter o cancelamento (`associados.status='ativo'`, limpar `data_cancelamento` e `motivo_bloqueio`) — caso o cancelamento de 18:50 tenha sido equívoco do operador "Teste".
+## Verificação (manual + automática)
+1. Abrir *Atribuir Benefícios Existentes* em qualquer plano, buscar "rastreador" → "Rastreador/Monitoramento - até 30 mil" aparece e vincula.
+2. Buscar termos no fim alfabético (ex.: "vidros", "viagem") nos 4 modais → resultados completos.
+3. Tentar vincular item já atribuído a outro plano nos modais globais → deve aparecer como já vinculado (não em "disponíveis").
+4. Script `check-supabase-pagination.ts` roda no build e falha se alguém reintroduzir `.select` cru nas tabelas-alvo.
 
-**B.** Manter o cancelamento e propagar a cascata: `contratos.status='cancelado'` (com `cancelado_em`, `motivo_cancelamento`), `veiculos.status='cancelado'`/`inativo`, desativar coberturas R/F, encerrar `instalacoes` ativas, baixar `cobrancas` futuras, registrar `cancelamentos_contrato` se a tabela existir.
-
-Cada opção registra `logs_auditoria` explícito citando a reconciliação.
-
-### Etapa 2 — Fix do hook `cancelarAssociado` (corrige reincidência)
-
-Em `src/hooks/useAssociados.ts`, dentro da `mutationFn`, após o passo Softruck e ANTES (ou depois, com ordem garantida) do `UPDATE` do associado:
-
-1. Buscar contratos ativos do associado.
-2. `UPDATE contratos SET status='cancelado', motivo_cancelamento=motivo, cancelado_em=now()` para cada contrato ativo.
-3. Para cada veículo vinculado a esses contratos: `UPDATE veiculos SET status='cancelado'` (ou status canônico equivalente — confirmar enum `status_veiculo`).
-4. Desativar coberturas: `cobertura_total=false`, `cobertura_r_f=false` no veículo, e cancelar registros relacionados em `coberturas_suspensoes` se houver pendência.
-
-Toda a operação envolta em validação: se houver troca de titularidade em andamento (`solicitacoes_troca_titularidade` com `status` não terminal), o cancelamento direto é bloqueado com toast explicativo, porque o fluxo canônico é a troca, não o cancelamento.
-
-### Etapa 3 — Guard DB (defesa em profundidade)
-
-Adicionar trigger AFTER UPDATE em `associados`:
-- Quando `OLD.status != 'cancelado'` e `NEW.status='cancelado'`:
-  - Cancelar em cascata `contratos` ativos do associado (`status='cancelado'`, `cancelado_em=now()`, `motivo_cancelamento=COALESCE(NEW.motivo_bloqueio,'cancelamento_associado')`).
-  - Cancelar em cascata `veiculos` (`status='cancelado'`).
-  - Limpar `cobertura_total/cobertura_r_f` nos veículos.
-
-Isso garante consistência mesmo se algum caminho legado (importação, script ad-hoc) atualizar `associados.status='cancelado'` direto, sem passar pelo hook.
-
-Trigger é SECURITY DEFINER, faz só os UPDATEs acima e registra um log via `insertAuditLog`-equivalente em SQL (INSERT em `logs_auditoria` com `acao='cancelar'`, `tabela='contratos'`/`veiculos'`, descrição `[CASCATA_CANCELAMENTO_ASSOCIADO]`).
-
-### Etapa 4 — Auditoria histórica
-
-Listar todos os associados em status `cancelado` que ainda tenham contrato `ativo` ou veículo `ativo` — produto colateral da mesma falha. Apresentar a lista para você decidir saneamento em lote ou caso a caso (mesmo padrão do TUM3D59).
-
----
-
-## Decisões necessárias antes de eu seguir
-
-1. Reverter o cancelamento do VINICIUS (Etapa 1.A) ou aplicar cascata (Etapa 1.B)?
-2. Aplicar o fix do hook + guard DB junto, ou só o saneamento pontual primeiro?
-3. Etapa 4 (varredura histórica) faz parte deste mesmo loop ou vai pra próximo?
-
-Sem essas respostas eu não toco em nada — todas envolvem decisão de negócio sobre o que conta como cancelamento canônico.
+## Risco
+Baixo. Sem mudança de schema, sem migração, sem mexer em fluxo de cotação/contrato. Helper é puro client-side. Busca server-side reduz tráfego (hoje baixa 2k+ linhas a cada abertura).

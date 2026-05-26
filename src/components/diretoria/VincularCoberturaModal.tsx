@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAll } from '@/lib/supabase/fetchAll';
 import { toast } from 'sonner';
 
 interface VincularCoberturaModalProps {
@@ -29,23 +30,26 @@ export function VincularCoberturaModal({ open, onClose, planoId }: VincularCober
     obrigatoria: false,
   });
 
-  // Coberturas disponíveis (não vinculadas)
+  // Coberturas disponíveis (não vinculadas) — fetchAll fura cap de 1000
   const { data: coberturas, isLoading } = useQuery({
     queryKey: ['coberturas-disponiveis-global', planoId],
     queryFn: async () => {
-      const { data: vinculadas } = await supabase
-        .from('planos_coberturas')
-        .select('cobertura_id');
-      
-      const idsVinculados = vinculadas?.map(v => v.cobertura_id) || [];
-      
-      let query = supabase.from('coberturas').select('*').eq('ativo', true).order('nome');
-      if (idsVinculados.length > 0) {
-        query = query.not('id', 'in', `(${idsVinculados.join(',')})`);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
+      const vinculadas = await fetchAll<{ cobertura_id: string }>(
+        (from, to) => supabase.from('planos_coberturas').select('cobertura_id').range(from, to),
+        { label: 'planos_coberturas-global' }
+      );
+      const idsVinculados = vinculadas.map((v) => v.cobertura_id);
+
+      const data = await fetchAll<any>(
+        (from, to) => {
+          let q = supabase.from('coberturas').select('*').eq('ativo', true).order('nome').range(from, to);
+          if (idsVinculados.length > 0) {
+            q = q.not('id', 'in', `(${idsVinculados.join(',')})`);
+          }
+          return q;
+        },
+        { label: 'coberturas-disponiveis-global' }
+      );
       return data;
     },
     enabled: open && !!planoId,
