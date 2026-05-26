@@ -495,8 +495,6 @@ serve(async (req) => {
 
         const updateData: Record<string, unknown> = {
           data: {
-            type: 'vehicle',
-            id: veiculoId,
             attributes: {},
             relationships: {
               enterprise: { type: 'enterprise', id: getEnterpriseId() },
