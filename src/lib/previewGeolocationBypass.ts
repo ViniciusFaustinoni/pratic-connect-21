@@ -30,7 +30,10 @@ function shouldBypass(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const host = window.location.hostname;
-    const isSandbox = /^id-preview--.*\.lovable\.app$/.test(host);
+    const isSandbox =
+      /^id-preview--.*\.lovable\.app$/.test(host) ||
+      /\.lovableproject\.com$/.test(host) ||
+      /^id-preview--.*\.lovableproject\.com$/.test(host);
     const flag = window.localStorage?.getItem('PRATIC_PREVIEW_GEO_BYPASS') === '1';
     return isSandbox || flag;
   } catch {
