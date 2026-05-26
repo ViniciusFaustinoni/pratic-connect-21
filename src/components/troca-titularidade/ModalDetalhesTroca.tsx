@@ -194,6 +194,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
   const handleAprovar = async () => {
     if (!solicitacao) return;
+    if (modo === 'monitoramento' && !(await garantirImeiValidado())) return;
     if (modo === 'cadastro') {
       await aprovarCadastro.mutateAsync({ solicitacao_id: solicitacao.id, observacao });
     } else {
@@ -204,6 +205,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
   const handleSolicitarVistoria = async (tipo: 'somente_fotos' | 'fotos_com_rastreador') => {
     if (!solicitacao) return;
+    if (!(await garantirImeiValidado())) return;
     await aprovarMonitoramento.mutateAsync({
       solicitacao_id: solicitacao.id,
       acao: 'solicitar_vistoria',
@@ -211,6 +213,11 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
       tipo_vistoria_troca: tipo,
     });
     onOpenChange(false);
+  };
+
+  const handleAbrirManutencao = async () => {
+    if (!(await garantirImeiValidado())) return;
+    setManutencaoOpen(true);
   };
 
   const handleReprovar = async () => {
