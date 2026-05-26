@@ -1,65 +1,90 @@
-## Diagnóstico (código real)
+## Diagnóstico — caso VINICIUS DE ANDRADE BARROS SANTOS (HOA1B39)
 
-Arquivo único afetado: `src/components/admin/planos/PlanBeneficiosList.tsx`
+### Estado atual no banco
+| Entidade | Status | Atualizado | Observação |
+|---|---|---|---|
+| `associados` (id `5955e32d…`) | **cancelado** | 26/05 18:50 | `motivo_bloqueio='cancelamento '`, `data_cancelamento=18:50` |
+| `contratos` (`CTR-20260428144839-0VKRQO`) | **ativo** | 26/05 13:37 | `cadastro_aprovado=true` |
+| `veiculos` (HOA1B39) | **ativo** | 22/05 08:31 | `codigo_hinova=35885` |
 
-### Erro 2 — Benefício criado para o plano não aparece na lista de "Atribuir Existente"
+### Cronologia (logs_auditoria)
+1. **26/05 13:36** — Hotfix anterior (loop de rebobinamento) restaurou associado: `em_analise → aguardando_instalacao` (HOA1B39 / VINICIUS).
+2. **26/05 13:37** — Sistema executou `ativar-associado` → contrato e associado viraram **ativos**.
+3. **26/05 18:50** — Usuário **"Teste"** (`37beadcf-284b-4a2c-88a0-6efa8cae60d9`) clicou em "Cancelar associado" no painel → SÓ o associado virou `cancelado`. Contrato e veículo seguem ativos.
 
-Lógica atual (linhas 210-225):
+Não há solicitação de troca de titularidade nem substituição relacionada — foi cancelamento direto via UI.
 
-```ts
-// Get all existing bindings with plan names
-const { data: allBindings, error: vErr } = await supabase
-  .from('planos_beneficios')
-  .select('benefit_id, planos:plano_id(nome)');
-...
-// Exclude benefits already assigned to ANY plan
-const assignedIds = new Set(Array.from(vinculoMap.keys()));
-return (allBenefits || [])
-  .filter((b: any) => !assignedIds.has(b.id));
-```
+### Causa raiz (código)
 
-O filtro exclui qualquer benefício que tenha vínculo em `planos_beneficios` com QUALQUER plano. Como a regra canônica é 1:1 (memória `Plan uniqueness` / `Decoupled items`), todo benefício criado já nasce vinculado a um plano — então a lista quase sempre vem vazia. O benefício que o usuário criou "para esse plano" já tem vínculo e é descartado. O único que sobrou no print ("Rastreador/Monitoramento - Select Premium - Aplicativo") é um caso órfão (sem registro em `planos_beneficios`).
+**Arquivo: `src/hooks/useAssociados.ts`, função `cancelarAssociado` (linhas 703–768)**
 
-A intenção real desta tela é "atribuir um benefício existente a ESTE plano". Então deve excluir apenas o que já está vinculado a `planId` atual — não a outros planos. Benefícios vinculados a outros planos não podem ser reaproveitados (regra 1:1), mas a fonte de verdade para isso já é a unicidade no banco; a UI deve mostrar candidatos não-vinculados ao plano atual e a operação `insert` em `planos_beneficios` falharia se houvesse conflito.
+Esse hook faz, nessa ordem:
+1. Inativa cliente na Rede Veículos via orquestrador `rede-veiculos-inativar-cliente-completo`.
+2. Desassocia rastreadores Softruck e zera `veiculo_id` / `status='estoque'` em `rastreadores`.
+3. `UPDATE associados SET status='cancelado', motivo_bloqueio=motivo`.
 
-### Erro 1 — Modal aparece cortado horizontalmente
+**Não há `UPDATE` em `contratos` nem em `veiculos`.** Por isso o contrato/veículo seguem `ativo` após o cancelamento.
 
-DialogContent (linha 355):
+### Cascata em triggers DB — também não cobre
 
-```tsx
-<DialogContent className="max-w-md max-h-[80vh]" onInteractOutside={(e) => e.preventDefault()}>
-```
+Triggers em `associados`:
+- `trigger_estorno_cancelamento` (BEFORE UPDATE quando `status='cancelado'`) → só faz estorno/dedução de **comissão** de adesão; não toca em contrato nem veículo.
+- `trg_sync_contrato_status_assoc` → só dispara quando `new.status='ativo'`, não no caminho de cancelamento.
+- Demais triggers só fazem auditoria/histórico/recompute de cotação.
 
-Lista (linha 369):
-```tsx
-<div className="max-h-[40vh] overflow-y-auto space-y-1 border rounded-lg p-2">
-```
+### Por que isso é um problema geral, não só do VINICIUS
 
-Rodapé (linhas 396-409): `flex items-center justify-between` com "0 selecionado(s)" + Cancelar + "Vincular Selecionados" não cabe em `max-w-md` em viewports estreitos — o botão "Vincular Selecionados" estoura, força overflow horizontal no DialogContent e o usuário vê o título do botão cortado + uma scrollbar horizontal embaixo (visível no print). A lista interna também só tem `overflow-y-auto`, sem `overflow-x-hidden`, então qualquer nome longo (ex.: "Rastreador/Monitoramento - Select Premium - Aplicativo") também empurra a largura mesmo com `truncate` se o ancestral não tiver `min-w-0`.
+- Esse hook é a única função `cancelarAssociado` do sistema; usada em `ContratoDetalhe.tsx`, `InstalacoesList.tsx`, `InstalacaoDetalhe.tsx`.
+- Qualquer operador que clicar "Cancelar associado" deixa contrato + veículo + cobertura ativos no banco — desalinhando do canônico de cancelamento (ver `mem://features/billing/cancellation-workflow-constraints`).
+- Vai bater nos guards `trg_guard_cotacao_ativo_exige_caminho_canonico` e em qualquer auditoria que cruze status do trio.
 
-## Correções
+---
 
-Apenas no arquivo `src/components/admin/planos/PlanBeneficiosList.tsx`:
+## Plano
 
-**Fix Erro 2 (queryFn `beneficios-disponiveis-all`, linhas 199-228):**
-- Trocar o `select` de bindings por `.eq('plano_id', planId)` para trazer só vínculos do plano atual.
-- Filtrar `allBenefits` excluindo apenas os IDs vinculados a este plano.
-- Atualizar comentários para refletir a nova semântica.
+### Etapa 1 — Saneamento pontual do VINICIUS (sem migration de schema)
 
-**Fix Erro 1 (DialogContent, linhas 354-411):**
-- Ampliar largura: `max-w-md` → `max-w-lg w-[calc(100vw-2rem)]` e adicionar `overflow-hidden` para impedir scroll horizontal externo.
-- Lista interna: adicionar `overflow-x-hidden` em complemento ao `overflow-y-auto`.
-- Garantir truncamento: adicionar `min-w-0` no `<label>` da linha 380 (já existe no filho `flex items-center gap-2 min-w-0 flex-1`, mas o label pai precisa também).
-- Rodapé (linha 396): trocar para `flex flex-wrap items-center justify-between gap-2 pt-1` para os botões quebrarem linha em telas estreitas em vez de transbordar.
+Decidir, com você, qual o estado canônico esperado:
 
-## Fora de escopo
+**A.** Reverter o cancelamento (`associados.status='ativo'`, limpar `data_cancelamento` e `motivo_bloqueio`) — caso o cancelamento de 18:50 tenha sido equívoco do operador "Teste".
 
-- Nenhuma mudança em hooks, edge functions, schema, RLS ou regra de unicidade 1:1 (continua sendo enforçada no banco).
-- Nenhuma mudança no fluxo de criar/excluir benefício, no inline form, em coberturas, eligibility, ou no botão "Novo Benefício".
+**B.** Manter o cancelamento e propagar a cascata: `contratos.status='cancelado'` (com `cancelado_em`, `motivo_cancelamento`), `veiculos.status='cancelado'`/`inativo`, desativar coberturas R/F, encerrar `instalacoes` ativas, baixar `cobrancas` futuras, registrar `cancelamentos_contrato` se a tabela existir.
 
-## Verificação manual após implementar
+Cada opção registra `logs_auditoria` explícito citando a reconciliação.
 
-1. Abrir Editar Plano do "Select Basic - Até 30 Mil com rastreador" → clicar "Atribuir Existente".
-2. Modal abre dentro da viewport, sem scrollbar horizontal e com botão "Vincular Selecionados" inteiro visível.
-3. Lista mostra benefícios não vinculados a este plano (inclusive os recém-criados para outros planos que ficaram órfãos, e qualquer benefício sem vínculo).
-4. Selecionar um item e vincular: se já estiver vinculado a outro plano via regra 1:1, o insert falha com erro de unicidade do banco (comportamento pré-existente).
+### Etapa 2 — Fix do hook `cancelarAssociado` (corrige reincidência)
+
+Em `src/hooks/useAssociados.ts`, dentro da `mutationFn`, após o passo Softruck e ANTES (ou depois, com ordem garantida) do `UPDATE` do associado:
+
+1. Buscar contratos ativos do associado.
+2. `UPDATE contratos SET status='cancelado', motivo_cancelamento=motivo, cancelado_em=now()` para cada contrato ativo.
+3. Para cada veículo vinculado a esses contratos: `UPDATE veiculos SET status='cancelado'` (ou status canônico equivalente — confirmar enum `status_veiculo`).
+4. Desativar coberturas: `cobertura_total=false`, `cobertura_r_f=false` no veículo, e cancelar registros relacionados em `coberturas_suspensoes` se houver pendência.
+
+Toda a operação envolta em validação: se houver troca de titularidade em andamento (`solicitacoes_troca_titularidade` com `status` não terminal), o cancelamento direto é bloqueado com toast explicativo, porque o fluxo canônico é a troca, não o cancelamento.
+
+### Etapa 3 — Guard DB (defesa em profundidade)
+
+Adicionar trigger AFTER UPDATE em `associados`:
+- Quando `OLD.status != 'cancelado'` e `NEW.status='cancelado'`:
+  - Cancelar em cascata `contratos` ativos do associado (`status='cancelado'`, `cancelado_em=now()`, `motivo_cancelamento=COALESCE(NEW.motivo_bloqueio,'cancelamento_associado')`).
+  - Cancelar em cascata `veiculos` (`status='cancelado'`).
+  - Limpar `cobertura_total/cobertura_r_f` nos veículos.
+
+Isso garante consistência mesmo se algum caminho legado (importação, script ad-hoc) atualizar `associados.status='cancelado'` direto, sem passar pelo hook.
+
+Trigger é SECURITY DEFINER, faz só os UPDATEs acima e registra um log via `insertAuditLog`-equivalente em SQL (INSERT em `logs_auditoria` com `acao='cancelar'`, `tabela='contratos'`/`veiculos'`, descrição `[CASCATA_CANCELAMENTO_ASSOCIADO]`).
+
+### Etapa 4 — Auditoria histórica
+
+Listar todos os associados em status `cancelado` que ainda tenham contrato `ativo` ou veículo `ativo` — produto colateral da mesma falha. Apresentar a lista para você decidir saneamento em lote ou caso a caso (mesmo padrão do TUM3D59).
+
+---
+
+## Decisões necessárias antes de eu seguir
+
+1. Reverter o cancelamento do VINICIUS (Etapa 1.A) ou aplicar cascata (Etapa 1.B)?
+2. Aplicar o fix do hook + guard DB junto, ou só o saneamento pontual primeiro?
+3. Etapa 4 (varredura histórica) faz parte deste mesmo loop ou vai pra próximo?
+
+Sem essas respostas eu não toco em nada — todas envolvem decisão de negócio sobre o que conta como cancelamento canônico.
