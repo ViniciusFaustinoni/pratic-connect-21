@@ -125,7 +125,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
       if (res.rastreadorId) {
         await supabase
           .from('rastreadores')
-          .update({ veiculo_id: solicitacao.veiculo_id })
+          .update({ veiculo_id: solicitacao.veiculo_id, plataforma: res.origem })
           .eq('id', res.rastreadorId);
         qc.invalidateQueries({ queryKey: ['veiculo-completo', solicitacao.veiculo_id] });
       }
