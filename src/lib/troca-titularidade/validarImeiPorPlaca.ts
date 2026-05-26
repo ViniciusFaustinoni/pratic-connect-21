@@ -101,7 +101,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
       if (vehicleId) {
         softruckPlacaEncontrada = true;
         const { data: porId, error: eId } = await supabase.functions.invoke('softruck-api', {
-          body: { action: 'buscar-veiculo-id', data: { veiculoId: vehicleId } },
+          body: { operation: 'buscar-veiculo-id', data: { veiculoId: vehicleId } },
         });
         if (eId) throw eId;
         // Resposta padrão JSON:API: included[] com devices ou relationships
