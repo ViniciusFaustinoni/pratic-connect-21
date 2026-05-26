@@ -31,6 +31,8 @@ import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
 import { useVeiculoCompleto } from '@/hooks/useVeiculoDetalhes';
 import { exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
 import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
+import { ValidarImeiPorPlacaCard } from './ValidarImeiPorPlacaCard';
+import { validarImeiPorPlaca, type ValidacaoOrigem } from '@/lib/troca-titularidade/validarImeiPorPlaca';
 
 interface Props {
   open: boolean;
