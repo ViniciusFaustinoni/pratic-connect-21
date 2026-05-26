@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { resolverModeloCanonico } from '@/lib/quotation/modelo-canonico';
 
 export type FlowStep = 'upload' | 'processing' | 'confirmation' | 'success';
 
@@ -22,6 +23,7 @@ export interface FipeData {
   codigo: string;
   valor: number;
   mesReferencia: string;
+  descricao?: string;
 }
 
 export interface PersonalData {
