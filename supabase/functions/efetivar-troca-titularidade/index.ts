@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 import {
   alterarAssociadoHinova,
-  alterarSituacaoVeiculoHinova,
+  alterarVeiculoHinova,
   alterarVeiculoHinova,
   buscarAssociadoComVeiculosPorCpf,
   buscarVeiculoPorChassi,
