@@ -562,8 +562,8 @@ export default function CobrancasList() {
     iso ? format(parseISO(iso), 'dd/MM/yyyy', { locale: ptBR }) : '—';
 
   // ============================================================
-  // ENVIO EM MASSA — WhatsApp template Meta `emissao_boleto_gerado_v2`
-  // (já APROVADO pela Meta, contém a linha digitável como variável {{6}})
+  // ENVIO EM MASSA — WhatsApp template Meta `emissao_boleto_gerado_v3`
+  // (vars: [nome, placa, vencimento, valor, linha_digitavel])
   // ============================================================
   const handleEnviarWhatsAppLote = async () => {
     const selecionadas = cobrancasVisiveis.filter((c) => selectedIds.has(c.id));
@@ -576,15 +576,15 @@ export default function CobrancasList() {
     setEnviandoLote(true);
     const ids = selecionadas.map((c) => c.id);
 
-    // Buscar veículos para enriquecer dados (modelo/placa) sob demanda
+    // Buscar veículos para enriquecer dados (placa) sob demanda
     const veiculoIds = Array.from(new Set(selecionadas.map((c) => c.veiculo_id).filter(Boolean) as string[]));
-    let veiculoMap = new Map<string, { modelo?: string; placa?: string }>();
+    let veiculoMap = new Map<string, { placa?: string }>();
     if (veiculoIds.length > 0) {
       const { data: vs } = await supabase
         .from('veiculos')
-        .select('id, modelo, placa')
+        .select('id, placa')
         .in('id', veiculoIds);
-      veiculoMap = new Map((vs || []).map((v: any) => [v.id, { modelo: v.modelo, placa: v.placa }]));
+      veiculoMap = new Map((vs || []).map((v: any) => [v.id, { placa: v.placa }]));
     }
 
     let enviados = 0;
@@ -604,7 +604,6 @@ export default function CobrancasList() {
       const veic = cobranca.veiculo_id ? veiculoMap.get(cobranca.veiculo_id) : null;
       const params = [
         cobranca.associado?.nome || 'Associado',
-        veic?.modelo || '—',
         veic?.placa || '—',
         formatDataLote(cobranca.data_vencimento),
         formatBRLLote(cobranca.valor),
@@ -616,7 +615,7 @@ export default function CobrancasList() {
           body: {
             telefone: telefone.replace(/\D/g, ''),
             mensagem: '',
-            template_name: 'emissao_boleto_gerado_v2',
+            template_name: 'emissao_boleto_gerado_v3',
             template_params: params,
           },
         });

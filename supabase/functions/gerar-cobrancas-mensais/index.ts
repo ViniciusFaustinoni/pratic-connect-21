@@ -237,10 +237,11 @@ Sua mensalidade de *${valorFormatado}* está disponível.
 
 ${asaasCobranca.nossoNumero ? `📊 *Linha Digitável:*\n${asaasCobranca.nossoNumero}\n\n` : ''}Pague agora e evite atrasos! 😊`;
 
-            // Buscar veículo principal para template emissao_boleto_gerado_v2
+            // Buscar veículo principal para template emissao_boleto_gerado_v3
+            // vars: [nome, placa, vencimento, valor, linha_digitavel]
             const { data: vPrim } = await supabase
               .from('veiculos')
-              .select('placa, modelo')
+              .select('placa')
               .eq('associado_id', associado.id)
               .eq('status', 'ativo')
               .limit(1)
@@ -251,10 +252,9 @@ ${asaasCobranca.nossoNumero ? `📊 *Linha Digitável:*\n${asaasCobranca.nossoNu
                 telefone: telefone.replace(/\D/g, ''),
                 mensagem,
                 delay_ms: 500,
-                template_name: 'emissao_boleto_gerado_v2',
+                template_name: 'emissao_boleto_gerado_v3',
                 template_params: [
                   nomeAbreviado,
-                  vPrim?.modelo || 'seu veículo',
                   vPrim?.placa || '---',
                   dataFormatada,
                   valorFormatado,

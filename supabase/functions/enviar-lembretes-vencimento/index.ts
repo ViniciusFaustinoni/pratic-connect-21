@@ -374,10 +374,11 @@ serve(async (req) => {
           
           try {
             const nomeAbrev = associado.nome?.split(' ')[0] || 'Associado';
-            // Buscar veículo principal para template emissao_boleto_gerado_v2
+            // Buscar veículo principal para template emissao_boleto_gerado_v3
+            // vars: [nome, placa, vencimento, valor, linha_digitavel]
             const { data: vPrim } = await supabase
               .from('veiculos')
-              .select('placa, modelo')
+              .select('placa')
               .eq('associado_id', associado.id)
               .eq('status', 'ativo')
               .limit(1)
@@ -388,10 +389,9 @@ serve(async (req) => {
                 telefone: telefoneFormatado,
                 mensagem,
                 delay_ms: 500,
-                template_name: 'emissao_boleto_gerado_v2',
+                template_name: 'emissao_boleto_gerado_v3',
                 template_params: [
                   nomeAbrev,
-                  vPrim?.modelo || 'seu veículo',
                   vPrim?.placa || '---',
                   dataFormatada,
                   valorFormatado,

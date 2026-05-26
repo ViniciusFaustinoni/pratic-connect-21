@@ -109,15 +109,21 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
 
   // ── Cobrança ────────────────────────────────────────────────────────
   cobranca_mensalidade: {
-    momento: 'DESCONTINUADO — todas as gerações migradas para emissao_boleto_gerado_v2',
+    momento: 'DESCONTINUADO — todas as gerações migradas para emissao_boleto_gerado_v3',
     gatilho: '(legado — não disparar)',
     variaveis: ['nome', 'mes_ano', 'vencimento'],
-    deprecated: 'Use emissao_boleto_gerado_v2.',
+    deprecated: 'Use emissao_boleto_gerado_v3.',
   },
   emissao_boleto_gerado_v2: {
-    momento: 'Quando um boleto avulso é emitido com linha digitável',
-    gatilho: 'asaas-cobrancas · executar-regua-cobranca',
+    momento: 'DESCONTINUADO — substituído por emissao_boleto_gerado_v3 (sem modelo)',
+    gatilho: '(legado — disparo_habilitado=false na tabela)',
     variaveis: ['nome', 'modelo', 'placa', 'vencimento', 'valor', 'linha_digitavel'],
+    deprecated: 'Use emissao_boleto_gerado_v3.',
+  },
+  emissao_boleto_gerado_v3: {
+    momento: 'Quando um boleto avulso é emitido com linha digitável',
+    gatilho: 'asaas-cobrancas · executar-regua-cobranca · disparar-boletos-lote · gerar-cobrancas-mensais · gerar-faturas-mensais · CobrancasList (envio em massa)',
+    variaveis: ['nome', 'placa', 'vencimento', 'valor', 'linha_digitavel'],
   },
   cobranca_inadimplencia_pratic: {
     momento: 'Importação de CSV SGA — agrupa boletos vencidos por matrícula',
