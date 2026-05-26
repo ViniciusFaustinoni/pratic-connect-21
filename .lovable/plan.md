@@ -1,78 +1,82 @@
+## Reorientação
 
-# TUM3D59 — Corrigir vínculo de rastreador (Rede Veículos, não Softruck)
+Esquece coluna de cilindrada. O que precisa ir pro termo é o **nome completo do veículo igual ao CRLV** (campo `MARCA / MODELO / VERSÃO` → "FIAT/ARGO 1.0"). A cilindrada vem de brinde dentro dessa string — não precisa de campo separado.
 
-## Diagnóstico
+## Diagnóstico curto (com base no que já levantei)
 
-Saneamento anterior assumiu `plataforma='softruck'` porque a busca tri-fonte casou no Softruck primeiro. Na verdade, o IMEI **869412072526525** (Honda CG 160 Start, EDGAR DA SILVA SANTOS) está fisicamente vinculado na **Rede Veículos**, e o registro Softruck é resíduo de associação antiga ao KPX3F78.
+- `plate-lookup` (`supabase/functions/plate-lookup/index.ts:285-339`) já recebe a string crua do DETRAN em `veiculo.marca_modelo` (ex.: `"FIAT/ARGO 1.0"`) e também a `fipeData.descricao` (ex.: `"ARGO 1.0 FIRE FLEX 5p"`). Hoje a função quebra essa string em `marca` + `modelo` curto (`"argo"`) e devolve as duas partes — perdendo o "1.0".
+- Só `EtapaConsultaFipe.tsx:144` aplica a regra "modelo = descrição FIPE". O link público (`useNewLeadFlow.ts:320,356`) e `useCotacaoPublica.ts:251` salvam `state.vehicleData.modelo` cru — daí RTZ5C34 ficou `modelo='argo'`.
+- Termo (`supabase/functions/_shared/termo-afiliacao-template.ts:424`) renderiza literal `${marca} ${modelo}`. Se modelo for "ARGO 1.0", o termo já mostra "FIAT ARGO 1.0".
 
-Estado atual no banco:
-- `rastreadores.plataforma` = `softruck` ❌ (deveria ser `rede_veiculos`)
-- `rastreadores.plataforma_device_id` = `K3VgZ9xApKQ5EYW` (id Softruck do antigo veículo)
-- `rastreadores.plataforma_veiculo_id` = `grADZV6qk3ZyqOk` (id Softruck que criamos pro TUM3D59)
-- `rastreadores.softruck_integration_status` = `PENDING`
-- `veiculos.softruck_vehicle_id` = `grADZV6qk3ZyqOk`
-- `veiculos.rede_veiculos_veiculo_id` = NULL
-- `veiculos.rede_veiculos_cliente_id` = NULL
+Ou seja: o conserto é **garantir que `veiculo_modelo` gravado SEMPRE seja o nome completo CRLV/FIPE**, sem precisar tocar em schema nem template.
 
-Validação na API Rede Veículos (agora):
-- `rede-veiculos-buscar-dispositivo` por IMEI **e** por placa: `found=false`, mensagem *"Equipamento/Veículo não localizado ou não permite integração (Opção: 'Permitir sincronismo nas integrações' no cadastro do equipamento/veículo)"*.
+## Correção raiz (sem migration, sem coluna nova)
 
-Ou seja: na Rede o equipamento existe mas com **sincronismo desabilitado**, ou ainda não foi cadastrado. Sem habilitar isso no backoffice da Rede, nenhuma chamada de sync nossa terá efeito.
+### 1. Helper canônico único
+`src/lib/quotation/modelo-canonico.ts` (novo):
+```ts
+// Retorna o nome do veículo no formato esperado pelo termo:
+//   1º) descrição oficial FIPE quando disponível ("ARGO 1.0 FIRE FLEX 5p")
+//   2º) marca_modelo cru do DETRAN sem a marca ("ARGO 1.0")
+//   3º) fallback: modelo curto ("argo")
+export function resolverModeloCanonico(opts: {
+  fipeDescricao?: string | null;
+  marcaModeloDetran?: string | null; // "FIAT/ARGO 1.0"
+  modeloCurtoDetran?: string | null; // "argo"
+  marca?: string | null;
+}): string { ... }
+```
+Regra: prefere FIPE; quando FIPE não vier, extrai do `marca_modelo` removendo o prefixo `MARCA/` (mantendo o que sobra — "ARGO 1.0").
 
-## Plano
+### 2. plate-lookup devolve o nome completo já resolvido
+`supabase/functions/plate-lookup/index.ts`:
+- Adicionar no payload de retorno `modelo_completo` = aplicação do helper acima sobre `fipeData.descricao` ⟂ `veiculo.marca_modelo`.
+- Manter `modelo` curto por compatibilidade.
 
-### Passo 1 — Saneamento do registro `rastreadores` (migration)
-Em `rastreadores.id=7a4b13ab-da6c-4e8f-ab7e-38b8803d8fdb`:
-- `plataforma = 'rede_veiculos'`
-- `plataforma_device_id = NULL`
-- `plataforma_veiculo_id = NULL`
-- `softruck_integration_status = NULL`
-- `softruck_last_attempt_at = NULL`
-- `softruck_payload_sent = NULL`
-- `softruck_response_raw = NULL`
-- `softruck_chip_id = NULL`
-- `id_plataforma`, `imei`, `veiculo_id`, `status='instalado'` permanecem
-- Log de auditoria `[CORRECAO_PLATAFORMA_RASTREADOR]` com motivo (vínculo físico é Rede, Softruck era resíduo do KPX3F78).
+### 3. Forçar TODOS os call-sites a usar o nome completo
+| Arquivo | Linha | Mudança |
+|---|---|---|
+| `src/components/cotacao/EtapaConsultaFipe.tsx` | 141-149 | trocar a regra inline por `resolverModeloCanonico(...)` (sem mudança funcional, só centraliza) |
+| `src/components/cotacao/EtapaConsultaFipe.tsx` | 211-225 (`handleTrocarFipe`) | usar `resolverModeloCanonico` na troca manual de variante FIPE |
+| `src/hooks/useNewLeadFlow.ts` | 319-320 e 355-356 | gravar `veiculo_modelo: resolverModeloCanonico(...)` (ler `state.fipeData?.descricao` e `state.vehicleData?.marca_modelo`) |
+| `src/hooks/useCotacaoPublica.ts` | 230-260 (`CriarCotacaoPublicaParams`) | aceitar campo extra `veiculoModeloCompleto` e usá-lo em `veiculo_modelo` no `insert` |
+| Edge `contrato-gerar` (vamos localizar o arquivo) | snapshot de veículo | ao copiar `veiculo_modelo` da cotação para o contrato, aplicar `resolverModeloCanonico` defensivo caso o snapshot da cotação esteja curto |
+| Edge `autentique-create` / `autentique-create-by-token` | onde monta `templateData.veiculo.modelo` (via `termo-afiliacao-utils.ts:465`) | adicionar fallback final: se `contrato.veiculo_modelo` parece "curto" (sem dígito ou sem espaço), tentar recompor com `veiculoDB.codigo_fipe` consultando `fipe_cache`/última descrição conhecida; senão deixa como está. Isso é cinto + suspensório para contratos já em voo. |
 
-### Passo 2 — Limpar resíduo Softruck em `veiculos` (TUM3D59)
-- `veiculos.softruck_vehicle_id = NULL`
-- Log de auditoria.
-- (Não tocar em `rede_veiculos_veiculo_id` aqui — virá do sync no Passo 4.)
+### 4. Saneamento do caso RTZ5C34
+SQL one-shot via insert tool:
+```sql
+UPDATE veiculos
+   SET modelo = 'ARGO 1.0'
+ WHERE placa = 'RTZ5C34' AND modelo = 'argo';
 
-### Passo 3 — Avisar operador da Rede Veículos
-A API responde "não encontrado ou sync desabilitado". Antes do Passo 4 funcionar, o operador precisa, no backoffice da Rede:
-1. Confirmar que o equipamento IMEI `869412072526525` está cadastrado, e
-2. Marcar **"Permitir sincronismo nas integrações"** no cadastro desse equipamento/veículo.
+UPDATE contratos
+   SET veiculo_modelo = 'ARGO 1.0'
+ WHERE veiculo_id = '08699d5f-04e7-44bf-9a05-e92deb54e707'
+   AND veiculo_modelo = 'argo';
 
-Sem isso, qualquer chamada de sync nossa volta `found=false` e o vínculo não materializa. Esse passo é manual e fora do código.
+UPDATE cotacoes
+   SET veiculo_modelo = 'ARGO 1.0'
+ WHERE veiculo_placa = 'RTZ5C34'
+   AND veiculo_modelo = 'argo';
 
-### Passo 4 — Sincronizar na Rede Veículos (depois do Passo 3)
-Chamar, nesta ordem:
-1. `rede-veiculos-ativar-cliente-completo` (ou `vincular-cliente` + `ativar-veiculo` conforme o caso) para o associado `4326b0f4-ba90-49fb-ad98-e58e3e298fbe` + veículo `55c2f9bc-9c16-4e63-a838-d2fbe143d5aa`.
-2. `rede-veiculos-buscar-dispositivo` por IMEI para confirmar `found=true` e gravar `rede_veiculos_veiculo_id`/`rede_veiculos_cliente_id` em `veiculos`.
-3. Atualizar `rastreadores.id_plataforma` com o id retornado pela Rede, se diferente.
+UPDATE leads
+   SET veiculo_modelo = 'ARGO 1.0'
+ WHERE veiculo_placa = 'RTZ5C34'
+   AND veiculo_modelo = 'argo';
+```
+Como o termo deste contrato já está **Assinado/Aprovado** (screenshot 26/05 11:04), pra ele virar "FIAT ARGO 1.0" também no documento, precisa **reemissão versionada** via `retificar-termo-filiacao` (memória `mem://features/contracts/retificacao-termo-filiacao`).
 
-Sem o Passo 3, o Passo 4 é abortado com aviso ao operador (sem mais retries cegos).
+### 5. Memória
+- Atualizar `mem://logic/quotation/fipe-variant-selection-heuristica`: listar os call-sites que DEVEM passar pelo helper `resolverModeloCanonico` (EtapaConsultaFipe, useNewLeadFlow, useCotacaoPublica, contrato-gerar, autentique-create).
 
-### Passo 5 — Decisão sobre Softruck (limpeza do lado de lá)
-Na Softruck o asset `K3VgZ9xApKQ5EYW` continua associado ao veículo antigo `1aN6LqxoGawEY4O` (KPX3F78) — isso ficou inconsistente porque é resíduo de instalação que nunca foi de fato Softruck. Como o vínculo real é Rede, **não fazemos nada na Softruck**: nem desassociar, nem desativar, pra não bagunçar histórico de outro veículo. Só registro de auditoria explicando.
+## Fora de escopo (intencional)
+- Nada de coluna `cilindrada` — o nome completo do CRLV já carrega a cilindrada.
+- Nada de mexer em template do termo / variável nova.
+- Sem backfill em massa de outros veículos com modelo curto — só RTZ5C34 agora; varredura ampla fica como item futuro (impacto em termos antigos imutáveis precisa decisão).
+- Sem mudança em SGA Hinova / FIPE pricing / RLS.
 
-### Passo 6 — Guard pra não cair de novo (correção pontual no hook)
-Em `useBuscarRastreadorPorImei` (`src/hooks/useBuscarRastreadorPorImei.ts`) a tri-fonte tem ordem **estoque → Softruck → Rede**. Quando o Softruck retorna `found=true` mas o dispositivo está associado a **outro veículo** lá, hoje paramos no Softruck e gravamos `plataforma='softruck'` mesmo que a Rede também devolva `found=true` para a placa-alvo.
-
-Ajuste mínimo:
-- Quando o Softruck devolve `found=true` mas o asset Softruck está vinculado a veículo **diferente** do `veiculoIdAlvo` (cenário "asset already associated"), consultar também a Rede Veículos pela placa do veículo alvo. Se a Rede devolver `found=true` para a placa alvo, preferir `rede_veiculos`.
-- Se ambas as fontes devolverem found mas em veículos distintos, devolver `conflito` enriquecido (origem ambígua) em vez de assumir Softruck.
-
-Esse ajuste é frontend-only, não muda o contrato de retorno (`origem` continua `'estoque' | 'softruck' | 'rede_veiculos'`).
-
-### Passo 7 — Memória
-Atualizar `mem://logic/operations/rastreador-vinculo-preservacao` (já existente) com uma linha lembrando: na correção de IMEI órfão, validar plataforma pelo veículo-alvo (cruzar Softruck E Rede), nunca herdar do registro Softruck antigo.
-
-## Fora de escopo
-- Não mexer em Softruck do KPX3F78.
-- Não criar trigger DB nova (o problema é dado-pontual + viés do tri-fonte, não cascata).
-- Não tocar no fluxo de Cadastro/Monitoramento — o caso TUM3D59 já está na fila de aprovação correta.
-
-## Dependência externa
-Passo 4 depende do operador habilitar "Permitir sincronismo nas integrações" no backoffice da Rede (Passo 3). Se isso já estiver feito, executamos Passo 4 nesta mesma loop. Caso contrário, aplico Passos 1, 2, 5, 6, 7 agora e deixo o Passo 4 sinalizado pra rodar quando o operador confirmar.
+## Validação
+1. Após deploy, criar nova cotação pelo link público com qualquer placa → conferir `leads.veiculo_modelo`, `cotacoes.veiculo_modelo`, `contratos.veiculo_modelo` e `veiculos.modelo` todos = descrição FIPE completa.
+2. Gerar termo → HTML deve mostrar `Marca/Modelo: FIAT ARGO 1.0 FIRE FLEX 5p` (ou equivalente conforme FIPE).
+3. Rodar saneamento + `retificar-termo-filiacao` para RTZ5C34 e conferir nova versão do termo no Autentique.

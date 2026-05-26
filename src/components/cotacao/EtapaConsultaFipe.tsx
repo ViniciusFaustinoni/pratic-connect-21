@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { useFipe, FipeAlternativa } from '@/hooks/useFipe';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { resolverModeloCanonico } from '@/lib/quotation/modelo-canonico';
 
 interface VeiculoEncontrado {
   placa: string;
@@ -138,10 +139,16 @@ export function EtapaConsultaFipe({
       if (result.success && result.vehicleData) {
         const { vehicleData, fipeData, fipeAlternativas: alts, fipeAmbiguo } = result;
         
-        // Modelo canônico = descrição oficial da FIPE quando disponível, NÃO o
-        // nome livre do DETRAN. Garante coerência entre `codigo_fipe` e
-        // `veiculo.modelo` (correção raiz desincronização tipo PYL9A01).
-        const modeloFinal = fipeData?.descricao || vehicleData.modelo;
+        // Modelo canônico = descrição oficial da FIPE quando disponível;
+        // senão, marca_modelo cru do DETRAN sem o prefixo da marca
+        // (ex.: "FIAT/ARGO 1.0" → "ARGO 1.0"). Carrega cilindrada/variante
+        // direto pro termo. Ver `src/lib/quotation/modelo-canonico.ts`.
+        const modeloFinal = resolverModeloCanonico({
+          fipeDescricao: fipeData?.descricao,
+          marcaModeloDetran: (vehicleData as any).marca_modelo,
+          modeloCurtoDetran: vehicleData.modelo,
+          marca: vehicleData.marca,
+        }) || vehicleData.modelo;
 
         setVeiculoEncontrado({
           placa: vehicleData.placa,
