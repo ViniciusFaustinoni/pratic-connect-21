@@ -19,6 +19,8 @@ interface Associado {
   nome: string;
   cpf: string | null;
   telefone: string | null;
+  telefone_secundario: string | null;
+  whatsapp: string | null;
   email: string;
   cep: string | null;
   logradouro: string | null;
@@ -38,6 +40,9 @@ interface Veiculo {
   chassi: string | null;
   renavam: string | null;
   combustivel: string | null;
+  codigo_fipe: string | null;
+  valor_fipe: number | null;
+  aguardando_placa_definitiva: boolean | null;
   rede_veiculos_cliente_id: string | null;
   rede_veiculos_veiculo_id: string | null;
 }
