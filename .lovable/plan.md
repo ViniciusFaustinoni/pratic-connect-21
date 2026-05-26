@@ -1,37 +1,38 @@
 ## Bug
-Quando o serviço é `local_vistoria='base'` (cliente vai até a base/oficina — ninguém vai até ele), ao iniciar a tarefa o cliente ainda recebe o WhatsApp **"🚗 Técnico a Caminho!"**. Foi o que aconteceu com CARLOS HENRIQUE em 22/05/2026 (print anexado).
+Os cards de "Atribuição Manual" (Monitoramento › Serviços de Campo › Atribuição Manual) mostram apenas a **data** ("Hoje", "28/05") sem o **período** (Manhã/Tarde), embora o período seja escolhido na criação da tarefa.
 
 ## Causa raiz (código real)
 
-`supabase/functions/notificar-inicio-rota/index.ts`
-- Linha 34–75: o `SELECT` em `servicos` **não inclui** `local_vistoria`.
-- Linhas 118–195: dispara incondicionalmente `notificar-cliente` com `tipo: 'tecnico_em_rota'` para qualquer serviço, sem distinguir Base × Rota. Comentário no código diz "Esta é a ÚNICA origem desta notificação", confirmando que é o ponto único.
+`src/components/monitoramento/AtribuicaoManualTab.tsx` linhas 100–107:
 
-Origem do trigger: `src/hooks/useTarefaAtual.ts:224` (botão "Iniciar Tarefa"). É a única chamada da função em todo o projeto. Confirmei via grep que não há outra rota disparando `tecnico_em_rota`.
+```tsx
+<Clock className="h-3 w-3" />
+<span>
+  {isToday(parseISO(servico.data_agendada)) ? 'Hoje' :
+    isTomorrow(parseISO(servico.data_agendada)) ? 'Amanhã' :
+      format(parseISO(servico.data_agendada), 'dd/MM', { locale: ptBR })}
+  {servico.hora_agendada && ` às ${servico.hora_agendada.slice(0, 5)}`}
+</span>
+```
 
-Banco confirma o discriminador existente: `servicos.local_vistoria ∈ {cliente, base}` (29 serviços com `base` hoje). Não precisa coluna nova.
+Só renderiza `data_agendada` + `hora_agendada`. **Não renderiza `servico.periodo`**, mesmo o hook `useServicosParaAtribuir` (linha 36 de `src/hooks/useAtribuicaoManual.ts`) trazendo `periodo` no `select`. Confirmado: o dado existe, a UI ignora.
 
-## Correção raiz
+Regra canônica: Vistoria Base é por período (Manhã 08:00–12:00 / Tarde 14:00–18:00) — ver `mem://logic/operations/vistoria-base-periodo-only`. `hora_agendada` é marcador interno; para o operador, o relevante é o período.
 
-Editar **um único arquivo** — `supabase/functions/notificar-inicio-rota/index.ts`:
+## Correção
 
-1. Adicionar `local_vistoria` ao SELECT (linha ~49).
-2. Antes do bloco "2. Notificar o CLIENTE" (linha 118), guard:
-   ```ts
-   const ehBase = servico.local_vistoria === 'base';
-   if (ehBase) {
-     console.log('[notificar-inicio-rota] Serviço local_vistoria=base — cliente NÃO recebe "técnico a caminho" (cliente vai até a base)');
-     resultados.cliente_notificado = false;
-   } else if (clienteTelefone) { ... fluxo atual ... }
-   ```
-3. Manter intacto o bloco do profissional (linhas 197–282) — ele continua recebendo os dados da tarefa.
+Editar **apenas** `src/components/monitoramento/AtribuicaoManualTab.tsx` (linhas ~100–107):
 
-Nenhuma migration, nenhuma mudança de UI, nenhuma alteração no template `notificar-cliente`. Apenas o gate no único ponto de origem.
+- Acrescentar rótulo do período após a data quando `servico.periodo` existir.
+- Mapa: `manha` → "Manhã", `tarde` → "Tarde", `dia_todo`/`integral` → "Dia todo".
+- Manter `hora_agendada` quando existir (priorizar período visualmente; hora vira complemento entre parênteses para evitar perder informação técnica em rota).
+
+Resultado esperado nos 3 cards do print:
+- SERGIO BARRETO — "Hoje · Tarde"
+- PEDRO HENRIQUE — "Hoje · Manhã"
+- LEONARDO GOMES — "28/05 · Tarde"
 
 ## Fora de escopo
-- Não tocar em vistoria rota / instalação (`local_vistoria='cliente'` ou null permanecem com a notificação atual).
-- Não mexer em `useTarefaAtual.ts` — manter o invoke como está (o edge é a barreira correta).
-- Sem saneamento histórico (mensagens já enviadas não dá pra desfazer).
-
-## Memória
-Após apply, registrar `mem://logic/operations/notificar-inicio-rota-pula-base` deixando claro que `notificar-inicio-rota` é o ÚNICO ponto de origem do template `tecnico_em_rota` e que `local_vistoria='base'` suprime o envio ao cliente (profissional segue notificado).
+- Nada no hook / banco / outras telas.
+- Não mexer em `DragOverlayCard` (cartão flutuante durante drag) — escopo é a lista visível.
+- Não tocar regras de janela horária / SLA.

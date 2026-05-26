@@ -102,7 +102,15 @@ function DraggableServico({ servico }: { servico: any }) {
                 {isToday(parseISO(servico.data_agendada)) ? 'Hoje' :
                   isTomorrow(parseISO(servico.data_agendada)) ? 'Amanhã' :
                     format(parseISO(servico.data_agendada), 'dd/MM', { locale: ptBR })}
-                {servico.hora_agendada && ` às ${servico.hora_agendada.slice(0, 5)}`}
+                {(() => {
+                  const p = servico.periodo;
+                  const label = p === 'manha' ? 'Manhã'
+                    : p === 'tarde' ? 'Tarde'
+                    : (p === 'dia_todo' || p === 'integral') ? 'Dia todo'
+                    : null;
+                  return label ? ` · ${label}` : '';
+                })()}
+                {servico.hora_agendada && ` (${servico.hora_agendada.slice(0, 5)})`}
               </span>
             </div>
             {/* Botão "Realizar Vistoria Interna" — só Coordenador/Diretor */}
