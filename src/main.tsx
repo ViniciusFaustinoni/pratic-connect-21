@@ -2,6 +2,9 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { installPreviewGeolocationBypass } from "./lib/previewGeolocationBypass";
+
+installPreviewGeolocationBypass();
 
 // =============================================================
 // Workaround: Scripts externos (Lovable preview token, extensões)
