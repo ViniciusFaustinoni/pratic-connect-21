@@ -19,6 +19,7 @@ import {
 } from "../_shared/hinova-client.ts";
 import { insertAuditLog } from '../_shared/auditLog.ts';
 import { buildAssociadoPayload, variantesCodigoFipe } from '../_shared/hinova-payloads.ts';
+import { resolverDiaVencimento } from '../_shared/vencimento-utils.ts';
 
 
 const corsHeaders = {
