@@ -681,13 +681,14 @@ serve(async (req) => {
       console.warn("[efetivar-troca][dedup] erro não-bloqueante:", (e as Error)?.message);
     }
 
-    // 6.3 SOFTRUCK — Reaponte de vínculo usuário↔veículo
-    //     Em veículo elegível a rastreador, garantir que o novo titular
-    //     vê o veículo no app Softruck e o antigo perde acesso.
-    //     vehicle_id e association_devices ficam INTOCADOS.
+    // 6.3 Reaponte de vínculo cliente↔veículo na plataforma de rastreamento
+    //     Roteia por rastreadores.plataforma do rastreador instalado:
+    //       - 'softruck' (default) → sequência GET/DELETE/POST em associations/users.
+    //       - 'rede_veiculos'      → desvincular + vincular cliente na Rede.
+    //     Vehicle/device físico ficam INTOCADOS em ambos os caminhos.
     //     Falha não aborta a troca: enfileira em sga_sync_queue.
-    //     Prefixo distinto [FALHA_SOFTRUCK_RECRIAR_VINCULO] na janela
-    //     DELETE→POST (única em que a inconsistência fica visível pro usuário).
+    //     Prefixos distintos na janela DELETE→POST:
+    //       [FALHA_SOFTRUCK_RECRIAR_VINCULO] / [FALHA_REDE_REVINCULAR_CLIENTE]
     try {
       // Pré-condição 1: veículo exige rastreador?
       const { data: precisaRastr } = await supabase.rpc("fn_veiculo_precisa_rastreador", {
@@ -695,22 +696,137 @@ serve(async (req) => {
       });
 
       if (precisaRastr !== true) {
-        console.log("[efetivar-troca][softruck-vinculo] veículo não elegível a rastreador, pulando reaponte");
+        console.log("[efetivar-troca][rastreador-vinculo] veículo não elegível a rastreador, pulando reaponte");
       } else {
-        // Pré-condição 2: veículo já existe na Softruck?
-        const { data: veicSoft } = await supabase
-          .from("veiculos")
-          .select("softruck_vehicle_id, placa")
-          .eq("id", veiculoId)
+        // Pré-condição 2: qual rastreador físico está instalado e em qual plataforma?
+        const { data: rastrInstalado } = await supabase
+          .from("rastreadores")
+          .select("id, imei, plataforma, associado_id")
+          .eq("veiculo_id", veiculoId)
+          .eq("status", "instalado")
           .maybeSingle();
 
-        const vehicleId = (veicSoft as any)?.softruck_vehicle_id as string | undefined;
+        const plataforma = ((rastrInstalado as any)?.plataforma || "").toLowerCase();
+        const imeiInst = (rastrInstalado as any)?.imei as string | undefined;
+        const rastrIdInst = (rastrInstalado as any)?.id as string | undefined;
 
-        if (!vehicleId) {
+        if (!rastrInstalado) {
           console.log(
-            `[SOFTRUCK_TROCA_VINCULO_SEM_VEHICLE_ID] veiculo=${veiculoId} placa=${(veicSoft as any)?.placa} — nunca foi sincronizado na Softruck, nada a fazer`,
+            `[TROCA_VINCULO_SEM_RASTREADOR] veiculo=${veiculoId} elegível mas sem rastreador instalado — nada a reapontar`,
           );
+        } else if (plataforma === "rede_veiculos") {
+          // ============================================================
+          // BRANCH REDE VEÍCULOS — reaproveita edges existentes
+          // ============================================================
+          const callRede =
+            (globalThis as any).__redeTrocaVinculoOverride ??
+            ((fn: string, body: unknown) => supabase.functions.invoke(fn, { body }));
+
+          const enqueueRedeFalha = async (
+            etapa: "rede_desvincular_cliente" | "rede_revincular_cliente",
+            msg: string,
+          ) => {
+            try {
+              // TODO[retry-rede-troca-vinculo]: cron-sga-retry ainda não drena esta etapa.
+              const payload: Record<string, unknown> = {
+                associado_id: novoAssociadoId,
+                veiculo_id: veiculoId,
+                status: "pendente",
+                etapa_parou: `troca_titularidade:${etapa}`,
+                erro_ultimo: msg,
+                origem: "troca_titularidade",
+              };
+              if (etapa === "rede_revincular_cliente") payload.prioridade = "alta";
+              await supabase.from("sga_sync_queue").insert(payload as any);
+            } catch (qErr) {
+              console.error("[efetivar-troca][rede-vinculo] falha ao enfileirar:", (qErr as Error)?.message);
+            }
+          };
+
+          // ===== Passo A: desvincular cliente antigo na Rede =====
+          try {
+            const del = await callRede("rede-veiculos-desvincular-cliente", {
+              rastreadorId: rastrIdInst,
+              imei: imeiInst,
+              motivo: "troca_titularidade",
+              atualizarBancoLocal: false,
+            });
+            const delData = (del as any)?.data ?? del;
+            if ((del as any)?.error) throw new Error(JSON.stringify((del as any).error));
+            if (delData && delData.success === false) {
+              throw new Error(delData.error || JSON.stringify(delData));
+            }
+          } catch (e) {
+            const msg = (e as Error)?.message ?? String(e);
+            console.error(
+              `[FALHA_REDE_TROCA_VINCULO] passo=desvincular-cliente solicitacao=${solicitacao_id} veiculo=${veiculoId} rastreador=${rastrIdInst} imei=${imeiInst} erro=${msg}`,
+            );
+            await enqueueRedeFalha("rede_desvincular_cliente", `desvincular-cliente: ${msg}`);
+            throw new Error("__rede_abort__");
+          }
+
+          // ===== Passo B: vincular cliente novo (janela DELETE→POST) =====
+          try {
+            if (!imeiInst) throw new Error("rastreador instalado sem IMEI");
+            const vin = await callRede("rede-veiculos-vincular-cliente", {
+              imei: imeiInst,
+              veiculoId,
+              associadoId: novoAssociadoId,
+            });
+            const vinData = (vin as any)?.data ?? vin;
+            if ((vin as any)?.error) throw new Error(JSON.stringify((vin as any).error));
+            if (vinData && vinData.success === false) {
+              throw new Error(vinData.error || JSON.stringify(vinData));
+            }
+          } catch (e) {
+            const msg = (e as Error)?.message ?? String(e);
+            console.error(
+              `[FALHA_REDE_REVINCULAR_CLIENTE] passo=vincular-cliente solicitacao=${solicitacao_id} veiculo=${veiculoId} rastreador=${rastrIdInst} imei=${imeiInst} novoAssoc=${novoAssociadoId} erro=${msg}`,
+            );
+            await enqueueRedeFalha("rede_revincular_cliente", `vincular-cliente: ${msg}`);
+            throw new Error("__rede_abort__");
+          }
+
+          console.log(
+            `[REDE_TROCA_VINCULO_OK] veiculoId=${veiculoId} rastreador=${rastrIdInst} imei=${imeiInst} novoAssoc=${novoAssociadoId}`,
+          );
+
+          try {
+            await insertAuditLog(supabase, {
+              acao: "criar",
+              modulo: "monitoramento",
+              descricao: `[REDE_TROCA_VINCULO_OK] veiculo_id=${veiculoId} imei=${imeiInst} → associado=${novoAssociadoId}`,
+              tabela: "solicitacoes_troca_titularidade",
+              registro_id: solicitacao_id,
+              dados_novos: {
+                origem: "rede_veiculos",
+                veiculo_id: veiculoId,
+                rastreador_id: rastrIdInst,
+                imei: imeiInst,
+                associado_novo: novoAssociadoId,
+              },
+            });
+          } catch (logErr) {
+            console.warn("[efetivar-troca][rede-vinculo] insertAuditLog falhou:", (logErr as Error)?.message);
+          }
         } else {
+          // ============================================================
+          // BRANCH SOFTRUCK (default) — preservado do bloco original
+          // ============================================================
+          // Pré-condição: veículo já existe na Softruck?
+          const { data: veicSoft } = await supabase
+            .from("veiculos")
+            .select("softruck_vehicle_id, placa")
+            .eq("id", veiculoId)
+            .maybeSingle();
+
+          const vehicleId = (veicSoft as any)?.softruck_vehicle_id as string | undefined;
+
+          if (!vehicleId) {
+            console.log(
+              `[SOFTRUCK_TROCA_VINCULO_SEM_VEHICLE_ID] veiculo=${veiculoId} placa=${(veicSoft as any)?.placa} — nunca foi sincronizado na Softruck, nada a fazer`,
+            );
+          } else {
           // Pré-condição 3: novo titular tem identificador para virar user Softruck?
           const { data: novoAssoc } = await supabase
             .from("associados")
