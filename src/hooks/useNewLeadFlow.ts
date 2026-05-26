@@ -317,6 +317,16 @@ export function useNewLeadFlow() {
       // - Senão, null (trigger do banco pode auto-atribuir se for vendedor)
       const vendedorId = state.selectedVendedor || null;
 
+      // Modelo canônico = descrição FIPE (preferido) ou marca_modelo do DETRAN.
+      // Evita salvar "argo" cru quando o CRLV diz "FIAT/ARGO 1.0".
+      // Ver `src/lib/quotation/modelo-canonico.ts`.
+      const modeloCanonico = resolverModeloCanonico({
+        fipeDescricao: state.fipeData?.descricao,
+        marcaModeloDetran: state.vehicleData?.marca_modelo,
+        modeloCurtoDetran: state.vehicleData?.modelo,
+        marca: state.vehicleData?.marca,
+      }) || null;
+
       // 1. Criar o lead
       const leadData = {
         nome: state.personalData?.nome || 'Lead sem nome',
@@ -324,7 +334,7 @@ export function useNewLeadFlow() {
         email: state.email || null,
         cpf: state.personalData?.cpf || null,
         veiculo_marca: state.vehicleData?.marca || null,
-        veiculo_modelo: state.vehicleData?.modelo || null,
+        veiculo_modelo: modeloCanonico,
         veiculo_ano: state.vehicleData?.ano ? parseInt(state.vehicleData.ano.split('/')[0]) : null,
         veiculo_placa: state.vehicleData?.placa || null,
         veiculo_fipe: state.fipeData?.valor || null,
@@ -360,7 +370,7 @@ export function useNewLeadFlow() {
             lead_id: lead.id,
             vendedor_id: state.selectedVendedor || null,
             veiculo_marca: state.vehicleData?.marca || null,
-            veiculo_modelo: state.vehicleData?.modelo || null,
+            veiculo_modelo: modeloCanonico,
             veiculo_ano: state.vehicleData?.ano ? parseInt(state.vehicleData.ano.split('/')[0]) : null,
             veiculo_placa: state.vehicleData?.placa || null,
             valor_fipe: state.fipeData?.valor || null,
