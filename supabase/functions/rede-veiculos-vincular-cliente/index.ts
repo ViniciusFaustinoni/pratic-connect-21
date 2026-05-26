@@ -188,6 +188,8 @@ serve(async (req) => {
         nome,
         cpf,
         telefone,
+        telefone_secundario,
+        whatsapp,
         email,
         cep,
         logradouro,
