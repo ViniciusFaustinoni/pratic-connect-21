@@ -325,6 +325,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                       }
                       if (erroValidacao) setErroValidacao(null);
                     }}
+                    onValidar={() => { void garantirImeiValidado(); }}
                     validando={validandoImei}
                     validado={imeiValidado}
                     origem={origemValidacao}
