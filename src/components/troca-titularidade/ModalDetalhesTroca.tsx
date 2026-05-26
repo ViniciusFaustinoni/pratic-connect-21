@@ -143,6 +143,11 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     }
   };
 
+  // Polling do termo (fallback para o webhook Autentique, que não chega).
+  const precisaSyncTermo = !!solicitacao
+    && !!solicitacao.termo_cancelamento_enviado_em
+    && !solicitacao.termo_cancelamento_assinado_em
+    && solicitacao.status === 'aguardando_termo_cancelamento';
   const syncTermo = useSyncTermoCancelamento({
     tipo: 'troca',
     solicitacaoId: solicitacao?.id,
