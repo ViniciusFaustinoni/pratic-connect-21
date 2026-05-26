@@ -69,6 +69,13 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [sgaLiberado, setSgaLiberado] = useState(false);
   const [activeTab, setActiveTab] = useState('dados');
 
+  // Validação placa ↔ IMEI (Monitoramento, veículo elegível a rastreador).
+  const [imeiInput, setImeiInput] = useState('');
+  const [validandoImei, setValidandoImei] = useState(false);
+  const [imeiValidado, setImeiValidado] = useState(false);
+  const [origemValidacao, setOrigemValidacao] = useState<ValidacaoOrigem | null>(null);
+  const [erroValidacao, setErroValidacao] = useState<string | null>(null);
+
   const aprovarCadastro = useAprovarTrocaCadastro();
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
