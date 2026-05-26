@@ -93,23 +93,8 @@ export function useBuscarRastreadorPorImei() {
       let local = await fetchLocalPorImei(imeiLimpo);
       let origem: OrigemRastreador = 'estoque';
 
-      // 2. Softruck (upsert local em caso de found)
-      if (!local) {
-        try {
-          const { data } = await supabase.functions.invoke('softruck-buscar-dispositivo', {
-            body: { busca: imeiLimpo },
-          });
-          if (data?.success && data?.found) {
-            local = await fetchLocalPorImei(imeiLimpo);
-            origem = 'softruck';
-          }
-        } catch (e) {
-          console.warn('[buscarImei] softruck falhou', e);
-        }
-      }
-
-      // 3. Rede Veículos (upsert local em caso de found)
-      if (!local) {
+      // Helper: chama a edge da Rede; se found, recarrega local e retorna true
+      const tentarRede = async (): Promise<boolean> => {
         try {
           const { data } = await supabase.functions.invoke('rede-veiculos-buscar-dispositivo', {
             body: { busca: imeiLimpo },
@@ -117,15 +102,54 @@ export function useBuscarRastreadorPorImei() {
           if (data?.success && data?.found) {
             local = await fetchLocalPorImei(imeiLimpo);
             origem = 'rede_veiculos';
+            return true;
           }
         } catch (e) {
           console.warn('[buscarImei] rede falhou', e);
         }
+        return false;
+      };
+
+      // 2. Softruck (upsert local em caso de found)
+      let softruckRespondeuFound = false;
+      let softruckAssetEmOutroVeiculo = false;
+      if (!local) {
+        try {
+          const { data } = await supabase.functions.invoke('softruck-buscar-dispositivo', {
+            body: { busca: imeiLimpo },
+          });
+          if (data?.success && data?.found) {
+            softruckRespondeuFound = true;
+            local = await fetchLocalPorImei(imeiLimpo);
+            origem = 'softruck';
+            // Se o asset Softruck está vinculado a OUTRO veículo, não confiar cegamente —
+            // dá uma chance pra Rede dizer que ESTE IMEI pertence ao veículo alvo.
+            if (local?.veiculo_id && local.veiculo_id !== veiculoIdAlvo) {
+              softruckAssetEmOutroVeiculo = true;
+            }
+          }
+        } catch (e) {
+          console.warn('[buscarImei] softruck falhou', e);
+        }
+      }
+
+      // 3. Rede Veículos
+      //    - se Softruck não achou: rota normal
+      //    - se Softruck achou mas o asset está em outro veículo: ainda consulta Rede
+      //      pra evitar o viés que cravou plataforma=softruck para TUM3D59 (caso 26/05/26).
+      if (!local || softruckAssetEmOutroVeiculo) {
+        await tentarRede();
       }
 
       if (!local) {
         setErro(`IMEI ${imeiLimpo} não foi encontrado no estoque local, Softruck ou Rede Veículos.`);
         return null;
+      }
+
+      // Se Softruck disse found mas o registro local já tem plataforma='rede_veiculos'
+      // (porque a edge da Rede atualizou depois), preferir Rede como origem.
+      if (softruckRespondeuFound && (local.plataforma || '').toLowerCase() === 'rede_veiculos') {
+        origem = 'rede_veiculos';
       }
 
       // Re-derivar origem se já existia localmente
