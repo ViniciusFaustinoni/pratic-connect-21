@@ -130,7 +130,7 @@ serve(async (req) => {
           codigo_hinova: sgaCodAss, sincronizado_hinova: true, sincronizado_hinova_em: new Date().toISOString(),
         }).eq("id", troca.novo_associado_id);
 
-        // Veículo
+        // Veículo — localiza no Hinova (chassi → fallback placa)
         let codVeicAtual: number | null = null;
         let codAssVeic: number | null = null;
         if (vehicleData?.chassi) {
@@ -140,14 +140,42 @@ serve(async (req) => {
               codVeicAtual = Number(found.found.codigo_veiculo) || null;
               codAssVeic = Number(found.found.codigo_associado) || null;
             }
-          } catch (e) { console.warn("[retry-sga] buscaVeic:", (e as Error).message); }
+          } catch (e) { console.warn("[retry-sga] buscaVeicChassi:", (e as Error).message); }
+        }
+        if (!codVeicAtual && vehicleData?.placa) {
+          try {
+            const placaLimpa = String(vehicleData.placa).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            const found = await buscarVeiculoPorPlaca(supabase, placaLimpa);
+            if (found.found) {
+              codVeicAtual = Number(found.found.codigo_veiculo) || null;
+              codAssVeic = Number(found.found.codigo_associado) || null;
+            }
+          } catch (e) { console.warn("[retry-sga] buscaVeicPlaca:", (e as Error).message); }
         }
 
-        if (!(codVeicAtual && codAssVeic === sgaCodAss)) {
-          if (codVeicAtual) {
-            const codCanc = await getConfiguracaoNumero(supabase, "sga_codigo_situacao_veiculo_cancelado", 3);
-            await alterarSituacaoVeiculoHinova(supabase, codVeicAtual, codCanc).catch(e => console.warn("[retry-sga] cancelar veic antigo:", e?.message || e));
+        if (codVeicAtual && codAssVeic === sgaCodAss) {
+          // Idempotência: já vinculado ao novo titular
+          sgaCodVeic = codVeicAtual;
+        } else if (codVeicAtual) {
+          // CAMINHO CANÔNICO — troca de titularidade via POST /alterar/veiculo.
+          // Preserva codigo_veiculo e o histórico do veículo no Hinova.
+          // transferir_agregados: regra ainda em definição. Quando definida,
+          // passar array de codigo_voluntario aqui (ver sga-hinova-sync linha ~283).
+          const ra = await alterarVeiculoHinova(supabase, {
+            codigo_veiculo: codVeicAtual,
+            codigo_associado: sgaCodAss,
+          });
+          if (!ra.ok) {
+            throw new Error(
+              `SGA alterarVeiculo (troca titularidade) falhou: ${(ra.errors || []).join('; ') || ra.mensagem || `HTTP ${ra.status}`}`
+            );
           }
+          sgaCodVeic = codVeicAtual;
+        } else {
+          // FALLBACK DEGENERADO — veículo não existe no Hinova (titular antigo
+          // nunca foi sincronizado). Só nesse caso cai no caminho legado de
+          // cadastrar como novo. Não roda mais alterarSituacaoVeiculo(cancelado).
+          console.warn('[retry-sga] veículo não encontrado no Hinova — caindo no fallback de cadastrar');
           const codGrupo = await getConfiguracaoNumero(supabase, "sga_codigo_grupo_produto_padrao", 0);
           const basePayloadVeiculo = {
             codigo_associado: sgaCodAss,
@@ -215,11 +243,10 @@ serve(async (req) => {
             }
           }
 
-          if (!(cadVeic?.ok && cadVeic?.codigo)) throw new Error(`SGA cadastrarVeiculo: ${(cadVeic?.errors || []).join("; ") || cadVeic?.mensagem || 'payload sem código_fipe/codigo_modelo válido'}`);
+          if (!(cadVeic?.ok && cadVeic?.codigo)) throw new Error(`SGA cadastrarVeiculo (fallback troca titularidade): ${(cadVeic?.errors || []).join("; ") || cadVeic?.mensagem || 'payload sem código_fipe/codigo_modelo válido'}`);
           sgaCodVeic = cadVeic.codigo;
-        } else {
-          sgaCodVeic = codVeicAtual;
         }
+
 
         await supabase.from("veiculos").update({
           codigo_hinova: sgaCodVeic, sincronizado_hinova: true, sincronizado_hinova_em: new Date().toISOString(),
