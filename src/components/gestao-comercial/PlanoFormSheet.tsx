@@ -32,22 +32,27 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const { data: allRules = [] } = useAllEligibilityRules();
 
   // IDs already assigned to OTHER plans (exclude current plan being edited)
+  // Paginado para varrer planos_coberturas/planos_beneficios inteiras sem cap de 1000.
   const { data: assignedCoberturaIds = new Set<string>() } = useQuery({
     queryKey: ['assigned-cobertura-ids', planoId],
     queryFn: async () => {
-      let query = supabase.from('planos_coberturas').select('cobertura_id');
-      if (planoId) query = query.neq('plano_id', planoId);
-      const { data } = await query;
-      return new Set((data || []).map((r: any) => r.cobertura_id));
+      const rows = await fetchAllPaginated<{ cobertura_id: string }>((from, to) => {
+        let q = supabase.from('planos_coberturas').select('cobertura_id').range(from, to);
+        if (planoId) q = q.neq('plano_id', planoId);
+        return q;
+      });
+      return new Set(rows.map((r) => r.cobertura_id));
     },
   });
   const { data: assignedBenefitIds = new Set<string>() } = useQuery({
     queryKey: ['assigned-benefit-ids', planoId],
     queryFn: async () => {
-      let query = supabase.from('planos_beneficios').select('benefit_id');
-      if (planoId) query = query.neq('plano_id', planoId);
-      const { data } = await query;
-      return new Set((data || []).map((r: any) => r.benefit_id));
+      const rows = await fetchAllPaginated<{ benefit_id: string }>((from, to) => {
+        let q = supabase.from('planos_beneficios').select('benefit_id').range(from, to);
+        if (planoId) q = q.neq('plano_id', planoId);
+        return q;
+      });
+      return new Set(rows.map((r) => r.benefit_id));
     },
   });
 
