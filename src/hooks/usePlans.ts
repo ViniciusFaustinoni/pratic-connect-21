@@ -446,18 +446,27 @@ export function useCoberturas(onlyActive = false) {
   return useQuery({
     queryKey: ['coberturas', onlyActive],
     queryFn: async () => {
-      let query = supabase
-        .from('coberturas')
-        .select('*')
-        .order('nome');
-      
-      if (onlyActive) {
-        query = query.eq('ativo', true);
+      // PostgREST limita a 1000 linhas por padrão. Pagine para trazer o catálogo inteiro.
+      const pageSize = 1000;
+      let offset = 0;
+      const all: Cobertura[] = [];
+      while (true) {
+        let query = supabase
+          .from('coberturas')
+          .select('*')
+          .order('nome')
+          .range(offset, offset + pageSize - 1);
+        if (onlyActive) {
+          query = query.eq('ativo', true);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        const rows = (data ?? []) as Cobertura[];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+        offset += pageSize;
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Cobertura[];
+      return all;
     },
   });
 }
