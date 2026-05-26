@@ -391,7 +391,7 @@ Deno.serve(async (req) => {
           .eq("id", servico.id)
           .maybeSingle();
 
-        if (!servicoAtual || !["agendada", "em_rota", "em_andamento"].includes(servicoAtual.status)) {
+        if (!servicoAtual || !["agendada", "em_rota"].includes(servicoAtual.status)) {
           ignoradosStatusMudou++;
           console.log(`[cron-reagendamento] Status mudou para ${servicoAtual?.status} — abortando: ${servico.id}`);
           continue;
