@@ -31,7 +31,7 @@ export const VAR_LABELS: Record<CobrancaVar, string> = {
 
 export const TEMPLATE_PARAMS_MAP: Record<string, CobrancaVar[]> = {
   cobranca_mensalidade: ['nome', 'mes_ano', 'vencimento'],
-  d_6_lembrete_desconto_v1: ['nome', 'vencimento', 'linha_digitavel'],
+  d_6_lembrete_desconto_v2: ['nome', 'vencimento', 'linha_digitavel'],
   d0_boleto_vence_hoje_v1: ['nome', 'valor', 'vencimento', 'modelo', 'placa', 'linha_digitavel'],
   d1_a_d4_boleto_vencido_v1: ['nome'],
   d5_ultimo_dia_sem_revistoria_v1: ['vencimento'],
