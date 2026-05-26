@@ -655,6 +655,25 @@ export default function AprovacaoInstalacaoDetalhe() {
         </Card>
       )}
 
+      {/* Vincular rastreador existente — Monitoramento decide se há rastreador físico
+          no veículo cujo vínculo lógico foi perdido (ex.: troca/sub-FIPE diesel).
+          Ver `mem://logic/operations/vincular-rastreador-existente-monitoramento`. */}
+      {veiculo?.id && associado?.id && (
+        <VincularRastreadorExistenteCard
+          veiculoId={veiculo.id}
+          associadoId={associado.id}
+          associadoEmail={associado.email}
+          exigeRastreador={exigeInstalacaoTecnica(veiculo) && !rastreador}
+          jaTemRastreador={!!rastreador}
+          origemContexto="aprovacao_associados"
+          origemRefId={servico?.id}
+          onVinculado={() => {
+            qc.invalidateQueries({ queryKey: ['servico-detalhe-aprovacao', servico?.id] });
+          }}
+        />
+      )}
+
+
       {/* Documentação do Associado */}
       <Card className="border-border">
         <CardHeader className="pb-3">
