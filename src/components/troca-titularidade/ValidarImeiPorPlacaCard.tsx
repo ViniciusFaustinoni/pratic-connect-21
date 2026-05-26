@@ -1,13 +1,15 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Cpu, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Cpu, Loader2, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface Props {
   placa: string | null | undefined;
   imei: string;
   onChange: (imei: string) => void;
+  onValidar: () => void | Promise<void>;
   validando: boolean;
   validado: boolean;
   origem: 'softruck' | 'rede_veiculos' | null;
@@ -16,20 +18,25 @@ interface Props {
 }
 
 /**
- * Card de entrada do IMEI físico instalado, controlado pelo pai.
- * A validação placa ↔ IMEI é disparada no clique de Aprovar (transação única).
+ * Card de entrada + validação do IMEI físico instalado.
+ * Botão "Validar" dispara a checagem Softruck → fallback Rede contra a placa.
+ * O pai (ModalDetalhesTroca) só libera "Aprovar" depois que `validado=true`.
  * Ver `mem://logic/operations/vincular-rastreador-existente-monitoramento`.
  */
 export function ValidarImeiPorPlacaCard({
   placa,
   imei,
   onChange,
+  onValidar,
   validando,
   validado,
   origem,
   erro,
   disabled,
 }: Props) {
+  const imeiDigits = imei.replace(/\D/g, '').length;
+  const podeValidar = !disabled && !validando && !validado && imeiDigits >= 15;
+
   return (
     <div className="rounded border p-3 space-y-3">
       <div className="flex items-center gap-2">
@@ -44,21 +51,49 @@ export function ValidarImeiPorPlacaCard({
       </div>
       <p className="text-xs text-muted-foreground">
         Veículo elegível a rastreador. Informe o IMEI fisicamente instalado na placa{' '}
-        <strong>{placa || '(sem placa)'}</strong>. A validação é feita ao clicar em
-        <strong> Aprovar</strong>: o sistema confirma o vínculo IMEI ↔ placa na Softruck (com
-        fallback Rede Veículos) antes de registrar a decisão.
+        <strong>{placa || '(sem placa)'}</strong> e clique em <strong>Validar</strong>. O sistema
+        confirma o vínculo IMEI ↔ placa na Softruck (com fallback Rede Veículos). O botão{' '}
+        <strong>Aprovar</strong> só libera após a validação confirmar.
       </p>
       <div className="space-y-1">
         <Label htmlFor="validacao-imei">IMEI</Label>
-        <Input
-          id="validacao-imei"
-          inputMode="numeric"
-          autoComplete="off"
-          value={imei}
-          onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 16))}
-          disabled={disabled || validando || validado}
-          maxLength={16}
-        />
+        <div className="flex gap-2">
+          <Input
+            id="validacao-imei"
+            inputMode="numeric"
+            autoComplete="off"
+            value={imei}
+            onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 16))}
+            disabled={disabled || validando || validado}
+            maxLength={16}
+            className="flex-1"
+          />
+          {!validado && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void onValidar()}
+              disabled={!podeValidar}
+            >
+              {validando ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Validando…
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  Validar
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+        {!validado && imeiDigits > 0 && imeiDigits < 15 && (
+          <p className="text-xs text-muted-foreground">
+            IMEI deve ter pelo menos 15 dígitos ({imeiDigits}/15).
+          </p>
+        )}
       </div>
       {validando && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -66,7 +101,7 @@ export function ValidarImeiPorPlacaCard({
           Validando IMEI nas plataformas externas…
         </div>
       )}
-      {erro && (
+      {erro && !validando && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Validação bloqueada</AlertTitle>
