@@ -1,67 +1,103 @@
 ## Objetivo
 
-Após `fn_cancelar_associado_se_orfao` cancelar o titular antigo localmente, espelhar essa inativação na Hinova. Falha remota não aborta a troca — só vai pra fila de retry com prefixo identificável.
+Após troca de titularidade efetivada em veículo elegível a rastreador, reaponte o vínculo usuário↔veículo na Softruck: garantir usuário do novo titular, remover `association_user` do antigo e criar do novo. `vehicle_id`, `device_association` e `codigo_veiculo` (Hinova) ficam intocados. Falha não aborta a troca — vai para `sga_sync_queue`.
 
 ## Escopo
 
-Apenas `supabase/functions/efetivar-troca-titularidade/index.ts`, no bloco "8.1 Cancelar antigo proprietário se ficou sem vínculos ativos" (linhas ~910-948), logo após o read-back confirmar `statusReal === 'cancelado'`.
+Único arquivo tocado: `supabase/functions/efetivar-troca-titularidade/index.ts`.
 
-Nada mais é tocado:
-- `fn_cancelar_associado_se_orfao` continua igual
-- Lógica de decisão de órfão continua igual
-- Outras integrações (Softruck, Rede, etc.) intocadas
-- Etapa SGA do novo titular (linhas 1415+) intocada
+Reaproveita 4 operações já existentes em `softruck-api`:
+- `buscar-usuario` (por cpf, fallback email)
+- `criar-usuario`
+- `listar-usuarios-veiculo`
+- `desassociar-usuario-veiculo`
+- `associar-usuario-veiculo`
 
-## Mudança no `efetivar-troca-titularidade/index.ts`
+Nada novo em `softruck-api/index.ts`. Nada de Rede Veículos. Rastreador físico (`association_devices`) não é tocado.
 
-Dentro do `else` (cancErr ausente), depois do bloco que valida `statusReal === 'cancelado'`:
+## Ponto de inserção
 
-1. Só entra no novo bloco quando `cancelado === true && statusReal === 'cancelado'` (ou seja, o local realmente cancelou).
-2. Busca `codigo_hinova` do antigo associado (`associados` por `solicitacao.associado_id`).
-3. Se não houver `codigo_hinova`: loga warn `[INATIVAR_ANTIGO_SEM_CODIGO_HINOVA]`, sai (nada a fazer remoto — associado nunca foi sincronizado).
-4. Resolve `codigoSituacaoInativo`: `Number.parseInt(Deno.env.get('HINOVA_CODIGO_SITUACAO_INATIVO') || '', 10)`; se inválido, fallback `2` (padrão Hinova: 1=ativo, 2=inativo, 3=pendente). Mesmo padrão de `codigoSituacaoPendente` em `sga-hinova-sync`.
-5. Try/catch ao redor de `alterarSituacaoAssociadoHinova(supabase, codigoHinova, codigoSituacaoInativo)`:
-   - Sucesso (`rs.ok`): `console.log('[efetivar-troca][inativar-antigo] ✅ ...')` e `insertAuditLog` com `acao:'criar'`, `descricao: '[INATIVAR_ANTIGO_OK] ...'`.
-   - `!rs.ok` ou throw: tratar como falha (item 6).
-6. Falha (não bloqueante):
-   - `console.error('[FALHA_INATIVAR_ASSOCIADO_ANTIGO] ...', msg)`
-   - `insertAuditLog` com `descricao: '[FALHA_INATIVAR_ASSOCIADO_ANTIGO] ...'` carregando `solicitacao_id`, `associado_antigo_id`, `codigo_hinova`, `status` HTTP e `errors`.
-   - Enfileira em `sga_sync_queue` com:
-     ```
-     associado_id: solicitacao.associado_id,
-     veiculo_id: null,
-     status: 'pendente',
-     etapa_parou: 'troca_titularidade:inativar_associado_antigo',
-     erro_ultimo: msg,
-     origem: 'troca_titularidade',
-     codigo_associado_hinova: codigoHinova,
-     ```
-   - Não altera nem retorna do handler — fluxo segue para etapa SGA do novo titular e marcação de `efetivada`.
+Novo bloco **6.3 (Softruck — reaponte de usuário)**, logo após o bloco existente **6.1 RELIGAR COBERTURA + REAPONTAR RASTREADOR** (linhas 599-658). Esse ponto vem depois da transferência do veículo no banco e antes da etapa SGA do novo titular — alinhado com "após Hinova bem-sucedida" do prompt (a etapa Hinova `alterar veículo` já rodou; `inativar antigo` roda mais adiante e é não-bloqueante igual a este novo bloco, então a ordem entre eles é indiferente).
 
-## Tratamento do cron de retry
+## Lógica do bloco 6.3
 
-`cron-sga-retry` hoje processa `origem='troca_titularidade'` com base no associado novo. Precisamos garantir que a nova etapa (`etapa_parou='troca_titularidade:inativar_associado_antigo'`) seja reconhecida — caso contrário, o item fica pendente sem ser drenado.
+Pré-condições para executar (qualquer falha → pula em silêncio, sem enfileirar):
+1. `exigeRastreador === true` (reusa o valor já computado em 6.1 via `fn_veiculo_precisa_rastreador`; vou içar a variável para fora do `try` de 6.1, ou recomputar aqui — recomputar mantém o bloco isolado e auditável).
+2. `SELECT softruck_vehicle_id, placa FROM veiculos WHERE id = veiculoId` retorna `softruck_vehicle_id` não-nulo. Sem ele, log info `[SOFTRUCK_TROCA_VINCULO_SEM_VEHICLE_ID]` e sai (veículo nunca foi sincronizado na Softruck).
+3. Carrega novo titular: `SELECT nome, cpf, email, telefone FROM associados WHERE id = novoAssociadoId`. Sem CPF e sem email, log warn e sai (não dá pra resolver usuário).
 
-Decisão: o suporte real ao retry desta etapa específica fica **fora deste prompt** (a fila já recebe o item, garantindo rastreabilidade e ação manual). Vou apenas adicionar comentário `TODO[retry-inativar-antigo]` no enqueue, deixando explícito que o cron ainda não consome essa etapa. Se quiser que eu implemente o consumo nesta mesma rodada, me avise antes de aprovar.
+Passos (cada um envolto em try/catch independente para preservar o estado da janela DELETE→POST):
 
-## Validação interna
+**Passo 1 — Resolver/criar usuário Softruck do novo titular**
+- `supabase.functions.invoke('softruck-api', { body: { operation: 'buscar-usuario', data: { cpf } } })`. Se vier vazio e tiver email, repete com `{ email }`.
+- Se achou: `novoUserId = items[0].id`.
+- Se não achou: `supabase.functions.invoke('softruck-api', { body: { operation: 'criar-usuario', data: { username: emailOuCpf, email, nome, telefone, cpf } } })` e extrai `novoUserId` do retorno.
+- Falha aqui → `[FALHA_SOFTRUCK_TROCA_VINCULO]` + enqueue, **return** (não tenta DELETE).
 
-Testes Deno em `supabase/functions/efetivar-troca-titularidade/inativar_antigo_test.ts` com mock do client Supabase e mock do helper `alterarSituacaoAssociadoHinova` via import map override (ou injection helper local). Como o módulo hoje importa o helper diretamente, vou:
+**Passo 2 — Listar vínculos atuais**
+- `operation: 'listar-usuarios-veiculo'` com `vehicleId = softruck_vehicle_id`.
+- Extrai todos os `association.id` cujo `user.id !== novoUserId` (cobre o caso de múltiplos usuários antigos; em prática é só um).
+- Se o `novoUserId` já estiver na lista E nenhum antigo presente, log `[SOFTRUCK_TROCA_VINCULO_NOOP]` e sai com sucesso.
+- Falha aqui → `[FALHA_SOFTRUCK_TROCA_VINCULO]` + enqueue, return.
 
-1. Refatorar o bloco novo para chamar via variável local `const inativar = (globalThis as any).__inativarAssociadoHinovaOverride ?? alterarSituacaoAssociadoHinova;` (hook de teste mínimo, único acoplamento permitido).
-2. Escrever 3 cenários (Deno.test):
-   - **C1 Órfão + sucesso Hinova**: ordem das chamadas registradas no mock = `cadastrar novo → alterar veículo → ... → inativar antigo`; `solicitacao.status === 'efetivada'`; nenhuma linha em `sga_sync_queue` com etapa `inativar_associado_antigo`.
-   - **C2 Órfão + falha Hinova**: mock lança; `solicitacao.status === 'efetivada'`; log com prefixo `[FALHA_INATIVAR_ASSOCIADO_ANTIGO]` registrado; `sga_sync_queue` recebeu insert com `etapa_parou='troca_titularidade:inativar_associado_antigo'`.
-   - **C3 Não-órfão**: `fn_cancelar_associado_se_orfao` retorna false; mock de `inativar` **não** é chamado; troca segue normal.
+**Passo 3 — Remover vínculo(s) antigo(s)**
+- Para cada `associationId` antigo, chama `operation: 'desassociar-usuario-veiculo'`.
+- Falha aqui → `[FALHA_SOFTRUCK_TROCA_VINCULO]` + enqueue, return (passo 4 não roda).
 
-Como rodar: `supabase--test_edge_functions` com `name_pattern: 'inativar_antigo'`. Reporto resultado bruto (passou/lista de chamadas/estado final) por cenário.
+**Passo 4 — Criar vínculo novo**
+- Só roda se passo 3 OK E `novoUserId` ainda não está vinculado.
+- `operation: 'associar-usuario-veiculo'` com `{ userId: novoUserId, vehicleId: softruck_vehicle_id }`.
+- Falha aqui → **`[FALHA_SOFTRUCK_RECRIAR_VINCULO]`** (prefixo distinto pedido pelo usuário, janela de inconsistência visível) + enqueue com `etapa_parou='troca_titularidade:softruck_recriar_vinculo'` e `prioridade` mais alta se a coluna existir (caso contrário, prefixo já basta para o operador distinguir).
+- Sucesso → log `[SOFTRUCK_TROCA_VINCULO_OK]` + `insertAuditLog` (`acao:'criar'`, módulo `monitoramento`) descrevendo `vehicle_id`, `user_antigo_removido`, `user_novo_vinculado`.
 
-Se algum cenário não puder rodar (ex.: mock do Supabase complexo demais para a edge testável), reporto qual e o motivo, sem inventar resultado.
+## Enqueue na `sga_sync_queue`
+
+Mesmo padrão do bloco `INATIVAR_ANTIGO` (linhas ~1051):
+
+```ts
+await supabase.from('sga_sync_queue').insert({
+  associado_id: novoAssociadoId,
+  veiculo_id: veiculoId,
+  status: 'pendente',
+  etapa_parou: 'troca_titularidade:softruck_reaponte_usuario', // ou ':softruck_recriar_vinculo'
+  erro_ultimo: msg,
+  origem: 'troca_titularidade',
+});
+```
+
+Comentário `TODO[retry-softruck-troca-vinculo]` no enqueue — `cron-sga-retry` hoje não drena essa etapa; rastreabilidade e ação manual ficam garantidas, retry automático é prompt futuro.
+
+## Hook de teste (mínimo, padrão já estabelecido)
+
+Para permitir teste sem rede, envolver as 4 invocações em:
+
+```ts
+const callSoftruck = (globalThis as any).__softruckTrocaVinculoOverride
+  ?? ((operation: string, data: unknown) =>
+       supabase.functions.invoke('softruck-api', { body: { operation, data } }));
+```
+
+Mesmo padrão do `globalThis.__inativarAssociadoHinovaOverride`.
+
+## Validação
+
+Testes Deno em `supabase/functions/efetivar-troca-titularidade/softruck_reaponte_test.ts` com mock do client Supabase e do `callSoftruck`:
+
+- **C1 — Elegível + caminho feliz**: ordem de chamadas = `buscar-usuario(cpf) → listar-usuarios-veiculo → desassociar-usuario-veiculo (antigo) → associar-usuario-veiculo (novo)`; nenhum insert em `sga_sync_queue`; `solicitacao.status === 'efetivada'`.
+- **C2 — Não elegível** (`fn_veiculo_precisa_rastreador` retorna false): `callSoftruck` **não** é invocado; troca segue normal.
+- **C3 — Sem `softruck_vehicle_id`**: nenhuma chamada Softruck; nenhum enqueue; log `[SOFTRUCK_TROCA_VINCULO_SEM_VEHICLE_ID]` registrado.
+- **C4 — Falha no passo 1 (criar-usuario)**: `[FALHA_SOFTRUCK_TROCA_VINCULO]` logado; `sga_sync_queue` recebe insert com etapa `softruck_reaponte_usuario`; passos 2-4 não rodam; troca efetivada.
+- **C5 — Falha no passo 4 (POST associar)**: passos 1-3 OK, mock falha no 4; `[FALHA_SOFTRUCK_RECRIAR_VINCULO]` logado; enqueue com etapa `softruck_recriar_vinculo`; troca efetivada.
+- **C6 — Usuário novo já vinculado e nenhum antigo presente**: passo 2 retorna apenas o `novoUserId`; passos 3 e 4 não rodam; log `[SOFTRUCK_TROCA_VINCULO_NOOP]`; sem enqueue.
+
+Reporto bruto (passou/lista de chamadas/estado final). Se algum cenário não puder rodar por limitação de mock, reporto qual e por quê — sem inventar resultado.
 
 ## Memória
 
-Após implementar, atualizar `mem://logic/operations/troca-titularidade-cancela-titular-orfao` adicionando: "Quando cancela localmente, também chama `alterarSituacaoAssociadoHinova` (inativo=2) não-bloqueante; falha → log `[FALHA_INATIVAR_ASSOCIADO_ANTIGO]` + `sga_sync_queue` etapa `inativar_associado_antigo` (consumo pelo cron pendente)."
+Após implementar, atualizar `mem://logic/operations/troca-titularidade-religa-cobertura-e-rastreador` (já é a memória canônica do reaponte pós-troca) adicionando: "Em veículo elegível a rastreador, também reaponta `association_users` na Softruck (buscar/criar user → listar → DELETE antigo → POST novo); falha → `[FALHA_SOFTRUCK_TROCA_VINCULO]` ou `[FALHA_SOFTRUCK_RECRIAR_VINCULO]` (janela DELETE→POST) + `sga_sync_queue` etapa `softruck_reaponte_usuario`/`softruck_recriar_vinculo` (consumo pelo cron pendente)."
 
-## Decisão pendente antes de implementar
+## Decisões pendentes antes de implementar
 
-Confirmar fallback `codigoSituacaoInativo=2`. Se a sua regional usa outro código, me passa o número (ou setamos só via env `HINOVA_CODIGO_SITUACAO_INATIVO` sem fallback, abortando se ausente).
+1. **`enterpriseId` no `criar-usuario`**: a operação já tem fallback para `getEnterpriseId()` interno do `softruck-api`. Confirma que esse default é o correto para clientes novos da troca, ou precisa passar um enterprise específico?
+2. **`username` na criação**: vou usar `email || cpf` como base (op já sanitiza). OK?
+3. **Suporte a retry no cron**: implemento só o enqueue agora (rastreabilidade) e deixo `TODO[retry-softruck-troca-vinculo]`, como já fizemos com `inativar_associado_antigo`. Se quiser drenagem automática nesta mesma rodada, me avise antes de aprovar.
