@@ -176,18 +176,39 @@ Deno.serve(async (req) => {
   );
 
   if (ativErr) {
-    return json(500, {
+    // supabase-js mete o body real em ativErr.context (Response). Sem ler ele,
+    // a UI só vê "non-2xx status code" e cai em tela branca (memória:
+    // "Edge Function returned a non-2xx status code" / graceful degradation).
+    let detail: any = ativErr.message;
+    let upstreamStatus: number | null = null;
+    const ctx: any = (ativErr as any).context;
+    if (ctx && typeof ctx.text === 'function') {
+      upstreamStatus = ctx.status ?? null;
+      try {
+        const txt = await ctx.text();
+        try { detail = JSON.parse(txt); } catch { detail = txt || ativErr.message; }
+      } catch { /* noop */ }
+    }
+    console.error('[reconciliar-instalacao-sga] ativar-associado falhou', {
+      instalacaoId, upstreamStatus, detail,
+    });
+    // Nunca propagar 500 — devolve 200 com fallback estruturado para a UI
+    // tratar como erro tratável (sem blank screen).
+    return json(200, {
       success: false,
       error: 'ativar_associado_falhou',
-      detail: ativErr.message,
+      upstream_status: upstreamStatus,
+      detail,
+      fallback: true,
     });
   }
 
   if (ativacao && (ativacao as any).success === false) {
-    return json(409, {
+    return json(200, {
       success: false,
       error: 'ativar_associado_recusado',
       detail: ativacao,
+      fallback: true,
     });
   }
 
