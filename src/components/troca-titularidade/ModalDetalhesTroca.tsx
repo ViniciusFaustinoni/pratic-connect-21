@@ -87,14 +87,62 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const veiculoExigeRastreador = veiculoCompleto?.veiculo ? exigeInstalacaoTecnica(veiculoCompleto.veiculo as any) : false;
   const jaTemRastreador = !!veiculoCompleto?.rastreador;
   const precisaVinculoRastreador = modo === 'monitoramento' && veiculoExigeRastreador && !jaTemRastreador;
+  // Quando o veículo já exige rastreador no Monitoramento, agora a aprovação
+  // depende da validação placa ↔ IMEI (substitui o card de busca livre por IMEI
+  // no contexto de Troca de Titularidade).
+  const precisaValidarImei = precisaVinculoRastreador;
 
-  // Polling do termo (fallback para o webhook Autentique, que não chega).
-  // Ativa enquanto o modal está aberto, o termo foi enviado e ainda não foi
-  // marcado como assinado. Ver `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica`.
-  const precisaSyncTermo = !!solicitacao
-    && !!solicitacao.termo_cancelamento_enviado_em
-    && !solicitacao.termo_cancelamento_assinado_em
-    && solicitacao.status === 'aguardando_termo_cancelamento';
+  /**
+   * Garante a validação placa ↔ IMEI antes de qualquer mutação de decisão do
+   * Monitoramento (aprovar, solicitar vistoria, agendar manutenção). Retorna
+   * `true` quando pode prosseguir, `false` quando deve abortar.
+   */
+  const garantirImeiValidado = async (): Promise<boolean> => {
+    if (!precisaValidarImei) return true;
+    if (imeiValidado) return true;
+    if (!solicitacao?.veiculo_id) return false;
+    if (!imeiInput.trim()) {
+      setErroValidacao('Informe o IMEI instalado no veículo.');
+      toast.error('Informe o IMEI instalado no veículo.');
+      return false;
+    }
+    setValidandoImei(true);
+    setErroValidacao(null);
+    try {
+      const placa = veiculoCompleto?.veiculo?.placa as string | undefined;
+      const res = await validarImeiPorPlaca({
+        placa,
+        imei: imeiInput,
+        veiculoIdAlvo: solicitacao.veiculo_id,
+      });
+      if (!res.ok) {
+        setErroValidacao(res.mensagem);
+        toast.error(res.mensagem);
+        return false;
+      }
+      // Sucesso: registrar vínculo lógico local (se rastreador conhecido) para
+      // que a Fase 4 da troca aponte para o rastreador correto.
+      if (res.rastreadorId) {
+        await supabase
+          .from('rastreadores')
+          .update({ veiculo_id: solicitacao.veiculo_id })
+          .eq('id', res.rastreadorId);
+        qc.invalidateQueries({ queryKey: ['veiculo-completo', solicitacao.veiculo_id] });
+      }
+      setImeiValidado(true);
+      setOrigemValidacao(res.origem);
+      toast.success(`IMEI validado (${res.origem === 'softruck' ? 'Softruck' : 'Rede Veículos'}).`);
+      return true;
+    } catch (e) {
+      console.error('[VALIDACAO_IMEI_PLACA] erro inesperado', e);
+      setErroValidacao('Não foi possível validar o IMEI agora. Tente novamente em alguns minutos.');
+      toast.error('Não foi possível validar o IMEI agora. Tente novamente em alguns minutos.');
+      return false;
+    } finally {
+      setValidandoImei(false);
+    }
+  };
+
   const syncTermo = useSyncTermoCancelamento({
     tipo: 'troca',
     solicitacaoId: solicitacao?.id,
