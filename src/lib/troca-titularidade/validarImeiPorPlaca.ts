@@ -92,7 +92,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
     try {
       console.log(TAG, 'softruck.buscar-veiculo-placa', { placa: placaSan, imei: mascararImei(imeiSan) });
       const { data: porPlaca, error: ePlaca } = await supabase.functions.invoke('softruck-api', {
-        body: { action: 'buscar-veiculo-placa', data: { placa: placaSan } },
+        body: { operation: 'buscar-veiculo-placa', data: { placa: placaSan } },
       });
       if (ePlaca) throw ePlaca;
       const lista = (porPlaca as any)?.data?.data || (porPlaca as any)?.data || [];
@@ -101,7 +101,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
       if (vehicleId) {
         softruckPlacaEncontrada = true;
         const { data: porId, error: eId } = await supabase.functions.invoke('softruck-api', {
-          body: { action: 'buscar-veiculo-id', data: { veiculoId: vehicleId } },
+          body: { operation: 'buscar-veiculo-id', data: { veiculoId: vehicleId } },
         });
         if (eId) throw eId;
         // Resposta padrão JSON:API: included[] com devices ou relationships
@@ -126,7 +126,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
         // Verifica se o IMEI existe em outra placa Softruck → caso B.
         try {
           const { data: porImei } = await supabase.functions.invoke('softruck-api', {
-            body: { action: 'buscar-device-imei', data: { imei: imeiSan } },
+            body: { operation: 'buscar-device-imei', data: { imei: imeiSan } },
           });
           const listaImei = (porImei as any)?.data?.data || (porImei as any)?.data || [];
           const devOutro = Array.isArray(listaImei) ? listaImei[0] : null;
