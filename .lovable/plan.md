@@ -1,84 +1,67 @@
 ## Objetivo
 
-Permitir que o Monitoramento estabeleça o vínculo de um rastreador físico já instalado no veículo no momento da aprovação, em **duas filas**:
+Substituir o conteúdo do template Meta `emissao_boleto_gerado_v2` pelo novo texto (sem citar o modelo do veículo, mantendo só a placa). Como o template já está APPROVED na Meta e em uso por 5 callers, a forma segura é **criar `emissao_boleto_gerado_v3`** e **desativar o v2** (sem deletá-lo, preservando histórico).
 
-1. **Aprovação de Troca de Titularidade** (`/monitoramento/aprovacoes-troca` → `ModalDetalhesTroca` em `modo='monitoramento'`).
-2. **Aprovação de Associados** (`/monitoramento/aprovacoes` → `AprovacaoInstalacaoDetalhe`), que cobre os casos sub-FIPE em que o rastreador é exigido (diesel sempre) ou foi instalado por opção do associado/herdado de inclusão.
+## Nota sobre variáveis
 
-Fecha o caminho hoje aberto que faz o `ativar-associado` falhar em `requer_rastreador_fisico` (e o trigger `trg_guard_veiculo_ativo_exige_rastreador` como última linha) — caso Anderson/KPJ4994 e análogos.
+O texto enviado pelo usuário usa `{{1}}`, `{{3}}`, `{{4}}`, `{{5}}`, `{{6}}` (pulando `{{2}}`, que era o modelo). A Meta **não aprova templates com variáveis não-sequenciais** — exige `{{1}}..{{N}}` contínuos. Vou renumerar no template registrado para `{{1}}..{{5}}` mantendo a mesma ordem semântica:
 
-Escopo limitado a **Troca + Aprovação de Associados**. Inclusão e Substituição ficam fora — entram apenas se aparecerem casos análogos.
+- `{{1}}` = nome
+- `{{2}}` = placa
+- `{{3}}` = vencimento
+- `{{4}}` = valor
+- `{{5}}` = linha digitável
 
----
+Conteúdo exato gravado:
 
-## Decisões já tomadas (perguntas anteriores)
+```
+Olá {{1}}, aqui é da PRATIC CAR, tudo bem? 😊
 
-- **Vínculo por IMEI**: input manual + busca tri-fonte (estoque local → Softruck → Rede Veículos).
-- **Critério "OK" para liberar aprovação**: apenas o vínculo lógico precisa existir. Comunicação fica como warning visual, não bloqueia.
+Estamos enviando o boleto QUE JÁ ESTÁ disponível, referente a proteção do veículo:
+Placa: {{2}}
 
----
+Com vencimento em: {{3}}
 
-## Comportamento esperado nas duas telas
+No valor de: {{4}}.
 
-Critério único de "exige rastreador" reusando `precisaRastreador` (`useConfigRastreador`): Diesel sempre, Carro FIPE ≥ R$ 30k, Moto FIPE ≥ R$ 9k. Sub-FIPE não-diesel: a seção aparece como opcional (botão "Vincular rastreador existente" disponível mas sem bloquear aprovação).
+⚠️ Caso já tenha efetuado o pagamento, favor desconsiderar.
 
-### Estado A — Já vinculado
-Card atual do rastreador (código, IMEI, plataforma, última comunicação). Badge verde **"Rastreador vinculado"**. Aprovação livre.
+Estou enviando abaixo, para copiar e colar, a linha digitável para realizar o pagamento junto ao banco 👇
 
-### Estado B — Sem vínculo + exige rastreador
-- Alerta amarelo: "Veículo exige rastreador para ser ativado".
-- Input **IMEI** (15 dígitos) + botão **Buscar**.
-- Resultado mostra origem (Estoque / Softruck / Rede), placa atual, status.
-- Botão **Vincular ao veículo** executa `useAtivarRastreador` (já implementado, já cobre estoque local + Softruck + Rede).
-- Aprovar fica desabilitado com tooltip "Vincule o rastreador antes de aprovar" enquanto não houver vínculo. Botões "Solicitar vistoria" / "Agendar manutenção" / "Devolver ao Cadastro" continuam disponíveis como alternativas.
+{{5}}
+```
 
-### Estado C — Sem vínculo + não exige (sub-FIPE não-diesel)
-- Seção colapsada com texto "Veículo dispensa rastreador. Vincular um existente (opcional)" + botão para expandir.
-- Mesma UX do estado B se expandido, mas **sem bloquear aprovação**.
+Categoria `UTILITY`, idioma `pt_BR`, sem header, sem footer, sem botões (igual ao v2). Rodapé "ESSA MENSAGEM É AUTOMÁTICA..." removido conforme texto novo.
 
-### Bloqueios de segurança (espelhando regra canônica `intencao-rastreador-fallback-monitoramento`)
-- IMEI `instalado` em outro veículo ativo → bloqueia com mensagem clara (placa + associado conflitantes).
-- IMEI vindo só da plataforma sem registro local → cria `rastreadores` com `status='instalado'` antes de vincular (o `useAtivarRastreador` atual já assume que existe; vamos estender o fluxo para criar o registro quando a tri-fonte achar só na plataforma).
+## Mudanças
 
----
+### 1. Migration SQL
+- `INSERT` em `whatsapp_meta_templates` com `nome='emissao_boleto_gerado_v3'`, `status='PENDING'`, `disparo_habilitado=true`, `variaveis_exemplo` com os 5 valores de exemplo.
+- `UPDATE whatsapp_meta_templates SET disparo_habilitado=false WHERE nome='emissao_boleto_gerado_v2'` — respeita o gate canônico `disparo_habilitado` (mem://logic/integrations/whatsapp-template-disparo-toggle) sem mexer no status Meta.
 
-## Arquivos afetados
+### 2. Submissão à Meta
+Após a migration, chamar `whatsapp-submit-template` com `template_name='emissao_boleto_gerado_v3'` para registrar/aprovar na Meta. (Edge function já existente, sem alteração.)
 
-| Arquivo | Mudança |
-|---|---|
-| **Novo** `src/hooks/useBuscarRastreadorPorImei.ts` | Hook único orquestrando estoque local + `softruck-buscar-dispositivo` + `rede-veiculos-buscar-veiculo`. Retorna `{ origem, rastreador, conflito? }`. |
-| **Novo** `src/components/rastreadores/VincularRastreadorExistenteCard.tsx` | Componente isolado: input IMEI, busca, card resultado, botão vincular. Aceita props `{ veiculoId, associadoId, exigeRastreador, onVinculado }`. Reusa `useAtivarRastreador`. |
-| `src/components/troca-titularidade/VeiculoCompletoCard.tsx` | Renderiza `VincularRastreadorExistenteCard` dentro do `RastreadorBlock` quando passar prop `modo='monitoramento'` e estado B/C. |
-| `src/components/troca-titularidade/ModalDetalhesTroca.tsx` | Computar `precisaVinculoRastreador`, propagar `modo` para o card, desabilitar botão Aprovar com tooltip canônico no estado B sem vínculo. |
-| `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` | Logo abaixo do bloco existente de "Rastreador" (linha ~624), renderizar `VincularRastreadorExistenteCard` quando aplicável. Estender o gate "FALTA_RASTREADOR_FISICO" para considerar vínculo recém-criado (invalidação de query já cuida). |
-| Reuso sem alteração: `useAtivarRastreador`, `softruck-buscar-dispositivo`, `softruck-ativar-dispositivo`, `rede-veiculos-buscar-veiculo`, `rede-veiculos-vincular-cliente`, `precisaRastreador`. |
+### 3. Atualizar os 5 callers de v2 → v3 (5 vars em vez de 6)
 
-Edge function nova só se a busca por IMEI na Softruck/Rede não existir hoje em endpoint reutilizável — vou verificar no momento da execução; se faltar, crio adapter por dentro do hook usando as funções existentes.
+Remover o `modelo` do array `variables` em:
 
-Nenhuma migration. Nenhum guard de banco alterado. `trg_guard_veiculo_ativo_exige_rastreador` continua sendo a última linha de defesa.
+- `src/pages/financeiro/CobrancasList.tsx` (envio em massa manual)
+- `supabase/functions/disparar-boletos-lote/index.ts`
+- `supabase/functions/enviar-lembretes-vencimento/index.ts`
+- `supabase/functions/gerar-cobrancas-mensais/index.ts`
+- `supabase/functions/gerar-faturas-mensais/index.ts`
 
----
+Atualizar `template_name` para `emissao_boleto_gerado_v3` e ajustar comentários de docs (`vars: [nome, placa, vencimento, valor, linha_digitavel]`).
 
-## Auditoria
+### 4. Catálogo
+`src/lib/whatsapp/template-catalog.ts`: marcar `emissao_boleto_gerado_v2` como `DESCONTINUADO — migrado para emissao_boleto_gerado_v3` e adicionar entrada para `emissao_boleto_gerado_v3`.
 
-Após vínculo bem-sucedido: `registrarLog` (`acao='editar'`, `tabela='rastreadores'`, descrição `[VINCULO_MONITORAMENTO_{TROCA|APROVACAO}]` + placa + IMEI + id da solicitação/instalação). Compatível com `vigia-universal-logs-auditoria`.
+### 5. CSV de cobrança (separado)
+`disparar-cobranca-csv-meta` usa template `cobranca_inadimplencia_pratic` (não é o v2) — **não tocar**.
 
----
+## Garantias
 
-## Memória a registrar após implementar
-
-`mem://logic/operations/vincular-rastreador-existente-monitoramento` consolidando:
-- Componente canônico: `VincularRastreadorExistenteCard` + hook `useBuscarRastreadorPorImei`.
-- Aparece em duas filas (Aprovação de Associados + Aprovação de Troca).
-- Reusa `useAtivarRastreador`; bloqueia por IMEI duplicado; comunicação não-bloqueante; sub-FIPE não-diesel é opcional.
-- Triggers DB seguem como última linha.
-
----
-
-## Validação
-
-1. **Caso Anderson/KPJ4994** (Troca, já em rollback): abrir modal em Monitoramento, ver estado B, digitar IMEI, vincular, aprovar — `efetivar-troca-titularidade` segue, `ativar-associado` aceita.
-2. **Sub-FIPE diesel** (Aprovação de Associados): mesma UX, mesmo gate.
-3. **Sub-FIPE não-diesel**: seção opcional, aprovação livre mesmo sem vincular.
-4. **IMEI em outro veículo ativo**: bloqueio com mensagem clara, sem corromper estado.
-5. **IMEI só na plataforma (não em estoque local)**: registro `rastreadores` criado em `instalado` + vínculo lógico no veículo.
+- Nenhum disparo em produção quebra: enquanto v3 está PENDING, o gate `disparo_habilitado` no `whatsapp-send-text` impede que v2 dispare; quando v3 for aprovado pela Meta, callers já apontam para ele.
+- Caso o usuário queira liberar v2 temporariamente até v3 aprovar, basta reativar `disparo_habilitado=true` em v2 pela UI.
+- Histórico de envios anteriores em `whatsapp_messages` permanece íntegro (v2 não é deletado).
