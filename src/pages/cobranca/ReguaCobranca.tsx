@@ -48,7 +48,7 @@ const etapasPadrao: Etapa[] = [
   { id: crypto.randomUUID(), dias: 2, acao: 'whatsapp', template: 'd1_a_d4_boleto_vencido_v2', ativa: true },
   { id: crypto.randomUUID(), dias: 3, acao: 'whatsapp', template: 'd1_a_d4_boleto_vencido_v2', ativa: true },
   { id: crypto.randomUUID(), dias: 4, acao: 'whatsapp', template: 'd1_a_d4_boleto_vencido_v2', ativa: true },
-  { id: crypto.randomUUID(), dias: 5, acao: 'whatsapp', template: 'd5_ultimo_dia_sem_revistoria_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 5, acao: 'whatsapp', template: 'd5_ultimo_dia_sem_revistoria_v2', ativa: true },
   { id: crypto.randomUUID(), dias: 6, acao: 'whatsapp', template: 'd6_impedimento_pagamento_v1', ativa: true },
   { id: crypto.randomUUID(), dias: 7, acao: 'whatsapp', template: 'd7_reforco_contato_v1', ativa: true },
   { id: crypto.randomUUID(), dias: 8, acao: 'whatsapp', template: 'd8_urgencia_revistoria_v1', ativa: true },
