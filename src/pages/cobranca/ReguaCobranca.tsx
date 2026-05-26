@@ -42,7 +42,7 @@ const acoes = [
 ];
 
 const etapasPadrao: Etapa[] = [
-  { id: crypto.randomUUID(), dias: -6, acao: 'whatsapp', template: 'd_6_lembrete_desconto_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: -6, acao: 'whatsapp', template: 'd_6_lembrete_desconto_v2', ativa: true },
   { id: crypto.randomUUID(), dias: 0, acao: 'whatsapp', template: 'd0_boleto_vence_hoje_v1', ativa: true },
   { id: crypto.randomUUID(), dias: 1, acao: 'whatsapp', template: 'd1_a_d4_boleto_vencido_v1', ativa: true },
   { id: crypto.randomUUID(), dias: 2, acao: 'whatsapp', template: 'd1_a_d4_boleto_vencido_v1', ativa: true },
