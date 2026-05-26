@@ -1,88 +1,61 @@
-## Contexto
+## Diagnóstico (evidência real)
 
-Hoje, `supabase/functions/efetivar-troca-titularidade/index.ts` faz a troca de titularidade na Hinova em duas etapas:
+Contagem atual no banco das tabelas envolvidas:
 
-1. `alterarSituacaoVeiculoHinova(codVeicAtual, 3)` — cancela o veículo do antigo titular.
-2. `cadastrarVeiculoHinova({ codigo_associado: novoTitular, ... })` — cria um veículo novo para o novo titular.
+| Tabela | Linhas | Status |
+|---|---|---|
+| `coberturas` | 2.887 | acima do cap |
+| `benefits` | 1.777 | acima do cap |
+| `planos_coberturas` | 2.263 | acima do cap |
+| `planos_beneficios` | 1.334 | acima do cap |
+| `entity_eligibility_rules` | 21.439 | muito acima |
+| `marcas_modelos` | 12.606 | muito acima |
+| `planos` (visivel_gestao=true) | 290 | seguro |
+| `tabelas_preco_mensalidade` | 20 | seguro |
 
-Isso gera um novo `codigo_veiculo`, quebra o histórico Hinova do veículo e ignora o caminho oficial `POST /alterar/veiculo` — que já está implementado e em uso em `sga-hinova-sync` para o mesmo cenário (e está marcado como canônico em `mem://logic/integrations/sga-alterar-veiculo-troca-titularidade`).
+## Pontos do Gestão Comercial que truncam hoje (sem `.range()`/`.limit()`/paginação)
 
-Existem **dois lugares** com esse padrão no arquivo:
+Cada item abaixo é uma query real, com caminho e número de linha. Já estão sendo executadas e devolvem no máximo 1000 linhas mesmo precisando de mais.
 
-- **Bloco A** — fluxo principal: linhas ~1230–1352.
-- **Bloco B** — retry/recuperação SGA: linhas ~130–230.
+1. **`src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx:504`** — `from('planos_coberturas').select('cobertura_id, planos(nome)')` (2.263 → 1.000). Mapa de "em quais planos a cobertura está" perde ~1.263 vínculos. É o caso clássico que o usuário descreveu (aba "Coberturas e Benefícios").
+2. **`src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx:511`** — `from('planos_beneficios').select('benefit_id, planos(nome)')` (1.334 → 1.000). Mesmo problema para benefícios.
+3. **`src/components/gestao-comercial/PlanoFormSheet.tsx:38`** — `from('planos_coberturas').select('cobertura_id').neq('plano_id', planoId)`. Lista de "coberturas já usadas por outros planos" trunca → o sheet de editar plano oferece coberturas que NA VERDADE já estão atribuídas (viola a regra 1:1 de catálogo, ver `mem://architecture/products/plan-item-uniqueness-enforcement`).
+4. **`src/components/gestao-comercial/PlanoFormSheet.tsx:47`** — idem para `planos_beneficios` (1.334 rows).
+5. **`src/components/gestao-comercial/ProdutosPlanos.tsx:136`** — `from('planos_coberturas').select(...)` (todas as 2.263) usado para montar "coberturas por plano". Planos no fim da lista ficam sem coberturas exibidas.
+6. **`src/components/gestao-comercial/ProdutosPlanos.tsx:152`** — `from('planos_beneficios').select(...)` (todas as 1.334). Mesmo efeito para benefícios.
+7. **`src/components/gestao-comercial/ProdutosPlanos.tsx:90`** — `from('associados').select('plano_id').eq('status','ativo')`. Contagem de associados por plano fica capada em 1.000 (subestima volumes).
+8. **`src/hooks/useMarcasModelos.ts:25`** — `from('marcas_modelos').select('*')` (12.606 → 1.000). É o hook usado pela aba "Marcas e Modelos" do Gestão Comercial e por `useDetectarTipoVeiculo`/`useEnriquecerVeiculo`. Hoje só "vemos" 1.000 marcas+modelos no admin.
 
-Ambos precisam migrar para `alterarVeiculoHinova`.
+## Já corretos (não mexer)
 
-## O que vai mudar
+- `useCoberturas` (`src/hooks/usePlans.ts:445`) — paginado em chunks de 1000.
+- `useBenefits` (`src/hooks/usePlans.ts:375`) — paginado em chunks de 1000.
+- `useAllEligibilityRules` (`src/hooks/useEntityEligibilityRules.ts:49`) — paginado.
+- `useLinhasComPlanos` (`src/components/gestao-comercial/LinhasPlanos.tsx:243-298`) — chunked por `plano_id` + `range(0,9999)` para `planos_coberturas`, `planos_beneficios` e `entity_eligibility_rules`.
+- `usePlans` (`src/hooks/usePlans.ts:173`) — top-level é `planos` (290 rows), seguro.
 
-### 1. Fluxo canônico em `efetivar-troca-titularidade`
+## Achados que NÃO são bug (informe ao usuário)
 
-Onde hoje há `alterarSituacaoVeiculoHinova(cancelado) → cadastrarVeiculoHinova(novo titular)`, passar a:
+- **`src/components/gestao-comercial/BeneficiosCoberturas.tsx`** existe mas **não é importado em lugar nenhum** (`grep` em `src/` só encontra a própria definição). É código morto — não causa o problema relatado.
+- **`src/components/gestao-comercial/ElegibilidadeVeiculos.tsx`** lê `plano_elegibilidade_modelos` que hoje tem **0 linhas** (tabela legada, ver core memory). Os selects sem `.range()` ali não estão causando truncamento real hoje, mas a tela está usando uma fonte deprecada — fora do escopo deste fix.
+- **`src/components/gestao-comercial/TabelaPrecosTab.tsx`** lê `tabelas_preco_mensalidade` (20 rows) e `plano_preco_map` (0 rows). Sem risco hoje.
+- **`SimuladorRateio.tsx`** consulta `veiculos`/`sinistros` mas é a aba "Simulador de Rateio" e usa agregação por contagem, não listagem — fora do escopo do que o usuário descreveu ("ver todos os planos/benefícios/coberturas"). Sinalizo se quiser que eu inclua.
 
-1. Buscar o veículo no Hinova por chassi (já feito hoje via `buscarVeiculoPorChassi`, com fallback por placa para coerência com `sga-hinova-sync`).
-2. Se já vinculado ao novo titular → idempotente, nada a fazer (comportamento atual preservado).
-3. Caso contrário, montar payload mínimo:
-   ```
-   {
-     codigo_veiculo: <codigoVeiculoSga existente>,
-     codigo_associado: <codigoAssociadoNovo>,
-     // transferir_agregados: omitido por enquanto
-   }
-   ```
-4. Chamar `alterarVeiculoHinova(supabase, payload)`.
-5. Em sucesso: `sgaCodigoVeiculoNovo = codigoVeiculoSga` (mesmo valor que já existia — esse é o ponto central do critério de aceitação).
-6. Em falha: lançar erro com prefixo claro `SGA alterarVeiculo (troca titularidade) falhou: …` — mantém a semântica atual de marcar `sga_status='falha'` e ir para fila de retry. **Não** seguir para "efetivada".
+## Correções propostas (somente front-end, sem mexer no banco)
 
-### 2. Caso degenerado: veículo nunca sincronizado no SGA
+Padrão único para todas as 8 queries listadas: paginação por `range()` em chunks de 1.000 até `rows.length < pageSize`, idêntico ao já usado em `useCoberturas`/`useBenefits`. Para os mapas atribuição→plano da aba Catálogo, mantenho o shape de retorno; só passa a varrer a tabela inteira.
 
-Se `buscarVeiculoPorChassi` (e fallback por placa) **não encontrar** o veículo no Hinova (ou seja, `codigoVeiculoSga` é `null`), significa que o titular antigo nunca foi sincronizado. Nesse cenário não há o que alterar — o caminho válido continua sendo `cadastrarVeiculoHinova` com o novo titular (com toda a cadeia de fallback de modelo/FIPE que já existe).
+Arquivos que serão editados:
 
-Esse fallback é mantido **explicitamente** com log/comentário deixando claro que é o caminho legado e só ocorre quando o veículo não existe no Hinova. Não roda mais `alterarSituacaoVeiculoHinova(cancelado)`.
+- `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx` — paginar as duas queries de atribuição (linhas 501-514).
+- `src/components/gestao-comercial/PlanoFormSheet.tsx` — paginar as duas queries de IDs atribuídos (linhas 35-52).
+- `src/components/gestao-comercial/ProdutosPlanos.tsx` — paginar `associados.plano_id`, `planos_coberturas` e `planos_beneficios` (linhas 86-161).
+- `src/hooks/useMarcasModelos.ts` — paginar `useMarcasModelos()` (linha 25).
 
-### 3. Ponto preparado para `transferir_agregados`
+Extração: criar um helper minúsculo `src/lib/data/fetchAllPaginated.ts` para evitar repetir a mesma estrutura `while(true) { range(); }` em 8 lugares. Tudo passa a usar esse helper.
 
-A propriedade `transferir_agregados` fica explicitamente **omitida** do payload por enquanto. A função `alterarVeiculoHinova` já aceita esse campo opcional — basta o caller passar quando a regra de negócio for definida. Adicionar comentário acima do payload:
+## Out of scope (pergunto antes)
 
-```ts
-// transferir_agregados: regra ainda em definição. Quando definida,
-// passar array de codigo_voluntario aqui (ver sga-hinova-sync linha ~283).
-```
-
-Sem flag em `configuracoes` neste prompt (a `sga-hinova-sync` já tem uma; manter ambos paralelos seria ruído).
-
-### 4. Voluntário (`codigo_voluntario`)
-
-Fora de escopo deste prompt. O fluxo de `sga-hinova-sync` resolve voluntário porque é um sweep que cobre cenários antigos; no `efetivar-troca` o novo titular acabou de ser criado e não tem voluntário ainda. **Não enviar** `codigo_voluntario` aqui.
-
-### 5. Persistência local
-
-Inalterado: continua escrevendo `veiculos.codigo_hinova = sgaCodigoVeiculoNovo`. A diferença é que esse valor agora é **idêntico** ao que já estava em `veiculos.codigo_hinova` antes da troca — comportamento esperado pelo critério de aceitação.
-
-## O que NÃO muda
-
-- Cadastro do novo associado no SGA (`cadastrarOuAtualizarAssociadoHinova`).
-- Cancelamento local do antigo titular órfão.
-- Criação do contrato local, triggers, religar cobertura, reapontar rastreador.
-- Softruck / Rede Veículos.
-- Estrutura de logs/fila SGA não-bloqueante.
-- `sga-hinova-sync` (já está correto — serve de referência).
-
-## Arquivos tocados
-
-- `supabase/functions/efetivar-troca-titularidade/index.ts` — substituir os dois blocos (linhas ~130–230 e ~1230–1352). Importar `alterarVeiculoHinova` do `_shared/hinova-client.ts` (já exportado).
-- `mem://logic/integrations/sga-alterar-veiculo-troca-titularidade.md` — atualizar para registrar que agora **dois** caminhos usam `/alterar/veiculo` (efetivar + sweep), não só o sweep.
-
-## Validação
-
-1. Disparar uma troca de titularidade em ambiente de teste com veículo já sincronizado no SGA.
-2. Antes: anotar `veiculos.codigo_hinova` da placa.
-3. Após efetivar: confirmar que `solicitacoes_troca_titularidade.sga_codigo_veiculo_novo` e `veiculos.codigo_hinova` são **iguais** ao valor anotado.
-4. `buscarVeiculoPorChassi` deve retornar `codigo_associado` = código do novo titular.
-5. Logs devem mostrar `alterarVeiculo` em vez de `alterarSituacaoVeiculo(3)` + `cadastrarVeiculo`.
-
-## Riscos
-
-- **Veículo não existe no SGA**: tratado pelo fallback degenerado (cadastrar com novo titular) — mesmo resultado de antes para esse caso de borda.
-- **Hinova rejeita `/alterar/veiculo`**: troca não avança, vai pra fila de retry (igual hoje), mensagem de erro identifica o passo.
-- **Agregados**: campo fica preparado mas omitido — não regride nada já que hoje também não é enviado.
+- Corrigir o legado `plano_elegibilidade_modelos` na aba Elegibilidade.
+- Refatorar `BeneficiosCoberturas.tsx` (código morto) — remover ou ressuscitar?
+- Bug colateral no Catálogo: cada cobertura/benefício só guarda **um** nome de plano no `cobAttrMap`/`benAttrMap` (o último iterado). É uma limitação visual à parte. Posso incluir nesta passagem se quiser que vire lista de planos.
