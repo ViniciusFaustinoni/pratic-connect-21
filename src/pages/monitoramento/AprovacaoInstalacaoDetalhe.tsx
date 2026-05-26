@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +44,7 @@ import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
+import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
 import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
 import { servicoConcluidoEmCampo } from '@/lib/servicos/terminaisPositivos';
 
@@ -353,6 +354,7 @@ const fotoLabels: Record<string, string> = {
 export default function AprovacaoInstalacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data, isLoading, error, refetch, isFetching } = useServicoDetalheAprovacao(id);
   const aprovar = useAprovarInstalacaoMonitoramento();
   const reprovar = useReprovarInstalacaoMonitoramento();
@@ -652,6 +654,25 @@ export default function AprovacaoInstalacaoDetalhe() {
           </CardContent>
         </Card>
       )}
+
+      {/* Vincular rastreador existente — Monitoramento decide se há rastreador físico
+          no veículo cujo vínculo lógico foi perdido (ex.: troca/sub-FIPE diesel).
+          Ver `mem://logic/operations/vincular-rastreador-existente-monitoramento`. */}
+      {veiculo?.id && associado?.id && (
+        <VincularRastreadorExistenteCard
+          veiculoId={veiculo.id}
+          associadoId={associado.id}
+          associadoEmail={associado.email}
+          exigeRastreador={exigeInstalacaoTecnica(veiculo) && !rastreador}
+          jaTemRastreador={!!rastreador}
+          origemContexto="aprovacao_associados"
+          origemRefId={servico?.id}
+          onVinculado={() => {
+            qc.invalidateQueries({ queryKey: ['servico-detalhe-aprovacao', servico?.id] });
+          }}
+        />
+      )}
+
 
       {/* Documentação do Associado */}
       <Card className="border-border">

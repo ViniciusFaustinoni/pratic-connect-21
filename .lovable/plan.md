@@ -1,67 +1,84 @@
-# Por que falhou no Alan Thiago (KQB4683)
+## Objetivo
 
-Investiguei como admin. Histórico real da placa KQB4683 / IMEI 865011030213996 em `rastreadores_api_logs`:
+Permitir que o Monitoramento estabeleça o vínculo de um rastreador físico já instalado no veículo no momento da aprovação, em **duas filas**:
 
-- 18:13 / 18:54 → "O CPF/CNPJ e/ou IMEI não foram informados."
-- 18:57 → 20:29 → "JSON não informado"
-- Após o último fix (mudança de `URLSearchParams` para `FormData` multipart): chamei via curl agora como admin e a Rede Veículos respondeu **`JSON não informado`** novamente.
+1. **Aprovação de Troca de Titularidade** (`/monitoramento/aprovacoes-troca` → `ModalDetalhesTroca` em `modo='monitoramento'`).
+2. **Aprovação de Associados** (`/monitoramento/aprovacoes` → `AprovacaoInstalacaoDetalhe`), que cobre os casos sub-FIPE em que o rastreador é exigido (diesel sempre) ou foi instalado por opção do associado/herdado de inclusão.
 
-Ou seja: o caso do Alan não é dado faltando — CPF (`11604313706`) e IMEI estão corretos. O problema é o **formato do POST** enviado para `/vincularClienteVeiculo`.
+Fecha o caminho hoje aberto que faz o `ativar-associado` falhar em `requer_rastreador_fisico` (e o trigger `trg_guard_veiculo_ativo_exige_rastreador` como última linha) — caso Anderson/KPJ4994 e análogos.
 
-# Causa raiz
+Escopo limitado a **Troca + Aprovação de Associados**. Inclusão e Substituição ficam fora — entram apenas se aparecerem casos análogos.
 
-Comparei `vincular` com as 3 funções da MESMA plataforma que estão funcionando em produção:
+---
 
-| Função | URL | Body | Funciona? |
-|---|---|---|---|
-| `atualizarDadosCliente/` | **com barra** | `URLSearchParams` só com `json=<stringify>` | ✅ |
-| `ativarVeiculo/` | **com barra** | `URLSearchParams` só com `json=<stringify>` | ✅ |
-| `informarVeiculoAdimplente/` | **com barra** | `URLSearchParams` só com `json=<stringify>` | ✅ |
-| `desvincularClienteVeiculo` | sem barra | `FormData` flat (sem `json`) | ✅ |
-| `vincularClienteVeiculo` | **sem barra** | misto: flat + `json` em `URLSearchParams` (versão original) / `FormData` (último fix) | ❌ |
+## Decisões já tomadas (perguntas anteriores)
 
-A função `vincular` é a única que destoa do padrão dominante. O comentário "barra causa 301/307 e PHP perde o body" que justificou retirar a barra foi uma hipótese errada — as outras 3 rotas no mesmo backend respondem corretamente com barra. Sem a barra, o PHP da Rede Veículos não popula `$_REQUEST['json']` e devolve "JSON não informado".
+- **Vínculo por IMEI**: input manual + busca tri-fonte (estoque local → Softruck → Rede Veículos).
+- **Critério "OK" para liberar aprovação**: apenas o vínculo lógico precisa existir. Comunicação fica como warning visual, não bloqueia.
 
-# O que vou mudar (e onde)
+---
 
-### 1. `supabase/functions/rede-veiculos-vincular-cliente/index.ts` (bloco 280–296)
+## Comportamento esperado nas duas telas
 
-Alinhar exatamente ao padrão `atualizarDadosCliente`:
+Critério único de "exige rastreador" reusando `precisaRastreador` (`useConfigRastreador`): Diesel sempre, Carro FIPE ≥ R$ 30k, Moto FIPE ≥ R$ 9k. Sub-FIPE não-diesel: a seção aparece como opcional (botão "Vincular rastreador existente" disponível mas sem bloquear aprovação).
 
-- URL: `${baseUrl}/vincularClienteVeiculo/` (com barra)
-- Body: `URLSearchParams` com **um único campo** `json=<JSON.stringify(payload)>`
-- Header: `Content-Type: application/x-www-form-urlencoded`
-- Remover os campos flat (`cpfCnpj`, `imei`, `placa`) — eles já estão dentro do payload JSON e foram a "remendo" feito quando a API reclamava de CPF/IMEI; o problema real era a falta da barra, não a falta dos campos flat.
+### Estado A — Já vinculado
+Card atual do rastreador (código, IMEI, plataforma, última comunicação). Badge verde **"Rastreador vinculado"**. Aprovação livre.
 
-Atualizar o comentário acima do `fetch` para registrar a regra correta e prevenir reincidência.
+### Estado B — Sem vínculo + exige rastreador
+- Alerta amarelo: "Veículo exige rastreador para ser ativado".
+- Input **IMEI** (15 dígitos) + botão **Buscar**.
+- Resultado mostra origem (Estoque / Softruck / Rede), placa atual, status.
+- Botão **Vincular ao veículo** executa `useAtivarRastreador` (já implementado, já cobre estoque local + Softruck + Rede).
+- Aprovar fica desabilitado com tooltip "Vincule o rastreador antes de aprovar" enquanto não houver vínculo. Botões "Solicitar vistoria" / "Agendar manutenção" / "Devolver ao Cadastro" continuam disponíveis como alternativas.
 
-### 2. `src/hooks/useAtivarRastreador.ts` (linhas 82–93)
+### Estado C — Sem vínculo + não exige (sub-FIPE não-diesel)
+- Seção colapsada com texto "Veículo dispensa rastreador. Vincular um existente (opcional)" + botão para expandir.
+- Mesma UX do estado B se expandido, mas **sem bloquear aprovação**.
 
-Hoje, quando o edge devolve 400, o hook joga `error.message || 'Erro na integração...'` — que vira o genérico "Edge Function returned a non-2xx status code" na tela. A mensagem real (`"JSON não informado"`, `"CPF/CNPJ duplicado"`, etc.) está em `data.error`, mas é descartada.
+### Bloqueios de segurança (espelhando regra canônica `intencao-rastreador-fallback-monitoramento`)
+- IMEI `instalado` em outro veículo ativo → bloqueia com mensagem clara (placa + associado conflitantes).
+- IMEI vindo só da plataforma sem registro local → cria `rastreadores` com `status='instalado'` antes de vincular (o `useAtivarRastreador` atual já assume que existe; vamos estender o fluxo para criar o registro quando a tri-fonte achar só na plataforma).
 
-Mudança: quando `FunctionsHttpError` ocorrer, ler `await error.context.json()` (ou cair em `data?.error`) e propagar a mensagem real. Mesma correção que já aplicamos em outros pontos via `toastErroEdge`.
+---
 
-Isso garante que o próximo problema da Rede Veículos (se houver) seja diagnosticável de cara, sem precisar abrir `rastreadores_api_logs`.
+## Arquivos afetados
 
-### 3. Validação pós-deploy (sem mexer em DB)
+| Arquivo | Mudança |
+|---|---|
+| **Novo** `src/hooks/useBuscarRastreadorPorImei.ts` | Hook único orquestrando estoque local + `softruck-buscar-dispositivo` + `rede-veiculos-buscar-veiculo`. Retorna `{ origem, rastreador, conflito? }`. |
+| **Novo** `src/components/rastreadores/VincularRastreadorExistenteCard.tsx` | Componente isolado: input IMEI, busca, card resultado, botão vincular. Aceita props `{ veiculoId, associadoId, exigeRastreador, onVinculado }`. Reusa `useAtivarRastreador`. |
+| `src/components/troca-titularidade/VeiculoCompletoCard.tsx` | Renderiza `VincularRastreadorExistenteCard` dentro do `RastreadorBlock` quando passar prop `modo='monitoramento'` e estado B/C. |
+| `src/components/troca-titularidade/ModalDetalhesTroca.tsx` | Computar `precisaVinculoRastreador`, propagar `modo` para o card, desabilitar botão Aprovar com tooltip canônico no estado B sem vínculo. |
+| `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` | Logo abaixo do bloco existente de "Rastreador" (linha ~624), renderizar `VincularRastreadorExistenteCard` quando aplicável. Estender o gate "FALTA_RASTREADOR_FISICO" para considerar vínculo recém-criado (invalidação de query já cuida). |
+| Reuso sem alteração: `useAtivarRastreador`, `softruck-buscar-dispositivo`, `softruck-ativar-dispositivo`, `rede-veiculos-buscar-veiculo`, `rede-veiculos-vincular-cliente`, `precisaRastreador`. |
 
-Antes de avisar o usuário:
-- `curl` direto no edge com o payload do Alan e confirmar status 200 + `idCliente`/`idVeiculo`/`idEquipamento`.
-- Conferir em `rastreadores_api_logs` que entrou linha `status='sucesso'` para `vincularClienteVeiculo`.
-- Confirmar que `rastreadores.id_plataforma` e `veiculos.rede_veiculos_*` ficaram preenchidos.
+Edge function nova só se a busca por IMEI na Softruck/Rede não existir hoje em endpoint reutilizável — vou verificar no momento da execução; se faltar, crio adapter por dentro do hook usando as funções existentes.
 
-Se o curl ainda falhar com outra mensagem, a mensagem virá no body do 400 e eu reporto antes de tocar o front.
+Nenhuma migration. Nenhum guard de banco alterado. `trg_guard_veiculo_ativo_exige_rastreador` continua sendo a última linha de defesa.
 
-# Por que isso não se repete em outros associados
+---
 
-- O fix está no transporte HTTP de **toda** chamada `vincularClienteVeiculo`, não no dado do Alan. Qualquer associado que precise ser vinculado pela primeira vez na Rede Veículos passa por esse mesmo caminho.
-- O fix do hook expõe erros reais da plataforma em tempo de clique. Se a Rede Veículos mudar regra (ex.: passar a exigir CEP), o operador vê o motivo na hora em vez de um genérico.
-- Atualizo o memory `mem://integrations/tracking/provider-logic-consolidated-v2` com a regra "endpoints Rede Veículos que aceitam `json` em form-urlencoded EXIGEM barra final" para travar a reincidência em revisões futuras de código.
+## Auditoria
 
-# O que NÃO vou mexer
+Após vínculo bem-sucedido: `registrarLog` (`acao='editar'`, `tabela='rastreadores'`, descrição `[VINCULO_MONITORAMENTO_{TROCA|APROVACAO}]` + placa + IMEI + id da solicitação/instalação). Compatível com `vigia-universal-logs-auditoria`.
 
-- Nenhuma migration. O problema é 100% código de edge function + tratamento de erro no front.
-- Nenhuma mudança de regra de elegibilidade, vínculo de veículo, status do rastreador, ou estado do Alan no banco — o registro do Alan já está consistente (rastreador `instalado`, `veiculo_id` apontando para KQB4683).
-- Nada nas outras funções da Rede Veículos — elas já estão certas.
+---
 
-Aprovando, executo na sequência: edge → hook → curl de validação → relatório.
+## Memória a registrar após implementar
+
+`mem://logic/operations/vincular-rastreador-existente-monitoramento` consolidando:
+- Componente canônico: `VincularRastreadorExistenteCard` + hook `useBuscarRastreadorPorImei`.
+- Aparece em duas filas (Aprovação de Associados + Aprovação de Troca).
+- Reusa `useAtivarRastreador`; bloqueia por IMEI duplicado; comunicação não-bloqueante; sub-FIPE não-diesel é opcional.
+- Triggers DB seguem como última linha.
+
+---
+
+## Validação
+
+1. **Caso Anderson/KPJ4994** (Troca, já em rollback): abrir modal em Monitoramento, ver estado B, digitar IMEI, vincular, aprovar — `efetivar-troca-titularidade` segue, `ativar-associado` aceita.
+2. **Sub-FIPE diesel** (Aprovação de Associados): mesma UX, mesmo gate.
+3. **Sub-FIPE não-diesel**: seção opcional, aprovação livre mesmo sem vincular.
+4. **IMEI em outro veículo ativo**: bloqueio com mensagem clara, sem corromper estado.
+5. **IMEI só na plataforma (não em estoque local)**: registro `rastreadores` criado em `instalado` + vínculo lógico no veículo.

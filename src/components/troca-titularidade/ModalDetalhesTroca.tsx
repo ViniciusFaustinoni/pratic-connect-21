@@ -28,6 +28,9 @@ import { Wrench, Camera, ChevronDown } from 'lucide-react';
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
 import { RefreshCw } from 'lucide-react';
 import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
+import { useVeiculoCompleto } from '@/hooks/useVeiculoDetalhes';
+import { exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
+import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
 
 interface Props {
   open: boolean;
@@ -68,6 +71,13 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
+
+  // Veículo completo: usado para decidir se Monitoramento precisa de vínculo de rastreador.
+  // Ver `mem://logic/operations/vincular-rastreador-existente-monitoramento`.
+  const { data: veiculoCompleto } = useVeiculoCompleto(solicitacao?.veiculo_id || undefined);
+  const veiculoExigeRastreador = veiculoCompleto?.veiculo ? exigeInstalacaoTecnica(veiculoCompleto.veiculo as any) : false;
+  const jaTemRastreador = !!veiculoCompleto?.rastreador;
+  const precisaVinculoRastreador = modo === 'monitoramento' && veiculoExigeRastreador && !jaTemRastreador;
 
   // Polling do termo (fallback para o webhook Autentique, que não chega).
   // Ativa enquanto o modal está aberto, o termo foi enviado e ainda não foi
@@ -234,6 +244,21 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.novo_titular_dados?.cpf)} • {solicitacao.novo_titular_dados?.email || '-'} • {formatPhone(solicitacao.novo_titular_dados?.telefone)}</p>
                 </div>
                 <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
+                {modo === 'monitoramento' && solicitacao.veiculo_id && veiculoCompleto?.associado?.id && (
+                  <VincularRastreadorExistenteCard
+                    veiculoId={solicitacao.veiculo_id}
+                    associadoId={veiculoCompleto.associado.id}
+                    associadoEmail={(veiculoCompleto.associado as any)?.email}
+                    exigeRastreador={veiculoExigeRastreador}
+                    jaTemRastreador={jaTemRastreador}
+                    origemContexto="troca_titularidade"
+                    origemRefId={solicitacao.id}
+                    onVinculado={() => {
+                      qc.invalidateQueries({ queryKey: ['veiculo-completo', solicitacao.veiculo_id] });
+                      qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+                    }}
+                  />
+                )}
                 {solicitacao.cotacao ? (
                   <div className="rounded border p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -418,13 +443,16 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
                     const bloqueadoPorAutovistoria = modo === 'cadastro' && !solicitacao.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela;
                     const bloqueadoPorSga = modo === 'cadastro' && !sgaLiberado;
-                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria || bloqueadoPorSga;
+                    const bloqueadoPorRastreador = precisaVinculoRastreador;
+                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria || bloqueadoPorSga || bloqueadoPorRastreador;
                     const motivoBloqueio = bloqueadoPorAssinatura
                       ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
                       : bloqueadoPorAutovistoria
                       ? 'Janela mesmo-dia expirada — peça nova adesão.'
                       : bloqueadoPorSga
                       ? 'Pendência financeira no SGA — regularize ou use o bypass do Diretor acima.'
+                      : bloqueadoPorRastreador
+                      ? 'Vincule o rastreador físico ao veículo (campo IMEI na aba Dados) antes de aprovar.'
                       : '';
                     const btn = (
                       <Button
