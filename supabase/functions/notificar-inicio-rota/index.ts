@@ -150,7 +150,10 @@ serve(async (req) => {
       ? profissionalTelefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
       : 'Não informado';
     
-    if (clienteTelefone) {
+    const ehBase = servico.local_vistoria === 'base';
+    if (ehBase) {
+      console.log('[notificar-inicio-rota] local_vistoria=base — cliente NÃO recebe "técnico a caminho" (cliente vai até a base)');
+    } else if (clienteTelefone) {
       try {
         console.log(`[notificar-inicio-rota] Notificando cliente ${associado.nome} via notificar-cliente...`);
         
