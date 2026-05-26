@@ -280,7 +280,7 @@ export function useServicos(filters?: ServicoFilters) {
           veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, chassi, marca, modelo, cor, ano_fabricacao, ano_modelo),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone),
           cotacao:cotacoes(id, numero),
-          contrato:contratos(id, numero)
+          contrato:contratos!servicos_contrato_id_fkey(id, numero, aprovado_em, origem_troca_titularidade_id)
         `)
         .is('dedup_substituido_por', null)
         .order('data_agendada', { ascending: false, nullsFirst: false })
@@ -331,7 +331,20 @@ export function useServicos(filters?: ServicoFilters) {
       const { data, error } = await query;
 
       if (error) throw error;
-      return (data || []) as Servico[];
+
+      // Gate canônico Cadastro→Monitoramento: oculta serviços de contratos que
+      // ainda não foram aprovados pelo Cadastro. Exceção: troca de titularidade
+      // (o contrato do novo titular só recebe aprovado_em em efetivar-troca-titularidade,
+      // mas o serviço já precisa estar visível para o Monitoramento).
+      // Serviços sem contrato vinculado (manutenções avulsas, etc.) passam.
+      // Ver mem://logic/operations/atribuicao-manual-gate-cadastro-aprovado
+      const filtrados = ((data || []) as any[]).filter((s) => {
+        if (!s.contrato_id) return true;
+        if (s.origem === 'troca_titularidade') return true;
+        return !!s.contrato?.aprovado_em || !!s.contrato?.origem_troca_titularidade_id;
+      });
+
+      return filtrados as Servico[];
     },
     refetchInterval: 15000,
     refetchIntervalInBackground: true,
