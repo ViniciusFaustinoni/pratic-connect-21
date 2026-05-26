@@ -1007,11 +1007,16 @@ serve(async (req) => {
             }
           }
         }
+        }
       }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e);
-      if (msg !== "__softruck_abort__" && msg !== "__softruck_done__") {
-        console.warn("[efetivar-troca][softruck-vinculo] erro não-bloqueante:", msg);
+      if (
+        msg !== "__softruck_abort__" &&
+        msg !== "__softruck_done__" &&
+        msg !== "__rede_abort__"
+      ) {
+        console.warn("[efetivar-troca][rastreador-vinculo] erro não-bloqueante:", msg);
       }
     }
 
