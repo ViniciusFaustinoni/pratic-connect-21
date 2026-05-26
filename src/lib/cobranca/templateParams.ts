@@ -34,7 +34,7 @@ export const TEMPLATE_PARAMS_MAP: Record<string, CobrancaVar[]> = {
   d_6_lembrete_desconto_v2: ['nome', 'vencimento', 'linha_digitavel'],
   d0_boleto_vence_hoje_v1: ['nome', 'valor', 'vencimento', 'modelo', 'placa', 'linha_digitavel'],
   d1_a_d4_boleto_vencido_v2: ['nome', 'vencimento'],
-  d5_ultimo_dia_sem_revistoria_v1: ['vencimento'],
+  d5_ultimo_dia_sem_revistoria_v2: ['vencimento'],
   d6_impedimento_pagamento_v1: ['nome', 'vencimento', 'valor', 'placa'],
   d7_reforco_contato_v1: ['nome', 'vencimento'],
   d8_urgencia_revistoria_v1: ['nome'],

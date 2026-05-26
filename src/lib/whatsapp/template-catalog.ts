@@ -161,6 +161,12 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     momento: 'D+5 — alerta de início de processo de revistoria',
     gatilho: 'executar-regua-cobranca',
     variaveis: ['vencimento'],
+    deprecated: 'Use d5_ultimo_dia_sem_revistoria_v2.',
+  },
+  d5_ultimo_dia_sem_revistoria_v2: {
+    momento: 'D+5 — alerta de início de processo de revistoria',
+    gatilho: 'executar-regua-cobranca',
+    variaveis: ['vencimento'],
   },
   d6_impedimento_pagamento_v1: {
     momento: 'D+6 — pergunta motivo do não pagamento',
