@@ -24,6 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated } from '@/lib/data/fetchAllPaginated';
 import { usePlans, useProductLines } from '@/hooks/usePlans';
 import { useDeletePlan, useDuplicatePlan, useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import { toast } from 'sonner';
@@ -82,16 +83,17 @@ export function ProdutosPlanos() {
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
-  // Fetch associados count per plan
+  // Fetch associados count per plan — paginado (associados ativos pode passar de 1000)
   const { data: associadosCounts } = useQuery({
     queryKey: ['associados-por-plano'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('associados')
-        .select('plano_id')
-        .eq('status', 'ativo');
+      const data = await fetchAllPaginated<{ plano_id: string | null }>((from, to) =>
+        supabase.from('associados').select('plano_id').eq('status', 'ativo').range(from, to),
+      );
       const counts: Record<string, number> = {};
-      data?.forEach(a => { if (a.plano_id) counts[a.plano_id] = (counts[a.plano_id] || 0) + 1; });
+      data.forEach((a) => {
+        if (a.plano_id) counts[a.plano_id] = (counts[a.plano_id] || 0) + 1;
+      });
       return counts;
     },
   });
@@ -100,9 +102,11 @@ export function ProdutosPlanos() {
   const { data: precoMappings } = useQuery({
     queryKey: ['plano-preco-mappings'],
     queryFn: async () => {
-      const { data: maps } = await supabase.from('plano_preco_map').select('plano_id, linha_slug, tipo_uso');
+      const maps = await fetchAllPaginated<{ plano_id: string; linha_slug: string; tipo_uso: string }>((from, to) =>
+        supabase.from('plano_preco_map').select('plano_id, linha_slug, tipo_uso').range(from, to),
+      );
       const porPlano: Record<string, { linhaSlug: string; tipoUso: string }> = {};
-      maps?.forEach(m => {
+      maps.forEach((m) => {
         porPlano[m.plano_id] = { linhaSlug: m.linha_slug, tipoUso: m.tipo_uso };
       });
       return porPlano;
@@ -128,15 +132,18 @@ export function ProdutosPlanos() {
     enabled: !!selectedMapping?.linhaSlug,
   });
 
-  // Fetch coberturas per plan
+  // Fetch coberturas per plan — paginado (planos_coberturas global passa de 1000)
   const { data: coberturasPorPlano } = useQuery({
     queryKey: ['coberturas-por-plano'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('planos_coberturas')
-        .select('id, plano_id, cobertura_id, percentual_cobertura, valor_limite, franquia_percentual, franquia_valor, carencia_dias, obrigatoria, coberturas(id, nome, descricao, tipo)');
+      const data = await fetchAllPaginated<any>((from, to) =>
+        supabase
+          .from('planos_coberturas')
+          .select('id, plano_id, cobertura_id, percentual_cobertura, valor_limite, franquia_percentual, franquia_valor, carencia_dias, obrigatoria, coberturas(id, nome, descricao, tipo)')
+          .range(from, to),
+      );
       const map: Record<string, any[]> = {};
-      data?.forEach((pc: any) => {
+      data.forEach((pc: any) => {
         if (!map[pc.plano_id]) map[pc.plano_id] = [];
         map[pc.plano_id].push({ ...pc, cobertura: pc.coberturas });
       });
@@ -144,15 +151,18 @@ export function ProdutosPlanos() {
     },
   });
 
-  // Fetch beneficios per plan
+  // Fetch beneficios per plan — paginado (planos_beneficios global passa de 1000)
   const { data: beneficiosPorPlano } = useQuery({
     queryKey: ['beneficios-por-plano'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('planos_beneficios')
-        .select('id, plano_id, benefit_id, custom_text, custom_value, is_highlighted, display_order, benefits(id, name, icon, category, description)');
+      const data = await fetchAllPaginated<any>((from, to) =>
+        supabase
+          .from('planos_beneficios')
+          .select('id, plano_id, benefit_id, custom_text, custom_value, is_highlighted, display_order, benefits(id, name, icon, category, description)')
+          .range(from, to),
+      );
       const map: Record<string, any[]> = {};
-      data?.forEach((pb: any) => {
+      data.forEach((pb: any) => {
         if (!map[pb.plano_id]) map[pb.plano_id] = [];
         map[pb.plano_id].push(pb);
       });

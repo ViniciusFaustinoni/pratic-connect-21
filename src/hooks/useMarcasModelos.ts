@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated } from '@/lib/data/fetchAllPaginated';
 import { toast } from 'sonner';
 
 export type TipoVeiculo = 'carro' | 'moto' | 'caminhao' | 'onibus' | 'utilitario' | 'outros';
@@ -26,13 +27,11 @@ export function useMarcasModelos() {
   return useQuery({
     queryKey: ['marcas_modelos'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('marcas_modelos')
-        .select('*')
-        .order('marca')
-        .order('modelo');
-      if (error) throw error;
-      return data as MarcaModelo[];
+      // marcas_modelos tem >12k linhas — varrer paginado, senão PostgREST corta em 1000.
+      const data = await fetchAllPaginated<MarcaModelo>((from, to) =>
+        supabase.from('marcas_modelos').select('*').order('marca').order('modelo').range(from, to),
+      );
+      return data;
     },
   });
 }
