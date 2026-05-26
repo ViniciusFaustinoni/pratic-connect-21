@@ -376,13 +376,23 @@ export function useBenefits() {
   return useQuery({
     queryKey: ['benefits'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('benefits')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      return data as Benefit[];
+      // PostgREST limita a 1000 linhas por padrão. Pagine para trazer o catálogo inteiro.
+      const pageSize = 1000;
+      let offset = 0;
+      const all: Benefit[] = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from('benefits')
+          .select('*')
+          .order('name')
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        const rows = (data ?? []) as Benefit[];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+        offset += pageSize;
+      }
+      return all;
     },
   });
 }
