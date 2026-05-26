@@ -9,6 +9,7 @@ export interface VehicleData {
   placa: string;
   marca: string;
   modelo: string;
+  marca_modelo?: string;
   ano: string;
   cor: string;
   combustivel: string;
