@@ -1256,7 +1256,7 @@ serve(async (req) => {
         sincronizado_hinova_em: new Date().toISOString(),
       }).eq('id', novoAssociadoId);
 
-      // 15.2 Localizar codigo_veiculo atual no SGA pelo chassi (idempotência)
+      // 15.2 Localizar codigo_veiculo atual no SGA (chassi → fallback placa)
       let codigoVeiculoSga: number | null = null;
       let codigoAssociadoVeiculoAtual: number | null = null;
       if (veiculoChassi) {
@@ -1270,25 +1270,48 @@ serve(async (req) => {
           console.warn('[efetivar-troca][SGA] buscarVeiculoPorChassi:', (e as Error).message);
         }
       }
+      if (!codigoVeiculoSga && veiculoPlaca) {
+        try {
+          const placaLimpa = String(veiculoPlaca).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          const found = await buscarVeiculoPorPlaca(supabase, placaLimpa);
+          if (found.found) {
+            codigoVeiculoSga = Number(found.found.codigo_veiculo) || null;
+            codigoAssociadoVeiculoAtual = Number(found.found.codigo_associado) || null;
+          }
+        } catch (e) {
+          console.warn('[efetivar-troca][SGA] buscarVeiculoPorPlaca:', (e as Error).message);
+        }
+      }
 
-      // 15.3 Se já vinculado ao novo titular → idempotência: nada a fazer
+      // 15.3 Já vinculado ao novo titular → idempotência
       const jaTransferido = codigoVeiculoSga && codigoAssociadoVeiculoAtual === codigoAssociadoNovo;
 
-      if (!jaTransferido) {
-        // 15.4 Cancelar veículo no titular antigo (se existir no SGA)
-        if (codigoVeiculoSga) {
-          const codSituacaoCancelado = await getConfiguracaoNumero(
-            supabase, 'sga_codigo_situacao_veiculo_cancelado', 3,
+      if (jaTransferido) {
+        sgaCodigoVeiculoNovo = codigoVeiculoSga;
+      } else if (codigoVeiculoSga) {
+        // 15.4 CAMINHO CANÔNICO — POST /alterar/veiculo
+        // Apenas troca o associado vinculado; preserva codigo_veiculo e
+        // o histórico Hinova do veículo. Substitui o antigo
+        // alterarSituacaoVeiculo(cancelado) + cadastrarVeiculo(novo).
+        //
+        // transferir_agregados: regra ainda em definição. Quando definida,
+        // passar array de codigo_voluntario aqui (ver sga-hinova-sync linha ~283).
+        const ra = await alterarVeiculoHinova(supabase, {
+          codigo_veiculo: codigoVeiculoSga,
+          codigo_associado: codigoAssociadoNovo,
+        });
+        if (!ra.ok) {
+          throw new Error(
+            `SGA alterarVeiculo (troca titularidade) falhou: ${(ra.errors || []).join('; ') || ra.mensagem || `HTTP ${ra.status}`}`
           );
-          const altSit = await alterarSituacaoVeiculoHinova(
-            supabase, codigoVeiculoSga, codSituacaoCancelado,
-          );
-          if (!altSit.ok) {
-            console.warn('[efetivar-troca][SGA] alterarSituacaoVeiculo (antigo) falhou:', altSit.errors, altSit.mensagem);
-          }
         }
-
-        // 15.5 Re-cadastrar veículo no novo titular
+        console.log(`[efetivar-troca][SGA] /alterar/veiculo OK: codigo_veiculo=${codigoVeiculoSga} → codigo_associado=${codigoAssociadoNovo}`);
+        sgaCodigoVeiculoNovo = codigoVeiculoSga;
+      } else {
+        // 15.5 FALLBACK DEGENERADO — veículo não existe no Hinova.
+        // Titular antigo nunca foi sincronizado. Só nesse caso cai no caminho
+        // legado de cadastrar como novo. NÃO roda mais alterarSituacaoVeiculo(cancelado).
+        console.warn('[efetivar-troca][SGA] veículo não encontrado no Hinova — fallback cadastrarVeiculo');
         const codigoGrupoProduto = await getConfiguracaoNumero(supabase, 'sga_codigo_grupo_produto_padrao', 0);
         const basePayloadVeiculo = {
           codigo_associado: codigoAssociadoNovo,
@@ -1364,12 +1387,11 @@ serve(async (req) => {
         }
 
         if (!(cadVeic?.ok && cadVeic?.codigo)) {
-          throw new Error(`SGA cadastrarVeiculo (novo titular) falhou: ${(cadVeic?.errors || []).join('; ') || cadVeic?.mensagem || cadVeic?.status || 'payload sem código_fipe/codigo_modelo válido'}`);
+          throw new Error(`SGA cadastrarVeiculo (fallback troca titularidade) falhou: ${(cadVeic?.errors || []).join('; ') || cadVeic?.mensagem || cadVeic?.status || 'payload sem código_fipe/codigo_modelo válido'}`);
         }
         sgaCodigoVeiculoNovo = cadVeic.codigo;
-      } else {
-        sgaCodigoVeiculoNovo = codigoVeiculoSga;
       }
+
 
       // Persiste código no veículo local
       if (sgaCodigoVeiculoNovo) {
