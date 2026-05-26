@@ -68,11 +68,22 @@ interface VincularResponse {
   idEquipamento?: number;
 }
 
-// Mapear combustível para tipo de veículo (inferência básica)
-// Como não há coluna 'tipo', assumimos 'carro' como padrão
-function mapTipoVeiculo(_combustivel: string | null): string {
-  // Por padrão retorna 'carro' - o tipo real pode ser inferido pelo modelo no futuro
-  return 'carro';
+// Mapear tipo_veiculo canônico (marcas_modelos) para enum oficial Rede Veículos v2
+// Enum aceito: CARRO ONIBUS MOTO CAMINHAO JETSKI BARCO BICICLETA TRATOR RETRO PET PESSOAL
+function mapTipoVeiculoRede(tipoCanonico: string | null | undefined): string {
+  const t = (tipoCanonico || '').toLowerCase().trim();
+  switch (t) {
+    case 'carro': return 'CARRO';
+    case 'moto':
+    case 'motocicleta': return 'MOTO';
+    case 'caminhao':
+    case 'caminhão': return 'CAMINHAO';
+    case 'onibus':
+    case 'ônibus': return 'ONIBUS';
+    default:
+      console.warn('[RedeVeiculos Vincular][tipo-fallback] tipo desconhecido, usando CARRO:', tipoCanonico);
+      return 'CARRO';
+  }
 }
 
 // Formatar CPF/CNPJ
@@ -222,50 +233,67 @@ serve(async (req) => {
 
     console.log('[RedeVeiculos Vincular] Autenticado, ambiente:', plataforma.ambiente_atual);
 
-    // ===== 6. Montar payload para API Rede Veículos =====
+    // ===== 6. Montar payload para API Rede Veículos (v2 — estrutura oficial) =====
+    // Doc oficial: campos aninhados em { dados: {...} } dentro de equipamento/veiculo/cliente.
+    // Body urlencoded com chave `json` contendo o objeto serializado.
     const cpfCnpjLimpo = formatarCpfCnpj(associado.cpf);
     const imeiLimpo = (rastreador.imei || '').replace(/\D/g, '');
 
     if (!cpfCnpjLimpo) throw new Error(`Associado ${associado.nome} sem CPF/CNPJ válido`);
     if (!imeiLimpo) throw new Error(`Rastreador sem IMEI válido`);
 
-    const payload = {
-      // Campos no nível raiz exigidos pela API Rede Veículos
+    // Resolver tipo canônico do veículo via marcas_modelos (fonte canônica do projeto)
+    let tipoCanonico: string | null = null;
+    if (veiculo.marca && veiculo.modelo) {
+      const { data: mm } = await supabase
+        .from('marcas_modelos')
+        .select('tipo_veiculo')
+        .ilike('marca', veiculo.marca.trim())
+        .ilike('modelo', veiculo.modelo.trim())
+        .maybeSingle();
+      tipoCanonico = mm?.tipo_veiculo || null;
+    }
+    const tipoRede = mapTipoVeiculoRede(tipoCanonico);
+
+    const enderecoLimpo = associado.logradouro ? {
+      cep: associado.cep?.replace(/\D/g, '') || '',
+      logradouro: associado.logradouro || '',
+      numero: associado.numero || 'S/N',
+      bairro: associado.bairro || '',
+      cidade: associado.cidade || '',
+      uf: associado.uf || '',
+    } : undefined;
+
+    const veiculoDados: Record<string, unknown> = {
+      tipo: tipoRede,
+      marca: veiculo.marca || 'NI',
+      modelo: veiculo.modelo || 'NI',
+      placa: (veiculo.placa || '').toUpperCase(),
+      cor: veiculo.cor || 'NI',
+      ano: String(veiculo.ano_modelo || new Date().getFullYear()),
+    };
+    if (veiculo.chassi) veiculoDados.chassi = veiculo.chassi;
+    if (veiculo.renavam) veiculoDados.renavam = veiculo.renavam;
+
+    const clienteDados: Record<string, unknown> = {
       cpfCnpj: cpfCnpjLimpo,
-      imei: imeiLimpo,
-      // Dados do Equipamento
+      nome: associado.nome,
+    };
+    const celularLimpo = formatarTelefone(associado.telefone);
+    if (celularLimpo) clienteDados.celular = celularLimpo;
+    if (associado.email) clienteDados.email = associado.email;
+    if (enderecoLimpo) clienteDados.endereco = enderecoLimpo;
+
+    const payload = {
       equipamento: {
-        imei: imeiLimpo,
-        localInstalacao: localInstalacao,
-        possuiBloqueio: possuiBloqueio,
+        dados: {
+          imei: imeiLimpo,
+          localInstalacao: localInstalacao,
+          possuiBloqueio: possuiBloqueio,
+        },
       },
-      // Dados do Veículo
-      veiculo: {
-        tipo: mapTipoVeiculo(veiculo.combustivel),
-        marca: veiculo.marca || 'NI',
-        modelo: veiculo.modelo || 'NI',
-        placa: veiculo.placa,
-        cor: veiculo.cor || 'NI',
-        ano: veiculo.ano_modelo || new Date().getFullYear(),
-        chassi: veiculo.chassi || undefined,
-        renavam: veiculo.renavam || undefined,
-      },
-      // Dados do Cliente
-      cliente: {
-        cpfCnpj: cpfCnpjLimpo,
-        nome: associado.nome,
-        celular: formatarTelefone(associado.telefone),
-        email: associado.email,
-        endereco: associado.logradouro ? {
-          cep: associado.cep?.replace(/\D/g, '') || '',
-          logradouro: associado.logradouro || '',
-          numero: associado.numero || 'S/N',
-          bairro: associado.bairro || '',
-          cidade: associado.cidade || '',
-          uf: associado.uf || '',
-        } : undefined,
-      },
-      // Permissões padrão
+      veiculo: { dados: veiculoDados },
+      cliente: { dados: clienteDados },
       permissoes: {
         acessoWeb: true,
         pushNotifications: true,
@@ -275,19 +303,12 @@ serve(async (req) => {
       },
     };
 
-    console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
+    console.log('[RedeVeiculos Vincular] Payload v2 montado:', JSON.stringify(payload, null, 2));
 
     // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo/ =====
-    // URL DEVE terminar com `/` — sem a barra o servidor responde 301 e o body
-    // é perdido no redirect (testado: devolve "JSON não informado" / "CPF/IMEI
-    // não informados").
-    // Formato exato do body ainda precisa ser confirmado com a Rede Veículos
-    // (ver bloco abaixo). Mantemos urlencoded + flat + json, padrão dos demais
-    // endpoints da plataforma.
+    // URL DEVE terminar com `/` (sem barra → 301 e body perdido).
+    // Body urlencoded com SOMENTE a chave `json` (doc oficial v2).
     const formBody = new URLSearchParams();
-    formBody.append('cpfCnpj', cpfCnpjLimpo);
-    formBody.append('imei', imeiLimpo);
-    formBody.append('placa', (veiculo.placa || '').toUpperCase());
     formBody.append('json', JSON.stringify(payload));
 
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
