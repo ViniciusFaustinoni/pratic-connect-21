@@ -145,6 +145,8 @@ export interface Servico {
   contrato?: {
     id: string;
     numero: string | null;
+    aprovado_em: string | null;
+    origem_troca_titularidade_id: string | null;
   } | null;
 }
 
