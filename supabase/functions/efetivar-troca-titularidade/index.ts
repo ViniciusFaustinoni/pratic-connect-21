@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 import {
   alterarAssociadoHinova,
+  alterarSituacaoAssociadoHinova,
   alterarVeiculoHinova,
   buscarAssociadoComVeiculosPorCpf,
   buscarVeiculoPorChassi,
@@ -956,6 +957,111 @@ serve(async (req) => {
             tabela: 'associados',
             dados_novos: { solicitacao_id, associado_id: solicitacao.associado_id, status_real: statusReal },
           });
+        }
+
+        // 8.1.1 Espelha cancelamento na Hinova (NÃO bloqueante).
+        // Só dispara quando o local realmente cancelou (cancelado=true + statusReal='cancelado').
+        // Falha não aborta a troca: log [FALHA_INATIVAR_ASSOCIADO_ANTIGO] + sga_sync_queue para retry.
+        if (cancelado === true && statusReal === 'cancelado') {
+          const { data: assocAntigoCodigo } = await supabase
+            .from('associados')
+            .select('codigo_hinova')
+            .eq('id', solicitacao.associado_id)
+            .maybeSingle();
+          const codigoHinovaAntigo = (assocAntigoCodigo as { codigo_hinova?: number | null } | null)?.codigo_hinova ?? null;
+
+          if (!codigoHinovaAntigo) {
+            console.warn(
+              `[INATIVAR_ANTIGO_SEM_CODIGO_HINOVA] associado ${solicitacao.associado_id} sem codigo_hinova — nada a fazer remoto`,
+            );
+          } else {
+            // Fallback canônico: 2 (Hinova: 1=ativo, 2=inativo, 3=pendente).
+            let codigoSituacaoInativo = Number.parseInt(Deno.env.get('HINOVA_CODIGO_SITUACAO_INATIVO') || '', 10);
+            if (!Number.isFinite(codigoSituacaoInativo) || codigoSituacaoInativo <= 0) codigoSituacaoInativo = 2;
+
+            // Hook de teste: permite mockar via globalThis sem refatoração maior.
+            const inativar: typeof alterarSituacaoAssociadoHinova =
+              (globalThis as any).__inativarAssociadoHinovaOverride ?? alterarSituacaoAssociadoHinova;
+
+            let okRemoto = false;
+            let msgFalha = '';
+            let httpStatus = 0;
+            let errsRemoto: string[] = [];
+            try {
+              const rs = await inativar(supabase, codigoHinovaAntigo, codigoSituacaoInativo);
+              okRemoto = !!rs?.ok;
+              httpStatus = rs?.status ?? 0;
+              errsRemoto = rs?.errors ?? [];
+              if (!okRemoto) {
+                msgFalha = rs?.mensagem || (rs?.errors ?? []).join('; ') || `HTTP ${httpStatus}`;
+              }
+            } catch (remErr) {
+              okRemoto = false;
+              msgFalha = (remErr as Error)?.message || String(remErr);
+            }
+
+            if (okRemoto) {
+              console.log(
+                `[efetivar-troca][inativar-antigo] ✅ associado ${solicitacao.associado_id} (codigo_hinova=${codigoHinovaAntigo}) inativado na Hinova`,
+              );
+              try {
+                await insertAuditLog(supabase as any, {
+                  acao: 'criar',
+                  modulo: 'associados',
+                  descricao: `[INATIVAR_ANTIGO_OK] associado antigo inativado na Hinova após troca (codigo_hinova=${codigoHinovaAntigo})`,
+                  registro_id: solicitacao.associado_id,
+                  tabela: 'associados',
+                  dados_novos: {
+                    solicitacao_id,
+                    associado_antigo_id: solicitacao.associado_id,
+                    codigo_hinova: codigoHinovaAntigo,
+                    codigo_situacao: codigoSituacaoInativo,
+                  },
+                });
+              } catch (logErr) {
+                console.warn('[efetivar-troca] insertAuditLog INATIVAR_ANTIGO_OK falhou:', logErr);
+              }
+            } else {
+              console.error(
+                `[FALHA_INATIVAR_ASSOCIADO_ANTIGO] associado ${solicitacao.associado_id} (codigo_hinova=${codigoHinovaAntigo}): ${msgFalha}`,
+              );
+              try {
+                await insertAuditLog(supabase as any, {
+                  acao: 'criar',
+                  modulo: 'associados',
+                  descricao: `[FALHA_INATIVAR_ASSOCIADO_ANTIGO] ${msgFalha}`,
+                  registro_id: solicitacao.associado_id,
+                  tabela: 'associados',
+                  dados_novos: {
+                    solicitacao_id,
+                    associado_antigo_id: solicitacao.associado_id,
+                    codigo_hinova: codigoHinovaAntigo,
+                    codigo_situacao: codigoSituacaoInativo,
+                    http_status: httpStatus,
+                    errors: errsRemoto,
+                    erro: msgFalha,
+                  },
+                });
+              } catch (logErr) {
+                console.warn('[efetivar-troca] insertAuditLog FALHA_INATIVAR_ASSOCIADO_ANTIGO falhou:', logErr);
+              }
+              // TODO[retry-inativar-antigo]: cron-sga-retry ainda não consome esta etapa.
+              // A linha fica na fila para rastreabilidade/ação manual via painel SGA.
+              try {
+                await supabase.from('sga_sync_queue').insert({
+                  veiculo_id: null,
+                  associado_id: solicitacao.associado_id,
+                  status: 'pendente',
+                  etapa_parou: 'troca_titularidade:inativar_associado_antigo',
+                  erro_ultimo: msgFalha,
+                  origem: 'troca_titularidade',
+                  codigo_associado_hinova: codigoHinovaAntigo,
+                });
+              } catch (qErr) {
+                console.warn('[efetivar-troca] enqueue inativar-antigo falhou:', (qErr as Error)?.message || qErr);
+              }
+            }
+          }
         }
       }
     } catch (e) {
