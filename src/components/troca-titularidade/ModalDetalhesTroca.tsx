@@ -72,6 +72,13 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
 
+  // Veículo completo: usado para decidir se Monitoramento precisa de vínculo de rastreador.
+  // Ver `mem://logic/operations/vincular-rastreador-existente-monitoramento`.
+  const { data: veiculoCompleto } = useVeiculoCompleto(solicitacao?.veiculo_id || undefined);
+  const veiculoExigeRastreador = veiculoCompleto?.veiculo ? exigeInstalacaoTecnica(veiculoCompleto.veiculo as any) : false;
+  const jaTemRastreador = !!veiculoCompleto?.rastreador;
+  const precisaVinculoRastreador = modo === 'monitoramento' && veiculoExigeRastreador && !jaTemRastreador;
+
   // Polling do termo (fallback para o webhook Autentique, que não chega).
   // Ativa enquanto o modal está aberto, o termo foi enviado e ainda não foi
   // marcado como assinado. Ver `mem://logic/operations/troca-titularidade-promocao-cadastro-canonica`.
