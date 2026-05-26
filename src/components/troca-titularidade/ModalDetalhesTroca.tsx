@@ -443,13 +443,16 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
                     const bloqueadoPorAutovistoria = modo === 'cadastro' && !solicitacao.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela;
                     const bloqueadoPorSga = modo === 'cadastro' && !sgaLiberado;
-                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria || bloqueadoPorSga;
+                    const bloqueadoPorRastreador = precisaVinculoRastreador;
+                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorAutovistoria || bloqueadoPorSga || bloqueadoPorRastreador;
                     const motivoBloqueio = bloqueadoPorAssinatura
                       ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
                       : bloqueadoPorAutovistoria
                       ? 'Janela mesmo-dia expirada — peça nova adesão.'
                       : bloqueadoPorSga
                       ? 'Pendência financeira no SGA — regularize ou use o bypass do Diretor acima.'
+                      : bloqueadoPorRastreador
+                      ? 'Vincule o rastreador físico ao veículo (campo IMEI na aba Dados) antes de aprovar.'
                       : '';
                     const btn = (
                       <Button
