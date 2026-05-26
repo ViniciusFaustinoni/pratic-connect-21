@@ -147,7 +147,13 @@ export const TEMPLATE_CATALOG: Record<string, TemplateCatalogEntry> = {
     variaveis: ['nome', 'valor', 'vencimento', 'modelo', 'placa', 'linha_digitavel'],
   },
   d1_a_d4_boleto_vencido_v1: {
-    momento: 'D+1 a D+4 — boleto vencido (cobrança leve)',
+    momento: 'DESCONTINUADO — substituído por d1_a_d4_boleto_vencido_v2 (corpo de urgência)',
+    gatilho: '(legado — disparo_habilitado=false na tabela)',
+    variaveis: ['nome', 'vencimento'],
+    deprecated: 'Use d1_a_d4_boleto_vencido_v2.',
+  },
+  d1_a_d4_boleto_vencido_v2: {
+    momento: 'D+1 a D+4 — boleto vencido (cobrança de urgência)',
     gatilho: 'executar-regua-cobranca',
     variaveis: ['nome', 'vencimento'],
   },
