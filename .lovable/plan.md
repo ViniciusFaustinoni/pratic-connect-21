@@ -1,103 +1,63 @@
 ## Objetivo
+Replicar o reaponte de vínculo cliente↔veículo (feito hoje só na Softruck) também na Rede Veículos, com roteamento por fonte (`fonte_rastreador`) dentro do `efetivar-troca-titularidade`.
 
-Após troca de titularidade efetivada em veículo elegível a rastreador, reaponte o vínculo usuário↔veículo na Softruck: garantir usuário do novo titular, remover `association_user` do antigo e criar do novo. `vehicle_id`, `device_association` e `codigo_veiculo` (Hinova) ficam intocados. Falha não aborta a troca — vai para `sga_sync_queue`.
+## Fonte da verdade: `rastreadores.plataforma`
+- A coluna já existe (`'softruck' | 'rede_veiculos'`) e está preenchida na base atual (10k+ registros).
+- A validação placa↔IMEI do Prompt 4 (`validarImeiPorPlaca`) já devolve `origem: 'softruck' | 'rede_veiculos'`.
+- Hoje o `ModalDetalhesTroca` recebe esse `origem` mas só guarda em estado de UI. Vou **persisti-lo** no mesmo `UPDATE rastreadores` que já roda após a validação OK (linhas 125-131 do modal), gravando `plataforma: res.origem`. Sem migração de schema.
 
-## Escopo
+## Alterações
 
-Único arquivo tocado: `supabase/functions/efetivar-troca-titularidade/index.ts`.
+### 1. `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+No bloco que já faz `update rastreadores set veiculo_id` após validação OK, incluir `plataforma: res.origem` no mesmo update. Idempotente; só roda quando `res.rastreadorId` é conhecido.
 
-Reaproveita 4 operações já existentes em `softruck-api`:
-- `buscar-usuario` (por cpf, fallback email)
-- `criar-usuario`
-- `listar-usuarios-veiculo`
-- `desassociar-usuario-veiculo`
-- `associar-usuario-veiculo`
+### 2. `supabase/functions/efetivar-troca-titularidade/index.ts` — refatorar bloco 6.3
+Após etapa Hinova OK, manter as pré-condições atuais (`fn_veiculo_precisa_rastreador === true`). Mudar a decisão para:
 
-Nada novo em `softruck-api/index.ts`. Nada de Rede Veículos. Rastreador físico (`association_devices`) não é tocado.
-
-## Ponto de inserção
-
-Novo bloco **6.3 (Softruck — reaponte de usuário)**, logo após o bloco existente **6.1 RELIGAR COBERTURA + REAPONTAR RASTREADOR** (linhas 599-658). Esse ponto vem depois da transferência do veículo no banco e antes da etapa SGA do novo titular — alinhado com "após Hinova bem-sucedida" do prompt (a etapa Hinova `alterar veículo` já rodou; `inativar antigo` roda mais adiante e é não-bloqueante igual a este novo bloco, então a ordem entre eles é indiferente).
-
-## Lógica do bloco 6.3
-
-Pré-condições para executar (qualquer falha → pula em silêncio, sem enfileirar):
-1. `exigeRastreador === true` (reusa o valor já computado em 6.1 via `fn_veiculo_precisa_rastreador`; vou içar a variável para fora do `try` de 6.1, ou recomputar aqui — recomputar mantém o bloco isolado e auditável).
-2. `SELECT softruck_vehicle_id, placa FROM veiculos WHERE id = veiculoId` retorna `softruck_vehicle_id` não-nulo. Sem ele, log info `[SOFTRUCK_TROCA_VINCULO_SEM_VEHICLE_ID]` e sai (veículo nunca foi sincronizado na Softruck).
-3. Carrega novo titular: `SELECT nome, cpf, email, telefone FROM associados WHERE id = novoAssociadoId`. Sem CPF e sem email, log warn e sai (não dá pra resolver usuário).
-
-Passos (cada um envolto em try/catch independente para preservar o estado da janela DELETE→POST):
-
-**Passo 1 — Resolver/criar usuário Softruck do novo titular**
-- `supabase.functions.invoke('softruck-api', { body: { operation: 'buscar-usuario', data: { cpf } } })`. Se vier vazio e tiver email, repete com `{ email }`.
-- Se achou: `novoUserId = items[0].id`.
-- Se não achou: `supabase.functions.invoke('softruck-api', { body: { operation: 'criar-usuario', data: { username: emailOuCpf, email, nome, telefone, cpf } } })` e extrai `novoUserId` do retorno.
-- Falha aqui → `[FALHA_SOFTRUCK_TROCA_VINCULO]` + enqueue, **return** (não tenta DELETE).
-
-**Passo 2 — Listar vínculos atuais**
-- `operation: 'listar-usuarios-veiculo'` com `vehicleId = softruck_vehicle_id`.
-- Extrai todos os `association.id` cujo `user.id !== novoUserId` (cobre o caso de múltiplos usuários antigos; em prática é só um).
-- Se o `novoUserId` já estiver na lista E nenhum antigo presente, log `[SOFTRUCK_TROCA_VINCULO_NOOP]` e sai com sucesso.
-- Falha aqui → `[FALHA_SOFTRUCK_TROCA_VINCULO]` + enqueue, return.
-
-**Passo 3 — Remover vínculo(s) antigo(s)**
-- Para cada `associationId` antigo, chama `operation: 'desassociar-usuario-veiculo'`.
-- Falha aqui → `[FALHA_SOFTRUCK_TROCA_VINCULO]` + enqueue, return (passo 4 não roda).
-
-**Passo 4 — Criar vínculo novo**
-- Só roda se passo 3 OK E `novoUserId` ainda não está vinculado.
-- `operation: 'associar-usuario-veiculo'` com `{ userId: novoUserId, vehicleId: softruck_vehicle_id }`.
-- Falha aqui → **`[FALHA_SOFTRUCK_RECRIAR_VINCULO]`** (prefixo distinto pedido pelo usuário, janela de inconsistência visível) + enqueue com `etapa_parou='troca_titularidade:softruck_recriar_vinculo'` e `prioridade` mais alta se a coluna existir (caso contrário, prefixo já basta para o operador distinguir).
-- Sucesso → log `[SOFTRUCK_TROCA_VINCULO_OK]` + `insertAuditLog` (`acao:'criar'`, módulo `monitoramento`) descrevendo `vehicle_id`, `user_antigo_removido`, `user_novo_vinculado`.
-
-## Enqueue na `sga_sync_queue`
-
-Mesmo padrão do bloco `INATIVAR_ANTIGO` (linhas ~1051):
-
-```ts
-await supabase.from('sga_sync_queue').insert({
-  associado_id: novoAssociadoId,
-  veiculo_id: veiculoId,
-  status: 'pendente',
-  etapa_parou: 'troca_titularidade:softruck_reaponte_usuario', // ou ':softruck_recriar_vinculo'
-  erro_ultimo: msg,
-  origem: 'troca_titularidade',
-});
+```text
+buscar rastreadorAtivo (id, imei, plataforma, associado_id) por (veiculo_id, status='instalado')
+se não exige rastreador → log, sair
+se exige mas não há rastreador instalado → log, sair
+se rastreadorAtivo.plataforma === 'rede_veiculos' → bloco Rede (novo)
+senão → bloco Softruck (atual, preservado byte-a-byte)
 ```
 
-Comentário `TODO[retry-softruck-troca-vinculo]` no enqueue — `cron-sga-retry` hoje não drena essa etapa; rastreabilidade e ação manual ficam garantidas, retry automático é prompt futuro.
+### 3. Novo bloco Rede (espelho do Softruck)
+Reaproveita edges existentes; **não** cria HTTP client novo.
 
-## Hook de teste (mínimo, padrão já estabelecido)
+- **Passo A — desvincular antigo:**
+  `supabase.functions.invoke('rede-veiculos-desvincular-cliente', { body: { rastreadorId: rastreadorAtivo.id, motivo: 'troca_titularidade', atualizarBancoLocal: false } })`
+  Falha → `[FALHA_REDE_TROCA_VINCULO] passo=desvincular ...` + enqueue em `sga_sync_queue` (`etapa_parou='troca_titularidade:rede_desvincular_cliente'`) e **retorna** (não tenta vincular).
 
-Para permitir teste sem rede, envolver as 4 invocações em:
+- **Passo B — vincular novo:**
+  `supabase.functions.invoke('rede-veiculos-vincular-cliente', { body: { imei: rastreadorAtivo.imei, veiculoId, associadoId: novoAssociadoId } })`
+  Falha → `[FALHA_REDE_REVINCULAR_CLIENTE] ...` (prefixo distinto, janela DELETE→POST) + enqueue com `etapa_parou='troca_titularidade:rede_revincular_cliente'` e `prioridade='alta'` se a coluna existir (mesmo padrão do Softruck).
 
-```ts
-const callSoftruck = (globalThis as any).__softruckTrocaVinculoOverride
-  ?? ((operation: string, data: unknown) =>
-       supabase.functions.invoke('softruck-api', { body: { operation, data } }));
-```
+- **Sucesso:** log `[REDE_TROCA_VINCULO_OK] veiculoId=... imei=... novoAssoc=...` + `insertAuditLog` com `{ origem:'rede_veiculos', imei, veiculo_id, associado_novo }`.
 
-Mesmo padrão do `globalThis.__inativarAssociadoHinovaOverride`.
+- **Hook de teste:** `globalThis.__redeTrocaVinculoOverride` (paralelo ao Softruck), para futura suíte Deno.
+- **TODO[retry-rede-troca-vinculo]** — `cron-sga-retry` ainda não drena essas duas etapas (mesma dívida do Softruck).
 
-## Validação
+### 4. Não-objetivos (não muda nada)
+- Bloco Softruck atual (700-880) preservado.
+- Regra de elegibilidade (`fn_veiculo_precisa_rastreador`).
+- Update local de `rastreadores.associado_id` (linhas 641-655) — continua antes do roteamento.
+- Vehicle/device físico: nenhum endpoint que toque equipamento é chamado.
+- Veículo não-elegível: nenhuma chamada em nenhuma das fontes.
 
-Testes Deno em `supabase/functions/efetivar-troca-titularidade/softruck_reaponte_test.ts` com mock do client Supabase e do `callSoftruck`:
+### 5. Memory & versão
+- `mem://logic/operations/troca-titularidade-religa-cobertura-e-rastreador.md` — descrever roteamento por `rastreadores.plataforma` e os dois novos prefixos.
+- `public/version.json` → `rede-troca-vinculo`.
 
-- **C1 — Elegível + caminho feliz**: ordem de chamadas = `buscar-usuario(cpf) → listar-usuarios-veiculo → desassociar-usuario-veiculo (antigo) → associar-usuario-veiculo (novo)`; nenhum insert em `sga_sync_queue`; `solicitacao.status === 'efetivada'`.
-- **C2 — Não elegível** (`fn_veiculo_precisa_rastreador` retorna false): `callSoftruck` **não** é invocado; troca segue normal.
-- **C3 — Sem `softruck_vehicle_id`**: nenhuma chamada Softruck; nenhum enqueue; log `[SOFTRUCK_TROCA_VINCULO_SEM_VEHICLE_ID]` registrado.
-- **C4 — Falha no passo 1 (criar-usuario)**: `[FALHA_SOFTRUCK_TROCA_VINCULO]` logado; `sga_sync_queue` recebe insert com etapa `softruck_reaponte_usuario`; passos 2-4 não rodam; troca efetivada.
-- **C5 — Falha no passo 4 (POST associar)**: passos 1-3 OK, mock falha no 4; `[FALHA_SOFTRUCK_RECRIAR_VINCULO]` logado; enqueue com etapa `softruck_recriar_vinculo`; troca efetivada.
-- **C6 — Usuário novo já vinculado e nenhum antigo presente**: passo 2 retorna apenas o `novoUserId`; passos 3 e 4 não rodam; log `[SOFTRUCK_TROCA_VINCULO_NOOP]`; sem enqueue.
+## Critério de aceitação (rastreável nos logs)
+- Plataforma `softruck` → mesmo comportamento de hoje (Prompt 3).
+- Plataforma `rede_veiculos` → 1 DELETE + 1 POST nas edges Rede; antigo perde acesso, novo passa a ver.
+- Veículo não elegível → nenhuma chamada Softruck nem Rede.
+- IMEI/equipamento intocados em ambas as APIs.
+- Falhas geram `[FALHA_REDE_TROCA_VINCULO]` / `[FALHA_REDE_REVINCULAR_CLIENTE]` + linha em `sga_sync_queue`; solicitação permanece `efetivada`.
 
-Reporto bruto (passou/lista de chamadas/estado final). Se algum cenário não puder rodar por limitação de mock, reporto qual e por quê — sem inventar resultado.
-
-## Memória
-
-Após implementar, atualizar `mem://logic/operations/troca-titularidade-religa-cobertura-e-rastreador` (já é a memória canônica do reaponte pós-troca) adicionando: "Em veículo elegível a rastreador, também reaponta `association_users` na Softruck (buscar/criar user → listar → DELETE antigo → POST novo); falha → `[FALHA_SOFTRUCK_TROCA_VINCULO]` ou `[FALHA_SOFTRUCK_RECRIAR_VINCULO]` (janela DELETE→POST) + `sga_sync_queue` etapa `softruck_reaponte_usuario`/`softruck_recriar_vinculo` (consumo pelo cron pendente)."
-
-## Decisões pendentes antes de implementar
-
-1. **`enterpriseId` no `criar-usuario`**: a operação já tem fallback para `getEnterpriseId()` interno do `softruck-api`. Confirma que esse default é o correto para clientes novos da troca, ou precisa passar um enterprise específico?
-2. **`username` na criação**: vou usar `email || cpf` como base (op já sanitiza). OK?
-3. **Suporte a retry no cron**: implemento só o enqueue agora (rastreabilidade) e deixo `TODO[retry-softruck-troca-vinculo]`, como já fizemos com `inativar_associado_antigo`. Se quiser drenagem automática nesta mesma rodada, me avise antes de aprovar.
+## Arquivos tocados
+- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` (1 linha no update)
+- `supabase/functions/efetivar-troca-titularidade/index.ts` (refator do bloco 6.3, ~80 linhas novas para o branch Rede)
+- `mem://logic/operations/troca-titularidade-religa-cobertura-e-rastreador.md`
+- `public/version.json`
