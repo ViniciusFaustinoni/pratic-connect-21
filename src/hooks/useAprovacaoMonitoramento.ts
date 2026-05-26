@@ -62,9 +62,13 @@ export function useInstalacoesAguardandoAprovacao() {
       }
 
       // Gate do Cadastro: Monitoramento só recebe após aprovação manual do Cadastro.
+      // Gate adicional canônico: associado/contrato/veículo cancelado nunca aparece na fila
+      // (cascata de cancelamento pode ter perdido um vínculo histórico de servico).
       const aprovados = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
         if (!v) return false;
+        if (s.associado?.status === 'cancelado') return false;
+        if (v.status === 'cancelado') return false;
         // NÃO filtrar por cobertura_total: é atributo do plano, não sinal de fluxo.
         // Antes excluía silenciosamente todos os contratos com cobertura total da fila.
         const cadastroAprovado =
