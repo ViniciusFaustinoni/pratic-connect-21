@@ -68,11 +68,22 @@ interface VincularResponse {
   idEquipamento?: number;
 }
 
-// Mapear combustível para tipo de veículo (inferência básica)
-// Como não há coluna 'tipo', assumimos 'carro' como padrão
-function mapTipoVeiculo(_combustivel: string | null): string {
-  // Por padrão retorna 'carro' - o tipo real pode ser inferido pelo modelo no futuro
-  return 'carro';
+// Mapear tipo_veiculo canônico (marcas_modelos) para enum oficial Rede Veículos v2
+// Enum aceito: CARRO ONIBUS MOTO CAMINHAO JETSKI BARCO BICICLETA TRATOR RETRO PET PESSOAL
+function mapTipoVeiculoRede(tipoCanonico: string | null | undefined): string {
+  const t = (tipoCanonico || '').toLowerCase().trim();
+  switch (t) {
+    case 'carro': return 'CARRO';
+    case 'moto':
+    case 'motocicleta': return 'MOTO';
+    case 'caminhao':
+    case 'caminhão': return 'CAMINHAO';
+    case 'onibus':
+    case 'ônibus': return 'ONIBUS';
+    default:
+      console.warn('[RedeVeiculos Vincular][tipo-fallback] tipo desconhecido, usando CARRO:', tipoCanonico);
+      return 'CARRO';
+  }
 }
 
 // Formatar CPF/CNPJ
