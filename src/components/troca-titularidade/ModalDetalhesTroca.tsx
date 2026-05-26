@@ -28,6 +28,9 @@ import { Wrench, Camera, ChevronDown } from 'lucide-react';
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
 import { RefreshCw } from 'lucide-react';
 import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
+import { useVeiculoCompleto } from '@/hooks/useVeiculoDetalhes';
+import { exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
+import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
 
 interface Props {
   open: boolean;
