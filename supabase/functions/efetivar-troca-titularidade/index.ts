@@ -1091,7 +1091,11 @@ serve(async (req) => {
       valor_adesao: 0, // Troca de titularidade não tem adesão, tem taxa separada
       valor_mensal: contratoAnterior?.valor_mensal || 0,
       cota_participacao: contratoAnterior?.cota_participacao || null,
-      dia_vencimento: resolverDiaVencimento(contratoAnterior?.dia_vencimento, now).dia,
+      // dia_vencimento: cotação (canônico) > contrato anterior (herança) > resolverDiaVencimento (rede de segurança)
+      dia_vencimento: resolverDiaVencimento(
+        diaVencimentoCotacao ?? contratoAnterior?.dia_vencimento,
+        now,
+      ).dia,
       vendedor_id: vendedorId,
       status: "ativo",
       data_inicio: dataInicio,
