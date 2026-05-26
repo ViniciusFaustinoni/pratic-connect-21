@@ -348,11 +348,14 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
 
       {/* Dialog de atribuição de benefícios existentes */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent className="max-w-md max-h-[80vh]" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogContent
+          className="max-w-lg w-[calc(100vw-2rem)] max-h-[85vh] overflow-hidden"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Atribuir Benefícios Existentes</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -362,7 +365,7 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
                 className="pl-9"
               />
             </div>
-            <div className="max-h-[40vh] overflow-y-auto space-y-1 border rounded-lg p-2">
+            <div className="max-h-[40vh] overflow-y-auto overflow-x-hidden space-y-1 border rounded-lg p-2">
               {loadingDisponiveis ? (
                 <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando...
@@ -375,21 +378,21 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
                 filteredDisponiveis.map((ben: any) => (
                   <label
                     key={ben.id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-accent/50 transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-accent/50 transition-colors min-w-0"
                   >
                     <Checkbox
                       checked={assignSelected.has(ben.id)}
                       onCheckedChange={() => toggleAssignItem(ben.id)}
                     />
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {ben.icon && <span className="text-base">{ben.icon}</span>}
+                      {ben.icon && <span className="text-base shrink-0">{ben.icon}</span>}
                       <span className="text-sm truncate">{ben.name}</span>
                     </div>
                   </label>
                 ))
               )}
             </div>
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <span className="text-xs text-muted-foreground">
                 {assignSelected.size} selecionado(s)
               </span>
