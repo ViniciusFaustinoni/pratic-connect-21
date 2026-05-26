@@ -207,22 +207,18 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
         .order('name');
       if (bErr) throw bErr;
 
-      // Get all existing bindings with plan names
-      const { data: allBindings, error: vErr } = await supabase
+      // Get bindings of THIS plan only — we want to show every other benefit
+      // (including ones already linked to other plans; the 1:1 DB constraint
+      // will surface a unique violation on insert if there is a real conflict).
+      const { data: planBindings, error: vErr } = await supabase
         .from('planos_beneficios')
-        .select('benefit_id, planos:plano_id(nome)');
+        .select('benefit_id')
+        .eq('plano_id', planId);
       if (vErr) throw vErr;
 
-      // Build a map: benefit_id -> binding info
-      const vinculoMap = new Map<string, any>();
-      (allBindings || []).forEach((v: any) => {
-        vinculoMap.set(v.benefit_id, v);
-      });
-
-      // Exclude benefits already assigned to ANY plan
-      const assignedIds = new Set(Array.from(vinculoMap.keys()));
+      const assignedToThisPlan = new Set((planBindings || []).map((v: any) => v.benefit_id));
       return (allBenefits || [])
-        .filter((b: any) => !assignedIds.has(b.id));
+        .filter((b: any) => !assignedToThisPlan.has(b.id));
     },
     enabled: assignOpen,
   });
