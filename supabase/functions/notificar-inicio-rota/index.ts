@@ -37,6 +37,7 @@ serve(async (req) => {
         id,
         tipo,
         status,
+        local_vistoria,
         data_agendada,
         hora_agendada,
         periodo,
