@@ -493,8 +493,17 @@ serve(async (req) => {
 
         if (!veiculoId) throw new Error('veiculoId é obrigatório');
 
-        const updateData: Record<string, unknown> = { data: { attributes: {} } };
-        const attrs = (updateData.data as Record<string, unknown>).attributes as Record<string, unknown>;
+        const updateData: Record<string, unknown> = {
+          data: {
+            type: 'vehicle',
+            id: veiculoId,
+            attributes: {},
+            relationships: {
+              enterprise: { type: 'enterprise', id: getEnterpriseId() },
+            },
+          },
+        };
+        const attrs = ((updateData.data as Record<string, unknown>).attributes) as Record<string, unknown>;
         
         if (placa) {
           const placaSan = placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
