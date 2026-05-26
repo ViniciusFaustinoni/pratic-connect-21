@@ -1,47 +1,52 @@
-## Objetivo
+# Substituir `d1_a_d4_boleto_vencido_v1` por `_v2`
 
-Substituir o corpo do template Meta `d_6_lembrete_desconto_v1` pelo novo conteúdo (manchete de urgência + linha digitável). Como o v1 já está APPROVED na Meta, replicamos o padrão usado em `emissao_boleto_gerado_v3`: **criar `d_6_lembrete_desconto_v2`** com o novo corpo e **desativar o v1** via `disparo_habilitado=false` (gate canônico, sem mexer no status Meta — ver `mem://logic/integrations/whatsapp-template-disparo-toggle`).
+Mesma mecânica usada em `emissao_boleto_gerado_v3` e `d_6_lembrete_desconto_v2`:
+cria nova versão PENDING, desativa v1 via flag canônica e aponta callers.
 
-As variáveis continuam as mesmas (`{{1}}=nome`, `{{2}}=vencimento`, `{{3}}=linha_digitavel`), então nenhum caller precisa mudar a montagem do array de parâmetros — só trocar o nome do template.
+## 1. Novo template Meta
 
-## Conteúdo do v2
+`d1_a_d4_boleto_vencido_v2` — `UTILITY` / `pt_BR`, sem header / footer / botões.
+
+Corpo (variáveis `{{1}}=nome`, `{{2}}=vencimento`):
 
 ```
-O PRAZO PARA DESCONTO DE 5% É ATÉ AMANHÃ!! NÃO PERCA! 🤩🚨
+SEU BOLETO ESTÁ VENCIDO!! 🚨🚨🚨
 
-Bom dia Sr(a) {{1}}, tudo bem? Passando para informar que o seu boleto vence em {{2}} e o(a) Sr(a) consegue efetuar o PAGAMENTO COM 5% DE DESCONTO ATÉ AMANHÃ
+Bom dia Sr(a) {{1}}, tudo bem?
 
-Estou enviando abaixo, para copiar e colar, a linha digitável para realizar o pagamento junto ao banco 👇
+Seu boleto venceu em {{2}}.
 
-{{3}}
+Corra e efetue o pagamento ainda hoje, para que não seja necessário a realização da revistoria!
 
-Atenciosamente, Praticcar 💙❤️
+LEMBRANDO QUE O SEU VEÍCULO JÁ SE ENCONTRA DESPROTEGIDO! 🗣️😞
+
+SEGUE O CÓDIGO DE BARRAS ATUALIZADO!
+
+⚠️ Caso já tenha efetuado o pagamento, favor desconsiderar.
 ```
 
-Categoria `UTILITY`, idioma `pt_BR`, sem header/footer/botões (igual ao v1).
+Observação: a frase final do brief ("SEGUE O CÓDIGO DE BARRAS ATUALIZADO!") é mantida como texto fixo — o template **não** carrega linha digitável (mesma forma da v1). A linha digitável continua sendo enviada na sequência por outro template/fluxo, como já é hoje. Nenhuma `{{3}}` é introduzida.
 
-## Mudanças
+## 2. Migração SQL
 
-### 1. Migration SQL
-- `INSERT` em `whatsapp_meta_templates` com `nome='d_6_lembrete_desconto_v2'`, `status='PENDING'`, `disparo_habilitado=true`, `variaveis_exemplo` com 3 valores de exemplo.
-- `UPDATE whatsapp_meta_templates SET disparo_habilitado=false WHERE nome='d_6_lembrete_desconto_v1'`.
+- `INSERT` em `whatsapp_meta_templates` com `nome='d1_a_d4_boleto_vencido_v2'`, `status='PENDING'`, `disparo_habilitado=true`, `variaveis_exemplo={"1":"João","2":"20/03/2026"}`.
+- `UPDATE whatsapp_meta_templates SET disparo_habilitado=false WHERE nome='d1_a_d4_boleto_vencido_v1'` (gate canônico — não muda status Meta, preserva histórico).
 
-### 2. Submissão à Meta
-Chamar `whatsapp-submit-template` com `template_name='d_6_lembrete_desconto_v2'` para enviar para aprovação (edge function existente).
+## 3. Submissão Meta
 
-### 3. Atualizar os 4 callers de v1 → v2 (mesmas 3 vars)
+Chamar `whatsapp-submit-template` para `d1_a_d4_boleto_vencido_v2`.
 
-- `supabase/functions/executar-regua-cobranca/index.ts` (linha 47 — mapa interno duplicado)
-- `src/lib/cobranca/templateParams.ts` (linha 34 — `TEMPLATE_PARAMS_MAP`)
-- `src/lib/whatsapp/template-catalog.ts` (linha 133 — marcar v1 como `DESCONTINUADO — migrado para v2` e adicionar entrada v2)
-- `src/pages/cobranca/ReguaCobranca.tsx` (linha 45 — preset default da régua D-6)
+## 4. Callers a atualizar
 
-### 4. CSV / outras réguas
-Não há outros callers. Templates `cobranca_inadimplencia_pratic` e `emissao_boleto_gerado_v3` não são afetados.
+Apontar de `_v1` para `_v2` e **corrigir bug existente**: hoje os dois callers passam apenas `['nome']`, mas o corpo tem `{{2}}=vencimento`. Atualizar para `['nome','vencimento']`.
 
-## Garantias
+- `src/lib/cobranca/templateParams.ts:36` — `d1_a_d4_boleto_vencido_v2: ['nome','vencimento']`
+- `supabase/functions/executar-regua-cobranca/index.ts:49` — idem
+- `src/pages/cobranca/ReguaCobranca.tsx:47-50` — trocar `template: 'd1_a_d4_boleto_vencido_v1'` por `_v2` nos 4 presets D+1..D+4
+- `src/lib/whatsapp/template-catalog.ts` — marcar v1 como `deprecated: 'Use d1_a_d4_boleto_vencido_v2.'` e adicionar entry `_v2` (mesmos campos, sem deprecated)
 
-- Enquanto v2 está PENDING, o gate `disparo_habilitado` no `whatsapp-send-text` bloqueia v1, evitando que o conteúdo antigo continue saindo.
-- Quando v2 for APPROVED pela Meta, os callers já apontam para ele — não precisa de novo deploy.
-- Histórico em `whatsapp_messages` permanece íntegro (v1 não é deletado).
-- Se a Meta demorar para aprovar v2 e o time precisar enviar o D-6 nesse intervalo, basta reativar `disparo_habilitado=true` em v1 pela UI temporariamente.
+## 5. Garantias
+
+- Enquanto v2 está PENDING, gate `disparo_habilitado=false` em v1 bloqueia o envio antigo; quando Meta aprovar v2, os callers já apontam para ela e o disparo retoma com o conteúdo novo.
+- Se Meta atrasar e for preciso voltar temporariamente para v1, basta reativar `disparo_habilitado=true` na v1 via tela `Configurações › Integrações › WhatsApp`.
+- Mensagens já enviadas com v1 permanecem íntegras.
