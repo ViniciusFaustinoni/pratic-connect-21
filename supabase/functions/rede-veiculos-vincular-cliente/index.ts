@@ -165,6 +165,9 @@ serve(async (req) => {
         chassi, 
         renavam, 
         combustivel,
+        codigo_fipe,
+        valor_fipe,
+        aguardando_placa_definitiva,
         rede_veiculos_cliente_id,
         rede_veiculos_veiculo_id
       `)
