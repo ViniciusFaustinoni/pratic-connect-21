@@ -249,11 +249,14 @@ Deno.serve(async (req) => {
 
     // ===== PARTE 2: Reagendamento automático de serviços do dia não iniciados =====
     // ✅ CORRIGIDO: Só marca como nao_compareceu quando a janela de atendimento realmente venceu
+    // ✅ HOTFIX KVV7538 (26/05/2026): NUNCA reagendar serviço já em_andamento.
+    // Técnico que iniciou está fisicamente no local — cron não pode interromper execução em campo.
+    // Só 'agendada' e 'em_rota' entram na avaliação de não-comparecimento.
     const { data: servicos, error } = await supabase
       .from("servicos")
       .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo, associado_id, veiculo_id, profissional_id, local_vistoria")
       .eq("data_agendada", hoje)
-      .in("status", ["agendada", "em_rota", "em_andamento"])
+      .in("status", ["agendada", "em_rota"])
       .is("reagendamento_enviado_em", null)
       .in("tipo", [
         "vistoria_entrada",
