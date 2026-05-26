@@ -491,16 +491,14 @@ ${asaasCobranca.bankSlipUrl ? `📋 Boleto: ${asaasCobranca.bankSlipUrl}` : ''}`
               const valorStr = totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
               const dataVencStr = dataVencimento.toLocaleDateString('pt-BR');
               const placaPrincipal = composicoesPorVeiculo[0]?.veiculo?.placa || '---';
-              const modeloPrincipal = composicoesPorVeiculo[0]?.veiculo?.modelo || (veiculosAtivos.length > 1 ? `${veiculosAtivos.length} veículos` : 'seu veículo');
               const linhaDig = asaasCobranca.nossoNumero || asaasCobranca.pixPayload || '—';
               await supabase.functions.invoke('whatsapp-send-text', {
                 body: {
                   telefone: telefone.replace(/\D/g, ''),
                   mensagem,
-                  // Migrado de cobranca_mensalidade → emissao_boleto_gerado_v2
-                  // vars: [nome, modelo, placa, vencimento, valor, linha_digitavel]
-                  template_name: 'emissao_boleto_gerado_v2',
-                  template_params: [primeiroNomeFatura, modeloPrincipal, placaPrincipal, dataVencStr, valorStr, linhaDig],
+                  // emissao_boleto_gerado_v3 — vars: [nome, placa, vencimento, valor, linha_digitavel]
+                  template_name: 'emissao_boleto_gerado_v3',
+                  template_params: [primeiroNomeFatura, placaPrincipal, dataVencStr, valorStr, linhaDig],
                 },
               });
               
