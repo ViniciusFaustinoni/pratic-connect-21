@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_meta_templates SET nome = 'd1_a_d4_boleto_vencido_v2', status = 'PENDING' WHERE nome = 'd1_a_d4_boleto_vencido_v2_urgente' AND meta_template_id IS NULL;
