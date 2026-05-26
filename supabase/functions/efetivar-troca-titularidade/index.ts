@@ -19,6 +19,7 @@ import {
 } from "../_shared/hinova-client.ts";
 import { insertAuditLog } from '../_shared/auditLog.ts';
 import { buildAssociadoPayload, variantesCodigoFipe } from '../_shared/hinova-payloads.ts';
+import { resolverDiaVencimento } from '../_shared/vencimento-utils.ts';
 
 
 const corsHeaders = {
@@ -1069,7 +1070,7 @@ serve(async (req) => {
       valor_adesao: 0, // Troca de titularidade não tem adesão, tem taxa separada
       valor_mensal: contratoAnterior?.valor_mensal || 0,
       cota_participacao: contratoAnterior?.cota_participacao || null,
-      dia_vencimento: contratoAnterior?.dia_vencimento || now.getDate(),
+      dia_vencimento: resolverDiaVencimento(contratoAnterior?.dia_vencimento, now).dia,
       vendedor_id: vendedorId,
       status: "ativo",
       data_inicio: dataInicio,
