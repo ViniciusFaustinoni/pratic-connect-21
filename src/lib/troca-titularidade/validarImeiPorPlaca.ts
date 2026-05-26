@@ -92,7 +92,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
     try {
       console.log(TAG, 'softruck.buscar-veiculo-placa', { placa: placaSan, imei: mascararImei(imeiSan) });
       const { data: porPlaca, error: ePlaca } = await supabase.functions.invoke('softruck-api', {
-        body: { action: 'buscar-veiculo-placa', data: { placa: placaSan } },
+        body: { operation: 'buscar-veiculo-placa', data: { placa: placaSan } },
       });
       if (ePlaca) throw ePlaca;
       const lista = (porPlaca as any)?.data?.data || (porPlaca as any)?.data || [];
