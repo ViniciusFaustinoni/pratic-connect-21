@@ -521,6 +521,27 @@ serve(async (req) => {
       console.warn("[efetivar-troca] Nenhum contrato ativo encontrado para o titular anterior, continuando sem herança de contrato");
     }
 
+    // 4.0.1 Fonte canônica de dia_vencimento: a COTAÇÃO da troca (escolhida pelo novo titular).
+    //        Contrato anterior é apenas fallback caso a cotação não tenha o campo.
+    //        Sem isso, o `|| now.getDate()` quebrava o check constraint quando o contrato
+    //        anterior não existia / não tinha dia_vencimento (caso ANDERSON/KPJ4994).
+    let diaVencimentoCotacao: number | null = null;
+    try {
+      const cotIdParaVenc = (solicitacao as any).cotacao_id;
+      if (cotIdParaVenc) {
+        const { data: cotVenc } = await supabase
+          .from("cotacoes")
+          .select("dia_vencimento")
+          .eq("id", cotIdParaVenc)
+          .maybeSingle();
+        if (cotVenc && typeof cotVenc.dia_vencimento === "number") {
+          diaVencimentoCotacao = cotVenc.dia_vencimento;
+        }
+      }
+    } catch (e) {
+      console.warn("[efetivar-troca] Falha ao ler dia_vencimento da cotação:", (e as Error)?.message);
+    }
+
     // 4.1 Fallback de endereço para o novo associado: se ainda estiver sem UF/CEP,
     //     herda do contrato anterior (snapshot que veio do CRLV/cotação).
     try {
