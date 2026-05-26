@@ -126,7 +126,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
         // Verifica se o IMEI existe em outra placa Softruck → caso B.
         try {
           const { data: porImei } = await supabase.functions.invoke('softruck-api', {
-            body: { action: 'buscar-device-imei', data: { imei: imeiSan } },
+            body: { operation: 'buscar-device-imei', data: { imei: imeiSan } },
           });
           const listaImei = (porImei as any)?.data?.data || (porImei as any)?.data || [];
           const devOutro = Array.isArray(listaImei) ? listaImei[0] : null;
