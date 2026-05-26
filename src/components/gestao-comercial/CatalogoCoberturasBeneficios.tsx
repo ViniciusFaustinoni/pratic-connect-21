@@ -14,6 +14,7 @@ import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useDuplicateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated } from '@/lib/data/fetchAllPaginated';
 import { toast } from 'sonner';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
 import { useRulesForEntity } from '@/hooks/useEntityEligibilityRules';
