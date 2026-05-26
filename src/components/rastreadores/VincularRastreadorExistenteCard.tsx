@@ -110,8 +110,9 @@ export function VincularRastreadorExistenteCard({
 
       await registrarLog({
         acao: 'editar',
+        modulo: 'monitoramento',
         tabela: 'rastreadores',
-        registro_id: r.id,
+        entidade_id: r.id,
         descricao: `[VINCULO_MONITORAMENTO_${origemContexto.toUpperCase()}] IMEI ${r.imei} vinculado ao veículo ${veiculoId}${origemRefId ? ` (ref ${origemRefId})` : ''}`,
       });
 
