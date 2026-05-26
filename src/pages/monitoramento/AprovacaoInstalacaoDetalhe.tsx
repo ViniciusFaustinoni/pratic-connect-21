@@ -354,6 +354,7 @@ const fotoLabels: Record<string, string> = {
 export default function AprovacaoInstalacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data, isLoading, error, refetch, isFetching } = useServicoDetalheAprovacao(id);
   const aprovar = useAprovarInstalacaoMonitoramento();
   const reprovar = useReprovarInstalacaoMonitoramento();
