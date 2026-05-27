@@ -225,8 +225,27 @@ serve(async (req) => {
     const temEnderecoAlterado = enderecoFields.some(field => camposAlterados[field as keyof typeof camposAlterados] !== undefined);
     
     if (temEnderecoAlterado) {
+      const cepSource = camposAlterados.cep ?? associado.cep;
+      let cepFormatado = '';
+      if (cepSource) {
+        const cepDigits = String(cepSource).replace(/\D/g, '');
+        if (cepDigits.length === 8) {
+          cepFormatado = `${cepDigits.slice(0, 5)}-${cepDigits.slice(5)}`;
+        } else {
+          console.warn('[REDE_ATUALIZAR][CEP_INVALIDO]', { associadoId: associado.id, cepRaw: cepSource, digits: cepDigits });
+          return new Response(
+            JSON.stringify({
+              success: false,
+              code: 'CEP_INVALIDO',
+              message: `CEP é inválido ("${cepSource}"). Esperado 8 dígitos. Corrija no cadastro antes de sincronizar com a Rede Veículos.`,
+              associadoId: associado.id,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+      }
       payload.endereco = {
-        cep: (camposAlterados.cep ?? associado.cep)?.replace(/\D/g, '') || '',
+        cep: cepFormatado,
         logradouro: camposAlterados.logradouro ?? associado.logradouro ?? '',
         numero: camposAlterados.numero ?? associado.numero ?? 'S/N',
         bairro: camposAlterados.bairro ?? associado.bairro ?? '',
