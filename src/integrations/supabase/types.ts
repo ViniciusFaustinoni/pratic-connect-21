@@ -29750,6 +29750,76 @@ export type Database = {
           },
         ]
       }
+      softruck_gps_poll_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          last_response: Json | null
+          max_attempts: number
+          next_run_at: string
+          rastreador_id: string
+          softruck_device_id: string
+          softruck_vehicle_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          last_response?: Json | null
+          max_attempts?: number
+          next_run_at?: string
+          rastreador_id: string
+          softruck_device_id: string
+          softruck_vehicle_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          last_response?: Json | null
+          max_attempts?: number
+          next_run_at?: string
+          rastreador_id?: string
+          softruck_device_id?: string
+          softruck_vehicle_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "softruck_gps_poll_queue_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "softruck_gps_poll_queue_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores_pendentes_vinculo"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "softruck_gps_poll_queue_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+        ]
+      }
       softruck_webhook_raw_log: {
         Row: {
           created_at: string
