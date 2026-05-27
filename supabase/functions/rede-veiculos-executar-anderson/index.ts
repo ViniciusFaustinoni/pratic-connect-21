@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== Etapa 1: desvincular Gabriel =====
-    const etapa1Fields = {
+    const etapa1Payload = {
       imei: IMEI_ALVO,
       cpfCnpj: CPF_GABRIEL,
       placa: PLACA,
@@ -124,9 +124,15 @@ Deno.serve(async (req) => {
       motivo: 'troca_titularidade_anderson_KPJ4994',
     };
     if (dryRun) {
-      out.etapas.etapa1_desvincular_gabriel = { dry_run: true, payload: etapa1Fields };
+      out.etapas.etapa1_desvincular_gabriel = { dry_run: true, payload: etapa1Payload };
     } else {
-      out.etapas.etapa1_desvincular_gabriel = await callRedeFormFlat(baseUrl, token, '/desvincularClienteVeiculo', etapa1Fields);
+      // Rede v2 quer json={} urlencoded também aqui (multipart devolve "JSON não informado").
+      // Tenta com trailing slash; se 404 cair, tenta sem.
+      let r = await callRedeJsonForm(baseUrl, token, '/desvincularClienteVeiculo/', etapa1Payload);
+      if (r.http_status === 404) {
+        r = await callRedeJsonForm(baseUrl, token, '/desvincularClienteVeiculo', etapa1Payload);
+      }
+      out.etapas.etapa1_desvincular_gabriel = r;
     }
 
     // Se desvinculação falhou com algo diferente de "já desvinculado", parar
