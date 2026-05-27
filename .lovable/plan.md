@@ -1,85 +1,87 @@
+## Escopo
 
-## Escopo confirmado
+Manter a edge `deslogar-todos-usuarios` como está (backend já invalida tokens e audita). Acoplar um **broadcast em tempo real** que faz cada cliente conectado se deslogar imediatamente, e uma **rede de segurança 401** para quem estava offline na hora.
 
-Só conserto da causa-raiz. Sem hook novo, sem aba de pendentes, sem refactor de UX, sem sweep periódico extra, sem mexer em card de validação / Rastreadores / cadastro de veículo.
+Sem botão novo. Sem refactor de auth. Sem mexer em `getSession`/`onAuthStateChange`.
 
-Foco único: garantir que nova ativação **Softruck** e nova vinculação **Rede Veículos** **não travem** como QPW4H53 / RUM0H01.
+## Mudanças
 
-## Diagnóstico do estado atual
+### 1. `supabase/functions/deslogar-todos-usuarios/index.ts` — adicionar broadcast
 
-**Softruck (`softruck-ativar-dispositivo/index.ts`)** — o conserto principal já existe:
-- Passo **8.5** (linhas 658–696) faz o UPDATE canônico (`plataforma_device_id`, `plataforma_veiculo_id`, `softruck_chip_id`, `softruck_integration_status='SUCCESS'`, `status='instalado'`, `veiculos.softruck_vehicle_id`) **antes** do GPS.
-- O passo 8.5 já enfileira em `softruck_gps_poll_queue` (tabela existe, worker `cron-softruck-gps-poll` existe).
-- Mas o passo **8.6** (linhas 698–740) ainda faz tentativa síncrona de GPS dentro da edge — hoje com `MAX_TENTATIVAS=1` e `INTERVALO_MS=0`, então é só 1 chamada HTTP, mas ainda é tempo agarrado na resposta.
-- O passo **9** (linhas 742–788) refaz o UPDATE inteiro depois do GPS — é redundante com o 8.5 e mantém a porta aberta para "se travar aqui, perdemos coisa". Conforme o RUM0H01/QPW4H53 originais.
-
-**Rede Veículos (`rede-veiculos-vincular-cliente/index.ts`)** — não tem polling de GPS, mas tem dois problemas:
-- O **passo 8** (UPDATE local, linhas 421–451) já vem **antes** do passo 8.1 (`ativarVeiculo`, linhas 453–489), e o 8.1 já está em try/catch não-bloqueante. ✅ Ordem está OK.
-- **Faltam guardas de idempotência:** se a edge for chamada 2x para o mesmo IMEI/veículo, o segundo POST `/vincularClienteVeiculo/` é disparado de novo — risco de cliente/veículo/equipamento duplicado no lado da Rede.
-
-## O conserto (mínimo)
-
-### 1. Softruck — fechar a janela do GPS de vez
-
-Em `supabase/functions/softruck-ativar-dispositivo/index.ts`:
-
-- **Remover o passo 8.6 inteiro** (linhas 698–740 — laço síncrono de tracking) e **remover o passo 9** (linhas 742–788 — segundo UPDATE redundante).
-- Posições GPS passam a ser **100% responsabilidade** do worker assíncrono (`cron-softruck-gps-poll` consumindo `softruck_gps_poll_queue`), que já está deployado.
-- O `responseRaw` do log final (passo 13, linhas 820–830) passa a referenciar `{ softruckVehicleId, softruckDeviceId, softruckChipId, softruckUserId, gps_polling: 'async' }` (mesmo objeto que o 8.5 já grava).
-- A resposta HTTP devolve `primeira_posicao: null` (campo mantido por compatibilidade, vira sempre null nesta edge).
-
-Resultado: a edge devolve assim que o 8.5 grava. Nenhum caminho de código pode mais perder o UPDATE local por causa de GPS.
-
-### 2. Softruck — verificação rápida de idempotência
-
-Sem código novo. Só validar que o early-return existente (linhas 185–199) cobre re-chamada:
-- Se `plataforma_device_id` E `plataforma_veiculo_id` já estiverem populados localmente, retorna `already_activated: true` sem tocar na Softruck.
-- A criação de veículo/chip/device já tem `buscar → criar → on Already Exists, re-buscar`. ✅
-- Vou adicionar UMA linha de log explicitando isso em PR (não muda comportamento).
-
-### 3. Rede Veículos — early-return idempotente
-
-Em `supabase/functions/rede-veiculos-vincular-cliente/index.ts`, logo após buscar `veiculo` (linha 176):
+Antes do retorno final (depois do `insertAuditLog`), publicar num canal Realtime `system-events`:
 
 ```ts
-if (veiculo.rede_veiculos_veiculo_id && veiculo.rede_veiculos_cliente_id && rastreador.plataforma_device_id) {
-  return new Response(JSON.stringify({
-    success: true,
-    rastreador_id: rastreador.id,
-    rede_veiculos_cliente_id: veiculo.rede_veiculos_cliente_id,
-    rede_veiculos_veiculo_id: veiculo.rede_veiculos_veiculo_id,
-    rede_veiculos_equipamento_id: rastreador.plataforma_device_id,
-    already_activated: true,
-    mensagem: 'Já vinculado na Rede Veículos',
-  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-}
+const channel = admin.channel('system-events');
+await channel.send({
+  type: 'broadcast',
+  event: 'force_logout',
+  payload: {
+    at: new Date().toISOString(),
+    by_id: callerId,
+    by_nome: callerNome,
+    reason: 'admin_mass_logout',
+  },
+});
+await admin.removeChannel(channel);
 ```
 
-Resultado: rodar a edge 2x para o mesmo IMEI/veículo não dispara segundo `/vincularClienteVeiculo/`.
+O broadcast roda **depois** do `signOut` em massa — clientes recebem o evento e o token deles já está revogado no servidor.
 
-### 4. Rede Veículos — ordem do UPDATE já está OK
+### 2. Novo hook `src/hooks/useForceLogoutListener.ts`
 
-Sem mudança. O passo 8 (UPDATE local) já roda antes do 8.1 (`ativarVeiculo`), e o 8.1 já está envolvido em try/catch isolado. Não há padrão de travamento equivalente ao GPS da Softruck.
+- Cria um único canal `supabase.channel('system-events')` no mount.
+- Escuta `broadcast` `event: 'force_logout'`.
+- Ao receber:
+  1. `queryClient.clear()` (limpa todo cache React Query).
+  2. Limpa `localStorage` e `sessionStorage` preservando apenas chaves técnicas neutras (ex.: tema). Tudo de Supabase Auth (`sb-*-auth-token`) e cache de app sai.
+  3. Tenta `supabase.auth.signOut({ scope: 'local' })` (best-effort, ignora erro).
+  4. `window.location.replace('/login?reason=admin_logout')` — replace para não permitir voltar.
+- Filtro: ignora o evento se o `payload.by_id === user?.id` (a sessão do Diretor que disparou não é encerrada).
 
-## O que NÃO entra (confirmando)
+### 3. Montar o listener no shell autenticado
 
-- ❌ Hook único de busca por placa
-- ❌ Aba/tela de pendentes
-- ❌ Sweep periódico novo (o `cron-softruck-gps-poll` já existe e fica)
-- ❌ Estados intermediários complexos
-- ❌ Card de validação, Rastreadores, cadastro de veículo
-- ❌ Mexer em `softruck-buscar-dispositivo`, `rede-veiculos-buscar-dispositivo`, `useAtivarRastreador`, `useBuscarRastreadorPorImei`
+Adicionar `useForceLogoutListener()` dentro do `AuthProvider` (após o estado de sessão existir), para que TODA aba autenticada do app receba o broadcast — independente da rota.
+
+### 4. Interceptor 401 (rede de segurança offline)
+
+Em `src/integrations/supabase/client.ts`, instrumentar o `fetch` passado ao `createClient` (já é customizado lá hoje, se não for, virar wrapper) para detectar:
+- response `status === 401`, **ou**
+- corpo com `{ code: 'PGRST301' }` / `JWT expired` / `invalid_token`.
+
+Ao detectar e havendo sessão local presente, disparar uma única vez (`window.__forceLogoutInFlight` guard):
+- Mesma rotina de limpeza do passo 2.
+- Redirect para `/login?reason=session_expired`.
+
+### 5. Página de login — mensagem
+
+`src/pages/Login.tsx` (ou o componente equivalente — confirmar no momento da implementação): ler `searchParams.get('reason')` e exibir um `Alert` no topo:
+- `admin_logout` → "Sua sessão foi encerrada pelo administrador. Faça login novamente para ver as informações atualizadas."
+- `session_expired` → "Sua sessão expirou. Faça login novamente."
+
+Some sozinho ao começar a digitar / após próximo login.
+
+## O que NÃO entra
+
+- Forçar `window.location.reload()` sem deslogar.
+- Botão por-usuário ("deslogar fulano").
+- Tabela nova / migration.
+- Mexer em `signOut` global do supabase-js fora do listener.
+- Webhook / cron extra.
 
 ## Critério de aceitação
 
-1. Nova ativação Softruck em qualquer IMEI: `rastreadores.plataforma_device_id`, `plataforma_veiculo_id`, `softruck_integration_status='SUCCESS'`, `status='instalado'` e `veiculos.softruck_vehicle_id` ficam preenchidos **antes** do retorno HTTP. Travamento ou timeout em qualquer fase posterior do GPS não pode mais apagar isso (passos 8.6 e 9 deletados).
-2. Rodar `softruck-ativar-dispositivo` 2x para o mesmo IMEI já vinculado: retorna `already_activated: true`, zero chamada externa.
-3. Rodar `rede-veiculos-vincular-cliente` 2x para o mesmo IMEI já vinculado: retorna `already_activated: true`, zero POST em `/vincularClienteVeiculo/`.
-4. Posições GPS continuam chegando via `cron-softruck-gps-poll` (worker assíncrono já em produção) — fora do caminho crítico da ativação.
+1. Diretor clica "Deslogar todos os usuários" → em poucos segundos, todas as abas autenticadas (exceto a do próprio Diretor) caem para `/login?reason=admin_logout` com mensagem visível.
+2. Após relogar, o app carrega do zero (queries refetcham, localStorage limpo) — dados aparecem atualizados.
+3. Usuário offline no momento: ao voltar e fazer qualquer request, recebe 401, é redirecionado para `/login?reason=session_expired` automaticamente, sem loop.
+4. `logs_auditoria` continua registrando quem disparou e quando (já implementado, sem regressão).
+5. A sessão do Diretor que disparou **permanece ativa** (filtro por `by_id` no listener + `signOut` da edge já exclui o caller).
 
 ## Arquivos tocados
 
-- `supabase/functions/softruck-ativar-dispositivo/index.ts` — deletar passos 8.6 e 9; ajustar `responseRaw` do log de sucesso.
-- `supabase/functions/rede-veiculos-vincular-cliente/index.ts` — adicionar early-return idempotente após buscar veículo.
+- `supabase/functions/deslogar-todos-usuarios/index.ts` — adicionar broadcast no canal `system-events`.
+- `src/hooks/useForceLogoutListener.ts` — novo, ~60 linhas.
+- `src/contexts/AuthContext.tsx` — uma linha: `useForceLogoutListener()` dentro do provider.
+- `src/integrations/supabase/client.ts` — wrap do `fetch` para interceptar 401 e disparar logout local.
+- `src/pages/Login.tsx` (arquivo a confirmar na implementação) — `Alert` baseado em `?reason=`.
 
-Nenhum arquivo de frontend, nenhuma migration, nenhuma tabela nova.
+Nenhuma migration, nenhuma tabela nova, nenhum cron.
