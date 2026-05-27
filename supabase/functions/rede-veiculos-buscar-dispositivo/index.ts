@@ -148,21 +148,34 @@ Deno.serve(async (req) => {
       ultimoErro = e?.message || String(e);
     }
 
+    // Classifica o erro pra distinguir "IMEI inexistente" de "API com problema".
+    // Sem isso, a edge devolve found:false pra TUDO e os consumidores tratam como
+    // "rastreador não existe", mascarando casos Anderson-like (flag de sincronismo
+    // desabilitada, CPF inválido, erro de auth, etc.).
+    const errorKind = classificarErro(ultimoErro);
+
     // Log da operação
     await supabase.from('rastreadores_api_logs').insert({
       plataforma: 'rede_veiculos',
       operacao: 'buscarDispositivo',
       request: { busca: buscaRaw, isImei, placa, cpfCnpj: cpfCnpj || null },
-      response: { found: !!achado, total: achadosLista.length, endpointUsado, ultimoErro: achado ? null : ultimoErro },
-      status: achado ? 'sucesso' : 'sem_resultado',
+      response: { found: !!achado, total: achadosLista.length, endpointUsado, ultimoErro: achado ? null : ultimoErro, error_kind: achado ? null : errorKind },
+      status: achado ? 'sucesso' : (errorKind === 'not_found' ? 'sem_resultado' : 'erro_api'),
     });
 
     if (!achado) {
       const tipo = apenasCpfCnpj ? 'CPF/CNPJ' : (isImei ? 'IMEI' : 'placa');
+      const apiProblema = errorKind !== 'not_found';
       return json({
         success: true,
         found: false,
-        message: `Não encontrado na Rede Veículos (${tipo}: ${buscaRaw || cpfCnpj}).`,
+        // false-negative protection: chamadores devem inspecionar error_kind
+        // antes de concluir "rastreador não existe".
+        error_kind: errorKind,
+        api_error: apiProblema,
+        message: apiProblema
+          ? `Rede Veículos respondeu com erro (${errorKind}) — não é possível afirmar que o ${tipo} ${buscaRaw || cpfCnpj} não existe. Detalhe: ${ultimoErro || 'sem detalhe'}`
+          : `Não encontrado na Rede Veículos (${tipo}: ${buscaRaw || cpfCnpj}).`,
         debug: ultimoErro || undefined,
       });
     }
