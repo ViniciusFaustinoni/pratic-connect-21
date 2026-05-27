@@ -86,10 +86,13 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
   // ===== 0) Estoque local: rastreador já cadastrado e identificado =====
   // Se o IMEI existe localmente como Softruck/Rede em estoque (ou já apontado para este veículo),
   // não precisamos depender das APIs externas — é fonte canônica.
+  // Guard Anderson-like: pra origem='rede_veiculos' EXIGIMOS plataforma_device_id NOT NULL.
+  // Sem ID externo, o rastreador foi criado por upsert legado e a Rede pode não tê-lo
+  // sincronizado — cai pra API pra confirmar.
   try {
     const { data: rLocal0 } = await supabase
       .from('rastreadores')
-      .select('id, veiculo_id, status, plataforma')
+      .select('id, veiculo_id, status, plataforma, plataforma_device_id')
       .eq('imei', imeiSan)
       .maybeSingle();
     if (rLocal0) {
@@ -101,9 +104,13 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
         plataforma === 'rede_veiculos' ? 'rede_veiculos'
         : plataforma === 'softruck' ? 'softruck'
         : null;
-      if (origem && livre) {
+      const idsOk = origem === 'rede_veiculos' ? !!rLocal0.plataforma_device_id : true;
+      if (origem && livre && idsOk) {
         console.log(TAG, 'estoque_local_ok', { imei: mascararImei(imeiSan), plataforma, status });
         return { ok: true, origem, rastreadorId: rLocal0.id };
+      }
+      if (origem === 'rede_veiculos' && !idsOk) {
+        console.warn(TAG, 'estoque_local_rede_sem_ids', { imei: mascararImei(imeiSan), id: rLocal0.id });
       }
     }
   } catch (e) {
