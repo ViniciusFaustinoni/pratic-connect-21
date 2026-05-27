@@ -29,6 +29,7 @@ interface RawRow {
   contratos: {
     id: string;
     numero: string | null;
+    status: string | null;
     veiculo_placa: string | null;
     vendedor_id: string | null;
     link_token: string | null;
