@@ -272,6 +272,7 @@ export function PropostaApprovalStepper({
               onViewDocumento={onViewDocumento}
               onAprovarDocumento={onAprovarDocumento}
               onReprovarDocumento={onReprovarDocumento}
+              onReverterReprovacao={onReverterReprovacaoDocumento}
             />
           </div>
         )}
