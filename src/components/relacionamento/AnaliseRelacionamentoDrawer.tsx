@@ -188,8 +188,16 @@ export default function AnaliseRelacionamentoDrawer({ analise, open, onOpenChang
                       <Row label="Email" value={associadoQ.data.email} />
                       <Row label="Telefone" value={associadoQ.data.telefone} />
                       <Row label="Status" value={<Badge variant="outline">{associadoQ.data.status}</Badge>} />
-                      <Row label="Cidade/UF" value={`${associadoQ.data.cidade || '—'} / ${associadoQ.data.estado || '—'}`} />
-                      <Row label="Endereço" value={associadoQ.data.endereco} />
+                      <Row label="Cidade/UF" value={`${associadoQ.data.cidade || '—'} / ${(associadoQ.data as any).uf || '—'}`} />
+                      <Row
+                        label="Endereço"
+                        value={[
+                          (associadoQ.data as any).logradouro,
+                          (associadoQ.data as any).numero,
+                          (associadoQ.data as any).bairro,
+                          (associadoQ.data as any).cep,
+                        ].filter(Boolean).join(', ') || '—'}
+                      />
                       <Row label="Plano" value={(associadoQ.data as any).planos?.nome} />
                       <Row label="Veículos" value={(associadoQ.data as any).veiculos?.length ?? 0} />
                       <Row
