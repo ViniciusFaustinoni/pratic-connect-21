@@ -1,154 +1,64 @@
-## Diagnóstico confirmado
+## Objetivo
+Corrigir o envio de CEP para a API Rede Veículos (formato obrigatório `XXXXX-XXX`), endurecer comportamento com CEP inválido, e reprocessar o vínculo do Anderson (KPJ4994).
 
-**Causa bloqueante real:** o fluxo para em **cadastro do veículo no SGA**, antes da etapa de mídia.
+## Callers afetados (confirmado via `rg`)
+Apenas 2 edges enviam CEP no payload da Rede:
 
-### O que o código faz hoje
-1. **Autentica no Hinova**  
-   - `supabase/functions/sga-hinova-sync/index.ts:847-866`
-2. **Busca/cadastra associado**  
-   - busca: `supabase/functions/sga-hinova-sync/index.ts:868-905`  
-   - cadastro: `supabase/functions/sga-hinova-sync/index.ts:907-1000`
-3. **Busca/cadastra veículo**  
-   - busca/reuso: `supabase/functions/sga-hinova-sync/index.ts:1003-1112`  
-   - cadastro: `supabase/functions/sga-hinova-sync/index.ts:1113-1451`
-4. **Só depois disso envia fotos/docs**  
-   - início da etapa de mídia: `supabase/functions/sga-hinova-sync/index.ts:1520-1707`
+1. `supabase/functions/rede-veiculos-vincular-cliente/index.ts:314` — envia `cep` cru sem hífen no `clienteDados`.
+2. `supabase/functions/rede-veiculos-atualizar-cliente/index.ts:229` — mesma sanitização sem formatação.
 
-### Onde o caso do MARCOS quebra
-O abort explícito está aqui:
-- `supabase/functions/sga-hinova-sync/index.ts:1420-1451`
+Demais edges Rede (`desvincular-cliente`, `informar-adimplente/inadimplente`, `ativar/inativar-cliente-completo`, etc.) **não enviam CEP** — fora de escopo.
 
-Se `cadastrar_veiculo` falha:
-- seta `status_sga = 'erro_sincronizacao'`
-- grava fila em `sga_sync_queue` com `etapa_parou='veiculo'`
-- faz `return`
-- **não entra** na etapa 7 (`FOTOS`)
+## Mudanças
 
-Isso explica por que **nem veículo nem fotos/docs foram enviados**.
-
-### Evidência do banco para TOG2A62
-Consulta cruzada mostrou:
-- `sga_sync_queue.status = 'pendente'`
-- `sga_sync_queue.etapa_parou = 'veiculo'`
-- `sga_sync_queue.codigo_associado_hinova = 30523`
-- `sga_sync_queue.codigo_veiculo_hinova = null`
-- `veiculos.status_sga = 'erro_sincronizacao'`
-
-Ou seja: **o associado foi resolvido no Hinova, mas o veículo nunca foi criado**, então não existe `codigo_veiculo_hinova` para anexar mídia.
-
-### Evidência dos logs do caso
-Os logs do veículo mostram exatamente esta sequência:
-- `resolver_grupo_sga` = warning, não bloqueante  
-  - `supabase/functions/sga-hinova-sync/index.ts:778-807`
-- `autenticar` = sucesso  
-- `buscar_associado` = sucesso  
-- `cadastrar_veiculo` = falha nas 3 variantes FIPE  
-- `listar_modelos_hinova` = sem retorno útil  
-- `cadastrar_veiculo` = erro final  
-
-As 3 variantes FIPE vêm daqui:
-- `supabase/functions/_shared/hinova-payloads.ts:209-230`
-- loop de tentativa: `supabase/functions/sga-hinova-sync/index.ts:1321-1353`
-
-O fallback por catálogo Hinova vem daqui:
-- `supabase/functions/sga-hinova-sync/index.ts:1356-1417`
-- cliente de catálogo: `supabase/functions/_shared/hinova-client.ts:1829-1892`
-- heurística de escolha: `supabase/functions/_shared/hinova-client.ts:1905-1935`
-
-No caso TOG2A62, o log confirma:
-- FIPE tentadas: `001589-0`, `0015890`, `001589`
-- catálogo Hinova: `Nenhum modelo encontrado no catálogo Hinova (endpoint=/buscar/modelo/Fiat, status=406)`
-
-**Fato objetivo:** o código não conseguiu resolver nem `codigo_fipe` aceito pelo tenant, nem `codigo_modelo` via fallback. Sem isso, o veículo não é criado.
-
-### Sobre fotos/docs: existe envio separado?
-**Não existe** no codebase um endpoint separado de “documentos” para o SGA.
-
-O que existe é:
-- coleta de `documentos`, `contratos_documentos`, `avatar_url` e `vistoria_fotos`:  
-  `supabase/functions/sga-hinova-sync/index.ts:1523-1606`
-- transformação de tudo em payload de foto:  
-  `supabase/functions/_shared/hinova-payloads.ts:354-410`
-- envio único para `POST /veiculo/foto/cadastrar`:  
-  `supabase/functions/_shared/hinova-client.ts:1646-1667`
-
-Então, no código atual, **docs e fotos dependem 100% de `codigoVeiculoHinova` existir**.
-
-### Também confirmei que havia mídia local para enviar
-Para TOG2A62 existem artefatos locais:
-- `documentos`: **1**
-- `contratos_documentos`: **4**
-- `vistorias`: **1**
-- `vistoria_fotos`: **31**
-
-Ou seja: **não faltou mídia local**; faltou o veículo remoto para vincular a mídia.
-
-### O warning do plano sem grupo SGA é a causa?
-**Não.**
-Esse warning é explicitamente não-bloqueante:
-- `supabase/functions/sga-hinova-sync/index.ts:796-807`
-
-O próprio comentário diz que o fluxo segue sem `codigo_grupo_produto`.
-
-### O 401 em uma tentativa antiga é a causa?
-**Não para este erro final.**
-Houve uma tentativa com `buscar_associado` 401, mas nas tentativas seguintes:
-- `autenticar` deu sucesso
-- `buscar_associado` deu sucesso
-- a falha voltou a acontecer em `cadastrar_veiculo`
-
-Então a causa recorrente deste caso é o bloco de resolução/cadastro do veículo, não autenticação.
-
----
-
-## Plano de correção
-
-### 1) Corrigir a resolução de modelo no fallback Hinova
-Ajustar o fallback de catálogo para não morrer silenciosamente quando o tenant devolve 406/estrutura vazia nos endpoints atuais.
-
-**Arquivos alvo:**
-- `supabase/functions/_shared/hinova-client.ts`
-- `supabase/functions/sga-hinova-sync/index.ts`
-
-**Mudanças:**
-- registrar o resultado de **cada endpoint candidato** em `listarModelosHinova`, não só o último
-- normalizar melhor `marca/modelo` antes da busca no catálogo
-- enriquecer o fallback com tentativa mais orientada ao nome base do modelo quando o nome comercial vier composto
-- devolver debug estruturado suficiente para comprovar por que nenhum candidato serviu
-
-### 2) Melhorar a observabilidade do erro recorrente
-Hoje o log final guarda só o último `endpoint/status` do fallback de catálogo.
-
-**Mudanças:**
-- incluir no log de `listar_modelos_hinova` o histórico de candidatos tentados
-- logar se `escolherMelhorModeloHinova` recebeu lista vazia ou rejeitou candidatos por score
-- logar explicitamente quando não existe `codigo_modelo_hinova` persistido e o fast-path foi pulado
-
-### 3) Reprocessar o caso TOG2A62 após a correção
-Depois do ajuste:
-- reexecutar `sga-hinova-sync` para TOG2A62
-- validar criação de `codigo_veiculo_hinova`
-- validar entrada na etapa `FOTOS`
-- conferir envio dos 1 + 4 + 31 artefatos elegíveis
-
-### 4) Validar se o problema afeta outros casos iguais
-Usar o mesmo padrão para localizar outros veículos presos em:
-- `sga_sync_queue.etapa_parou = 'veiculo'`
-- `erro_ultimo` contendo `MODELO enviado não foi encontrado`
-
----
-
-## Detalhes técnicos
-
-```text
-Fluxo atual
-associado OK -> veículo falha -> return -> mídia não roda
-
-Ponto exato do bloqueio
-sga-hinova-sync/index.ts:1420-1451
-
-Ponto exato da mídia
-sga-hinova-sync/index.ts:1520-1707
+### 1. Helper compartilhado (inline em cada edge, não vamos criar shared yet)
+```ts
+function formatarCepRede(cepRaw: string | null | undefined, ctx: { associadoId: string; caller: string }): string {
+  const digits = (cepRaw || '').replace(/\D/g, '');
+  if (digits.length !== 8) {
+    console.warn('[REDE_CEP_INVALIDO]', { ...ctx, cepRaw, digits });
+    throw new Error(`CEP_INVALIDO: associado ${ctx.associadoId} tem CEP "${cepRaw}" inválido (esperado 8 dígitos). Corrija no cadastro antes de sincronizar com a Rede.`);
+  }
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
 ```
 
-Se você aprovar, eu implemento a correção e deixo o log do próximo caso autoexplicativo.
+**Decisão (conforme recomendação aprovada): abortar com erro identificável** — CEP inválido vira 400 visível, não falha silenciosa. A edge devolve `{ success:false, code:'CEP_INVALIDO', message }` (HTTP 400) para que UI/cron/troca de titularidade tratem como erro cadastral acionável.
+
+### 2. `rede-veiculos-vincular-cliente/index.ts` (linha ~314)
+Substituir:
+```ts
+if (associado.cep) clienteDados.cep = associado.cep.replace(/\D/g, '');
+```
+Por chamada ao helper + try/catch que devolve 400 com `code:'CEP_INVALIDO'` antes de tentar `POST /clientes`. Se `associado.cep` for null/vazio, omitir o campo (comportamento atual da Rede aceita ausência; só rejeita formato inválido).
+
+### 3. `rede-veiculos-atualizar-cliente/index.ts` (linha ~229)
+Mesma troca dentro de `camposAlterados.cep ?? associado.cep`. Se nenhum CEP, omitir do PATCH; se presente porém inválido, abortar com 400 `CEP_INVALIDO`.
+
+### 4. Sem mudanças em `desvincular-cliente` (CEP não é enviado lá).
+
+### 5. Reprocessar Anderson após deploy
+- Confirmar `associados.cep` do Anderson via `supabase--read_query` (id `5f51682f-7be6-45c5-baf2-b695711ddf3a`). Se ≠8 dígitos, instrução para o operador corrigir antes; se válido, prosseguir.
+- Chamar `supabase--curl_edge_functions` POST `/rede-veiculos-vincular-cliente` com:
+  ```json
+  {"imei":"354522186314659","veiculoId":"d53acb36-0e8c-4683-8537-0651c724d454","associadoId":"5f51682f-7be6-45c5-baf2-b695711ddf3a"}
+  ```
+- Coletar via `supabase--edge_function_logs rede-veiculos-vincular-cliente`:
+  - Payload final enviado à Rede (com CEP `23094-140`)
+  - Resposta crua (`idCliente`, `idVeiculo`, `idEquipamento`)
+- Verificar persistência via SQL:
+  ```sql
+  select rede_veiculos_cliente_id, rede_veiculos_veiculo_id, updated_at
+  from veiculos where id='d53acb36-0e8c-4683-8537-0651c724d454';
+  select plataforma_device_id, plataforma, updated_at
+  from rastreadores where imei='354522186314659';
+  ```
+
+## Fora de escopo (mantido do plano anterior, não nesta rodada)
+- Itens 2/3/4/6 do plano anterior (override de CPF no desvincular, branch 6.3 em `efetivar-troca-titularidade`, retry no `cron-sga-retry`, audit de callers obsoletos com payload flat).
+
+## Critério de sucesso
+- Anderson com `rede_veiculos_cliente_id` e `rede_veiculos_veiculo_id` preenchidos.
+- `rastreadores.plataforma_device_id` preenchido para IMEI `354522186314659`.
+- Log mostrando CEP no formato `23094-140` no payload outgoing.
+- Tentativa futura com CEP inválido em qualquer dos 2 callers retorna 400 `CEP_INVALIDO` em vez de erro genérico da Rede.
