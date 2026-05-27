@@ -1,140 +1,74 @@
-## Contexto
+# Não Lidos em Relacionamento › Chat
 
-Diagnóstico já validado: nos casos **RUM0H01** e **QPW4H53**, a `softruck-ativar-dispositivo` chegou até a etapa 8 (device/veículo criados na Softruck), mas o **UPDATE final** do registro local em `rastreadores` (status `SUCCESS`, IDs, `response_raw`) e a sincronização de `veiculos.softruck_vehicle_id` **não aconteceram**. Sem `FAILED_*` registrado: o corte foi mid-flow, não erro de negócio. RUM0H01 foi consertado manualmente sem padrão documentado.
+Hoje a aba Relacionamento › Chat (`/eventos/n` → `EventosChatIA.tsx`) lista conversas WhatsApp agrupadas por telefone sem nenhuma noção de "lido / não lido" do lado do operador. A coluna `whatsapp_mensagens.read_at` existente é o *read receipt do destinatário* (quando o cliente leu a nossa mensagem) — não serve para marcar o que o operador interno já visualizou.
 
-Hoje já existe a edge `rastreador-reconciliar-softruck`, mas ela faz o sentido **inverso** do que precisamos: ela detecta que o device na Softruck não tem veículo associado e **desvincula** localmente (status `RECONCILIADO`). **Não cobre** o caso em que o device/veículo **existe** lá e o local ficou incompleto.
+A solução é por-operador: cada usuário interno tem o próprio "last seen" por conversa.
 
----
+## Comportamento
 
-## (a) Edge canônica `softruck-reconciliar-pending`
+- Cada conversa exibe contador de mensagens **não lidas** = mensagens `direcao='entrada'` com `created_at > last_read_at` daquele operador.
+- Toggle no topo da lista: **Todas** / **Não lidos** (preserva filtro de busca).
+- Conversas com não lidos: nome em **negrito**, badge com a contagem (verde), ordem de prioridade no topo da lista quando o filtro "Não lidos" estiver ativo.
+- Ao **abrir** uma conversa, o `last_read_at` daquele operador é atualizado para `now()` automaticamente (upsert) — o badge some.
+- Botão secundário discreto **"Marcar todas como lidas"** acima da lista (apenas quando há não lidas).
+- Funciona em tempo real: Realtime já existente em `whatsapp_mensagens` invalida a query; a contagem se recalcula sem reload.
 
-**Objetivo:** transformar o fix manual do RUM0H01 em caminho canônico, e usar o QPW4H53 como primeiro caso oficial desse caminho.
+## Escopo backend
 
-**Nova edge:** `supabase/functions/softruck-reconciliar-pending/index.ts`.
-Não reusar `rastreador-reconciliar-softruck` (semântica oposta — desvínculo vs completar vínculo).
+Nova tabela `whatsapp_conversa_leituras`:
 
-**Entrada:**
-```ts
-{ rastreador_id: string; dry_run?: boolean }
-```
-(`imei` é derivado do registro local; `dry_run` retorna o plano sem aplicar.)
+| coluna | tipo | obs |
+|---|---|---|
+| `user_id` | uuid | FK lógico para `auth.users` |
+| `telefone` | varchar | mesmo formato do `whatsapp_mensagens.telefone` |
+| `last_read_at` | timestamptz | default `now()` |
+| `updated_at` | timestamptz | trigger padrão |
 
-**Pré-condições para aceitar:**
-- `rastreadores.plataforma = 'softruck'`
-- `softruck_integration_status` em `('PENDING','CREATED_BUT_NOT_ACTIVATED', NULL)` **ou** ausência de `plataforma_device_id`/`plataforma_veiculo_id` mesmo com `status='instalado'`
-- Tem `veiculo_id` local (rastreador já tinha sido apontado para um veículo)
+- PK composta `(user_id, telefone)`.
+- RLS: operador só lê/escreve as próprias linhas (`auth.uid() = user_id`).
+- GRANT canônico para `authenticated` + `service_role` (sem `anon`).
+- Index em `(user_id)` (PK já cobre busca por telefone dentro do user).
 
-Se o registro já está `SUCCESS` com IDs completos, retorna `{ applied:false, reason:'already_reconciled' }`.
+Sem migração de dados: ausência de linha = nunca lido (tudo aparece como não lido na primeira passagem do operador).
 
-**Fluxo:**
-1. Autenticar usuário (igual `rastreador-reconciliar-softruck`).
-2. Buscar token Softruck (mesmo helper já em uso).
-3. `GET /devices?filters[devices.imei][eq]=<imei>&includes[vehicle][]=plate` — confirmar que device existe lá e capturar `device.id`, `vehicle.id`, `vehicle.attributes.plate`.
-4. Comparar `vehicle.plate` remoto com `veiculos.placa` local do `veiculo_id` apontado:
-   - Match → seguir.
-   - Divergência → 409 `placa_divergente` (NUNCA aplicar — segue caminho `rastreador-reconciliar-softruck` para desvínculo).
-   - Device não existe na Softruck → 404 `device_nao_existe` (orienta reativar fluxo normal).
-5. **UPDATE final canônico** em `rastreadores` (a parte que faltou):
-   ```
-   plataforma_device_id, plataforma_veiculo_id,
-   softruck_chip_id (se vier do remoto),
-   softruck_integration_status = 'SUCCESS',
-   softruck_response_raw = { reconciled_from_pending: true, source: 'softruck-reconciliar-pending', remote: {...}, reconciliado_em, reconciliado_por }
-   ```
-6. `UPDATE veiculos SET softruck_vehicle_id = <remote.vehicle.id> WHERE id = rastreador.veiculo_id` (a outra parte que faltou no RUM0H01).
-7. Inserir em `rastreadores_api_logs` com `motivo = 'RECONCILED_FROM_PENDING'`, request/response brutos e usuário.
-8. (Opcional, **não-bloqueante**) enfileirar/disparar 1 chamada de `tracking` para popular `ultima_posicao_*`. Falha não desfaz a reconciliação.
+## Escopo frontend
 
-**Disparo no front:**
-- Botão "Reconciliar Softruck" no drawer do rastreador, visível **só** quando os critérios da pré-condição batem.
-- Fluxo: `dry_run=true` → mostra preview (local × remoto) → confirmação → `dry_run=false`.
-- Toast com `applied:true` + IMEI; abre o registro atualizado.
+Arquivos tocados (lista mínima):
 
-**QPW4H53:** primeiro caso a rodar pela nova edge (não como manual-fix). RUM0H01 fica como histórico (já consertado).
+1. **`src/pages/eventos/EventosChatIA.tsx`**
+   - Nova query `useQuery` em `whatsapp_conversa_leituras` filtrado por `user_id` atual → mapa `telefone → last_read_at`.
+   - No agrupamento do `useMemo`, calcular `unread_count` por conversa (somente `direcao='entrada'` e `created_at > last_read_at`).
+   - Ao chamar `handleSelectConversa`, disparar mutation `upsert` em `whatsapp_conversa_leituras` (`onConflict: 'user_id,telefone'`) com `last_read_at = now()` + invalidar a query de leituras.
 
----
+2. **`src/components/eventos/n/ConversasList.tsx`**
+   - Estender `ConversaAgrupada` com `unread_count: number`.
+   - Adicionar toggle `Tabs`/`ToggleGroup` "Todas | Não lidos" + botão "Marcar todas como lidas".
+   - Aplicar `font-bold` no nome, badge contador, e ordenar não-lidos primeiro quando o filtro estiver ativo.
+   - Manter prioridade visual de "Cobrança" (já existe) acima do destaque de não-lido para não conflitar.
 
-## (b) Refactor da `softruck-ativar-dispositivo`
+3. **Sem mexer** em `ChatPanel.tsx`, `ContatoDetalheDrawer.tsx` nem nas variantes `escopo='monitoramento'` — a marcação é única, vale para qualquer variante.
 
-**Objetivo:** garantir que um corte mid-flow nunca mais deixe o registro em estado fantasma. Polling de GPS sai do caminho síncrono.
+## Casos de borda
 
-### Mudança 1 — estados intermediários determinísticos
+- **Tempo real**: o `INSERT` realtime invalida `chat-ia-conversas`; a contagem de não-lidos é derivada do resultado já com `last_read_at`, então recalcula sozinha.
+- **Conversa aberta + nova mensagem chega**: como a UI mostra a conversa selecionada em primeiro plano, atualizamos o `last_read_at` também quando uma nova mensagem chega *enquanto a conversa está aberta* (efeito no `EventosChatIA` que observa `telefoneSelecionado` + `mensagens`).
+- **Mensagens próprias (`direcao='saida'`) nunca contam como não-lidas.**
+- **Sem usuário logado** (não deveria acontecer nessa tela, mas guard): query de leituras desabilitada → contagem 0 e filtro funciona apenas como "Todas".
 
-Estender o tipo `IntegrationStatus` e gravar o estágio atual **antes** de cada etapa custosa via `updateIntegrationStatus`:
+## Fora do escopo
 
-```
-STEP_AUTH         → antes de obter token
-STEP_VEHICLE      → antes de criar/buscar veículo
-STEP_CHIP         → antes de criar chip
-STEP_DEVICE       → antes de criar device
-STEP_ASSOCIATE    → antes de associar device↔veículo
-STEP_USER         → antes de criar usuário do cliente
-STEP_READY        → após UPDATE final canônico (substituto do antigo SUCCESS síncrono)
-STEP_GPS_POLL     → marcador do job assíncrono em andamento
-SUCCESS           → set somente após primeira posição (ou timeout sem erro)
-```
+- Sincronizar com `read_at` do WhatsApp (read receipt do cliente) — é semântica diferente.
+- Marcar individual mensagem como lida — só por conversa.
+- Notificações push — fluxo separado.
 
-Em cada step, persistir também `softruck_payload_sent` parcial — assim sweep/reconciliação enxergam exatamente até onde foi.
+## Validação manual
 
-### Mudança 2 — UPDATE final **antes** do GPS
+1. Abrir Relacionamento › Chat como operador A.
+2. Em outra sessão, inserir mensagem `direcao='entrada'` para um telefone novo → conversa aparece em negrito com badge "1".
+3. Clicar → badge some, negrito vira normal.
+4. Filtrar "Não lidos" → conversa lida desaparece da lista; chega nova mensagem → reaparece.
+5. Trocar de operador (B) → o estado é independente.
 
-O bloco atual (linhas 658–745) está invertido: faz polling síncrono de GPS (até 30 s) **antes** do UPDATE final. Se o runtime corta nesse intervalo, o registro fica incompleto — exatamente o caso RUM0H01/QPW4H53.
+## Próximo passo
 
-Novo encadeamento:
-1. Etapa 8 termina (associate/ativar) → `STEP_READY`.
-2. **UPDATE final canônico imediato** com IDs + `softruck_integration_status='STEP_READY'` + `softruck_response_raw` (sem `primeiraPos`).
-3. `UPDATE veiculos.softruck_vehicle_id` na mesma transação lógica.
-4. Só depois, disparar GPS de forma assíncrona (ver Mudança 3). Falha do GPS nunca reverte os passos 2/3.
-
-### Mudança 3 — polling GPS assíncrono
-
-Polling síncrono atual (3 tentativas × 10 s) sai do request. Duas opções, escolher a mais barata operacionalmente:
-
-- **Opção A (preferida):** enfileirar em `sga_sync_queue`-style/tabela `softruck_gps_poll_queue` (criar se não existir) com `{ rastreador_id, device_id, vehicle_id, attempts, next_run_at }`. Cron de 1 minuto (`cron-softruck-gps-poll`) consome até N por execução, atualiza `ultima_posicao_*` quando chega, marca `SUCCESS`; após X tentativas sem GPS, marca `SUCCESS_NO_GPS` (estado terminal benigno, não-falha).
-- **Opção B:** `EdgeRuntime.waitUntil(...)` dentro da própria função para 1 background tick (mais simples, mas se o runtime reciclar, perde — daí preferir A).
-
-A resposta HTTP da `softruck-ativar-dispositivo` retorna assim que `STEP_READY` está gravado. Frontend deixa de esperar GPS para considerar o vínculo "concluído".
-
-### Mudança 4 — idempotência verificável por etapa
-
-Antes de cada criação remota, consultar se o item já existe (`devices?filters[imei][eq]`, `vehicles?filters[plate][eq]`, `chips?filters[serial][eq]`), reusar quando achar. Documentar no log a decisão (`reused_existing` vs `created`). Garantir que rodar a edge 2× para o mesmo IMEI nunca duplica device/vehicle/chip.
-
-### Mudança 5 — sweep periódico de PENDING
-
-Cron novo (`cron-softruck-reconciliar-pending`, 5–15 min) que:
-- Lista rastreadores em `STEP_VEHICLE`/`STEP_CHIP`/`STEP_DEVICE`/`STEP_ASSOCIATE`/`STEP_USER` há > 5 min sem progressão.
-- Para cada um, chama `softruck-reconciliar-pending` em `dry_run=false` quando seguro (placa bate, device existe). Se não seguro, registra fila para revisão manual.
-- Garante que casos futuros tipo RUM0H01/QPW4H53 sejam fechados sem operador.
-
-### Mudança 6 — log canônico
-
-Toda etapa relevante grava em `rastreadores_api_logs` com `motivo` em `('STEP_*','RECONCILED_FROM_PENDING','FAILED_*','SUCCESS','SUCCESS_NO_GPS')`. Sweep/reconciliação consomem esse log para reconstruir histórico.
-
----
-
-## (c) Item separado (registrar, não executar)
-
-**QPW4H53 — duplicação Hinova:**
-- `cotacoes.status_sga='erro_sincronizacao'`, motivo placa duplicada (codigo_associado=14209 no Hinova).
-- Reconciliar Softruck via (a) **não** resolve isso.
-- Tarefa apartada: investigar a duplicação na Hinova, identificar qual codigo_associado é o canônico, decidir inativação/limpeza no painel SGA antes de qualquer reenfileiramento em `sga_sync_queue`.
-- Sem implementação agora — fica como TODO documentado.
-
----
-
-## Plano de saída
-
-1. Migration (se Opção A): tabela `softruck_gps_poll_queue` + grants + RLS.
-2. Edge nova `softruck-reconciliar-pending` (a).
-3. Refactor da `softruck-ativar-dispositivo` (b) — estados STEP_*, UPDATE final antes do GPS, polling assíncrono, idempotência.
-4. Edge cron `cron-softruck-reconciliar-pending` (sweep).
-5. Botão UI no drawer do rastreador para `softruck-reconciliar-pending` (dry_run + apply).
-6. Testes Deno: idempotência, corte mid-flow simulado, reconciliação ponto-a-ponto.
-7. Rodar (a) para QPW4H53 como primeiro caso oficial.
-8. Memória: registrar caminho canônico em `mem://logic/integrations/softruck-reconciliar-pending-canonico` e atualizar `mem://logic/operations/softtruck-desvinculo-bidirecional` cruzando os 2 sentidos (desvínculo × completar vínculo).
-
-## Fora de escopo
-
-- Tratar a duplicação Hinova do QPW4H53.
-- Mudar contratos/cotações/financeiro.
-- Mexer em `rastreador-reconciliar-softruck` (continua válida para o sentido inverso).
+Aprove para eu rodar a migration e implementar os dois arquivos do front.
