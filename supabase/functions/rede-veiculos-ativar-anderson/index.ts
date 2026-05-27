@@ -75,35 +75,40 @@ Deno.serve(async (req) => {
 
     if (dryRun) {
       out.etapas = {
-        a_obter_por_placa: { dry_run: true, payload: { placa: PLACA, cpfCnpjCliente: CPF } },
-        b_obter_por_imei:  { dry_run: true, payload: { imei: IMEI,  cpfCnpjCliente: CPF } },
-        c_ativar_veiculo:  { dry_run: true, payload: { chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF } },
+        a_ativar_cliente:       { dry_run: true, payload: { cpfCnpjCliente: CPF } },
+        b_ativar_veiculo:       { dry_run: true, payload: { chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF } },
+        c_informar_adimplente:  { dry_run: true, payload: { chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF } },
       };
       return new Response(JSON.stringify(out, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // 1. obterDadosVeiculo via placa
-    out.etapas.a_obter_por_placa = await callRede(baseUrl, token, '/obterDadosVeiculo/', {
-      placa: PLACA, cpfCnpjCliente: CPF,
+    // 1. ativarCliente (doc nova: cpfCnpjCliente)
+    out.etapas.a_ativar_cliente = await callRede(baseUrl, token, '/ativarCliente/', {
+      cpfCnpjCliente: CPF,
     });
 
-    // 2. obterDadosVeiculo via imei
-    out.etapas.b_obter_por_imei = await callRede(baseUrl, token, '/obterDadosVeiculo/', {
-      imei: IMEI, cpfCnpjCliente: CPF,
-    });
-
-    // 3. ativarVeiculo (doc nova: chassi + placa + imei + cpfCnpjCliente)
-    out.etapas.c_ativar_veiculo = await callRede(baseUrl, token, '/ativarVeiculo/', {
+    // 2. ativarVeiculo (doc nova: chassi + placa + imei + cpfCnpjCliente)
+    out.etapas.b_ativar_veiculo = await callRede(baseUrl, token, '/ativarVeiculo/', {
       chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF,
     });
 
-    // 4. reconfirmar pós-ativar
+    // 3. informarVeiculoAdimplente (teste extra — doc menciona)
+    out.etapas.c_informar_adimplente = await callRede(baseUrl, token, '/informarVeiculoAdimplente/', {
+      chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF,
+    });
+
+    // 4. reconfirmar pós-ativar (por placa)
     out.etapas.d_reconfirmar = await callRede(baseUrl, token, '/obterDadosVeiculo/', {
       placa: PLACA, cpfCnpjCliente: CPF,
     });
 
+    // 5. alias por imei
+    out.etapas.e_reconfirmar_imei = await callRede(baseUrl, token, '/obterDadosVeiculo/', {
+      imei: IMEI, cpfCnpjCliente: CPF,
+    });
+
     // 5. extrair IDs do melhor obter (preferir d, depois a, depois b)
-    const candidatos = [out.etapas.d_reconfirmar, out.etapas.a_obter_por_placa, out.etapas.b_obter_por_imei];
+    const candidatos = [out.etapas.d_reconfirmar, out.etapas.e_reconfirmar_imei];
     let idCliente: any = null, idVeiculo: any = null, idEquipamento: any = null;
     for (const c of candidatos) {
       const p = c?.parsed || {};
