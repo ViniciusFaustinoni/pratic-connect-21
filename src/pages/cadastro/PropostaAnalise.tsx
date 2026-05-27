@@ -74,6 +74,7 @@ export default function PropostaAnalise() {
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
+  const [documentoReverter, setDocumentoReverter] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
   const [sgaLiberado, setSgaLiberado] = useState(false);
   
