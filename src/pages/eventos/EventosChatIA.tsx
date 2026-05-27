@@ -264,7 +264,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
   return (
     <div className="h-[calc(100dvh-8rem)] flex rounded-lg border border-border bg-card overflow-hidden">
       {/* Sidebar - Conversations List */}
-      <div className="w-80 shrink-0">
+      <div className="w-96 shrink-0">
         <ConversasList
           conversas={conversas}
           isLoading={isLoading}
