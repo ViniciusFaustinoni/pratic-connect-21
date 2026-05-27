@@ -402,7 +402,7 @@ export default function PropostaAnalise() {
     justificativa: string,
   ) => {
     // Defesa: proposta já fechada não permite reversão
-    if (proposta?.aprovado_em || isFinalizada) {
+    if (isFinalizada) {
       toast.error('Proposta já finalizada — reversão não permitida');
       throw new Error('proposta_finalizada');
     }
@@ -419,12 +419,12 @@ export default function PropostaAnalise() {
       if (isSolicitado) {
         const { data: sol, error: e0 } = await supabase
           .from('documentos_solicitados')
-          .select('id, documento_id, tipo, observacao_cliente')
+          .select('id, documento_id, tipo_documento, observacao_cliente')
           .eq('id', realId)
           .maybeSingle();
         if (e0 || !sol) throw new Error(e0?.message || 'Solicitação não encontrada');
         documentoIdHist = sol.documento_id;
-        tipoDoc = sol.tipo;
+        tipoDoc = sol.tipo_documento;
         motivoOriginal = sol.observacao_cliente;
 
         if (sol.documento_id) {
@@ -445,17 +445,16 @@ export default function PropostaAnalise() {
       } else {
         const { data: cd, error: e0 } = await supabase
           .from('contratos_documentos')
-          .select('id, tipo_documento, motivo_reprovacao')
+          .select('id, tipo')
           .eq('id', realId)
           .maybeSingle();
         if (e0 || !cd) throw new Error(e0?.message || 'Documento não encontrado');
         documentoIdHist = cd.id;
-        tipoDoc = cd.tipo_documento;
-        motivoOriginal = cd.motivo_reprovacao;
+        tipoDoc = cd.tipo;
 
         const { error } = await supabase
           .from('contratos_documentos')
-          .update({ status: novoStatus, motivo_reprovacao: null })
+          .update({ status: novoStatus })
           .eq('id', realId);
         if (error) throw new Error(error.message);
       }
