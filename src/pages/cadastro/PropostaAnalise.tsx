@@ -74,6 +74,7 @@ export default function PropostaAnalise() {
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
+  const [documentoReverter, setDocumentoReverter] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
   const [sgaLiberado, setSgaLiberado] = useState(false);
   
@@ -394,7 +395,114 @@ export default function PropostaAnalise() {
     queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
   };
 
-  // Verificar se pode ativar Softruck
+  // Handler para reverter reprovação de documento (com justificativa obrigatória)
+  const handleReverterReprovacaoDocumento = async (
+    docId: string,
+    novoStatus: NovoStatusReversao,
+    justificativa: string,
+  ) => {
+    // Defesa: proposta já fechada não permite reversão
+    if (isFinalizada) {
+      toast.error('Proposta já finalizada — reversão não permitida');
+      throw new Error('proposta_finalizada');
+    }
+
+    const isSolicitado = docId.startsWith('solicitado-');
+    const realId = isSolicitado ? docId.replace(/^solicitado-/, '') : docId;
+
+    // Snapshot antes
+    let documentoIdHist: string | null = null;
+    let tipoDoc: string | null = null;
+    let motivoOriginal: string | null = null;
+
+    try {
+      if (isSolicitado) {
+        const { data: sol, error: e0 } = await supabase
+          .from('documentos_solicitados')
+          .select('id, documento_id, tipo_documento, observacao_cliente')
+          .eq('id', realId)
+          .maybeSingle();
+        if (e0 || !sol) throw new Error(e0?.message || 'Solicitação não encontrada');
+        documentoIdHist = sol.documento_id;
+        tipoDoc = sol.tipo_documento;
+        motivoOriginal = sol.observacao_cliente;
+
+        if (sol.documento_id) {
+          const { error: eDoc } = await supabase
+            .from('documentos')
+            .update({ status: novoStatus, motivo_reprovacao: null })
+            .eq('id', sol.documento_id);
+          if (eDoc) throw new Error(eDoc.message);
+        }
+        const { error: eSol } = await supabase
+          .from('documentos_solicitados')
+          .update({
+            status: novoStatus === 'aprovado' ? 'aprovado' : 'enviado',
+            observacao_cliente: null,
+          })
+          .eq('id', realId);
+        if (eSol) throw new Error(eSol.message);
+      } else {
+        const { data: cd, error: e0 } = await supabase
+          .from('contratos_documentos')
+          .select('id, tipo')
+          .eq('id', realId)
+          .maybeSingle();
+        if (e0 || !cd) throw new Error(e0?.message || 'Documento não encontrado');
+        documentoIdHist = null; // FK aponta para public.documentos; contratos_documentos não é elegível
+        tipoDoc = cd.tipo;
+
+        const { error } = await supabase
+          .from('contratos_documentos')
+          .update({ status: novoStatus })
+          .eq('id', realId);
+        if (error) throw new Error(error.message);
+      }
+
+      // Histórico do associado
+      if (proposta?.associado_id) {
+        await supabase.from('associados_historico').insert({
+          associado_id: proposta.associado_id,
+          contrato_id: proposta.id,
+          documento_id: documentoIdHist,
+          tipo: 'documento_reprovacao_revertida',
+          acao: novoStatus === 'aprovado' ? 'aprovar' : 'reativar',
+          descricao: `Reprovação do documento "${tipoDoc ?? 'documento'}" revertida para ${novoStatus === 'aprovado' ? 'APROVADO' : 'em análise'}`,
+          motivo: justificativa,
+          status_anterior: 'reprovado',
+          status_novo: novoStatus,
+          metadata: {
+            motivo_reprovacao_original: motivoOriginal,
+            origem: isSolicitado ? 'documentos_solicitados' : 'contratos_documentos',
+            doc_id: realId,
+          },
+        });
+      }
+
+      // Log de auditoria
+      await registrarLog({
+        acao: 'reativar',
+        modulo: 'documentos',
+        descricao: `Reverter reprovação de documento "${tipoDoc ?? 'documento'}" para ${novoStatus}`,
+        entidade_id: realId,
+        tabela: isSolicitado ? 'documentos_solicitados' : 'contratos_documentos',
+        dados_anteriores: { status: 'reprovado', motivo_reprovacao: motivoOriginal },
+        dados_novos: { status: novoStatus, justificativa },
+      });
+
+      toast.success(
+        novoStatus === 'aprovado'
+          ? 'Reprovação revertida e documento aprovado'
+          : 'Reprovação revertida — documento voltou para análise',
+      );
+      queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error('Erro ao reverter reprovação', { description: msg });
+      throw err;
+    }
+  };
   const podeAtivarSoftruck = proposta?.status === 'ativo' &&
     proposta?.instalacao_info?.rastreador_plataforma === 'softruck' &&
     !proposta?.instalacao_info?.rastreador_ativado &&
@@ -635,6 +743,7 @@ export default function PropostaAnalise() {
           onViewDocumento={setDocumentoVisualizar}
           onAprovarDocumento={handleAprovarDocumento}
           onReprovarDocumento={handleReprovarDocumento}
+          onReverterReprovacaoDocumento={isFinalizada ? undefined : (doc) => setDocumentoReverter(doc)}
           onAprovar={handleAprovar}
           onSolicitarDocs={() => setShowSolicitarDocs(true)}
           onReprovar={() => setShowReprovar(true)}
@@ -784,6 +893,14 @@ export default function PropostaAnalise() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reverter reprovação de documento (somente proposta aberta) */}
+      <ReverterReprovacaoDocumentoDialog
+        documento={documentoReverter}
+        open={!!documentoReverter}
+        onOpenChange={(o) => !o && setDocumentoReverter(null)}
+        onConfirm={handleReverterReprovacaoDocumento}
+      />
     </div>
   );
 }
