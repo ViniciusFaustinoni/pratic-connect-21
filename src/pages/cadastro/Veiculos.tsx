@@ -478,7 +478,9 @@ export default function Veiculos() {
                     key={veiculo.id}
                     veiculo={veiculo}
                     canDelete={canDeleteVeiculo}
+                    canHardDelete={canHardDeleteVeiculo}
                     onSelect={setSelectedVeiculoId}
+                    onCancelar={setVeiculoToCancel}
                     onDelete={setVeiculoToDelete}
                     formatCurrency={formatCurrency}
                   />
@@ -533,17 +535,45 @@ export default function Veiculos() {
                           <p className="text-xs text-muted-foreground truncate">{veiculo.modelo}</p>
                         </div>
                         {canDeleteVeiculo && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 -mt-1 -mr-1 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa });
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 -mt-1 -mr-1 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setVeiculoToCancel({
+                                  id: veiculo.id,
+                                  placa: veiculo.placa,
+                                  marca: veiculo.marca,
+                                  modelo: veiculo.modelo,
+                                  associado_id: veiculo.associado_id,
+                                })}
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Cancelar veículo
+                              </DropdownMenuItem>
+                              {canHardDeleteVeiculo && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa })}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Excluir permanentemente
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
 
