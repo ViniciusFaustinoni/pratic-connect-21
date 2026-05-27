@@ -3,6 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { encerrarSessao, SESSION_TOKEN_KEY } from '@/hooks/useAuthSession';
+import { useForceLogoutListener } from '@/hooks/useForceLogoutListener';
 import {
   Profile,
   PerfilAcesso,
@@ -94,6 +95,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Escuta broadcast `force_logout` (Diretor → "Deslogar todos os usuários")
+  // e dispara logout local imediato em todas as abas conectadas exceto a do
+  // próprio Diretor que disparou. Ver `useForceLogoutListener`.
+  useForceLogoutListener(user?.id ?? null);
 
   // ============================================
   // FUNÇÕES DE BUSCA

@@ -240,6 +240,22 @@ export default function LoginPage() {
 
         <CardContent className="space-y-4">
 
+          {/* AVISO DE SESSÃO ENCERRADA (admin / 401) */}
+          {(() => {
+            const reason = new URLSearchParams(location.search).get('reason');
+            if (reason !== 'admin_logout' && reason !== 'session_expired') return null;
+            const msg =
+              reason === 'admin_logout'
+                ? 'Sua sessão foi encerrada pelo administrador. Faça login novamente para ver as informações atualizadas.'
+                : 'Sua sessão expirou. Faça login novamente.';
+            return (
+              <Alert className="animate-in fade-in slide-in-from-top-2 duration-300 border-amber-500/40 bg-amber-500/10">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-900 dark:text-amber-200">{msg}</AlertDescription>
+              </Alert>
+            );
+          })()}
+
           {/* ALERTA DE ERRO */}
           {error && (
             <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">

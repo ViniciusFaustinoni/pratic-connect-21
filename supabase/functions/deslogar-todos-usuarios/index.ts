@@ -142,6 +142,36 @@ Deno.serve(async (req) => {
       },
     });
 
+    // Broadcast em tempo real: clientes conectados ouvem `system-events`
+    // e executam logout local imediato (limpando cache + redirecionando
+    // para /login?reason=admin_logout). O cliente filtra por `by_id` para
+    // preservar a sessão do próprio Diretor que disparou.
+    try {
+      const channel = admin.channel('system-events');
+      await new Promise<void>((resolve) => {
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') resolve();
+        });
+        // Falha-safe: não bloqueia mais de 3s aguardando subscribe
+        setTimeout(resolve, 3000);
+      });
+      await channel.send({
+        type: 'broadcast',
+        event: 'force_logout',
+        payload: {
+          at: new Date().toISOString(),
+          by_id: callerId,
+          by_nome: callerNome,
+          reason: 'admin_mass_logout',
+        },
+      });
+      await admin.removeChannel(channel);
+    } catch (broadcastErr) {
+      // Broadcast é best-effort — usuários ainda cairão no 401 quando o
+      // token revogado tentar refresh. Apenas loga sem falhar a operação.
+      console.error('[deslogar-todos-usuarios] broadcast falhou:', broadcastErr);
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,

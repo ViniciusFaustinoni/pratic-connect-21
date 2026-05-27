@@ -53,6 +53,29 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
   try {
     const res = await fetch(input, { ...init, signal: controller.signal });
     status = res.status;
+
+    // Rede de segurança: usuários offline durante "Deslogar todos" voltam
+    // e qualquer request autenticada retorna 401 — força logout local e
+    // redireciona para /login?reason=session_expired. PostgREST/Auth/Edge
+    // todos retornam 401 quando o JWT está revogado/expirado.
+    // Importante: ignorar chamadas explícitas de login/refresh, que usam
+    // 400/401 como controle de fluxo normal.
+    if (
+      status === 401 &&
+      !url.includes('/auth/v1/token') &&
+      !url.includes('/auth/v1/signup') &&
+      !url.includes('/auth/v1/otp') &&
+      typeof window !== 'undefined' &&
+      !window.__forceLogoutInFlight &&
+      window.location.pathname !== '/login' &&
+      !window.location.pathname.startsWith('/auth')
+    ) {
+      // Import dinâmico evita ciclo client → hook → client
+      import('@/hooks/useForceLogoutListener')
+        .then(({ forceLocalLogout }) => forceLocalLogout('session_expired'))
+        .catch(() => { /* noop */ });
+    }
+
     return res;
   } catch (err: any) {
     isTimeout = err?.name === 'AbortError';
