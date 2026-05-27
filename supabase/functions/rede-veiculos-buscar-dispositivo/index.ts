@@ -356,3 +356,21 @@ function json(body: unknown, status = 200): Response {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
+
+/**
+ * Classifica `ultimoErro` para distinguir IMEI/placa realmente inexistente
+ * de problemas de plataforma (flag de sincronismo, CPF inválido, 5xx, etc).
+ * Retornar 'not_found' significa "API respondeu OK mas sem registro".
+ */
+type ErrorKind = 'not_found' | 'sync_disabled' | 'api_error' | 'api_unavailable' | 'auth_error';
+function classificarErro(msg: string | null): ErrorKind {
+  if (!msg) return 'not_found';
+  const m = msg.toLowerCase();
+  if (m.includes('sincronismo') || m.includes('integraç') && m.includes('desabilit')) return 'sync_disabled';
+  if (m.includes('autentic') || m.includes('token') || m.includes('unauthorized') || m.includes('401') || m.includes('403')) return 'auth_error';
+  if (m.startsWith('http 5') || m.includes('timeout') || m.includes('network') || m.includes('econn') || m.includes('fetch failed')) return 'api_unavailable';
+  if (m.includes('cpf') || m.includes('inválid') || m.includes('invalid') || m.includes('cliente') || m.startsWith('http 4')) return 'api_error';
+  if (m.includes('sem veículo') || m.includes('sem veiculo') || m.includes('sem resultado') || m.includes('não encontrad') || m.includes('not found')) return 'not_found';
+  // Fallback conservador: tudo que não casa com "sem resultado" claro vira api_error.
+  return 'api_error';
+}
