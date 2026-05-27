@@ -1,134 +1,154 @@
+## Diagnóstico confirmado
 
-## Pontos preliminares confirmados
+**Causa bloqueante real:** o fluxo para em **cadastro do veículo no SGA**, antes da etapa de mídia.
 
-**1. Endpoint já é produção.**
-`rastreadores_config_plataformas` para `rede_veiculos`:
-- `ambiente_atual = producao`
-- `api_url_producao = https://integracao.redeveiculos.com/api/v2/prod`
-- A edge usa `${baseUrl}/vincularClienteVeiculo/` → resolve para `/api/v2/prod/vincularClienteVeiculo/`. ✅ Nada a alterar aqui.
+### O que o código faz hoje
+1. **Autentica no Hinova**  
+   - `supabase/functions/sga-hinova-sync/index.ts:847-866`
+2. **Busca/cadastra associado**  
+   - busca: `supabase/functions/sga-hinova-sync/index.ts:868-905`  
+   - cadastro: `supabase/functions/sga-hinova-sync/index.ts:907-1000`
+3. **Busca/cadastra veículo**  
+   - busca/reuso: `supabase/functions/sga-hinova-sync/index.ts:1003-1112`  
+   - cadastro: `supabase/functions/sga-hinova-sync/index.ts:1113-1451`
+4. **Só depois disso envia fotos/docs**  
+   - início da etapa de mídia: `supabase/functions/sga-hinova-sync/index.ts:1520-1707`
 
-**2. Tipo do veículo — fonte canônica encontrada.**
-A tabela `veiculos` não guarda tipo, mas `marcas_modelos.tipo_veiculo` é a fonte canônica (regra de memória já estabelecida).
-Para KPJ4994: JOIN por marca+modelo retorna `tipo_veiculo = 'carro'` → mapear para `'CARRO'` (uppercase) exigido pela Rede.
+### Onde o caso do MARCOS quebra
+O abort explícito está aqui:
+- `supabase/functions/sga-hinova-sync/index.ts:1420-1451`
 
-Mapeamento `tipo_veiculo` local → enum Rede:
-- `carro` → `CARRO`
-- `moto` → `MOTO`
-- `caminhao` → `CAMINHAO`
-- `onibus` → `ONIBUS`
-- fallback: `CARRO` (com `console.warn [tipo-fallback]` para rastreabilidade)
+Se `cadastrar_veiculo` falha:
+- seta `status_sga = 'erro_sincronizacao'`
+- grava fila em `sga_sync_queue` com `etapa_parou='veiculo'`
+- faz `return`
+- **não entra** na etapa 7 (`FOTOS`)
 
-Outros valores do enum Rede (`JETSKI`, `BARCO`, `BICICLETA`, `TRATOR`, `RETRO`, `PET`, `PESSOAL`) não têm correspondente em `marcas_modelos.tipo_veiculo` hoje — ficam como TODO futuro.
+Isso explica por que **nem veículo nem fotos/docs foram enviados**.
+
+### Evidência do banco para TOG2A62
+Consulta cruzada mostrou:
+- `sga_sync_queue.status = 'pendente'`
+- `sga_sync_queue.etapa_parou = 'veiculo'`
+- `sga_sync_queue.codigo_associado_hinova = 30523`
+- `sga_sync_queue.codigo_veiculo_hinova = null`
+- `veiculos.status_sga = 'erro_sincronizacao'`
+
+Ou seja: **o associado foi resolvido no Hinova, mas o veículo nunca foi criado**, então não existe `codigo_veiculo_hinova` para anexar mídia.
+
+### Evidência dos logs do caso
+Os logs do veículo mostram exatamente esta sequência:
+- `resolver_grupo_sga` = warning, não bloqueante  
+  - `supabase/functions/sga-hinova-sync/index.ts:778-807`
+- `autenticar` = sucesso  
+- `buscar_associado` = sucesso  
+- `cadastrar_veiculo` = falha nas 3 variantes FIPE  
+- `listar_modelos_hinova` = sem retorno útil  
+- `cadastrar_veiculo` = erro final  
+
+As 3 variantes FIPE vêm daqui:
+- `supabase/functions/_shared/hinova-payloads.ts:209-230`
+- loop de tentativa: `supabase/functions/sga-hinova-sync/index.ts:1321-1353`
+
+O fallback por catálogo Hinova vem daqui:
+- `supabase/functions/sga-hinova-sync/index.ts:1356-1417`
+- cliente de catálogo: `supabase/functions/_shared/hinova-client.ts:1829-1892`
+- heurística de escolha: `supabase/functions/_shared/hinova-client.ts:1905-1935`
+
+No caso TOG2A62, o log confirma:
+- FIPE tentadas: `001589-0`, `0015890`, `001589`
+- catálogo Hinova: `Nenhum modelo encontrado no catálogo Hinova (endpoint=/buscar/modelo/Fiat, status=406)`
+
+**Fato objetivo:** o código não conseguiu resolver nem `codigo_fipe` aceito pelo tenant, nem `codigo_modelo` via fallback. Sem isso, o veículo não é criado.
+
+### Sobre fotos/docs: existe envio separado?
+**Não existe** no codebase um endpoint separado de “documentos” para o SGA.
+
+O que existe é:
+- coleta de `documentos`, `contratos_documentos`, `avatar_url` e `vistoria_fotos`:  
+  `supabase/functions/sga-hinova-sync/index.ts:1523-1606`
+- transformação de tudo em payload de foto:  
+  `supabase/functions/_shared/hinova-payloads.ts:354-410`
+- envio único para `POST /veiculo/foto/cadastrar`:  
+  `supabase/functions/_shared/hinova-client.ts:1646-1667`
+
+Então, no código atual, **docs e fotos dependem 100% de `codigoVeiculoHinova` existir**.
+
+### Também confirmei que havia mídia local para enviar
+Para TOG2A62 existem artefatos locais:
+- `documentos`: **1**
+- `contratos_documentos`: **4**
+- `vistorias`: **1**
+- `vistoria_fotos`: **31**
+
+Ou seja: **não faltou mídia local**; faltou o veículo remoto para vincular a mídia.
+
+### O warning do plano sem grupo SGA é a causa?
+**Não.**
+Esse warning é explicitamente não-bloqueante:
+- `supabase/functions/sga-hinova-sync/index.ts:796-807`
+
+O próprio comentário diz que o fluxo segue sem `codigo_grupo_produto`.
+
+### O 401 em uma tentativa antiga é a causa?
+**Não para este erro final.**
+Houve uma tentativa com `buscar_associado` 401, mas nas tentativas seguintes:
+- `autenticar` deu sucesso
+- `buscar_associado` deu sucesso
+- a falha voltou a acontecer em `cadastrar_veiculo`
+
+Então a causa recorrente deste caso é o bloco de resolução/cadastro do veículo, não autenticação.
 
 ---
 
-## Etapa A — Reestruturar payload na edge `rede-veiculos-vincular-cliente`
+## Plano de correção
 
-Trocar o bloco "6. Montar payload" + "7. Chamar API" pelo formato que a doc oficial exige: tudo aninhado dentro de `dados`, sem campos duplicados na raiz dos objetos `equipamento`/`veiculo`/`cliente`.
+### 1) Corrigir a resolução de modelo no fallback Hinova
+Ajustar o fallback de catálogo para não morrer silenciosamente quando o tenant devolve 406/estrutura vazia nos endpoints atuais.
 
-**Novo payload (estrutura oficial v2):**
+**Arquivos alvo:**
+- `supabase/functions/_shared/hinova-client.ts`
+- `supabase/functions/sga-hinova-sync/index.ts`
 
-```json
-{
-  "equipamento": {
-    "dados": {
-      "imei": "354522186314659",
-      "localInstalacao": "painel",
-      "possuiBloqueio": false
-    }
-  },
-  "veiculo": {
-    "dados": {
-      "tipo": "CARRO",
-      "marca": "RENAULT",
-      "modelo": "DUSTER DYNAMIQUE 1.6 FLEX 16V MEC.",
-      "placa": "KPJ4994",
-      "cor": "Prata",
-      "ano": "2013",
-      "chassi": "93YHSR6P5DJ617772",
-      "renavam": "<renavam ou omitir>"
-    }
-  },
-  "cliente": {
-    "dados": {
-      "cpfCnpj": "00337172730",
-      "nome": "ANDERSON DA SILVA ESTEVES",
-      "celular": "<telefone limpo>",
-      "email": "<email>",
-      "endereco": {
-        "cep": "...",
-        "logradouro": "...",
-        "numero": "...",
-        "bairro": "...",
-        "cidade": "...",
-        "uf": "..."
-      }
-    }
-  },
-  "permissoes": {
-    "acessoWeb": true,
-    "pushNotifications": true,
-    "alertaVelocidade": true,
-    "alertaCercaVirtual": true,
-    "alertaIgnicao": true
-  }
-}
+**Mudanças:**
+- registrar o resultado de **cada endpoint candidato** em `listarModelosHinova`, não só o último
+- normalizar melhor `marca/modelo` antes da busca no catálogo
+- enriquecer o fallback com tentativa mais orientada ao nome base do modelo quando o nome comercial vier composto
+- devolver debug estruturado suficiente para comprovar por que nenhum candidato serviu
+
+### 2) Melhorar a observabilidade do erro recorrente
+Hoje o log final guarda só o último `endpoint/status` do fallback de catálogo.
+
+**Mudanças:**
+- incluir no log de `listar_modelos_hinova` o histórico de candidatos tentados
+- logar se `escolherMelhorModeloHinova` recebeu lista vazia ou rejeitou candidatos por score
+- logar explicitamente quando não existe `codigo_modelo_hinova` persistido e o fast-path foi pulado
+
+### 3) Reprocessar o caso TOG2A62 após a correção
+Depois do ajuste:
+- reexecutar `sga-hinova-sync` para TOG2A62
+- validar criação de `codigo_veiculo_hinova`
+- validar entrada na etapa `FOTOS`
+- conferir envio dos 1 + 4 + 31 artefatos elegíveis
+
+### 4) Validar se o problema afeta outros casos iguais
+Usar o mesmo padrão para localizar outros veículos presos em:
+- `sga_sync_queue.etapa_parou = 'veiculo'`
+- `erro_ultimo` contendo `MODELO enviado não foi encontrado`
+
+---
+
+## Detalhes técnicos
+
+```text
+Fluxo atual
+associado OK -> veículo falha -> return -> mídia não roda
+
+Ponto exato do bloqueio
+sga-hinova-sync/index.ts:1420-1451
+
+Ponto exato da mídia
+sga-hinova-sync/index.ts:1520-1707
 ```
 
-**Envio (mantém urlencoded conforme doc):**
-```ts
-const formBody = new URLSearchParams();
-formBody.append('json', JSON.stringify(payload));
-// NÃO duplicar cpfCnpj/imei/placa na raiz do form — a doc não pede
-```
-
-**Mudanças cirúrgicas na edge:**
-1. Remover `cpfCnpj` e `imei` do nível raiz do objeto `payload` (linhas 232–235).
-2. Aninhar `equipamento`, `veiculo`, `cliente` dentro de `{ dados: {...} }`.
-3. Buscar `tipo_veiculo` via JOIN com `marcas_modelos` (marca+modelo), mapear para uppercase com fallback `CARRO`.
-4. Atualizar `mapTipoVeiculo` para receber `tipoCanonico` e devolver enum Rede.
-5. Remover `formBody.append('cpfCnpj'/'imei'/'placa')` — manter apenas `json`.
-6. `permissoes` segue dentro do payload (não está documentado como obrigatório, mas a edge já usa — manter por compatibilidade).
-
-**Antes de disparar:** a edge ainda NÃO será chamada. Eu mostro o request body montado (via `console.log` + execução dry-run) e você confirma antes do disparo real para o Anderson.
-
----
-
-## Etapa B — Disparo controlado do Anderson/KPJ4994 (após confirmação)
-
-Após você validar o payload reestruturado:
-
-1. Chamar `rede-veiculos-vincular-cliente` com:
-   - `imei = 354522186314659`
-   - `veiculoId = d53acb36-0e8c-4683-8537-0651c724d454`
-   - `associadoId = 5f51682f-7be6-45c5-baf2-b695711ddf3a`
-2. **Validações pós-chamada (3 trincas):**
-   - `rede-veiculos-buscar-dispositivo` por IMEI → deve retornar KPJ4994 vinculado a Anderson
-   - Consulta por CPF Anderson (`00337172730`) → deve listar KPJ4994
-   - Consulta por CPF Gabriel (`15582970738`) → deve continuar vazio
-3. Se sucesso: registrar memória `mem://logic/integrations/rede-veiculos-vincular-payload-v2-dados-aninhado` com o formato canônico e atualizar resolução do caso Anderson.
-4. Se falhar: parar, reportar resposta crua, sem improvisar fix em cima de fix.
-
----
-
-## Etapa C — Hardening da edge `efetivar-troca-titularidade` (deploy próprio, depois de A+B verdes)
-
-Mantido como acordado: quando `rastreadores.status ≠ 'instalado'` mas `veiculo_id` está setado, enfileirar em `sga_sync_queue` com `etapa_parou = 'revisao_rastreador_estado_ambiguo'`, `status = 'falha_permanente'` (Softruck + Rede simétrico).
-
-Sem batch retroativo (1 única troca efetivada no histórico).
-
----
-
-## TODOs registrados (não bloqueiam este deploy)
-
-- Mapear demais tipos do enum Rede (`JETSKI`, `BARCO`, `BICICLETA`, `TRATOR`, `RETRO`, `PET`, `PESSOAL`) quando aparecerem em `marcas_modelos.tipo_veiculo`.
-- Endpoint separado `/atualizarDadosCliente/` para casos de cliente já cadastrado precisando de update (regra da doc: vincular ignora dados de cliente preexistente).
-
----
-
-## Ordem de execução
-
-1. Etapa A (reestruturar payload) — **deploy + dry-run com log do body**
-2. **Pausa para sua confirmação** do payload exato
-3. Etapa B (disparo Anderson + 3 trincas de validação)
-4. Etapa C (hardening edge troca) — deploy próprio depois
+Se você aprovar, eu implemento a correção e deixo o log do próximo caso autoexplicativo.
