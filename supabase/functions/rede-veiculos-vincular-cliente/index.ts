@@ -180,6 +180,31 @@ serve(async (req) => {
 
     console.log('[RedeVeiculos Vincular] Veículo encontrado:', veiculo.placa);
 
+    // ===== 2.1 Early-return idempotente =====
+    // Se já temos cliente+veículo na Rede E equipamento vinculado localmente,
+    // não dispara novo POST /vincularClienteVeiculo/ (evita duplicar cliente/
+    // veículo/equipamento na Rede em re-chamadas). Mesmo padrão do early-return
+    // da softruck-ativar-dispositivo.
+    if (
+      veiculo.rede_veiculos_veiculo_id &&
+      veiculo.rede_veiculos_cliente_id &&
+      rastreador.plataforma_device_id
+    ) {
+      console.log('[RedeVeiculos Vincular] Já vinculado — early return idempotente');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          rastreador_id: rastreador.id,
+          rede_veiculos_cliente_id: veiculo.rede_veiculos_cliente_id,
+          rede_veiculos_veiculo_id: veiculo.rede_veiculos_veiculo_id,
+          rede_veiculos_equipamento_id: rastreador.plataforma_device_id,
+          already_activated: true,
+          mensagem: 'Já vinculado na Rede Veículos',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+      );
+    }
+
     // ===== 3. Buscar associado local =====
     const { data: associado, error: associadoError } = await supabase
       .from('associados')
