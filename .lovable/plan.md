@@ -1,63 +1,47 @@
 ## Objetivo
 
-Permitir que a analista de Cadastro **desfaça uma reprovação de documento** (volte para `em_analise`/`pendente` ou aprove diretamente) **enquanto a proposta ainda não foi fechada** (Cadastro ainda não aprovado). Toda reversão exige uma **justificativa obrigatória**, registrada no histórico do associado e em logs de auditoria.
+Em **Monitoramento › Serviço de Campo › Serviços**, no drawer de detalhe do serviço, exibir o **Local da Instalação** que o técnico preencheu no ato da instalação — tanto na aba **Resumo** quanto na aba **Rastreador**.
 
-## Regras de negócio
+## Onde isso vive hoje
 
-- **Quando pode reverter:** só enquanto o contrato da proposta tem `aprovado_em IS NULL` (Cadastro ainda em análise). Depois disso, o card de doc reprovado fica como hoje (somente leitura).
-- **Quem pode reverter:** mesmo perfil que aprova/reprova documento hoje (analista de Cadastro / interno).
-- **Justificativa:** texto obrigatório (mín. 10 caracteres). Sem texto válido, botão de confirmar fica desabilitado.
-- **Para onde volta:**
-  - "Reverter para análise" → status `em_analise`, limpa `motivo_reprovacao`.
-  - "Reverter e aprovar" (atalho) → status `aprovado`, limpa `motivo_reprovacao`.
-- **Rastro obrigatório (sempre os dois):**
-  - `associados_historico` (aba Histórico do associado) — tipo `documento_reprovacao_revertida`, descrição com nome do tipo do doc + justificativa + analista, `dados_anteriores` (status anterior + motivo) e `dados_novos` (novo status).
-  - `logs_auditoria` via `registrarLog` — ação `atualizar` + descrição `[CADASTRO] Reversão de reprovação de documento`.
-- **Snapshot no próprio doc:** preserva o motivo reprovado no histórico (não some sem registro).
+O técnico grava três campos canônicos na tabela `rastreadores` durante a instalação:
 
-## Mudanças no produto
+- `local_instalacao` — texto curto (ex.: "Sob o painel, lado motorista")
+- `descricao_instalacao` — descrição/observação livre
+- `foto_local_instalacao_url` — foto do local
 
-### 1. UI — Card do documento reprovado (`DocumentoAnexadoCard.tsx`)
-- Quando `status === 'reprovado'` **e** contrato da proposta ainda **não aprovado** (`aprovado_em IS NULL`), exibir um botão discreto **"Reverter reprovação"** abaixo do badge "Reprovado".
-- Sem o contexto de "proposta aberta", o botão não aparece (mantém o card como hoje em telas de histórico/associado já fechado).
+O `ServicoDetailModal` já carrega o relacionamento `rastreadores:rastreador_id`, mas **não seleciona** esses três campos hoje — por isso a UI não tem como mostrar. A informação existe e é alimentada pelo fluxo do instalador (`InstaladorChecklist`, hook `useServicos` linhas 1062–1068).
 
-### 2. Novo dialog — `ReverterReprovacaoDocumentoDialog.tsx`
-- Mostra: tipo do doc, data da reprovação, motivo original.
-- Campo **Justificativa** (textarea, obrigatório, mín. 10 chars).
-- Dois CTAs:
-  - **Reverter para análise** (volta a `em_analise`).
-  - **Reverter e aprovar** (vai direto para `aprovado`).
-- Toast de sucesso/erro padrão.
+## Mudanças
 
-### 3. Hook — `useReverterReprovacaoDocumento` (em `src/hooks/useDocumentos.ts`)
-- Roda em transação lógica no cliente:
-  1. Lê o documento atual (status, motivo, associado_id, tipo).
-  2. Guarda contra reversão se contrato já aprovado (consulta `contratos.aprovado_em` da proposta — bloqueio defensivo além da UI).
-  3. `UPDATE documentos` → novo status, `motivo_reprovacao = null`, `analista_id = auth.uid()`, `data_analise = now()`.
-  4. `INSERT associados_historico` com tipo, descrição e snapshots.
-  5. `registrarLog` em `logs_auditoria`.
-- Invalida as mesmas queries que `useAnaliseDocumento`.
+### 1. `src/hooks/useServicos.ts` — incluir campos no select
+Adicionar `local_instalacao, descricao_instalacao, foto_local_instalacao_url` nos dois selects de rastreadores (busca primária em `servicos` linha ~796 e fallback em `instalacoes` linha ~817).
 
-### 4. Telas que devem consumir o novo botão
-- `PropostaAnalise.tsx`, `FilaDocumentos.tsx`, `AnaliseDocumento.tsx`, `AssociadoDetalhe.tsx` (aba Documentos enquanto proposta aberta) — passar a prop `propostaAberta` para o card decidir se renderiza o botão.
+### 2. `src/components/servicos-campo/ServicoDetailModal.tsx`
 
-## Não-objetivos (fora deste escopo)
+**Aba Resumo (apenas instalação / vistoria de entrada concluída):**
+Adicionar nova `<Section title="Local da instalação" icon={MapPin}>` após Agendamento, exibindo:
+- `Local` → `rastreadores.local_instalacao`
+- `Descrição` → `rastreadores.descricao_instalacao` (quando houver)
+- Thumbnail clicável da `foto_local_instalacao_url` (abre em nova aba; sem foto, mostra "—")
 
-- Não muda nada para documentos **aprovados** (não há reversão de aprovação aqui).
-- Não muda fluxo do Cadastro depois de aprovado (não reabre proposta).
-- Não altera regras de R/F nem `cadastro_aprovado` — apenas o status do documento.
-- Não mexe nas reprovações em telas externas (Monitoramento, Vistoria etc.).
+A seção só aparece quando `isInstalacao && (servico.rastreadores?.local_instalacao || foto_local_instalacao_url || descricao_instalacao)` — para serviços ainda não concluídos / sem rastreador físico, fica oculta (não aparece "—" vazio para sub-FIPE que dispensa rastreador).
 
-## Detalhes técnicos
+**Aba Rastreador:**
+Acrescentar à `<Section title="Rastreador">` existente os mesmos três campos abaixo de Quilometragem, com a thumbnail da foto.
 
-- Não precisa de migração de schema: já há `documentos.status`, `motivo_reprovacao`, `analista_id`, `data_analise` e a tabela `associados_historico` já é usada pelo projeto.
-- Guard backend leve: o próprio UPDATE em `documentos` pode rodar com o cliente atual (RLS de interno já permite); a checagem `contratos.aprovado_em IS NULL` é feita no hook antes do update. Se quiser proteção dura no banco, fica como tech-debt opcional (trigger BEFORE UPDATE em `documentos` bloqueando transição `reprovado → *` quando contrato já aprovado) — não bloqueante para esta entrega.
-- `registrarLog` segue o padrão atual do projeto (Vigia universal de logs_auditoria com fallback `acao='criar'`).
+### 3. Sem mudanças em backend
+Schema e fluxo de gravação já existem. Não há migração nem edge function envolvida.
 
 ## Critério de aceite
 
-- Doc reprovado em proposta aberta mostra "Reverter reprovação".
-- Clicar abre dialog; sem justificativa válida, não submete.
-- Após reverter, status muda corretamente, motivo original aparece na aba Histórico do associado com a justificativa da analista + nome dela + carimbo de data/hora.
-- Aparece também em Configurações › Logs (logs_auditoria).
-- Em proposta já aprovada pelo Cadastro, o botão não aparece e (se chamado direto) o hook recusa com toast.
+1. Abrir um serviço de instalação **concluído** (ex.: o LLF7F07 do print) → aba Resumo mostra "Local da instalação" com o texto e a foto que o técnico enviou.
+2. Aba Rastreador exibe ID, IMEI, KM **e** local + descrição + foto.
+3. Em serviço sub-FIPE (sem rastreador físico) ou serviço ainda não concluído sem dados preenchidos, a seção/linhas não aparecem (não polui a UI com "—").
+4. Foto abre em nova aba ao clicar.
+
+## Fora de escopo
+
+- Não tocar no fluxo do técnico (já grava certo).
+- Não mexer em `AprovacaoInstalacaoDetalhe` nem nas outras telas de monitoramento — pedido é específico do `ServicoDetailModal`.
+- Não criar nova aba — reaproveita Resumo + Rastreador existentes.
