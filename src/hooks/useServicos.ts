@@ -815,7 +815,7 @@ export function useServicoDetalhes(id: string | undefined) {
           *,
           associados (id, nome, telefone, email, whatsapp, cpf, rg, logradouro, numero, bairro, cidade, uf, cep, complemento),
           veiculos (id, marca, modelo, placa, ano_modelo, ano_fabricacao, cor, chassi, renavam, valor_fipe, combustivel),
-          rastreadores (id, codigo, numero_serie, imei, plataforma, status)
+          rastreadores (id, codigo, numero_serie, imei, plataforma, status, local_instalacao, descricao_instalacao, foto_local_instalacao_url)
         `)
         .eq('id', id)
         .maybeSingle();
