@@ -11,9 +11,10 @@ interface DocumentosAnexadosPanelProps {
   onViewDocumento: (documento: DocumentoAnexadoCompleto) => void;
   onAprovarDocumento?: (docId: string) => Promise<void>;
   onReprovarDocumento?: (docId: string, motivo: string) => Promise<void>;
+  onReverterReprovacao?: (documento: DocumentoAnexadoCompleto) => void;
 }
 
-export function DocumentosAnexadosPanel({ documentos, onViewDocumento, onAprovarDocumento, onReprovarDocumento }: DocumentosAnexadosPanelProps) {
+export function DocumentosAnexadosPanel({ documentos, onViewDocumento, onAprovarDocumento, onReprovarDocumento, onReverterReprovacao }: DocumentosAnexadosPanelProps) {
   // Verificar se tem contrato assinado
   const contratoAssinado = documentos.find(d => d.tipo === 'contrato_assinado');
   const temContratoAprovado = contratoAssinado?.status === 'aprovado';
