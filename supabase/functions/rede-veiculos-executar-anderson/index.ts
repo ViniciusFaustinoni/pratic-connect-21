@@ -116,12 +116,10 @@ Deno.serve(async (req) => {
     }
 
     // ===== Etapa 1: desvincular Gabriel =====
+    // Opção A: payload MÍNIMO — só imei + cpfCnpjCliente
     const etapa1Payload = {
       imei: IMEI_ALVO,
       cpfCnpjCliente: CPF_GABRIEL,
-      placa: PLACA,
-      chassi: CHASSI,
-      motivo: 'troca_titularidade_anderson_KPJ4994',
     };
     if (dryRun) {
       out.etapas.etapa1_desvincular_gabriel = { dry_run: true, payload: etapa1Payload };
