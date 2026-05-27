@@ -1,6 +1,7 @@
 import { 
   FileText, Eye, CheckCircle, Shield, Clock, XCircle,
-  CreditCard, Car, Home, Camera, FileSignature, Image, AlertCircle, Loader2
+  CreditCard, Car, Home, Camera, FileSignature, Image, AlertCircle, Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ interface DocumentoAnexadoCardProps {
   onView: (documento: DocumentoAnexadoCompleto) => void;
   onAprovar?: (docId: string) => Promise<void>;
   onReprovar?: (docId: string, motivo: string) => Promise<void>;
+  /** Quando fornecido e doc está reprovado, mostra "Reverter reprovação". */
+  onReverter?: (documento: DocumentoAnexadoCompleto) => void;
 }
 
 // Mapeamento de ícones por tipo
@@ -92,11 +95,12 @@ function formatDateTime(dateString: string): string {
   return format(new Date(dateString), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
-export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar }: DocumentoAnexadoCardProps) {
+export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar, onReverter }: DocumentoAnexadoCardProps) {
   const isContrato = documento.tipo === 'contrato_assinado';
   const isReenviado = typeof documento.id === 'string' && documento.id.startsWith('solicitado-');
   const status = statusConfig[documento.status] || statusConfig.pendente;
   const podeAnalisar = (documento.status === 'pendente' || documento.status === 'em_analise') && (onAprovar || onReprovar);
+  const podeReverterReprovacao = documento.status === 'reprovado' && !!onReverter;
 
   const [loadingAction, setLoadingAction] = useState<'aprovar' | 'reprovar' | null>(null);
 
@@ -213,6 +217,24 @@ export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar 
                   Reprovar
                 </Button>
               )}
+            </div>
+          )}
+
+          {/* Reverter reprovação — só quando proposta ainda aberta no Cadastro */}
+          {podeReverterReprovacao && (
+            <div className="mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-warning/40 text-warning hover:bg-warning/10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReverter?.(documento);
+                }}
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reverter reprovação
+              </Button>
             </div>
           )}
         </div>

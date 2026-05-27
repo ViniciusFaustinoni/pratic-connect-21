@@ -1,59 +1,63 @@
 ## Objetivo
 
-1. Corrigir o local de instalação do **RJH0C29** na Rede Veículos (hoje "PAINEL", correto: **ODB**).
-2. Criar caminho reutilizável para alterar `localInstalacao` na Rede após o vínculo inicial.
+Permitir que a analista de Cadastro **desfaça uma reprovação de documento** (volte para `em_analise`/`pendente` ou aprove diretamente) **enquanto a proposta ainda não foi fechada** (Cadastro ainda não aprovado). Toda reversão exige uma **justificativa obrigatória**, registrada no histórico do associado e em logs de auditoria.
 
-## Situação atual (apurada)
+## Regras de negócio
 
-- **Banco local** já está correto: `rastreadores.local_instalacao = 'odb'`.
-- **`veiculos.rede_veiculos_veiculo_id` está NULL** para o RJH0C29 — nosso sistema não tem o ID da Rede gravado, então não consegue chamar nenhum endpoint de atualização direto.
-- Hoje só enviamos `localInstalacao` para a Rede no momento do vínculo inicial (`rede-veiculos-vincular-cliente`). Não existe endpoint nosso para alterar isso depois.
+- **Quando pode reverter:** só enquanto o contrato da proposta tem `aprovado_em IS NULL` (Cadastro ainda em análise). Depois disso, o card de doc reprovado fica como hoje (somente leitura).
+- **Quem pode reverter:** mesmo perfil que aprova/reprova documento hoje (analista de Cadastro / interno).
+- **Justificativa:** texto obrigatório (mín. 10 caracteres). Sem texto válido, botão de confirmar fica desabilitado.
+- **Para onde volta:**
+  - "Reverter para análise" → status `em_analise`, limpa `motivo_reprovacao`.
+  - "Reverter e aprovar" (atalho) → status `aprovado`, limpa `motivo_reprovacao`.
+- **Rastro obrigatório (sempre os dois):**
+  - `associados_historico` (aba Histórico do associado) — tipo `documento_reprovacao_revertida`, descrição com nome do tipo do doc + justificativa + analista, `dados_anteriores` (status anterior + motivo) e `dados_novos` (novo status).
+  - `logs_auditoria` via `registrarLog` — ação `atualizar` + descrição `[CADASTRO] Reversão de reprovação de documento`.
+- **Snapshot no próprio doc:** preserva o motivo reprovado no histórico (não some sem registro).
 
-## Plano
+## Mudanças no produto
 
-### Passo 1 — Backfill do RJH0C29 (caso pontual)
+### 1. UI — Card do documento reprovado (`DocumentoAnexadoCard.tsx`)
+- Quando `status === 'reprovado'` **e** contrato da proposta ainda **não aprovado** (`aprovado_em IS NULL`), exibir um botão discreto **"Reverter reprovação"** abaixo do badge "Reprovado".
+- Sem o contexto de "proposta aberta", o botão não aparece (mantém o card como hoje em telas de histórico/associado já fechado).
 
-Criar edge **`rede-veiculos-backfill-rjh0c29`** (one-shot, descartável após uso) que:
+### 2. Novo dialog — `ReverterReprovacaoDocumentoDialog.tsx`
+- Mostra: tipo do doc, data da reprovação, motivo original.
+- Campo **Justificativa** (textarea, obrigatório, mín. 10 chars).
+- Dois CTAs:
+  - **Reverter para análise** (volta a `em_analise`).
+  - **Reverter e aprovar** (vai direto para `aprovado`).
+- Toast de sucesso/erro padrão.
 
-1. Autentica na Rede.
-2. Chama `obterDadosVeiculo` por **placa** (`RJH0C29`) para descobrir `idVeiculo`, `idCliente`, `idEquipamento`.
-3. Grava esses IDs no nosso banco:
-   - `veiculos.rede_veiculos_veiculo_id`
-   - `veiculos.rede_veiculos_cliente_id`
-   - `rastreadores.plataforma_device_id` / `id_plataforma`
-4. Retorna os IDs encontrados.
+### 3. Hook — `useReverterReprovacaoDocumento` (em `src/hooks/useDocumentos.ts`)
+- Roda em transação lógica no cliente:
+  1. Lê o documento atual (status, motivo, associado_id, tipo).
+  2. Guarda contra reversão se contrato já aprovado (consulta `contratos.aprovado_em` da proposta — bloqueio defensivo além da UI).
+  3. `UPDATE documentos` → novo status, `motivo_reprovacao = null`, `analista_id = auth.uid()`, `data_analise = now()`.
+  4. `INSERT associados_historico` com tipo, descrição e snapshots.
+  5. `registrarLog` em `logs_auditoria`.
+- Invalida as mesmas queries que `useAnaliseDocumento`.
 
-Se a Rede não aceitar busca por placa sem CPF, usar fallback: buscar pelo IMEI `356428070135895` via endpoint que aceite (ou cair em `obterDadosVeiculo` passando `cpfCnpj` do associado + `placa`).
+### 4. Telas que devem consumir o novo botão
+- `PropostaAnalise.tsx`, `FilaDocumentos.tsx`, `AnaliseDocumento.tsx`, `AssociadoDetalhe.tsx` (aba Documentos enquanto proposta aberta) — passar a prop `propostaAberta` para o card decidir se renderiza o botão.
 
-### Passo 2 — Nova edge `rede-veiculos-atualizar-equipamento`
+## Não-objetivos (fora deste escopo)
 
-Caminho reutilizável para qualquer veículo que precise corrigir o local depois:
+- Não muda nada para documentos **aprovados** (não há reversão de aprovação aqui).
+- Não muda fluxo do Cadastro depois de aprovado (não reabre proposta).
+- Não altera regras de R/F nem `cadastro_aprovado` — apenas o status do documento.
+- Não mexe nas reprovações em telas externas (Monitoramento, Vistoria etc.).
 
-- **Input:** `{ veiculoId, localInstalacao }`
-- **Fluxo:**
-  1. Lê `veiculos.rede_veiculos_veiculo_id` + `rastreadores` do veículo. Falha clara se faltar ID da Rede.
-  2. Autentica.
-  3. POST para o endpoint da Rede de atualização de equipamento (`atualizarDadosEquipamento/` — confirmar nome exato na primeira chamada via log).
-  4. Atualiza `rastreadores.local_instalacao` local em caso de sucesso.
-  5. Loga em `rastreadores_api_logs`.
-- **Onde acionar** (fora deste plano, mas previsto): drawer do rastreador (aba Gestão da Rede) — botão "Atualizar local na Rede" próximo ao campo de local. Não vou implementar a UI agora; só a edge.
+## Detalhes técnicos
 
-### Passo 3 — Aplicar para o RJH0C29
+- Não precisa de migração de schema: já há `documentos.status`, `motivo_reprovacao`, `analista_id`, `data_analise` e a tabela `associados_historico` já é usada pelo projeto.
+- Guard backend leve: o próprio UPDATE em `documentos` pode rodar com o cliente atual (RLS de interno já permite); a checagem `contratos.aprovado_em IS NULL` é feita no hook antes do update. Se quiser proteção dura no banco, fica como tech-debt opcional (trigger BEFORE UPDATE em `documentos` bloqueando transição `reprovado → *` quando contrato já aprovado) — não bloqueante para esta entrega.
+- `registrarLog` segue o padrão atual do projeto (Vigia universal de logs_auditoria com fallback `acao='criar'`).
 
-1. Rodar `rede-veiculos-backfill-rjh0c29`.
-2. Rodar `rede-veiculos-atualizar-equipamento` com `localInstalacao='odb'`.
-3. Confirmar no painel da Rede.
+## Critério de aceite
 
-### Passo 4 — Memória
-
-Adicionar nota em `mem://logic/integrations/rede-atualizar-local-instalacao` registrando o novo endpoint e o requisito de `rede_veiculos_veiculo_id` populado.
-
-## Não está no escopo
-
-- Botão na UI para acionar a atualização (posso fazer depois, se quiser).
-- Backfill em massa de outros veículos com `rede_veiculos_veiculo_id` NULL — só o RJH0C29.
-- Criar valor "DUTO DO AR ESQUERDO" no catálogo (você optou por manter ODB).
-
-## Riscos
-
-- O endpoint exato da Rede para alterar `localInstalacao` pós-vínculo precisa ser confirmado pela documentação/teste. Se a Rede não expõe isso, o Passo 2 vira **"sincronizar local no nosso banco + alerta para o operador ajustar manualmente no painel"** — eu reporto antes de prosseguir.
+- Doc reprovado em proposta aberta mostra "Reverter reprovação".
+- Clicar abre dialog; sem justificativa válida, não submete.
+- Após reverter, status muda corretamente, motivo original aparece na aba Histórico do associado com a justificativa da analista + nome dela + carimbo de data/hora.
+- Aparece também em Configurações › Logs (logs_auditoria).
+- Em proposta já aprovada pelo Cadastro, o botão não aparece e (se chamado direto) o hook recusa com toast.

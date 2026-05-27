@@ -50,7 +50,9 @@ import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocume
 import { SituacaoFinanceiraGate } from '@/components/cadastro/SituacaoFinanceiraGate';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
+import { ReverterReprovacaoDocumentoDialog, type NovoStatusReversao } from '@/components/cadastro/ReverterReprovacaoDocumentoDialog';
 import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
+import { registrarLog } from '@/hooks/useAuditLog';
 import {
   PropostaHeroHeader,
   PropostaDetalhesTabs,
