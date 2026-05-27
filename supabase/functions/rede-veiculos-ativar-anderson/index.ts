@@ -82,58 +82,17 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify(out, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // 1. ativarCliente (doc nova: cpfCnpjCliente)
-    out.etapas.a_ativar_cliente = await callRede(baseUrl, token, '/ativarCliente/', {
+    // SONDA: obterStatusCliente — caso 1 (cliente não existe) vs caso 2 (existe mas inconsistente)
+    out.etapas.a_obter_status_cliente = await callRede(baseUrl, token, '/obterStatusCliente/', {
       cpfCnpjCliente: CPF,
     });
-
-    // 2. ativarVeiculo (doc nova: chassi + placa + imei + cpfCnpjCliente)
-    out.etapas.b_ativar_veiculo = await callRede(baseUrl, token, '/ativarVeiculo/', {
-      chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF,
+    // variantes de chave caso a doc esteja errada
+    out.etapas.b_obter_status_cliente_alt_cpf = await callRede(baseUrl, token, '/obterStatusCliente/', {
+      cpf: CPF,
     });
-
-    // 3. informarVeiculoAdimplente (teste extra — doc menciona)
-    out.etapas.c_informar_adimplente = await callRede(baseUrl, token, '/informarVeiculoAdimplente/', {
-      chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF,
+    out.etapas.c_obter_status_cliente_alt_cpfCnpj = await callRede(baseUrl, token, '/obterStatusCliente/', {
+      cpfCnpj: CPF,
     });
-
-    // 4. reconfirmar pós-ativar (por placa)
-    out.etapas.d_reconfirmar = await callRede(baseUrl, token, '/obterDadosVeiculo/', {
-      placa: PLACA, cpfCnpjCliente: CPF,
-    });
-
-    // 5. alias por imei
-    out.etapas.e_reconfirmar_imei = await callRede(baseUrl, token, '/obterDadosVeiculo/', {
-      imei: IMEI, cpfCnpjCliente: CPF,
-    });
-
-    // 5. extrair IDs do melhor obter (preferir d, depois a, depois b)
-    const candidatos = [out.etapas.d_reconfirmar, out.etapas.e_reconfirmar_imei];
-    let idCliente: any = null, idVeiculo: any = null, idEquipamento: any = null;
-    for (const c of candidatos) {
-      const p = c?.parsed || {};
-      idCliente     = idCliente     ?? p.idCliente     ?? p.cliente?.idCliente     ?? p.cliente?.id    ?? null;
-      idVeiculo     = idVeiculo     ?? p.idVeiculo     ?? p.veiculo?.idVeiculo     ?? p.veiculo?.id    ?? null;
-      idEquipamento = idEquipamento ?? p.idEquipamento ?? p.equipamento?.idEquipamento ?? p.equipamento?.id ?? null;
-    }
-    out.ids_extraidos = { idCliente, idVeiculo, idEquipamento };
-
-    if (idCliente || idVeiculo || idEquipamento) {
-      const veicPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (idCliente != null) veicPatch.rede_veiculos_cliente_id = String(idCliente);
-      if (idVeiculo != null) veicPatch.rede_veiculos_veiculo_id = String(idVeiculo);
-      const { error: ve } = await supabase.from('veiculos').update(veicPatch).eq('id', VEICULO_ID);
-
-      const rastPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (idEquipamento != null) rastPatch.plataforma_device_id = String(idEquipamento);
-      if (idVeiculo != null) rastPatch.plataforma_veiculo_id = String(idVeiculo);
-      if (idCliente != null) rastPatch.plataforma_user_id = String(idCliente);
-      const { error: re } = await supabase.from('rastreadores').update(rastPatch).eq('id', RASTREADOR_ID);
-
-      out.persistencia = { veicPatch, rastPatch, veiculoErr: ve?.message || null, rastreadorErr: re?.message || null };
-    } else {
-      out.persistencia = { skip: 'nenhum ID retornado pelos obterDadosVeiculo' };
-    }
 
     out.success = true;
     return new Response(JSON.stringify(out, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
