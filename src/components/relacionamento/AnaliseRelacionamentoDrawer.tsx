@@ -11,10 +11,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  FileSignature, User, Car, FileText, History, Upload, CheckCircle2, Loader2, ExternalLink,
+  FileSignature, User, Car, DollarSign, History, Upload, CheckCircle2, Loader2, ExternalLink,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useAssociado } from '@/hooks/useAssociados';
+import { useVeiculo } from '@/hooks/useVeiculos';
+import { useCobrancas } from '@/hooks/useCobrancas';
+import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
+import { TimelineHistorico } from '@/components/cadastro/TimelineHistorico';
 import {
   TIPO_CFG, STATUS_CFG,
   useAssumirAnalise, useResolverAnalise, uploadAnexoRelacionamento,
@@ -27,18 +33,50 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
+function fmtMoney(v: number | null | undefined) {
+  if (v == null || Number.isNaN(v)) return '—';
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[140px_1fr] gap-2 text-sm py-1">
+      <div className="text-muted-foreground">{label}</div>
+      <div className="font-medium break-words">{value ?? '—'}</div>
+    </div>
+  );
+}
+
 export default function AnaliseRelacionamentoDrawer({ analise, open, onOpenChange }: Props) {
   const [justificativa, setJustificativa] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [tab, setTab] = useState<'associado' | 'veiculo' | 'financeiro' | 'historico'>('associado');
 
   const assumir = useAssumirAnalise();
   const resolver = useResolverAnalise();
+
+  // Lazy: só dispara fetch quando aba está ativa e drawer aberto
+  const associadoQ = useAssociado(
+    tab === 'associado' && open ? analise?.associado_id ?? undefined : undefined
+  );
+  const veiculoQ = useVeiculo(
+    tab === 'veiculo' && open ? analise?.veiculo_id ?? undefined : undefined
+  );
+  const cobrancasQ = useCobrancas(
+    tab === 'financeiro' && open && analise?.associado_id
+      ? { associado_id: analise.associado_id }
+      : undefined
+  );
+  const historicoQ = useAssociadoHistoricoCompleto(
+    tab === 'historico' && open ? analise?.associado_id ?? undefined : undefined
+  );
 
   useEffect(() => {
     if (analise) {
       setJustificativa(analise.justificativa || '');
       setFile(null);
+      setTab('associado');
     }
   }, [analise?.id]);
 
@@ -93,7 +131,7 @@ export default function AnaliseRelacionamentoDrawer({ analise, open, onOpenChang
         </SheetHeader>
 
         <div className="space-y-4 mt-4">
-          {/* Documentos / termos */}
+          {/* Documento assinado */}
           <Card>
             <CardContent className="p-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -116,53 +154,161 @@ export default function AnaliseRelacionamentoDrawer({ analise, open, onOpenChang
             </CardContent>
           </Card>
 
-          {/* Atalhos para visualizações existentes */}
+          {/* Visualizações nativas (sem sair do setor) */}
           <Card>
-            <CardContent className="p-3 space-y-2">
-              <div className="text-sm font-medium">Acessos rápidos</div>
-              <div className="flex flex-wrap gap-2">
-                {analise.associado_id && (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/cadastro/associados/${analise.associado_id}`}>
-                      <User className="h-4 w-4 mr-1" /> Ficha do Associado
-                    </Link>
-                  </Button>
-                )}
-                {analise.veiculo_id && (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/cadastro/veiculos?id=${analise.veiculo_id}`}>
-                      <Car className="h-4 w-4 mr-1" /> Veículo
-                    </Link>
-                  </Button>
-                )}
-                {analise.contrato_id && (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/cadastro/contratos/${analise.contrato_id}`}>
-                      <FileText className="h-4 w-4 mr-1" /> Contrato
-                    </Link>
-                  </Button>
-                )}
-                {analise.associado_id && (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/financeiro/cobrancas?associado=${analise.associado_id}`}>
-                      Financeiro
-                    </Link>
-                  </Button>
-                )}
-                {analise.associado_id && (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={`/cadastro/associados/${analise.associado_id}?tab=historico`}>
-                      <History className="h-4 w-4 mr-1" /> Histórico
-                    </Link>
-                  </Button>
-                )}
-              </div>
+            <CardContent className="p-3">
+              <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="associado" className="text-xs">
+                    <User className="h-3.5 w-3.5 mr-1" /> Associado
+                  </TabsTrigger>
+                  <TabsTrigger value="veiculo" className="text-xs" disabled={!analise.veiculo_id}>
+                    <Car className="h-3.5 w-3.5 mr-1" /> Veículo
+                  </TabsTrigger>
+                  <TabsTrigger value="financeiro" className="text-xs">
+                    <DollarSign className="h-3.5 w-3.5 mr-1" /> Financeiro
+                  </TabsTrigger>
+                  <TabsTrigger value="historico" className="text-xs">
+                    <History className="h-3.5 w-3.5 mr-1" /> Histórico
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* ASSOCIADO */}
+                <TabsContent value="associado" className="mt-3">
+                  {associadoQ.isLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-1/2" />
+                      <Skeleton className="h-5 w-2/3" />
+                      <Skeleton className="h-5 w-1/3" />
+                    </div>
+                  ) : associadoQ.data ? (
+                    <div className="divide-y divide-border">
+                      <Row label="Nome" value={associadoQ.data.nome} />
+                      <Row label="CPF" value={<span className="font-mono">{associadoQ.data.cpf}</span>} />
+                      <Row label="Email" value={associadoQ.data.email} />
+                      <Row label="Telefone" value={associadoQ.data.telefone} />
+                      <Row label="Status" value={<Badge variant="outline">{associadoQ.data.status}</Badge>} />
+                      <Row label="Cidade/UF" value={`${associadoQ.data.cidade || '—'} / ${(associadoQ.data as any).uf || '—'}`} />
+                      <Row
+                        label="Endereço"
+                        value={[
+                          (associadoQ.data as any).logradouro,
+                          (associadoQ.data as any).numero,
+                          (associadoQ.data as any).bairro,
+                          (associadoQ.data as any).cep,
+                        ].filter(Boolean).join(', ') || '—'}
+                      />
+                      <Row label="Plano" value={(associadoQ.data as any).planos?.nome} />
+                      <Row label="Veículos" value={(associadoQ.data as any).veiculos?.length ?? 0} />
+                      <Row
+                        label="Adesão"
+                        value={associadoQ.data.created_at
+                          ? format(new Date(associadoQ.data.created_at), 'dd/MM/yyyy', { locale: ptBR })
+                          : '—'}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Associado não encontrado.</p>
+                  )}
+                </TabsContent>
+
+                {/* VEÍCULO */}
+                <TabsContent value="veiculo" className="mt-3">
+                  {!analise.veiculo_id ? (
+                    <p className="text-xs text-muted-foreground">Esta análise não tem veículo vinculado.</p>
+                  ) : veiculoQ.isLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-1/2" />
+                      <Skeleton className="h-5 w-2/3" />
+                    </div>
+                  ) : veiculoQ.data ? (
+                    <div className="divide-y divide-border">
+                      <Row label="Placa" value={<span className="font-mono">{veiculoQ.data.placa}</span>} />
+                      <Row label="Marca" value={veiculoQ.data.marca} />
+                      <Row label="Modelo" value={veiculoQ.data.modelo} />
+                      <Row label="Ano" value={`${veiculoQ.data.ano_fabricacao ?? '—'} / ${veiculoQ.data.ano_modelo ?? '—'}`} />
+                      <Row label="Cor" value={veiculoQ.data.cor} />
+                      <Row label="Chassi" value={<span className="font-mono text-xs">{veiculoQ.data.chassi}</span>} />
+                      <Row label="RENAVAM" value={veiculoQ.data.renavam} />
+                      <Row label="Combustível" value={veiculoQ.data.combustivel} />
+                      <Row label="FIPE" value={fmtMoney(Number((veiculoQ.data as any).valor_fipe))} />
+                      <Row label="Status" value={<Badge variant="outline">{veiculoQ.data.status}</Badge>} />
+                      <Row label="Categoria" value={(veiculoQ.data as any).categoria} />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Veículo não encontrado.</p>
+                  )}
+                </TabsContent>
+
+                {/* FINANCEIRO */}
+                <TabsContent value="financeiro" className="mt-3">
+                  {cobrancasQ.isLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : cobrancasQ.cobrancas && cobrancasQ.cobrancas.length > 0 ? (
+                    <div className="space-y-2">
+                      {cobrancasQ.estatisticas && (
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="rounded border p-2">
+                            <div className="text-muted-foreground">Total</div>
+                            <div className="font-semibold">{fmtMoney(cobrancasQ.estatisticas.valorTotal)}</div>
+                          </div>
+                          <div className="rounded border p-2">
+                            <div className="text-muted-foreground">Recebido</div>
+                            <div className="font-semibold text-emerald-600">{fmtMoney(cobrancasQ.estatisticas.valorRecebido)}</div>
+                          </div>
+                          <div className="rounded border p-2">
+                            <div className="text-muted-foreground">Pendente</div>
+                            <div className="font-semibold text-amber-600">{fmtMoney(cobrancasQ.estatisticas.valorPendente)}</div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="max-h-96 overflow-y-auto divide-y divide-border rounded border">
+                        {cobrancasQ.cobrancas.map((c: any) => (
+                          <div key={c.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                            <div className="min-w-0 pr-2">
+                              <div className="font-medium truncate">{c.descricao || c.tipo}</div>
+                              <div className="text-muted-foreground">
+                                Venc: {c.data_vencimento ? format(new Date(c.data_vencimento), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+                                {c.referencia_mes && c.referencia_ano && (
+                                  <> · {String(c.referencia_mes).padStart(2, '0')}/{c.referencia_ano}</>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="font-semibold">{fmtMoney(Number(c.valor))}</div>
+                              <Badge variant="outline" className="text-[10px]">{c.status}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Nenhuma cobrança encontrada para este associado.</p>
+                  )}
+                </TabsContent>
+
+                {/* HISTÓRICO */}
+                <TabsContent value="historico" className="mt-3">
+                  <div className="max-h-[28rem] overflow-y-auto">
+                    <TimelineHistorico
+                      eventos={(historicoQ as any).data || []}
+                      isLoading={(historicoQ as any).isLoading}
+                      maxItems={50}
+                      showFilters={false}
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
           <Separator />
 
-          {/* Ação */}
+          {/* Tratativa */}
           {isResolvido ? (
             <Card>
               <CardContent className="p-3 space-y-2">
