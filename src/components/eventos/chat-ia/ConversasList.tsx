@@ -177,31 +177,85 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
               const tempoCobranca = isCobranca
                 ? formatDistanceToNowStrict(new Date(conversa.ultima_cobranca!), { locale: ptBR, addSuffix: false })
                 : null;
+
+              // Idade da última mensagem (em horas) — usado pra ramp de atenção em não lidos
+              const ultimaMsgDate = new Date(conversa.ultima_mensagem);
+              const horasDesdeUltima = (Date.now() - ultimaMsgDate.getTime()) / 3_600_000;
+              const tempoRelativo = formatDistanceToNowStrict(ultimaMsgDate, { locale: ptBR, addSuffix: false });
+
+              // Ramp de atenção (somente quando não lido e não-cobrança override)
+              // <1h normal · 1-3h amber · 3-8h orange · >8h red + pulse
+              let attentionBorder = '';
+              let attentionBg = '';
+              let attentionDot = '';
+              let attentionPulse = false;
+              if (isUnread && !isCobranca) {
+                if (horasDesdeUltima >= 8) {
+                  attentionBorder = 'border-l-red-500';
+                  attentionBg = 'bg-red-50/60 dark:bg-red-950/30 hover:bg-red-100/60 dark:hover:bg-red-950/50';
+                  attentionDot = 'bg-red-500';
+                  attentionPulse = true;
+                } else if (horasDesdeUltima >= 3) {
+                  attentionBorder = 'border-l-orange-500';
+                  attentionBg = 'bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-100/50 dark:hover:bg-orange-950/40';
+                  attentionDot = 'bg-orange-500';
+                } else if (horasDesdeUltima >= 1) {
+                  attentionBorder = 'border-l-amber-500';
+                  attentionBg = 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/40 dark:hover:bg-amber-950/30';
+                  attentionDot = 'bg-amber-500';
+                } else {
+                  attentionBorder = 'border-l-emerald-500';
+                  attentionDot = 'bg-emerald-500';
+                }
+              }
+
               return (
                 <button
                   key={conversa.telefone}
                   onClick={() => onSelectConversa(conversa)}
-                  title={isCobranca ? `Última cobrança enviada há ${tempoCobranca}` : undefined}
+                  title={
+                    isCobranca
+                      ? `Última cobrança enviada há ${tempoCobranca}`
+                      : isUnread
+                      ? `Última mensagem recebida há ${tempoRelativo} (${format(ultimaMsgDate, 'dd/MM HH:mm')})`
+                      : undefined
+                  }
                   className={cn(
-                    'w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-muted/50 transition-colors',
+                    'w-full flex items-start gap-3 px-3 py-3 text-left hover:bg-muted/50 transition-colors',
                     telefoneSelecionado === conversa.telefone && 'bg-muted',
                     isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50',
-                    !isCobranca && isUnread && 'border-l-4 border-l-emerald-500'
+                    !isCobranca && isUnread && cn('border-l-4', attentionBorder, attentionBg)
                   )}
                 >
-                  <UserAvatar
-                    src={conversa.avatar_url}
-                    name={conversa.nome_contato}
-                    size="md"
-                  />
+                  <div className="relative shrink-0">
+                    <UserAvatar
+                      src={conversa.avatar_url}
+                      name={conversa.nome_contato}
+                      size="md"
+                    />
+                    {isUnread && !isCobranca && attentionDot && (
+                      <span
+                        className={cn(
+                          'absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background',
+                          attentionDot,
+                          attentionPulse && 'animate-pulse'
+                        )}
+                      />
+                    )}
+                  </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={cn('text-sm truncate', isUnread ? 'font-bold text-foreground' : 'font-medium')}>
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className={cn(
+                          'text-sm break-words leading-tight line-clamp-2',
+                          isUnread ? 'font-bold text-foreground' : 'font-medium'
+                        )}
+                      >
                         {conversa.nome_contato || formatarTelefone(conversa.telefone)}
                       </span>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className={cn('text-[10px]', isUnread ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground')}>
+                      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                        <span className={cn('text-[10px] whitespace-nowrap', isUnread ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground')}>
                           {formatarData(conversa.ultima_mensagem)}
                         </span>
                         {isUnread && (
@@ -211,7 +265,7 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 mt-0.5">
+                    <div className="flex items-center gap-1 mt-1">
                       {conversa.ultima_direcao === 'entrada' ? (
                         <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       ) : (
@@ -223,11 +277,27 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                           : '📎 Mídia'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
                       {conversa.nome_contato && (
                         <p className="text-[10px] text-muted-foreground">
                           {formatarTelefone(conversa.telefone)}
                         </p>
+                      )}
+                      {isUnread && (
+                        <span
+                          className={cn(
+                            'text-[10px] font-medium flex items-center gap-1',
+                            horasDesdeUltima >= 8
+                              ? 'text-red-600 dark:text-red-400'
+                              : horasDesdeUltima >= 3
+                              ? 'text-orange-600 dark:text-orange-400'
+                              : horasDesdeUltima >= 1
+                              ? 'text-amber-700 dark:text-amber-400'
+                              : 'text-emerald-600 dark:text-emerald-400'
+                          )}
+                        >
+                          ⏱ há {tempoRelativo}
+                        </span>
                       )}
                       {isCobranca && (
                         <Badge

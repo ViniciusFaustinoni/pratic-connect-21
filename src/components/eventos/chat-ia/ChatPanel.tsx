@@ -304,7 +304,41 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
 
                         {/* Audio */}
                         {msg.tipo === 'audio' && msg.media_url ? (
-                          <audio controls src={msg.media_url} className="w-full max-w-[250px]" />
+                          <div
+                            className={cn(
+                              'flex items-center gap-2 rounded-lg px-2 py-2 min-w-[240px]',
+                              isEntrada
+                                ? 'bg-background/60 border border-border'
+                                : 'bg-white/60 dark:bg-black/20 border border-green-200 dark:border-green-800'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'h-8 w-8 rounded-full flex items-center justify-center shrink-0',
+                                isEntrada ? 'bg-primary/10 text-primary' : 'bg-green-600/15 text-green-700 dark:text-green-400'
+                              )}
+                            >
+                              <Mic className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                  Mensagem de voz
+                                </span>
+                                <a
+                                  href={msg.media_url}
+                                  download
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-primary hover:underline"
+                                  title="Baixar áudio"
+                                >
+                                  baixar
+                                </a>
+                              </div>
+                              <audio controls src={msg.media_url} className="w-full h-8" preload="metadata" />
+                            </div>
+                          </div>
                         ) : msg.tipo === 'image' && msg.media_url ? (
                           <img src={msg.media_url} alt="Imagem" className="max-w-[250px] rounded" />
                         ) : !isEntrada && msg.mensagem ? (
