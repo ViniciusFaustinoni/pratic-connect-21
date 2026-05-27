@@ -449,7 +449,7 @@ export default function PropostaAnalise() {
           .eq('id', realId)
           .maybeSingle();
         if (e0 || !cd) throw new Error(e0?.message || 'Documento não encontrado');
-        documentoIdHist = cd.id;
+        documentoIdHist = null; // FK aponta para public.documentos; contratos_documentos não é elegível
         tipoDoc = cd.tipo;
 
         const { error } = await supabase
