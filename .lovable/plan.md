@@ -1,138 +1,72 @@
-## Objetivo
 
-Criar a aba **"Análises"** dentro de **Relacionamento** para receber, de forma unificada e auditável, todo caso em que um associado assinou um **termo de cancelamento** (troca de titularidade, cancelamento voluntário, substituição, ou qualquer termo de cancelamento futuro), permitindo que a operadora trate financeiramente o associado que está saindo sem bloquear nenhum fluxo existente.
+# Hard delete: MARCOS VINICIUS DATIVO MACHADO
 
-## Regras de negócio confirmadas
+> ⚠️ **Operação irreversível**. Os registros abaixo serão fisicamente removidos. Auditoria e histórico do associado serão perdidos para sempre.
 
-1. **Não-bloqueante**: a análise é paralela. Troca, cancelamento voluntário e substituição seguem seus fluxos atuais inalterados — nada espera a resolução do caso.
-2. **Cancelamento é por veículo, não por pessoa**. Cascata existente (`trg_cascata_cancelamento_associado` e fluxos atuais) já cuida disso — não vamos tocar.
-3. **Reavaliação de status do associado** quando perde o último veículo ativo → `cancelado`. Mesma regra que já existe via cascata DB. Confirmado: nenhuma alteração de cascata necessária.
-4. **Sem SGA**: a tela usa só dados internos.
-5. **Estrutura preparada para novos tipos** via enum.
+## Pessoas no escopo
 
-## Onde os termos vivem hoje (fontes do gatilho)
+| Nome | Status no sistema |
+|---|---|
+| **MARCOS VINICIUS DATIVO MACHADO** (CPF 141.948.967-42, marcosdativo@gmail.com) | ✅ Encontrado — será apagado |
+| **VINICIUS FAUSTINONI** | ❌ **Não localizado** — pendente CPF/email/grafia correta. Não será tocado nesta rodada. |
 
-Auditei o `autentique-webhook` — todo termo de cancelamento assinado já é persistido em 3 lugares canônicos:
+## Footprint do MARCOS hoje no banco
 
-| Tipo | Tabela | Coluna de "assinado em" |
+| Entidade | Qtd | Detalhe |
 |---|---|---|
-| Troca de titularidade | `solicitacoes_troca_titularidade` | `termo_cancelamento_assinado_em` |
-| Substituição de veículo | `substituicoes_veiculo` | `termo_cancelamento_assinado_em` |
-| Cancelamento voluntário | `contratos` | `autentique_cancelamento_assinado_em` |
+| `associados` | 1 | id `a96c1136…eedc67`, status `ativo` |
+| `contratos` | 2 | — |
+| `veiculos` | 3 | KOU6D37 (ativo, com rastreador), QOO5C17 e LTB4J74 (em_analise) |
+| `cotacoes` | 2 | ambas em status avançado (ativo / contrato_assinado) |
+| `rastreadores` vinculados | 1 | IMEI 863829079148639 — **NÃO será deletado**, apenas desvinculado |
+| `servicos` / `vistorias` | 1 / 1 | atrelados ao fluxo do KOU6D37 |
+| `associados_historico` | 10 | apagados junto |
+| `contratos_documentos`, `instalacoes`, `sga_sync_queue`, `analises_relacionamento` | 0 | nada a fazer |
 
-Vamos plugar **triggers AFTER UPDATE** nessas 3 colunas. Caminho único, idempotente, sem mexer nos webhooks.
+## Plano de execução (migração única, transacional)
 
-## Mudanças
-
-### 1. Migração: tabela `analises_relacionamento`
+A ordem respeita FKs e os triggers existentes (`trg_cascata_cancelamento_associado`, guards `trg_guard_*`). Todas as ações em um único `BEGIN…COMMIT`.
 
 ```text
-analises_relacionamento
-├── id uuid PK
-├── tipo enum (troca_titularidade | cancelamento_voluntario | substituicao | outro)
-├── status enum (pendente | em_andamento | resolvido)
-├── associado_id uuid FK associados
-├── veiculo_id uuid FK veiculos (nullable — caso o veículo já tenha sumido)
-├── contrato_id uuid FK contratos (nullable)
-├── origem_tabela text  ('solicitacoes_troca_titularidade'|'substituicoes_veiculo'|'contratos')
-├── origem_id uuid       (id do registro origem — unique junto com origem_tabela)
-├── termo_url text        (snapshot do PDF Autentique no momento do gatilho)
-├── termo_assinado_em timestamptz
-├── assumido_por uuid (profile), assumido_em timestamptz
-├── resolvido_por uuid (profile), resolvido_em timestamptz
-├── justificativa text
-├── documento_comprobatorio_url text
-├── metadata jsonb (placa, cpf, nome — snapshot p/ filtros rápidos)
-├── created_at, updated_at
-└── UNIQUE (origem_tabela, origem_id)   ← idempotência absoluta
+1. Desvincular rastreador físico (preservar asset)
+   UPDATE rastreadores
+     SET veiculo_id = NULL, status = 'em_estoque', desvinculado_em = now(),
+         motivo_desvinculo = 'hard_delete_marcos_dativo'
+     WHERE veiculo_id IN (veículos do MARCOS);
+
+2. Limpar dependências de cotações
+   DELETE FROM cotacoes_vistoria_fotos WHERE cotacao_id IN (...);
+   DELETE FROM cotacoes_documentos     WHERE cotacao_id IN (...);
+   DELETE FROM contratos_documentos    WHERE contrato_id IN (...);
+   DELETE FROM vistoria_fotos          WHERE vistoria_id IN (...);
+   DELETE FROM vistorias               WHERE associado_id = :id;
+   DELETE FROM servicos                WHERE associado_id = :id;
+   DELETE FROM agendamentos_base       WHERE servico_id IN (...) OR vistoria_origem IN (...);
+   DELETE FROM instalacoes             WHERE contrato_id IN (...);     -- safety
+   DELETE FROM sga_sync_queue          WHERE associado_id = :id;       -- safety
+   DELETE FROM analises_relacionamento WHERE associado_id = :id;       -- safety
+
+3. Apagar contratos, veículos, cotações
+   DELETE FROM contratos WHERE associado_id = :id;
+   DELETE FROM veiculos  WHERE associado_id = :id;
+   DELETE FROM cotacoes  WHERE cliente_cpf = '141.948.967-42'
+                            OR email_solicitante = 'marcosdativo@gmail.com';
+
+4. Apagar histórico e associado
+   DELETE FROM associados_historico WHERE associado_id = :id;
+   DELETE FROM associados           WHERE id = :id;
+
+5. Auditoria mínima fora da entidade
+   INSERT INTO logs_auditoria(acao, entidade, descricao, ...)
+     VALUES ('excluir', 'associado',
+             'Hard delete MARCOS VINICIUS DATIVO MACHADO (CPF 141.948.967-42) por solicitação direta');
 ```
 
-**GRANT**: SELECT/INSERT/UPDATE para `authenticated` (RLS abaixo restringe), ALL para `service_role`. Sem `anon`.
+> O script descobre tabelas dependentes adicionais via `pg_depend` antes do COMMIT — se aparecer FK não listada (ex.: `solicitacoes_troca_titularidade`, `cobrancas`, `mensalidades`), o script aborta e me devolve a lista para eu decidir.
 
-**RLS** (sem mexer em auth):
-- SELECT: usuários com role relacionamento/cobranca/diretor/coordenador_monitoramento (via `has_role`/policy existente)
-- INSERT: bloqueado para usuário comum (só via trigger/service_role)
-- UPDATE: mesmas roles do SELECT, e só quem está autenticado pode marcar resolvido (auditado em `resolvido_por`)
+## Pendências antes de executar
 
-### 2. Triggers de criação automática
+1. **Confirmar deleção do MARCOS** entendendo que histórico, contratos, cotações, vistorias e cobranças associadas somem do banco para sempre (SGA/Autentique não são tocados — limpeza lá é manual).
+2. **Fornecer dado do VINICIUS FAUSTINONI** (CPF, e-mail, telefone ou grafia alternativa) para eu localizar antes de qualquer ação.
 
-Três triggers AFTER UPDATE OF nas 3 tabelas-fonte, todos chamando `fn_criar_analise_relacionamento_cancelamento()`:
-- `trg_analise_relacionamento_troca` em `solicitacoes_troca_titularidade` quando `termo_cancelamento_assinado_em` passa de NULL → NOT NULL
-- `trg_analise_relacionamento_substituicao` em `substituicoes_veiculo` mesma condição
-- `trg_analise_relacionamento_cancelamento_voluntario` em `contratos` quando `autentique_cancelamento_assinado_em` passa de NULL → NOT NULL
-
-A função faz `INSERT … ON CONFLICT (origem_tabela, origem_id) DO NOTHING` — totalmente idempotente. Resolve `associado_id`, `veiculo_id`, `contrato_id` e o snapshot do `metadata` na hora.
-
-**Backfill**: a migration faz um INSERT inicial cobrindo todos os registros já assinados nas 3 fontes (mesma idempotência), para que casos existentes apareçam imediatamente.
-
-### 3. Storage bucket `relacionamento-anexos` (privado)
-
-Para `documento_comprobatorio_url`. RLS: somente roles autorizadas no upload/leitura. Tipos aceitos: imagens, PDFs, áudios.
-
-### 4. Frontend — novo módulo
-
-**Sidebar** (`AppSidebar.tsx`): adicionar item em "Relacionamento":
-```ts
-{ title: 'Análises', url: '/relacionamento/analises', icon: ClipboardCheck }
-```
-
-**Rota**: `/relacionamento/analises` → nova page `src/pages/relacionamento/AnalisesRelacionamento.tsx`
-
-**Hook**: `src/hooks/useAnalisesRelacionamento.ts`
-- `useAnalisesRelacionamento({ status?, tipo?, busca? })` — lista
-- `useAssumirAnalise(id)` — UPDATE status='em_andamento' + assumido_por/em
-- `useResolverAnalise(id, { justificativa, documentoUrl })` — UPDATE status='resolvido' + resolvido_por/em + insere `associados_historico` com `tipo='analise_relacionamento_resolvida'`
-
-**Tela `AnalisesRelacionamento.tsx`**:
-- Header com filtros: status (Pendente/Em Andamento/Resolvido/Todos), tipo (badge), busca por nome/CPF/placa
-- Tabela: badge tipo, status, associado, CPF, placa, data assinatura, ações
-- Linha clicável → abre `AnaliseRelacionamentoDrawer`
-
-**Drawer `AnaliseRelacionamentoDrawer.tsx`** (novo):
-- Cabeçalho: badge tipo + status + nome/CPF/placa
-- Botão "Ver termo assinado" → abre `termo_url` em nova aba
-- Botões de atalho para visualizações já existentes:
-  - "Ficha do Associado" → `AssociadoFichaCompletaDialog` (já existe)
-  - "Detalhe do Veículo" → rota existente
-  - "Financeiro do Associado" → reusa `FinanceiroTab` / `useResumoFinanceiroAssociado`
-  - "Documentos" → `useDocumentosPorAssociado`
-- Histórico do associado embutido (`HistoricoAssociadoTab` existente)
-- Bloco de ação:
-  - Se pendente: botão "Assumir" → status='em_andamento'
-  - Se em_andamento ou pendente: bloco "Resolver" com upload (1 arquivo, max 20MB) + textarea justificativa obrigatória (min 10 chars) → "Marcar Resolvido"
-  - Se resolvido: mostra anexo, justificativa, quem/quando, em modo somente leitura
-- **Sem nenhuma chamada SGA**.
-
-### 5. Histórico do associado
-
-`useResolverAnalise` insere em `associados_historico`:
-```
-tipo: 'analise_relacionamento_resolvida'
-descricao: 'Análise de Relacionamento resolvida: <tipo> (placa <X>)'
-metadata: { analise_id, tipo, justificativa, documento_url }
-```
-Assim a referência aparece automaticamente em qualquer tela que já lê `associados_historico` (ficha do associado, drawer de serviço, etc.) — sem precisar tocar nelas.
-
-## O que NÃO muda (defensivo)
-
-- `efetivar-troca-titularidade`, `cancelar-veiculo`, `cancelar-associado`, `efetivar-substituicao`: intactos
-- `autentique-webhook`: intacto (só lemos o lado-efeito que ele já produz)
-- Cascata DB de cancelamento (`trg_cascata_cancelamento_associado`, religadores): intacta
-- Fluxo de troca/substituição/cancelamento voluntário: continua não-bloqueante em relação a esta nova fila
-- Nenhuma trava ou validação atual é alterada
-
-## Critério de aceite
-
-1. Assinar termo de cancelamento (qualquer dos 3 fluxos) → linha aparece em `/relacionamento/analises` com badge correto, em ≤ alguns segundos (insert via trigger).
-2. Veículo + cotações/contratos/coberturas/rastreador continuam cancelando pelo fluxo existente, sem nova trava.
-3. Associado vira `cancelado` só se perdeu o último veículo ativo (cascata atual já cobre).
-4. Drawer mostra associado, CPF, placa, badge, termo assinado, status, e links/embed para tudo que já existe — sem SGA.
-5. Operadora consegue Assumir → Resolver com anexo + justificativa.
-6. Caso resolvido permanece listado, filtrável por status, com anexo + justificativa em modo leitura.
-7. `associados_historico` ganha registro automático ao resolver.
-8. Adicionar novo tipo no futuro = expandir enum + criar trigger em nova tabela-fonte. Nada na UI muda além de mapear label/cor do badge.
-
-## Memória a atualizar pós-build
-
-Nova entrada Core:
-> Todo termo de cancelamento assinado (troca, substituição, voluntário) materializa um caso em `analises_relacionamento` via triggers AFTER UPDATE — fila não-bloqueante na aba Relacionamento › Análises. Idempotência por UNIQUE (origem_tabela, origem_id).
+Sem o item 2 eu executo só o MARCOS e devolvo o VINICIUS para uma segunda rodada.
