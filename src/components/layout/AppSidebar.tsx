@@ -248,6 +248,7 @@ const menuConfig: {
       color: MENU_COLORS.eventos,
       items: [
         { title: 'Chat', url: '/eventos/chat-ia', icon: MessageCircle },
+        { title: 'Análises', url: '/relacionamento/analises', icon: ClipboardCheck },
         { title: 'Cobranças', url: '/financeiro/cobrancas/emissao?sub=csv', icon: Receipt },
       ],
     },

@@ -211,6 +211,7 @@ const DashboardVendaExterna = lazy(() => import("./pages/financeiro/DashboardVen
 // Cobrança — apenas Régua continua roteada (dentro de /financeiro/cobrancas/regua via ReguaPage)
 const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
 const RelacionamentoTrocas = lazy(() => import("./pages/cobranca/RelacionamentoTrocas"));
+const AnalisesRelacionamento = lazy(() => import("./pages/relacionamento/AnalisesRelacionamento"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
 const AprovacoesUnificadas = lazy(() => import("./pages/monitoramento/AprovacoesUnificadas"));
@@ -625,6 +626,7 @@ const App = () => (
               <Route path="/cobranca/acordos/:id" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
               <Route path="/relacionamento/troca-titularidade" element={<TrocaTitularidade />} />
               <Route path="/relacionamento/debitos" element={<RelacionamentoTrocas />} />
+              <Route path="/relacionamento/analises" element={<AnalisesRelacionamento />} />
               <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               
               {/* Contabilidade */}

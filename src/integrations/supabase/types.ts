@@ -1106,6 +1106,178 @@ export type Database = {
           },
         ]
       }
+      analises_relacionamento: {
+        Row: {
+          associado_id: string | null
+          assumido_em: string | null
+          assumido_por: string | null
+          contrato_id: string | null
+          created_at: string
+          documento_comprobatorio_url: string | null
+          id: string
+          justificativa: string | null
+          metadata: Json
+          origem_id: string
+          origem_tabela: string
+          resolvido_em: string | null
+          resolvido_por: string | null
+          status: Database["public"]["Enums"]["analise_relacionamento_status"]
+          termo_assinado_em: string | null
+          termo_url: string | null
+          tipo: Database["public"]["Enums"]["analise_relacionamento_tipo"]
+          updated_at: string
+          veiculo_id: string | null
+        }
+        Insert: {
+          associado_id?: string | null
+          assumido_em?: string | null
+          assumido_por?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          documento_comprobatorio_url?: string | null
+          id?: string
+          justificativa?: string | null
+          metadata?: Json
+          origem_id: string
+          origem_tabela: string
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          status?: Database["public"]["Enums"]["analise_relacionamento_status"]
+          termo_assinado_em?: string | null
+          termo_url?: string | null
+          tipo: Database["public"]["Enums"]["analise_relacionamento_tipo"]
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Update: {
+          associado_id?: string | null
+          assumido_em?: string | null
+          assumido_por?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          documento_comprobatorio_url?: string | null
+          id?: string
+          justificativa?: string | null
+          metadata?: Json
+          origem_id?: string
+          origem_tabela?: string
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          status?: Database["public"]["Enums"]["analise_relacionamento_status"]
+          termo_assinado_em?: string | null
+          termo_url?: string | null
+          tipo?: Database["public"]["Enums"]["analise_relacionamento_tipo"]
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analises_relacionamento_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "analises_relacionamento_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           ativa: boolean | null
@@ -35090,6 +35262,20 @@ export type Database = {
           user_id: string
         }[]
       }
+      fn_criar_analise_relacionamento: {
+        Args: {
+          _associado_id: string
+          _contrato_id: string
+          _metadata: Json
+          _origem_id: string
+          _origem_tabela: string
+          _termo_assinado_em: string
+          _termo_url: string
+          _tipo: Database["public"]["Enums"]["analise_relacionamento_tipo"]
+          _veiculo_id: string
+        }
+        Returns: string
+      }
       fn_detectar_limbo_ativacao: { Args: never; Returns: Json }
       fn_determinar_numero_parcela_cobranca: {
         Args: { p_cobranca_id: string }
@@ -35480,6 +35666,12 @@ export type Database = {
       verificar_acordos_quebrados: { Args: never; Returns: number }
     }
     Enums: {
+      analise_relacionamento_status: "pendente" | "em_andamento" | "resolvido"
+      analise_relacionamento_tipo:
+        | "troca_titularidade"
+        | "cancelamento_voluntario"
+        | "substituicao"
+        | "outro"
       app_role:
         | "diretor"
         | "gerente_comercial"
@@ -35940,6 +36132,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      analise_relacionamento_status: ["pendente", "em_andamento", "resolvido"],
+      analise_relacionamento_tipo: [
+        "troca_titularidade",
+        "cancelamento_voluntario",
+        "substituicao",
+        "outro",
+      ],
       app_role: [
         "diretor",
         "gerente_comercial",
