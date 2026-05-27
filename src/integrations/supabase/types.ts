@@ -23879,6 +23879,7 @@ export type Database = {
           softruck_last_attempt_at: string | null
           softruck_payload_sent: Json | null
           softruck_response_raw: Json | null
+          softruck_tentativas: number
           status: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao: string | null
           ultima_ignicao: boolean | null
@@ -23919,6 +23920,7 @@ export type Database = {
           softruck_last_attempt_at?: string | null
           softruck_payload_sent?: Json | null
           softruck_response_raw?: Json | null
+          softruck_tentativas?: number
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
@@ -23959,6 +23961,7 @@ export type Database = {
           softruck_last_attempt_at?: string | null
           softruck_payload_sent?: Json | null
           softruck_response_raw?: Json | null
+          softruck_tentativas?: number
           status?: Database["public"]["Enums"]["status_rastreador"]
           ultima_comunicacao?: string | null
           ultima_ignicao?: boolean | null
