@@ -219,6 +219,24 @@ export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar,
               )}
             </div>
           )}
+
+          {/* Reverter reprovação — só quando proposta ainda aberta no Cadastro */}
+          {podeReverterReprovacao && (
+            <div className="mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-warning/40 text-warning hover:bg-warning/10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReverter?.(documento);
+                }}
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reverter reprovação
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Botão de visualização */}
