@@ -82,7 +82,7 @@ export function usePendenciasDocumentos() {
         .select(
           `id, tipo_documento, descricao, associado_id, contrato_id,
            associados:associado_id ( nome, telefone ),
-           contratos:contrato_id ( id, numero, veiculo_placa, vendedor_id, link_token, cotacao_token_publico )`,
+           contratos:contrato_id ( id, numero, status, veiculo_placa, vendedor_id, link_token, cotacao_token_publico )`,
         )
         .eq('status', 'pendente')
         .limit(500);
@@ -92,10 +92,15 @@ export function usePendenciasDocumentos() {
 
       const rows = (data || []) as unknown as RawRow[];
 
+      // Descarta pendências de contratos cancelados (veículo/processo encerrado).
+      const semCancelados = rows.filter(
+        (r) => !r.contratos || String(r.contratos.status || '').toLowerCase() !== 'cancelado',
+      );
+
       // Filtra por vendedor quando não é gestor/cadastro
       const filtered = veTudo
-        ? rows
-        : rows.filter((r) => r.contratos?.vendedor_id && r.contratos.vendedor_id === profile?.id);
+        ? semCancelados
+        : semCancelados.filter((r) => r.contratos?.vendedor_id && r.contratos.vendedor_id === profile?.id);
 
       // Agrupa por contrato (proposta)
       const map = new Map<string, PendenciaPropostaAgrupada>();
