@@ -93,12 +93,18 @@ export function useBuscarRastreadorPorImei() {
       let local = await fetchLocalPorImei(imeiLimpo);
       let origem: OrigemRastreador = 'estoque';
 
-      // Helper: chama a edge da Rede; se found, recarrega local e retorna true
+      // Helper: chama a edge da Rede; se found (e não api_error mascarado), recarrega local
       const tentarRede = async (): Promise<boolean> => {
         try {
           const { data } = await supabase.functions.invoke('rede-veiculos-buscar-dispositivo', {
             body: { busca: imeiLimpo },
           });
+          // Edge classifica erros: api_error/sync_disabled/api_unavailable/auth_error
+          // não podem ser tratados como rastreador inexistente.
+          if ((data as any)?.api_error || ((data as any)?.error_kind && (data as any).error_kind !== 'not_found')) {
+            console.warn('[buscarImei] rede.api_error', (data as any)?.error_kind, (data as any)?.debug);
+            return false;
+          }
           if (data?.success && data?.found) {
             local = await fetchLocalPorImei(imeiLimpo);
             origem = 'rede_veiculos';
