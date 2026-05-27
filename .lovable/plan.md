@@ -1,72 +1,48 @@
+## Objetivo
 
-# Hard delete: MARCOS VINICIUS DATIVO MACHADO
+Hoje, no drawer de detalhes em **Relacionamento › Análises**, os botões "Ficha do Associado / Veículo / Financeiro / Histórico" usam `<Link>` e tiram o usuário da tela do Relacionamento (caem em Cadastro, Financeiro etc.). A operadora deve resolver o caso **sem sair do setor** — a visualização precisa ser nativa, dentro do próprio drawer.
 
-> ⚠️ **Operação irreversível**. Os registros abaixo serão fisicamente removidos. Auditoria e histórico do associado serão perdidos para sempre.
+## Escopo
 
-## Pessoas no escopo
+Arquivo único: `src/components/relacionamento/AnaliseRelacionamentoDrawer.tsx`.
+Sem mudança de schema, edge functions, rotas ou outros setores. Apenas frontend/presentation.
 
-| Nome | Status no sistema |
-|---|---|
-| **MARCOS VINICIUS DATIVO MACHADO** (CPF 141.948.967-42, marcosdativo@gmail.com) | ✅ Encontrado — será apagado |
-| **VINICIUS FAUSTINONI** | ❌ **Não localizado** — pendente CPF/email/grafia correta. Não será tocado nesta rodada. |
+## O que muda
 
-## Footprint do MARCOS hoje no banco
+1. Trocar o bloco **"Acessos rápidos"** (5 botões `<Link>`) por um componente de **abas internas** (`Tabs` do shadcn) renderizadas dentro do próprio `SheetContent`. Abas:
+   - **Associado** — dados pessoais (nome, CPF, contato, endereço, status) reaproveitando `useAssociados` / `getAssociadoById`.
+   - **Veículo** — placa, marca/modelo, FIPE, chassi, status, rastreador vinculado (via `useVeiculos` filtrado por `analise.veiculo_id`).
+   - **Financeiro** — lista enxuta de cobranças/mensalidades do associado (read-only) reaproveitando o hook já existente em `src/hooks` que serve a tela de Cobranças por associado.
+   - **Histórico** — timeline via `useAssociadoHistoricoCompleto(analise.associado_id)`.
+2. Cada aba é **read-only** e renderizada inline (cards densos compatíveis com a largura do `Sheet sm:max-w-2xl`). Nada de iframe; só consumo dos hooks que já existem.
+3. Estado de loading/empty/error padrão (`Skeleton` + mensagens curtas).
+4. Manter:
+   - Cabeçalho com badges, nome, CPF, placa, termo assinado.
+   - Card "Termo de cancelamento" (link externo para Autentique permanece — é documento fora do sistema).
+   - Card "Tratativa" (Assumir caso, justificativa, anexo, Marcar como resolvido) inalterado.
 
-| Entidade | Qtd | Detalhe |
-|---|---|---|
-| `associados` | 1 | id `a96c1136…eedc67`, status `ativo` |
-| `contratos` | 2 | — |
-| `veiculos` | 3 | KOU6D37 (ativo, com rastreador), QOO5C17 e LTB4J74 (em_analise) |
-| `cotacoes` | 2 | ambas em status avançado (ativo / contrato_assinado) |
-| `rastreadores` vinculados | 1 | IMEI 863829079148639 — **NÃO será deletado**, apenas desvinculado |
-| `servicos` / `vistorias` | 1 / 1 | atrelados ao fluxo do KOU6D37 |
-| `associados_historico` | 10 | apagados junto |
-| `contratos_documentos`, `instalacoes`, `sga_sync_queue`, `analises_relacionamento` | 0 | nada a fazer |
+## Detalhes técnicos
 
-## Plano de execução (migração única, transacional)
+- Adicionar `Tabs/TabsList/TabsTrigger/TabsContent` de `@/components/ui/tabs`.
+- Importar hooks já existentes (sem criar novos):
+  - `useAssociados` → buscar por `id` ou criar select pontual via `supabase` se mais leve.
+  - `useVeiculos` → idem para `analise.veiculo_id`.
+  - `useAssociadoHistoricoCompleto` (já existe em `src/hooks/useAssociadoHistoricoCompleto.ts`).
+  - Para Financeiro, reaproveitar o hook usado em `src/pages/financeiro/Cobrancas*` (verificar nome exato no momento da implementação — provavelmente `useCobrancasPorAssociado` ou consulta direta a `cobrancas` por `associado_id`).
+- Cada aba só dispara fetch quando ativada (lazy via `value` controlado) para não pesar.
+- Remover imports não usados (`Link`, `User`, `Car`, `FileText`, `History` se não forem mais necessários como ícones das abas — manter os que virarem ícones do `TabsTrigger`).
+- Sem alterações de rota/router.
 
-A ordem respeita FKs e os triggers existentes (`trg_cascata_cancelamento_associado`, guards `trg_guard_*`). Todas as ações em um único `BEGIN…COMMIT`.
+## Critérios de aceite
 
-```text
-1. Desvincular rastreador físico (preservar asset)
-   UPDATE rastreadores
-     SET veiculo_id = NULL, status = 'em_estoque', desvinculado_em = now(),
-         motivo_desvinculo = 'hard_delete_marcos_dativo'
-     WHERE veiculo_id IN (veículos do MARCOS);
+- Abrir um caso → ver as 4 abas dentro do drawer; nenhuma navegação para outra página ao clicar.
+- A aba Histórico mostra os eventos do associado direto no drawer.
+- A aba Financeiro mostra as cobranças do associado direto no drawer.
+- O resto do drawer (termo, tratativa, resolver) continua funcionando idêntico.
+- Sem regressões em `Relacionamento › Análises` (lista + filtros).
 
-2. Limpar dependências de cotações
-   DELETE FROM cotacoes_vistoria_fotos WHERE cotacao_id IN (...);
-   DELETE FROM cotacoes_documentos     WHERE cotacao_id IN (...);
-   DELETE FROM contratos_documentos    WHERE contrato_id IN (...);
-   DELETE FROM vistoria_fotos          WHERE vistoria_id IN (...);
-   DELETE FROM vistorias               WHERE associado_id = :id;
-   DELETE FROM servicos                WHERE associado_id = :id;
-   DELETE FROM agendamentos_base       WHERE servico_id IN (...) OR vistoria_origem IN (...);
-   DELETE FROM instalacoes             WHERE contrato_id IN (...);     -- safety
-   DELETE FROM sga_sync_queue          WHERE associado_id = :id;       -- safety
-   DELETE FROM analises_relacionamento WHERE associado_id = :id;       -- safety
+## Fora de escopo
 
-3. Apagar contratos, veículos, cotações
-   DELETE FROM contratos WHERE associado_id = :id;
-   DELETE FROM veiculos  WHERE associado_id = :id;
-   DELETE FROM cotacoes  WHERE cliente_cpf = '141.948.967-42'
-                            OR email_solicitante = 'marcosdativo@gmail.com';
-
-4. Apagar histórico e associado
-   DELETE FROM associados_historico WHERE associado_id = :id;
-   DELETE FROM associados           WHERE id = :id;
-
-5. Auditoria mínima fora da entidade
-   INSERT INTO logs_auditoria(acao, entidade, descricao, ...)
-     VALUES ('excluir', 'associado',
-             'Hard delete MARCOS VINICIUS DATIVO MACHADO (CPF 141.948.967-42) por solicitação direta');
-```
-
-> O script descobre tabelas dependentes adicionais via `pg_depend` antes do COMMIT — se aparecer FK não listada (ex.: `solicitacoes_troca_titularidade`, `cobrancas`, `mensalidades`), o script aborta e me devolve a lista para eu decidir.
-
-## Pendências antes de executar
-
-1. **Confirmar deleção do MARCOS** entendendo que histórico, contratos, cotações, vistorias e cobranças associadas somem do banco para sempre (SGA/Autentique não são tocados — limpeza lá é manual).
-2. **Fornecer dado do VINICIUS FAUSTINONI** (CPF, e-mail, telefone ou grafia alternativa) para eu localizar antes de qualquer ação.
-
-Sem o item 2 eu executo só o MARCOS e devolvo o VINICIUS para uma segunda rodada.
+- Editar dados do associado/veículo no drawer (continua read-only — quem edita usa as telas próprias).
+- Mudar SGA, financeiro real ou histórico de outros setores.
+- Adicionar novos tipos de análise/badges.
