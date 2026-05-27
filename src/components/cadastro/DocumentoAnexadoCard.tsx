@@ -1,6 +1,7 @@
 import { 
   FileText, Eye, CheckCircle, Shield, Clock, XCircle,
-  CreditCard, Car, Home, Camera, FileSignature, Image, AlertCircle, Loader2
+  CreditCard, Car, Home, Camera, FileSignature, Image, AlertCircle, Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ interface DocumentoAnexadoCardProps {
   onView: (documento: DocumentoAnexadoCompleto) => void;
   onAprovar?: (docId: string) => Promise<void>;
   onReprovar?: (docId: string, motivo: string) => Promise<void>;
+  /** Quando fornecido e doc está reprovado, mostra "Reverter reprovação". */
+  onReverter?: (documento: DocumentoAnexadoCompleto) => void;
 }
 
 // Mapeamento de ícones por tipo
