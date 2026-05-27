@@ -99,6 +99,7 @@ export function PropostaApprovalStepper({
   onViewDocumento,
   onAprovarDocumento,
   onReprovarDocumento,
+  onReverterReprovacaoDocumento,
   onAprovar,
   onSolicitarDocs,
   onReprovar,
