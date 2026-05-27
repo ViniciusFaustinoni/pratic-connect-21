@@ -673,6 +673,12 @@ export default function Veiculos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CancelarVeiculoDialog
+        open={!!veiculoToCancel}
+        onClose={() => setVeiculoToCancel(null)}
+        veiculo={veiculoToCancel}
+      />
     </div>
   );
 }
