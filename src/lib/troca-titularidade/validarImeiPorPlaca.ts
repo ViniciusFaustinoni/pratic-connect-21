@@ -195,19 +195,32 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
       body: { busca: imeiSan },
     });
     if (error) throw error;
-    if ((data as any)?.success && (data as any)?.found) {
+    const resp = data as any;
+    // Edge agora classifica erros: api_error/sync_disabled/api_unavailable/auth_error
+    // NÃO podem ser tratados como "rastreador inexistente" (caso Anderson).
+    if (resp?.api_error || (resp?.error_kind && resp.error_kind !== 'not_found')) {
+      console.warn(TAG, 'rede.api_error', { error_kind: resp?.error_kind, debug: resp?.debug });
+      redeFalhou = true;
+    } else if (resp?.success && resp?.found) {
       redeEncontrou = true;
-      // Upsert local já feito pela edge. Lê vínculo:
+      // Upsert local já feito pela edge. Lê vínculo + IDs externos:
       const { data: rLocal } = await supabase
         .from('rastreadores')
-        .select('id, veiculo_id, status')
+        .select('id, veiculo_id, status, plataforma_device_id, plataforma_veiculo_id')
         .eq('imei', imeiSan)
         .maybeSingle();
-      if (rLocal?.veiculo_id && rLocal.veiculo_id === veiculoIdAlvo) {
+      // Guard Anderson-like: pra confirmar match Rede precisa ter device_id real.
+      const idsRedeOk = !!rLocal?.plataforma_device_id;
+      if (rLocal?.veiculo_id && rLocal.veiculo_id === veiculoIdAlvo && idsRedeOk) {
         console.log(TAG, 'rede.match_ok', { imei: mascararImei(imeiSan) });
         return { ok: true, origem: 'rede_veiculos', rastreadorId: rLocal.id };
       }
-      if (rLocal?.veiculo_id && (rLocal.status || '').toLowerCase() === 'instalado') {
+      if (rLocal?.veiculo_id && rLocal.veiculo_id === veiculoIdAlvo && !idsRedeOk) {
+        // Vínculo local existe mas Rede não retornou IDs → não confiar.
+        console.warn(TAG, 'rede.match_local_sem_ids_externos', { id: rLocal.id });
+        redeFalhou = true;
+      }
+      if (rLocal?.veiculo_id && rLocal.veiculo_id !== veiculoIdAlvo && (rLocal.status || '').toLowerCase() === 'instalado') {
         const { data: vOutro } = await supabase
           .from('veiculos')
           .select('placa, status')
@@ -224,7 +237,6 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
         }
       }
       // Encontrado na Rede mas sem vínculo de veículo → não bate com a placa atual.
-      // Sem confirmação de vínculo placa↔IMEI: trata como não encontrado para a placa.
     }
   } catch (e) {
     console.warn(TAG, 'rede.erro', e);
