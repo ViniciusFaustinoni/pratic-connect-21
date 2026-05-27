@@ -96,6 +96,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Escuta broadcast `force_logout` (Diretor → "Deslogar todos os usuários")
+  // e dispara logout local imediato em todas as abas conectadas exceto a do
+  // próprio Diretor que disparou. Ver `useForceLogoutListener`.
+  useForceLogoutListener(user?.id ?? null);
+
   // ============================================
   // FUNÇÕES DE BUSCA
   // ============================================
