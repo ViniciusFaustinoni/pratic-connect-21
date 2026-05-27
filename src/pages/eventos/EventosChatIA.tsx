@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ConversasList, type ConversaAgrupada } from '@/components/eventos/chat-ia/ConversasList';
 import { ChatPanel } from '@/components/eventos/chat-ia/ChatPanel';
+import { useAuth } from '@/hooks/useAuth';
 
 interface EventosChatIAProps {
   drawerVariant?: 'relacionamento' | 'eventos' | 'monitoramento';
@@ -13,6 +14,8 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
   const [telefoneSelecionado, setTelefoneSelecionado] = useState<string | null>(null);
   const [nomeContato, setNomeContato] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
 
   // Fetch all messages grouped by phone — apenas do provedor/instância ativa(s)
   const { data: instanciasAtivas } = useQuery({
@@ -22,7 +25,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         .from('whatsapp_instancias')
         .select('id')
         .eq('ativa', true)
-        .in('provedor', ['evolution', 'meta']); // somente provedores WhatsApp
+        .in('provedor', ['evolution', 'meta']);
       if (error) throw error;
       return (data ?? []).map((d) => d.id);
     },
@@ -52,6 +55,24 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     refetchIntervalInBackground: false,
   });
 
+  // Leituras do operador atual (telefone → last_read_at)
+  const { data: leiturasMap } = useQuery({
+    queryKey: ['chat-ia-leituras', userId],
+    enabled: !!userId,
+    staleTime: 5_000,
+    queryFn: async () => {
+      const sb: any = supabase;
+      const { data, error } = await sb
+        .from('whatsapp_conversa_leituras')
+        .select('telefone, last_read_at')
+        .eq('user_id', userId);
+      if (error) throw error;
+      const map = new Map<string, string>();
+      (data ?? []).forEach((r: any) => map.set(r.telefone, r.last_read_at));
+      return map;
+    },
+  });
+
   // Realtime: atualiza a lista de conversas assim que uma nova mensagem é gravada
   useEffect(() => {
     if (!instanciasAtivas?.length) return;
@@ -72,6 +93,31 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
       supabase.removeChannel(channel);
     };
   }, [instanciasAtivas, queryClient]);
+
+  // Marca conversa como lida (upsert)
+  const marcarLido = useCallback(
+    async (telefone: string) => {
+      if (!userId || !telefone) return;
+      const sb: any = supabase;
+      const { error } = await sb
+        .from('whatsapp_conversa_leituras')
+        .upsert(
+          { user_id: userId, telefone, last_read_at: new Date().toISOString() },
+          { onConflict: 'user_id,telefone' }
+        );
+      if (!error) {
+        queryClient.invalidateQueries({ queryKey: ['chat-ia-leituras', userId] });
+      }
+    },
+    [userId, queryClient]
+  );
+
+  // Se uma nova mensagem chega na conversa aberta, mantém como lida
+  useEffect(() => {
+    if (telefoneSelecionado) {
+      marcarLido(telefoneSelecionado);
+    }
+  }, [telefoneSelecionado, mensagens, marcarLido]);
 
   // Fetch associados for avatar matching
   const { data: associados } = useQuery({
@@ -159,6 +205,11 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         if (!telefonesMonitoramento || !telefonesMonitoramento.has(d)) continue;
       }
       const isCobranca = msg.referencia_tipo && COBRANCA_TIPOS.has(msg.referencia_tipo);
+      const lastRead = leiturasMap?.get(tel) ?? null;
+      const isUnreadMsg =
+        msg.direcao === 'entrada' &&
+        (!lastRead || new Date(msg.created_at).getTime() > new Date(lastRead).getTime());
+
       if (!mapa.has(tel)) {
         const assoc = avatarMap.get(tel.replace(/\D/g, ''));
         mapa.set(tel, {
@@ -170,6 +221,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
           ultima_msg_texto: msg.mensagem,
           ultima_direcao: msg.direcao,
           ultima_cobranca: isCobranca ? msg.created_at : null,
+          unread_count: isUnreadMsg ? 1 : 0,
         });
       } else {
         const c = mapa.get(tel)!;
@@ -178,19 +230,36 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         if (isCobranca && (!c.ultima_cobranca || new Date(msg.created_at) > new Date(c.ultima_cobranca))) {
           c.ultima_cobranca = msg.created_at;
         }
+        if (isUnreadMsg) c.unread_count++;
       }
     }
 
     return Array.from(mapa.values()).sort(
       (a, b) => new Date(b.ultima_mensagem).getTime() - new Date(a.ultima_mensagem).getTime()
     );
-  }, [mensagens, associados, escopo, telefonesMonitoramento]);
+  }, [mensagens, associados, escopo, telefonesMonitoramento, leiturasMap]);
 
   const handleSelectConversa = (conversa: ConversaAgrupada) => {
     setTelefoneSelecionado(conversa.telefone);
     setNomeContato(conversa.nome_contato);
     setAvatarUrl(conversa.avatar_url);
+    marcarLido(conversa.telefone);
   };
+
+  const handleMarcarTodasLidas = useCallback(async () => {
+    if (!userId) return;
+    const telefonesNaoLidos = conversas.filter((c) => c.unread_count > 0).map((c) => c.telefone);
+    if (telefonesNaoLidos.length === 0) return;
+    const now = new Date().toISOString();
+    const rows = telefonesNaoLidos.map((telefone) => ({ user_id: userId, telefone, last_read_at: now }));
+    const sb: any = supabase;
+    const { error } = await sb
+      .from('whatsapp_conversa_leituras')
+      .upsert(rows, { onConflict: 'user_id,telefone' });
+    if (!error) {
+      queryClient.invalidateQueries({ queryKey: ['chat-ia-leituras', userId] });
+    }
+  }, [conversas, userId, queryClient]);
 
   return (
     <div className="h-[calc(100dvh-8rem)] flex rounded-lg border border-border bg-card overflow-hidden">
@@ -201,6 +270,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
           isLoading={isLoading}
           telefoneSelecionado={telefoneSelecionado}
           onSelectConversa={handleSelectConversa}
+          onMarcarTodasLidas={handleMarcarTodasLidas}
         />
       </div>
 
