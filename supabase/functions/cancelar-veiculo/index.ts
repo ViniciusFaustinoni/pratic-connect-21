@@ -325,7 +325,7 @@ Deno.serve(async (req) => {
     .from('veiculos')
     .update({
       status: 'cancelado',
-      data_cancelamento: nowIso,
+      data_inativacao: nowIso,
       motivo_inativacao: motivo,
       updated_at: nowIso,
     })
