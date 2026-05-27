@@ -1,34 +1,59 @@
-# Plano para corrigir o cancelamento do veículo e remover todos os processos das filas
+## Objetivo
 
-## O que vou ajustar
+1. Corrigir o local de instalação do **RJH0C29** na Rede Veículos (hoje "PAINEL", correto: **ODB**).
+2. Criar caminho reutilizável para alterar `localInstalacao` na Rede após o vínculo inicial.
 
-1. Corrigir a cascata do `cancelar-veiculo`
-   - Ao cancelar um veículo, além de cotações, instalações, serviços, vistorias e contrato, também encerrar os `documentos_solicitados` vinculados ao processo desse veículo.
-   - Usar o status já suportado pelo banco (`cancelado`) em vez de deixar a pendência viva.
-   - Manter o escopo no veículo/contrato cancelado, sem afetar outros veículos do mesmo associado.
+## Situação atual (apurada)
 
-2. Corrigir as consultas das filas e alertas
-   - Ajustar a fila do sino de `Documentos Pendentes` para não mostrar pendências de contrato/veículo já cancelado.
-   - Ajustar a leitura de propostas pendentes no Cadastro para ignorar documentos solicitados de processos cancelados.
-   - Revisar a tela pública de acompanhamento para não exibir pendências de um processo já cancelado.
+- **Banco local** já está correto: `rastreadores.local_instalacao = 'odb'`.
+- **`veiculos.rede_veiculos_veiculo_id` está NULL** para o RJH0C29 — nosso sistema não tem o ID da Rede gravado, então não consegue chamar nenhum endpoint de atualização direto.
+- Hoje só enviamos `localInstalacao` para a Rede no momento do vínculo inicial (`rede-veiculos-vincular-cliente`). Não existe endpoint nosso para alterar isso depois.
 
-3. Bloquear efeitos colaterais após cancelamento
-   - Ajustar rotinas que ainda consomem `documentos_solicitados` pendentes, como lembretes/WhatsApp, para ignorar itens cancelados ou contratos cancelados.
-   - Garantir que o cancelamento faça essas pendências sumirem das filas imediatamente após invalidação/refetch.
+## Plano
 
-4. Validar o caso real
-   - Conferir o fluxo do caso KRN6G76 para garantir que, após o cancelamento, ele não apareça mais em `Documentos Pendentes` nem em outras filas relacionadas.
+### Passo 1 — Backfill do RJH0C29 (caso pontual)
 
-## Resultado esperado
+Criar edge **`rede-veiculos-backfill-rjh0c29`** (one-shot, descartável após uso) que:
 
-- Cancelar um veículo encerra todos os processos daquele veículo.
-- O associado continua ativo se ainda tiver outros veículos/processos válidos.
-- Pendências do veículo cancelado somem das filas, do sino e dos lembretes.
-- Nenhum outro veículo do mesmo associado é afetado.
+1. Autentica na Rede.
+2. Chama `obterDadosVeiculo` por **placa** (`RJH0C29`) para descobrir `idVeiculo`, `idCliente`, `idEquipamento`.
+3. Grava esses IDs no nosso banco:
+   - `veiculos.rede_veiculos_veiculo_id`
+   - `veiculos.rede_veiculos_cliente_id`
+   - `rastreadores.plataforma_device_id` / `id_plataforma`
+4. Retorna os IDs encontrados.
 
-## Detalhes técnicos
+Se a Rede não aceitar busca por placa sem CPF, usar fallback: buscar pelo IMEI `356428070135895` via endpoint que aceite (ou cair em `obterDadosVeiculo` passando `cpfCnpj` do associado + `placa`).
 
-- Hoje o problema principal é que a edge function já cancela várias entidades, mas não encerra `documentos_solicitados` do processo cancelado.
-- Os consumidores atuais da fila de pendências consultam `documentos_solicitados` por `associado_id` e/ou `status='pendente'` sem cruzar corretamente com o estado do contrato/veículo.
-- O banco já aceita `documentos_solicitados.status = 'cancelado'`, então a correção pode seguir o padrão existente sem mudança estrutural obrigatória.
-- A implementação deve preservar auditoria e escopo por contrato/veículo, evitando cancelar pendências de outros veículos do mesmo associado.
+### Passo 2 — Nova edge `rede-veiculos-atualizar-equipamento`
+
+Caminho reutilizável para qualquer veículo que precise corrigir o local depois:
+
+- **Input:** `{ veiculoId, localInstalacao }`
+- **Fluxo:**
+  1. Lê `veiculos.rede_veiculos_veiculo_id` + `rastreadores` do veículo. Falha clara se faltar ID da Rede.
+  2. Autentica.
+  3. POST para o endpoint da Rede de atualização de equipamento (`atualizarDadosEquipamento/` — confirmar nome exato na primeira chamada via log).
+  4. Atualiza `rastreadores.local_instalacao` local em caso de sucesso.
+  5. Loga em `rastreadores_api_logs`.
+- **Onde acionar** (fora deste plano, mas previsto): drawer do rastreador (aba Gestão da Rede) — botão "Atualizar local na Rede" próximo ao campo de local. Não vou implementar a UI agora; só a edge.
+
+### Passo 3 — Aplicar para o RJH0C29
+
+1. Rodar `rede-veiculos-backfill-rjh0c29`.
+2. Rodar `rede-veiculos-atualizar-equipamento` com `localInstalacao='odb'`.
+3. Confirmar no painel da Rede.
+
+### Passo 4 — Memória
+
+Adicionar nota em `mem://logic/integrations/rede-atualizar-local-instalacao` registrando o novo endpoint e o requisito de `rede_veiculos_veiculo_id` populado.
+
+## Não está no escopo
+
+- Botão na UI para acionar a atualização (posso fazer depois, se quiser).
+- Backfill em massa de outros veículos com `rede_veiculos_veiculo_id` NULL — só o RJH0C29.
+- Criar valor "DUTO DO AR ESQUERDO" no catálogo (você optou por manter ODB).
+
+## Riscos
+
+- O endpoint exato da Rede para alterar `localInstalacao` pós-vínculo precisa ser confirmado pela documentação/teste. Se a Rede não expõe isso, o Passo 2 vira **"sincronizar local no nosso banco + alerta para o operador ajustar manualmente no painel"** — eu reporto antes de prosseguir.
