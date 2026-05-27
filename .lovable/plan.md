@@ -1,74 +1,85 @@
-# Não Lidos em Relacionamento › Chat
 
-Hoje a aba Relacionamento › Chat (`/eventos/n` → `EventosChatIA.tsx`) lista conversas WhatsApp agrupadas por telefone sem nenhuma noção de "lido / não lido" do lado do operador. A coluna `whatsapp_mensagens.read_at` existente é o *read receipt do destinatário* (quando o cliente leu a nossa mensagem) — não serve para marcar o que o operador interno já visualizou.
+## Escopo confirmado
 
-A solução é por-operador: cada usuário interno tem o próprio "last seen" por conversa.
+Só conserto da causa-raiz. Sem hook novo, sem aba de pendentes, sem refactor de UX, sem sweep periódico extra, sem mexer em card de validação / Rastreadores / cadastro de veículo.
 
-## Comportamento
+Foco único: garantir que nova ativação **Softruck** e nova vinculação **Rede Veículos** **não travem** como QPW4H53 / RUM0H01.
 
-- Cada conversa exibe contador de mensagens **não lidas** = mensagens `direcao='entrada'` com `created_at > last_read_at` daquele operador.
-- Toggle no topo da lista: **Todas** / **Não lidos** (preserva filtro de busca).
-- Conversas com não lidos: nome em **negrito**, badge com a contagem (verde), ordem de prioridade no topo da lista quando o filtro "Não lidos" estiver ativo.
-- Ao **abrir** uma conversa, o `last_read_at` daquele operador é atualizado para `now()` automaticamente (upsert) — o badge some.
-- Botão secundário discreto **"Marcar todas como lidas"** acima da lista (apenas quando há não lidas).
-- Funciona em tempo real: Realtime já existente em `whatsapp_mensagens` invalida a query; a contagem se recalcula sem reload.
+## Diagnóstico do estado atual
 
-## Escopo backend
+**Softruck (`softruck-ativar-dispositivo/index.ts`)** — o conserto principal já existe:
+- Passo **8.5** (linhas 658–696) faz o UPDATE canônico (`plataforma_device_id`, `plataforma_veiculo_id`, `softruck_chip_id`, `softruck_integration_status='SUCCESS'`, `status='instalado'`, `veiculos.softruck_vehicle_id`) **antes** do GPS.
+- O passo 8.5 já enfileira em `softruck_gps_poll_queue` (tabela existe, worker `cron-softruck-gps-poll` existe).
+- Mas o passo **8.6** (linhas 698–740) ainda faz tentativa síncrona de GPS dentro da edge — hoje com `MAX_TENTATIVAS=1` e `INTERVALO_MS=0`, então é só 1 chamada HTTP, mas ainda é tempo agarrado na resposta.
+- O passo **9** (linhas 742–788) refaz o UPDATE inteiro depois do GPS — é redundante com o 8.5 e mantém a porta aberta para "se travar aqui, perdemos coisa". Conforme o RUM0H01/QPW4H53 originais.
 
-Nova tabela `whatsapp_conversa_leituras`:
+**Rede Veículos (`rede-veiculos-vincular-cliente/index.ts`)** — não tem polling de GPS, mas tem dois problemas:
+- O **passo 8** (UPDATE local, linhas 421–451) já vem **antes** do passo 8.1 (`ativarVeiculo`, linhas 453–489), e o 8.1 já está em try/catch não-bloqueante. ✅ Ordem está OK.
+- **Faltam guardas de idempotência:** se a edge for chamada 2x para o mesmo IMEI/veículo, o segundo POST `/vincularClienteVeiculo/` é disparado de novo — risco de cliente/veículo/equipamento duplicado no lado da Rede.
 
-| coluna | tipo | obs |
-|---|---|---|
-| `user_id` | uuid | FK lógico para `auth.users` |
-| `telefone` | varchar | mesmo formato do `whatsapp_mensagens.telefone` |
-| `last_read_at` | timestamptz | default `now()` |
-| `updated_at` | timestamptz | trigger padrão |
+## O conserto (mínimo)
 
-- PK composta `(user_id, telefone)`.
-- RLS: operador só lê/escreve as próprias linhas (`auth.uid() = user_id`).
-- GRANT canônico para `authenticated` + `service_role` (sem `anon`).
-- Index em `(user_id)` (PK já cobre busca por telefone dentro do user).
+### 1. Softruck — fechar a janela do GPS de vez
 
-Sem migração de dados: ausência de linha = nunca lido (tudo aparece como não lido na primeira passagem do operador).
+Em `supabase/functions/softruck-ativar-dispositivo/index.ts`:
 
-## Escopo frontend
+- **Remover o passo 8.6 inteiro** (linhas 698–740 — laço síncrono de tracking) e **remover o passo 9** (linhas 742–788 — segundo UPDATE redundante).
+- Posições GPS passam a ser **100% responsabilidade** do worker assíncrono (`cron-softruck-gps-poll` consumindo `softruck_gps_poll_queue`), que já está deployado.
+- O `responseRaw` do log final (passo 13, linhas 820–830) passa a referenciar `{ softruckVehicleId, softruckDeviceId, softruckChipId, softruckUserId, gps_polling: 'async' }` (mesmo objeto que o 8.5 já grava).
+- A resposta HTTP devolve `primeira_posicao: null` (campo mantido por compatibilidade, vira sempre null nesta edge).
 
-Arquivos tocados (lista mínima):
+Resultado: a edge devolve assim que o 8.5 grava. Nenhum caminho de código pode mais perder o UPDATE local por causa de GPS.
 
-1. **`src/pages/eventos/EventosChatIA.tsx`**
-   - Nova query `useQuery` em `whatsapp_conversa_leituras` filtrado por `user_id` atual → mapa `telefone → last_read_at`.
-   - No agrupamento do `useMemo`, calcular `unread_count` por conversa (somente `direcao='entrada'` e `created_at > last_read_at`).
-   - Ao chamar `handleSelectConversa`, disparar mutation `upsert` em `whatsapp_conversa_leituras` (`onConflict: 'user_id,telefone'`) com `last_read_at = now()` + invalidar a query de leituras.
+### 2. Softruck — verificação rápida de idempotência
 
-2. **`src/components/eventos/n/ConversasList.tsx`**
-   - Estender `ConversaAgrupada` com `unread_count: number`.
-   - Adicionar toggle `Tabs`/`ToggleGroup` "Todas | Não lidos" + botão "Marcar todas como lidas".
-   - Aplicar `font-bold` no nome, badge contador, e ordenar não-lidos primeiro quando o filtro estiver ativo.
-   - Manter prioridade visual de "Cobrança" (já existe) acima do destaque de não-lido para não conflitar.
+Sem código novo. Só validar que o early-return existente (linhas 185–199) cobre re-chamada:
+- Se `plataforma_device_id` E `plataforma_veiculo_id` já estiverem populados localmente, retorna `already_activated: true` sem tocar na Softruck.
+- A criação de veículo/chip/device já tem `buscar → criar → on Already Exists, re-buscar`. ✅
+- Vou adicionar UMA linha de log explicitando isso em PR (não muda comportamento).
 
-3. **Sem mexer** em `ChatPanel.tsx`, `ContatoDetalheDrawer.tsx` nem nas variantes `escopo='monitoramento'` — a marcação é única, vale para qualquer variante.
+### 3. Rede Veículos — early-return idempotente
 
-## Casos de borda
+Em `supabase/functions/rede-veiculos-vincular-cliente/index.ts`, logo após buscar `veiculo` (linha 176):
 
-- **Tempo real**: o `INSERT` realtime invalida `chat-ia-conversas`; a contagem de não-lidos é derivada do resultado já com `last_read_at`, então recalcula sozinha.
-- **Conversa aberta + nova mensagem chega**: como a UI mostra a conversa selecionada em primeiro plano, atualizamos o `last_read_at` também quando uma nova mensagem chega *enquanto a conversa está aberta* (efeito no `EventosChatIA` que observa `telefoneSelecionado` + `mensagens`).
-- **Mensagens próprias (`direcao='saida'`) nunca contam como não-lidas.**
-- **Sem usuário logado** (não deveria acontecer nessa tela, mas guard): query de leituras desabilitada → contagem 0 e filtro funciona apenas como "Todas".
+```ts
+if (veiculo.rede_veiculos_veiculo_id && veiculo.rede_veiculos_cliente_id && rastreador.plataforma_device_id) {
+  return new Response(JSON.stringify({
+    success: true,
+    rastreador_id: rastreador.id,
+    rede_veiculos_cliente_id: veiculo.rede_veiculos_cliente_id,
+    rede_veiculos_veiculo_id: veiculo.rede_veiculos_veiculo_id,
+    rede_veiculos_equipamento_id: rastreador.plataforma_device_id,
+    already_activated: true,
+    mensagem: 'Já vinculado na Rede Veículos',
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
+```
 
-## Fora do escopo
+Resultado: rodar a edge 2x para o mesmo IMEI/veículo não dispara segundo `/vincularClienteVeiculo/`.
 
-- Sincronizar com `read_at` do WhatsApp (read receipt do cliente) — é semântica diferente.
-- Marcar individual mensagem como lida — só por conversa.
-- Notificações push — fluxo separado.
+### 4. Rede Veículos — ordem do UPDATE já está OK
 
-## Validação manual
+Sem mudança. O passo 8 (UPDATE local) já roda antes do 8.1 (`ativarVeiculo`), e o 8.1 já está envolvido em try/catch isolado. Não há padrão de travamento equivalente ao GPS da Softruck.
 
-1. Abrir Relacionamento › Chat como operador A.
-2. Em outra sessão, inserir mensagem `direcao='entrada'` para um telefone novo → conversa aparece em negrito com badge "1".
-3. Clicar → badge some, negrito vira normal.
-4. Filtrar "Não lidos" → conversa lida desaparece da lista; chega nova mensagem → reaparece.
-5. Trocar de operador (B) → o estado é independente.
+## O que NÃO entra (confirmando)
 
-## Próximo passo
+- ❌ Hook único de busca por placa
+- ❌ Aba/tela de pendentes
+- ❌ Sweep periódico novo (o `cron-softruck-gps-poll` já existe e fica)
+- ❌ Estados intermediários complexos
+- ❌ Card de validação, Rastreadores, cadastro de veículo
+- ❌ Mexer em `softruck-buscar-dispositivo`, `rede-veiculos-buscar-dispositivo`, `useAtivarRastreador`, `useBuscarRastreadorPorImei`
 
-Aprove para eu rodar a migration e implementar os dois arquivos do front.
+## Critério de aceitação
+
+1. Nova ativação Softruck em qualquer IMEI: `rastreadores.plataforma_device_id`, `plataforma_veiculo_id`, `softruck_integration_status='SUCCESS'`, `status='instalado'` e `veiculos.softruck_vehicle_id` ficam preenchidos **antes** do retorno HTTP. Travamento ou timeout em qualquer fase posterior do GPS não pode mais apagar isso (passos 8.6 e 9 deletados).
+2. Rodar `softruck-ativar-dispositivo` 2x para o mesmo IMEI já vinculado: retorna `already_activated: true`, zero chamada externa.
+3. Rodar `rede-veiculos-vincular-cliente` 2x para o mesmo IMEI já vinculado: retorna `already_activated: true`, zero POST em `/vincularClienteVeiculo/`.
+4. Posições GPS continuam chegando via `cron-softruck-gps-poll` (worker assíncrono já em produção) — fora do caminho crítico da ativação.
+
+## Arquivos tocados
+
+- `supabase/functions/softruck-ativar-dispositivo/index.ts` — deletar passos 8.6 e 9; ajustar `responseRaw` do log de sucesso.
+- `supabase/functions/rede-veiculos-vincular-cliente/index.ts` — adicionar early-return idempotente após buscar veículo.
+
+Nenhum arquivo de frontend, nenhuma migration, nenhuma tabela nova.

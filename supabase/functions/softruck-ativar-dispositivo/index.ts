@@ -695,97 +695,21 @@ serve(async (req) => {
       }
     }
 
-    // ===== 8.6. Tentativa síncrona oportunista de primeira posição (best-effort, sem bloquear) =====
-    console.log('[Softruck Ativar] Tentativa oportunista de GPS...');
-    let primeiraPos = null;
-    const MAX_TENTATIVAS = 1;
-    const INTERVALO_MS = 0;
-
-    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-      console.log(`[Softruck Ativar] Tentativa ${tentativa}/${MAX_TENTATIVAS} de buscar posição...`);
-      
-      const trackingResult = await callSoftruckApi(
-        supabaseUrl,
-        supabaseAnonKey,
-        'tracking',
-        { veiculoId: softruckVehicleId, deviceId: softruckDeviceId }
-      );
-      
-      if (trackingResult.success && trackingResult.data) {
-        const trackingData = trackingResult.data as { 
-          latitude?: number; 
-          longitude?: number; 
-          speed?: number;
-          ignition?: boolean;
-          last_gps_time?: string;
-        };
-        
-        if (trackingData.latitude && trackingData.longitude) {
-          primeiraPos = {
-            latitude: trackingData.latitude,
-            longitude: trackingData.longitude,
-            velocidade: trackingData.speed || 0,
-            ignicao: trackingData.ignition || false,
-            data_posicao: trackingData.last_gps_time || new Date().toISOString(),
-          };
-          console.log('[Softruck Ativar] Primeira posição recebida!', primeiraPos);
-          break;
-        }
-      }
-      
-      if (tentativa < MAX_TENTATIVAS) {
-        console.log(`[Softruck Ativar] Aguardando ${INTERVALO_MS/1000}s antes da próxima tentativa...`);
-        await new Promise(r => setTimeout(r, INTERVALO_MS));
-      }
-    }
-    
-    // ===== 9. Atualizar rastreador local com todos os IDs e status =====
-    console.log('[Softruck Ativar] [9/9] Atualizando rastreador local...');
-    
+    // ===== 8.6/9. REMOVIDOS =====
+    // O UPDATE canônico do rastreador (e do veiculos.softruck_vehicle_id) já foi feito
+    // no passo 8.5 ANTES de qualquer tentativa de GPS. Polling de posição é 100%
+    // responsabilidade do worker assíncrono `cron-softruck-gps-poll` consumindo
+    // `softruck_gps_poll_queue` (já enfileirado no 8.5). Isso elimina os casos
+    // QPW4H53 / RUM0H01 em que travamento no GPS deixava o registro local incompleto.
+    const primeiraPos = null;
     const responseRaw = {
       softruckVehicleId,
       softruckDeviceId,
       softruckChipId,
       softruckUserId,
-      primeiraPos,
+      gps_polling: 'async',
     };
-    
-    const updateData: Record<string, unknown> = {
-      plataforma_device_id: softruckDeviceId,
-      plataforma_veiculo_id: softruckVehicleId,
-      softruck_chip_id: softruckChipId || null,
-      softruck_integration_status: 'SUCCESS',
-      softruck_last_attempt_at: new Date().toISOString(),
-      softruck_payload_sent: payloadSent,
-      softruck_response_raw: responseRaw,
-      updated_at: new Date().toISOString(),
-    };
-    
-    // Se recebeu posição, atualizar também
-    if (primeiraPos) {
-      updateData.ultima_comunicacao = primeiraPos.data_posicao;
-      updateData.ultima_posicao_lat = primeiraPos.latitude;
-      updateData.ultima_posicao_lng = primeiraPos.longitude;
-      updateData.ultima_velocidade = primeiraPos.velocidade;
-      updateData.ultima_ignicao = primeiraPos.ignicao;
-    }
-    
-    // Se ainda não estava instalado, atualizar vínculo
-    if (rastreador.status !== 'instalado') {
-      updateData.veiculo_id = veiculoId;
-      updateData.associado_id = associadoId;
-      updateData.associado_email = associadoEmail;
-      updateData.status = 'instalado';
-    }
-    
-    const { error: updateError } = await supabase
-      .from('rastreadores')
-      .update(updateData)
-      .eq('id', rastreador.id);
 
-    if (updateError) {
-      throw new Error(`Erro ao atualizar rastreador: ${updateError.message}`);
-    }
 
     // ===== 10. NOTA: Ativação do associado e liberação de cobertura =====
     // CORREÇÃO: Removida atualização redundante de associados.status e veiculos.cobertura_total
