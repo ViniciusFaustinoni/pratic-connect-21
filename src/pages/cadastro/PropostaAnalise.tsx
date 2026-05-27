@@ -743,6 +743,7 @@ export default function PropostaAnalise() {
           onViewDocumento={setDocumentoVisualizar}
           onAprovarDocumento={handleAprovarDocumento}
           onReprovarDocumento={handleReprovarDocumento}
+          onReverterReprovacaoDocumento={isFinalizada ? undefined : (doc) => setDocumentoReverter(doc)}
           onAprovar={handleAprovar}
           onSolicitarDocs={() => setShowSolicitarDocs(true)}
           onReprovar={() => setShowReprovar(true)}
