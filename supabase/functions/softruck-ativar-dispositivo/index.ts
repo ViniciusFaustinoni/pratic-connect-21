@@ -655,12 +655,53 @@ serve(async (req) => {
       console.log('[Softruck Ativar] Veículo ativado com sucesso');
     }
 
-    // ===== 8.5. Verificar primeira posição (polling curto) =====
-    console.log('[Softruck Ativar] Verificando primeira posição GPS...');
-    
+    // ===== 8.5. UPDATE FINAL CANÔNICO ANTES DE QUALQUER POLLING =====
+    // CRÍTICO: gravar IDs + status SUCCESS + sincronizar veiculos.softruck_vehicle_id
+    // ANTES do GPS. Se o runtime cair durante o polling, o registro não fica fantasma
+    // (casos RUM0H01 / QPW4H53). Polling de GPS vai para fila assíncrona.
+    {
+      const updEarly: Record<string, unknown> = {
+        plataforma_device_id: softruckDeviceId,
+        plataforma_veiculo_id: softruckVehicleId,
+        softruck_chip_id: softruckChipId || null,
+        softruck_integration_status: 'SUCCESS',
+        softruck_last_attempt_at: new Date().toISOString(),
+        softruck_payload_sent: payloadSent,
+        softruck_response_raw: { softruckVehicleId, softruckDeviceId, softruckChipId, softruckUserId, gps_polling: 'pendente_async' },
+        updated_at: new Date().toISOString(),
+      };
+      if (rastreador.status !== 'instalado') {
+        updEarly.veiculo_id = veiculoId;
+        updEarly.associado_id = associadoId;
+        updEarly.associado_email = associadoEmail;
+        updEarly.status = 'instalado';
+      }
+      const { error: upEarlyErr } = await supabase.from('rastreadores').update(updEarly).eq('id', rastreador.id);
+      if (upEarlyErr) throw new Error(`UPDATE final rastreador: ${upEarlyErr.message}`);
+      if (softruckVehicleId) {
+        await supabase.from('veiculos').update({ softruck_vehicle_id: softruckVehicleId }).eq('id', veiculoId);
+      }
+      // Enfileirar polling GPS assíncrono — falha não bloqueia
+      try {
+        await supabase.from('softruck_gps_poll_queue').insert({
+          rastreador_id: rastreador.id,
+          softruck_device_id: softruckDeviceId,
+          softruck_vehicle_id: softruckVehicleId,
+          status: 'pending',
+          next_run_at: new Date().toISOString(),
+        });
+      } catch (qErr) {
+        console.warn('[Softruck Ativar] falha enfileirar gps poll:', qErr);
+      }
+    }
+
+    // ===== 8.6. Tentativa síncrona oportunista de primeira posição (best-effort, sem bloquear) =====
+    console.log('[Softruck Ativar] Tentativa oportunista de GPS...');
     let primeiraPos = null;
-    const MAX_TENTATIVAS = 3;
-    const INTERVALO_MS = 10000; // 10 segundos
+    const MAX_TENTATIVAS = 1;
+    const INTERVALO_MS = 0;
+
+    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     
     for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
       console.log(`[Softruck Ativar] Tentativa ${tentativa}/${MAX_TENTATIVAS} de buscar posição...`);
