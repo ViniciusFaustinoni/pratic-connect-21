@@ -702,8 +702,6 @@ serve(async (req) => {
     const INTERVALO_MS = 0;
 
     for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    
-    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
       console.log(`[Softruck Ativar] Tentativa ${tentativa}/${MAX_TENTATIVAS} de buscar posição...`);
       
       const trackingResult = await callSoftruckApi(
