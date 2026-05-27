@@ -33290,6 +33290,27 @@ export type Database = {
           },
         ]
       }
+      whatsapp_conversa_leituras: {
+        Row: {
+          last_read_at: string
+          telefone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          telefone: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          telefone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       whatsapp_fila_ia: {
         Row: {
           created_at: string | null
