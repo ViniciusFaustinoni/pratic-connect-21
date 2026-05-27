@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     });
 
     // 5. extrair IDs do melhor obter (preferir d, depois a, depois b)
-    const candidatos = [out.etapas.d_reconfirmar, out.etapas.a_obter_por_placa, out.etapas.b_obter_por_imei];
+    const candidatos = [out.etapas.d_reconfirmar, out.etapas.e_reconfirmar_imei];
     let idCliente: any = null, idVeiculo: any = null, idEquipamento: any = null;
     for (const c of candidatos) {
       const p = c?.parsed || {};
