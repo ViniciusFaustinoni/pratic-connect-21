@@ -95,11 +95,12 @@ function formatDateTime(dateString: string): string {
   return format(new Date(dateString), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
-export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar }: DocumentoAnexadoCardProps) {
+export function DocumentoAnexadoCard({ documento, onView, onAprovar, onReprovar, onReverter }: DocumentoAnexadoCardProps) {
   const isContrato = documento.tipo === 'contrato_assinado';
   const isReenviado = typeof documento.id === 'string' && documento.id.startsWith('solicitado-');
   const status = statusConfig[documento.status] || statusConfig.pendente;
   const podeAnalisar = (documento.status === 'pendente' || documento.status === 'em_analise') && (onAprovar || onReprovar);
+  const podeReverterReprovacao = documento.status === 'reprovado' && !!onReverter;
 
   const [loadingAction, setLoadingAction] = useState<'aprovar' | 'reprovar' | null>(null);
 
