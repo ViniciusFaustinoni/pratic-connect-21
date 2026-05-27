@@ -1,7 +1,15 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2, MoreVertical, XCircle } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { CancelarVeiculoDialog } from '@/components/veiculos/CancelarVeiculoDialog';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -100,12 +108,14 @@ const statusColors: Record<StatusVeiculo, string> = {
 interface VeiculoRowProps {
   veiculo: any;
   canDelete: boolean;
+  canHardDelete: boolean;
   onSelect: (id: string) => void;
+  onCancelar: (v: { id: string; placa: string; marca?: string | null; modelo?: string | null; associado_id?: string | null }) => void;
   onDelete: (v: { id: string; placa: string }) => void;
   formatCurrency: (v: number | null) => string;
 }
 
-const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect, onDelete, formatCurrency }: VeiculoRowProps) {
+const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, canHardDelete, onSelect, onCancelar, onDelete, formatCurrency }: VeiculoRowProps) {
   const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
   // Derivação: se está 'instalacao_pendente' mas NÃO há nenhuma instalação criada/agendada,
   // o veículo na verdade aguarda vistoria/aprovação manual (fluxo sem rastreador) — mostrar label honesto.
@@ -189,18 +199,41 @@ const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect
         )}
       </TableCell>
       {canDelete && (
-        <TableCell>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete({ id: veiculo.id, placa: veiculo.placa });
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+        <TableCell onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => onCancelar({
+                  id: veiculo.id,
+                  placa: veiculo.placa,
+                  marca: veiculo.marca,
+                  modelo: veiculo.modelo,
+                  associado_id: veiculo.associado_id,
+                })}
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Cancelar veículo
+              </DropdownMenuItem>
+              {canHardDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onDelete({ id: veiculo.id, placa: veiculo.placa })}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir permanentemente
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TableCell>
       )}
     </TableRow>
@@ -228,8 +261,11 @@ export default function Veiculos() {
   const { isDiretor, isAdminMaster, isDesenvolvedor, hasPerm } = usePermissions();
   const { toast } = useToast();
   const [veiculoToDelete, setVeiculoToDelete] = useState<{ id: string; placa: string } | null>(null);
+  const [veiculoToCancel, setVeiculoToCancel] = useState<{ id: string; placa: string; marca?: string | null; modelo?: string | null; associado_id?: string | null } | null>(null);
 
-  const canDeleteVeiculo = isDiretor || isAdminMaster || isDesenvolvedor;
+  const canHardDeleteVeiculo = isDiretor || isAdminMaster || isDesenvolvedor;
+  // Cancelar veículo: mesmo gate por enquanto (operador com permissão de gestão da entidade).
+  const canDeleteVeiculo = canHardDeleteVeiculo;
 
   // Consulta de placa
   const [placaInput, setPlacaInput] = useState('');
@@ -442,7 +478,9 @@ export default function Veiculos() {
                     key={veiculo.id}
                     veiculo={veiculo}
                     canDelete={canDeleteVeiculo}
+                    canHardDelete={canHardDeleteVeiculo}
                     onSelect={setSelectedVeiculoId}
+                    onCancelar={setVeiculoToCancel}
                     onDelete={setVeiculoToDelete}
                     formatCurrency={formatCurrency}
                   />
@@ -497,17 +535,45 @@ export default function Veiculos() {
                           <p className="text-xs text-muted-foreground truncate">{veiculo.modelo}</p>
                         </div>
                         {canDeleteVeiculo && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 -mt-1 -mr-1 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa });
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 -mt-1 -mr-1 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setVeiculoToCancel({
+                                  id: veiculo.id,
+                                  placa: veiculo.placa,
+                                  marca: veiculo.marca,
+                                  modelo: veiculo.modelo,
+                                  associado_id: veiculo.associado_id,
+                                })}
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Cancelar veículo
+                              </DropdownMenuItem>
+                              {canHardDeleteVeiculo && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa })}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Excluir permanentemente
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
 
@@ -607,6 +673,12 @@ export default function Veiculos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CancelarVeiculoDialog
+        open={!!veiculoToCancel}
+        onClose={() => setVeiculoToCancel(null)}
+        veiculo={veiculoToCancel}
+      />
     </div>
   );
 }

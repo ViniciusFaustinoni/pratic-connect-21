@@ -1,64 +1,86 @@
-## Objetivo
-Corrigir o envio de CEP para a API Rede Veículos (formato obrigatório `XXXXX-XXX`), endurecer comportamento com CEP inválido, e reprocessar o vínculo do Anderson (KPJ4994).
+## Problema
 
-## Callers afetados (confirmado via `rg`)
-Apenas 2 edges enviam CEP no payload da Rede:
+Hoje, em `/cadastro/veiculos`, a única ação destrutiva por linha é o trash vermelho (`useDeleteVeiculo`), que faz **DELETE permanente**. Não existe "cancelar veículo": só é possível cancelar o associado inteiro (cascata via `trg_cascata_cancelamento_associado`), o que é destrutivo demais para o associado com 3 veículos do exemplo (FRANCISCO FILHO / KRN6G76).
 
-1. `supabase/functions/rede-veiculos-vincular-cliente/index.ts:314` — envia `cep` cru sem hífen no `clienteDados`.
-2. `supabase/functions/rede-veiculos-atualizar-cliente/index.ts:229` — mesma sanitização sem formatação.
+Falta o caminho: **cancelar 1 veículo**, derrubar processos vinculados a ele, e — só se o associado ficar sem nenhum veículo/contrato ativo — cancelar também o associado.
 
-Demais edges Rede (`desvincular-cliente`, `informar-adimplente/inadimplente`, `ativar/inativar-cliente-completo`, etc.) **não enviam CEP** — fora de escopo.
+## Solução
 
-## Mudanças
+Espelhar o padrão canônico de `cancelarAssociado` (`src/hooks/useAssociados.ts:703`), mas escopado a 1 veículo, reaproveitando a function existente `fn_cancelar_associado_se_orfao` (já implementada — usada hoje pelo `efetivar-troca-titularidade`).
 
-### 1. Helper compartilhado (inline em cada edge, não vamos criar shared yet)
-```ts
-function formatarCepRede(cepRaw: string | null | undefined, ctx: { associadoId: string; caller: string }): string {
-  const digits = (cepRaw || '').replace(/\D/g, '');
-  if (digits.length !== 8) {
-    console.warn('[REDE_CEP_INVALIDO]', { ...ctx, cepRaw, digits });
-    throw new Error(`CEP_INVALIDO: associado ${ctx.associadoId} tem CEP "${cepRaw}" inválido (esperado 8 dígitos). Corrija no cadastro antes de sincronizar com a Rede.`);
-  }
-  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-}
-```
+### 1. Edge function nova: `supabase/functions/cancelar-veiculo/index.ts`
 
-**Decisão (conforme recomendação aprovada): abortar com erro identificável** — CEP inválido vira 400 visível, não falha silenciosa. A edge devolve `{ success:false, code:'CEP_INVALIDO', message }` (HTTP 400) para que UI/cron/troca de titularidade tratem como erro cadastral acionável.
+Input: `{ veiculoId, motivo }`. Auth: usuário interno autenticado (lê JWT → `cancelado_por`).
 
-### 2. `rede-veiculos-vincular-cliente/index.ts` (linha ~314)
-Substituir:
-```ts
-if (associado.cep) clienteDados.cep = associado.cep.replace(/\D/g, '');
-```
-Por chamada ao helper + try/catch que devolve 400 com `code:'CEP_INVALIDO'` antes de tentar `POST /clientes`. Se `associado.cep` for null/vazio, omitir o campo (comportamento atual da Rede aceita ausência; só rejeita formato inválido).
+Sequência (não-bloqueante onde marcado):
 
-### 3. `rede-veiculos-atualizar-cliente/index.ts` (linha ~229)
-Mesma troca dentro de `camposAlterados.cep ?? associado.cep`. Se nenhum CEP, omitir do PATCH; se presente porém inválido, abortar com 400 `CEP_INVALIDO`.
+1. **Guards**
+   - Buscar veículo + associado_id + status; se já `cancelado`/`vendido`/`transferido` → 409.
+   - Verificar `solicitacoes_troca_titularidade` aberta para a placa/veículo → 409 `TROCA_EM_ANDAMENTO`.
+   - Verificar `solicitacoes_substituicao` aberta para o veículo → 409 `SUBSTITUICAO_EM_ANDAMENTO`.
 
-### 4. Sem mudanças em `desvincular-cliente` (CEP não é enviado lá).
+2. **Cancelar processos vinculados ao veículo** (cascata escopada)
+   - `cotacoes` do veículo com `status_contratacao NOT IN ('ativo','cancelada')` → marcar `cancelada` + `motivo_cancelamento`.
+   - `instalacoes` com `status IN ('agendada','em_andamento','pendente')` → `cancelada` (triggers `cancelar_servicos_ao_cancelar_instalacao` já existentes propagam para `servicos`).
+   - `servicos` abertos (`em_aberto/agendada/em_rota/em_andamento/em_analise`) por `veiculo_id` → `cancelada`. Trigger `trg_sync_agendamento_base_on_servico_terminal` fecha `agendamentos_base`.
+   - `vistorias` em andamento ligadas via instalação/veículo → `cancelada` (triggers existentes).
+   - `contratos` com `veiculo_id = X` e `status IN ('ativo','assinado','pendente')` → `cancelado` + `motivo_cancelamento` + `cancelado_em` (1 contrato : 1 veículo, confirmado no schema).
+   - `cobertura_total` / `cobertura_roubo_furto` no veículo → false.
 
-### 5. Reprocessar Anderson após deploy
-- Confirmar `associados.cep` do Anderson via `supabase--read_query` (id `5f51682f-7be6-45c5-baf2-b695711ddf3a`). Se ≠8 dígitos, instrução para o operador corrigir antes; se válido, prosseguir.
-- Chamar `supabase--curl_edge_functions` POST `/rede-veiculos-vincular-cliente` com:
-  ```json
-  {"imei":"354522186314659","veiculoId":"d53acb36-0e8c-4683-8537-0651c724d454","associadoId":"5f51682f-7be6-45c5-baf2-b695711ddf3a"}
-  ```
-- Coletar via `supabase--edge_function_logs rede-veiculos-vincular-cliente`:
-  - Payload final enviado à Rede (com CEP `23094-140`)
-  - Resposta crua (`idCliente`, `idVeiculo`, `idEquipamento`)
-- Verificar persistência via SQL:
-  ```sql
-  select rede_veiculos_cliente_id, rede_veiculos_veiculo_id, updated_at
-  from veiculos where id='d53acb36-0e8c-4683-8537-0651c724d454';
-  select plataforma_device_id, plataforma, updated_at
-  from rastreadores where imei='354522186314659';
-  ```
+3. **Desvincular rastreador** (mesmo padrão do `cancelarAssociado`)
+   - Softruck: `softruck-api { operation: 'desassociar-device-veiculo' }` (não-bloqueante).
+   - Rede Veículos: chamar `rede-veiculos-desvincular-cliente` por veículo (não-bloqueante; o orquestrador `inativar-cliente-completo` é por associado, não serve aqui).
+   - `rastreadores`: `veiculo_id=null, associado_id=null, status='estoque'`.
 
-## Fora de escopo (mantido do plano anterior, não nesta rodada)
-- Itens 2/3/4/6 do plano anterior (override de CPF no desvincular, branch 6.3 em `efetivar-troca-titularidade`, retry no `cron-sga-retry`, audit de callers obsoletos com payload flat).
+4. **SGA Hinova (não-bloqueante)**: enfileirar em `sga_sync_queue` `acao='inativar_veiculo'` com `codigo_hinova` do veículo. (Hoje só `efetivar-substituicao` faz inativação direta; aqui a operação é equivalente).
+
+5. **Marcar veículo** `status='cancelado'`, `data_cancelamento=now()`, `motivo_cancelamento=<motivo>`.
+
+6. **Auto-cancelar associado órfão**: `select fn_cancelar_associado_se_orfao(associado_id, motivo)`. A function existente já verifica `contratos.status IN (ativo,assinado,pendente)` AND `veiculos.status NOT IN (cancelado,vendido,transferido)`; se zero em ambos, marca `associados.status='cancelado'` e grava `associados_historico`. Retornar `{ associadoCancelado: bool }` no response.
+
+7. **Audit log**: `insertAuditLog` com `acao='cancelar'`, `modulo='veiculos'`, descrição com placa + motivo + flag órfão.
+
+### 2. Hook novo: `src/hooks/useCancelarVeiculo.ts`
+
+`useMutation` chamando `supabase.functions.invoke('cancelar-veiculo', { body: { veiculoId, motivo } })`. Toasts:
+- Sucesso veículo + associado cancelados: "Veículo cancelado. Associado também foi cancelado (sem veículos/contratos ativos)."
+- Sucesso só veículo: "Veículo cancelado e processos vinculados encerrados."
+- 409 troca/substituição: mensagem direcionada.
+
+Invalida queries: `veiculos`, `associados`, `cotacoes`, `instalacoes`, `servicos`, `contratos`.
+
+### 3. UI em `src/pages/cadastro/Veiculos.tsx`
+
+**Substituir** o ícone de lixeira atual (DELETE permanente) por um `DropdownMenu` na coluna de ações com:
+
+- **Cancelar veículo** (default, ícone `XCircle`, vermelho) — abre `CancelarVeiculoDialog` novo.
+- **Excluir permanentemente** (só para Diretor/AdminMaster/Desenvolvedor — gate atual `canDeleteVeiculo`) — mantém o `useDeleteVeiculo` atual com aviso "destrutivo, sem auditoria de cancelamento".
+
+Aplicar nas DUAS views (tabela desktop linhas 436–509 e cards mobile).
+
+### 4. Componente novo: `src/components/veiculos/CancelarVeiculoDialog.tsx`
+
+Padrão do `SuspenderVeiculoDialog`:
+- Mostra placa + marca/modelo + associado.
+- Select de motivo (`desistencia`, `inadimplencia`, `solicitacao_cliente`, `troca_para_outro_servico`, `outro`).
+- Textarea de observações (obrigatória).
+- Alert vermelho listando o que será cancelado: "contrato deste veículo, cotações/instalações/serviços/vistorias em aberto, rastreador volta ao estoque, sincronização SGA enfileirada".
+- Aviso explícito quando for o último veículo ativo: "Este é o último veículo ativo. O associado também será cancelado automaticamente."
+- Botão confirmar disparando `useCancelarVeiculo`.
+
+### 5. Sem migrations DB
+
+`fn_cancelar_associado_se_orfao` já existe. Triggers em cascata (`cancelar_servicos_ao_cancelar_instalacao`, `trg_sync_agendamento_base_on_servico_terminal`) já existem. Enum `status_veiculo` já inclui `cancelado`. Nada novo no schema.
+
+## Out of scope
+
+- Não tocar em `cancelarAssociado` nem em `trg_cascata_cancelamento_associado` (continuam sendo o caminho para cancelamento global).
+- Não criar fluxo de termo de cancelamento Autentique para 1 veículo só (continua sendo via troca/substituição/cancelamento global).
+- Não mexer no comportamento de "Vender" / "Suspender" (dialogs separados continuam).
 
 ## Critério de sucesso
-- Anderson com `rede_veiculos_cliente_id` e `rede_veiculos_veiculo_id` preenchidos.
-- `rastreadores.plataforma_device_id` preenchido para IMEI `354522186314659`.
-- Log mostrando CEP no formato `23094-140` no payload outgoing.
-- Tentativa futura com CEP inválido em qualquer dos 2 callers retorna 400 `CEP_INVALIDO` em vez de erro genérico da Rede.
+
+- No exemplo do FRANCISCO: cancelar KRN6G76 → KRN6G76 vira `cancelado`, contrato/cotação/instalação dele encerram, rastreador volta ao estoque; LMT8B33 e o 3º seguem ativos; associado **permanece ativo** (badge volta de "Cancelado" para o status anterior — nota: o associado da screenshot já está "Cancelado", precisamos validar se o caso ali é regressão de outro fluxo antes).
+- Cancelar o último veículo ativo do associado → função detecta órfão → marca associado como `cancelado` + grava histórico.
+- Tentar cancelar veículo com troca/substituição aberta → 409 com mensagem clara.
+- Trash "Excluir permanentemente" continua disponível só para Diretor.
