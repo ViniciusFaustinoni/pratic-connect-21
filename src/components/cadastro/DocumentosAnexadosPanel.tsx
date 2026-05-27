@@ -114,6 +114,7 @@ export function DocumentosAnexadosPanel({ documentos, onViewDocumento, onAprovar
                 onView={onViewDocumento}
                 onAprovar={onAprovarDocumento}
                 onReprovar={onReprovarDocumento}
+                onReverter={onReverterReprovacao}
               />
             ))}
           </div>
