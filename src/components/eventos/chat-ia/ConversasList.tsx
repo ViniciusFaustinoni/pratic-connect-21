@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Search, User, Bot, Loader2, MessageSquare, AlertCircle } from 'lucide-react';
+import { Search, User, Bot, Loader2, MessageSquare, AlertCircle, CheckCheck } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +21,8 @@ export interface ConversaAgrupada {
   ultima_direcao: string;
   /** Timestamp da última mensagem de cobrança (referencia_tipo IN ('cobranca','cobranca_csv')). Null = nunca recebeu cobrança. */
   ultima_cobranca: string | null;
+  /** Mensagens recebidas (direcao='entrada') ainda não lidas pelo operador atual. */
+  unread_count: number;
 }
 
 interface ConversasListProps {
@@ -26,6 +30,7 @@ interface ConversasListProps {
   isLoading: boolean;
   telefoneSelecionado: string | null;
   onSelectConversa: (conversa: ConversaAgrupada) => void;
+  onMarcarTodasLidas?: () => void;
 }
 
 const formatarData = (dataStr: string) => {
@@ -54,18 +59,40 @@ const formatarTelefone = (tel: string) => {
   return tel;
 };
 
-export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSelectConversa }: ConversasListProps) {
+export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSelectConversa, onMarcarTodasLidas }: ConversasListProps) {
   const [busca, setBusca] = useState('');
+  const [filtro, setFiltro] = useState<'todas' | 'nao_lidos'>('todas');
+
+  const totalNaoLidos = useMemo(
+    () => conversas.reduce((acc, c) => acc + (c.unread_count > 0 ? 1 : 0), 0),
+    [conversas]
+  );
 
   const conversasFiltradas = useMemo(() => {
-    if (!busca.trim()) return conversas;
-    const termo = busca.toLowerCase();
-    return conversas.filter(
-      (c) =>
-        c.telefone.includes(termo) ||
-        c.nome_contato?.toLowerCase().includes(termo)
-    );
-  }, [conversas, busca]);
+    let base = conversas;
+    if (filtro === 'nao_lidos') {
+      base = base.filter((c) => c.unread_count > 0);
+    }
+    if (busca.trim()) {
+      const termo = busca.toLowerCase();
+      base = base.filter(
+        (c) =>
+          c.telefone.includes(termo) ||
+          c.nome_contato?.toLowerCase().includes(termo)
+      );
+    }
+    if (filtro === 'nao_lidos') {
+      // já é tudo não-lido; mantém ordenação por última msg
+      return base;
+    }
+    // Não lidos no topo, restante por recência
+    return [...base].sort((a, b) => {
+      const an = a.unread_count > 0 ? 1 : 0;
+      const bn = b.unread_count > 0 ? 1 : 0;
+      if (an !== bn) return bn - an;
+      return new Date(b.ultima_mensagem).getTime() - new Date(a.ultima_mensagem).getTime();
+    });
+  }, [conversas, busca, filtro]);
 
   return (
     <div className="flex flex-col h-full border-r border-border">
@@ -77,6 +104,11 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
           {conversas.length > 0 && (
             <Badge variant="secondary" className="text-[10px]">{conversas.length}</Badge>
           )}
+          {totalNaoLidos > 0 && (
+            <Badge className="text-[10px] bg-emerald-600 hover:bg-emerald-600">
+              {totalNaoLidos} não lida{totalNaoLidos > 1 ? 's' : ''}
+            </Badge>
+          )}
         </h2>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -86,6 +118,37 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
             onChange={(e) => setBusca(e.target.value)}
             className="pl-8 h-8 text-sm"
           />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={filtro}
+            onValueChange={(v) => v && setFiltro(v as 'todas' | 'nao_lidos')}
+            className="justify-start"
+          >
+            <ToggleGroupItem value="todas" className="h-7 px-2 text-xs">Todas</ToggleGroupItem>
+            <ToggleGroupItem value="nao_lidos" className="h-7 px-2 text-xs gap-1">
+              Não lidos
+              {totalNaoLidos > 0 && (
+                <Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px]">
+                  {totalNaoLidos}
+                </Badge>
+              )}
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {totalNaoLidos > 0 && onMarcarTodasLidas && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onMarcarTodasLidas}
+              className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              title="Marcar todas as conversas como lidas"
+            >
+              <CheckCheck className="h-3.5 w-3.5 mr-1" />
+              Marcar lidas
+            </Button>
+          )}
         </div>
       </div>
 
@@ -98,12 +161,19 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
         ) : conversasFiltradas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <MessageSquare className="h-6 w-6 mb-2 opacity-50" />
-            <p className="text-xs">{busca ? 'Nenhuma conversa encontrada' : 'Nenhuma conversa'}</p>
+            <p className="text-xs">
+              {busca
+                ? 'Nenhuma conversa encontrada'
+                : filtro === 'nao_lidos'
+                ? 'Nenhuma conversa não lida'
+                : 'Nenhuma conversa'}
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-border">
             {conversasFiltradas.map((conversa) => {
               const isCobranca = !!conversa.ultima_cobranca;
+              const isUnread = conversa.unread_count > 0;
               const tempoCobranca = isCobranca
                 ? formatDistanceToNowStrict(new Date(conversa.ultima_cobranca!), { locale: ptBR, addSuffix: false })
                 : null;
@@ -115,7 +185,8 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                   className={cn(
                     'w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-muted/50 transition-colors',
                     telefoneSelecionado === conversa.telefone && 'bg-muted',
-                    isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50'
+                    isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50',
+                    !isCobranca && isUnread && 'border-l-4 border-l-emerald-500'
                   )}
                 >
                   <UserAvatar
@@ -126,12 +197,19 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm truncate">
+                      <span className={cn('text-sm truncate', isUnread ? 'font-bold text-foreground' : 'font-medium')}>
                         {conversa.nome_contato || formatarTelefone(conversa.telefone)}
                       </span>
-                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                        {formatarData(conversa.ultima_mensagem)}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className={cn('text-[10px]', isUnread ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground')}>
+                          {formatarData(conversa.ultima_mensagem)}
+                        </span>
+                        {isUnread && (
+                          <Badge className="h-4 min-w-4 px-1 text-[9px] bg-emerald-600 hover:bg-emerald-600 rounded-full">
+                            {conversa.unread_count > 99 ? '99+' : conversa.unread_count}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 mt-0.5">
                       {conversa.ultima_direcao === 'entrada' ? (
@@ -139,7 +217,7 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                       ) : (
                         <Bot className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       )}
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className={cn('text-xs truncate', isUnread ? 'text-foreground font-medium' : 'text-muted-foreground')}>
                         {conversa.ultima_msg_texto
                           ? conversa.ultima_msg_texto.slice(0, 50) + (conversa.ultima_msg_texto.length > 50 ? '...' : '')
                           : '📎 Mídia'}
