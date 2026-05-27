@@ -261,8 +261,11 @@ export default function Veiculos() {
   const { isDiretor, isAdminMaster, isDesenvolvedor, hasPerm } = usePermissions();
   const { toast } = useToast();
   const [veiculoToDelete, setVeiculoToDelete] = useState<{ id: string; placa: string } | null>(null);
+  const [veiculoToCancel, setVeiculoToCancel] = useState<{ id: string; placa: string; marca?: string | null; modelo?: string | null; associado_id?: string | null } | null>(null);
 
-  const canDeleteVeiculo = isDiretor || isAdminMaster || isDesenvolvedor;
+  const canHardDeleteVeiculo = isDiretor || isAdminMaster || isDesenvolvedor;
+  // Cancelar veículo: mesmo gate por enquanto (operador com permissão de gestão da entidade).
+  const canDeleteVeiculo = canHardDeleteVeiculo;
 
   // Consulta de placa
   const [placaInput, setPlacaInput] = useState('');
