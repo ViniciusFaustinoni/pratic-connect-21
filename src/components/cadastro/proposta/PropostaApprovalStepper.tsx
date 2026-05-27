@@ -23,6 +23,7 @@ interface PropostaApprovalStepperProps {
   onViewDocumento: (documento: DocumentoAnexadoCompleto) => void;
   onAprovarDocumento: (docId: string) => Promise<void>;
   onReprovarDocumento: (docId: string, motivo: string) => Promise<void>;
+  onReverterReprovacaoDocumento?: (documento: DocumentoAnexadoCompleto) => void;
   onAprovar: () => void;
   onSolicitarDocs: () => void;
   onReprovar: () => void;
