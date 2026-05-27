@@ -311,7 +311,23 @@ serve(async (req) => {
       clienteDados.emailContato = associado.email;
       clienteDados.emailAlertas = associado.email;
     }
-    if (associado.cep) clienteDados.cep = associado.cep.replace(/\D/g, '');
+    if (associado.cep) {
+      const cepDigits = String(associado.cep).replace(/\D/g, '');
+      if (cepDigits.length === 8) {
+        clienteDados.cep = `${cepDigits.slice(0, 5)}-${cepDigits.slice(5)}`;
+      } else {
+        console.warn('[REDE_VINCULAR][CEP_INVALIDO]', { associadoId: associado.id, cepRaw: associado.cep, digits: cepDigits });
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: 'CEP_INVALIDO',
+            message: `CEP do associado é inválido ("${associado.cep}"). Esperado 8 dígitos. Corrija no cadastro antes de sincronizar com a Rede Veículos.`,
+            associadoId: associado.id,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
     if (enderecoCompleto) clienteDados.enderecoCompleto = enderecoCompleto;
     if (associado.bairro) clienteDados.bairro = associado.bairro;
     if (associado.cidade) clienteDados.cidade = associado.cidade;
