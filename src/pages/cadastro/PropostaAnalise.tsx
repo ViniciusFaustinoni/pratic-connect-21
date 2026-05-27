@@ -893,6 +893,14 @@ export default function PropostaAnalise() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reverter reprovação de documento (somente proposta aberta) */}
+      <ReverterReprovacaoDocumentoDialog
+        documento={documentoReverter}
+        open={!!documentoReverter}
+        onOpenChange={(o) => !o && setDocumentoReverter(null)}
+        onConfirm={handleReverterReprovacaoDocumento}
+      />
     </div>
   );
 }
