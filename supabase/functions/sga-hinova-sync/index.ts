@@ -1371,13 +1371,18 @@ serve(async (req) => {
                 ano: veiculo.ano_modelo || veiculo.ano_fabricacao || null,
                 tipo_veiculo: tipoVeiculo,
               });
+              const dbg = lookup.debug as any;
               await logSync(_vid, _aid, 'listar_modelos_hinova',
                 lookup.items.length > 0 ? 'success' : 'warning',
-                { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo },
-                { count: lookup.items.length, endpoint: lookup.debug.endpoint, status: lookup.debug.status,
-                  amostra: lookup.items.slice(0, 5) },
+                { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo,
+                  variantes_tentadas: dbg?.variantes_tentadas ?? [],
+                  fast_path_pulado: !(veiculo as any).codigo_modelo_hinova },
+                { count: lookup.items.length,
+                  endpoint_final: dbg?.endpoint, status_final: dbg?.status,
+                  amostra: lookup.items.slice(0, 5),
+                  trail: dbg?.trail ?? [] },
                 lookup.items.length === 0
-                  ? `Nenhum modelo encontrado no catálogo Hinova (endpoint=${lookup.debug.endpoint}, status=${lookup.debug.status})`
+                  ? `Nenhum modelo encontrado no catálogo Hinova após ${dbg?.trail?.length ?? 0} tentativas (último: ${dbg?.endpoint}, status=${dbg?.status})`
                   : null);
 
               const melhor = escolherMelhorModeloHinova(
@@ -1385,6 +1390,13 @@ serve(async (req) => {
                 String(veiculo.modelo || ''),
                 veiculo.ano_modelo || veiculo.ano_fabricacao || null,
               );
+
+              if (!melhor && lookup.items.length > 0) {
+                await logSync(_vid, _aid, 'escolher_modelo_hinova', 'warning',
+                  { texto: veiculo.modelo, ano: veiculo.ano_modelo, total_candidatos: lookup.items.length },
+                  { amostra: lookup.items.slice(0, 5).map(i => ({ codigo_modelo: i.codigo_modelo, descricao: i.descricao, ano: i.ano })) },
+                  'Catálogo retornou candidatos, mas nenhum atingiu score>0 pela heurística — operador deve preencher codigo_modelo_hinova manualmente.');
+              }
 
               if (melhor?.codigo_modelo) {
                 const ctxComModelo: VeiculoCtx = { ...ctxV, codigo_modelo: melhor.codigo_modelo };

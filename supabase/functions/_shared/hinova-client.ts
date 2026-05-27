@@ -1817,78 +1817,146 @@ const _modelosCache = new Map<string, { ts: number; items: ModeloHinova[] }>();
 const MODELOS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
+ * Normaliza marca/texto antes de bater o catálogo Hinova:
+ * uppercase + strip de acentos + colapsa espaços. Vários tenants só
+ * matcham com a chave exatamente nesse formato (caso TOG2A62, "Fiat" 406).
+ */
+function normalizarChaveCatalogoHinova(s: string): string {
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Primeiro token "significativo" do modelo (>=3 chars, alfanumérico). */
+function primeiroTokenModelo(texto: string): string {
+  const t = normalizarChaveCatalogoHinova(texto);
+  for (const tok of t.split(/\s+/)) {
+    const limpo = tok.replace(/[^A-Z0-9]/g, '');
+    if (limpo.length >= 3) return limpo;
+  }
+  return t;
+}
+
+export interface ListarModelosDebug {
+  endpoint: string;
+  status: number;
+  bodySample: string;
+  /** Histórico completo de candidatos tentados (endpoint + status + amostra). */
+  trail: Array<{ endpoint: string; status: number; bodySample: string; itens: number }>;
+  /** Variantes de marca/texto efetivamente usadas. */
+  variantes_tentadas: Array<{ marca: string; texto: string }>;
+}
+
+/**
  * Busca modelos no catálogo Hinova por marca (texto) e/ou texto do modelo.
  * Retorna lista; vazia significa "não encontrei nada" (não é erro).
  *
- * Endpoints testados em ordem (todos GET, autenticados via Bearer):
+ * Estratégia:
+ *   1) Normaliza marca/texto (UPPER + sem acento).
+ *   2) Tenta com marca+texto cheio.
+ *   3) Se nada, tenta com marca + primeiro token do modelo (ex.: "FIORINO ENDURANCE" → "FIORINO").
+ *   4) Se nada, tenta apenas com marca.
+ *
+ * Endpoints testados por variante (todos GET, autenticados via Bearer):
  *   - /buscar/modelo-veiculo?marca=X&modelo=Y
  *   - /buscar/modelo?marca=X&modelo=Y
  *   - /buscar/modelos?marca=X&modelo=Y
  *   - /listar/modelos?marca=X&modelo=Y
+ *   - /buscar/modelo/{MARCA}
  */
 export async function listarModelosHinova(
   supabase: any,
   args: { marca: string; texto?: string; ano?: number | null; tipo_veiculo?: number | null },
-): Promise<{ items: ModeloHinova[]; debug: { endpoint: string; status: number; bodySample: string } }> {
-  const marca = (args.marca || '').trim();
-  const texto = (args.texto || '').trim();
-  if (!marca && !texto) {
-    return { items: [], debug: { endpoint: 'listar-modelos', status: 0, bodySample: 'marca/texto vazios' } };
+): Promise<{ items: ModeloHinova[]; debug: ListarModelosDebug }> {
+  const marcaIn = (args.marca || '').trim();
+  const textoIn = (args.texto || '').trim();
+  if (!marcaIn && !textoIn) {
+    return {
+      items: [],
+      debug: { endpoint: 'listar-modelos', status: 0, bodySample: 'marca/texto vazios', trail: [], variantes_tentadas: [] },
+    };
   }
 
-  const cacheKey = `${marca.toLowerCase()}|${texto.toLowerCase()}|${args.ano ?? ''}|${args.tipo_veiculo ?? ''}`;
+  const marcaNorm = normalizarChaveCatalogoHinova(marcaIn);
+  const textoNorm = normalizarChaveCatalogoHinova(textoIn);
+  const tokenBase = textoNorm ? primeiroTokenModelo(textoNorm) : '';
+
+  const cacheKey = `${marcaNorm}|${textoNorm}|${args.ano ?? ''}|${args.tipo_veiculo ?? ''}`;
   const cached = _modelosCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < MODELOS_CACHE_TTL_MS) {
-    return { items: cached.items, debug: { endpoint: 'cache', status: 200, bodySample: `n=${cached.items.length}` } };
+    return {
+      items: cached.items,
+      debug: { endpoint: 'cache', status: 200, bodySample: `n=${cached.items.length}`, trail: [], variantes_tentadas: [] },
+    };
   }
 
   const session0 = await getHinovaSession(supabase);
   const apiUrl = session0.apiUrl;
 
-  const qs = new URLSearchParams();
-  if (marca) qs.set('marca', marca);
-  if (texto) qs.set('modelo', texto);
-  if (args.ano) qs.set('ano', String(args.ano));
-  if (args.tipo_veiculo) qs.set('codigo_tipo_veiculo', String(args.tipo_veiculo));
-  const query = qs.toString();
+  // Variantes de (marca, texto) — começa pelo mais específico
+  const variantes: Array<{ marca: string; texto: string }> = [];
+  const push = (m: string, t: string) => {
+    const key = `${m}|${t}`;
+    if (!variantes.some(v => `${v.marca}|${v.texto}` === key)) variantes.push({ marca: m, texto: t });
+  };
+  if (marcaNorm && textoNorm) push(marcaNorm, textoNorm);
+  if (marcaNorm && tokenBase && tokenBase !== textoNorm) push(marcaNorm, tokenBase);
+  if (marcaNorm) push(marcaNorm, '');
 
-  const candidates = [
-    `/buscar/modelo-veiculo?${query}`,
-    `/buscar/modelo?${query}`,
-    `/buscar/modelos?${query}`,
-    `/listar/modelos?${query}`,
-    // alguns tenants aceitam GET sem querystring, com marca no path
-    ...(marca ? [`/buscar/modelo/${encodeURIComponent(marca)}`] : []),
-  ];
+  const trail: ListarModelosDebug['trail'] = [];
+  let lastDebug: { endpoint: string; status: number; bodySample: string } = {
+    endpoint: 'listar-modelos', status: 0, bodySample: '',
+  };
 
-  let lastDebug = { endpoint: 'listar-modelos', status: 0, bodySample: '' };
+  for (const variante of variantes) {
+    const qs = new URLSearchParams();
+    if (variante.marca) qs.set('marca', variante.marca);
+    if (variante.texto) qs.set('modelo', variante.texto);
+    if (args.ano) qs.set('ano', String(args.ano));
+    if (args.tipo_veiculo) qs.set('codigo_tipo_veiculo', String(args.tipo_veiculo));
+    const query = qs.toString();
 
-  for (const path of candidates) {
-    try {
-      const { response, bodyText } = await hinovaFetch(
-        supabase,
-        (token) => ({
-          url: `${apiUrl}${path}`,
-          init: { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
-        }),
-        'listarModelosHinova',
-      );
-      const status = response.status;
-      lastDebug = { endpoint: path, status, bodySample: bodyText.slice(0, 200) };
-      if (status === 404) continue;
-      if (!response.ok) continue;
-      const j = parseJsonSafe(bodyText);
-      const items = normalizarModelosResposta(j);
-      if (items.length > 0) {
-        _modelosCache.set(cacheKey, { ts: Date.now(), items });
-        return { items, debug: lastDebug };
+    const candidates = [
+      `/buscar/modelo-veiculo?${query}`,
+      `/buscar/modelo?${query}`,
+      `/buscar/modelos?${query}`,
+      `/listar/modelos?${query}`,
+      ...(variante.marca ? [`/buscar/modelo/${encodeURIComponent(variante.marca)}`] : []),
+    ];
+
+    for (const path of candidates) {
+      try {
+        const { response, bodyText } = await hinovaFetch(
+          supabase,
+          (token) => ({
+            url: `${apiUrl}${path}`,
+            init: { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+          }),
+          'listarModelosHinova',
+        );
+        const status = response.status;
+        const sample = bodyText.slice(0, 200);
+        lastDebug = { endpoint: path, status, bodySample: sample };
+        const j = response.ok ? parseJsonSafe(bodyText) : null;
+        const items = j ? normalizarModelosResposta(j) : [];
+        trail.push({ endpoint: path, status, bodySample: sample, itens: items.length });
+        if (status === 404) continue;
+        if (!response.ok) continue;
+        if (items.length > 0) {
+          _modelosCache.set(cacheKey, { ts: Date.now(), items });
+          return { items, debug: { ...lastDebug, trail, variantes_tentadas: variantes } };
+        }
+      } catch (e: any) {
+        const sample = String(e?.message || e).slice(0, 200);
+        lastDebug = { endpoint: path, status: 0, bodySample: sample };
+        trail.push({ endpoint: path, status: 0, bodySample: sample, itens: 0 });
       }
-    } catch (e: any) {
-      // erro transitório: passa pro próximo candidato
-      lastDebug = { endpoint: path, status: 0, bodySample: String(e?.message || e).slice(0, 200) };
     }
   }
-  return { items: [], debug: lastDebug };
+  return { items: [], debug: { ...lastDebug, trail, variantes_tentadas: variantes } };
 }
 
 /**
