@@ -75,9 +75,9 @@ Deno.serve(async (req) => {
 
     if (dryRun) {
       out.etapas = {
-        a_obter_por_placa: { dry_run: true, payload: { placa: PLACA, cpfCnpjCliente: CPF } },
-        b_obter_por_imei:  { dry_run: true, payload: { imei: IMEI,  cpfCnpjCliente: CPF } },
-        c_ativar_veiculo:  { dry_run: true, payload: { chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF } },
+        a_ativar_cliente:       { dry_run: true, payload: { cpfCnpjCliente: CPF } },
+        b_ativar_veiculo:       { dry_run: true, payload: { chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF } },
+        c_informar_adimplente:  { dry_run: true, payload: { chassi: CHASSI, placa: PLACA, imei: IMEI, cpfCnpjCliente: CPF } },
       };
       return new Response(JSON.stringify(out, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
