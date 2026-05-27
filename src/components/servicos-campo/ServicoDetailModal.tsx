@@ -300,6 +300,37 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                   <Field label="Permite encaixe" value={servico.permite_encaixe ? 'Sim' : 'Não'} />
                 </Section>
 
+                {(() => {
+                  const rast = (servico as any).rastreadores;
+                  if (!isInstalacao || !rast) return null;
+                  if (!rast.local_instalacao && !rast.descricao_instalacao && !rast.foto_local_instalacao_url) return null;
+                  return (
+                    <Section title="Local da instalação" icon={MapPin}>
+                      <Field label="Local" value={rast.local_instalacao || '—'} />
+                      {rast.descricao_instalacao && (
+                        <Field label="Descrição" value={rast.descricao_instalacao} />
+                      )}
+                      {rast.foto_local_instalacao_url && (
+                        <div className="space-y-1.5">
+                          <Label>Foto do local</Label>
+                          <a
+                            href={rast.foto_local_instalacao_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block w-32 h-32 rounded-md overflow-hidden border border-border hover:opacity-80 transition"
+                          >
+                            <img
+                              src={rast.foto_local_instalacao_url}
+                              alt="Local da instalação do rastreador"
+                              className="w-full h-full object-cover"
+                            />
+                          </a>
+                        </div>
+                      )}
+                    </Section>
+                  );
+                })()}
+
                 {servico.observacoes && (
                   <Section title="Observações" icon={Info}>
                     <p className="text-sm whitespace-pre-wrap">{servico.observacoes}</p>
@@ -395,6 +426,37 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                     <Field label="IMEI" value={servico.imei_rastreador || '—'} mono />
                     <Field label="Quilometragem" value={servico.quilometragem ? `${servico.quilometragem} km` : '—'} />
                   </Section>
+
+                  {(() => {
+                    const rast = (servico as any).rastreadores;
+                    if (!rast) return null;
+                    if (!rast.local_instalacao && !rast.descricao_instalacao && !rast.foto_local_instalacao_url) return null;
+                    return (
+                      <Section title="Local da instalação" icon={MapPin}>
+                        <Field label="Local" value={rast.local_instalacao || '—'} />
+                        {rast.descricao_instalacao && (
+                          <Field label="Descrição" value={rast.descricao_instalacao} />
+                        )}
+                        {rast.foto_local_instalacao_url && (
+                          <div className="space-y-1.5">
+                            <Label>Foto do local</Label>
+                            <a
+                              href={rast.foto_local_instalacao_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-32 h-32 rounded-md overflow-hidden border border-border hover:opacity-80 transition"
+                            >
+                              <img
+                                src={rast.foto_local_instalacao_url}
+                                alt="Local da instalação do rastreador"
+                                className="w-full h-full object-cover"
+                              />
+                            </a>
+                          </div>
+                        )}
+                      </Section>
+                    );
+                  })()}
                 </TabsContent>
               )}
 
