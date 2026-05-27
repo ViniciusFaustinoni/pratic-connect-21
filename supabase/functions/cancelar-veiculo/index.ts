@@ -217,14 +217,23 @@ Deno.serve(async (req) => {
   }
 
   // ─── Passo 5: cancelar contrato do veículo (1:1) ───
+  // Coletamos TODOS os contratos do veículo (vivos OU já cancelados) para
+  // poder também encerrar as pendências de documentos vinculadas a eles
+  // — incluindo casos onde o contrato já estava cancelado mas as pendências
+  // ficaram órfãs ("Documentos Pendentes" continuava listando o veículo).
+  let contratoIdsParaLimpar: string[] = []
   try {
-    const { data: contratos } = await admin
+    const { data: todosContratos } = await admin
       .from('contratos')
       .select('id, status')
       .eq('veiculo_id', veiculoId)
-      .in('status', ['ativo', 'assinado', 'pendente', 'pendente_assinatura', 'enviado'])
-    if (contratos && contratos.length > 0) {
-      const ids = contratos.map((c: any) => c.id)
+    contratoIdsParaLimpar = (todosContratos || []).map((c: any) => c.id)
+
+    const contratosVivos = (todosContratos || []).filter((c: any) =>
+      ['ativo', 'assinado', 'pendente', 'pendente_assinatura', 'enviado'].includes(c.status),
+    )
+    if (contratosVivos.length > 0) {
+      const ids = contratosVivos.map((c: any) => c.id)
       const { error } = await admin
         .from('contratos')
         .update({
@@ -239,6 +248,33 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     results.push({ step: 'contratos', ok: false, detail: (e as Error).message })
+  }
+
+  // ─── Passo 5.1: cancelar documentos_solicitados pendentes do(s) contrato(s) ───
+  // Escopo restrito a contratos do VEÍCULO cancelado — não afeta outros
+  // veículos do mesmo associado.
+  try {
+    if (contratoIdsParaLimpar.length > 0) {
+      const { data: docs, error } = await admin
+        .from('documentos_solicitados')
+        .update({
+          status: 'cancelado',
+          observacao_solicitacao: motivoTag,
+          updated_at: nowIso,
+        })
+        .in('contrato_id', contratoIdsParaLimpar)
+        .eq('status', 'pendente')
+        .select('id')
+      results.push({
+        step: 'documentos_solicitados',
+        ok: !error,
+        detail: error ? error.message : `${docs?.length || 0} pendências canceladas`,
+      })
+    } else {
+      results.push({ step: 'documentos_solicitados', ok: true, detail: 'sem contrato vinculado' })
+    }
+  } catch (e) {
+    results.push({ step: 'documentos_solicitados', ok: false, detail: (e as Error).message })
   }
 
   // ─── Passo 6: desativar coberturas do veículo ───

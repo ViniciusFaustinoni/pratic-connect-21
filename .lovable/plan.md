@@ -1,25 +1,34 @@
-## Causa do erro
+# Plano para corrigir o cancelamento do veículo e remover todos os processos das filas
 
-O toast "Failed to send a request to the Edge Function" é o erro do supabase-js quando a chamada HTTP nem chega à função (404 de função inexistente ou DNS ainda não propagado). Isso aconteceu porque a edge `cancelar-veiculo` tinha acabado de ser criada e o deploy automático ainda não havia concluído quando você clicou em "Confirmar cancelamento".
+## O que vou ajustar
 
-Verificado agora via curl direto: a função está **online**, recebe o body, valida guards e responde 404 `veiculo_nao_encontrado` quando o ID não existe — comportamento esperado. Imports `_shared/auditLog` e `_shared/hinova-client` resolvem normalmente.
+1. Corrigir a cascata do `cancelar-veiculo`
+   - Ao cancelar um veículo, além de cotações, instalações, serviços, vistorias e contrato, também encerrar os `documentos_solicitados` vinculados ao processo desse veículo.
+   - Usar o status já suportado pelo banco (`cancelado`) em vez de deixar a pendência viva.
+   - Manter o escopo no veículo/contrato cancelado, sem afetar outros veículos do mesmo associado.
 
-## Ação
+2. Corrigir as consultas das filas e alertas
+   - Ajustar a fila do sino de `Documentos Pendentes` para não mostrar pendências de contrato/veículo já cancelado.
+   - Ajustar a leitura de propostas pendentes no Cadastro para ignorar documentos solicitados de processos cancelados.
+   - Revisar a tela pública de acompanhamento para não exibir pendências de um processo já cancelado.
 
-**Nenhuma alteração de código.** Basta repetir a operação:
+3. Bloquear efeitos colaterais após cancelamento
+   - Ajustar rotinas que ainda consomem `documentos_solicitados` pendentes, como lembretes/WhatsApp, para ignorar itens cancelados ou contratos cancelados.
+   - Garantir que o cancelamento faça essas pendências sumirem das filas imediatamente após invalidação/refetch.
 
-1. Reabrir o veículo KRN6G76 em `/cadastro/veiculos`
-2. Menu de ações → **Cancelar veículo**
-3. Selecionar motivo (Desistência) + detalhes ("O ASSOCIADO DESISTIU")
-4. Confirmar
+4. Validar o caso real
+   - Conferir o fluxo do caso KRN6G76 para garantir que, após o cancelamento, ele não apareça mais em `Documentos Pendentes` nem em outras filas relacionadas.
 
-Resultado esperado:
-- Veículo KRN6G76 → `cancelado`
-- Contrato/cotações/instalações/serviços/vistorias do KRN6G76 → `cancelada`
-- Rastreador volta ao estoque (com tentativa de desvínculo Softruck/Rede)
-- SGA Hinova enfileirado para inativação
-- Como o badge mostra que é o último veículo ativo do associado, `fn_cancelar_associado_se_orfao` deve marcar o associado como `cancelado` também
+## Resultado esperado
 
-## Se o erro acontecer de novo
+- Cancelar um veículo encerra todos os processos daquele veículo.
+- O associado continua ativo se ainda tiver outros veículos/processos válidos.
+- Pendências do veículo cancelado somem das filas, do sino e dos lembretes.
+- Nenhum outro veículo do mesmo associado é afetado.
 
-Reportar de volta — abro os logs com `supabase--edge_function_logs cancelar-veiculo` para ver o stacktrace real (boot error, RPC inexistente, ou enum value rejeitado pelos UPDATEs em massa) e corrijo cirurgicamente.
+## Detalhes técnicos
+
+- Hoje o problema principal é que a edge function já cancela várias entidades, mas não encerra `documentos_solicitados` do processo cancelado.
+- Os consumidores atuais da fila de pendências consultam `documentos_solicitados` por `associado_id` e/ou `status='pendente'` sem cruzar corretamente com o estado do contrato/veículo.
+- O banco já aceita `documentos_solicitados.status = 'cancelado'`, então a correção pode seguir o padrão existente sem mudança estrutural obrigatória.
+- A implementação deve preservar auditoria e escopo por contrato/veículo, evitando cancelar pendências de outros veículos do mesmo associado.
