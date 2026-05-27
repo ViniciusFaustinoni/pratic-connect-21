@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     // ===== Etapa 1: desvincular Gabriel =====
     const etapa1Payload = {
       imei: IMEI_ALVO,
-      cpfCnpj: CPF_GABRIEL,
+      cpfCnpjCliente: CPF_GABRIEL,
       placa: PLACA,
       chassi: CHASSI,
       motivo: 'troca_titularidade_anderson_KPJ4994',
