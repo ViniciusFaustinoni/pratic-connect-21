@@ -41,7 +41,6 @@ export function TrocaTitularidadeDialog({
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [veiculoId, setVeiculoId] = useState<string | null>(null);
-  const [veiculoId, setVeiculoId] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [syncErro, setSyncErro] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
