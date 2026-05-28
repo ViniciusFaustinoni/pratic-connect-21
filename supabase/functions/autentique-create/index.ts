@@ -779,16 +779,13 @@ serve(async (req) => {
     }
 
     // Validação de formato de email — Autentique rejeita signers.0.email malformado
-    // com erro "must_be_a_string / format_is_invalid". Falhar aqui com mensagem clara
-    // evita ciclo de retries do front e contrato órfão em rascunho.
-    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    const emailTrim = (signerEmail || '').trim();
-    if (!emailTrim || !EMAIL_REGEX.test(emailTrim)) {
-      throw new Error(
-        `E-mail do signatário inválido (${emailTrim || 'vazio'}). ` +
-        `Corrija o e-mail do cliente na cotação/contrato antes de gerar o documento de assinatura.`
-      );
-    }
+    // com erro "must_be_a_string / format_is_invalid". Falhar aqui com ConsultorActionableError
+    // (code: EMAIL_INVALIDO) evita ciclo de retries do front. O modal CorrigirEmailDialog
+    // captura, atualiza o e-mail no banco e reprocese.
+    const emailTrim = validarEmailOuLancar(signerEmail, {
+      campo: 'cliente_email',
+      contexto: 'signatário do contrato',
+    });
     
     // Validar CPF antes de enviar ao Autentique
     const cpfRaw = (clienteCpf || contrato.cliente_cpf || contrato.associados?.cpf || contrato.leads?.cpf || '').replace(/\D/g, '');
