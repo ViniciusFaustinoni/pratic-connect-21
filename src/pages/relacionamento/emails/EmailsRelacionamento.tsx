@@ -8,8 +8,8 @@ import { TemplateEditor } from './components/TemplateEditor';
 import { HistoricoEnvios } from './components/HistoricoEnvios';
 
 export default function EmailsRelacionamento() {
-  const { isAdminMaster, isDesenvolvedor } = usePermissions();
-  const podeAcessar = isAdminMaster || isDesenvolvedor;
+  const { isAdminMaster, isDesenvolvedor, isDiretor } = usePermissions();
+  const podeAcessar = isAdminMaster || isDesenvolvedor || isDiretor;
 
   if (!podeAcessar) {
     return (
