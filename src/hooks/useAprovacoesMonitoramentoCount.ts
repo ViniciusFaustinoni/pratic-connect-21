@@ -24,6 +24,7 @@ export function useAprovacoesMonitoramentoBreakdown() {
         try { return await p; } catch (e) { console.warn('[aprovacoes-count] fonte falhou', e); return 0; }
       };
 
+
       const [
         associados,
         troca,
