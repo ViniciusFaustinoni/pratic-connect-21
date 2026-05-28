@@ -120,6 +120,16 @@ Deno.serve(async (req) => {
       .eq('id', solicitacao_id);
     if (updErr) throw updErr;
 
+    // Marca a cotação como originada de troca de titularidade — essencial
+    // para a trigger `fn_troca_promove_cadastro_via_cotacao` reconhecer o
+    // vínculo e promover a solicitação a `aguardando_cadastro` quando o
+    // cliente terminar o link público.
+    await admin
+      .from('cotacoes')
+      .update({ origem_troca_titularidade: true, updated_at: new Date().toISOString() })
+      .eq('id', cotacao_id)
+      .eq('origem_troca_titularidade', false);
+
     // Trabalho pesado em background (snapshot SGA + atribuição vendedor + WhatsApp)
     runPosCadastroBackgroundFireAndForget(admin, {
       id: sol.id,
