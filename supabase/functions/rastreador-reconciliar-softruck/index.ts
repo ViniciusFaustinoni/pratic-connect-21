@@ -94,20 +94,48 @@ serve(async (req) => {
     const { token, publicKey } = await getSoftruckToken(supabase, baseUrl);
 
     const imei = rast.imei || rast.codigo;
-    const url = `${baseUrl}/devices?filters[devices.imei][eq]=${encodeURIComponent(imei)}&includes[vehicle][]=plate`;
+    // NOTE: includes[vehicle][]=plate é rejeitado pela Softruck (400). Buscamos só o device
+    // e resolvemos placa via veiculos local + relationships.vehicle.id.
+    const url = `${baseUrl}/devices?filters[devices.imei][eq]=${encodeURIComponent(imei)}`;
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, "public-key": publicKey, "Content-Type": "application/json" },
     });
-    if (!resp.ok) throw new Error(`Softruck devices ${resp.status}`);
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      console.error("[reconciliar-softruck] devices fail", resp.status, errText);
+      // Fallback gracioso: não derruba a UI; devolve 200 com fallback=true.
+      return new Response(JSON.stringify({
+        error: `SOFTTRUCK_DEVICES_${resp.status}`,
+        fallback: true,
+        rastreador_id,
+        imei,
+        detail: errText.slice(0, 500),
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const result = await resp.json();
     const device = result?.data?.[0];
 
     const remoteVehicleId = device?.relationships?.vehicle?.id
       || device?.relationships?.vehicle?.data?.id
       || null;
-    const remotePlate = device?.relationships?.vehicle?.attributes?.plate
+    let remotePlate: string | null = device?.relationships?.vehicle?.attributes?.plate
       || device?.relationships?.vehicle?.data?.attributes?.plate
       || null;
+
+    // Sem includes, buscamos a placa diretamente quando há vehicle_id remoto.
+    if (remoteVehicleId && !remotePlate) {
+      try {
+        const vResp = await fetch(`${baseUrl}/vehicles/${remoteVehicleId}`, {
+          headers: { Authorization: `Bearer ${token}`, "public-key": publicKey, "Content-Type": "application/json" },
+        });
+        if (vResp.ok) {
+          const vJson = await vResp.json();
+          remotePlate = vJson?.data?.attributes?.plate || null;
+        }
+      } catch (e) {
+        console.warn("[reconciliar-softruck] vehicle fetch falhou", e);
+      }
+    }
 
     // Buscar placa local
     let localPlaca: string | null = null;
