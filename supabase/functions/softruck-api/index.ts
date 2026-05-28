@@ -1074,7 +1074,7 @@ serve(async (req) => {
         const { vehicleId } = data as { vehicleId: string };
         if (!vehicleId) throw new Error('vehicleId é obrigatório');
         
-        const endpoint = `/v2/vehicles/${vehicleId}/associations/users?includes[user][]=name&includes[user][]=username&includes[user][]=cpf&includes[user][]=email`;
+        const endpoint = `/v2/vehicles/${vehicleId}/associations/users`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }
