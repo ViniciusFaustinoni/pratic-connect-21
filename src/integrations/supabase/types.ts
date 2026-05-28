@@ -12892,6 +12892,108 @@ export type Database = {
         }
         Relationships: []
       }
+      email_suspensao_config: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          singleton: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      email_suspensao_envios: {
+        Row: {
+          assunto_enviado: string | null
+          cliente_id: string | null
+          cliente_nome: string | null
+          corpo_renderizado: string | null
+          created_at: string
+          destinatario: string
+          enviado_em: string
+          erro_mensagem: string | null
+          fluxo_origem: string | null
+          id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assunto_enviado?: string | null
+          cliente_id?: string | null
+          cliente_nome?: string | null
+          corpo_renderizado?: string | null
+          created_at?: string
+          destinatario: string
+          enviado_em?: string
+          erro_mensagem?: string | null
+          fluxo_origem?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assunto_enviado?: string | null
+          cliente_id?: string | null
+          cliente_nome?: string | null
+          corpo_renderizado?: string | null
+          created_at?: string
+          destinatario?: string
+          enviado_em?: string
+          erro_mensagem?: string | null
+          fluxo_origem?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_suspensao_template: {
+        Row: {
+          assunto: string
+          corpo: string
+          created_at: string
+          id: string
+          singleton: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          assunto?: string
+          corpo?: string
+          created_at?: string
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          assunto?: string
+          corpo?: string
+          created_at?: string
+          id?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       empresas_sindicancia: {
         Row: {
           ativo: boolean | null

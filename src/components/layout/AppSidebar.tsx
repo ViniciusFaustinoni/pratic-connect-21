@@ -52,6 +52,7 @@ import {
   PieChart,
   Key,
   MessageCircle,
+  Mail,
   Kanban,
   FilePlus,
   History,
@@ -249,6 +250,7 @@ const menuConfig: {
       items: [
         { title: 'Chat', url: '/eventos/chat-ia', icon: MessageCircle },
         { title: 'Análises', url: '/relacionamento/analises', icon: ClipboardCheck },
+        { title: 'E-mails', url: '/relacionamento/emails', icon: Mail, permission: 'isAdminMaster' },
         { title: 'Cobranças', url: '/financeiro/cobrancas/emissao?sub=csv', icon: Receipt },
       ],
     },
