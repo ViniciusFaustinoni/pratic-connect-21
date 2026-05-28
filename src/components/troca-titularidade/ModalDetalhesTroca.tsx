@@ -48,6 +48,7 @@ const STATUS_LABELS: Record<StatusTroca, { label: string; variant: 'default'|'se
   aguardando_monitoramento: { label: 'Aguardando Monitoramento', variant: 'secondary' },
   aguardando_vistoria: { label: 'Em Vistoria', variant: 'secondary' },
   liberada_para_assinatura: { label: 'Liberada p/ Assinatura', variant: 'default' },
+  efetivacao_pendente: { label: 'Efetivação pendente', variant: 'secondary' },
   efetivada: { label: 'Efetivada', variant: 'default' },
   reprovada_cadastro: { label: 'Reprovada (Cadastro)', variant: 'destructive' },
   reprovada_monitoramento: { label: 'Reprovada (Monitoramento)', variant: 'destructive' },
