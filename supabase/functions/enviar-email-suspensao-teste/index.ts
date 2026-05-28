@@ -94,12 +94,13 @@ Deno.serve(async (req) => {
     // ---- Template ----
     const { data: tpl, error: tplErr } = await admin
       .from('email_suspensao_templates')
-      .select('id, fluxo_key, assunto, corpo, variaveis_disponiveis')
+      .select('id, fluxo_key, assunto, corpo, formato, variaveis_disponiveis')
       .eq('fluxo_key', templateKey)
       .maybeSingle();
     if (tplErr || !tpl) {
       return jsonResponse({ error: 'template_nao_encontrado', detail: tplErr?.message }, 404);
     }
+    const formato: 'html' | 'texto' = (tpl.formato ?? 'html') === 'texto' ? 'texto' : 'html';
 
     // Monta vars usando o que veio + defaults amigáveis
     const hoje = new Date().toLocaleDateString('pt-BR');
