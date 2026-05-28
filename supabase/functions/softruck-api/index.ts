@@ -424,7 +424,8 @@ serve(async (req) => {
       case 'buscar-veiculo-id': {
         const { veiculoId } = data as { veiculoId: string };
         if (!veiculoId) throw new Error('veiculoId é obrigatório');
-        const endpoint = `/v2/vehicles/${veiculoId}?includes[devices][]=name&includes[devices][]=imei&includes[enterprise][]=name`;
+        // Softruck v2: usar singular `device` (igual aos demais endpoints). Plural `devices` retorna validation_failed.
+        const endpoint = `/v2/vehicles/${veiculoId}?includes[device][]=name&includes[device][]=imei&includes[device][]=code&includes[enterprise][]=name`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }
