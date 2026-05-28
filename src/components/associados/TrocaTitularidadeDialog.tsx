@@ -41,9 +41,33 @@ export function TrocaTitularidadeDialog({
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [veiculoId, setVeiculoId] = useState<string | null>(null);
+  const [veiculoId, setVeiculoId] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [syncErro, setSyncErro] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [progressDone, setProgressDone] = useState(false);
   const criar = useCriarSolicitacaoTroca();
+
+  // Animação de progresso enquanto a criação está em andamento.
+  // Sobe suavemente até ~90% e trava ali até a resposta chegar; depois vai a 100%.
+  useEffect(() => {
+    if (!criar.isPending) return;
+    setProgress((p) => (p < 5 ? 5 : p));
+    const id = window.setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) return prev;
+        return Math.min(90, prev + Math.max(1, (90 - prev) * 0.08));
+      });
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [criar.isPending]);
+
+  const progressLabel =
+    progressDone ? 'Solicitação criada com sucesso!'
+    : progress < 30 ? 'Validando dados…'
+    : progress < 60 ? 'Sincronizando com o SGA…'
+    : progress < 90 ? 'Gerando cotação do novo titular…'
+    : 'Finalizando…';
 
   // 1) Busca o registro local para obter codigo_hinova + cpf canônicos
   const { data: assocLocal, refetch: refetchLocal } = useQuery({
