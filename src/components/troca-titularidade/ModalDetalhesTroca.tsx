@@ -294,6 +294,10 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
             {/* (Removido) Alerta de débito pendente do antigo titular */}
 
+            <PontasPendentesCard solicitacao={solicitacao as any} />
+
+
+
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="dados">Dados</TabsTrigger>
