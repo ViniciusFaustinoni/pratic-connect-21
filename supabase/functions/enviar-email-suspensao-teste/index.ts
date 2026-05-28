@@ -42,8 +42,16 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function corpoParaHtml(corpo: string): string {
-  return `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.6;white-space:pre-wrap">${escapeHtml(corpo)}</div>`;
+function corpoParaMiolo(corpo: string, formato: 'html' | 'texto'): string {
+  if (formato === 'html') {
+    return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;line-height:1.6;">${corpo}</div>`;
+  }
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;line-height:1.6;white-space:pre-wrap;">${escapeHtml(corpo)}</div>`;
+}
+
+function corpoParaTexto(corpo: string, formato: 'html' | 'texto'): string {
+  if (formato === 'texto') return corpo;
+  return corpo.replace(/<br\s*\/?>(?:\s*\n?)/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 Deno.serve(async (req) => {
