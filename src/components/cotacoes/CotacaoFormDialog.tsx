@@ -1787,7 +1787,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           cenario_adesao: cenarioExterno,
         } : {}),
         // Tipo da cotação (informativo) — coluna direta + espelho em dados_extras
-        tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as any,
+        // Guarda canônica: 'troca_titularidade' e 'substituicao_placa' SÓ podem
+        // ser definidos via fluxos de origem (origemTroca/origemSubstituicao).
+        // Se o operador escolher esses valores no dropdown sem o fluxo canônico,
+        // rebaixamos para 'adesao' para evitar cotação órfã sem solicitação vinculada.
+        tipo_entrada: (
+          origemTroca
+            ? 'troca_titularidade'
+            : origemSubstituicao
+              ? 'substituicao_placa'
+              : (tipoCotacao === 'troca_titularidade' || tipoCotacao === 'substituicao_placa')
+                ? 'adesao'
+                : (tipoCotacao || 'adesao')
+        ) as any,
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
@@ -1810,7 +1822,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             coberturasRemovidas: p.coberturasRemovidas || [],
           })),
           // Tipo da cotação (informativo) espelhado
-          tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as string,
+          tipo_entrada: (
+            origemTroca
+              ? 'troca_titularidade'
+              : origemSubstituicao
+                ? 'substituicao_placa'
+                : (tipoCotacao === 'troca_titularidade' || tipoCotacao === 'substituicao_placa')
+                  ? 'adesao'
+                  : (tipoCotacao || 'adesao')
+          ) as string,
           ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
             ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
             : {}),
@@ -2921,8 +2941,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 <SelectContent>
                   <SelectItem value="adesao">Cotação nova (adesão)</SelectItem>
                   <SelectItem value="inclusao">Inclusão de veículo</SelectItem>
-                  <SelectItem value="substituicao_placa">Substituição de veículo</SelectItem>
-                  <SelectItem value="troca_titularidade">Troca de titularidade</SelectItem>
                   <SelectItem value="reativacao">Reativação</SelectItem>
                   <SelectItem value="migracao">Migração</SelectItem>
                   <SelectItem value="outro">Outro (descrever)</SelectItem>
