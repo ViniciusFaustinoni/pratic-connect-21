@@ -33,6 +33,7 @@ import { exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
 import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
 import { ValidarImeiPorPlacaCard } from './ValidarImeiPorPlacaCard';
 import { validarImeiPorPlaca, type ValidacaoOrigem } from '@/lib/troca-titularidade/validarImeiPorPlaca';
+import { PontasPendentesCard } from './PontasPendentesCard';
 
 interface Props {
   open: boolean;
