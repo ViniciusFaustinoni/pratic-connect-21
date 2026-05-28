@@ -565,7 +565,11 @@ export function useAceitarCotacaoEGerarContrato() {
         body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
       });
       
-      if (fnError) throw fnError;
+      if (fnError) {
+        // Anexa cotacaoId p/ o modal CorrigirEmail saber onde atualizar quando code=EMAIL_INVALIDO
+        (fnError as any).__cotacaoId = cotacaoId;
+        throw fnError;
+      }
       
       return data;
     },
@@ -580,9 +584,23 @@ export function useAceitarCotacaoEGerarContrato() {
         descricao: 'Cotação aceita e contrato gerado',
       });
     },
-    onError: (error: Error) => {
+    onError: async (error: any, variables) => {
       console.error('Erro ao aceitar cotação:', error);
-      toast.error('Erro ao aceitar cotação: ' + error.message);
+      const { toastErroEdge } = await import('@/lib/ui/toastErroEdge');
+      await toastErroEdge(error, {
+        contexto: 'Aceitar cotação e gerar contrato',
+        emailFix: {
+          cotacaoId: variables.cotacaoId,
+          onRetry: async () => {
+            const { error: retryErr } = await supabase.functions.invoke('contrato-gerar', {
+              body: { cotacao_id: variables.cotacaoId, vendedor_id: variables.vendedorId },
+            });
+            if (retryErr) throw retryErr;
+            queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+            queryClient.invalidateQueries({ queryKey: ['contratos'] });
+          },
+        },
+      });
     },
   });
 }

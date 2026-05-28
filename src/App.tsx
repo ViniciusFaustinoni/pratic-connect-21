@@ -17,6 +17,7 @@ import { AgenciaLayout } from "@/components/layout/AgenciaLayout";
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 import { VendasNotificationListener } from "./components/notifications/VendasNotificationListener";
 import { Loader2 } from "lucide-react";
+import { CorrigirEmailProvider } from "@/components/cotacoes/CorrigirEmailDialog";
 
 // Global loading fallback
 const PageLoader = () => (
@@ -422,6 +423,7 @@ const App = () => (
           <TooltipProvider>
             <Toaster />
             <Sonner />
+            <CorrigirEmailProvider />
             <AppErrorBoundary>
               <BrowserRouter>
                 <Suspense fallback={<PageLoader />}>

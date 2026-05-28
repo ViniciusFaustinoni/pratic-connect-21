@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { ConsultorActionableError, respostaErroEstruturado, validarEmailOuLancar } from "../_shared/erroEstruturado.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getConfiguracaoNumero } from '../_shared/config-helper.ts'
 import { resolverDiaVencimento } from '../_shared/vencimento-utils.ts'
@@ -466,19 +467,23 @@ serve(async (req) => {
     }
 
     if (!nomeFinal || nomeFinal.includes('Cliente Cotação')) {
-      throw new Error('Nome é obrigatório para gerar o contrato. Complete os dados antes de continuar.');
+      throw new ConsultorActionableError({
+        code: 'NOME_INVALIDO',
+        mensagem: 'O nome do solicitante está em branco ou inválido. Corrija o nome na cotação e reprocese.',
+        campo: 'nome_solicitante',
+        valorAtual: nomeFinal,
+        hint: 'Edite a cotação, informe nome completo e tente novamente.',
+        extras: { cotacao_id: cotacao.id, cotacao_numero: cotacao.numero },
+      });
     }
 
     // Validação de email do solicitante — defesa raiz contra emails sem @ ou
     // malformados que quebram a criação de documento no Autentique (signers.0.email).
-    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    const emailLimpo = (emailFinal || '').trim();
-    if (!emailLimpo || !EMAIL_REGEX.test(emailLimpo)) {
-      throw new Error(
-        `O e-mail do solicitante (${emailLimpo || 'vazio'}) é inválido. ` +
-        `Corrija o e-mail na cotação antes de gerar o contrato — o Autentique exige um e-mail válido para enviar a assinatura.`
-      );
-    }
+    // Lança ConsultorActionableError(EMAIL_INVALIDO) — o front abre modal de correção.
+    const emailLimpo = validarEmailOuLancar(emailFinal, {
+      campo: 'email_solicitante',
+      contexto: 'solicitante',
+    });
 
     // 6.1 GATE DE DÉBITOS — REMOVIDO (15/05 + reimplementação)
     // O campo "Tipo da Cotação" do modal é informativo. Inadimplência NÃO trava
@@ -1531,6 +1536,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Erro:', error);
+    if (error instanceof ConsultorActionableError) {
+      return respostaErroEstruturado(error, corsHeaders);
+    }
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),

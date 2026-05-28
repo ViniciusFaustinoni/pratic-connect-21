@@ -1,89 +1,77 @@
-## Estado atual confirmado (28/05 ~16:39)
+## Problema
 
-**Local (banco):**
-- `rastreadores` (IMEI `865011032275324`): `status=instalado`, `veiculo_id=4e67…3575` (RFH7G28), `plataforma=rede_veiculos`, **`id_plataforma=NULL`**, `plataforma_device_id=NULL`.
-- `veiculos` (RFH7G28): `status=em_analise`, `cobertura_roubo_furto=true`, `codigo_hinova=36384`, **`rede_veiculos_cliente_id=NULL`**, **`rede_veiculos_veiculo_id=NULL`**.
-- `associados` JOHNSON: `codigo_hinova=30546`, CPF `05453793775`.
+Quando `contrato-gerar` / `autentique-create` falham (ex.: e-mail sem `@` — caso `Jesusmatheus8917gmail.com`), o consultor vê só um `toast.error` genérico vindo de `error.message`. Sem código de erro, sem solução, sem botão para corrigir — a cotação fica travada e exige intervenção manual no banco.
 
-**Rede Veículos (via edge `rede-veiculos-obter-status-cliente`):**
-- Cliente JOHNSON: `veiculosVinculados: 1`, `veiculosInativos: 1`, `veiculosAtivos: 0`.
-- Vínculo do IMEI **existe** lá (confirma o que você viu na plataforma), mas o veículo está **inativo** na Rede.
-- O endpoint não retorna `idCliente`/`idVeiculo` nesse modo agregado. Pra preencher localmente preciso desses 2 (3 com o equipamento) números.
+Hoje o backend já valida o e-mail e lança `Error('O e-mail do solicitante (...) é inválido...')`, mas:
+- O hook `useGerarContrato` (`src/hooks/useContratos.ts`) só faz `toast.error(error.message)`.
+- A invocação via `supabase.functions.invoke` engole o body 4xx (perde `code`/`hint`).
+- Mesmo padrão em `useCotacoes.aceitarCotacao` e nas chamadas a `autentique-create`.
 
-**Diagnóstico:** o card "Ativar Rastreador" aparece porque a UI checa `id_plataforma IS NULL` (rastreador) e `rede_veiculos_veiculo_id IS NULL` (veículo). É só esse buraco de dados — não tem nada de errado na Rede. Saneando essas 3 colunas o card some.
+## Objetivo
 
-## Plano de saneamento
+Para erros recuperáveis (começando por e-mail inválido), o consultor recebe:
+1. O **erro exato** com o **código** visível (ex.: `[EMAIL_INVALIDO]`)
+2. Um **modal de correção inline** que atualiza o campo no banco e **reprocessa** a operação automaticamente — sem sair da tela, sem suporte técnico.
 
-### Fase 1 — Coleta dos IDs reais da Rede (manual, você)
+## Mudanças
 
-No painel Rede Veículos, com o CPF `05453793775` (JOHNSON) ou IMEI `865011032275324`, abrir o registro e me passar:
+### 1. Backend — erros estruturados com `code`
 
-1. **`idCliente`** (ID interno do cliente JOHNSON na Rede)
-2. **`idVeiculo`** (ID interno do veículo RFH7G28 na Rede)
-3. **`idEquipamento`** (ID interno do rastreador / IMEI na Rede) — se a tela exibir
+Padronizar as edges para responder `4xx` com JSON `{ code, mensagem, hint, campo }` em vez de `throw new Error(...)` solto:
 
-Sem esses números o saneamento fica "fake" (preencheria com placeholder e quebraria sincronizações futuras tipo `rede-veiculos-atualizar-equipamento`).
+- `supabase/functions/contrato-gerar/index.ts` (linhas 468–481):
+  - Validação de nome → `code: 'NOME_INVALIDO'`, `campo: 'nome'`
+  - Validação de e-mail → `code: 'EMAIL_INVALIDO'`, `campo: 'email_solicitante'`, `hint: 'Corrija o e-mail e reprocesse — formato esperado: nome@dominio.com'`
+- `supabase/functions/autentique-create/index.ts` (linhas 777–785): mesmo padrão para os mesmos códigos (defesa em profundidade).
+- Helper compartilhado mínimo (`_shared/erroEstruturado.ts`) com `respostaErro(status, code, mensagem, extras)` — só pra não repetir o JSON.
 
-> ⚠️ Já fica registrado o risco lateral: o veículo está **INATIVO na Rede**. Depois do saneamento + aprovação do Monitoramento, o fluxo precisa rodar `rede-veiculos-ativar-veiculo` para mudar o estado lá. Isso é da etapa de aprovação, não desse saneamento.
+### 2. Frontend — propagar `code` e abrir modal
 
-### Fase 2 — Aplicação do saneamento (eu, via insert tool)
+- **`src/hooks/useContratos.ts` (`useGerarContrato`)** e **`src/hooks/useCotacoes.ts` (`aceitarCotacao` linha 564)**:
+  - Trocar `toast.error(error.message)` por `toastErroEdge(error, 'Gerar proposta')` (helper já existe em `src/lib/ui/toastErroEdge.ts` e já sabe parsear `error.context`).
+  - Adicionar `EMAIL_INVALIDO` ao set `CODIGOS_409_CONHECIDOS` em `toastErroEdge.ts` (toast persistente com `[EMAIL_INVALIDO]` visível).
+  - Mutation passa a **re-throw** o `EdgeErrorParsed` para o componente caller decidir abrir modal de correção.
 
-Quando você me passar os IDs, eu rodo um único bloco transacional:
+- **Novo componente `src/components/cotacoes/CorrigirEmailDialog.tsx`**:
+  - Props: `open`, `onOpenChange`, `cotacaoId`, `contratoId?`, `emailAtual`, `onReprocessar(novoEmail)`.
+  - Form simples com `<Input type="email">` + validação `EMAIL_REGEX` no submit.
+  - Ao confirmar: UPDATE em `cotacoes.email_solicitante` (+ `contratos.cliente_email` + `associados.email` quando vinculados), chama `onReprocessar` (reinvoca `contrato-gerar` / `autentique-create`), fecha em sucesso.
+  - Layout segue padrão de `ConfirmacaoAcaoDialog`.
 
-```sql
--- 1. Veículo: registrar os IDs da Rede
-UPDATE veiculos
-SET rede_veiculos_cliente_id  = :idCliente,
-    rede_veiculos_veiculo_id  = :idVeiculo,
-    updated_at = now()
-WHERE id = '4e675f45-8190-4401-b0d6-e4f26cbd3575';
+- **Callers que disparam contrato-gerar/autentique-create** abrem o modal quando `code === 'EMAIL_INVALIDO'`:
+  - `src/pages/vendas/Cotacao.tsx` (e o ponto em `/vendas/contratos` que chama `useGerarContrato`)
+  - `src/hooks/useAtribuirPlano.ts` (linha 167) — chama `autentique-create-by-token`
+  - `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx` — fluxo do link público
 
--- 2. Rastreador: registrar id_plataforma (faz o card fantasma sumir)
-UPDATE rastreadores
-SET id_plataforma         = :idEquipamento_ou_idVeiculo,
-    plataforma_device_id  = :idEquipamento,
-    dados_extras = COALESCE(dados_extras, '{}'::jsonb) || jsonb_build_object(
-      'saneamento_manual', true,
-      'saneamento_motivo', 'bypass_vinculo_pulou_monitoramento_caso_JOHNSON_RFH7G28',
-      'saneamento_em', now()
-    ),
-    updated_at = now()
-WHERE id = '096341f0-54e8-48cd-a83b-abe7cd91d09e';
+### 3. Saneamento do caso atual (COT-20260528-141222375-095)
 
--- 3. Veículo: voltar status p/ instalacao_pendente para reentrar na fila normal
---    (LEANDRO tinha mudado para 'em_analise' às 12:54, isso o tirou do gate canônico)
-UPDATE veiculos
-SET status = 'instalacao_pendente'
-WHERE id = '4e675f45-8190-4401-b0d6-e4f26cbd3575';
+Migration única corrigindo `Jesusmatheus8917gmail.com` → `Jesusmatheus8917@gmail.com` em `cotacoes`, `contratos` e `associados`, e re-disparando `autentique-create` para `CTR-20260528171456-3LA6ZH`. (Aguardo sua confirmação de que o e-mail correto é esse antes de aplicar.)
 
--- 4. Auditoria
-INSERT INTO logs_auditoria (acao, modulo, tabela, registro_id, descricao, usuario_nome, dados_novos)
-VALUES (
-  'editar', 'rastreadores', 'rastreadores',
-  '096341f0-54e8-48cd-a83b-abe7cd91d09e',
-  'Saneamento manual — JOHNSON / RFH7G28 / IMEI 865011032275324: rastreador já vinculado na Rede, IDs locais preenchidos manualmente para destravar fluxo no Monitoramento.',
-  'Sistema (saneamento manual)',
-  jsonb_build_object(
-    'rede_veiculos_cliente_id', :idCliente,
-    'rede_veiculos_veiculo_id', :idVeiculo,
-    'id_plataforma', :idEquipamento_ou_idVeiculo
-  )
-);
+## Resultado pro consultor
+
+```text
+Antes:  toast.error("Edge Function returned a non-2xx status code")  → travado
+Depois: toast persistente "Gerar proposta: O e-mail do solicitante
+        (Jesusmatheus8917gmail.com) é inválido [EMAIL_INVALIDO]
+        Corrija o e-mail e reprocesse..."
+        + Modal "Corrigir e-mail e reprocessar" abre automaticamente
+        + Consultor digita o novo e-mail → salva → reprocessa → contrato OK
 ```
 
-### Fase 3 — Validação (você, depois do meu UPDATE)
+## Escopo desta primeira iteração
 
-1. Abrir Monitoramento › Rastreadores → procurar IMEI `865011032275324`. **Card "Ativar Rastreador" deve ter sumido.**
-2. Abrir o drawer do rastreador → aba "Gestão" deve carregar dados da Rede agora (com `id_plataforma` preenchido).
-3. O veículo deve aparecer na fila **Monitoramento › Aprovações › Aprovação de Associados** (status `instalacao_pendente` + rastreador vinculado). A partir daí o fluxo canônico de aprovação dispara o `ativar-associado`, que sincroniza o SGA com docs/fotos.
+Só **e-mail inválido**. A infra (backend estruturado + `toastErroEdge` + padrão de "modal de correção") fica pronta pra estender depois pra `NOME_INVALIDO`, `CPF_INVALIDO`, `TELEFONE_INVALIDO` etc. com baixo custo.
 
-## O que **NÃO** estou fazendo neste saneamento
+## Arquivos tocados
 
-- ❌ Não estou chamando `rede-veiculos-vincular-cliente` (daria erro de novo — vínculo já existe lá).
-- ❌ Não estou tocando em status do cliente/veículo na Rede (a ativação na Rede acontece via `rede-veiculos-ativar-veiculo` quando o Monitoramento aprovar).
-- ❌ Não estou mexendo em `contratos.cadastro_aprovado` nem chamando `ativar-associado` — é o Monitoramento que decide isso.
-- ❌ Não estou implementando o guard estrutural (Fase B da investigação anterior) — esse fica para uma próxima rodada e exige aprovação separada.
-
-## Próximo passo solicitado
-
-Me passe `idCliente`, `idVeiculo` e (se possível) `idEquipamento` da Rede Veículos para o JOHNSON / RFH7G28, e eu executo a Fase 2 já.
+- `supabase/functions/_shared/erroEstruturado.ts` (novo, ~15 linhas)
+- `supabase/functions/contrato-gerar/index.ts` (validação e-mail/nome)
+- `supabase/functions/autentique-create/index.ts` (validação e-mail)
+- `src/lib/ui/toastErroEdge.ts` (adicionar `EMAIL_INVALIDO` ao set)
+- `src/components/cotacoes/CorrigirEmailDialog.tsx` (novo)
+- `src/hooks/useContratos.ts` (`useGerarContrato`)
+- `src/hooks/useCotacoes.ts` (`aceitarCotacao`)
+- `src/hooks/useAtribuirPlano.ts`
+- `src/pages/vendas/Cotacao.tsx` (e ponto de `/vendas/contratos`)
+- `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
+- Migration de saneamento da COT-20260528-141222375-095 (após confirmação)
