@@ -169,9 +169,22 @@ export default function LiberacoesAutoVistoria() {
             <DialogTitle>Liberar {alvosLiberar.length} associado(s)</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            O associado receberá WhatsApp com o link para reagendar a vistoria/instalação.
+            {enviarWhatsapp
+              ? 'O associado receberá WhatsApp com o link para reagendar a vistoria/instalação.'
+              : 'O associado NÃO será notificado por WhatsApp — avise por outro canal.'}{' '}
             A cobertura de roubo/furto volta imediatamente; a Proteção 360 será ativada após a instalação concluída.
           </p>
+          <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3">
+            <Checkbox
+              id="enviar-whatsapp-liberar"
+              checked={enviarWhatsapp}
+              onCheckedChange={(v) => setEnviarWhatsapp(v === true)}
+              className="mt-0.5"
+            />
+            <Label htmlFor="enviar-whatsapp-liberar" className="text-sm font-normal cursor-pointer leading-snug">
+              Enviar WhatsApp ao associado com link para reagendar
+            </Label>
+          </div>
           <Textarea placeholder="Motivo (opcional)" value={motivoLiberar} onChange={(e) => setMotivoLiberar(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogLiberarOpen(false)}>Cancelar</Button>
