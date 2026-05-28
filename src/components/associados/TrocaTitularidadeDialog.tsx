@@ -275,9 +275,47 @@ export function TrocaTitularidadeDialog({
     }
   };
 
+  const enviando = criar.isPending || progressDone;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Não permite fechar o modal enquanto a solicitação está sendo criada
+        if (enviando && !next) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="max-w-md relative">
+        {enviando && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 rounded-lg bg-background/95 backdrop-blur-sm p-6 text-center animate-in fade-in duration-200">
+            {progressDone ? (
+              <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+            ) : (
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+            )}
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold">
+                {progressDone ? 'Tudo certo!' : 'Criando solicitação de troca…'}
+              </h3>
+              <p className="text-sm text-muted-foreground">{progressLabel}</p>
+            </div>
+            <div className="w-full max-w-xs space-y-2">
+              <Progress
+                value={progress}
+                className={progressDone ? '[&>div]:bg-emerald-500 transition-all' : 'transition-all'}
+              />
+              <div className="text-xs text-muted-foreground tabular-nums">
+                {Math.round(progress)}%
+              </div>
+            </div>
+            {!progressDone && (
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Isso pode levar alguns segundos enquanto sincronizamos o associado e geramos a cotação.
+              </p>
+            )}
+          </div>
+        )}
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
