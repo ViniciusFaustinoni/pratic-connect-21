@@ -212,6 +212,7 @@ const DashboardVendaExterna = lazy(() => import("./pages/financeiro/DashboardVen
 const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
 const RelacionamentoTrocas = lazy(() => import("./pages/cobranca/RelacionamentoTrocas"));
 const AnalisesRelacionamento = lazy(() => import("./pages/relacionamento/AnalisesRelacionamento"));
+const EmailsRelacionamento = lazy(() => import("./pages/relacionamento/emails/EmailsRelacionamento"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
 const AprovacoesUnificadas = lazy(() => import("./pages/monitoramento/AprovacoesUnificadas"));
