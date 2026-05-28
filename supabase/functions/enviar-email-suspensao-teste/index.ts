@@ -3,6 +3,7 @@
 // NÃO é chamada por nenhum fluxo automático; apenas pelo botão "Enviar e-mail de teste".
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { envelopeEmailPraticcar } from '../_shared/email-layout-praticcar.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
