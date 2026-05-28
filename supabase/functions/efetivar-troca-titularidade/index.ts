@@ -2250,12 +2250,16 @@ serve(async (req) => {
       if (error) console.warn('[efetivar-troca] update solicitacoes_troca:', error.message);
     });
 
-    // Fast-path: se as 3 pontas já estão OK no DB (caso típico: sem rastreador +
-    // SGA sincronizou inline), promove imediatamente pra 'efetivada'.
+    // Regra das 3 Pontas — canônico: passa pelo wrapper `troca-promover-com-sondagem`
+    // que SONDA a plataforma do rastreador (Softruck/Rede) em tempo real, persiste
+    // o resultado em `plataforma_rastreador_status` e só então invoca o gate SQL.
+    // Nunca mais escreve `status='efetivada'` direto aqui.
     try {
-      await supabase.rpc('fn_promover_troca_se_completo', { _solicitacao_id: solicitacao_id });
+      await supabase.functions.invoke('troca-promover-com-sondagem', {
+        body: { solicitacao_id },
+      });
     } catch (e) {
-      console.warn('[efetivar-troca] fn_promover_troca_se_completo falhou:', (e as Error)?.message);
+      console.warn('[efetivar-troca] troca-promover-com-sondagem falhou:', (e as Error)?.message);
     }
 
     console.log(`[efetivar-troca] ✅ Efetivação concluída com sucesso`);
