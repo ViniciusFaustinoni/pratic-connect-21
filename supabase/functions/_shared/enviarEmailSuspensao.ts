@@ -119,7 +119,7 @@ export async function enviarEmailSuspensao(
     // 2) Template + toggle individual
     const { data: tpl } = await supabase
       .from('email_suspensao_templates')
-      .select('id, fluxo_key, assunto, corpo, ativo')
+      .select('id, fluxo_key, assunto, corpo, ativo, formato')
       .eq('fluxo_key', templateKey)
       .maybeSingle();
     if (!tpl) {
