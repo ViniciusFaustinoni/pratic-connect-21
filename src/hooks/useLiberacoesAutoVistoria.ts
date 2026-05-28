@@ -75,15 +75,25 @@ export function useLiberacoesAutoVistoria() {
 export function useLiberarAutoVistoria() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ contrato_ids, motivo }: { contrato_ids: string[]; motivo?: string }) => {
+    mutationFn: async ({
+      contrato_ids,
+      motivo,
+      enviar_whatsapp = true,
+    }: {
+      contrato_ids: string[];
+      motivo?: string;
+      enviar_whatsapp?: boolean;
+    }) => {
       const { data, error } = await supabase.functions.invoke('liberar-reagendamento-autovistoria', {
-        body: { contrato_ids, motivo },
+        body: { contrato_ids, motivo, enviar_whatsapp },
       });
       if (error) throw error;
-      return data;
+      return { ...data, _enviar_whatsapp: enviar_whatsapp };
     },
-    onSuccess: (data) => {
-      toast.success(`${data?.liberados ?? 0} associado(s) liberado(s). WhatsApp enviado.`);
+    onSuccess: (data: any) => {
+      const n = data?.liberados ?? 0;
+      const sufixo = data?._enviar_whatsapp ? 'WhatsApp enviado.' : 'Sem notificação WhatsApp.';
+      toast.success(`${n} associado(s) liberado(s). ${sufixo}`);
       qc.invalidateQueries({ queryKey: ['liberacoes-autovistoria'] });
       qc.invalidateQueries({ queryKey: ['aprovacoes-monitoramento-breakdown'] });
     },
