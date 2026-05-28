@@ -469,6 +469,17 @@ serve(async (req) => {
       throw new Error('Nome é obrigatório para gerar o contrato. Complete os dados antes de continuar.');
     }
 
+    // Validação de email do solicitante — defesa raiz contra emails sem @ ou
+    // malformados que quebram a criação de documento no Autentique (signers.0.email).
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const emailLimpo = (emailFinal || '').trim();
+    if (!emailLimpo || !EMAIL_REGEX.test(emailLimpo)) {
+      throw new Error(
+        `O e-mail do solicitante (${emailLimpo || 'vazio'}) é inválido. ` +
+        `Corrija o e-mail na cotação antes de gerar o contrato — o Autentique exige um e-mail válido para enviar a assinatura.`
+      );
+    }
+
     // 6.1 GATE DE DÉBITOS — REMOVIDO (15/05 + reimplementação)
     // O campo "Tipo da Cotação" do modal é informativo. Inadimplência NÃO trava
     // a criação do contrato/cotação — é decidida apenas no Cadastro

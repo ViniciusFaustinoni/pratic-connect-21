@@ -284,6 +284,14 @@ export default function CotacaoPage() {
       toast.error('A taxa de filiação deve ser maior que zero');
       return;
     }
+    // Validação de email — Autentique rejeita signers com email sem @/malformado
+    // (validation: format_is_invalid). Bloquear no front evita cotação travada na etapa Contrato.
+    const emailTrim = (emailAssociado || '').trim();
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailTrim || !EMAIL_REGEX.test(emailTrim)) {
+      toast.error('E-mail do solicitante inválido. Verifique se contém "@" e domínio válido (ex.: nome@dominio.com).');
+      return;
+    }
     const dadosCotacao = {
       associado: {
         id: skipEtapa1 ? associadoIdParam : undefined,
