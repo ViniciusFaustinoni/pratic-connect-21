@@ -198,7 +198,20 @@ export function useAtivarRastreadorPlataforma() {
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          // FunctionsHttpError mascara o body do edge — extrai a mensagem real
+          let mensagemReal: string | undefined;
+          try {
+            const ctx = (error as any)?.context;
+            if (ctx && typeof ctx.json === 'function') {
+              const body = await ctx.json();
+              mensagemReal = body?.error || body?.message;
+            }
+          } catch {
+            // ignora — usa fallback
+          }
+          throw new Error(mensagemReal || result?.error || error.message || 'Erro ao vincular na Rede Veículos');
+        }
         if (!result?.success) throw new Error(result?.error || 'Erro ao vincular na Rede Veículos');
       } else {
         console.warn('[ativar-rastreador] Plataforma sem integração de ativação:', rastreador.plataforma);
