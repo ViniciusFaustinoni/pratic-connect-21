@@ -166,7 +166,7 @@ serve(async (req) => {
         // Notificar associado
         const { data: associadoUser } = await supabase
           .from('associados')
-          .select('user_id')
+          .select('user_id, email, nome')
           .eq('id', associadoId)
           .single();
 
@@ -195,6 +195,25 @@ serve(async (req) => {
             });
           } catch (notifErr) {
             console.warn(`[Cron] Erro ao enviar notificação:`, notifErr);
+          }
+
+          // E-mail novo via helper (paralelo ao disparar-notificacao, não bloqueante)
+          try {
+            await enviarEmailSuspensao({
+              supabase,
+              templateKey: 'inadimplencia',
+              fluxoOrigem: 'cron_suspensao_inadimplencia',
+              destinatario: associadoUser.email,
+              clienteNome: associadoUser.nome ?? dados.nome,
+              clienteId: associadoId,
+              variaveis: {
+                nome_cliente: associadoUser.nome ?? dados.nome,
+                motivo_suspensao: `Inadimplência: R$ ${dados.valorTotalPendente.toFixed(2)} em atraso há ${dados.diasMaiorAtraso} dias`,
+                data: new Date().toLocaleDateString('pt-BR'),
+              },
+            });
+          } catch (emailErr) {
+            console.error('[cron-suspender-inadimplentes] erro e-mail novo (não bloqueante):', emailErr);
           }
         }
 
