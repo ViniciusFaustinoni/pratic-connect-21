@@ -344,7 +344,27 @@ async function executarSoftruckTrocaVinculo(
   for (const assocId of antigosAssocIds) {
     try {
       const del = await callSoftruck("desassociar-usuario-veiculo", { associationId: assocId });
-      if ((del as any)?.error) throw new Error(JSON.stringify((del as any).error));
+      const delErr = (del as any)?.error;
+      if (delErr) {
+        // FunctionsHttpError não traz texto; tenta extrair body via re-fetch da própria msg
+        const errMsg = typeof delErr === "string" ? delErr : (delErr?.message || JSON.stringify(delErr));
+        // tenta extrair body se disponível em delErr.context
+        const ctxBody = (delErr as any)?.context?.responseText || "";
+        const combo = `${errMsg} ${ctxBody}`;
+        if (isAssocNaoEncontrada(combo) || /não encontrada|nao encontrada|not found|FunctionsHttpError/i.test(combo)) {
+          // Re-sondagem: se sumiu da lista, tratar como sucesso idempotente
+          try {
+            const lst3 = await callSoftruck("listar-usuarios-veiculo", { vehicleId });
+            const items3 = extractItems(lst3);
+            const aindaPresente = items3.some((it: any) => String(it?.id ?? "") === assocId);
+            if (!aindaPresente) {
+              console.log(`[softruck-troca][idempotente] DELETE ${assocId}: sumiu da lista — seguindo`);
+              continue;
+            }
+          } catch { /* segue para erro abaixo */ }
+        }
+        throw new Error(errMsg);
+      }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e);
       if (isAssocNaoEncontrada(msg)) {
@@ -354,6 +374,7 @@ async function executarSoftruckTrocaVinculo(
       return { ok: false, etapa: "desassociar", msg };
     }
   }
+
 
   // ===== Passo 4: associar novo (se faltar) — idempotente =====
   if (!novoJaVinculado) {
