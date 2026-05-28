@@ -59,6 +59,37 @@ export async function enviarEmailSuspensao(
     clienteId = null,
   } = args;
 
+  // Helper interno: registra uma tentativa que parou antes do disparo (sem template, template inativo, ou desativado globalmente).
+  const logEarlyReturn = async (
+    status: 'desativado' | 'sem_template' | 'template_inativo',
+    erroMsg: string,
+    tplRef: { id?: string | null; fluxo_key?: string | null } = {},
+  ): Promise<string | undefined> => {
+    try {
+      const { data: row } = await supabase
+        .from('email_suspensao_envios')
+        .insert({
+          cliente_nome: clienteNome,
+          cliente_id: clienteId,
+          destinatario: (destinatario ?? '').trim().toLowerCase() || '(sem email)',
+          fluxo_origem: fluxoOrigem,
+          template_id: tplRef.id ?? null,
+          template_key: tplRef.fluxo_key ?? templateKey,
+          assunto_enviado: '',
+          corpo_renderizado: '',
+          status,
+          provider: 'resend',
+          erro_mensagem: erroMsg,
+        })
+        .select('id')
+        .single();
+      return row?.id;
+    } catch (e) {
+      console.error('[enviarEmailSuspensao] falha ao logar early-return', status, e);
+      return undefined;
+    }
+  };
+
   try {
     // 1) Toggle global
     const { data: cfg } = await supabase
@@ -66,7 +97,8 @@ export async function enviarEmailSuspensao(
       .select('enabled')
       .maybeSingle();
     if (!cfg?.enabled) {
-      return { status: 'desativado' };
+      const envioId = await logEarlyReturn('desativado', 'Toggle global de e-mails de suspensão está desligado');
+      return { status: 'desativado', envioId };
     }
 
     // 2) Template + toggle individual
@@ -75,8 +107,22 @@ export async function enviarEmailSuspensao(
       .select('id, fluxo_key, assunto, corpo, ativo')
       .eq('fluxo_key', templateKey)
       .maybeSingle();
-    if (!tpl) return { status: 'template_ausente' };
-    if (!tpl.ativo) return { status: 'template_inativo' };
+    if (!tpl) {
+      const envioId = await logEarlyReturn(
+        'sem_template',
+        `Template '${templateKey}' não cadastrado em email_suspensao_templates`,
+      );
+      return { status: 'template_ausente', envioId };
+    }
+    if (!tpl.ativo) {
+      const envioId = await logEarlyReturn(
+        'template_inativo',
+        `Template '${templateKey}' existe mas está desativado`,
+        { id: tpl.id, fluxo_key: tpl.fluxo_key },
+      );
+      return { status: 'template_inativo', envioId };
+    }
+
 
     // 3) Renderização
     const varsStr: Record<string, string> = {};
