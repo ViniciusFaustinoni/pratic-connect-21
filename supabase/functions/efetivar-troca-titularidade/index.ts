@@ -1220,8 +1220,6 @@ serve(async (req) => {
             }
           }
         }
-        }
-      }
       }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e);
