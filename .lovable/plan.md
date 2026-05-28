@@ -1,78 +1,89 @@
-## Fase 2 — Envio real via Resend (isolado e testável pela aba)
+## Estado atual confirmado (28/05 ~16:39)
 
-Objetivo: habilitar envio real de e-mails pela aba **Relacionamento › E-mails**, sem tocar em nenhum fluxo de suspensão existente. Toda a infra cai sob a aba e só dispara via botão "Enviar e-mail de teste".
+**Local (banco):**
+- `rastreadores` (IMEI `865011032275324`): `status=instalado`, `veiculo_id=4e67…3575` (RFH7G28), `plataforma=rede_veiculos`, **`id_plataforma=NULL`**, `plataforma_device_id=NULL`.
+- `veiculos` (RFH7G28): `status=em_analise`, `cobertura_roubo_furto=true`, `codigo_hinova=36384`, **`rede_veiculos_cliente_id=NULL`**, **`rede_veiculos_veiculo_id=NULL`**.
+- `associados` JOHNSON: `codigo_hinova=30546`, CPF `05453793775`.
 
----
+**Rede Veículos (via edge `rede-veiculos-obter-status-cliente`):**
+- Cliente JOHNSON: `veiculosVinculados: 1`, `veiculosInativos: 1`, `veiculosAtivos: 0`.
+- Vínculo do IMEI **existe** lá (confirma o que você viu na plataforma), mas o veículo está **inativo** na Rede.
+- O endpoint não retorna `idCliente`/`idVeiculo` nesse modo agregado. Pra preencher localmente preciso desses 2 (3 com o equipamento) números.
 
-### 1. Edge function nova: `enviar-email-suspensao-teste`
+**Diagnóstico:** o card "Ativar Rastreador" aparece porque a UI checa `id_plataforma IS NULL` (rastreador) e `rede_veiculos_veiculo_id IS NULL` (veículo). É só esse buraco de dados — não tem nada de errado na Rede. Saneando essas 3 colunas o card some.
 
-Por que nova (em vez de reaproveitar `send-email`): isolar Fase 2 de qualquer chamador antigo, manter contrato dedicado (template salvo + variáveis + log no histórico da aba) e permitir alterar/remover sem risco regressivo.
+## Plano de saneamento
 
-Responsabilidades:
-- Validar JWT do chamador e checar que o perfil é `admin_master`, `diretor` ou `desenvolvedor` (mesmo gate da aba).
-- Ler template atual de `email_suspensao_template` (assunto + corpo).
-- Receber payload: `{ destinatario, variaveis?: { nome_cliente, motivo_suspensao, data } }`. Variáveis ausentes caem para os mesmos valores de exemplo já usados no preview (`Maria Souza`, `Inadimplência da mensalidade de maio`, data atual).
-- Renderizar assunto e corpo substituindo `{{nome_cliente}}`, `{{motivo_suspensao}}`, `{{data}}`.
-- Inserir linha em `email_suspensao_envios` com `status='pendente'`, `fluxo_origem='teste_manual'`, snapshot de `assunto_enviado` e `corpo_renderizado`.
-- Chamar Resend `POST https://api.resend.com/emails` com:
-  - `from`: `"Praticcar <nao-responder@praticcar.org>"` (sugestão; sender em `praticcar.org` exige domínio verificado no Resend — ver "Atenção" abaixo).
-  - `to: [destinatario]`, `subject`, `html` (corpo simples convertido com quebras de linha → `<br/>`) e `text` (corpo cru) para fallback.
-  - `Authorization: Bearer ${RESEND_API_KEY}` (secret já configurado).
-- Atualizar a linha em `email_suspensao_envios`:
-  - sucesso → `status='entregue'`, salvar `provider_message_id` (id retornado pelo Resend).
-  - falha → `status='falhou'`, salvar `erro_mensagem` com a mensagem do Resend.
-- Responder ao front com `{ ok, status, erro? }`.
+### Fase 1 — Coleta dos IDs reais da Rede (manual, você)
 
-CORS padrão Lovable, validação Zod do payload, sem `verify_jwt` no `config.toml` (validação manual em código).
+No painel Rede Veículos, com o CPF `05453793775` (JOHNSON) ou IMEI `865011032275324`, abrir o registro e me passar:
 
-### 2. Pequena migração no histórico
+1. **`idCliente`** (ID interno do cliente JOHNSON na Rede)
+2. **`idVeiculo`** (ID interno do veículo RFH7G28 na Rede)
+3. **`idEquipamento`** (ID interno do rastreador / IMEI na Rede) — se a tela exibir
 
-`email_suspensao_envios` ganha duas colunas opcionais para a Fase 2:
-- `provider` (texto, default `'resend'`).
-- `provider_message_id` (texto, nullable) — id retornado pelo Resend, útil para futuras consultas de bounce/complaint.
+Sem esses números o saneamento fica "fake" (preencheria com placeholder e quebraria sincronizações futuras tipo `rede-veiculos-atualizar-equipamento`).
 
-Nenhuma alteração em RLS já existente. Sem mudança em `email_suspensao_config` nem em `email_suspensao_template`.
+> ⚠️ Já fica registrado o risco lateral: o veículo está **INATIVO na Rede**. Depois do saneamento + aprovação do Monitoramento, o fluxo precisa rodar `rede-veiculos-ativar-veiculo` para mudar o estado lá. Isso é da etapa de aprovação, não desse saneamento.
 
-### 3. UI dentro da aba "E-mails"
+### Fase 2 — Aplicação do saneamento (eu, via insert tool)
 
-Acréscimos mínimos, sem refatorar o layout atual.
+Quando você me passar os IDs, eu rodo um único bloco transacional:
 
-- **Botão "Enviar e-mail de teste"** no header da aba (ao lado do título), visível apenas para quem já tem acesso (admin_master / diretor / desenvolvedor — gate da página já cobre).
-- **`EnviarTesteDialog.tsx`** (novo): formulário com
-  - E-mail de destino (obrigatório, validação básica).
-  - Campos opcionais: nome do cliente, motivo da suspensão, data — placeholders com os valores de exemplo.
-  - Pré-visualização inline do assunto e do corpo renderizados (reusa `renderTemplateEmailSuspensao`).
-  - Botão "Enviar agora" → chama edge function via `supabase.functions.invoke('enviar-email-suspensao-teste', ...)`.
-  - Feedback imediato via `toast.success` / `toast.error` com a mensagem retornada; em caso de erro, exibe também o motivo dentro do próprio dialog para o operador conferir antes de fechar.
-  - Após sucesso/falha, invalida `KEY_ENVIOS` para o histórico atualizar.
-- **`HistoricoEnvios.tsx`**: nenhuma alteração estrutural; passa a popular naturalmente. Filtro de fluxo já lista "teste_manual" via `useEmailSuspensaoFluxos`.
-- **`EnvioDetalheDialog.tsx`**: já mostra assunto, corpo renderizado e status — adicionar bloco "Mensagem de erro" quando `erro_mensagem` não for nulo (texto destacado em tom destrutivo). Mantém o "Reenviar" desabilitado (Fase 3).
+```sql
+-- 1. Veículo: registrar os IDs da Rede
+UPDATE veiculos
+SET rede_veiculos_cliente_id  = :idCliente,
+    rede_veiculos_veiculo_id  = :idVeiculo,
+    updated_at = now()
+WHERE id = '4e675f45-8190-4401-b0d6-e4f26cbd3575';
 
-### 4. Hook novo
+-- 2. Rastreador: registrar id_plataforma (faz o card fantasma sumir)
+UPDATE rastreadores
+SET id_plataforma         = :idEquipamento_ou_idVeiculo,
+    plataforma_device_id  = :idEquipamento,
+    dados_extras = COALESCE(dados_extras, '{}'::jsonb) || jsonb_build_object(
+      'saneamento_manual', true,
+      'saneamento_motivo', 'bypass_vinculo_pulou_monitoramento_caso_JOHNSON_RFH7G28',
+      'saneamento_em', now()
+    ),
+    updated_at = now()
+WHERE id = '096341f0-54e8-48cd-a83b-abe7cd91d09e';
 
-`useEnviarEmailTeste` (em `src/hooks/emails-suspensao/`): `useMutation` que chama a edge function, com `onSuccess` invalidando `KEY_ENVIOS` e fazendo toast.
+-- 3. Veículo: voltar status p/ instalacao_pendente para reentrar na fila normal
+--    (LEANDRO tinha mudado para 'em_analise' às 12:54, isso o tirou do gate canônico)
+UPDATE veiculos
+SET status = 'instalacao_pendente'
+WHERE id = '4e675f45-8190-4401-b0d6-e4f26cbd3575';
 
-### 5. Escopo desta fase — invariantes
+-- 4. Auditoria
+INSERT INTO logs_auditoria (acao, modulo, tabela, registro_id, descricao, usuario_nome, dados_novos)
+VALUES (
+  'editar', 'rastreadores', 'rastreadores',
+  '096341f0-54e8-48cd-a83b-abe7cd91d09e',
+  'Saneamento manual — JOHNSON / RFH7G28 / IMEI 865011032275324: rastreador já vinculado na Rede, IDs locais preenchidos manualmente para destravar fluxo no Monitoramento.',
+  'Sistema (saneamento manual)',
+  jsonb_build_object(
+    'rede_veiculos_cliente_id', :idCliente,
+    'rede_veiculos_veiculo_id', :idVeiculo,
+    'id_plataforma', :idEquipamento_ou_idVeiculo
+  )
+);
+```
 
-- Toggle global `email_suspensao_config.enabled` segue sem efeito; não é lido por nenhum fluxo.
-- Nenhum trigger novo, nenhum cron novo, nenhum chamador além do dialog de teste.
-- Edge function `send-email` legacy não é tocada.
-- `auth-email-hook`, fluxos de suspensão de cobertura, fluxos de cobrança — intocados.
+### Fase 3 — Validação (você, depois do meu UPDATE)
 
----
+1. Abrir Monitoramento › Rastreadores → procurar IMEI `865011032275324`. **Card "Ativar Rastreador" deve ter sumido.**
+2. Abrir o drawer do rastreador → aba "Gestão" deve carregar dados da Rede agora (com `id_plataforma` preenchido).
+3. O veículo deve aparecer na fila **Monitoramento › Aprovações › Aprovação de Associados** (status `instalacao_pendente` + rastreador vinculado). A partir daí o fluxo canônico de aprovação dispara o `ativar-associado`, que sincroniza o SGA com docs/fotos.
 
-### Atenção operacional (não bloqueia a entrega, mas o diretor precisa saber antes de validar)
+## O que **NÃO** estou fazendo neste saneamento
 
-Para `nao-responder@praticcar.org` funcionar sem cair em spam/rejeição, o domínio `praticcar.org` precisa estar **verificado no painel da Resend** (registros SPF + DKIM + DMARC publicados no DNS). Se ainda não estiver:
-- Os envios podem ser aceitos pela Resend mas marcados como spam pelos provedores, **ou**
-- A Resend pode rejeitar com `"The from address is not verified"` — nesse caso o histórico vai logar `falhou` com a mensagem exata, exatamente o comportamento esperado pra você validar.
+- ❌ Não estou chamando `rede-veiculos-vincular-cliente` (daria erro de novo — vínculo já existe lá).
+- ❌ Não estou tocando em status do cliente/veículo na Rede (a ativação na Rede acontece via `rede-veiculos-ativar-veiculo` quando o Monitoramento aprovar).
+- ❌ Não estou mexendo em `contratos.cadastro_aprovado` nem chamando `ativar-associado` — é o Monitoramento que decide isso.
+- ❌ Não estou implementando o guard estrutural (Fase B da investigação anterior) — esse fica para uma próxima rodada e exige aprovação separada.
 
-Se preferir validar primeiro sem depender do DNS, posso usar `from: "Praticcar <onboarding@resend.dev>"` como fallback temporário e trocar para `nao-responder@praticcar.org` assim que o domínio estiver verificado. Me avise no momento de implementar qual caminho seguir.
+## Próximo passo solicitado
 
-### Critérios de aceite
-
-- Botão "Enviar e-mail de teste" visível apenas para admin_master/diretor/desenvolvedor.
-- Envio para e-mail válido com Resend OK → histórico mostra linha "entregue", origem "teste_manual", com assunto e corpo renderizados visíveis no detalhe.
-- Envio com domínio não verificado / e-mail inválido / Resend retornando erro → histórico mostra linha "falhou" com `erro_mensagem` exibido no detalhe.
-- Variáveis preenchidas no formulário aparecem corretamente substituídas no corpo enviado; vazias usam os valores de exemplo.
-- Nenhum fluxo de suspensão existente alterado; toggle global segue inerte.
+Me passe `idCliente`, `idVeiculo` e (se possível) `idEquipamento` da Rede Veículos para o JOHNSON / RFH7G28, e eu executo a Fase 2 já.
