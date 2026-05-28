@@ -508,8 +508,43 @@ serve(async (req) => {
           }
         }
 
+        // Se não temos deviceId mas temos IMEI, tenta resolver via Softruck antes de desistir
+        if ((!vehicleId || !deviceId) && rastreador.imei) {
+          const baseUrlResolve = plataforma?.ambiente_atual === 'producao'
+            ? (plataforma?.api_url_producao || 'https://api.softruck.com.br')
+            : (plataforma?.api_url_sandbox || 'https://sandbox.softruck.com.br');
+          const resolved = await resolverSoftruckIdsPorImei(
+            supabaseAdmin, supabaseUrl, supabaseKey,
+            rastreador.imei, rastreador.id, baseUrlResolve,
+          );
+          if (resolved) {
+            deviceId = resolved.deviceId;
+            // Só usa vehicleId resolvido se for diferente do deviceId (helper faz fallback)
+            if (resolved.vehicleId && resolved.vehicleId !== resolved.deviceId) {
+              vehicleId = resolved.vehicleId;
+            }
+          }
+        }
+
+        // Rastreador em estoque ou sem vínculo de veículo na plataforma: não é erro — só não tem posição.
         if (!vehicleId || !deviceId) {
-          throw new Error('Rastreador não configurado com IDs da plataforma');
+          const motivo = rastreador.status === 'estoque'
+            ? 'Rastreador em estoque — ainda não vinculado a um veículo na plataforma Softruck.'
+            : 'Rastreador sem vínculo com veículo na plataforma Softruck. Vincule via Monitoramento › Estoque.';
+          return new Response(
+            JSON.stringify({
+              success: true,
+              plataforma: plataformaCodigo,
+              tempo_real: false,
+              offline: true,
+              sem_vinculo_plataforma: true,
+              mensagem: motivo,
+              posicao: null,
+              veiculo: { id: veiculo.id, placa: veiculo.placa, modelo: veiculo.modelo || '', marca: veiculo.marca || '' },
+              rastreador: { id: rastreador.id, codigo: rastreador.codigo },
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
         }
 
         console.log(`[Softruck] Usando vehicleId=${vehicleId}, deviceId=${deviceId}`);
