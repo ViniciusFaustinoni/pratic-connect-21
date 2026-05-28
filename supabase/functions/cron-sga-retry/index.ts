@@ -124,6 +124,46 @@ serve(async (req) => {
           continue;
         }
 
+        // Roteamento por etapa: inativação do antigo titular na Troca de Titularidade.
+        // Antes era órfã (sem consumer). Agora chama sga-inativar-associado-antigo
+        // e ao sucesso dispara o gate da troca via wrapper de sondagem.
+        if (item.etapa_parou === 'troca_titularidade:inativar_associado_antigo') {
+          const { data, error } = await supabase.functions.invoke('sga-inativar-associado-antigo', {
+            body: {
+              veiculo_id: item.veiculo_id,
+              associado_antigo_id: item.associado_id,
+              codigo_associado_hinova: item.codigo_associado_hinova,
+            },
+          });
+          if (error) throw new Error(error.message || 'Erro ao inativar antigo titular no SGA');
+          if (data?.success) {
+            await supabase
+              .from('sga_sync_queue')
+              .update({ status: 'concluido', erro_ultimo: null, ultima_tentativa_em: new Date().toISOString() })
+              .eq('id', item.id);
+
+            // tenta promover a troca correspondente
+            const { data: sol } = await supabase
+              .from('solicitacoes_troca_titularidade')
+              .select('id')
+              .eq('veiculo_id', item.veiculo_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (sol?.id) {
+              await supabase.functions.invoke('troca-promover-com-sondagem', {
+                body: { solicitacao_id: sol.id },
+              }).catch(() => {});
+            }
+            sucesso++;
+          } else {
+            throw new Error(data?.error || 'sga-inativar-associado-antigo retornou success=false');
+          }
+          continue;
+        }
+
+
+
         const { data: veiculoRetry } = await supabase
           .from('veiculos')
           .select('cobertura_total')
