@@ -155,6 +155,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo, novoAsso
       const idsOk = origem === 'rede_veiculos' ? !!rLocal0.plataforma_device_id : true;
       if (origem && livre && idsOk) {
         console.log(TAG, 'estoque_local_ok', { imei: mascararImei(imeiSan), plataforma, status });
+        await promoverRastreadorParaInstalado(rLocal0.id, veiculoIdAlvo, origem, novoAssociadoId);
         return { ok: true, origem, rastreadorId: rLocal0.id };
       }
       if (origem === 'rede_veiculos' && !idsOk) {
