@@ -254,6 +254,46 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
         (assocs || []).forEach((a: any) => associadosMap.set(a.id, a));
       }
 
+      // 2c) Fallback canônico: cotações de troca SEM solicitação vinculada.
+      // Resolve titular antigo via veiculos.placa -> veiculos.associado_id -> associados.
+      // Cobre caso histórico de cotação órfã (ex.: COT-20260528-142801654-756) até
+      // o saneamento e a trigger DB entrarem em vigor.
+      const fallbackAntigoPorCotacao = new Map<string, any>();
+      const placasOrfas = Array.from(new Set(
+        cotList
+          .filter((c) => {
+            const tipoRaw = c.tipo_entrada as string;
+            return tipoRaw === 'troca_titularidade' && !trocasMap.has(c.id) && !!c.veiculo_placa;
+          })
+          .map((c) => String(c.veiculo_placa).toUpperCase()),
+      ));
+      if (placasOrfas.length > 0) {
+        const { data: veiculosOrfos } = await supabase
+          .from('veiculos')
+          .select('placa, associado_id')
+          .in('placa', placasOrfas);
+        const placaToAssocId = new Map<string, string>();
+        (veiculosOrfos || []).forEach((v: any) => {
+          if (v?.placa && v?.associado_id) placaToAssocId.set(String(v.placa).toUpperCase(), v.associado_id);
+        });
+        const novosAssocIds = Array.from(new Set(Array.from(placaToAssocId.values())))
+          .filter((id) => !associadosMap.has(id));
+        if (novosAssocIds.length > 0) {
+          const { data: assocsExtra } = await supabase
+            .from('associados')
+            .select('id, nome, cpf, email, telefone')
+            .in('id', novosAssocIds);
+          (assocsExtra || []).forEach((a: any) => associadosMap.set(a.id, a));
+        }
+        cotList.forEach((c) => {
+          const tipoRaw = c.tipo_entrada as string;
+          if (tipoRaw !== 'troca_titularidade' || trocasMap.has(c.id) || !c.veiculo_placa) return;
+          const assocId = placaToAssocId.get(String(c.veiculo_placa).toUpperCase());
+          const assoc = assocId ? associadosMap.get(assocId) : null;
+          if (assoc) fallbackAntigoPorCotacao.set(c.id, assoc);
+        });
+      }
+
       // 3) Pendências financeiras (relacionamento_debitos_pendentes)
       const trocaIds = (trocas || []).map((t: any) => t.id);
       const debitosPorTroca = new Map<string, { qtd: number; total: number }>();
