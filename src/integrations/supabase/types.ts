@@ -30426,6 +30426,9 @@ export type Database = {
           novo_titular_dados: Json
           observacao_cadastro: string | null
           observacao_monitoramento: string | null
+          plataforma_rastreador_erro: string | null
+          plataforma_rastreador_sincronizado_em: string | null
+          plataforma_rastreador_status: string | null
           reprovado_em: string | null
           reprovado_por: string | null
           servico_manutencao_id: string | null
@@ -30469,6 +30472,9 @@ export type Database = {
           novo_titular_dados?: Json
           observacao_cadastro?: string | null
           observacao_monitoramento?: string | null
+          plataforma_rastreador_erro?: string | null
+          plataforma_rastreador_sincronizado_em?: string | null
+          plataforma_rastreador_status?: string | null
           reprovado_em?: string | null
           reprovado_por?: string | null
           servico_manutencao_id?: string | null
@@ -30512,6 +30518,9 @@ export type Database = {
           novo_titular_dados?: Json
           observacao_cadastro?: string | null
           observacao_monitoramento?: string | null
+          plataforma_rastreador_erro?: string | null
+          plataforma_rastreador_sincronizado_em?: string | null
+          plataforma_rastreador_status?: string | null
           reprovado_em?: string | null
           reprovado_por?: string | null
           servico_manutencao_id?: string | null
