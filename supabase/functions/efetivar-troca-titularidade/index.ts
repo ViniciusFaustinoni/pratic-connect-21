@@ -1176,203 +1176,52 @@ serve(async (req) => {
           }
         } else {
           // ============================================================
-          // BRANCH SOFTRUCK (default) — preservado do bloco original
+          // BRANCH SOFTRUCK — agora delega ao helper canônico
+          // executarSoftruckTrocaVinculo, que resolve vehicleId por fallback
+          // (cache veiculos → rastreador.plataforma_veiculo_id → deviceId →
+          // IMEI → placa) antes de seguir com o reaponte de usuário.
+          // Falha não-bloqueante: enfileira em sga_sync_queue para o
+          // cron-softruck-troca-retry drenar.
           // ============================================================
-          // Pré-condição: veículo já existe na Softruck?
-          const { data: veicSoft } = await supabase
-            .from("veiculos")
-            .select("softruck_vehicle_id, placa")
-            .eq("id", veiculoId)
-            .maybeSingle();
+          const res = await executarSoftruckTrocaVinculo(supabase, veiculoId, novoAssociadoId);
 
-          const vehicleId = (veicSoft as any)?.softruck_vehicle_id as string | undefined;
-
-          if (!vehicleId) {
+          if (res.ok) {
             console.log(
-              `[SOFTRUCK_TROCA_VINCULO_SEM_VEHICLE_ID] veiculo=${veiculoId} placa=${(veicSoft as any)?.placa} — nunca foi sincronizado na Softruck, nada a fazer`,
+              `[SOFTRUCK_TROCA_VINCULO_OK] sol=${solicitacao_id} status=${res.status}${(res as any).vehicleId ? ` vehicleId=${(res as any).vehicleId}` : ""}${(res as any).userId ? ` userId=${(res as any).userId}` : ""}`,
             );
-          } else {
-          // Pré-condição 3: novo titular tem identificador para virar user Softruck?
-          const { data: novoAssoc } = await supabase
-            .from("associados")
-            .select("nome, cpf, email, telefone, telefone_celular")
-            .eq("id", novoAssociadoId)
-            .maybeSingle();
-
-          const cpfNovo = ((novoAssoc as any)?.cpf || "").replace(/\D/g, "");
-          const emailNovo = (novoAssoc as any)?.email as string | undefined;
-          const nomeNovo = (novoAssoc as any)?.nome as string | undefined;
-          const telNovo = ((novoAssoc as any)?.telefone_celular || (novoAssoc as any)?.telefone) as string | undefined;
-
-          if (!cpfNovo && !emailNovo) {
-            console.warn(
-              `[efetivar-troca][softruck-vinculo] novo titular ${novoAssociadoId} sem cpf/email — não dá pra resolver user Softruck`,
-            );
-          } else {
-            // Hook de teste mínimo (mesmo padrão de __inativarAssociadoHinovaOverride)
-            const callSoftruck =
-              (globalThis as any).__softruckTrocaVinculoOverride ??
-              ((operation: string, payload: unknown) =>
-                supabase.functions.invoke("softruck-api", { body: { operation, data: payload } }));
-
-            const enqueueFalha = async (
-              etapa: "softruck_reaponte_usuario" | "softruck_recriar_vinculo",
-              msg: string,
-            ) => {
-              try {
-                // TODO[retry-softruck-troca-vinculo]: cron-sga-retry ainda não drena esta etapa.
-                await supabase.from("sga_sync_queue").insert({
-                  associado_id: novoAssociadoId,
-                  veiculo_id: veiculoId,
-                  status: "pendente",
-                  etapa_parou: `troca_titularidade:${etapa}`,
-                  erro_ultimo: msg,
-                  origem: "troca_titularidade",
-                });
-              } catch (qErr) {
-                console.error("[efetivar-troca][softruck-vinculo] falha ao enfileirar:", (qErr as Error)?.message);
-              }
-            };
-
-            // Helper: extrai array de items {id, attributes?, ...} de qualquer formato JSON:API
-            const extractItems = (resp: any): any[] => {
-              const inner = resp?.data ?? resp;
-              const arr = inner?.data ?? inner;
-              return Array.isArray(arr) ? arr : [];
-            };
-
-            // ===== Passo 1: resolver/criar usuário Softruck do novo titular =====
-            let novoUserId: string | undefined;
-            try {
-              let found: any[] = [];
-              if (cpfNovo) {
-                const r1 = await callSoftruck("buscar-usuario", { cpf: cpfNovo });
-                if ((r1 as any)?.error) throw new Error(JSON.stringify((r1 as any).error));
-                found = extractItems(r1);
-              }
-              if (found.length === 0 && emailNovo) {
-                const r2 = await callSoftruck("buscar-usuario", { email: emailNovo });
-                if ((r2 as any)?.error) throw new Error(JSON.stringify((r2 as any).error));
-                found = extractItems(r2);
-              }
-
-              if (found.length > 0) {
-                novoUserId = String(found[0]?.id ?? found[0]?.user?.id);
-              } else {
-                const created = await callSoftruck("criar-usuario", {
-                  username: emailNovo || cpfNovo,
-                  email: emailNovo,
-                  nome: nomeNovo,
-                  telefone: telNovo,
-                  cpf: cpfNovo,
-                });
-                if ((created as any)?.error) throw new Error(JSON.stringify((created as any).error));
-                const cItems = extractItems(created);
-                novoUserId =
-                  String(cItems[0]?.id ?? (created as any)?.data?.data?.id ?? (created as any)?.data?.id ?? "") || undefined;
-              }
-
-              if (!novoUserId) throw new Error("user_id não retornado pela Softruck após buscar/criar");
-            } catch (e) {
-              const msg = (e as Error)?.message ?? String(e);
-              console.error(
-                `[FALHA_SOFTRUCK_TROCA_VINCULO] passo=criar/buscar-usuario solicitacao=${solicitacao_id} veiculo=${veiculoId} vehicleId=${vehicleId} novoAssoc=${novoAssociadoId} erro=${msg}`,
-              );
-              await enqueueFalha("softruck_reaponte_usuario", `criar/buscar-usuario: ${msg}`);
-              throw new Error("__softruck_abort__");
-            }
-
-            // ===== Passo 2: listar vínculos atuais do veículo =====
-            let antigosAssocIds: string[] = [];
-            let novoJaVinculado = false;
-            try {
-              const lst = await callSoftruck("listar-usuarios-veiculo", { vehicleId });
-              if ((lst as any)?.error) throw new Error(JSON.stringify((lst as any).error));
-              const items = extractItems(lst);
-              for (const it of items) {
-                const uid = String(it?.user?.id ?? it?.attributes?.user_id ?? "");
-                const aid = String(it?.id ?? "");
-                if (!aid) continue;
-                if (uid && uid === novoUserId) {
-                  novoJaVinculado = true;
-                } else {
-                  antigosAssocIds.push(aid);
-                }
-              }
-
-              if (novoJaVinculado && antigosAssocIds.length === 0) {
-                console.log(
-                  `[SOFTRUCK_TROCA_VINCULO_NOOP] vehicleId=${vehicleId} userId=${novoUserId} já é o único vinculado`,
-                );
-                throw new Error("__softruck_done__");
-              }
-            } catch (e) {
-              const msg = (e as Error)?.message ?? String(e);
-              if (msg === "__softruck_done__") throw e;
-              console.error(
-                `[FALHA_SOFTRUCK_TROCA_VINCULO] passo=listar-usuarios-veiculo vehicleId=${vehicleId} erro=${msg}`,
-              );
-              await enqueueFalha("softruck_reaponte_usuario", `listar-usuarios-veiculo: ${msg}`);
-              throw new Error("__softruck_abort__");
-            }
-
-            // ===== Passo 3: remover vínculo(s) antigo(s) =====
-            try {
-              for (const assocId of antigosAssocIds) {
-                const del = await callSoftruck("desassociar-usuario-veiculo", { associationId: assocId });
-                if ((del as any)?.error) throw new Error(JSON.stringify((del as any).error));
-              }
-            } catch (e) {
-              const msg = (e as Error)?.message ?? String(e);
-              console.error(
-                `[FALHA_SOFTRUCK_TROCA_VINCULO] passo=desassociar-usuario-veiculo vehicleId=${vehicleId} erro=${msg}`,
-              );
-              await enqueueFalha("softruck_reaponte_usuario", `desassociar-usuario-veiculo: ${msg}`);
-              throw new Error("__softruck_abort__");
-            }
-
-            // ===== Passo 4: criar vínculo novo (se ainda não estava) =====
-            if (!novoJaVinculado) {
-              try {
-                const created = await callSoftruck("associar-usuario-veiculo", {
-                  userId: novoUserId,
-                  vehicleId,
-                });
-                if ((created as any)?.error) throw new Error(JSON.stringify((created as any).error));
-              } catch (e) {
-                // Janela DELETE→POST visível pro usuário: prefixo distinto + prioridade lógica.
-                const msg = (e as Error)?.message ?? String(e);
-                console.error(
-                  `[FALHA_SOFTRUCK_RECRIAR_VINCULO] passo=associar-usuario-veiculo vehicleId=${vehicleId} userId=${novoUserId} erro=${msg}`,
-                );
-                await enqueueFalha("softruck_recriar_vinculo", `associar-usuario-veiculo: ${msg}`);
-                throw new Error("__softruck_abort__");
-              }
-            }
-
-            console.log(
-              `[SOFTRUCK_TROCA_VINCULO_OK] vehicleId=${vehicleId} userId=${novoUserId} removidos=[${antigosAssocIds.join(",")}]`,
-            );
-
             try {
               await insertAuditLog(supabase, {
                 acao: "criar",
                 modulo: "monitoramento",
-                descricao: `[SOFTRUCK_TROCA_VINCULO_OK] vehicle_id=${vehicleId} → user_id=${novoUserId} (removidos ${antigosAssocIds.length} antigo(s))`,
+                descricao: `[SOFTRUCK_TROCA_VINCULO_OK] sol=${solicitacao_id} status=${res.status}`,
                 tabela: "solicitacoes_troca_titularidade",
                 registro_id: solicitacao_id,
-                dados_novos: {
-                  vehicle_id: vehicleId,
-                  user_novo_vinculado: novoUserId,
-                  user_antigo_removido: antigosAssocIds,
-                },
+                dados_novos: res,
               });
             } catch (logErr) {
               console.warn("[efetivar-troca][softruck-vinculo] insertAuditLog falhou:", (logErr as Error)?.message);
             }
+          } else {
+            const etapaFila = res.etapa === "associar" ? "softruck_recriar_vinculo" : "softruck_reaponte_usuario";
+            console.error(
+              `[FALHA_SOFTRUCK_TROCA_VINCULO] sol=${solicitacao_id} etapa=${res.etapa} msg=${res.msg}`,
+            );
+            try {
+              await supabase.from("sga_sync_queue").insert({
+                associado_id: novoAssociadoId,
+                veiculo_id: veiculoId,
+                status: "pendente",
+                etapa_parou: `troca_titularidade:${etapaFila}`,
+                erro_ultimo: `${res.etapa}: ${res.msg}`,
+                origem: "troca_titularidade",
+              });
+            } catch (qErr) {
+              console.error("[efetivar-troca][softruck-vinculo] falha ao enfileirar:", (qErr as Error)?.message);
+            }
           }
         }
         }
+      }
       }
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e);
