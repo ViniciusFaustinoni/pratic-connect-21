@@ -108,7 +108,7 @@ async function checarConflitoLocal(imei: string, veiculoIdAlvo: string) {
   return { rastreadorId: r.id, placaOutra: v.placa || null };
 }
 
-export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params): Promise<ResultadoValidacaoImei> {
+export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo, novoAssociadoId }: Params): Promise<ResultadoValidacaoImei> {
   const placaSan = sanPlaca(placa);
   const imeiSan = sanImei(imei);
   const placaAtualLabel = placaSan || '(sem placa)';
