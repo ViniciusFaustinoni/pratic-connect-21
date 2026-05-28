@@ -422,6 +422,7 @@ const App = () => (
           <TooltipProvider>
             <Toaster />
             <Sonner />
+            <CorrigirEmailProvider />
             <AppErrorBoundary>
               <BrowserRouter>
                 <Suspense fallback={<PageLoader />}>
