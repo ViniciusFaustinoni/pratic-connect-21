@@ -119,10 +119,16 @@ export function useAprovacoesMonitoramentoBreakdown() {
       const total = associados + troca + liberacaoSuspensao + recusas + ressalvas + imprevistos;
       return { associados, troca, liberacaoSuspensao, recusas, ressalvas, imprevistos, total };
     },
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    // Badge informativo: aumentamos o intervalo de 60s → 5min e desligamos o
+    // refetch ao focar a janela. A query da aba `associados` puxa todos os
+    // serviços `concluida` sem paginação — reexecutá-la em alta frequência
+    // saturava a UI e impedia as abas de saírem do skeleton.
+    refetchInterval: 5 * 60_000,
+    staleTime: 2 * 60_000,
+    refetchOnWindowFocus: false,
   });
 }
+
 
 /** Backward-compat: total apenas (usado pelo sidebar). */
 export function useAprovacoesMonitoramentoCount() {
