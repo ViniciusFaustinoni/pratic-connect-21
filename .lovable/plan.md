@@ -1,69 +1,78 @@
-# Aba E-mails em Relacionamento — fase 1 (UI + persistência)
+## Fase 2 — Envio real via Resend (isolado e testável pela aba)
 
-Escopo estrito: criar a interface e persistir template + toggle + estrutura de histórico. **Nenhuma** integração com fluxos de suspensão ou Resend nesta fase.
+Objetivo: habilitar envio real de e-mails pela aba **Relacionamento › E-mails**, sem tocar em nenhum fluxo de suspensão existente. Toda a infra cai sob a aba e só dispara via botão "Enviar e-mail de teste".
 
-## 1. Backend (migration única)
+---
 
-Três tabelas novas, todas restritas a `admin_master` / `diretor` via `has_role()`.
+### 1. Edge function nova: `enviar-email-suspensao-teste`
 
-### `email_suspensao_config`
-Linha única (singleton). Guarda o toggle global.
-- `enabled boolean default false`
-- `updated_by uuid`, timestamps
+Por que nova (em vez de reaproveitar `send-email`): isolar Fase 2 de qualquer chamador antigo, manter contrato dedicado (template salvo + variáveis + log no histórico da aba) e permitir alterar/remover sem risco regressivo.
 
-### `email_suspensao_template`
-Linha única (singleton) com o template editável.
-- `assunto text`
-- `corpo text` (texto/HTML com `{{nome_cliente}}`, `{{motivo_suspensao}}`, `{{data}}`)
-- `updated_by uuid`, timestamps
-- Seed inicial com o assunto/corpo fornecidos no briefing
+Responsabilidades:
+- Validar JWT do chamador e checar que o perfil é `admin_master`, `diretor` ou `desenvolvedor` (mesmo gate da aba).
+- Ler template atual de `email_suspensao_template` (assunto + corpo).
+- Receber payload: `{ destinatario, variaveis?: { nome_cliente, motivo_suspensao, data } }`. Variáveis ausentes caem para os mesmos valores de exemplo já usados no preview (`Maria Souza`, `Inadimplência da mensalidade de maio`, data atual).
+- Renderizar assunto e corpo substituindo `{{nome_cliente}}`, `{{motivo_suspensao}}`, `{{data}}`.
+- Inserir linha em `email_suspensao_envios` com `status='pendente'`, `fluxo_origem='teste_manual'`, snapshot de `assunto_enviado` e `corpo_renderizado`.
+- Chamar Resend `POST https://api.resend.com/emails` com:
+  - `from`: `"Praticcar <nao-responder@praticcar.org>"` (sugestão; sender em `praticcar.org` exige domínio verificado no Resend — ver "Atenção" abaixo).
+  - `to: [destinatario]`, `subject`, `html` (corpo simples convertido com quebras de linha → `<br/>`) e `text` (corpo cru) para fallback.
+  - `Authorization: Bearer ${RESEND_API_KEY}` (secret já configurado).
+- Atualizar a linha em `email_suspensao_envios`:
+  - sucesso → `status='entregue'`, salvar `provider_message_id` (id retornado pelo Resend).
+  - falha → `status='falhou'`, salvar `erro_mensagem` com a mensagem do Resend.
+- Responder ao front com `{ ok, status, erro? }`.
 
-### `email_suspensao_envios` (estrutura pronta, fica vazia)
-- `cliente_nome text`, `cliente_id uuid null`
-- `destinatario text`
-- `fluxo_origem text` (ex.: `suspensao_inadimplencia`, `suspensao_48h`, etc. — livre por enquanto)
-- `assunto_enviado text`, `corpo_renderizado text`
-- `status text check in ('pendente','entregue','falhou')` default `'pendente'`
-- `erro_mensagem text null`
-- `enviado_em timestamptz default now()`
-- Índices: `(status)`, `(fluxo_origem)`, `(enviado_em desc)`, `(destinatario)`
+CORS padrão Lovable, validação Zod do payload, sem `verify_jwt` no `config.toml` (validação manual em código).
 
-### Grants + RLS
-Todas as 3 tabelas:
-- `GRANT SELECT, INSERT, UPDATE, DELETE ... TO authenticated; GRANT ALL ... TO service_role;` (sem anon)
-- RLS ligada; policies SELECT/INSERT/UPDATE/DELETE liberadas só para `has_role(auth.uid(),'admin_master')` OR `has_role(auth.uid(),'diretor')`
+### 2. Pequena migração no histórico
 
-## 2. Frontend
+`email_suspensao_envios` ganha duas colunas opcionais para a Fase 2:
+- `provider` (texto, default `'resend'`).
+- `provider_message_id` (texto, nullable) — id retornado pelo Resend, útil para futuras consultas de bounce/complaint.
 
-### Rota e navegação
-- `src/App.tsx`: nova rota `/relacionamento/emails` → `EmailsRelacionamento` (lazy)
-- `src/components/layout/AppSidebar.tsx`: novo item `{ title: 'E-mails', url: '/relacionamento/emails', icon: Mail }` no grupo `relacionamento`, **renderizado apenas quando o usuário é admin_master/diretor** (guard via `useUserRoles` ou padrão existente no projeto — verificar como outros itens admin-only fazem)
+Nenhuma alteração em RLS já existente. Sem mudança em `email_suspensao_config` nem em `email_suspensao_template`.
 
-### Páginas / componentes (`src/pages/relacionamento/emails/`)
-- `EmailsRelacionamento.tsx` — guard de acesso (admin_master/diretor; redireciona para `/acesso-negado` caso contrário) + Tabs com 2 abas: **Template** e **Histórico**. Toggle global no topo (acima das tabs).
-- `components/ToggleEnvioSuspensao.tsx` — Switch + label "Enviar e-mail em suspensões" lendo/gravando `email_suspensao_config`.
-- `components/TemplateEditor.tsx` — Input assunto, Textarea corpo, botões inserir variável (`{{nome_cliente}}`, `{{motivo_suspensao}}`, `{{data}}`), botão salvar, painel de pré-visualização com dados de exemplo (substituição simples por replace).
-- `components/HistoricoEnvios.tsx` — ListToolbar (busca por nome/e-mail) + selects de filtro (status, fluxo) + tabela paginada (reaproveitar `ServerPagination`). Empty state explicando que só popula quando o envio real for ligado.
-- `components/EnvioDetalheDialog.tsx` — Dialog com assunto enviado, corpo renderizado, erro (se houver) e botão **Reenviar** desabilitado com tooltip "Disponível após integração com o envio real".
+### 3. UI dentro da aba "E-mails"
 
-### Hooks (`src/hooks/emails-suspensao/`)
-- `useEmailSuspensaoConfig` — get + mutation update
-- `useEmailSuspensaoTemplate` — get + mutation update
-- `useEmailSuspensaoEnvios({ search, status, fluxo, page })` — query paginada
-- `useEmailSuspensaoEnvio(id)` — detalhe
+Acréscimos mínimos, sem refatorar o layout atual.
 
-Todos com invalidation via React Query.
+- **Botão "Enviar e-mail de teste"** no header da aba (ao lado do título), visível apenas para quem já tem acesso (admin_master / diretor / desenvolvedor — gate da página já cobre).
+- **`EnviarTesteDialog.tsx`** (novo): formulário com
+  - E-mail de destino (obrigatório, validação básica).
+  - Campos opcionais: nome do cliente, motivo da suspensão, data — placeholders com os valores de exemplo.
+  - Pré-visualização inline do assunto e do corpo renderizados (reusa `renderTemplateEmailSuspensao`).
+  - Botão "Enviar agora" → chama edge function via `supabase.functions.invoke('enviar-email-suspensao-teste', ...)`.
+  - Feedback imediato via `toast.success` / `toast.error` com a mensagem retornada; em caso de erro, exibe também o motivo dentro do próprio dialog para o operador conferir antes de fechar.
+  - Após sucesso/falha, invalida `KEY_ENVIOS` para o histórico atualizar.
+- **`HistoricoEnvios.tsx`**: nenhuma alteração estrutural; passa a popular naturalmente. Filtro de fluxo já lista "teste_manual" via `useEmailSuspensaoFluxos`.
+- **`EnvioDetalheDialog.tsx`**: já mostra assunto, corpo renderizado e status — adicionar bloco "Mensagem de erro" quando `erro_mensagem` não for nulo (texto destacado em tom destrutivo). Mantém o "Reenviar" desabilitado (Fase 3).
 
-## 3. Fora de escopo (fase posterior, não tocar agora)
-- Edge function de envio / integração Resend
-- Leitura do toggle pelos fluxos de suspensão existentes
-- Reenvio real (botão fica desabilitado)
-- Mudanças em qualquer fluxo de suspensão atual
+### 4. Hook novo
 
-## Critérios de aceite
-- `/relacionamento/emails` acessível somente a admin_master/diretor; demais perfis recebem 403/acesso negado e o item nem aparece no sidebar.
-- Template inicial já vem populado (seed) com o assunto/corpo do briefing.
-- Salvar template e alternar toggle persiste e sobrevive a reload.
-- Pré-visualização substitui as 3 variáveis por dados de exemplo.
-- Histórico renderiza vazio sem erros, com filtros e paginação funcionais.
-- Nenhum fluxo de suspensão existente é modificado.
+`useEnviarEmailTeste` (em `src/hooks/emails-suspensao/`): `useMutation` que chama a edge function, com `onSuccess` invalidando `KEY_ENVIOS` e fazendo toast.
+
+### 5. Escopo desta fase — invariantes
+
+- Toggle global `email_suspensao_config.enabled` segue sem efeito; não é lido por nenhum fluxo.
+- Nenhum trigger novo, nenhum cron novo, nenhum chamador além do dialog de teste.
+- Edge function `send-email` legacy não é tocada.
+- `auth-email-hook`, fluxos de suspensão de cobertura, fluxos de cobrança — intocados.
+
+---
+
+### Atenção operacional (não bloqueia a entrega, mas o diretor precisa saber antes de validar)
+
+Para `nao-responder@praticcar.org` funcionar sem cair em spam/rejeição, o domínio `praticcar.org` precisa estar **verificado no painel da Resend** (registros SPF + DKIM + DMARC publicados no DNS). Se ainda não estiver:
+- Os envios podem ser aceitos pela Resend mas marcados como spam pelos provedores, **ou**
+- A Resend pode rejeitar com `"The from address is not verified"` — nesse caso o histórico vai logar `falhou` com a mensagem exata, exatamente o comportamento esperado pra você validar.
+
+Se preferir validar primeiro sem depender do DNS, posso usar `from: "Praticcar <onboarding@resend.dev>"` como fallback temporário e trocar para `nao-responder@praticcar.org` assim que o domínio estiver verificado. Me avise no momento de implementar qual caminho seguir.
+
+### Critérios de aceite
+
+- Botão "Enviar e-mail de teste" visível apenas para admin_master/diretor/desenvolvedor.
+- Envio para e-mail válido com Resend OK → histórico mostra linha "entregue", origem "teste_manual", com assunto e corpo renderizados visíveis no detalhe.
+- Envio com domínio não verificado / e-mail inválido / Resend retornando erro → histórico mostra linha "falhou" com `erro_mensagem` exibido no detalhe.
+- Variáveis preenchidas no formulário aparecem corretamente substituídas no corpo enviado; vazias usam os valores de exemplo.
+- Nenhum fluxo de suspensão existente alterado; toggle global segue inerte.
