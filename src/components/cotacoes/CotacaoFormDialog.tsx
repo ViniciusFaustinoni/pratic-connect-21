@@ -1787,7 +1787,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           cenario_adesao: cenarioExterno,
         } : {}),
         // Tipo da cotação (informativo) — coluna direta + espelho em dados_extras
-        tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as any,
+        // Guarda canônica: 'troca_titularidade' e 'substituicao_placa' SÓ podem
+        // ser definidos via fluxos de origem (origemTroca/origemSubstituicao).
+        // Se o operador escolher esses valores no dropdown sem o fluxo canônico,
+        // rebaixamos para 'adesao' para evitar cotação órfã sem solicitação vinculada.
+        tipo_entrada: (
+          origemTroca
+            ? 'troca_titularidade'
+            : origemSubstituicao
+              ? 'substituicao_placa'
+              : (tipoCotacao === 'troca_titularidade' || tipoCotacao === 'substituicao_placa')
+                ? 'adesao'
+                : (tipoCotacao || 'adesao')
+        ) as any,
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
