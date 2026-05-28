@@ -13013,6 +13013,7 @@ export type Database = {
           corpo: string
           created_at: string
           fluxo_key: string
+          formato: string
           id: string
           nome: string
           updated_at: string
@@ -13025,6 +13026,7 @@ export type Database = {
           corpo?: string
           created_at?: string
           fluxo_key: string
+          formato?: string
           id?: string
           nome: string
           updated_at?: string
@@ -13037,6 +13039,7 @@ export type Database = {
           corpo?: string
           created_at?: string
           fluxo_key?: string
+          formato?: string
           id?: string
           nome?: string
           updated_at?: string

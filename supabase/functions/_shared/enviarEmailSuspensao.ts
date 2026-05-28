@@ -6,6 +6,8 @@
 // - Registra resultado em email_suspensao_envios (status: pendente → entregue / falhou / sem_email).
 // - NUNCA lança — falhas são silenciadas (logadas em console.error) para não derrubar o fluxo principal.
 
+import { envelopeEmailPraticcar } from './email-layout-praticcar.ts';
+
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM_ADDRESS = 'Praticcar <nao-responder@praticcar.org>';
 
@@ -13,8 +15,21 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function corpoParaHtml(corpo: string): string {
-  return `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.6;white-space:pre-wrap">${escapeHtml(corpo)}</div>`;
+/** Converte o miolo (texto puro OU HTML) no HTML interno a ser injetado no wrapper. */
+function corpoParaMiolo(corpo: string, formato: 'html' | 'texto'): string {
+  if (formato === 'html') {
+    // Template já é HTML — confiamos no editor visual. Apenas garantimos cor/tamanho coerente.
+    return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;line-height:1.6;">${corpo}</div>`;
+  }
+  // Compat retro: templates antigos em texto puro mantêm pre-wrap + escape.
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;line-height:1.6;white-space:pre-wrap;">${escapeHtml(corpo)}</div>`;
+}
+
+/** Texto puro de fallback para clientes de e-mail sem HTML. */
+function corpoParaTexto(corpo: string, formato: 'html' | 'texto'): string {
+  if (formato === 'texto') return corpo;
+  // Strip básico de tags
+  return corpo.replace(/<br\s*\/?>(?:\s*\n?)/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function render(text: string, vars: Record<string, string>): string {
@@ -104,7 +119,7 @@ export async function enviarEmailSuspensao(
     // 2) Template + toggle individual
     const { data: tpl } = await supabase
       .from('email_suspensao_templates')
-      .select('id, fluxo_key, assunto, corpo, ativo')
+      .select('id, fluxo_key, assunto, corpo, ativo, formato')
       .eq('fluxo_key', templateKey)
       .maybeSingle();
     if (!tpl) {
@@ -197,8 +212,12 @@ export async function enviarEmailSuspensao(
           from: FROM_ADDRESS,
           to: [destNorm],
           subject: assuntoRender,
-          html: corpoParaHtml(corpoRender),
-          text: corpoRender,
+          html: envelopeEmailPraticcar({
+            assunto: assuntoRender,
+            corpoHtml: corpoParaMiolo(corpoRender, (tpl.formato ?? 'html') as 'html' | 'texto'),
+            preHeader: assuntoRender,
+          }),
+          text: corpoParaTexto(corpoRender, (tpl.formato ?? 'html') as 'html' | 'texto'),
         }),
       });
       const raw = await r.text();

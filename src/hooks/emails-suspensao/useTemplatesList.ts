@@ -14,6 +14,7 @@ export interface EmailSuspensaoTemplateItem {
   assunto: string;
   corpo: string;
   ativo: boolean;
+  formato: 'html' | 'texto';
   variaveis_disponiveis: EmailTemplateVariavel[];
   updated_at: string;
 }
@@ -26,11 +27,12 @@ export function useEmailSuspensaoTemplatesList() {
     queryFn: async (): Promise<EmailSuspensaoTemplateItem[]> => {
       const { data, error } = await supabase
         .from('email_suspensao_templates')
-        .select('id, fluxo_key, nome, assunto, corpo, ativo, variaveis_disponiveis, updated_at')
+        .select('id, fluxo_key, nome, assunto, corpo, ativo, formato, variaveis_disponiveis, updated_at')
         .order('nome', { ascending: true });
       if (error) throw error;
       return (data ?? []).map((r: any) => ({
         ...r,
+        formato: (r.formato === 'texto' ? 'texto' : 'html') as 'html' | 'texto',
         variaveis_disponiveis: Array.isArray(r.variaveis_disponiveis)
           ? r.variaveis_disponiveis
           : [],
@@ -48,12 +50,14 @@ export function useUpdateEmailSuspensaoTemplateItem() {
       assunto?: string;
       corpo?: string;
       ativo?: boolean;
+      formato?: 'html' | 'texto';
     }) => {
       const { data: userRes } = await supabase.auth.getUser();
       const patch: Record<string, unknown> = { updated_by: userRes?.user?.id ?? null };
       if (input.assunto !== undefined) patch.assunto = input.assunto;
       if (input.corpo !== undefined) patch.corpo = input.corpo;
       if (input.ativo !== undefined) patch.ativo = input.ativo;
+      if (input.formato !== undefined) patch.formato = input.formato;
       const { error } = await supabase
         .from('email_suspensao_templates')
         .update(patch)

@@ -1,79 +1,52 @@
-## Parte D — Plano cirúrgico (2 deploys)
+## Objetivo
 
-Fluxo confirmado: gatilho → WhatsApp e e-mail em paralelo → helper checa condições → renderiza → Resend → registra no histórico. Tudo rastreável em `/relacionamento/emails`.
+Dar credibilidade visual aos e-mails de suspensão:
+1. Editor do corpo igual ao de **Documentos** (Tiptap, mesma toolbar/abas), salvando HTML real.
+2. Todo e-mail é envelopado automaticamente no **layout institucional Praticcar** (cabeçalho azul, miolo, rodapé com CNPJ) — operador edita só o miolo.
 
----
+## Mudanças
 
-### DEPLOY 1 — Observabilidade no helper `enviarEmailSuspensao.ts`
+### 1. Coluna `formato` no template (migration)
+- `email_suspensao_templates.formato text default 'html'` (`'html' | 'texto'`). Templates antigos viram `'texto'` no backfill para preservar render `pre-wrap` atual.
+- Sem alterações estruturais nem em `email_suspensao_envios` (já guarda `corpo_renderizado` como string).
 
-**Problema:** hoje 3 estados de early-return (`template_ausente`, `template_inativo`, `desativado`) saem silenciosamente — não inserem linha em `email_suspensao_envios`. Sem isso, o histórico fica vazio enquanto o template de `inadimplencia` não existir, e fica impossível validar o Deploy 2.
+### 2. Editor visual — `TemplateEditor.tsx` e `TemplateEditorDialog.tsx`
+Trocar o `<Textarea>` por um **EmailEditor** novo em `src/pages/relacionamento/emails/components/EmailBodyEditor.tsx`, modelado no editor de Documentos:
+- Tiptap (`StarterKit + Underline + TextAlign + Table + Placeholder`)
+- Toolbar reaproveitada do `documentos/tiptap/EditorToolbar` (negrito, itálico, cor, alinhamento, listas, link, tabela)
+- Abas **Visual / HTML / Preview** (mesmo padrão de Documentos)
+- Botões "Inserir variável" continuam funcionando (inserem `{{var}}` na posição do cursor do Tiptap)
+- `onChange` devolve HTML; salva em `corpo` + grava `formato='html'`
+- Para templates legados (`formato='texto'`), abre em modo compatível: editor mostra texto convertido em `<p>`s preservando quebras, mas o usuário pode promover para HTML salvando.
 
-**Mudança:** adicionar `INSERT` em `email_suspensao_envios` nos 3 caminhos de saída antecipada, antes do `return`. Mesma assinatura usada hoje no `sem_email`:
-- `status: 'sem_template'` quando template não existe
-- `status: 'template_inativo'` quando existe mas `ativo=false`
-- `status: 'desativado'` quando toggle global ou individual está off (registra qual)
+### 3. Wrapper institucional (sempre aplicado no envio)
+Novo arquivo `supabase/functions/_shared/email-layout-praticcar.ts` exporta `envelopeEmailPraticcar({ assunto, corpoHtml })` que devolve HTML completo inspirado no `termo-afiliacao-template.ts`:
+- `<!doctype html>` + estilos inline email-safe (tabela 600px centralizada — não `@page`/A4)
+- Header azul `#1e40af` com nome "Praticcar Proteção Veicular" centralizado
+- Corpo branco com o HTML do template injetado (sem escape)
+- Rodapé cinza com CNPJ, endereço, "Este é um e-mail automático — não responda" e nota "Em caso de dúvidas, fale conosco pelo WhatsApp"
+- Compatível com Gmail/Outlook (tabelas + inline styles, fontes Arial)
 
-Campos: `fluxo_key`, `associado_id`, `status`, `motivo` (string curta), `created_at`. Sem `resend_id`, sem `email_destino` se não disponível.
+### 4. `enviarEmailSuspensao.ts`
+- Substituir `corpoParaHtml(corpoRender)` por:
+  - se `tpl.formato === 'html'`: usar `corpoRender` cru
+  - se `'texto'`: manter `escapeHtml + pre-wrap` (compat retro)
+- Envelopar SEMPRE pelo `envelopeEmailPraticcar({ assunto: assuntoRender, corpoHtml: miolo })` antes de mandar pro Resend.
+- `corpo_renderizado` gravado em `email_suspensao_envios` continua sendo só o miolo (auditoria leve). O HTML final completo não é persistido (pode ser regenerado).
 
-**Não muda:**
-- Happy path (`nao_instalacao` com template ativo): zero alteração — fluxos 1 e 2 já em produção continuam idênticos.
-- Assinatura da função, parâmetros, retorno.
-- Lógica de render/Resend.
+### 5. Preview na tela do template
+- `renderTemplateEmailSuspensao` / `renderPreview` passam a renderizar o **envelope completo** num `<iframe srcDoc>` (igual a Documentos faz com o termo), para o operador ver exatamente o que o cliente vê.
 
-**Entrega:** mostro o diff exato do helper antes de deployar. Aguardo seu OK. Deploy isolado. Validação: você dispara uma suspensão de não-instalação real e confere que (a) e-mail continua saindo e (b) histórico continua mostrando `enviado` como hoje.
+## Não muda
+- WhatsApp paralelo
+- Tabelas `email_suspensao_envios`, `email_suspensao_config`
+- Fluxos do cron (suspensão por inadimplência / não-instalação) — só passa a chamar o helper já atualizado
+- Toggle global e toggle por template
+- Edição de assunto (segue Input simples)
 
----
+## Deploy
 
-### DEPLOY 2 — Cron `cron-suspender-inadimplentes` chama helper em paralelo
-
-**Local exato:** `supabase/functions/cron-suspender-inadimplentes/index.ts`, dentro do bloco `if (associadoUser?.user_id)` que hoje só chama `disparar-notificacao` (linha ~182).
-
-**Mudança:** adicionar import de `enviarEmailSuspensao` do `_shared/` e, **depois** do `try/catch` atual do WhatsApp, um novo `try/catch` independente:
-
-```ts
-try {
-  await enviarEmailSuspensao({
-    fluxo_key: 'inadimplencia',
-    associado_id: associadoId,
-    vars: { valor, dias_atraso },
-  });
-} catch (emailErr) {
-  console.error('[cron-suspender-inadimplentes] erro e-mail', emailErr);
-}
-```
-
-**Não muda:**
-- Chamada de `disparar-notificacao` com `subtipo:'suspensao'` — intacta. WhatsApp continua saindo como hoje.
-- E-mail genérico do `disparar-notificacao` — continua saindo (decisão de desligar fica pra quando o template `inadimplencia` existir).
-- Subtipos `atraso`, `suspensao_iminente`, `vencimento` — 100% inalterados.
-- `ContratoDetalhe.tsx` — confirmado que linha 306 é só timeline de exibição, não há call-site real de suspensão manual. Nada a mudar.
-
-**Comportamento pós-deploy 2 (sem template `inadimplencia`):**
-- WhatsApp ✅ sai como hoje
-- E-mail genérico do `disparar-notificacao` ✅ sai como hoje
-- Helper novo ❌ não envia, mas registra `sem_template` no histórico (graças ao Deploy 1)
-
-**Quando você criar o template `inadimplencia` e ativar o toggle:**
-- WhatsApp ✅
-- E-mail genérico ✅ (até você decidir desligar)
-- E-mail novo ✅ começa a sair junto, rastreável em `/relacionamento/emails`
-
----
-
-### Sequência
-
-1. Eu abro o helper, monto o diff do Deploy 1, te mostro.
-2. Você aprova o diff.
-3. Deploy 1 isolado. Você valida que fluxos 1 e 2 (não-instalação) seguem normais.
-4. Eu monto o diff do Deploy 2, te mostro.
-5. Você aprova. Deploy 2.
-6. Próxima suspensão por inadimplência: você confere no histórico que aparece `sem_template` pra inadimplência (e nada quebrou no WhatsApp).
-
----
-
-### Riscos
-
-- **Único risco real:** se algum outro lugar do código chama `enviarEmailSuspensao` esperando que early-returns **não** insiram linha, o Deploy 1 adiciona ruído no histórico desse caller. Mitigação: hoje só fluxos 1 e 2 chamam o helper, e ambos passam pelo happy path — early-returns só disparam em config quebrada, que é exatamente o que queremos ver no histórico.
-- Nenhum risco no Deploy 2: novo `try/catch` isolado, falha do helper não afeta WhatsApp nem o resto do cron.
-
-Aguardando seu OK pra abrir o helper e te mostrar o diff do Deploy 1.
+1. Migration `formato`
+2. Front: `EmailBodyEditor` + ajuste em `TemplateEditor.tsx`, `TemplateEditorDialog.tsx`, preview iframe
+3. Edge: `email-layout-praticcar.ts` + ajuste em `enviarEmailSuspensao.ts`
+4. Re-deploy de `cron-suspender-inadimplentes` e `cron-suspender-cobertura-inativacao` (não muda código deles, só puxam o helper atualizado)
