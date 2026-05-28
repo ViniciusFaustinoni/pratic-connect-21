@@ -1536,6 +1536,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Erro:', error);
+    if (error instanceof ConsultorActionableError) {
+      return respostaErroEstruturado(error, corsHeaders);
+    }
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
