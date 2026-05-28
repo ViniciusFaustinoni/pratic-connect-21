@@ -554,9 +554,14 @@ export function useGerarContrato() {
         body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Propaga o erro original (com .context) para o toastErroEdge extrair code/hint
+        (error as any).__cotacaoId = cotacaoId;
+        (error as any).__vendedorId = vendedorId;
+        throw error;
+      }
       if (!data.success) throw new Error(data.error);
-      
+
       return data.contrato;
     },
     onSuccess: () => {
@@ -564,8 +569,28 @@ export function useGerarContrato() {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       toast.success('Proposta gerada com sucesso!');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao gerar proposta');
+    onError: async (error: any) => {
+      const { toastErroEdge } = await import('@/lib/ui/toastErroEdge');
+      const cotacaoId = error?.__cotacaoId ?? null;
+      const vendedorId = error?.__vendedorId;
+      await toastErroEdge(error, {
+        contexto: 'Gerar proposta',
+        emailFix: cotacaoId
+          ? {
+              cotacaoId,
+              onRetry: async () => {
+                const { data, error: err2 } = await supabase.functions.invoke('contrato-gerar', {
+                  body: { cotacao_id: cotacaoId, vendedor_id: vendedorId },
+                });
+                if (err2) throw err2;
+                if (!data?.success) throw new Error(data?.error || 'Erro ao gerar proposta');
+                queryClient.invalidateQueries({ queryKey: ['contratos'] });
+                queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+                toast.success('Proposta gerada com sucesso!');
+              },
+            }
+          : undefined,
+      });
     },
   });
 }
