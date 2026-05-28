@@ -628,6 +628,7 @@ const App = () => (
               <Route path="/relacionamento/troca-titularidade" element={<TrocaTitularidade />} />
               <Route path="/relacionamento/debitos" element={<RelacionamentoTrocas />} />
               <Route path="/relacionamento/analises" element={<AnalisesRelacionamento />} />
+              <Route path="/relacionamento/emails" element={<EmailsRelacionamento />} />
               <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               
               {/* Contabilidade */}
