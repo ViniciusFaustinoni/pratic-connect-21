@@ -118,9 +118,24 @@ serve(async (req) => {
     const remoteVehicleId = device?.relationships?.vehicle?.id
       || device?.relationships?.vehicle?.data?.id
       || null;
-    const remotePlate = device?.relationships?.vehicle?.attributes?.plate
+    let remotePlate: string | null = device?.relationships?.vehicle?.attributes?.plate
       || device?.relationships?.vehicle?.data?.attributes?.plate
       || null;
+
+    // Sem includes, buscamos a placa diretamente quando há vehicle_id remoto.
+    if (remoteVehicleId && !remotePlate) {
+      try {
+        const vResp = await fetch(`${baseUrl}/vehicles/${remoteVehicleId}`, {
+          headers: { Authorization: `Bearer ${token}`, "public-key": publicKey, "Content-Type": "application/json" },
+        });
+        if (vResp.ok) {
+          const vJson = await vResp.json();
+          remotePlate = vJson?.data?.attributes?.plate || null;
+        }
+      } catch (e) {
+        console.warn("[reconciliar-softruck] vehicle fetch falhou", e);
+      }
+    }
 
     // Buscar placa local
     let localPlaca: string | null = null;
