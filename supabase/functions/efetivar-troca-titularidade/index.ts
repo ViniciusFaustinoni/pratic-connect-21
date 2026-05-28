@@ -266,12 +266,30 @@ async function executarSoftruckTrocaVinculo(
     if (found.length > 0) {
       novoUserId = String(found[0]?.id ?? found[0]?.user?.id);
     } else {
+      // Softruck exige relationships.roles ao criar usuário — resolve REGULAR via listar-roles
+      let defaultRoleId = Deno.env.get("SOFTRUCK_DEFAULT_USER_ROLE_ID") || "";
+      if (!defaultRoleId) {
+        try {
+          const rolesRes = await callSoftruck("listar-roles", {});
+          const rolesArr = extractItems(rolesRes);
+          const regular =
+            rolesArr.find((r: any) => r?.attributes?.name === "REGULAR") ||
+            rolesArr.find((r: any) => r?.attributes?.name === "PROVIDER");
+          defaultRoleId = String(regular?.id || "");
+        } catch (e) {
+          console.warn("[softruck-troca-vinculo] listar-roles falhou:", (e as Error)?.message);
+        }
+      }
+      if (!defaultRoleId) defaultRoleId = "rkov8pZ58Q93KgV"; // fallback REGULAR
+
+      const usernameBase = cpfNovo || (emailNovo ? emailNovo.split("@")[0] : `assoc_${novoAssociadoId.slice(0, 8)}`);
       const created = await callSoftruck("criar-usuario", {
-        username: emailNovo || cpfNovo,
+        username: usernameBase,
         email: emailNovo,
         nome: nomeNovo,
         telefone: telNovo,
         cpf: cpfNovo,
+        roleId: defaultRoleId,
       });
       if ((created as any)?.error) throw new Error(JSON.stringify((created as any).error));
       const cItems = extractItems(created);
@@ -280,6 +298,7 @@ async function executarSoftruckTrocaVinculo(
       ) || undefined;
     }
     if (!novoUserId) throw new Error("user_id não retornado pela Softruck após buscar/criar");
+
   } catch (e) {
     return { ok: false, etapa: "resolve_user", msg: (e as Error)?.message ?? String(e) };
   }
