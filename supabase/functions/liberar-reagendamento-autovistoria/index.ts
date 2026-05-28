@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
     }
 
     const motivo = body.motivo?.trim() || null;
+    const enviarWhatsapp = body.enviar_whatsapp !== false; // default true (retrocompat)
     const liberadoEm = new Date().toISOString();
 
     const { data: contratos, error: errC } = await supabase
