@@ -30,6 +30,54 @@ interface Params {
   placa: string | null | undefined;
   imei: string | null | undefined;
   veiculoIdAlvo: string;
+  /**
+   * Quando informado, a validação grava o estado CANÔNICO do rastreador:
+   * status='instalado' + associado_id = novoAssociadoId. Sem isso o rastreador
+   * fica como `estoque` e o `efetivar-troca-titularidade` não enxerga ele como
+   * "rastreador instalado", pulando o reaponte na plataforma externa.
+   */
+  novoAssociadoId?: string | null;
+}
+
+/**
+ * Promove o rastreador para o estado canônico pós-validação:
+ *   - status='instalado'
+ *   - veiculo_id = veículo desta troca
+ *   - associado_id = novo titular (quando conhecido)
+ *   - plataforma sincronizada
+ *
+ * Idempotente: só grava os campos que estão desalinhados. Falhas locais não
+ * abortam a validação — só são logadas, porque a próxima retomada do
+ * `efetivar-troca` re-resolve.
+ */
+async function promoverRastreadorParaInstalado(
+  rastreadorId: string,
+  veiculoIdAlvo: string,
+  origem: ValidacaoOrigem,
+  novoAssociadoId?: string | null,
+) {
+  try {
+    const { data: atual } = await supabase
+      .from('rastreadores')
+      .select('id, status, veiculo_id, associado_id, plataforma')
+      .eq('id', rastreadorId)
+      .maybeSingle();
+    if (!atual) return;
+    const patch: Record<string, unknown> = {};
+    if ((atual.status || '').toLowerCase() !== 'instalado') patch.status = 'instalado';
+    if (atual.veiculo_id !== veiculoIdAlvo) patch.veiculo_id = veiculoIdAlvo;
+    if (novoAssociadoId && atual.associado_id !== novoAssociadoId) patch.associado_id = novoAssociadoId;
+    if ((atual.plataforma || '').toLowerCase() !== origem) patch.plataforma = origem;
+    if (Object.keys(patch).length === 0) return;
+    const { error } = await supabase.from('rastreadores').update(patch).eq('id', rastreadorId);
+    if (error) {
+      console.warn(TAG, 'promover_rastreador_falhou', { rastreadorId, error: error.message });
+    } else {
+      console.log(TAG, 'rastreador_promovido_instalado', { rastreadorId, patch });
+    }
+  } catch (e) {
+    console.warn(TAG, 'promover_rastreador_excecao', e);
+  }
 }
 
 function sanPlaca(p?: string | null) {
@@ -60,7 +108,7 @@ async function checarConflitoLocal(imei: string, veiculoIdAlvo: string) {
   return { rastreadorId: r.id, placaOutra: v.placa || null };
 }
 
-export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params): Promise<ResultadoValidacaoImei> {
+export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo, novoAssociadoId }: Params): Promise<ResultadoValidacaoImei> {
   const placaSan = sanPlaca(placa);
   const imeiSan = sanImei(imei);
   const placaAtualLabel = placaSan || '(sem placa)';
@@ -107,6 +155,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
       const idsOk = origem === 'rede_veiculos' ? !!rLocal0.plataforma_device_id : true;
       if (origem && livre && idsOk) {
         console.log(TAG, 'estoque_local_ok', { imei: mascararImei(imeiSan), plataforma, status });
+        await promoverRastreadorParaInstalado(rLocal0.id, veiculoIdAlvo, origem, novoAssociadoId);
         return { ok: true, origem, rastreadorId: rLocal0.id };
       }
       if (origem === 'rede_veiculos' && !idsOk) {
@@ -153,6 +202,9 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
             rastreadorId = rLocal?.id || null;
           } catch (e) {
             console.warn(TAG, 'softruck.upsert_local_falhou', e);
+          }
+          if (rastreadorId) {
+            await promoverRastreadorParaInstalado(rastreadorId, veiculoIdAlvo, 'softruck', novoAssociadoId);
           }
           return { ok: true, origem: 'softruck', rastreadorId };
         }
@@ -213,6 +265,7 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo }: Params
       const idsRedeOk = !!rLocal?.plataforma_device_id;
       if (rLocal?.veiculo_id && rLocal.veiculo_id === veiculoIdAlvo && idsRedeOk) {
         console.log(TAG, 'rede.match_ok', { imei: mascararImei(imeiSan) });
+        await promoverRastreadorParaInstalado(rLocal.id, veiculoIdAlvo, 'rede_veiculos', novoAssociadoId);
         return { ok: true, origem: 'rede_veiculos', rastreadorId: rLocal.id };
       }
       if (rLocal?.veiculo_id && rLocal.veiculo_id === veiculoIdAlvo && !idsRedeOk) {

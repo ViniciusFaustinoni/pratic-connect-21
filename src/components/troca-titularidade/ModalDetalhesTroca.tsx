@@ -114,19 +114,18 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
         placa,
         imei: imeiInput,
         veiculoIdAlvo: solicitacao.veiculo_id,
+        // Passa o novo titular para que validarImeiPorPlaca grave o estado CANÔNICO
+        // do rastreador (status='instalado' + associado_id). Sem isso, o
+        // efetivar-troca-titularidade não enxerga rastreador instalado e pula o
+        // reaponte na Softruck/Rede (bug do caso SRZ2E82 / 28-05-2026).
+        novoAssociadoId: solicitacao.novo_associado_id ?? null,
       });
       if (res.ok === false) {
         setErroValidacao(res.mensagem);
         toast.error(res.mensagem);
         return false;
       }
-      // Sucesso: registrar vínculo lógico local (se rastreador conhecido) para
-      // que a Fase 4 da troca aponte para o rastreador correto.
       if (res.rastreadorId) {
-        await supabase
-          .from('rastreadores')
-          .update({ veiculo_id: solicitacao.veiculo_id, plataforma: res.origem })
-          .eq('id', res.rastreadorId);
         qc.invalidateQueries({ queryKey: ['veiculo-completo', solicitacao.veiculo_id] });
       }
       setImeiValidado(true);
