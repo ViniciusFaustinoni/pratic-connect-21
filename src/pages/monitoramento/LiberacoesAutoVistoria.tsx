@@ -23,6 +23,7 @@ export default function LiberacoesAutoVistoria() {
 
   const [dialogLiberarOpen, setDialogLiberarOpen] = useState(false);
   const [motivoLiberar, setMotivoLiberar] = useState('');
+  const [enviarWhatsapp, setEnviarWhatsapp] = useState(true);
   const [alvosLiberar, setAlvosLiberar] = useState<string[]>([]);
 
   const [dialogCancelarOpen, setDialogCancelarOpen] = useState(false);
