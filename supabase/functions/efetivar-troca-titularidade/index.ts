@@ -2221,8 +2221,23 @@ serve(async (req) => {
 
 
     // 16. Atualiza solicitacoes_troca_titularidade — marca como efetivada
+    // REGRA DAS 3 PONTAS — marca como efetivacao_pendente. A promoção para
+    // 'efetivada' acontece via fn_promover_troca_se_completo, que checa SGA,
+    // plataforma do rastreador e fila pendente.
+    //
+    // plataforma_rastreador_status:
+    //  - 'nao_aplicavel' SÓ quando precisaRastr === false (sub-FIPE / categoria
+    //    sem rastreador). Calculado aqui via RPC para não contar com cache local.
+    //  - caso contrário, 'pendente' como ponto de partida. O cron-softruck-troca-retry
+    //    (ou a sondagem real no helper) é quem promove pra 'sincronizado'.
+    let plataformaStatusFinal: string = 'pendente';
+    try {
+      const { data: precisa } = await supabase.rpc('fn_veiculo_precisa_rastreador', { _veiculo_id: veiculoId });
+      if (precisa !== true) plataformaStatusFinal = 'nao_aplicavel';
+    } catch (_e) { /* mantém 'pendente' em caso de erro */ }
+
     await supabase.from('solicitacoes_troca_titularidade').update({
-      status: 'efetivada',
+      status: 'efetivacao_pendente',
       efetivada_em: new Date().toISOString(),
       novo_associado_id: novoAssociadoId,
       sga_status: sgaStatus === 'nao_aplicavel' ? 'pendente' : sgaStatus,
@@ -2230,9 +2245,18 @@ serve(async (req) => {
       sga_codigo_associado_novo: sgaCodigoAssociadoNovo,
       sga_codigo_veiculo_novo: sgaCodigoVeiculoNovo,
       sga_sincronizado_em: sgaStatus === 'sincronizado' ? new Date().toISOString() : null,
+      plataforma_rastreador_status: plataformaStatusFinal,
     }).eq('id', solicitacao_id).then(({ error }) => {
       if (error) console.warn('[efetivar-troca] update solicitacoes_troca:', error.message);
     });
+
+    // Fast-path: se as 3 pontas já estão OK no DB (caso típico: sem rastreador +
+    // SGA sincronizou inline), promove imediatamente pra 'efetivada'.
+    try {
+      await supabase.rpc('fn_promover_troca_se_completo', { _solicitacao_id: solicitacao_id });
+    } catch (e) {
+      console.warn('[efetivar-troca] fn_promover_troca_se_completo falhou:', (e as Error)?.message);
+    }
 
     console.log(`[efetivar-troca] ✅ Efetivação concluída com sucesso`);
 
