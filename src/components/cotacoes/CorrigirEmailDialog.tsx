@@ -62,17 +62,23 @@ export function CorrigirEmailProvider() {
       const updates: Promise<unknown>[] = [];
       if (detail.cotacaoId) {
         updates.push(
-          supabase.from('cotacoes').update({ email_solicitante: novoEmail }).eq('id', detail.cotacaoId),
+          Promise.resolve(
+            supabase.from('cotacoes').update({ email_solicitante: novoEmail }).eq('id', detail.cotacaoId),
+          ),
         );
       }
       if (detail.contratoId) {
         updates.push(
-          supabase.from('contratos').update({ cliente_email: novoEmail }).eq('id', detail.contratoId),
+          Promise.resolve(
+            supabase.from('contratos').update({ cliente_email: novoEmail }).eq('id', detail.contratoId),
+          ),
         );
       }
       if (detail.associadoId) {
         updates.push(
-          supabase.from('associados').update({ email: novoEmail }).eq('id', detail.associadoId),
+          Promise.resolve(
+            supabase.from('associados').update({ email: novoEmail }).eq('id', detail.associadoId),
+          ),
         );
       }
       await Promise.all(updates);
