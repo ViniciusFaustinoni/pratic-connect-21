@@ -324,7 +324,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { solicitacao_id, cenario_override, retry_sga } = body;
+    const { solicitacao_id, cenario_override, retry_sga, retry_softruck } = body;
 
     if (!solicitacao_id) {
       return new Response(JSON.stringify({ success: false, error: "solicitacao_id obrigatório" }), {
