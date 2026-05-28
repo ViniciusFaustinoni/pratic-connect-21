@@ -1,70 +1,69 @@
-## Diagnóstico
+# Aba E-mails em Relacionamento — fase 1 (UI + persistência)
 
-Ao investigar o preview com o usuário logado em `/dashboard` (admin@teste.com — Diretor), encontrei **duas causas independentes** que se somam e explicam tanto a "Aprovação do Monitoramento não carregar" quanto a lentidão geral. As duas precisam ser corrigidas.
+Escopo estrito: criar a interface e persistir template + toggle + estrutura de histórico. **Nenhuma** integração com fluxos de suspensão ou Resend nesta fase.
 
-### 1. Loop de remount da árvore (causa primária da lentidão)
+## 1. Backend (migration única)
 
-Os logs do console mostram, **uma vez por segundo, em loop**:
+Três tabelas novas, todas restritas a `admin_master` / `diretor` via `has_role()`.
 
-```
-SIGNED_IN  (currentUserId: undefined)
-INITIAL_SESSION (currentUserId: 4218616b)
-[ProtectedRoute] Usuário autenticado sem profile, redirecionando para login
-Multiple GoTrueClient instances detected
-[pendencias-documentos-rt] SUBSCRIBED <novo channel ID a cada ciclo>
-```
+### `email_suspensao_config`
+Linha única (singleton). Guarda o toggle global.
+- `enabled boolean default false`
+- `updated_by uuid`, timestamps
 
-O channel id do PendenciasBell muda a cada ciclo → a árvore React inteira está sendo desmontada/remontada. O `AuthProvider` é remontado, refaz `onAuthStateChange` (emite `SIGNED_IN`+`INITIAL_SESSION`), refaz fetch de profile/perfis, e dispara reinscrição de todos os realtime channels, refetch de TanStack Query, recriação do `publicSupabase` (daí o "Multiple GoTrueClient" recorrente).
+### `email_suspensao_template`
+Linha única (singleton) com o template editável.
+- `assunto text`
+- `corpo text` (texto/HTML com `{{nome_cliente}}`, `{{motivo_suspensao}}`, `{{data}}`)
+- `updated_by uuid`, timestamps
+- Seed inicial com o assunto/corpo fornecidos no briefing
 
-**Causa raiz:** o `ProtectedRoute` está vendo `loading=false` + `user!=null` + `profile==null` em uma janela muito curta após o `SIGNED_IN` (antes do `setProfile()` propagar), e dispara `<Navigate to="/auth">`. O `/auth` por sua vez detecta sessão e devolve para `/dashboard`. Ciclo. Cada volta gera um Suspense remount → spinner → fetch tudo de novo → skeletons que nunca somem.
+### `email_suspensao_envios` (estrutura pronta, fica vazia)
+- `cliente_nome text`, `cliente_id uuid null`
+- `destinatario text`
+- `fluxo_origem text` (ex.: `suspensao_inadimplencia`, `suspensao_48h`, etc. — livre por enquanto)
+- `assunto_enviado text`, `corpo_renderizado text`
+- `status text check in ('pendente','entregue','falhou')` default `'pendente'`
+- `erro_mensagem text null`
+- `enviado_em timestamptz default now()`
+- Índices: `(status)`, `(fluxo_origem)`, `(enviado_em desc)`, `(destinatario)`
 
-Confirmação:
-- O profile do user existe no banco (`profiles.user_id = 4218616b-…`, tipo=funcionario, bloqueado=false), as policies permitem `user_id = auth.uid()` — a query funciona.
-- A leitura é assíncrona e o `setProfile` acontece **depois** de `setLoading(false)` em alguns caminhos do `loadUserData`, e o branch "Mesmo usuário já carregado" também faz `setLoading(false)` antes de garantir `profile != null`.
+### Grants + RLS
+Todas as 3 tabelas:
+- `GRANT SELECT, INSERT, UPDATE, DELETE ... TO authenticated; GRANT ALL ... TO service_role;` (sem anon)
+- RLS ligada; policies SELECT/INSERT/UPDATE/DELETE liberadas só para `has_role(auth.uid(),'admin_master')` OR `has_role(auth.uid(),'diretor')`
 
-### 2. Tela "Aprovações do Monitoramento" — queries pesadas sem paginação
+## 2. Frontend
 
-`useAprovacoesMonitoramentoBreakdown` (usado pelo badge do sidebar **e** pelas abas) roda 6 queries em paralelo a cada 60s e a cada navegação. A do `associados` puxa **todos** os `servicos` com `status=concluida` (sem `limit`) com 3 joins aninhados, depois faz um segundo `in()` em `vistorias`. A de `liberacaoSuspensao` puxa todos os `veiculos` suspensos + todos os contratos em `in(veiculo_id, …)`.
+### Rota e navegação
+- `src/App.tsx`: nova rota `/relacionamento/emails` → `EmailsRelacionamento` (lazy)
+- `src/components/layout/AppSidebar.tsx`: novo item `{ title: 'E-mails', url: '/relacionamento/emails', icon: Mail }` no grupo `relacionamento`, **renderizado apenas quando o usuário é admin_master/diretor** (guard via `useUserRoles` ou padrão existente no projeto — verificar como outros itens admin-only fazem)
 
-Cada remount do bloco anterior **reexecuta tudo isso**. É por isso que os skeletons das abas Aprovação de Associados / Liberação de Suspensão / Processos Operacionais não resolvem visualmente — a UI nunca chega ao estado estável antes do próximo remount.
+### Páginas / componentes (`src/pages/relacionamento/emails/`)
+- `EmailsRelacionamento.tsx` — guard de acesso (admin_master/diretor; redireciona para `/acesso-negado` caso contrário) + Tabs com 2 abas: **Template** e **Histórico**. Toggle global no topo (acima das tabs).
+- `components/ToggleEnvioSuspensao.tsx` — Switch + label "Enviar e-mail em suspensões" lendo/gravando `email_suspensao_config`.
+- `components/TemplateEditor.tsx` — Input assunto, Textarea corpo, botões inserir variável (`{{nome_cliente}}`, `{{motivo_suspensao}}`, `{{data}}`), botão salvar, painel de pré-visualização com dados de exemplo (substituição simples por replace).
+- `components/HistoricoEnvios.tsx` — ListToolbar (busca por nome/e-mail) + selects de filtro (status, fluxo) + tabela paginada (reaproveitar `ServerPagination`). Empty state explicando que só popula quando o envio real for ligado.
+- `components/EnvioDetalheDialog.tsx` — Dialog com assunto enviado, corpo renderizado, erro (se houver) e botão **Reenviar** desabilitado com tooltip "Disponível após integração com o envio real".
 
-## Plano de correção
+### Hooks (`src/hooks/emails-suspensao/`)
+- `useEmailSuspensaoConfig` — get + mutation update
+- `useEmailSuspensaoTemplate` — get + mutation update
+- `useEmailSuspensaoEnvios({ search, status, fluxo, page })` — query paginada
+- `useEmailSuspensaoEnvio(id)` — detalhe
 
-### Passo 1 — Estancar o loop de redirect (prioridade máxima)
+Todos com invalidation via React Query.
 
-Em `src/components/ProtectedRoute.tsx`:
-- Adicionar uma janela de tolerância: enquanto `user && !profile && !error`, considerar o estado como ainda carregando e mostrar o loader em vez de `<Navigate to="/auth">`. Só redirecionar quando houver sinalização explícita de falha (timeout do AuthContext já existente, ou flag nova `profileLoadFailed`).
+## 3. Fora de escopo (fase posterior, não tocar agora)
+- Edge function de envio / integração Resend
+- Leitura do toggle pelos fluxos de suspensão existentes
+- Reenvio real (botão fica desabilitado)
+- Mudanças em qualquer fluxo de suspensão atual
 
-Em `src/contexts/AuthContext.tsx`:
-- No `loadUserData`, ordenar `setProfile()`/`setPerfis()` **antes** de `setLoading(false)` (já está, mas garantir que o branch "mesmo usuário já carregado" no `onAuthStateChange` não force `loading=false` quando ainda não há profile carregado).
-- Expor um `profileLoadFailed: boolean` que só vira true após o timeout de 15s ou erro real — esse é o sinal que o `ProtectedRoute` usa para finalmente redirecionar.
-
-Resultado esperado: cessa o `Navigate → /auth → /dashboard → remount`. O `AuthProvider` permanece montado e os channels deixam de reinscrever. O "Multiple GoTrueClient" some.
-
-### Passo 2 — Aliviar `useAprovacoesMonitoramentoBreakdown`
-
-Em `src/hooks/useAprovacoesMonitoramentoCount.ts`:
-- Substituir a query de `associados` por um `count` no servidor (RPC `select count(*) from servicos … where …`) em vez de baixar todas as linhas e filtrar no cliente. Mesma coisa para `liberacaoSuspensao`.
-- Aumentar `refetchInterval` de 60s para 5 min (badges não precisam de granularidade fina) e marcar `refetchOnWindowFocus: false`.
-- Manter um único `useQuery` compartilhado (já é, via key estável) e usar nas abas apenas o `data?.associados` etc. para o badge — os contadores totais vêm desse hook único; as listas detalhadas continuam com seus próprios hooks, que já paginam.
-
-### Passo 3 — Reduzir thrash de realtime
-
-Em `PendenciasDocumentosBell` (e demais subscribers de canais) — após o passo 1 isso deixa de remontar, mas vou conferir que o `useEffect` use `cleanup` correto e não recrie o channel a cada render por dependências instáveis.
-
-### Passo 4 — Validação
-
-1. Abrir `/dashboard` e confirmar no console: **apenas 1** `SIGNED_IN`, **1** `INITIAL_SESSION`, **1** `Multiple GoTrueClient` (esperado, vem do `publicClient`), e **um único** `SUBSCRIBED` por canal.
-2. Navegar para `Monitoramento → Aprovações do Monitoramento` e confirmar que as abas Aprovação de Associados, Liberação de Suspensão e Processos Operacionais saem do skeleton em <2s.
-3. Conferir tempo total das queries do badge no painel network (target: <500ms por count vs. atual de baixar todos os `servicos concluida`).
-
-### Arquivos a alterar
-- `src/components/ProtectedRoute.tsx` — janela de tolerância antes do redirect.
-- `src/contexts/AuthContext.tsx` — flag `profileLoadFailed`, garantir ordem `setProfile → setLoading(false)` em todos os branches.
-- `src/hooks/useAprovacoesMonitoramentoCount.ts` — usar `count` server-side, refetch 5 min, sem refetch on focus.
-- (opcional) Verificar `PendenciasDocumentosBell` e canal `auth-user-roles-${user.id}` por dependências instáveis.
-
-### Nada que NÃO será mexido
-- Lógica de negócio das abas (filtros, regras de aprovação, edges).
-- RLS, schemas, migrations.
-- `publicClient.ts` (o aviso "Multiple GoTrueClient" é normal — uma instância no `client.ts`, outra no `publicClient.ts` — só vira problema porque o loop o repete).
+## Critérios de aceite
+- `/relacionamento/emails` acessível somente a admin_master/diretor; demais perfis recebem 403/acesso negado e o item nem aparece no sidebar.
+- Template inicial já vem populado (seed) com o assunto/corpo do briefing.
+- Salvar template e alternar toggle persiste e sobrevive a reload.
+- Pré-visualização substitui as 3 variáveis por dados de exemplo.
+- Histórico renderiza vazio sem erros, com filtros e paginação funcionais.
+- Nenhum fluxo de suspensão existente é modificado.
