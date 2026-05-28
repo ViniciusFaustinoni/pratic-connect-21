@@ -1062,7 +1062,7 @@ serve(async (req) => {
         }
 
         const deleteData = {
-          data: ids.map((id: string) => ({ type: 'user_associations', id })),
+          data: ids.map((id: string) => ({ type: 'user_permission', id })),
         };
 
         await softruckRequest('DELETE', '/v2/vehicles/associations/users', token, deleteData);
