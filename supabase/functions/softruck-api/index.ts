@@ -1038,8 +1038,10 @@ serve(async (req) => {
         const { associationId } = data as { associationId: string };
         if (!associationId) throw new Error('associationId é obrigatório');
 
+        // Tipo correto retornado pela Softruck no listar = 'user_associations'.
+        // O type antigo 'user_permission' causa 500 "Associação entre ativo e usuário não encontrada".
         const deleteData = {
-          data: [{ type: 'user_permission', id: associationId }],
+          data: [{ type: 'user_associations', id: associationId }],
         };
 
         result = await softruckRequest('DELETE', '/v2/vehicles/associations/users', token, deleteData);
