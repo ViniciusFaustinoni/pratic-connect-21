@@ -212,8 +212,12 @@ export async function enviarEmailSuspensao(
           from: FROM_ADDRESS,
           to: [destNorm],
           subject: assuntoRender,
-          html: corpoParaHtml(corpoRender),
-          text: corpoRender,
+          html: envelopeEmailPraticcar({
+            assunto: assuntoRender,
+            corpoHtml: corpoParaMiolo(corpoRender, (tpl.formato ?? 'html') as 'html' | 'texto'),
+            preHeader: assuntoRender,
+          }),
+          text: corpoParaTexto(corpoRender, (tpl.formato ?? 'html') as 'html' | 'texto'),
         }),
       });
       const raw = await r.text();
