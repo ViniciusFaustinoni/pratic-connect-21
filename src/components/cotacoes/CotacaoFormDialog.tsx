@@ -2941,8 +2941,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 <SelectContent>
                   <SelectItem value="adesao">Cotação nova (adesão)</SelectItem>
                   <SelectItem value="inclusao">Inclusão de veículo</SelectItem>
-                  <SelectItem value="substituicao_placa">Substituição de veículo</SelectItem>
-                  <SelectItem value="troca_titularidade">Troca de titularidade</SelectItem>
                   <SelectItem value="reativacao">Reativação</SelectItem>
                   <SelectItem value="migracao">Migração</SelectItem>
                   <SelectItem value="outro">Outro (descrever)</SelectItem>
