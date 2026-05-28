@@ -25,6 +25,7 @@ export type PermissionKey =
   | 'isGerencia'
   | 'isDesenvolvedor'
   | 'isAdminMaster'
+  | 'canManageEmailsSuspensao'
   | 'canManageUsers'
   | 'canManageLeads'
   | 'canManagePlanos'
@@ -284,6 +285,9 @@ export function usePermissions() {
     canManageIntegracoes: hasPerm('canManageIntegracoes'),
     canApproveElegibilidade: hasPerm('canApproveElegibilidade'),
     canViewElegibilidadePendente: hasPerm('canViewElegibilidadePendente'),
+
+    // E-mails de suspensão: admin_master, desenvolvedor e diretor
+    canManageEmailsSuspensao: isAdminMaster || isDesenvolvedor || isDiretor,
   };
 
   return {
