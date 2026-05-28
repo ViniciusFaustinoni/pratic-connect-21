@@ -48,6 +48,7 @@ export default function LiberacoesAutoVistoria() {
   const abrirLiberar = (ids: string[]) => {
     setAlvosLiberar(ids);
     setMotivoLiberar('');
+    setEnviarWhatsapp(true);
     setDialogLiberarOpen(true);
   };
 
@@ -58,7 +59,11 @@ export default function LiberacoesAutoVistoria() {
   };
 
   const confirmarLiberar = async () => {
-    await liberar.mutateAsync({ contrato_ids: alvosLiberar, motivo: motivoLiberar || undefined });
+    await liberar.mutateAsync({
+      contrato_ids: alvosLiberar,
+      motivo: motivoLiberar || undefined,
+      enviar_whatsapp: enviarWhatsapp,
+    });
     setSelecionados(new Set());
     setDialogLiberarOpen(false);
   };
