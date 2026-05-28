@@ -1,87 +1,69 @@
+## Diagnóstico — placa SRZ2E82 / IMEI 863829079450860
 
-## Diagnóstico — LTC8G02 (IMEI 359366080311592)
+Reconstituí a linha do tempo pelos logs e pela `sga_sync_queue`:
 
-**Estado atual em `rastreadores`:**
-- `softruck_integration_status = PENDING`
-- `softruck_tentativas = 0`
-- `softruck_response_raw = NULL`
-- `softruck_last_attempt_at = 2026-05-28 18:54:56` (hoje)
-- `plataforma_device_id = 359366080311592` ⚠️ **é o próprio IMEI, não um ID real Softruck** (formato real seria tipo `qekgzQoqPJwdAr8`)
-- `plataforma_veiculo_id = PR97L1qVkzLnlrm` (formato real Softruck — vehicle foi criado)
-- `id_plataforma = 359366080311592` ⚠️ idem
-- Payload registrado: `{imei, veiculoId, associadoId, associadoEmail}`
+| Hora (UTC) | Etapa | Resultado |
+|---|---|---|
+| 20:27 | `aprovar-troca-monitoramento` registra aprovação | OK |
+| 20:54 | `efetivar-troca-titularidade` roda → SGA Hinova sincroniza, status `efetivada` | **SGA OK** |
+| 20:55:25 | Mesmo fluxo tenta o reaponte Softruck (Passo 2 `listar-usuarios-veiculo`) → 400/`includes` inválido (bug do dia) → **enfileira** `sga_sync_queue` linha `72c5faf1` etapa `troca_titularidade:softruck_reaponte_usuario` | **Softruck falhou** |
+| 20:58:57 | Retry manual antes do deploy do fix → ainda etapa `listar` errando | falhou |
+| 20:59:52 | Retry manual após o fix → DESASSOCIAR + ASSOCIAR → `[SOFTRUCK_TROCA_VINCULO_OK] status=feito` → **Softruck agora correto na plataforma** | OK lógico |
+| 21:00 / 21:05 | Cron `cron-softruck-troca-retry` busca pendentes — query retorna 0 (race entre o UPDATE concluido e o select; depois eu reabri) | "nada a processar" |
+| 21:09 / 21:10 | Cron tenta novamente o mesmo item → helper lista, acha 0 vínculos antigos do CPF do antigo titular, mas ainda tenta DELETE com `associationId` em cache → Softruck 500 `"Associação entre ativo e usuário não encontrada"` → cron incrementa `tentativas` | **trava em loop** |
 
-**Logs de `softruck-ativar-dispositivo`**: zerados para este IMEI/placa. A função iniciou (gravou PENDING) mas nunca completou o passo 8.5 (UPDATE final canônico com `SUCCESS`).
+### Por que não terminou sozinho
 
-**O que aconteceu**: o fluxo de ativação criou o veículo na Softruck (vehicle_id real), populou `plataforma_device_id` com o IMEI como placeholder otimista vindo de outro caminho (`popular-ids-softruck` ou hook anterior), e morreu antes de chamar `criar-device` / `ativar-device`. A guarda do `softruck-ativar-dispositivo` (linhas 185–200) considera "já totalmente ativado" quando ambos IDs estão preenchidos — então uma nova invocação retorna `already_activated:true` sem fazer nada, ainda que o device IMEI nunca tenha sido criado na Softruck.
+- **A 1ª efetivação original falhou no Softruck** por causa do bug `includes` do `softruck-api` (`query.includes.devices[0] must be one of...`) — esse já foi corrigido no commit anterior, então **trocas novas não vão mais cair na fila por esse motivo**.
+- **O retry manual JÁ deixou a Softruck no estado certo** (novo titular vinculado), mas o item da fila não fechou — porque o cron, em execuções subsequentes, **re-executa cegamente DESASSOCIAR mesmo quando a associação antiga já não existe**, recebe 500 "Associação não encontrada" e marca falha.
+- Resultado: estado externo correto + fila eternamente pendente até `falha_permanente`.
 
-## Problema sistêmico (não é caso isolado)
+A raiz é **não-idempotência** do reaponte Softruck, agravada por não haver sondagem do estado real antes/depois.
 
-Query confirma: **45 rastreadores Softruck instalados estão presos em `PENDING`** indefinidamente, alguns desde 20/04/2026. Causas:
+---
 
-1. **Não existe cron** invocando `softruck-reconciliar-pending` nem `softruck-backfill-veiculos` (consulta em `cron.job` retornou vazio). Eles só rodam se alguém clicar manualmente em "Backfill" na tela de Integrações.
-2. **`softruck-backfill-veiculos`** (e o card de UI em `useRastreadoresSyncStatus`) só conta o problema, mas o backfill efetivo processa um lote pequeno (50) e ignora rastreadores cujo `plataforma_device_id` já está preenchido (mesmo quando é o IMEI placeholder).
-3. **Guarda do `ativar-dispositivo` (linhas 185–200)** trata "IDs preenchidos" como sinônimo de "concluído", ignorando `softruck_integration_status`. Quando IMEI vira device_id por engano, nunca mais reativa.
-4. **`softruck_tentativas` nunca é incrementado** em nenhum lugar — então não há sinal de "isto está falhando há X tentativas".
+## Plano de correção (4 mudanças cirúrgicas)
 
-Por isso o LTC8G02 **"nem aparece na fila de reprocessamento"**: a fila não existe como conceito ativo.
+### 1. Tornar `executarSoftruckTrocaVinculo` idempotente — `supabase/functions/efetivar-troca-titularidade/index.ts`
 
-## Plano de correção
+Helper canônico, usado tanto pelo fluxo normal quanto pelo `retry_softruck`. Mudanças:
 
-### 1. Reprocessar o LTC8G02 agora (sob aprovação)
+- **Passo 2 (listar)** já vira ponto de verdade: a partir do `listar-usuarios-veiculo` calcular `antigosAssocIds` SOMENTE com os vínculos efetivamente presentes; ignorar qualquer cache anterior. Se `novoJaVinculado=true` e `antigosAssocIds=[]` → `noop` (já existe).
+- **Passo 3 (desassociar)**: tratar respostas Softruck `404` e `500` com mensagem que contenha `"Associação"` + `"não encontrada"` (case/acentos-insensitive) como **sucesso lógico** — apenas logar e seguir. Continuar com o próximo `assocId`. Nunca retornar `ok=false` por essa causa.
+- **Passo 4 (associar)**: tratar resposta com mensagem `"já"`/`"already"` + `"vinculado"`/`"associated"` como sucesso lógico — após o erro, re-listar e confirmar; se `novoUserId` aparece, retornar `ok:true status:"feito"`.
+- Padronizar retorno `{ ok:true, status:"feito" | "noop" | "ja_correto", ... }` para os 3 cenários de sucesso.
 
-Migration para limpar o estado inconsistente do rastreador `9ac6603f-1a16-4596-801b-fe4661379232`:
-- Zerar `plataforma_device_id`, `id_plataforma`, `softruck_response_raw` (mantendo `plataforma_veiculo_id` se a placa bater com o remoto — vamos validar via `softruck-reconciliar-pending` em `dry_run`).
-- Setar `softruck_integration_status = NULL` para permitir nova ativação.
+### 2. Verificação de estado antes do DELETE no cron — `supabase/functions/cron-softruck-troca-retry/index.ts`
 
-Depois invocar `softruck-ativar-dispositivo` com o payload original. Logar resultado e confirmar `SUCCESS` + `plataforma_device_id` no formato real Softruck.
+Antes de re-invocar `retry_softruck`, o cron faz um pré-check leve:
 
-### 2. Fechar a guarda do `ativar-dispositivo`
+- Chama `softruck-api/listar-usuarios-veiculo` com o `vehicleId` do veículo (resolvido pelo mesmo fallback do helper).
+- Se o `userId` do novo titular já está na lista E não há vínculo do antigo → marca o item da fila como `concluido` direto, **sem chamar `retry_softruck`**.
+- Só invoca `retry_softruck` quando a sondagem confirma divergência.
 
-Em `supabase/functions/softruck-ativar-dispositivo/index.ts`, linha 185, mudar critério de "já ativado" para exigir também `softruck_integration_status === 'SUCCESS'` **e** que `plataforma_device_id` não seja igual ao IMEI (regex `/^\d{14,16}$/` + bate com IMEI → placeholder, ignorar). Assim placeholders nunca mais bloqueiam reativação.
+Isso fecha imediatamente qualquer item órfão como o `72c5faf1`.
 
-### 3. Incrementar `softruck_tentativas`
+### 3. Fechamento garantido no fluxo síncrono — `efetivar-troca-titularidade`
 
-Em `updateIntegrationStatus`, sempre que `status !== 'SUCCESS'` fazer `softruck_tentativas = softruck_tentativas + 1` (via RPC ou select+update). Limite duro: 5 tentativas, depois marca `FAILED_*` definitivo e exige intervenção manual.
+No bloco normal (linhas 1219-1264) e no bloco `retry_softruck` (linhas 415-455), após `res.ok === true`, **sempre** rodar o UPDATE da `sga_sync_queue` com a chave `(origem='troca_titularidade', veiculo_id, associado_id, etapa_parou LIKE 'troca_titularidade:softruck%')`. Hoje o bloco síncrono não limpa a fila (só o `retry_softruck` faz); por isso o item `72c5faf1` nasceu pendente e ficou. Aplicar idempotência: se não havia item, o UPDATE é no-op.
 
-### 4. Criar `cron-softruck-reconciliar-pending`
+### 4. Saneamento do caso atual (SRZ2E82)
 
-Nova edge function que, a cada 10 min:
-- Seleciona rastreadores `plataforma='softruck'`, `status='instalado'`, `softruck_integration_status='PENDING'`, `softruck_last_attempt_at < now() - 5 min`, `softruck_tentativas < 5` (lote 20).
-- Para cada um:
-  - Se `plataforma_device_id` parece IMEI (placeholder), zera e chama `softruck-ativar-dispositivo`.
-  - Caso contrário, chama `softruck-reconciliar-pending` (caminho canônico já existente para fechar o UPDATE final).
-- Registra resultado em `rastreadores_api_logs`.
+- Marcar manualmente `sga_sync_queue.id = 72c5faf1-7478-4e12-abc9-ab8bd01da004` como `concluido` com observação `[manual] estado Softruck já correto após retry 20:59:52`.
+- Rodar o cron uma vez para validar “nada a processar”.
+- Validar via `softruck-api/listar-usuarios-veiculo` que o veículo `12BVLr2P6mLaGz8` tem apenas o `userId` do novo titular.
 
-Agendar via `pg_cron`:
-```sql
-select cron.schedule(
-  'softruck-reconciliar-pending-10min',
-  '*/10 * * * *',
-  $$ select net.http_post(...softruck-reconciliar-pending-cron...) $$
-);
-```
+### O que NÃO entra neste plano
 
-### 5. UI — botão "Reprocessar agora" no drawer do rastreador
+- SGA Hinova já está OK nesta troca (`sga_status='sincronizado'`, `sga_codigo_associado_novo=24511`).
+- Rede Veículos não se aplica (rastreador está na plataforma `softruck`).
+- Não mexer no `aprovar-troca-monitoramento` — ele já chama `efetivar-troca-titularidade` na ordem certa; a falha era 100% dentro do reaponte Softruck.
 
-Adicionar em `src/components/rastreadores/...` (drawer/detalhe) um botão visível quando `softruck_integration_status` ∈ {`PENDING`, `FAILED_*`} que invoca a mesma rotina de reset + reativação. Isso elimina a dependência de operador SQL para esses casos.
+---
 
-### 6. Atualizar memória do projeto
+## Resultado esperado
 
-Criar `mem://logic/integrations/softruck-pending-reconciliation-canonica` com o caminho canônico de reprocessamento (cron + drawer + reset de placeholder) para não voltarmos a perder PENDING.
-
-## Detalhes técnicos
-
-**Arquivos a editar:**
-- `supabase/functions/softruck-ativar-dispositivo/index.ts` (guarda + tentativas)
-- novo `supabase/functions/cron-softruck-reconciliar-pending/index.ts`
-- novo `supabase/migrations/...sql` (hotfix LTC8G02 + schedule `pg_cron`)
-- `src/components/rastreadores/...Drawer.tsx` (botão "Reprocessar")
-- `src/hooks/useRastreadoresSyncStatus.ts` (expor ação de reprocessamento individual, opcional)
-- `mem://logic/integrations/softruck-pending-reconciliation-canonica`
-- update `mem://index.md` core
-
-**Validações pós-deploy:**
-- LTC8G02 com `softruck_integration_status='SUCCESS'` e `plataforma_device_id` ≠ IMEI.
-- Query agregada: PENDING deve cair de 45 para próximo de 0 em algumas horas.
-- Edge function logs do novo cron sem erros recorrentes.
+- Trocas novas: Softruck sincroniza no mesmo ciclo da aprovação (bug do `includes` já corrigido).
+- Falhas transitórias: cron `*/5min` drena e fecha por sondagem real do estado, sem laço infinito de DELETE.
+- Itens órfãos como o atual: fechados na próxima execução do cron, sem intervenção.
+- Garantia de "processo concluído integralmente": fluxo síncrono + cron idempotente + sondagem do estado externo.

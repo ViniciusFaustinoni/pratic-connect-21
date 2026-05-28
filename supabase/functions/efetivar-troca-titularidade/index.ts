@@ -324,23 +324,84 @@ async function executarSoftruckTrocaVinculo(
     return { ok: false, etapa: "listar", msg: (e as Error)?.message ?? String(e) };
   }
 
-  // ===== Passo 3: remover vínculos antigos =====
-  try {
-    for (const assocId of antigosAssocIds) {
+  // Idempotência: 404/500 "Associação não encontrada" = estado já correto, seguir.
+  const isAssocNaoEncontrada = (msg: string) => {
+    const m = (msg || "").toLowerCase();
+    return (
+      (m.includes("associação") || m.includes("associacao") || m.includes("association")) &&
+      (m.includes("não encontrada") || m.includes("nao encontrada") || m.includes("not found"))
+    );
+  };
+  const isJaVinculado = (msg: string) => {
+    const m = (msg || "").toLowerCase();
+    return (
+      (m.includes("já") || m.includes("ja ") || m.includes("already")) &&
+      (m.includes("vinculad") || m.includes("associat"))
+    );
+  };
+
+  // ===== Passo 3: remover vínculos antigos (idempotente) =====
+  for (const assocId of antigosAssocIds) {
+    try {
       const del = await callSoftruck("desassociar-usuario-veiculo", { associationId: assocId });
-      if ((del as any)?.error) throw new Error(JSON.stringify((del as any).error));
+      const delErr = (del as any)?.error;
+      if (delErr) {
+        // FunctionsHttpError não traz texto; tenta extrair body via re-fetch da própria msg
+        const errMsg = typeof delErr === "string" ? delErr : (delErr?.message || JSON.stringify(delErr));
+        // tenta extrair body se disponível em delErr.context
+        const ctxBody = (delErr as any)?.context?.responseText || "";
+        const combo = `${errMsg} ${ctxBody}`;
+        if (isAssocNaoEncontrada(combo) || /não encontrada|nao encontrada|not found|FunctionsHttpError/i.test(combo)) {
+          // Re-sondagem: se sumiu da lista, tratar como sucesso idempotente
+          try {
+            const lst3 = await callSoftruck("listar-usuarios-veiculo", { vehicleId });
+            const items3 = extractItems(lst3);
+            const aindaPresente = items3.some((it: any) => String(it?.id ?? "") === assocId);
+            if (!aindaPresente) {
+              console.log(`[softruck-troca][idempotente] DELETE ${assocId}: sumiu da lista — seguindo`);
+              continue;
+            }
+          } catch { /* segue para erro abaixo */ }
+        }
+        throw new Error(errMsg);
+      }
+    } catch (e) {
+      const msg = (e as Error)?.message ?? String(e);
+      if (isAssocNaoEncontrada(msg)) {
+        console.log(`[softruck-troca][idempotente] DELETE ${assocId}: associação já não existe — seguindo`);
+        continue;
+      }
+      return { ok: false, etapa: "desassociar", msg };
     }
-  } catch (e) {
-    return { ok: false, etapa: "desassociar", msg: (e as Error)?.message ?? String(e) };
   }
 
-  // ===== Passo 4: associar novo (se faltar) =====
+
+  // ===== Passo 4: associar novo (se faltar) — idempotente =====
   if (!novoJaVinculado) {
     try {
       const created = await callSoftruck("associar-usuario-veiculo", { userId: novoUserId, vehicleId });
       if ((created as any)?.error) throw new Error(JSON.stringify((created as any).error));
     } catch (e) {
-      return { ok: false, etapa: "associar", msg: (e as Error)?.message ?? String(e) };
+      const msg = (e as Error)?.message ?? String(e);
+      if (isJaVinculado(msg)) {
+        console.log(`[softruck-troca][idempotente] ASSOCIAR: novo titular já estava vinculado — seguindo`);
+      } else {
+        // Re-sondar: se já está correto na plataforma, tratar como sucesso.
+        try {
+          const lst2 = await callSoftruck("listar-usuarios-veiculo", { vehicleId });
+          const items2 = extractItems(lst2);
+          const presente = items2.some(
+            (it: any) => String(it?.user?.id ?? it?.attributes?.user_id ?? "") === novoUserId,
+          );
+          if (presente) {
+            console.log(`[softruck-troca][idempotente] ASSOCIAR falhou mas re-listar confirma vínculo correto`);
+          } else {
+            return { ok: false, etapa: "associar", msg };
+          }
+        } catch {
+          return { ok: false, etapa: "associar", msg };
+        }
+      }
     }
   }
 
@@ -1242,6 +1303,19 @@ serve(async (req) => {
               });
             } catch (logErr) {
               console.warn("[efetivar-troca][softruck-vinculo] insertAuditLog falhou:", (logErr as Error)?.message);
+            }
+            // Limpa pendências dessa solicitação no sga_sync_queue (idempotente)
+            try {
+              await supabase
+                .from("sga_sync_queue")
+                .update({ status: "concluido", ultima_tentativa_em: new Date().toISOString(), erro_ultimo: null })
+                .eq("origem", "troca_titularidade")
+                .eq("veiculo_id", veiculoId)
+                .eq("associado_id", novoAssociadoId)
+                .in("status", ["pendente", "processando", "falha_permanente"])
+                .like("etapa_parou", "troca_titularidade:softruck%");
+            } catch (qErr) {
+              console.warn("[efetivar-troca][softruck-vinculo] cleanup fila falhou:", (qErr as Error)?.message);
             }
           } else {
             const etapaFila = res.etapa === "associar" ? "softruck_recriar_vinculo" : "softruck_reaponte_usuario";
