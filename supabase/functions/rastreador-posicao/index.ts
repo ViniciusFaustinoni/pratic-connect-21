@@ -530,7 +530,22 @@ serve(async (req) => {
       }
       
       if (!vehicleId || !deviceId) {
-        throw new Error('Rastreador não configurado com IDs da plataforma');
+        // Rastreador em estoque ou sem vínculo na plataforma: resposta amigável, não é erro.
+        const motivo = rastreador.status === 'estoque'
+          ? 'Rastreador em estoque — ainda não vinculado a um veículo na plataforma Softruck.'
+          : 'Rastreador sem vínculo com veículo na plataforma Softruck.';
+        return new Response(
+          JSON.stringify({
+            success: true,
+            tempo_real: false,
+            offline: true,
+            sem_vinculo_plataforma: true,
+            mensagem: motivo,
+            posicao: null,
+            rastreador: { id: rastreador.id, codigo: rastreador.codigo, status: rastreador.status },
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
       }
       
       console.log(`[Softruck] Usando vehicleId=${vehicleId}, deviceId=${deviceId}`);
