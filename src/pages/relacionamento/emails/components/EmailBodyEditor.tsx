@@ -119,7 +119,7 @@ export function EmailBodyEditor({ value, onChange, insertVariableRef, previewHtm
     if (!editor) return;
     const incoming = textToHtml(value || '');
     if (incoming !== lastEmittedRef.current) {
-      editor.commands.setContent(incoming, false);
+      editor.commands.setContent(incoming, { emitUpdate: false });
       lastEmittedRef.current = incoming;
     }
   }, [value, editor]);
@@ -158,7 +158,7 @@ export function EmailBodyEditor({ value, onChange, insertVariableRef, previewHtm
             lastEmittedRef.current = e.target.value;
             onChange(e.target.value);
             // Atualiza o editor visual também
-            if (editor) editor.commands.setContent(e.target.value || '', false);
+            if (editor) editor.commands.setContent(e.target.value || '', { emitUpdate: false });
           }}
           rows={18}
           className="font-mono text-xs"
