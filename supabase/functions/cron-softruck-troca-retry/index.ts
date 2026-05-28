@@ -183,20 +183,50 @@ serve(async (req) => {
           .from("sga_sync_queue")
           .update({ status: "concluido", erro_ultimo: null, ultima_tentativa_em: new Date().toISOString() })
           .eq("id", item.id);
+
+        // Marca a ponta plataforma como sincronizada e tenta promover a troca
+        // de 'efetivacao_pendente' para 'efetivada' (regra das 3 pontas).
+        try {
+          await supabase
+            .from("solicitacoes_troca_titularidade")
+            .update({
+              plataforma_rastreador_status: "sincronizado",
+              plataforma_rastreador_sincronizado_em: new Date().toISOString(),
+              plataforma_rastreador_erro: null,
+            })
+            .eq("id", sol.id);
+          await supabase.rpc("fn_promover_troca_se_completo", { _solicitacao_id: sol.id });
+        } catch (promErr) {
+          console.warn(`[cron-softruck-troca-retry] promover troca ${sol.id} falhou:`, (promErr as Error)?.message);
+        }
         ok++;
       } else {
         const tentativas = (item.tentativas ?? 0) + 1;
         const proximo = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        const exauriu = tentativas >= 10;
         await supabase
           .from("sga_sync_queue")
           .update({
-            status: tentativas >= 10 ? "falha_permanente" : "pendente",
+            status: exauriu ? "falha_permanente" : "pendente",
             tentativas,
             ultima_tentativa_em: new Date().toISOString(),
             proximo_reenvio_em: proximo,
             erro_ultimo: resp?.msg || resp?.error || "retry retornou success=false",
           })
           .eq("id", item.id);
+        // Marca a ponta plataforma como falha_permanente para a UI sinalizar
+        // ao operador que precisa de ação manual (regra das 3 pontas).
+        if (exauriu) {
+          try {
+            await supabase
+              .from("solicitacoes_troca_titularidade")
+              .update({
+                plataforma_rastreador_status: "falha_permanente",
+                plataforma_rastreador_erro: resp?.msg || resp?.error || "retries esgotados",
+              })
+              .eq("id", sol.id);
+          } catch (_e) { /* não-bloqueante */ }
+        }
         fail++;
       }
     } catch (e) {
