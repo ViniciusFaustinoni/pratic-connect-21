@@ -27,13 +27,31 @@ export function ProtectedRoute({
   const { user, profile, loading, initialized, canAccess } = useAuth();
   const location = useLocation();
 
+  // Janela de tolerância: depois do AuthContext destravar (loading=false) ainda
+  // pode haver um gap de poucos ms até o setProfile() propagar. Sem isso o
+  // ProtectedRoute redirecionava para /auth, que reconhecia a sessão e voltava
+  // para a rota, criando um loop de remount que congelava as páginas.
+  // Só redirecionamos como "profile não encontrado" se o gap persistir além
+  // dessa janela.
+  const PROFILE_GRACE_MS = 4000;
+  const [profileGraceExpired, setProfileGraceExpired] = useState(false);
+  useEffect(() => {
+    if (!user || profile) {
+      setProfileGraceExpired(false);
+      return;
+    }
+    const t = setTimeout(() => setProfileGraceExpired(true), PROFILE_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [user?.id, profile]);
+
   // Se skipAuth está ativo (modo de teste), permite acesso direto
   if (skipAuth) {
     return <>{children}</>;
   }
 
-  // Loading real — auth ainda inicializando ou dados carregando
-  if (!initialized || loading) {
+  // Loading real — auth ainda inicializando, dados carregando, ou ainda
+  // dentro da janela de tolerância para profile chegar.
+  if (!initialized || loading || (user && !profile && !profileGraceExpired)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -49,11 +67,12 @@ export function ProtectedRoute({
     return <Navigate to={authRedirect} state={{ from: location }} replace />;
   }
 
-  // Usuário autenticado mas sem perfil (perfil não existe ou falha na busca)
+  // Usuário autenticado mas sem perfil após o grace period — falha real
   if (!profile) {
-    console.warn('[ProtectedRoute] Usuário autenticado sem profile, redirecionando para login');
+    console.warn('[ProtectedRoute] Usuário autenticado sem profile após grace period, redirecionando para login');
     return <Navigate to={authRedirect} state={{ from: location, error: 'profile_not_found' }} replace />;
   }
+
 
   // Verificar primeiro_acesso - redirecionar para definir senha
   if (profile?.primeiro_acesso) {
