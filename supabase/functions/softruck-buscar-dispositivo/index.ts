@@ -86,8 +86,10 @@ Deno.serve(async (req) => {
       '&includes[brand][]=name&includes[model][]=name&includes[color][]=name';
 
     if (isImei) {
+      // /v2/devices não aceita includes[vehicle] — pegamos vehicle_id pelo relationships
+      // e enriquecemos depois via fetchVehicle.
       const resp = await softFetch(
-        `${BASE_URL}/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(buscaRaw)}&includes[vehicle][]=plate`,
+        `${BASE_URL}/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(buscaRaw)}`,
       );
       if (!resp.ok) {
         const t = await resp.text();
