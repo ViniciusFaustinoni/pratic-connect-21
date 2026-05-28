@@ -77,7 +77,7 @@ async function callSoftruckApi(
   return result;
 }
 
-// Atualizar status de integração no rastreador
+// Atualizar status de integração no rastreador (e incrementa softruck_tentativas quando NÃO é SUCCESS)
 async function updateIntegrationStatus(
   supabase: any,
   rastreadorId: string | null,
@@ -90,19 +90,28 @@ async function updateIntegrationStatus(
     console.warn('[Softruck Ativar] rastreadorId não disponível para atualizar status');
     return;
   }
-  
+
   try {
-    await supabase
-      .from('rastreadores')
-      .update({
-        softruck_integration_status: status,
-        softruck_last_attempt_at: new Date().toISOString(),
-        softruck_payload_sent: payloadSent || null,
-        softruck_response_raw: responseRaw || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', rastreadorId);
-    
+    const update: Record<string, unknown> = {
+      softruck_integration_status: status,
+      softruck_last_attempt_at: new Date().toISOString(),
+      softruck_payload_sent: payloadSent || null,
+      softruck_response_raw: responseRaw || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (status !== 'SUCCESS') {
+      // Incrementar tentativas via expressão segura (read + write)
+      const { data: cur } = await supabase
+        .from('rastreadores')
+        .select('softruck_tentativas')
+        .eq('id', rastreadorId)
+        .maybeSingle();
+      update.softruck_tentativas = (cur?.softruck_tentativas ?? 0) + 1;
+    }
+
+    await supabase.from('rastreadores').update(update).eq('id', rastreadorId);
+
     console.log(`[Softruck Ativar] Status de integração atualizado: ${status}`);
   } catch (err) {
     console.error('[Softruck Ativar] Erro ao atualizar status de integração:', err);
@@ -179,10 +188,25 @@ serve(async (req) => {
       throw new Error(`Rastreador ${imei} não está disponível (status: ${rastreador.status})`);
     }
     
-    // CORREÇÃO: Só considerar "já ativado" se device E veículo estiverem vinculados na Softruck.
-    // Caso contrário, prosseguir para criar veículo / associar (evita travamento quando o
-    // device foi descoberto via softruck-buscar-dispositivo mas a ativação não terminou).
-    if (rastreador.plataforma_device_id && rastreador.plataforma_veiculo_id) {
+    // CORREÇÃO (canônica — caso LTC8G02): só considerar "já ativado" quando
+    // (1) ambos IDs preenchidos, (2) status = SUCCESS e
+    // (3) plataforma_device_id NÃO for igual ao IMEI (placeholder otimista de outros fluxos).
+    // Formato real Softruck é alfa-numérico tipo "qekgzQoqPJwdAr8"; quando o campo
+    // contém só dígitos e bate com o IMEI, é placeholder e a ativação precisa rodar.
+    const deviceIdLocal = rastreador.plataforma_device_id || '';
+    const isPlaceholderDeviceId = !!deviceIdLocal && /^\d{14,17}$/.test(deviceIdLocal) && deviceIdLocal === imei;
+    if (isPlaceholderDeviceId) {
+      console.warn('[Softruck Ativar] plataforma_device_id é placeholder (= IMEI). Resetando e reativando.');
+      await supabase
+        .from('rastreadores')
+        .update({ plataforma_device_id: null, id_plataforma: null })
+        .eq('id', rastreador.id);
+      rastreador.plataforma_device_id = null;
+    } else if (
+      rastreador.plataforma_device_id &&
+      rastreador.plataforma_veiculo_id &&
+      rastreador.softruck_integration_status === 'SUCCESS'
+    ) {
       console.log('[Softruck Ativar] Rastreador já totalmente ativado na Softruck:', {
         device: rastreador.plataforma_device_id,
         veiculo: rastreador.plataforma_veiculo_id,
@@ -197,9 +221,11 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-    if (rastreador.plataforma_device_id) {
-      console.log('[Softruck Ativar] Device já existe na Softruck mas falta vincular ao veículo. Continuando ativação...', rastreador.plataforma_device_id);
+    } else if (rastreador.plataforma_device_id) {
+      console.log('[Softruck Ativar] Device já existe na Softruck mas integração incompleta. Continuando ativação...', {
+        device: rastreador.plataforma_device_id,
+        status: rastreador.softruck_integration_status,
+      });
     }
     
     const jaInstalado = rastreador.status === 'instalado';
