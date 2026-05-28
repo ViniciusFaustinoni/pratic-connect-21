@@ -3,6 +3,7 @@
 // NÃO é chamada por nenhum fluxo automático; apenas pelo botão "Enviar e-mail de teste".
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { envelopeEmailPraticcar } from '../_shared/email-layout-praticcar.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,8 +42,16 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function corpoParaHtml(corpo: string): string {
-  return `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.6;white-space:pre-wrap">${escapeHtml(corpo)}</div>`;
+function corpoParaMiolo(corpo: string, formato: 'html' | 'texto'): string {
+  if (formato === 'html') {
+    return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;line-height:1.6;">${corpo}</div>`;
+  }
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1f2937;line-height:1.6;white-space:pre-wrap;">${escapeHtml(corpo)}</div>`;
+}
+
+function corpoParaTexto(corpo: string, formato: 'html' | 'texto'): string {
+  if (formato === 'texto') return corpo;
+  return corpo.replace(/<br\s*\/?>(?:\s*\n?)/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 Deno.serve(async (req) => {
@@ -85,12 +94,13 @@ Deno.serve(async (req) => {
     // ---- Template ----
     const { data: tpl, error: tplErr } = await admin
       .from('email_suspensao_templates')
-      .select('id, fluxo_key, assunto, corpo, variaveis_disponiveis')
+      .select('id, fluxo_key, assunto, corpo, formato, variaveis_disponiveis')
       .eq('fluxo_key', templateKey)
       .maybeSingle();
     if (tplErr || !tpl) {
       return jsonResponse({ error: 'template_nao_encontrado', detail: tplErr?.message }, 404);
     }
+    const formato: 'html' | 'texto' = (tpl.formato ?? 'html') === 'texto' ? 'texto' : 'html';
 
     // Monta vars usando o que veio + defaults amigáveis
     const hoje = new Date().toLocaleDateString('pt-BR');
@@ -145,8 +155,12 @@ Deno.serve(async (req) => {
           from: FROM_ADDRESS,
           to: [destinatario],
           subject: assuntoRender,
-          html: corpoParaHtml(corpoRender),
-          text: corpoRender,
+          html: envelopeEmailPraticcar({
+            assunto: assuntoRender,
+            corpoHtml: corpoParaMiolo(corpoRender, formato),
+            preHeader: assuntoRender,
+          }),
+          text: corpoParaTexto(corpoRender, formato),
         }),
       });
       resendStatus = r.status;
