@@ -35678,6 +35678,14 @@ export type Database = {
         Args: { p_vendedor_id: string }
         Returns: number
       }
+      fn_promover_troca_se_completo: {
+        Args: { _solicitacao_id: string }
+        Returns: {
+          pontas_pendentes: string[]
+          promovida: boolean
+          status: string
+        }[]
+      }
       fn_recalcular_cc_saldos: {
         Args: { p_vendedor_id: string }
         Returns: undefined
