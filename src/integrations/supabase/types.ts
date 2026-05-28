@@ -12934,6 +12934,8 @@ export type Database = {
           provider: string
           provider_message_id: string | null
           status: string
+          template_id: string | null
+          template_key: string | null
           updated_at: string
         }
         Insert: {
@@ -12950,6 +12952,8 @@ export type Database = {
           provider?: string
           provider_message_id?: string | null
           status?: string
+          template_id?: string | null
+          template_key?: string | null
           updated_at?: string
         }
         Update: {
@@ -12966,6 +12970,8 @@ export type Database = {
           provider?: string
           provider_message_id?: string | null
           status?: string
+          template_id?: string | null
+          template_key?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -12997,6 +13003,45 @@ export type Database = {
           singleton?: boolean
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      email_suspensao_templates: {
+        Row: {
+          assunto: string
+          ativo: boolean
+          corpo: string
+          created_at: string
+          fluxo_key: string
+          id: string
+          nome: string
+          updated_at: string
+          updated_by: string | null
+          variaveis_disponiveis: Json
+        }
+        Insert: {
+          assunto?: string
+          ativo?: boolean
+          corpo?: string
+          created_at?: string
+          fluxo_key: string
+          id?: string
+          nome: string
+          updated_at?: string
+          updated_by?: string | null
+          variaveis_disponiveis?: Json
+        }
+        Update: {
+          assunto?: string
+          ativo?: boolean
+          corpo?: string
+          created_at?: string
+          fluxo_key?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+          updated_by?: string | null
+          variaveis_disponiveis?: Json
         }
         Relationships: []
       }
