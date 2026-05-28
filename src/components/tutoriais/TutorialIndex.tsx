@@ -1,9 +1,9 @@
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
-import { TutorialStep } from '@/data/tutoriais';
+import type { TutorialStepRow } from '@/hooks/useTutoriais';
 
 interface TutorialIndexProps {
-  steps: TutorialStep[];
+  steps: TutorialStepRow[];
   currentStep: number;
   onSelect: (numero: number) => void;
 }
@@ -16,7 +16,7 @@ export function TutorialIndex({ steps, currentStep, onSelect }: TutorialIndexPro
         const isDone = step.numero < currentStep;
         return (
           <button
-            key={step.numero}
+            key={step.id ?? step.numero}
             type="button"
             onClick={() => onSelect(step.numero)}
             className={cn(
