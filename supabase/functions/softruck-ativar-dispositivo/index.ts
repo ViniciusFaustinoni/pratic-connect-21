@@ -77,7 +77,7 @@ async function callSoftruckApi(
   return result;
 }
 
-// Atualizar status de integração no rastreador
+// Atualizar status de integração no rastreador (e incrementa softruck_tentativas quando NÃO é SUCCESS)
 async function updateIntegrationStatus(
   supabase: any,
   rastreadorId: string | null,
@@ -90,19 +90,28 @@ async function updateIntegrationStatus(
     console.warn('[Softruck Ativar] rastreadorId não disponível para atualizar status');
     return;
   }
-  
+
   try {
-    await supabase
-      .from('rastreadores')
-      .update({
-        softruck_integration_status: status,
-        softruck_last_attempt_at: new Date().toISOString(),
-        softruck_payload_sent: payloadSent || null,
-        softruck_response_raw: responseRaw || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', rastreadorId);
-    
+    const update: Record<string, unknown> = {
+      softruck_integration_status: status,
+      softruck_last_attempt_at: new Date().toISOString(),
+      softruck_payload_sent: payloadSent || null,
+      softruck_response_raw: responseRaw || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (status !== 'SUCCESS') {
+      // Incrementar tentativas via expressão segura (read + write)
+      const { data: cur } = await supabase
+        .from('rastreadores')
+        .select('softruck_tentativas')
+        .eq('id', rastreadorId)
+        .maybeSingle();
+      update.softruck_tentativas = (cur?.softruck_tentativas ?? 0) + 1;
+    }
+
+    await supabase.from('rastreadores').update(update).eq('id', rastreadorId);
+
     console.log(`[Softruck Ativar] Status de integração atualizado: ${status}`);
   } catch (err) {
     console.error('[Softruck Ativar] Erro ao atualizar status de integração:', err);
