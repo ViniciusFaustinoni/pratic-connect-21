@@ -10,6 +10,7 @@ const corsHeaders = {
 interface Body {
   contrato_ids: string[];
   motivo?: string;
+  enviar_whatsapp?: boolean;
 }
 
 Deno.serve(async (req) => {
