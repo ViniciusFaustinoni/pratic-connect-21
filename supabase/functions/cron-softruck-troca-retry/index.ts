@@ -184,18 +184,13 @@ serve(async (req) => {
           .update({ status: "concluido", erro_ultimo: null, ultima_tentativa_em: new Date().toISOString() })
           .eq("id", item.id);
 
-        // Marca a ponta plataforma como sincronizada e tenta promover a troca
-        // de 'efetivacao_pendente' para 'efetivada' (regra das 3 pontas).
+        // Promoção canônica: passa pelo wrapper que SONDA Softruck antes
+        // de marcar `plataforma_rastreador_status='sincronizado'`. Critério
+        // estrito: novo presente E antigo ausente.
         try {
-          await supabase
-            .from("solicitacoes_troca_titularidade")
-            .update({
-              plataforma_rastreador_status: "sincronizado",
-              plataforma_rastreador_sincronizado_em: new Date().toISOString(),
-              plataforma_rastreador_erro: null,
-            })
-            .eq("id", sol.id);
-          await supabase.rpc("fn_promover_troca_se_completo", { _solicitacao_id: sol.id });
+          await supabase.functions.invoke("troca-promover-com-sondagem", {
+            body: { solicitacao_id: sol.id },
+          });
         } catch (promErr) {
           console.warn(`[cron-softruck-troca-retry] promover troca ${sol.id} falhou:`, (promErr as Error)?.message);
         }
