@@ -349,7 +349,10 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           : tipoRaw === 'substituicao' ? 'substituicao_placa'
           : (tipoRaw as TipoOutroProcesso);
         const troca = trocasMap.get(c.id) || null;
-        const associadoAntigo = troca ? associadosMap.get(troca.associado_antigo_id) : null;
+        // Fallback: cotação de troca sem solicitação resolve antigo via veiculo.associado_id
+        const associadoAntigo = troca
+          ? associadosMap.get(troca.associado_antigo_id)
+          : (fallbackAntigoPorCotacao.get(c.id) || null);
         const novoTitular = troca?.novo_titular_dados || null;
         const v = c.vendedor_id ? vendedoresMap.get(c.vendedor_id) : null;
         const debito = troca ? debitosPorTroca.get(troca.id) || { qtd: 0, total: 0 } : { qtd: 0, total: 0 };
