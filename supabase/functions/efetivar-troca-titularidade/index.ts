@@ -234,10 +234,20 @@ async function executarSoftruckTrocaVinculo(
 
   // deno-lint-ignore no-explicit-any
   const extractItems = (resp: any): any[] => {
-    const inner = resp?.data ?? resp;
-    const arr = inner?.data ?? inner;
-    return Array.isArray(arr) ? arr : [];
+    let cur: any = resp;
+    for (let i = 0; i < 4; i++) {
+      if (Array.isArray(cur)) return cur;
+      if (cur && typeof cur === "object" && "data" in cur) {
+        cur = cur.data;
+        continue;
+      }
+      break;
+    }
+    if (Array.isArray(cur)) return cur;
+    if (cur && typeof cur === "object" && cur.id) return [cur];
+    return [];
   };
+
 
   // ===== Passo 1: resolver/criar usuário Softruck do novo titular =====
   let novoUserId: string | undefined;
