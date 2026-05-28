@@ -1,73 +1,70 @@
-## Objetivo
+## Diagnóstico
 
-Transformar a seção **Tutoriais** (hoje 100% estática em `src/data/tutoriais/*.ts`) em um sistema gerenciável pelo painel — criar, editar, excluir tutoriais e steps, com upload de imagens — restrito a **Diretor** e **Admin Master**.
+Ao investigar o preview com o usuário logado em `/dashboard` (admin@teste.com — Diretor), encontrei **duas causas independentes** que se somam e explicam tanto a "Aprovação do Monitoramento não carregar" quanto a lentidão geral. As duas precisam ser corrigidas.
 
-## Escopo
+### 1. Loop de remount da árvore (causa primária da lentidão)
 
-- Migrar os 4 tutoriais existentes (incluindo Troca de Titularidade) para o banco.
-- Operadores comuns continuam vendo/lendo tutoriais como hoje.
-- Diretor / Admin Master ganham botões de gerenciar (Novo, Editar, Excluir) na lista e no detalhe.
+Os logs do console mostram, **uma vez por segundo, em loop**:
 
-## Mudanças
-
-### 1. Banco (migração)
-
-```sql
-create table public.tutoriais (
-  id uuid primary key default gen_random_uuid(),
-  slug text unique not null,
-  titulo text not null,
-  descricao text not null,
-  categoria text not null,
-  tempo_estimado_min int not null default 5,
-  novo boolean not null default false,
-  ordem int not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table public.tutoriais_steps (
-  id uuid primary key default gen_random_uuid(),
-  tutorial_id uuid not null references public.tutoriais(id) on delete cascade,
-  numero int not null,
-  titulo text not null,
-  descricao text not null,
-  imagem_url text,
-  dicas jsonb not null default '[]'::jsonb,
-  links jsonb not null default '[]'::jsonb,
-  created_at timestamptz not null default now(),
-  unique (tutorial_id, numero)
-);
+```
+SIGNED_IN  (currentUserId: undefined)
+INITIAL_SESSION (currentUserId: 4218616b)
+[ProtectedRoute] Usuário autenticado sem profile, redirecionando para login
+Multiple GoTrueClient instances detected
+[pendencias-documentos-rt] SUBSCRIBED <novo channel ID a cada ciclo>
 ```
 
-- `GRANT SELECT` para `anon` + `authenticated` (tutorial é leitura aberta a logados).
-- `GRANT INSERT/UPDATE/DELETE` só para `authenticated` + RLS exigindo `has_role(auth.uid(),'diretor') OR has_role(auth.uid(),'admin_master')`.
-- Bucket de Storage `tutoriais` (público para leitura) com policy de upload restrita às mesmas roles.
-- Seed dos 4 tutoriais atuais (incluindo imagens já importadas — mantemos os assets locais como `imagem_url` apontando para os imports atuais? não — vamos copiar URLs para storage no seed, OU manter referência pelo caminho original servido pelo build).
+O channel id do PendenciasBell muda a cada ciclo → a árvore React inteira está sendo desmontada/remontada. O `AuthProvider` é remontado, refaz `onAuthStateChange` (emite `SIGNED_IN`+`INITIAL_SESSION`), refaz fetch de profile/perfis, e dispara reinscrição de todos os realtime channels, refetch de TanStack Query, recriação do `publicSupabase` (daí o "Multiple GoTrueClient" recorrente).
 
-> Decisão: o seed grava `imagem_url` com o caminho importado atual (string vazia ou null) — as imagens existentes ficam embarcadas no front via fallback. Novas imagens vão para Storage. Vou anexar um fallback no front: se `imagem_url` começa com `local:troca-titularidade-busca` etc., resolve via mapa de imports; senão usa URL direta.
+**Causa raiz:** o `ProtectedRoute` está vendo `loading=false` + `user!=null` + `profile==null` em uma janela muito curta após o `SIGNED_IN` (antes do `setProfile()` propagar), e dispara `<Navigate to="/auth">`. O `/auth` por sua vez detecta sessão e devolve para `/dashboard`. Ciclo. Cada volta gera um Suspense remount → spinner → fetch tudo de novo → skeletons que nunca somem.
 
-### 2. Hooks
+Confirmação:
+- O profile do user existe no banco (`profiles.user_id = 4218616b-…`, tipo=funcionario, bloqueado=false), as policies permitem `user_id = auth.uid()` — a query funciona.
+- A leitura é assíncrona e o `setProfile` acontece **depois** de `setLoading(false)` em alguns caminhos do `loadUserData`, e o branch "Mesmo usuário já carregado" também faz `setLoading(false)` antes de garantir `profile != null`.
 
-- `src/hooks/useTutoriais.ts` — `useTutoriais()`, `useTutorial(slug)`, `useCreateTutorial`, `useUpdateTutorial`, `useDeleteTutorial`, `useUpsertStep`, `useDeleteStep`, `useUploadTutorialImage`.
+### 2. Tela "Aprovações do Monitoramento" — queries pesadas sem paginação
 
-### 3. UI
+`useAprovacoesMonitoramentoBreakdown` (usado pelo badge do sidebar **e** pelas abas) roda 6 queries em paralelo a cada 60s e a cada navegação. A do `associados` puxa **todos** os `servicos` com `status=concluida` (sem `limit`) com 3 joins aninhados, depois faz um segundo `in()` em `vistorias`. A de `liberacaoSuspensao` puxa todos os `veiculos` suspensos + todos os contratos em `in(veiculo_id, …)`.
 
-- `src/pages/tutoriais/TutoriaisLista.tsx` — ler do hook em vez do array estático; mostrar botões `+ Novo Tutorial` e ícones de editar/excluir nos cards (gated por role).
-- `src/pages/tutoriais/TutorialDetalhe.tsx` — botão `Editar` (abre modal de gerenciamento) gated por role.
-- Novo: `src/components/tutoriais/TutorialEditorDialog.tsx` — formulário com campos do tutorial + lista editável de steps (adicionar/remover/reordenar/upload imagem/editar texto/dicas/links).
-- Novo: `src/components/tutoriais/StepEditorRow.tsx` — uma linha editável de step.
+Cada remount do bloco anterior **reexecuta tudo isso**. É por isso que os skeletons das abas Aprovação de Associados / Liberação de Suspensão / Processos Operacionais não resolvem visualmente — a UI nunca chega ao estado estável antes do próximo remount.
 
-### 4. Limpeza / compat
+## Plano de correção
 
-- `src/data/tutoriais/*` continua existindo só como "seed" para a migração. Os componentes deixam de importar dele.
-- Página continua na rota `/tutoriais` e `/tutoriais/:slug`.
+### Passo 1 — Estancar o loop de redirect (prioridade máxima)
 
-## Critérios de aceite
+Em `src/components/ProtectedRoute.tsx`:
+- Adicionar uma janela de tolerância: enquanto `user && !profile && !error`, considerar o estado como ainda carregando e mostrar o loader em vez de `<Navigate to="/auth">`. Só redirecionar quando houver sinalização explícita de falha (timeout do AuthContext já existente, ou flag nova `profileLoadFailed`).
 
-- Operador comum: vê os mesmos tutoriais de hoje (Troca de Titularidade etc.), sem botões de edição.
-- Diretor / Admin Master: vê botões `+ Novo Tutorial`, `Editar`, `Excluir` na lista e no detalhe; consegue criar tutorial novo do zero, adicionar steps com imagem (upload) + descrição + dicas + links, salvar, editar depois e excluir.
-- Excluir tutorial cascateia steps e imagens órfãs no Storage (cleanup best-effort).
-- RLS bloqueia escrita para qualquer role fora de Diretor/Admin Master mesmo via API.
+Em `src/contexts/AuthContext.tsx`:
+- No `loadUserData`, ordenar `setProfile()`/`setPerfis()` **antes** de `setLoading(false)` (já está, mas garantir que o branch "mesmo usuário já carregado" no `onAuthStateChange` não force `loading=false` quando ainda não há profile carregado).
+- Expor um `profileLoadFailed: boolean` que só vira true após o timeout de 15s ou erro real — esse é o sinal que o `ProtectedRoute` usa para finalmente redirecionar.
 
-Confirma que sigo nesse formato (DB + Storage + CRUD UI)?
+Resultado esperado: cessa o `Navigate → /auth → /dashboard → remount`. O `AuthProvider` permanece montado e os channels deixam de reinscrever. O "Multiple GoTrueClient" some.
+
+### Passo 2 — Aliviar `useAprovacoesMonitoramentoBreakdown`
+
+Em `src/hooks/useAprovacoesMonitoramentoCount.ts`:
+- Substituir a query de `associados` por um `count` no servidor (RPC `select count(*) from servicos … where …`) em vez de baixar todas as linhas e filtrar no cliente. Mesma coisa para `liberacaoSuspensao`.
+- Aumentar `refetchInterval` de 60s para 5 min (badges não precisam de granularidade fina) e marcar `refetchOnWindowFocus: false`.
+- Manter um único `useQuery` compartilhado (já é, via key estável) e usar nas abas apenas o `data?.associados` etc. para o badge — os contadores totais vêm desse hook único; as listas detalhadas continuam com seus próprios hooks, que já paginam.
+
+### Passo 3 — Reduzir thrash de realtime
+
+Em `PendenciasDocumentosBell` (e demais subscribers de canais) — após o passo 1 isso deixa de remontar, mas vou conferir que o `useEffect` use `cleanup` correto e não recrie o channel a cada render por dependências instáveis.
+
+### Passo 4 — Validação
+
+1. Abrir `/dashboard` e confirmar no console: **apenas 1** `SIGNED_IN`, **1** `INITIAL_SESSION`, **1** `Multiple GoTrueClient` (esperado, vem do `publicClient`), e **um único** `SUBSCRIBED` por canal.
+2. Navegar para `Monitoramento → Aprovações do Monitoramento` e confirmar que as abas Aprovação de Associados, Liberação de Suspensão e Processos Operacionais saem do skeleton em <2s.
+3. Conferir tempo total das queries do badge no painel network (target: <500ms por count vs. atual de baixar todos os `servicos concluida`).
+
+### Arquivos a alterar
+- `src/components/ProtectedRoute.tsx` — janela de tolerância antes do redirect.
+- `src/contexts/AuthContext.tsx` — flag `profileLoadFailed`, garantir ordem `setProfile → setLoading(false)` em todos os branches.
+- `src/hooks/useAprovacoesMonitoramentoCount.ts` — usar `count` server-side, refetch 5 min, sem refetch on focus.
+- (opcional) Verificar `PendenciasDocumentosBell` e canal `auth-user-roles-${user.id}` por dependências instáveis.
+
+### Nada que NÃO será mexido
+- Lógica de negócio das abas (filtros, regras de aprovação, edges).
+- RLS, schemas, migrations.
+- `publicClient.ts` (o aviso "Multiple GoTrueClient" é normal — uma instância no `client.ts`, outra no `publicClient.ts` — só vira problema porque o loop o repete).
