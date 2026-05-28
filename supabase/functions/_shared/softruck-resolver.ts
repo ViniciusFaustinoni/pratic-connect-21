@@ -75,7 +75,7 @@ export async function resolverSoftruckIdsPorImei(
       supabaseKey,
       false,
     );
-    const url = `${baseUrl}/devices/?filters[devices.imei][eq]=${imei}&includes[vehicle][]=plate`;
+    const url = `${baseUrl}/devices/?filters[devices.imei][eq]=${imei}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
