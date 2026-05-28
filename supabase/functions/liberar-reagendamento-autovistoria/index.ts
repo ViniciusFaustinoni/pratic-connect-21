@@ -10,6 +10,7 @@ const corsHeaders = {
 interface Body {
   contrato_ids: string[];
   motivo?: string;
+  enviar_whatsapp?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -52,6 +53,7 @@ Deno.serve(async (req) => {
     }
 
     const motivo = body.motivo?.trim() || null;
+    const enviarWhatsapp = body.enviar_whatsapp !== false; // default true (retrocompat)
     const liberadoEm = new Date().toISOString();
 
     const { data: contratos, error: errC } = await supabase
@@ -109,33 +111,37 @@ Deno.serve(async (req) => {
       (cots ?? []).forEach(c => { if (c.token_publico) tokenByCotacao.set(c.id, c.token_publico); });
     }
 
-    // 3) notificar associados via WhatsApp
-    for (const c of contratos ?? []) {
-      try {
-        const { data: assoc } = await supabase
-          .from('associados')
-          .select('nome, telefone')
-          .eq('id', c.associado_id)
-          .maybeSingle();
-        if (!assoc?.telefone) continue;
+    // 3) notificar associados via WhatsApp (opcional — controlado pelo operador)
+    if (enviarWhatsapp) {
+      for (const c of contratos ?? []) {
+        try {
+          const { data: assoc } = await supabase
+            .from('associados')
+            .select('nome, telefone')
+            .eq('id', c.associado_id)
+            .maybeSingle();
+          if (!assoc?.telefone) continue;
 
-        const token = c.cotacao_id ? tokenByCotacao.get(c.cotacao_id) : null;
-        const link = token
-          ? `https://app.praticcar.org/cotacao/${token}`
-          : 'https://app.praticcar.org';
+          const token = c.cotacao_id ? tokenByCotacao.get(c.cotacao_id) : null;
+          const link = token
+            ? `https://app.praticcar.org/cotacao/${token}`
+            : 'https://app.praticcar.org';
 
-        const msg =
-          `Olá ${assoc.nome?.split(' ')[0] ?? ''}! ✅\n\n` +
-          `Boas notícias: nosso time de monitoramento *liberou seu cadastro* para reagendar a vistoria/instalação do rastreador.\n\n` +
-          `Acesse o link para escolher uma nova data:\n${link}\n\n` +
-          `Após a instalação, sua *Proteção 360* será reativada automaticamente. 🚗🛡️`;
+          const msg =
+            `Olá ${assoc.nome?.split(' ')[0] ?? ''}! ✅\n\n` +
+            `Boas notícias: nosso time de monitoramento *liberou seu cadastro* para reagendar a vistoria/instalação do rastreador.\n\n` +
+            `Acesse o link para escolher uma nova data:\n${link}\n\n` +
+            `Após a instalação, sua *Proteção 360* será reativada automaticamente. 🚗🛡️`;
 
-        await supabase.functions.invoke('enviar-whatsapp', {
-          body: { telefone: assoc.telefone, mensagem: msg, associado_id: c.associado_id, tipo: 'liberacao_autovistoria' },
-        });
-      } catch (e) {
-        console.error('[liberar-autovistoria] erro WhatsApp', e);
+          await supabase.functions.invoke('enviar-whatsapp', {
+            body: { telefone: assoc.telefone, mensagem: msg, associado_id: c.associado_id, tipo: 'liberacao_autovistoria' },
+          });
+        } catch (e) {
+          console.error('[liberar-autovistoria] erro WhatsApp', e);
+        }
       }
+    } else {
+      console.log('[liberar-autovistoria] envio WhatsApp suprimido pelo operador');
     }
 
     // 4) auditoria
@@ -144,11 +150,11 @@ Deno.serve(async (req) => {
       usuario_nome: profile.nome,
       acao: 'liberacao_reagendamento',
       modulo: 'monitoramento',
-      descricao: `Liberou ${ids.length} contrato(s) suspenso(s) por auto-vistoria sem instalação`,
-      dados_novos: { contrato_ids: ids, motivo },
+      descricao: `Liberou ${ids.length} contrato(s) suspenso(s) por auto-vistoria sem instalação${enviarWhatsapp ? '' : ' (sem WhatsApp)'}`,
+      dados_novos: { contrato_ids: ids, motivo, enviar_whatsapp: enviarWhatsapp },
     });
 
-    return new Response(JSON.stringify({ liberados: ids.length }), {
+    return new Response(JSON.stringify({ liberados: ids.length, whatsapp_enviado: enviarWhatsapp }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {

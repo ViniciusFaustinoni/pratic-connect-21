@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ShieldAlert, CheckCircle2, Phone, Car, Calendar, XCircle, AlertTriangle } from 'lucide-react';
 import {
@@ -22,6 +23,7 @@ export default function LiberacoesAutoVistoria() {
 
   const [dialogLiberarOpen, setDialogLiberarOpen] = useState(false);
   const [motivoLiberar, setMotivoLiberar] = useState('');
+  const [enviarWhatsapp, setEnviarWhatsapp] = useState(true);
   const [alvosLiberar, setAlvosLiberar] = useState<string[]>([]);
 
   const [dialogCancelarOpen, setDialogCancelarOpen] = useState(false);
@@ -46,6 +48,7 @@ export default function LiberacoesAutoVistoria() {
   const abrirLiberar = (ids: string[]) => {
     setAlvosLiberar(ids);
     setMotivoLiberar('');
+    setEnviarWhatsapp(true);
     setDialogLiberarOpen(true);
   };
 
@@ -56,7 +59,11 @@ export default function LiberacoesAutoVistoria() {
   };
 
   const confirmarLiberar = async () => {
-    await liberar.mutateAsync({ contrato_ids: alvosLiberar, motivo: motivoLiberar || undefined });
+    await liberar.mutateAsync({
+      contrato_ids: alvosLiberar,
+      motivo: motivoLiberar || undefined,
+      enviar_whatsapp: enviarWhatsapp,
+    });
     setSelecionados(new Set());
     setDialogLiberarOpen(false);
   };
@@ -162,9 +169,22 @@ export default function LiberacoesAutoVistoria() {
             <DialogTitle>Liberar {alvosLiberar.length} associado(s)</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            O associado receberá WhatsApp com o link para reagendar a vistoria/instalação.
+            {enviarWhatsapp
+              ? 'O associado receberá WhatsApp com o link para reagendar a vistoria/instalação.'
+              : 'O associado NÃO será notificado por WhatsApp — avise por outro canal.'}{' '}
             A cobertura de roubo/furto volta imediatamente; a Proteção 360 será ativada após a instalação concluída.
           </p>
+          <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3">
+            <Checkbox
+              id="enviar-whatsapp-liberar"
+              checked={enviarWhatsapp}
+              onCheckedChange={(v) => setEnviarWhatsapp(v === true)}
+              className="mt-0.5"
+            />
+            <Label htmlFor="enviar-whatsapp-liberar" className="text-sm font-normal cursor-pointer leading-snug">
+              Enviar WhatsApp ao associado com link para reagendar
+            </Label>
+          </div>
           <Textarea placeholder="Motivo (opcional)" value={motivoLiberar} onChange={(e) => setMotivoLiberar(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogLiberarOpen(false)}>Cancelar</Button>
