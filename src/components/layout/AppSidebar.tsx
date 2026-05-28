@@ -52,6 +52,7 @@ import {
   PieChart,
   Key,
   MessageCircle,
+  Mail,
   Kanban,
   FilePlus,
   History,
