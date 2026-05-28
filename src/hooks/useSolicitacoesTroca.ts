@@ -11,6 +11,7 @@ export type StatusTroca =
   | 'aguardando_vistoria'
   | 'aguardando_manutencao'
   | 'liberada_para_assinatura'
+  | 'efetivacao_pendente'
   | 'efetivada'
   | 'reprovada_cadastro'
   | 'reprovada_monitoramento'
