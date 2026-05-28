@@ -974,6 +974,9 @@ serve(async (req) => {
     console.error("[autentique-create] Erro:", error);
 
     logEdgeFunction({ functionName: "autentique-create", plataforma: "autentique", operacao: "create", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
+    if (error instanceof ConsultorActionableError) {
+      return respostaErroEstruturado(error, corsHeaders);
+    }
     return new Response(
       JSON.stringify({ 
         success: false, 
