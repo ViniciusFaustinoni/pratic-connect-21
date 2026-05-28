@@ -12931,6 +12931,8 @@ export type Database = {
           erro_mensagem: string | null
           fluxo_origem: string | null
           id: string
+          provider: string
+          provider_message_id: string | null
           status: string
           updated_at: string
         }
@@ -12945,6 +12947,8 @@ export type Database = {
           erro_mensagem?: string | null
           fluxo_origem?: string | null
           id?: string
+          provider?: string
+          provider_message_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -12959,6 +12963,8 @@ export type Database = {
           erro_mensagem?: string | null
           fluxo_origem?: string | null
           id?: string
+          provider?: string
+          provider_message_id?: string | null
           status?: string
           updated_at?: string
         }
