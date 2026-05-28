@@ -203,6 +203,9 @@ export async function validarImeiPorPlaca({ placa, imei, veiculoIdAlvo, novoAsso
           } catch (e) {
             console.warn(TAG, 'softruck.upsert_local_falhou', e);
           }
+          if (rastreadorId) {
+            await promoverRastreadorParaInstalado(rastreadorId, veiculoIdAlvo, 'softruck', novoAssociadoId);
+          }
           return { ok: true, origem: 'softruck', rastreadorId };
         }
         // Placa existe na Softruck mas IMEI digitado não está entre os devices dela.
