@@ -349,6 +349,71 @@ serve(async (req) => {
     }
 
     // ============================================
+    // RETRY SOFTRUCK — reexecuta SOMENTE o reaponte de usuário na Softruck.
+    //   Usado pelo cron-softruck-troca-retry para drenar sga_sync_queue
+    //   onde etapa_parou começa com 'troca_titularidade:softruck_'.
+    // ============================================
+    if (retry_softruck) {
+      console.log(`[efetivar-troca][retry-softruck] Iniciando retry para ${solicitacao_id}`);
+      const { data: troca } = await supabase
+        .from("solicitacoes_troca_titularidade")
+        .select("id, status, novo_associado_id, veiculo_id")
+        .eq("id", solicitacao_id)
+        .maybeSingle();
+
+      if (!troca || !troca.novo_associado_id || !troca.veiculo_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Solicitação sem novo titular/veículo para retry Softruck" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const res = await executarSoftruckTrocaVinculo(supabase, troca.veiculo_id, troca.novo_associado_id);
+
+      if (res.ok) {
+        console.log(`[SOFTRUCK_TROCA_VINCULO_OK][retry] sol=${solicitacao_id} status=${res.status}`);
+        // Limpa pendências dessa solicitação no sga_sync_queue
+        await supabase
+          .from("sga_sync_queue")
+          .update({ status: "concluido", ultima_tentativa_em: new Date().toISOString(), erro_ultimo: null })
+          .eq("origem", "troca_titularidade")
+          .eq("veiculo_id", troca.veiculo_id)
+          .eq("associado_id", troca.novo_associado_id)
+          .in("status", ["pendente", "processando", "falha_permanente"])
+          .like("etapa_parou", "troca_titularidade:softruck%");
+        try {
+          await insertAuditLog(supabase, {
+            acao: "criar",
+            modulo: "monitoramento",
+            descricao: `[SOFTRUCK_TROCA_VINCULO_OK] retry sol=${solicitacao_id} status=${res.status}${(res as any).vehicleId ? ` vehicleId=${(res as any).vehicleId}` : ""}${(res as any).userId ? ` userId=${(res as any).userId}` : ""}`,
+            tabela: "solicitacoes_troca_titularidade",
+            registro_id: solicitacao_id,
+            dados_novos: { retry: true, ...res },
+          });
+        } catch { /* não bloqueia */ }
+        return new Response(
+          JSON.stringify({ success: true, retry: "softruck", ...res }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      } else {
+        const etapaFila = res.etapa === "associar" ? "softruck_recriar_vinculo" : "softruck_reaponte_usuario";
+        console.error(`[FALHA_SOFTRUCK_TROCA_VINCULO][retry] sol=${solicitacao_id} etapa=${res.etapa} msg=${res.msg}`);
+        await supabase.from("sga_sync_queue").insert({
+          associado_id: troca.novo_associado_id,
+          veiculo_id: troca.veiculo_id,
+          status: "pendente",
+          etapa_parou: `troca_titularidade:${etapaFila}`,
+          erro_ultimo: `[retry] ${res.etapa}: ${res.msg}`,
+          origem: "troca_titularidade",
+        });
+        return new Response(
+          JSON.stringify({ success: false, retry: "softruck", ...res }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    // ============================================
     // RETRY SGA — reexecuta só a etapa Hinova quando a troca já está efetivada/liberada
     // ============================================
     if (retry_sga) {
