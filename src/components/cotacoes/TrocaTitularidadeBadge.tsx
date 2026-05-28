@@ -59,6 +59,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn' | 'ok
   aguardando_monitoramento: { label: 'Troca: aguardando monitoramento', tone: 'info' },
   aguardando_vistoria: { label: 'Troca: aguardando vistoria', tone: 'info' },
   liberada_para_assinatura: { label: 'Troca: liberada p/ assinatura', tone: 'ok' },
+  efetivacao_pendente: { label: 'Troca: efetivação pendente', tone: 'warn' },
   efetivada: { label: 'Troca efetivada', tone: 'ok' },
   reprovada_cadastro: { label: 'Troca reprovada', tone: 'danger' },
   reprovada_monitoramento: { label: 'Troca reprovada', tone: 'danger' },
