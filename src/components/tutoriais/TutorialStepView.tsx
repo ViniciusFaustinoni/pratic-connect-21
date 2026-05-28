@@ -1,14 +1,17 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Lightbulb, ImageIcon } from 'lucide-react';
-import { TutorialStep } from '@/data/tutoriais';
+import { Lightbulb, ImageIcon, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { resolverImagemTutorial } from '@/lib/tutoriais/imagemLocal';
+import type { TutorialStepRow } from '@/hooks/useTutoriais';
 
 interface TutorialStepViewProps {
-  step: TutorialStep;
+  step: TutorialStepRow;
   total: number;
 }
 
 export function TutorialStepView({ step, total }: TutorialStepViewProps) {
+  const imagem = resolverImagemTutorial(step.imagem_url);
   return (
     <div className="space-y-6">
       <div>
@@ -16,14 +19,16 @@ export function TutorialStepView({ step, total }: TutorialStepViewProps) {
           Passo {step.numero} de {total}
         </Badge>
         <h2 className="text-2xl font-semibold tracking-tight">{step.titulo}</h2>
-        <p className="mt-3 text-base text-muted-foreground leading-relaxed">{step.descricao}</p>
+        <p className="mt-3 text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">
+          {step.descricao}
+        </p>
       </div>
 
       <Card className="overflow-hidden bg-muted/30">
         <CardContent className="p-0">
-          {step.imagem ? (
+          {imagem ? (
             <img
-              src={step.imagem}
+              src={imagem}
               alt={`Ilustração do passo ${step.numero}: ${step.titulo}`}
               className="w-full h-auto"
               loading="lazy"
@@ -32,7 +37,7 @@ export function TutorialStepView({ step, total }: TutorialStepViewProps) {
             <div className="flex aspect-video w-full items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <ImageIcon className="mx-auto h-10 w-10 opacity-40" />
-                <p className="mt-2 text-sm">Screenshot em breve</p>
+                <p className="mt-2 text-sm">Sem imagem</p>
               </div>
             </div>
           )}
@@ -57,6 +62,20 @@ export function TutorialStepView({ step, total }: TutorialStepViewProps) {
         </Card>
       )}
 
+      {step.links && step.links.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {step.links.map((l, i) => (
+            <Link
+              key={i}
+              to={l.url}
+              className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {l.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

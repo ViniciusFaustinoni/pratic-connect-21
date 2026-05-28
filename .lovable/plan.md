@@ -1,37 +1,73 @@
 ## Objetivo
 
-Tornar o envio do WhatsApp **opcional** ao liberar associado(s) na tela **Monitoramento › Aprovações › Liberação de Suspensão**. Hoje o envio é automático e incondicional.
+Transformar a seção **Tutoriais** (hoje 100% estática em `src/data/tutoriais/*.ts`) em um sistema gerenciável pelo painel — criar, editar, excluir tutoriais e steps, com upload de imagens — restrito a **Diretor** e **Admin Master**.
 
-## Mudança de UX
+## Escopo
 
-No modal "Liberar X associado(s)" (`LiberacoesAutoVistoria.tsx`), adicionar um **Checkbox** logo acima dos botões do rodapé:
+- Migrar os 4 tutoriais existentes (incluindo Troca de Titularidade) para o banco.
+- Operadores comuns continuam vendo/lendo tutoriais como hoje.
+- Diretor / Admin Master ganham botões de gerenciar (Novo, Editar, Excluir) na lista e no detalhe.
 
-- Label: **"Enviar WhatsApp ao associado com link para reagendar"**
-- Estado padrão: **marcado** (mantém o comportamento atual como default seguro)
-- Quando desmarcado, o texto descritivo do modal muda sutilmente (some a parte "O associado receberá WhatsApp..."), ou aparece um aviso curto: "O associado **não** será notificado — avise por outro canal."
+## Mudanças
 
-O campo "Motivo (opcional)" permanece igual.
+### 1. Banco (migração)
 
-## Mudanças técnicas
+```sql
+create table public.tutoriais (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  titulo text not null,
+  descricao text not null,
+  categoria text not null,
+  tempo_estimado_min int not null default 5,
+  novo boolean not null default false,
+  ordem int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
-1. **`src/pages/monitoramento/LiberacoesAutoVistoria.tsx`**
-   - Novo estado `enviarWhatsapp` (default `true`).
-   - Resetar `enviarWhatsapp = true` em `abrirLiberar()`.
-   - Renderizar Checkbox no `Dialog` de liberar.
-   - Passar `enviar_whatsapp` na chamada `liberar.mutateAsync({ contrato_ids, motivo, enviar_whatsapp })`.
+create table public.tutoriais_steps (
+  id uuid primary key default gen_random_uuid(),
+  tutorial_id uuid not null references public.tutoriais(id) on delete cascade,
+  numero int not null,
+  titulo text not null,
+  descricao text not null,
+  imagem_url text,
+  dicas jsonb not null default '[]'::jsonb,
+  links jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (tutorial_id, numero)
+);
+```
 
-2. **`src/hooks/useLiberacoesAutoVistoria.ts`**
-   - `useLiberarAutoVistoria`: aceitar `enviar_whatsapp?: boolean` (default `true`) no payload da mutation e repassar no `body` do invoke.
-   - Ajustar `toast.success` para mostrar mensagem condicional: com WhatsApp ("WhatsApp enviado") vs sem ("sem notificação").
+- `GRANT SELECT` para `anon` + `authenticated` (tutorial é leitura aberta a logados).
+- `GRANT INSERT/UPDATE/DELETE` só para `authenticated` + RLS exigindo `has_role(auth.uid(),'diretor') OR has_role(auth.uid(),'admin_master')`.
+- Bucket de Storage `tutoriais` (público para leitura) com policy de upload restrita às mesmas roles.
+- Seed dos 4 tutoriais atuais (incluindo imagens já importadas — mantemos os assets locais como `imagem_url` apontando para os imports atuais? não — vamos copiar URLs para storage no seed, OU manter referência pelo caminho original servido pelo build).
 
-3. **`supabase/functions/liberar-reagendamento-autovistoria/index.ts`**
-   - Ler `enviar_whatsapp` do body (default `true` para retrocompat).
-   - Envolver o bloco do loop de WhatsApp (linhas 112–139) num `if (enviarWhatsapp)`.
-   - Auditoria: incluir `enviar_whatsapp` em `dados_novos` para rastreabilidade.
-   - Resposta: incluir `whatsapp_enviado: boolean`.
+> Decisão: o seed grava `imagem_url` com o caminho importado atual (string vazia ou null) — as imagens existentes ficam embarcadas no front via fallback. Novas imagens vão para Storage. Vou anexar um fallback no front: se `imagem_url` começa com `local:troca-titularidade-busca` etc., resolve via mapa de imports; senão usa URL direta.
 
-## Fora de escopo
+### 2. Hooks
 
-- O modal de **Cancelar adesão** continua enviando WhatsApp automaticamente (não foi pedido).
-- Sem alteração no botão "Liberar selecionados" em lote — a mesma flag se aplica naturalmente porque o modal é o mesmo.
-- Sem migração de banco.
+- `src/hooks/useTutoriais.ts` — `useTutoriais()`, `useTutorial(slug)`, `useCreateTutorial`, `useUpdateTutorial`, `useDeleteTutorial`, `useUpsertStep`, `useDeleteStep`, `useUploadTutorialImage`.
+
+### 3. UI
+
+- `src/pages/tutoriais/TutoriaisLista.tsx` — ler do hook em vez do array estático; mostrar botões `+ Novo Tutorial` e ícones de editar/excluir nos cards (gated por role).
+- `src/pages/tutoriais/TutorialDetalhe.tsx` — botão `Editar` (abre modal de gerenciamento) gated por role.
+- Novo: `src/components/tutoriais/TutorialEditorDialog.tsx` — formulário com campos do tutorial + lista editável de steps (adicionar/remover/reordenar/upload imagem/editar texto/dicas/links).
+- Novo: `src/components/tutoriais/StepEditorRow.tsx` — uma linha editável de step.
+
+### 4. Limpeza / compat
+
+- `src/data/tutoriais/*` continua existindo só como "seed" para a migração. Os componentes deixam de importar dele.
+- Página continua na rota `/tutoriais` e `/tutoriais/:slug`.
+
+## Critérios de aceite
+
+- Operador comum: vê os mesmos tutoriais de hoje (Troca de Titularidade etc.), sem botões de edição.
+- Diretor / Admin Master: vê botões `+ Novo Tutorial`, `Editar`, `Excluir` na lista e no detalhe; consegue criar tutorial novo do zero, adicionar steps com imagem (upload) + descrição + dicas + links, salvar, editar depois e excluir.
+- Excluir tutorial cascateia steps e imagens órfãs no Storage (cleanup best-effort).
+- RLS bloqueia escrita para qualquer role fora de Diretor/Admin Master mesmo via API.
+
+Confirma que sigo nesse formato (DB + Storage + CRUD UI)?

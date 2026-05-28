@@ -31512,6 +31512,89 @@ export type Database = {
           },
         ]
       }
+      tutoriais: {
+        Row: {
+          categoria: string
+          created_at: string
+          descricao: string
+          id: string
+          novo: boolean
+          ordem: number
+          slug: string
+          tempo_estimado_min: number
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          categoria: string
+          created_at?: string
+          descricao: string
+          id?: string
+          novo?: boolean
+          ordem?: number
+          slug: string
+          tempo_estimado_min?: number
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          descricao?: string
+          id?: string
+          novo?: boolean
+          ordem?: number
+          slug?: string
+          tempo_estimado_min?: number
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tutoriais_steps: {
+        Row: {
+          created_at: string
+          descricao: string
+          dicas: Json
+          id: string
+          imagem_url: string | null
+          links: Json
+          numero: number
+          titulo: string
+          tutorial_id: string
+        }
+        Insert: {
+          created_at?: string
+          descricao: string
+          dicas?: Json
+          id?: string
+          imagem_url?: string | null
+          links?: Json
+          numero: number
+          titulo: string
+          tutorial_id: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string
+          dicas?: Json
+          id?: string
+          imagem_url?: string | null
+          links?: Json
+          numero?: number
+          titulo?: string
+          tutorial_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tutoriais_steps_tutorial_id_fkey"
+            columns: ["tutorial_id"]
+            isOneToOne: false
+            referencedRelation: "tutoriais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_module_item_visibility: {
         Row: {
           created_at: string
