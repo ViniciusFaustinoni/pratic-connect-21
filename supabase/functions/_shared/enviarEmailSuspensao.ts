@@ -1,0 +1,194 @@
+// @ts-nocheck
+// Helper compartilhado para envio de e-mail de suspensão a partir dos fluxos.
+// - Respeita toggle global (email_suspensao_config.enabled) E toggle individual
+//   (email_suspensao_templates.ativo) do template referente ao fluxo.
+// - Renderiza variáveis dinâmicas (substituição simples {{var}}).
+// - Registra resultado em email_suspensao_envios (status: pendente → entregue / falhou / sem_email).
+// - NUNCA lança — falhas são silenciadas (logadas em console.error) para não derrubar o fluxo principal.
+
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+const FROM_ADDRESS = 'Praticcar <nao-responder@praticcar.org>';
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function corpoParaHtml(corpo: string): string {
+  return `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.6;white-space:pre-wrap">${escapeHtml(corpo)}</div>`;
+}
+
+function render(text: string, vars: Record<string, string>): string {
+  let out = text ?? '';
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'g'), v ?? '');
+  }
+  return out;
+}
+
+function emailValido(e: string | null | undefined): boolean {
+  if (!e) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+}
+
+export interface EnviarEmailSuspensaoArgs {
+  supabase: any; // admin client (service role)
+  templateKey: string; // e.g. 'nao_instalacao'
+  fluxoOrigem: string; // identificador do fluxo (cron_suspensao_nao_instalacao etc.)
+  destinatario: string | null | undefined;
+  variaveis: Record<string, string | number | null | undefined>;
+  clienteNome?: string | null;
+  clienteId?: string | null;
+}
+
+export interface EnviarEmailSuspensaoResult {
+  status: 'entregue' | 'falhou' | 'sem_email' | 'desativado' | 'template_inativo' | 'template_ausente';
+  envioId?: string;
+  erro?: string;
+}
+
+export async function enviarEmailSuspensao(
+  args: EnviarEmailSuspensaoArgs,
+): Promise<EnviarEmailSuspensaoResult> {
+  const {
+    supabase,
+    templateKey,
+    fluxoOrigem,
+    destinatario,
+    variaveis,
+    clienteNome = null,
+    clienteId = null,
+  } = args;
+
+  try {
+    // 1) Toggle global
+    const { data: cfg } = await supabase
+      .from('email_suspensao_config')
+      .select('enabled')
+      .maybeSingle();
+    if (!cfg?.enabled) {
+      return { status: 'desativado' };
+    }
+
+    // 2) Template + toggle individual
+    const { data: tpl } = await supabase
+      .from('email_suspensao_templates')
+      .select('id, fluxo_key, assunto, corpo, ativo')
+      .eq('fluxo_key', templateKey)
+      .maybeSingle();
+    if (!tpl) return { status: 'template_ausente' };
+    if (!tpl.ativo) return { status: 'template_inativo' };
+
+    // 3) Renderização
+    const varsStr: Record<string, string> = {};
+    for (const [k, v] of Object.entries(variaveis ?? {})) {
+      varsStr[k] = v == null ? '' : String(v);
+    }
+    const assuntoRender = render(tpl.assunto ?? '', varsStr).trim() || 'Aviso Praticcar';
+    const corpoRender = render(tpl.corpo ?? '', varsStr);
+
+    // 4) Sem e-mail → registra e devolve
+    const destNorm = (destinatario ?? '').trim().toLowerCase();
+    if (!emailValido(destNorm)) {
+      const { data: row } = await supabase
+        .from('email_suspensao_envios')
+        .insert({
+          cliente_nome: clienteNome,
+          cliente_id: clienteId,
+          destinatario: destNorm || '(sem email)',
+          fluxo_origem: fluxoOrigem,
+          template_id: tpl.id,
+          template_key: tpl.fluxo_key,
+          assunto_enviado: assuntoRender,
+          corpo_renderizado: corpoRender,
+          status: 'sem_email',
+          provider: 'resend',
+          erro_mensagem: 'Cliente sem e-mail cadastrado',
+        })
+        .select('id')
+        .single();
+      return { status: 'sem_email', envioId: row?.id };
+    }
+
+    // 5) Log pendente
+    const { data: pend, error: pendErr } = await supabase
+      .from('email_suspensao_envios')
+      .insert({
+        cliente_nome: clienteNome,
+        cliente_id: clienteId,
+        destinatario: destNorm,
+        fluxo_origem: fluxoOrigem,
+        template_id: tpl.id,
+        template_key: tpl.fluxo_key,
+        assunto_enviado: assuntoRender,
+        corpo_renderizado: corpoRender,
+        status: 'pendente',
+        provider: 'resend',
+      })
+      .select('id')
+      .single();
+    if (pendErr || !pend) {
+      console.error('[enviarEmailSuspensao] falha ao inserir log pendente', pendErr);
+      return { status: 'falhou', erro: pendErr?.message };
+    }
+
+    if (!RESEND_API_KEY) {
+      await supabase
+        .from('email_suspensao_envios')
+        .update({ status: 'falhou', erro_mensagem: 'RESEND_API_KEY ausente' })
+        .eq('id', pend.id);
+      return { status: 'falhou', envioId: pend.id, erro: 'resend_api_key_missing' };
+    }
+
+    // 6) Resend
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: FROM_ADDRESS,
+          to: [destNorm],
+          subject: assuntoRender,
+          html: corpoParaHtml(corpoRender),
+          text: corpoRender,
+        }),
+      });
+      const raw = await r.text();
+      let body: any = null;
+      try { body = raw ? JSON.parse(raw) : null; } catch { body = { raw }; }
+
+      if (r.status >= 200 && r.status < 300 && body?.id) {
+        await supabase
+          .from('email_suspensao_envios')
+          .update({ status: 'entregue', provider_message_id: String(body.id) })
+          .eq('id', pend.id);
+        return { status: 'entregue', envioId: pend.id };
+      }
+      const erroMsg =
+        body?.message || body?.error || body?.name ||
+        `Resend retornou status ${r.status}`;
+      await supabase
+        .from('email_suspensao_envios')
+        .update({
+          status: 'falhou',
+          erro_mensagem: typeof erroMsg === 'string' ? erroMsg : JSON.stringify(erroMsg),
+        })
+        .eq('id', pend.id);
+      return { status: 'falhou', envioId: pend.id, erro: String(erroMsg) };
+    } catch (e: any) {
+      await supabase
+        .from('email_suspensao_envios')
+        .update({
+          status: 'falhou',
+          erro_mensagem: `Falha de rede ao chamar Resend: ${e?.message ?? String(e)}`,
+        })
+        .eq('id', pend.id);
+      return { status: 'falhou', envioId: pend.id, erro: e?.message ?? String(e) };
+    }
+  } catch (e: any) {
+    console.error('[enviarEmailSuspensao] erro inesperado', e);
+    return { status: 'falhou', erro: e?.message ?? String(e) };
+  }
+}
