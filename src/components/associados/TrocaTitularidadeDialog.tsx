@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { TelefoneInput } from '@/components/inputs/MaskedInputs';
-import { Loader2, Users, Info, AlertTriangle } from 'lucide-react';
+import { Loader2, Users, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCriarSolicitacaoTroca } from '@/hooks/useSolicitacoesTroca';
@@ -42,7 +43,30 @@ export function TrocaTitularidadeDialog({
   const [veiculoId, setVeiculoId] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [syncErro, setSyncErro] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [progressDone, setProgressDone] = useState(false);
   const criar = useCriarSolicitacaoTroca();
+
+  // Animação de progresso enquanto a criação está em andamento.
+  // Sobe suavemente até ~90% e trava ali até a resposta chegar; depois vai a 100%.
+  useEffect(() => {
+    if (!criar.isPending) return;
+    setProgress((p) => (p < 5 ? 5 : p));
+    const id = window.setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) return prev;
+        return Math.min(90, prev + Math.max(1, (90 - prev) * 0.08));
+      });
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [criar.isPending]);
+
+  const progressLabel =
+    progressDone ? 'Solicitação criada com sucesso!'
+    : progress < 30 ? 'Validando dados…'
+    : progress < 60 ? 'Sincronizando com o SGA…'
+    : progress < 90 ? 'Gerando cotação do novo titular…'
+    : 'Finalizando…';
 
   // 1) Busca o registro local para obter codigo_hinova + cpf canônicos
   const { data: assocLocal, refetch: refetchLocal } = useQuery({
@@ -116,6 +140,8 @@ export function TrocaTitularidadeDialog({
       setNome(''); setEmail(''); setTelefone('');
       setSyncErro(null);
       setSincronizando(false);
+      setProgress(0);
+      setProgressDone(false);
     }
   }, [open]);
 
@@ -234,18 +260,62 @@ export function TrocaTitularidadeDialog({
       } else {
         toast.success('Solicitação criada! Termo de cancelamento enviado ao titular antigo.');
       }
+      // Trava a barra em 100% e segura ~600ms para o operador enxergar a conclusão
+      setProgress(100);
+      setProgressDone(true);
+      await new Promise((r) => setTimeout(r, 600));
       onOpenChange(false);
       if (result?.cotacao_id) {
         navigate(`/vendas/cotacoes/${result.cotacao_id}`);
       }
     } catch (e) {
+      setProgress(0);
+      setProgressDone(false);
       toast.error(e instanceof Error ? e.message : 'Erro ao criar solicitação');
     }
   };
 
+  const enviando = criar.isPending || progressDone;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Não permite fechar o modal enquanto a solicitação está sendo criada
+        if (enviando && !next) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="max-w-md relative">
+        {enviando && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 rounded-lg bg-background/95 backdrop-blur-sm p-6 text-center animate-in fade-in duration-200">
+            {progressDone ? (
+              <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+            ) : (
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+            )}
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold">
+                {progressDone ? 'Tudo certo!' : 'Criando solicitação de troca…'}
+              </h3>
+              <p className="text-sm text-muted-foreground">{progressLabel}</p>
+            </div>
+            <div className="w-full max-w-xs space-y-2">
+              <Progress
+                value={progress}
+                className={progressDone ? '[&>div]:bg-emerald-500 transition-all' : 'transition-all'}
+              />
+              <div className="text-xs text-muted-foreground tabular-nums">
+                {Math.round(progress)}%
+              </div>
+            </div>
+            {!progressDone && (
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Isso pode levar alguns segundos enquanto sincronizamos o associado e geramos a cotação.
+              </p>
+            )}
+          </div>
+        )}
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
