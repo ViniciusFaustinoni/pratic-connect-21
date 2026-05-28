@@ -45,6 +45,7 @@ const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
   aguardando_monitoramento: 'Aguardando Monitoramento',
   aguardando_vistoria: 'Em Vistoria',
   liberada_para_assinatura: 'Liberada para assinatura',
+  efetivacao_pendente: 'Efetivação pendente',
   efetivada: 'Efetivada',
   reprovada_cadastro: 'Reprovada (Cadastro)',
   reprovada_monitoramento: 'Reprovada (Monitoramento)',
