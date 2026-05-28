@@ -155,8 +155,12 @@ Deno.serve(async (req) => {
           from: FROM_ADDRESS,
           to: [destinatario],
           subject: assuntoRender,
-          html: corpoParaHtml(corpoRender),
-          text: corpoRender,
+          html: envelopeEmailPraticcar({
+            assunto: assuntoRender,
+            corpoHtml: corpoParaMiolo(corpoRender, formato),
+            preHeader: assuntoRender,
+          }),
+          text: corpoParaTexto(corpoRender, formato),
         }),
       });
       resendStatus = r.status;
