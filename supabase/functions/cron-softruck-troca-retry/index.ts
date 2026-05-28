@@ -103,6 +103,66 @@ serve(async (req) => {
       continue;
     }
 
+    // Pré-check: se o estado na Softruck já é o correto, fecha sem chamar retry.
+    try {
+      const { data: rastr } = await supabase
+        .from("rastreadores")
+        .select("plataforma_veiculo_id, imei")
+        .eq("veiculo_id", item.veiculo_id)
+        .eq("status", "instalado")
+        .maybeSingle();
+      const { data: vRow } = await supabase
+        .from("veiculos")
+        .select("softruck_vehicle_id, placa")
+        .eq("id", item.veiculo_id)
+        .maybeSingle();
+      const { data: assoc } = await supabase
+        .from("associados")
+        .select("cpf, email")
+        .eq("id", item.associado_id)
+        .maybeSingle();
+      const vehicleId =
+        (vRow as any)?.softruck_vehicle_id || (rastr as any)?.plataforma_veiculo_id || null;
+      const cpf = ((assoc as any)?.cpf || "").replace(/\D/g, "");
+      const email = (assoc as any)?.email || "";
+
+      if (vehicleId && (cpf || email)) {
+        const userResp = await supabase.functions.invoke("softruck-api", {
+          body: { operation: "buscar-usuario", data: cpf ? { cpf } : { email } },
+        });
+        const userData = (userResp as any)?.data ?? userResp;
+        const userArr = Array.isArray(userData?.data) ? userData.data : Array.isArray(userData) ? userData : [];
+        const novoUserId = String(userArr[0]?.id || userArr[0]?.user?.id || "");
+
+        if (novoUserId) {
+          const listResp = await supabase.functions.invoke("softruck-api", {
+            body: { operation: "listar-usuarios-veiculo", data: { vehicleId } },
+          });
+          const listData = (listResp as any)?.data ?? listResp;
+          const items = Array.isArray(listData?.data) ? listData.data : Array.isArray(listData) ? listData : [];
+          const userIds = items.map((it: any) => String(it?.user?.id ?? it?.attributes?.user_id ?? ""));
+          const novoPresente = userIds.includes(novoUserId);
+          const apenasNovo = userIds.length > 0 && userIds.every((u: string) => u === novoUserId);
+
+          if (novoPresente && apenasNovo) {
+            console.log(`[cron-softruck-troca-retry] item ${item.id}: estado Softruck já correto — fechando`);
+            await supabase
+              .from("sga_sync_queue")
+              .update({
+                status: "concluido",
+                erro_ultimo: "[cron pré-check] estado Softruck já correto",
+                ultima_tentativa_em: new Date().toISOString(),
+              })
+              .eq("id", item.id);
+            ok++;
+            continue;
+          }
+        }
+      }
+    } catch (preErr) {
+      console.warn(`[cron-softruck-troca-retry] pré-check item ${item.id} falhou (segue para retry):`, (preErr as Error)?.message);
+    }
+
     await supabase
       .from("sga_sync_queue")
       .update({ status: "processando", ultima_tentativa_em: new Date().toISOString() })
