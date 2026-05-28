@@ -140,6 +140,8 @@ export function TrocaTitularidadeDialog({
       setNome(''); setEmail(''); setTelefone('');
       setSyncErro(null);
       setSincronizando(false);
+      setProgress(0);
+      setProgressDone(false);
     }
   }, [open]);
 
