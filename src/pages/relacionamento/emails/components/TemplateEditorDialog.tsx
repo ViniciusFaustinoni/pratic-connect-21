@@ -10,21 +10,22 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Save, Loader2 } from 'lucide-react';
 import {
   useUpdateEmailSuspensaoTemplateItem,
   type EmailSuspensaoTemplateItem,
 } from '@/hooks/emails-suspensao/useTemplatesList';
+import { EmailBodyEditor } from './EmailBodyEditor';
+import { wrapPraticcarEmail } from '../lib/wrapPraticcarEmail';
 
 interface Props {
   template: EmailSuspensaoTemplateItem | null;
   onOpenChange: (open: boolean) => void;
 }
 
-function renderPreview(text: string, vars: Record<string, string>): string {
-  let out = text;
+function renderVars(text: string, vars: Record<string, string>): string {
+  let out = text ?? '';
   for (const [k, v] of Object.entries(vars)) {
     out = out.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'g'), v);
   }
@@ -43,7 +44,7 @@ export function TemplateEditorDialog({ template, onOpenChange }: Props) {
   const update = useUpdateEmailSuspensaoTemplateItem();
   const [assunto, setAssunto] = useState('');
   const [corpo, setCorpo] = useState('');
-  const corpoRef = useRef<HTMLTextAreaElement>(null);
+  const insertVarRef = useRef<((code: string) => void) | null>(null);
 
   useEffect(() => {
     if (template) {
@@ -57,92 +58,87 @@ export function TemplateEditorDialog({ template, onOpenChange }: Props) {
   const dirty = assunto !== template.assunto || corpo !== template.corpo;
 
   const inserirVariavel = (code: string) => {
-    const el = corpoRef.current;
-    if (!el) { setCorpo((c) => c + code); return; }
-    const start = el.selectionStart ?? corpo.length;
-    const end = el.selectionEnd ?? corpo.length;
-    setCorpo(corpo.slice(0, start) + code + corpo.slice(end));
-    requestAnimationFrame(() => {
-      el.focus();
-      const pos = start + code.length;
-      el.setSelectionRange(pos, pos);
-    });
+    if (insertVarRef.current) {
+      insertVarRef.current(code);
+      return;
+    }
+    setCorpo((c) => c + code);
   };
 
   async function handleSave() {
-    await update.mutateAsync({ id: template!.id, assunto, corpo });
+    await update.mutateAsync({
+      id: template!.id,
+      assunto,
+      corpo,
+      // ao salvar pelo editor visual, promovemos sempre o template a html
+      formato: 'html',
+    });
     onOpenChange(false);
   }
 
+  const previewHtml = wrapPraticcarEmail({
+    assunto: renderVars(assunto, SAMPLE_VARS) || '(sem assunto)',
+    corpoHtml: renderVars(corpo, SAMPLE_VARS),
+    formato: template.formato,
+  });
+
   return (
     <Dialog open={!!template} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-6xl">
         <DialogHeader>
           <DialogTitle>{template.nome}</DialogTitle>
           <DialogDescription>
             Identificador do fluxo:{' '}
             <code className="font-mono text-xs">{template.fluxo_key}</code>
+            {template.formato === 'texto' && (
+              <Badge variant="outline" className="ml-2 border-amber-300 text-amber-700">
+                Migrando de texto puro — será salvo como HTML
+              </Badge>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="assunto">Assunto</Label>
-              <Input
-                id="assunto"
-                value={assunto}
-                onChange={(e) => setAssunto(e.target.value)}
-              />
-            </div>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="assunto">Assunto</Label>
+            <Input
+              id="assunto"
+              value={assunto}
+              onChange={(e) => setAssunto(e.target.value)}
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label>Variáveis disponíveis</Label>
-              <div className="flex flex-wrap gap-2">
-                {template.variaveis_disponiveis.map((v) => (
-                  <Button
-                    key={v.code}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => inserirVariavel(v.code)}
-                    className="font-mono text-xs"
-                    title={v.label}
-                  >
-                    {v.code}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="corpo">Corpo do e-mail</Label>
-              <Textarea
-                id="corpo"
-                ref={corpoRef}
-                value={corpo}
-                onChange={(e) => setCorpo(e.target.value)}
-                rows={16}
-                className="font-mono text-sm"
-              />
+          <div className="space-y-2">
+            <Label>Variáveis disponíveis</Label>
+            <div className="flex flex-wrap gap-2">
+              {template.variaveis_disponiveis.map((v) => (
+                <Button
+                  key={v.code}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => inserirVariavel(v.code)}
+                  className="font-mono text-xs"
+                  title={v.label}
+                >
+                  {v.code}
+                </Button>
+              ))}
             </div>
           </div>
 
-          <div className="space-y-3">
-            <Label>Pré-visualização</Label>
-            <div className="rounded-md border bg-muted/30 px-3 py-2">
-              <p className="text-xs uppercase text-muted-foreground">Assunto</p>
-              <p className="font-medium text-sm">
-                {renderPreview(assunto, SAMPLE_VARS) || (
-                  <span className="text-muted-foreground italic">(vazio)</span>
-                )}
-              </p>
-            </div>
-            <div className="rounded-md border bg-background p-4 whitespace-pre-wrap text-sm leading-relaxed min-h-[320px]">
-              {renderPreview(corpo, SAMPLE_VARS) || (
-                <span className="text-muted-foreground italic">(vazio)</span>
-              )}
-            </div>
+          <div className="space-y-2">
+            <Label>Corpo do e-mail</Label>
+            <EmailBodyEditor
+              value={corpo}
+              onChange={setCorpo}
+              insertVariableRef={insertVarRef}
+              previewHtml={previewHtml}
+            />
+            <p className="text-xs text-muted-foreground">
+              O cabeçalho azul e o rodapé com CNPJ são adicionados automaticamente em todos os e-mails.
+              Você edita só o conteúdo do meio.
+            </p>
           </div>
         </div>
 
