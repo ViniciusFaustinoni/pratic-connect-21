@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import { enviarEmailSuspensao } from '../_shared/enviarEmailSuspensao.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -127,7 +128,7 @@ Deno.serve(async (req) => {
 
     const { data: assoc } = await supabase
       .from('associados')
-      .select('id, nome, telefone, uf')
+      .select('id, nome, telefone, email, uf')
       .eq('id', contrato.associado_id)
       .maybeSingle();
     const uf = (assoc?.uf || '').toUpperCase() || null;
@@ -186,25 +187,47 @@ Deno.serve(async (req) => {
       })
       .eq('id', contrato.veiculo_id);
 
-    // WhatsApp (mesma mensagem do cron)
-    try {
-      if (assoc?.telefone) {
-        const nomePrimeiro = assoc.nome?.split(' ')[0] ?? 'Associado';
-        const placaRef = veiculo.placa ?? veiculo.modelo ?? '---';
-        await supabase.functions.invoke('whatsapp-send-text', {
-          body: {
-            telefone: assoc.telefone,
-            mensagem: `Olá ${nomePrimeiro}! ⚠️ Cobertura (Roubo e Furto) suspensa - instalação não realizada em ${prazoHoras}h.`,
-            template_name: 'suspensao_cobertura_nao_instalacao_v1',
-            template_params: [nomePrimeiro, String(placaRef), String(prazoHoras)],
-            referencia_tipo: 'contrato',
-            referencia_id: contrato.id,
-          },
-        });
+    // Notificações em PARALELO (WhatsApp + E-mail). Falha em um não impede o outro.
+    const nomePrimeiro = assoc?.nome?.split(' ')[0] ?? 'Associado';
+    const placaRef = veiculo.placa ?? veiculo.modelo ?? '---';
+
+    const pWhatsapp = (async () => {
+      try {
+        if (assoc?.telefone) {
+          await supabase.functions.invoke('whatsapp-send-text', {
+            body: {
+              telefone: assoc.telefone,
+              mensagem: `Olá ${nomePrimeiro}! ⚠️ Cobertura (Roubo e Furto) suspensa - instalação não realizada em ${prazoHoras}h.`,
+              template_name: 'suspensao_cobertura_nao_instalacao_v1',
+              template_params: [nomePrimeiro, String(placaRef), String(prazoHoras)],
+              referencia_tipo: 'contrato',
+              referencia_id: contrato.id,
+            },
+          });
+        }
+      } catch (e) {
+        console.error('[suspender-manual] Falha ao notificar WhatsApp', e);
       }
-    } catch (e) {
-      console.error('[suspender-manual] Falha ao notificar WhatsApp', e);
-    }
+    })();
+
+    const pEmail = enviarEmailSuspensao({
+      supabase,
+      templateKey: 'nao_instalacao',
+      fluxoOrigem: 'suspensao_manual_nao_instalacao',
+      destinatario: assoc?.email ?? null,
+      variaveis: {
+        nome_cliente: assoc?.nome ?? nomePrimeiro,
+        placa: placaRef,
+        prazo_horas: prazoHoras,
+      },
+      clienteNome: assoc?.nome ?? null,
+      clienteId: assoc?.id ?? null,
+    }).catch((e) => {
+      console.error('[suspender-manual] Falha no envio de e-mail', e);
+      return null;
+    });
+
+    await Promise.all([pWhatsapp, pEmail]);
 
     // Auditoria
     await insertAuditLog(supabase as any, {

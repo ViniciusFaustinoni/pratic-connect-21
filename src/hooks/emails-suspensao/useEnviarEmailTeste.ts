@@ -4,11 +4,8 @@ import { toast } from 'sonner';
 
 export interface EnviarTestePayload {
   destinatario: string;
-  variaveis?: {
-    nome_cliente?: string;
-    motivo_suspensao?: string;
-    data?: string;
-  };
+  template_key?: string;
+  variaveis?: Record<string, string | undefined>;
 }
 
 export interface EnviarTesteResultado {

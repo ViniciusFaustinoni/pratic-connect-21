@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ToggleEnvioSuspensao } from './components/ToggleEnvioSuspensao';
-import { TemplateEditor } from './components/TemplateEditor';
+import { TemplatesList } from './components/TemplatesList';
 import { HistoricoEnvios } from './components/HistoricoEnvios';
 import { EnviarTesteDialog } from './components/EnviarTesteDialog';
 
@@ -52,14 +52,14 @@ export default function EmailsRelacionamento() {
 
       <ToggleEnvioSuspensao />
 
-      <Tabs defaultValue="template" className="space-y-4">
+      <Tabs defaultValue="templates" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="template">Template</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="historico">Histórico de envios</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="template" className="space-y-4">
-          <TemplateEditor />
+        <TabsContent value="templates" className="space-y-4">
+          <TemplatesList />
         </TabsContent>
 
         <TabsContent value="historico" className="space-y-4">
