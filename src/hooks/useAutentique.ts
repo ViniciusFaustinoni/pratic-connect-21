@@ -50,9 +50,12 @@ export function useSendToAutentique() {
         body: params,
       });
 
-      if (error) throw error;
+      if (error) {
+        (error as any).__params = params;
+        throw error;
+      }
       if (!data.success) throw new Error(data.error || 'Erro ao enviar para Autentique');
-      
+
       return data;
     },
     onSuccess: (data) => {
@@ -61,9 +64,38 @@ export function useSendToAutentique() {
       });
       queryClient.invalidateQueries({ queryKey: ['contratos'] });
     },
-    onError: (error: any) => {
-      toast.error('Erro ao enviar proposta', {
-        description: error.message,
+    onError: async (error: any) => {
+      const { toastErroEdge } = await import('@/lib/ui/toastErroEdge');
+      const params: SendToAutentiqueParams | undefined = error?.__params;
+      await toastErroEdge(error, {
+        contexto: 'Enviar para Autentique',
+        emailFix: params?.contratoId
+          ? {
+              contratoId: params.contratoId,
+              onRetry: async () => {
+                // Recarrega email atualizado do contrato antes de retentar
+                const { data: ctr } = await supabase
+                  .from('contratos')
+                  .select('cliente_email, cliente_nome, cliente_cpf, cliente_telefone')
+                  .eq('id', params.contratoId)
+                  .maybeSingle();
+                const retryParams: SendToAutentiqueParams = {
+                  contratoId: params.contratoId,
+                  clienteNome: ctr?.cliente_nome ?? params.clienteNome,
+                  clienteEmail: ctr?.cliente_email ?? params.clienteEmail,
+                  clienteCpf: ctr?.cliente_cpf ?? params.clienteCpf,
+                  clienteTelefone: ctr?.cliente_telefone ?? params.clienteTelefone,
+                };
+                const { data, error: err2 } = await supabase.functions.invoke('autentique-create', {
+                  body: retryParams,
+                });
+                if (err2) throw err2;
+                if (!data?.success) throw new Error(data?.error || 'Erro ao enviar para Autentique');
+                toast.success('Proposta enviada para assinatura!');
+                queryClient.invalidateQueries({ queryKey: ['contratos'] });
+              },
+            }
+          : undefined,
       });
     },
   });
