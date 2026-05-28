@@ -260,11 +260,17 @@ export function TrocaTitularidadeDialog({
       } else {
         toast.success('Solicitação criada! Termo de cancelamento enviado ao titular antigo.');
       }
+      // Trava a barra em 100% e segura ~600ms para o operador enxergar a conclusão
+      setProgress(100);
+      setProgressDone(true);
+      await new Promise((r) => setTimeout(r, 600));
       onOpenChange(false);
       if (result?.cotacao_id) {
         navigate(`/vendas/cotacoes/${result.cotacao_id}`);
       }
     } catch (e) {
+      setProgress(0);
+      setProgressDone(false);
       toast.error(e instanceof Error ? e.message : 'Erro ao criar solicitação');
     }
   };
