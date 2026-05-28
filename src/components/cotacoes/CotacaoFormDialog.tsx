@@ -1822,7 +1822,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             coberturasRemovidas: p.coberturasRemovidas || [],
           })),
           // Tipo da cotação (informativo) espelhado
-          tipo_entrada: (origemTroca ? 'troca_titularidade' : (origemSubstituicao ? 'substituicao_placa' : (tipoCotacao || 'adesao'))) as string,
+          tipo_entrada: (
+            origemTroca
+              ? 'troca_titularidade'
+              : origemSubstituicao
+                ? 'substituicao_placa'
+                : (tipoCotacao === 'troca_titularidade' || tipoCotacao === 'substituicao_placa')
+                  ? 'adesao'
+                  : (tipoCotacao || 'adesao')
+          ) as string,
           ...(tipoCotacao === 'outro' && tipoCotacaoOutro.trim()
             ? { tipo_entrada_descricao: tipoCotacaoOutro.trim() }
             : {}),
