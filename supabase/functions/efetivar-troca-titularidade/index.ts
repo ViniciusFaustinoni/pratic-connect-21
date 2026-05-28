@@ -1283,6 +1283,19 @@ serve(async (req) => {
             } catch (logErr) {
               console.warn("[efetivar-troca][softruck-vinculo] insertAuditLog falhou:", (logErr as Error)?.message);
             }
+            // Limpa pendências dessa solicitação no sga_sync_queue (idempotente)
+            try {
+              await supabase
+                .from("sga_sync_queue")
+                .update({ status: "concluido", ultima_tentativa_em: new Date().toISOString(), erro_ultimo: null })
+                .eq("origem", "troca_titularidade")
+                .eq("veiculo_id", veiculoId)
+                .eq("associado_id", novoAssociadoId)
+                .in("status", ["pendente", "processando", "falha_permanente"])
+                .like("etapa_parou", "troca_titularidade:softruck%");
+            } catch (qErr) {
+              console.warn("[efetivar-troca][softruck-vinculo] cleanup fila falhou:", (qErr as Error)?.message);
+            }
           } else {
             const etapaFila = res.etapa === "associar" ? "softruck_recriar_vinculo" : "softruck_reaponte_usuario";
             console.error(
