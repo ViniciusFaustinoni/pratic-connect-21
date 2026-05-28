@@ -39,13 +39,16 @@ serve(async (req) => {
       .eq('status', 'falha_permanente')
       .or('erro_ultimo.ilike.%Placa duplicada%,erro_ultimo.ilike.%HTML%,erro_ultimo.ilike.%502%,erro_ultimo.ilike.%rate%,erro_ultimo.ilike.%token%,erro_ultimo.ilike.%autorizado%');
 
-    // Buscar registros pendentes prontos para reenvio
+    // Buscar registros pendentes prontos para reenvio.
+    // EXCLUI etapas que exigem ação manual ('troca_titularidade:codigo_associado_nao_encontrado')
+    // — essas só saem da fila via edge `troca-resolver-pendencia-manual`.
     const { data: pendentes, error: fetchError } = await supabase
       .from('sga_sync_queue')
       .select('*')
       .eq('status', 'pendente')
       .lte('proximo_reenvio_em', new Date().toISOString())
       .lt('tentativas', 10)
+      .neq('etapa_parou', 'troca_titularidade:codigo_associado_nao_encontrado')
       .order('proximo_reenvio_em', { ascending: true })
       .limit(10); // Processar no máximo 10 por vez
 
