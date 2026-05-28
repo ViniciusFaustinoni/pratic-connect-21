@@ -27,6 +27,284 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============================================================
+// SOFTRUCK — Resolução resiliente do vehicleId + reaponte de usuário
+// ============================================================
+// Helper extraído para permitir reuso entre o fluxo principal e o modo
+// `retry_softruck` (drenado pelo cron-softruck-troca-retry). Sem isso, casos
+// como SRZ2E82 (28/05/26) ficavam efetivados localmente mas com vínculo
+// errado na Softruck, porque o branch inline desistia quando
+// `veiculos.softruck_vehicle_id` estava NULL.
+async function resolverSoftruckVehicleId(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  veiculoId: string,
+  rastreador: { id: string; imei: string | null; plataforma_device_id: string | null; plataforma_veiculo_id: string | null } | null,
+  placa: string | null,
+  // deno-lint-ignore no-explicit-any
+  callSoftruck: (op: string, payload: unknown) => Promise<any>,
+): Promise<string | null> {
+  // 1) Cache local em veiculos
+  const { data: veicSoft } = await supabase
+    .from("veiculos")
+    .select("softruck_vehicle_id")
+    .eq("id", veiculoId)
+    .maybeSingle();
+  if ((veicSoft as any)?.softruck_vehicle_id) {
+    return String((veicSoft as any).softruck_vehicle_id);
+  }
+
+  // 2) plataforma_veiculo_id do rastreador
+  if (rastreador?.plataforma_veiculo_id) {
+    const vId = String(rastreador.plataforma_veiculo_id);
+    await supabase.from("veiculos").update({ softruck_vehicle_id: vId }).eq("id", veiculoId);
+    return vId;
+  }
+
+  // Helper p/ extrair lista de JSON:API
+  // deno-lint-ignore no-explicit-any
+  const extractItems = (resp: any): any[] => {
+    const inner = resp?.data ?? resp;
+    const arr = inner?.data ?? inner;
+    return Array.isArray(arr) ? arr : [];
+  };
+  // deno-lint-ignore no-explicit-any
+  const extractVehicleIdFromDevice = (dev: any): string | null => {
+    return (
+      dev?.relationships?.vehicle?.id ||
+      dev?.relationships?.vehicle?.data?.id ||
+      null
+    );
+  };
+
+  // 3) Lookup por deviceId
+  if (rastreador?.plataforma_device_id) {
+    try {
+      const r = await callSoftruck("buscar-device-id", { deviceId: rastreador.plataforma_device_id });
+      const items = extractItems(r);
+      const dev = items[0] ?? (r as any)?.data?.data ?? (r as any)?.data;
+      const vId = extractVehicleIdFromDevice(dev);
+      if (vId) {
+        await persistVehicleIdResolved(supabase, veiculoId, rastreador.id, String(vId));
+        return String(vId);
+      }
+    } catch (e) {
+      console.warn("[softruck-resolver] buscar-device-id falhou:", (e as Error)?.message);
+    }
+  }
+
+  // 4) Lookup por IMEI
+  if (rastreador?.imei) {
+    try {
+      const r = await callSoftruck("buscar-device-imei", { imei: rastreador.imei });
+      const items = extractItems(r);
+      const dev = items[0] ?? null;
+      const vId = extractVehicleIdFromDevice(dev);
+      if (vId) {
+        await persistVehicleIdResolved(supabase, veiculoId, rastreador.id, String(vId));
+        return String(vId);
+      }
+    } catch (e) {
+      console.warn("[softruck-resolver] buscar-device-imei falhou:", (e as Error)?.message);
+    }
+  }
+
+  // 5) Lookup por placa
+  if (placa) {
+    try {
+      const r = await callSoftruck("buscar-veiculo-placa", { placa });
+      const items = extractItems(r);
+      const veh = items[0];
+      const vId = veh?.id ? String(veh.id) : null;
+      if (vId) {
+        await persistVehicleIdResolved(supabase, veiculoId, rastreador?.id ?? null, vId);
+        return vId;
+      }
+    } catch (e) {
+      console.warn("[softruck-resolver] buscar-veiculo-placa falhou:", (e as Error)?.message);
+    }
+  }
+
+  return null;
+}
+
+async function persistVehicleIdResolved(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  veiculoId: string,
+  rastreadorId: string | null,
+  vehicleId: string,
+) {
+  await supabase.from("veiculos").update({ softruck_vehicle_id: vehicleId }).eq("id", veiculoId);
+  if (rastreadorId) {
+    await supabase
+      .from("rastreadores")
+      .update({ plataforma_veiculo_id: vehicleId })
+      .eq("id", rastreadorId);
+  }
+  console.log(`[softruck-resolver] vehicleId resolvido e persistido: veiculo=${veiculoId} vehicleId=${vehicleId}`);
+}
+
+/**
+ * Executa o reaponte de usuário Softruck para a troca de titularidade:
+ *   - resolve user_id do novo titular (busca por CPF/email → cria se não existir)
+ *   - lista usuários atuais do veículo
+ *   - remove vínculos antigos
+ *   - cria vínculo novo
+ *
+ * Retorna `{ ok, status, etapa_falha?, msg? }`. Não enfileira sozinha — chamador
+ * decide enqueue/log conforme contexto (fluxo principal vs retry).
+ */
+async function executarSoftruckTrocaVinculo(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  veiculoId: string,
+  novoAssociadoId: string,
+): Promise<
+  | { ok: true; status: "feito" | "noop" | "sem_vehicle_id" | "sem_rastreador" | "sem_identificador_novo"; vehicleId?: string; userId?: string }
+  | { ok: false; etapa: "resolve_user" | "listar" | "desassociar" | "associar" | "resolver_vehicle_id"; msg: string }
+> {
+  // Rastreador físico instalado (canônico). Sem ele, não há sentido em reapontar
+  // vínculo de equipamento na plataforma.
+  const { data: rastrInstalado } = await supabase
+    .from("rastreadores")
+    .select("id, imei, plataforma, plataforma_device_id, plataforma_veiculo_id, status")
+    .eq("veiculo_id", veiculoId)
+    .eq("status", "instalado")
+    .maybeSingle();
+
+  if (!rastrInstalado || ((rastrInstalado as any)?.plataforma || "").toLowerCase() !== "softruck") {
+    return { ok: true, status: "sem_rastreador" };
+  }
+
+  // Hook de teste
+  // deno-lint-ignore no-explicit-any
+  const callSoftruck =
+    (globalThis as any).__softruckTrocaVinculoOverride ??
+    ((operation: string, payload: unknown) =>
+      supabase.functions.invoke("softruck-api", { body: { operation, data: payload } }));
+
+  // Resolve vehicleId com cadeia de fallback
+  const { data: vRow } = await supabase
+    .from("veiculos")
+    .select("placa")
+    .eq("id", veiculoId)
+    .maybeSingle();
+
+  const vehicleId = await resolverSoftruckVehicleId(
+    supabase,
+    veiculoId,
+    rastrInstalado as any,
+    (vRow as any)?.placa || null,
+    callSoftruck,
+  );
+
+  if (!vehicleId) {
+    return { ok: false, etapa: "resolver_vehicle_id", msg: "Não foi possível resolver vehicleId na Softruck (rastreador/IMEI/placa)" };
+  }
+
+  // Novo titular: dados pessoais
+  const { data: novoAssoc } = await supabase
+    .from("associados")
+    .select("nome, cpf, email, telefone")
+    .eq("id", novoAssociadoId)
+    .maybeSingle();
+
+  const cpfNovo = ((novoAssoc as any)?.cpf || "").replace(/\D/g, "");
+  const emailNovo = (novoAssoc as any)?.email as string | undefined;
+  const nomeNovo = (novoAssoc as any)?.nome as string | undefined;
+  const telNovo = (novoAssoc as any)?.telefone as string | undefined;
+
+  if (!cpfNovo && !emailNovo) {
+    return { ok: true, status: "sem_identificador_novo" };
+  }
+
+  // deno-lint-ignore no-explicit-any
+  const extractItems = (resp: any): any[] => {
+    const inner = resp?.data ?? resp;
+    const arr = inner?.data ?? inner;
+    return Array.isArray(arr) ? arr : [];
+  };
+
+  // ===== Passo 1: resolver/criar usuário Softruck do novo titular =====
+  let novoUserId: string | undefined;
+  try {
+    let found: any[] = [];
+    if (cpfNovo) {
+      const r1 = await callSoftruck("buscar-usuario", { cpf: cpfNovo });
+      if ((r1 as any)?.error) throw new Error(JSON.stringify((r1 as any).error));
+      found = extractItems(r1);
+    }
+    if (found.length === 0 && emailNovo) {
+      const r2 = await callSoftruck("buscar-usuario", { email: emailNovo });
+      if ((r2 as any)?.error) throw new Error(JSON.stringify((r2 as any).error));
+      found = extractItems(r2);
+    }
+    if (found.length > 0) {
+      novoUserId = String(found[0]?.id ?? found[0]?.user?.id);
+    } else {
+      const created = await callSoftruck("criar-usuario", {
+        username: emailNovo || cpfNovo,
+        email: emailNovo,
+        nome: nomeNovo,
+        telefone: telNovo,
+        cpf: cpfNovo,
+      });
+      if ((created as any)?.error) throw new Error(JSON.stringify((created as any).error));
+      const cItems = extractItems(created);
+      novoUserId = String(
+        cItems[0]?.id ?? (created as any)?.data?.data?.id ?? (created as any)?.data?.id ?? "",
+      ) || undefined;
+    }
+    if (!novoUserId) throw new Error("user_id não retornado pela Softruck após buscar/criar");
+  } catch (e) {
+    return { ok: false, etapa: "resolve_user", msg: (e as Error)?.message ?? String(e) };
+  }
+
+  // ===== Passo 2: listar vínculos atuais =====
+  let antigosAssocIds: string[] = [];
+  let novoJaVinculado = false;
+  try {
+    const lst = await callSoftruck("listar-usuarios-veiculo", { vehicleId });
+    if ((lst as any)?.error) throw new Error(JSON.stringify((lst as any).error));
+    const items = extractItems(lst);
+    for (const it of items) {
+      const uid = String(it?.user?.id ?? it?.attributes?.user_id ?? "");
+      const aid = String(it?.id ?? "");
+      if (!aid) continue;
+      if (uid && uid === novoUserId) novoJaVinculado = true;
+      else antigosAssocIds.push(aid);
+    }
+    if (novoJaVinculado && antigosAssocIds.length === 0) {
+      return { ok: true, status: "noop", vehicleId, userId: novoUserId };
+    }
+  } catch (e) {
+    return { ok: false, etapa: "listar", msg: (e as Error)?.message ?? String(e) };
+  }
+
+  // ===== Passo 3: remover vínculos antigos =====
+  try {
+    for (const assocId of antigosAssocIds) {
+      const del = await callSoftruck("desassociar-usuario-veiculo", { associationId: assocId });
+      if ((del as any)?.error) throw new Error(JSON.stringify((del as any).error));
+    }
+  } catch (e) {
+    return { ok: false, etapa: "desassociar", msg: (e as Error)?.message ?? String(e) };
+  }
+
+  // ===== Passo 4: associar novo (se faltar) =====
+  if (!novoJaVinculado) {
+    try {
+      const created = await callSoftruck("associar-usuario-veiculo", { userId: novoUserId, vehicleId });
+      if ((created as any)?.error) throw new Error(JSON.stringify((created as any).error));
+    } catch (e) {
+      return { ok: false, etapa: "associar", msg: (e as Error)?.message ?? String(e) };
+    }
+  }
+
+  return { ok: true, status: "feito", vehicleId, userId: novoUserId };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
