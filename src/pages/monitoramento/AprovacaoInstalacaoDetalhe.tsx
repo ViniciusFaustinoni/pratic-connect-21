@@ -127,6 +127,48 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         rastreador = rData;
       }
 
+      // ============= VISTORIA TÉCNICA (informações do técnico)
+      // Busca a vistoria presencial mais recente do veículo para extrair
+      // avarias, ressalvas, observações, KM, motivo de reprovação etc.
+      // Fallback: qualquer vistoria mais recente, se não houver presencial.
+      let vistoriaTecnico: any = null;
+      if (servico.veiculo_id) {
+        const baseSelect =
+          'id, modalidade, avarias, ressalvas, observacoes, observacoes_analise, motivo_reprovacao, km_atual, quilometragem, concluida_em, status, instalador_responsavel_id, instalador_id';
+        const { data: vPresencial } = await supabase
+          .from('vistorias')
+          .select(baseSelect)
+          .eq('veiculo_id', servico.veiculo_id)
+          .eq('modalidade', 'presencial')
+          .order('concluida_em', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        vistoriaTecnico = vPresencial || null;
+        if (!vistoriaTecnico) {
+          const { data: vQualquer } = await supabase
+            .from('vistorias')
+            .select(baseSelect)
+            .eq('veiculo_id', servico.veiculo_id)
+            .order('concluida_em', { ascending: false, nullsFirst: false })
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          vistoriaTecnico = vQualquer || null;
+        }
+        if (vistoriaTecnico) {
+          const tecId = vistoriaTecnico.instalador_responsavel_id || vistoriaTecnico.instalador_id;
+          if (tecId) {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('nome')
+              .eq('id', tecId)
+              .maybeSingle();
+            vistoriaTecnico.tecnico_nome = (prof as any)?.nome || null;
+          }
+        }
+      }
+
       // Buscar documentos do associado
       let documentos: any[] = [];
       if (servico.associado_id) {
@@ -329,6 +371,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         isAtendimentoBase,
         vistoriaModalidade,
         cadastroAprovado,
+        vistoriaTecnico,
       };
     },
     enabled: !!servicoId,
@@ -339,17 +382,80 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
 
 const fotoLabels: Record<string, string> = {
   frente_veiculo: 'Frente do Veículo',
+  frente: 'Frente',
   traseira_veiculo: 'Traseira do Veículo',
+  traseira: 'Traseira',
   placa_veiculo: 'Placa',
   local_rastreador: 'Local do Rastreador',
+  codigo_rastreador: 'Código do Rastreador',
+  teste_comunicacao: 'Teste de Comunicação',
   hodometro: 'Hodômetro',
+  odometro: 'Odômetro',
+  painel_km: 'Painel (KM)',
+  painel_completo: 'Painel Completo',
+  painel_odometro_ligado: 'Painel/Odômetro Ligado',
   lateral_esquerda: 'Lateral Esquerda',
   lateral_direita: 'Lateral Direita',
-  avarias: 'Avarias',
+  frente_lateral_esquerda: 'Frente Lateral Esquerda',
+  frente_lateral_direita: 'Frente Lateral Direita',
+  traseira_lateral_esquerda: 'Traseira Lateral Esquerda',
+  traseira_lateral_direita: 'Traseira Lateral Direita',
+  avarias: 'Avarias / Ressalvas',
+  motor: 'Motor',
+  motor_chassi: 'Motor / Chassi',
+  motor_direito: 'Motor (Direito)',
+  motor_esquerdo: 'Motor (Esquerdo)',
+  chassi: 'Chassi',
+  bateria: 'Bateria',
+  bateria_validade: 'Validade da Bateria',
+  chave: 'Chave',
+  chave_roda_macaco: 'Chave de Roda / Macaco',
+  farol: 'Farol',
+  estepe: 'Estepe',
+  parabrisa: 'Parabrisa',
+  capo_aberto_placa: 'Capô Aberto (Placa)',
+  mala_aberta: 'Porta-Malas',
+  vistoriador_selfie: 'Selfie do Vistoriador',
+  banco: 'Banco',
+  banco_motorista: 'Banco do Motorista',
+  banco_passageiro: 'Banco do Passageiro',
+  banco_traseiro: 'Banco Traseiro',
+  forracao_porta_dianteira_esquerda: 'Forração Porta Diant. Esq.',
+  forracao_porta_dianteira_direita: 'Forração Porta Diant. Dir.',
+  forracao_porta_traseira_esquerda: 'Forração Porta Tras. Esq.',
+  forracao_porta_traseira_direita: 'Forração Porta Tras. Dir.',
+  pneu_dianteiro_esquerdo: 'Pneu Diant. Esq.',
+  pneu_dianteiro_direito: 'Pneu Diant. Dir.',
+  pneu_traseiro_esquerdo: 'Pneu Tras. Esq.',
+  pneu_traseiro_direito: 'Pneu Tras. Dir.',
+  sola_pneu_dianteiro: 'Sola Pneu Dianteiro',
+  sola_pneu_traseiro: 'Sola Pneu Traseiro',
   interior: 'Interior',
   assinatura_cliente: 'Assinatura do Cliente',
   video_360: 'Vídeo 360°',
 };
+
+// Tipos de foto que o técnico produz na vistoria (rastreador, avarias,
+// mecânica, selfie). Exibidos em card destacado "Vistoria do Técnico".
+const TECNICO_FOTO_TIPOS = new Set<string>([
+  'local_rastreador',
+  'codigo_rastreador',
+  'teste_comunicacao',
+  'avarias',
+  'motor',
+  'motor_chassi',
+  'motor_direito',
+  'motor_esquerdo',
+  'painel_km',
+  'painel_odometro_ligado',
+  'painel_completo',
+  'vistoriador_selfie',
+  'bateria',
+  'bateria_validade',
+  'chave',
+  'chave_roda_macaco',
+  'farol',
+]);
 
 export default function AprovacaoInstalacaoDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -415,7 +521,7 @@ export default function AprovacaoInstalacaoDetalhe() {
     );
   }
 
-  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado, enderecoInstalacao, enderecoCadastral, enderecoBase, isAtendimentoBase, vistoriaModalidade, cadastroAprovado } = data as any;
+  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado, enderecoInstalacao, enderecoCadastral, enderecoBase, isAtendimentoBase, vistoriaModalidade, cadastroAprovado, vistoriaTecnico } = data as any;
   const associado = servico.associado as any;
   const veiculo = servico.veiculo as any;
   const profissional = servico.profissional as any;
@@ -457,6 +563,18 @@ export default function AprovacaoInstalacaoDetalhe() {
   };
 
   const imageFotos = fotos.filter((f: any) => f.tipo !== 'video_360');
+  const tecnicoFotos = imageFotos.filter((f: any) => TECNICO_FOTO_TIPOS.has(f.tipo));
+  const outrasFotos = imageFotos.filter((f: any) => !TECNICO_FOTO_TIPOS.has(f.tipo));
+  const temInfoTecnica = !!vistoriaTecnico && !!(
+    vistoriaTecnico.avarias ||
+    vistoriaTecnico.ressalvas ||
+    vistoriaTecnico.observacoes ||
+    vistoriaTecnico.observacoes_analise ||
+    vistoriaTecnico.motivo_reprovacao ||
+    vistoriaTecnico.km_atual ||
+    vistoriaTecnico.quilometragem ||
+    vistoriaTecnico.tecnico_nome
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
