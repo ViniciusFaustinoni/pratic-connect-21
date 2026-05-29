@@ -199,23 +199,24 @@ export function RastreadorDetailDrawer({
     if (!rastreadorId) return;
     setReprocessandoSoftruck(true);
     try {
-      const { error } = await supabase
-        .from('rastreadores')
-        .update({
-          softruck_integration_status: 'PENDING',
-          softruck_tentativas: 0,
-          softruck_last_attempt_at: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', rastreadorId);
+      const { data, error } = await supabase.functions.invoke('softruck-corrigir-vinculo', {
+        body: { rastreador_id: rastreadorId },
+      });
       if (error) throw error;
       const { toast } = await import('sonner');
-      toast.success('Reprocessamento enfileirado. O cron vai processar em até 10 min.');
+      const ok = (data as any)?.success;
+      const etapa = (data as any)?.etapa;
+      const motivo = (data as any)?.motivo_falha;
+      if (ok) {
+        toast.success(`Vínculo Softruck corrigido (${etapa || 'concluida'}).`);
+      } else {
+        toast.error(`Correção falhou: ${motivo || etapa || 'erro desconhecido'} — cron vai retentar.`);
+      }
       await queryClient.invalidateQueries({ queryKey: ['rastreador', rastreadorId] });
       await queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
     } catch (e: any) {
       const { toast } = await import('sonner');
-      toast.error(e?.message || 'Falha ao enfileirar reprocessamento');
+      toast.error(e?.message || 'Falha ao executar correção Softruck');
     } finally {
       setReprocessandoSoftruck(false);
     }
