@@ -3,6 +3,7 @@ import { ConsultorActionableError, respostaErroEstruturado, validarEmailOuLancar
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getConfiguracaoNumero } from '../_shared/config-helper.ts'
 import { resolverDiaVencimento } from '../_shared/vencimento-utils.ts'
+import { normalizarTipoEntrada } from '../_shared/tipo-entrada.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
