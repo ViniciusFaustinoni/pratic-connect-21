@@ -120,13 +120,6 @@ export type Database = {
             foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "acionamentos_roubo_furto_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -269,13 +262,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "acionamentos_roubo_furto_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "acionamentos_roubo_furto_veiculo_id_fkey"
@@ -534,13 +520,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "acordos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "acordos_associado_id_fkey"
@@ -886,25 +865,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "agendamentos_base_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
             foreignKeyName: "agendamentos_base_oficina_id_fkey"
             columns: ["oficina_id"]
             isOneToOne: false
             referencedRelation: "oficinas"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "agendamentos_base_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["vistoria_id"]
           },
           {
             foreignKeyName: "agendamentos_base_vistoria_id_fkey"
@@ -1182,13 +1147,6 @@ export type Database = {
             foreignKeyName: "analises_relacionamento_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "analises_relacionamento_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -1231,13 +1189,6 @@ export type Database = {
             foreignKeyName: "analises_relacionamento_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "analises_relacionamento_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -1247,13 +1198,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "analises_relacionamento_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "analises_relacionamento_veiculo_id_fkey"
@@ -1424,13 +1368,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "api_leads_logs_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
         ]
       }
@@ -1782,13 +1719,6 @@ export type Database = {
             foreignKeyName: "asaas_clientes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "asaas_clientes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -1991,13 +1921,6 @@ export type Database = {
             foreignKeyName: "asaas_cobrancas_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "asaas_cobrancas_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -2061,13 +1984,6 @@ export type Database = {
             foreignKeyName: "asaas_cobrancas_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "asaas_cobrancas_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -2105,13 +2021,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "asaas_cobrancas_veiculo_id_fkey"
@@ -2225,13 +2134,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "asaas_pagamentos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "asaas_pagamentos_associado_id_fkey"
@@ -2575,13 +2477,6 @@ export type Database = {
             foreignKeyName: "associados_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "associados_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -2696,13 +2591,6 @@ export type Database = {
             foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "associados_beneficios_adicionais_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -2754,13 +2642,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "associados_beneficios_adicionais_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "associados_beneficios_adicionais_contrato_id_fkey"
@@ -2844,13 +2725,6 @@ export type Database = {
             foreignKeyName: "associados_historico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "associados_historico_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -2893,13 +2767,6 @@ export type Database = {
             foreignKeyName: "associados_historico_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "associados_historico_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -2916,13 +2783,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "instalacoes"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "associados_historico_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
           },
           {
             foreignKeyName: "associados_historico_usuario_id_fkey"
@@ -2951,13 +2811,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "associados_historico_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "associados_historico_veiculo_id_fkey"
@@ -3040,13 +2893,6 @@ export type Database = {
             foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -3084,13 +2930,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "instalacoes"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ativacao_limbo_alertas_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
           },
         ]
       }
@@ -3191,13 +3030,6 @@ export type Database = {
             foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -3235,13 +3067,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "auditoria_dia_vencimento_legado_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "auditoria_dia_vencimento_legado_contrato_id_fkey"
@@ -3729,13 +3554,6 @@ export type Database = {
             foreignKeyName: "auth_tokens_app_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "auth_tokens_app_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -3804,13 +3622,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "auth_tokens_primeiro_acesso_associado_id_fkey"
@@ -4503,13 +4314,6 @@ export type Database = {
             foreignKeyName: "blacklist_veiculos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "blacklist_veiculos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -4552,13 +4356,6 @@ export type Database = {
             foreignKeyName: "blacklist_veiculos_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "blacklist_veiculos_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -4594,13 +4391,6 @@ export type Database = {
             foreignKeyName: "blacklist_veiculos_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "blacklist_veiculos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["veiculo_id"]
           },
@@ -4617,13 +4407,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "blacklist_veiculos_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["vistoria_id"]
           },
           {
             foreignKeyName: "blacklist_veiculos_vistoria_id_fkey"
@@ -5460,13 +5243,6 @@ export type Database = {
             foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -5511,13 +5287,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cc_vendedor_lancamentos_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "cc_vendedor_lancamentos_contrato_id_fkey"
@@ -5757,13 +5526,6 @@ export type Database = {
             foreignKeyName: "chamados_assistencia_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "chamados_assistencia_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -5843,13 +5605,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chamados_assistencia_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "chamados_assistencia_veiculo_id_fkey"
@@ -6051,13 +5806,6 @@ export type Database = {
             foreignKeyName: "chat_mensagens_ia_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "chat_mensagens_ia_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -6165,13 +5913,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "chat_solicitacoes_ia_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "chat_solicitacoes_ia_associado_id_fkey"
@@ -6376,13 +6117,6 @@ export type Database = {
             foreignKeyName: "cobranca_contatos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "cobranca_contatos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -6514,13 +6248,6 @@ export type Database = {
             foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "cobranca_csv_boletos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -6572,13 +6299,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cobranca_csv_boletos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "cobranca_csv_boletos_veiculo_id_fkey"
@@ -6700,13 +6420,6 @@ export type Database = {
             foreignKeyName: "cobranca_eventos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "cobranca_eventos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -6811,13 +6524,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cobranca_fila_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "cobranca_fila_associado_id_fkey"
@@ -7092,13 +6798,6 @@ export type Database = {
             foreignKeyName: "cobrancas_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "cobrancas_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -7162,13 +6861,6 @@ export type Database = {
             foreignKeyName: "cobrancas_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "cobrancas_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -7199,13 +6891,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cobrancas_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "cobrancas_veiculo_id_fkey"
@@ -7318,13 +7003,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cobrancas_composicao_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "cobrancas_composicao_veiculo_id_fkey"
@@ -7566,13 +7244,6 @@ export type Database = {
             foreignKeyName: "comissoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "comissoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -7617,13 +7288,6 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comissoes_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: true
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "comissoes_contrato_id_fkey"
@@ -7992,13 +7656,6 @@ export type Database = {
             foreignKeyName: "comissoes_deducoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "comissoes_deducoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -8050,13 +7707,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "comissoes_deducoes_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "comissoes_deducoes_contrato_id_fkey"
@@ -8727,13 +8377,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "confirmacoes_agendamento_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
             foreignKeyName: "confirmacoes_agendamento_novo_servico_id_fkey"
             columns: ["novo_servico_id"]
             isOneToOne: false
@@ -8865,13 +8508,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "consultas_juridicas_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "consultas_juridicas_associado_id_fkey"
@@ -9285,13 +8921,6 @@ export type Database = {
             foreignKeyName: "contrato_retificacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "contrato_retificacoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -9329,13 +8958,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contrato_retificacoes_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "contrato_retificacoes_contrato_id_fkey"
@@ -9871,13 +9493,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "contratos_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
-          },
-          {
             foreignKeyName: "contratos_liberado_reagendamento_por_fkey"
             columns: ["liberado_reagendamento_por"]
             isOneToOne: false
@@ -9918,13 +9533,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contratos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "contratos_veiculo_id_fkey"
@@ -9972,13 +9580,6 @@ export type Database = {
             foreignKeyName: "contratos_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["vistoria_id"]
-          },
-          {
-            foreignKeyName: "contratos_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -9995,13 +9596,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_contratos_associado"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "fk_contratos_associado"
@@ -10089,13 +9683,6 @@ export type Database = {
             foreignKeyName: "contratos_documentos_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "contratos_documentos_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -10150,13 +9737,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contratos_historico_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "contratos_historico_contrato_id_fkey"
@@ -10255,13 +9835,6 @@ export type Database = {
             foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "cotacao_avisos_sga_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -10299,13 +9872,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacao_avisos_sga_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "cotacao_avisos_sga_contrato_id_fkey"
@@ -10878,13 +10444,6 @@ export type Database = {
             foreignKeyName: "cotacoes_contrato_gerado_id_fkey"
             columns: ["contrato_gerado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "cotacoes_contrato_gerado_id_fkey"
-            columns: ["contrato_gerado_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -10894,13 +10453,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacoes_indicador_id_fkey"
-            columns: ["indicador_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "cotacoes_indicador_id_fkey"
@@ -10943,13 +10495,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacoes_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "cotacoes_plano_escolhido_id_fkey"
@@ -10997,13 +10542,6 @@ export type Database = {
             foreignKeyName: "cotacoes_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["vistoria_id"]
-          },
-          {
-            foreignKeyName: "cotacoes_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
             referencedRelation: "vistorias"
             referencedColumns: ["id"]
           },
@@ -11020,13 +10558,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_cotacoes_lead_id"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
         ]
       }
@@ -11072,351 +10603,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["cotacao_id"]
-          },
-        ]
-      }
-      cotacoes_publicas: {
-        Row: {
-          adicionais_selecionados: Json | null
-          asaas_boleto_url: string | null
-          asaas_charge_id: string | null
-          asaas_customer_id: string | null
-          asaas_pix_copiacola: string | null
-          asaas_pix_qrcode: string | null
-          codigo_fipe: string | null
-          concluido_em: string | null
-          created_at: string | null
-          dados_cnh: Json | null
-          dados_comprovante: Json | null
-          dados_crlv: Json | null
-          doc_cnh_frente: string | null
-          doc_cnh_verso: string | null
-          doc_comprovante: string | null
-          doc_crlv: string | null
-          doc_selfie: string | null
-          documentos_ok_em: string | null
-          expires_at: string | null
-          face_aprovada: boolean | null
-          face_match_score: number | null
-          face_verificada_em: string | null
-          id: string
-          ip_address: string | null
-          lead_id: string | null
-          pagamento_confirmado_em: string | null
-          pagamento_metodo: string | null
-          pagamento_status: string | null
-          pendencias: Json | null
-          pendencias_observacoes: string | null
-          plano_escolhido: string | null
-          plano_escolhido_em: string | null
-          proposta_aceita_em: string | null
-          rastreador_agendado_para: string | null
-          rastreador_id: string | null
-          rastreador_instalado_em: string | null
-          regiao: string | null
-          selfie_ok_em: string | null
-          status: string | null
-          termos_aceitos: boolean | null
-          termos_aceitos_em: string | null
-          tipo_vistoria: string | null
-          token: string
-          updated_at: string | null
-          user_agent: string | null
-          uso_aplicativo: boolean | null
-          uso_definido_em: string | null
-          valor_adesao_final: number | null
-          valor_fipe: number | null
-          valor_mensal_final: number | null
-          valor_primeira_parcela: number | null
-          veiculo_ano: number | null
-          veiculo_blindado: boolean | null
-          veiculo_combustivel: string | null
-          veiculo_cor: string | null
-          veiculo_marca: string | null
-          veiculo_modelo: string | null
-          veiculo_placa: string | null
-          vendedor_id: string | null
-          vistoria_agendada_para: string | null
-          vistoria_concluida_em: string | null
-          vistoria_endereco: string | null
-          vistoria_observacoes: string | null
-          vistoria_ok_em: string | null
-          visualizado_em: string | null
-        }
-        Insert: {
-          adicionais_selecionados?: Json | null
-          asaas_boleto_url?: string | null
-          asaas_charge_id?: string | null
-          asaas_customer_id?: string | null
-          asaas_pix_copiacola?: string | null
-          asaas_pix_qrcode?: string | null
-          codigo_fipe?: string | null
-          concluido_em?: string | null
-          created_at?: string | null
-          dados_cnh?: Json | null
-          dados_comprovante?: Json | null
-          dados_crlv?: Json | null
-          doc_cnh_frente?: string | null
-          doc_cnh_verso?: string | null
-          doc_comprovante?: string | null
-          doc_crlv?: string | null
-          doc_selfie?: string | null
-          documentos_ok_em?: string | null
-          expires_at?: string | null
-          face_aprovada?: boolean | null
-          face_match_score?: number | null
-          face_verificada_em?: string | null
-          id?: string
-          ip_address?: string | null
-          lead_id?: string | null
-          pagamento_confirmado_em?: string | null
-          pagamento_metodo?: string | null
-          pagamento_status?: string | null
-          pendencias?: Json | null
-          pendencias_observacoes?: string | null
-          plano_escolhido?: string | null
-          plano_escolhido_em?: string | null
-          proposta_aceita_em?: string | null
-          rastreador_agendado_para?: string | null
-          rastreador_id?: string | null
-          rastreador_instalado_em?: string | null
-          regiao?: string | null
-          selfie_ok_em?: string | null
-          status?: string | null
-          termos_aceitos?: boolean | null
-          termos_aceitos_em?: string | null
-          tipo_vistoria?: string | null
-          token?: string
-          updated_at?: string | null
-          user_agent?: string | null
-          uso_aplicativo?: boolean | null
-          uso_definido_em?: string | null
-          valor_adesao_final?: number | null
-          valor_fipe?: number | null
-          valor_mensal_final?: number | null
-          valor_primeira_parcela?: number | null
-          veiculo_ano?: number | null
-          veiculo_blindado?: boolean | null
-          veiculo_combustivel?: string | null
-          veiculo_cor?: string | null
-          veiculo_marca?: string | null
-          veiculo_modelo?: string | null
-          veiculo_placa?: string | null
-          vendedor_id?: string | null
-          vistoria_agendada_para?: string | null
-          vistoria_concluida_em?: string | null
-          vistoria_endereco?: string | null
-          vistoria_observacoes?: string | null
-          vistoria_ok_em?: string | null
-          visualizado_em?: string | null
-        }
-        Update: {
-          adicionais_selecionados?: Json | null
-          asaas_boleto_url?: string | null
-          asaas_charge_id?: string | null
-          asaas_customer_id?: string | null
-          asaas_pix_copiacola?: string | null
-          asaas_pix_qrcode?: string | null
-          codigo_fipe?: string | null
-          concluido_em?: string | null
-          created_at?: string | null
-          dados_cnh?: Json | null
-          dados_comprovante?: Json | null
-          dados_crlv?: Json | null
-          doc_cnh_frente?: string | null
-          doc_cnh_verso?: string | null
-          doc_comprovante?: string | null
-          doc_crlv?: string | null
-          doc_selfie?: string | null
-          documentos_ok_em?: string | null
-          expires_at?: string | null
-          face_aprovada?: boolean | null
-          face_match_score?: number | null
-          face_verificada_em?: string | null
-          id?: string
-          ip_address?: string | null
-          lead_id?: string | null
-          pagamento_confirmado_em?: string | null
-          pagamento_metodo?: string | null
-          pagamento_status?: string | null
-          pendencias?: Json | null
-          pendencias_observacoes?: string | null
-          plano_escolhido?: string | null
-          plano_escolhido_em?: string | null
-          proposta_aceita_em?: string | null
-          rastreador_agendado_para?: string | null
-          rastreador_id?: string | null
-          rastreador_instalado_em?: string | null
-          regiao?: string | null
-          selfie_ok_em?: string | null
-          status?: string | null
-          termos_aceitos?: boolean | null
-          termos_aceitos_em?: string | null
-          tipo_vistoria?: string | null
-          token?: string
-          updated_at?: string | null
-          user_agent?: string | null
-          uso_aplicativo?: boolean | null
-          uso_definido_em?: string | null
-          valor_adesao_final?: number | null
-          valor_fipe?: number | null
-          valor_mensal_final?: number | null
-          valor_primeira_parcela?: number | null
-          veiculo_ano?: number | null
-          veiculo_blindado?: boolean | null
-          veiculo_combustivel?: string | null
-          veiculo_cor?: string | null
-          veiculo_marca?: string | null
-          veiculo_modelo?: string | null
-          veiculo_placa?: string | null
-          vendedor_id?: string | null
-          vistoria_agendada_para?: string | null
-          vistoria_concluida_em?: string | null
-          vistoria_endereco?: string | null
-          vistoria_observacoes?: string | null
-          vistoria_ok_em?: string | null
-          visualizado_em?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cotacoes_publicas_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacoes_publicas_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
-          },
-          {
-            foreignKeyName: "cotacoes_publicas_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacoes_publicas_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vw_metricas_vendedores"
-            referencedColumns: ["vendedor_id"]
-          },
-          {
-            foreignKeyName: "cotacoes_publicas_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vw_vendedores_conflito"
-            referencedColumns: ["vendedor_id"]
-          },
-        ]
-      }
-      cotacoes_publicas_fotos: {
-        Row: {
-          aprovada: boolean | null
-          cotacao_id: string
-          created_at: string | null
-          descricao: string | null
-          id: string
-          latitude: number | null
-          longitude: number | null
-          motivo_rejeicao: string | null
-          tipo: string
-          url: string
-        }
-        Insert: {
-          aprovada?: boolean | null
-          cotacao_id: string
-          created_at?: string | null
-          descricao?: string | null
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          motivo_rejeicao?: string | null
-          tipo: string
-          url: string
-        }
-        Update: {
-          aprovada?: boolean | null
-          cotacao_id?: string
-          created_at?: string | null
-          descricao?: string | null
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          motivo_rejeicao?: string | null
-          tipo?: string
-          url?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cotacoes_publicas_fotos_cotacao_id_fkey"
-            columns: ["cotacao_id"]
-            isOneToOne: false
-            referencedRelation: "cotacoes_publicas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacoes_publicas_fotos_cotacao_id_fkey"
-            columns: ["cotacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["cotacao_publica_id"]
-          },
-        ]
-      }
-      cotacoes_publicas_historico: {
-        Row: {
-          acao: string
-          cotacao_id: string
-          created_at: string | null
-          detalhes: Json | null
-          id: string
-          ip_address: string | null
-          status_anterior: string | null
-          status_novo: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          acao: string
-          cotacao_id: string
-          created_at?: string | null
-          detalhes?: Json | null
-          id?: string
-          ip_address?: string | null
-          status_anterior?: string | null
-          status_novo?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          acao?: string
-          cotacao_id?: string
-          created_at?: string | null
-          detalhes?: Json | null
-          id?: string
-          ip_address?: string | null
-          status_anterior?: string | null
-          status_novo?: string | null
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cotacoes_publicas_historico_cotacao_id_fkey"
-            columns: ["cotacao_id"]
-            isOneToOne: false
-            referencedRelation: "cotacoes_publicas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacoes_publicas_historico_cotacao_id_fkey"
-            columns: ["cotacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["cotacao_publica_id"]
           },
         ]
       }
@@ -12066,13 +11252,6 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "distribuicao_historico_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
-          },
         ]
       }
       distribuicao_vendedores: {
@@ -12320,13 +11499,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documento_gerados_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "documento_gerados_associado_id_fkey"
@@ -12634,13 +11806,6 @@ export type Database = {
             foreignKeyName: "documentos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "documentos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -12678,13 +11843,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documentos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "documentos_veiculo_id_fkey"
@@ -12770,13 +11928,6 @@ export type Database = {
             foreignKeyName: "documentos_solicitados_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "documentos_solicitados_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -12814,13 +11965,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documentos_solicitados_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "documentos_solicitados_contrato_id_fkey"
@@ -13587,13 +12731,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "estoque_movimentacoes_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
             foreignKeyName: "estoque_movimentacoes_rastreador_id_fkey"
             columns: ["rastreador_id"]
             isOneToOne: false
@@ -13641,13 +12778,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "estoque_movimentacoes_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "estoque_movimentacoes_veiculo_id_fkey"
@@ -15410,13 +14540,6 @@ export type Database = {
             foreignKeyName: "gastos_beneficios_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "gastos_beneficios_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -15461,13 +14584,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gastos_beneficios_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "gastos_beneficios_contrato_id_fkey"
@@ -15981,13 +15097,6 @@ export type Database = {
             foreignKeyName: "indicacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "indicacoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -16030,13 +15139,6 @@ export type Database = {
             foreignKeyName: "indicacoes_indicador_id_fkey"
             columns: ["indicador_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "indicacoes_indicador_id_fkey"
-            columns: ["indicador_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -16074,13 +15176,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "indicacoes_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "indicacoes_programa_id_fkey"
@@ -16205,13 +15300,6 @@ export type Database = {
             referencedRelation: "instalacoes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "instalacao_fotos_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
         ]
       }
       instalacao_prestador_links: {
@@ -16333,13 +15421,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "instalacoes"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "instalacao_prestador_links_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
           },
           {
             foreignKeyName: "instalacao_prestador_links_prestador_id_fkey"
@@ -16498,25 +15579,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "instalacoes_agendamento_anterior_id_fkey"
-            columns: ["agendamento_anterior_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
             foreignKeyName: "instalacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "instalacoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "instalacoes_associado_id_fkey"
@@ -16559,13 +15626,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "instalacoes_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "instalacoes_contrato_id_fkey"
@@ -16638,13 +15698,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "instalacoes_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
-          },
-          {
             foreignKeyName: "instalacoes_rastreador_id_fkey"
             columns: ["rastreador_id"]
             isOneToOne: false
@@ -16678,13 +15731,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "instalacoes_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "instalacoes_veiculo_id_fkey"
@@ -16763,13 +15809,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "instalacoes_pendentes_criacao_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "instalacoes_pendentes_criacao_contrato_id_fkey"
@@ -17433,13 +16472,6 @@ export type Database = {
             foreignKeyName: "leads_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "leads_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -17567,13 +16599,6 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "leads_historico_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
-          },
         ]
       }
       leads_interesse_planos: {
@@ -17602,13 +16627,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_interesse_planos_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "leads_interesse_planos_plano_id_fkey"
@@ -17924,13 +16942,6 @@ export type Database = {
             foreignKeyName: "manutencao_tratativas_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -18059,13 +17070,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
@@ -18621,13 +17625,6 @@ export type Database = {
             foreignKeyName: "negativacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "negativacoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -19012,13 +18009,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notificacoes_vendas_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "notificacoes_vendas_usuario_id_fkey"
@@ -19555,13 +18545,6 @@ export type Database = {
             foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -19599,13 +18582,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "operacao_config_snapshot_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "operacao_config_snapshot_contrato_id_fkey"
@@ -20082,13 +19058,6 @@ export type Database = {
             foreignKeyName: "ordens_servico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "ordens_servico_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -20189,13 +19158,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ordens_servico_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "ordens_servico_veiculo_id_fkey"
@@ -20846,13 +19808,6 @@ export type Database = {
             foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "ouvidoria_manifestacoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -20999,13 +19954,6 @@ export type Database = {
             foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -21043,13 +19991,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pagamentos_sga_historico_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "pagamentos_sga_historico_veiculo_id_fkey"
@@ -21261,13 +20202,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "pesquisas_antecedentes_associado_id_fkey"
@@ -22291,13 +21225,6 @@ export type Database = {
             foreignKeyName: "pontuacao_eventos_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "pontuacao_eventos_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -22774,13 +21701,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "processos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "processos_associado_id_fkey"
@@ -23826,13 +22746,6 @@ export type Database = {
             foreignKeyName: "rastreador_alertas_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "rastreador_alertas_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["veiculo_id"]
           },
@@ -24141,13 +23054,6 @@ export type Database = {
             foreignKeyName: "rastreador_preferencias_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: true
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "rastreador_preferencias_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: true
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -24324,13 +23230,6 @@ export type Database = {
             foreignKeyName: "rastreadores_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "rastreadores_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -24410,13 +23309,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rastreadores_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "rastreadores_veiculo_id_fkey"
@@ -24635,13 +23527,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rastreadores_comandos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "rastreadores_comandos_veiculo_id_fkey"
@@ -25662,13 +24547,6 @@ export type Database = {
             foreignKeyName: "regua_execucoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "regua_execucoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -25802,13 +24680,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
@@ -26625,13 +25496,6 @@ export type Database = {
             foreignKeyName: "servicos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "servicos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -26669,13 +25533,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "servicos_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "servicos_contrato_id_fkey"
@@ -26734,13 +25591,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "servicos_instalacao_origem_id_fkey"
-            columns: ["instalacao_origem_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
             foreignKeyName: "servicos_intencao_rastreador_rastreador_id_fkey"
             columns: ["intencao_rastreador_rastreador_id"]
             isOneToOne: false
@@ -26769,25 +25619,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "servicos_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
-          },
-          {
             foreignKeyName: "servicos_novo_veiculo_id_fkey"
             columns: ["novo_veiculo_id"]
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "servicos_novo_veiculo_id_fkey"
-            columns: ["novo_veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "servicos_novo_veiculo_id_fkey"
@@ -26912,13 +25748,6 @@ export type Database = {
             foreignKeyName: "servicos_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "servicos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["veiculo_id"]
           },
@@ -26935,13 +25764,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "servicos_vistoria_origem_id_fkey"
-            columns: ["vistoria_origem_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["vistoria_id"]
           },
           {
             foreignKeyName: "servicos_vistoria_origem_id_fkey"
@@ -27187,13 +26009,6 @@ export type Database = {
             foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: true
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: true
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -27342,13 +26157,6 @@ export type Database = {
             foreignKeyName: "sga_situacao_check_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "sga_situacao_check_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -27386,13 +26194,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sga_situacao_check_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "sga_situacao_check_contrato_id_fkey"
@@ -27471,13 +26272,6 @@ export type Database = {
             foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -27515,13 +26309,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sga_sync_financeiro_jobs_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "sga_sync_financeiro_jobs_veiculo_id_fkey"
@@ -27598,13 +26385,6 @@ export type Database = {
             foreignKeyName: "sga_sync_logs_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "sga_sync_logs_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -27642,13 +26422,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sga_sync_logs_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "sga_sync_logs_veiculo_id_fkey"
@@ -27731,13 +26504,6 @@ export type Database = {
             foreignKeyName: "sga_sync_queue_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "sga_sync_queue_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -27775,13 +26541,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sga_sync_queue_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "sga_sync_queue_veiculo_id_fkey"
@@ -29088,13 +27847,6 @@ export type Database = {
             foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "sinistro_vidros_historico_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -29146,13 +27898,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
@@ -29619,13 +28364,6 @@ export type Database = {
             foreignKeyName: "sinistros_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "sinistros_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -29766,13 +28504,6 @@ export type Database = {
             foreignKeyName: "sinistros_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "sinistros_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["veiculo_id"]
           },
@@ -29881,13 +28612,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "softruck_eventos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "softruck_eventos_veiculo_id_fkey"
@@ -30321,13 +29045,6 @@ export type Database = {
             foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "solicitacoes_substituicao_placa_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -30379,13 +29096,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "solicitacoes_substituicao_placa_veiculo_antigo_id_fkey"
-            columns: ["veiculo_antigo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "solicitacoes_substituicao_placa_veiculo_antigo_id_fkey"
@@ -30603,13 +29313,6 @@ export type Database = {
             foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
             columns: ["associado_antigo_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
-            columns: ["associado_antigo_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -30682,13 +29385,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
-            columns: ["novo_associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
@@ -30808,13 +29504,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "solicitacoes_troca_titularidade_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "solicitacoes_troca_titularidade_veiculo_id_fkey"
@@ -31005,13 +29694,6 @@ export type Database = {
             foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "substituicoes_veiculo_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -31049,13 +29731,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contratos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "substituicoes_veiculo_contrato_novo_id_fkey"
-            columns: ["contrato_novo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
           },
           {
             foreignKeyName: "substituicoes_veiculo_contrato_novo_id_fkey"
@@ -31131,13 +29806,6 @@ export type Database = {
             foreignKeyName: "substituicoes_veiculo_veiculo_antigo_id_fkey"
             columns: ["veiculo_antigo_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "substituicoes_veiculo_veiculo_antigo_id_fkey"
-            columns: ["veiculo_antigo_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["veiculo_id"]
           },
@@ -31161,13 +29829,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "substituicoes_veiculo_veiculo_novo_id_fkey"
-            columns: ["veiculo_novo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "substituicoes_veiculo_veiculo_novo_id_fkey"
@@ -32364,13 +31025,6 @@ export type Database = {
             foreignKeyName: "veiculos_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "veiculos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -32422,13 +31076,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "veiculos_substituido_por_fkey"
-            columns: ["substituido_por"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "veiculos_substituido_por_fkey"
@@ -32574,13 +31221,6 @@ export type Database = {
           vistoria_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["vistoria_id"]
-          },
           {
             foreignKeyName: "vistoria_fotos_vistoria_id_fkey"
             columns: ["vistoria_id"]
@@ -32860,20 +31500,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "instalacoes"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vistoria_prestador_links_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
-            foreignKeyName: "vistoria_prestador_links_vistoria_id_fkey"
-            columns: ["vistoria_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["vistoria_id"]
           },
           {
             foreignKeyName: "vistoria_prestador_links_vistoria_id_fkey"
@@ -33237,13 +31863,6 @@ export type Database = {
             foreignKeyName: "vistorias_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "vistorias_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -33286,13 +31905,6 @@ export type Database = {
             foreignKeyName: "vistorias_contrato_id_fkey"
             columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["contrato_id"]
-          },
-          {
-            foreignKeyName: "vistorias_contrato_id_fkey"
-            columns: ["contrato_id"]
-            isOneToOne: false
             referencedRelation: "vw_cotacoes_em_limbo"
             referencedColumns: ["contrato_id"]
           },
@@ -33318,25 +31930,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "vistorias_instalacao_id_fkey"
-            columns: ["instalacao_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
             foreignKeyName: "vistorias_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vistorias_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "vistorias_rota_id_fkey"
@@ -33365,13 +31963,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vistorias_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "vistorias_veiculo_id_fkey"
@@ -34054,13 +32645,6 @@ export type Database = {
             foreignKeyName: "rastreadores_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "rastreadores_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -34098,13 +32682,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rastreadores_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
           },
           {
             foreignKeyName: "rastreadores_veiculo_id_fkey"
@@ -34175,13 +32752,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "servicos_instalacao_origem_id_fkey"
-            columns: ["instalacao_origem_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["instalacao_id"]
-          },
-          {
             foreignKeyName: "servicos_profissional_id_fkey"
             columns: ["profissional_id"]
             isOneToOne: false
@@ -34226,13 +32796,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "servicos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "servicos_associado_id_fkey"
@@ -34301,13 +32864,6 @@ export type Database = {
             foreignKeyName: "servicos_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["veiculo_id"]
-          },
-          {
-            foreignKeyName: "servicos_veiculo_id_fkey"
-            columns: ["veiculo_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["veiculo_id"]
           },
@@ -34326,47 +32882,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      view_acompanhamento: {
-        Row: {
-          associado_id: string | null
-          associado_status:
-            | Database["public"]["Enums"]["status_associado"]
-            | null
-          contrato_adesao_paga: boolean | null
-          contrato_data_assinatura: string | null
-          contrato_id: string | null
-          contrato_status: Database["public"]["Enums"]["status_contrato"] | null
-          cotacao_publica_id: string | null
-          cotacao_publica_status: string | null
-          cpf: string | null
-          detalhe_fase: string | null
-          docs_aprovados: number | null
-          docs_total: number | null
-          fase_acompanhamento: string | null
-          instalacao_data: string | null
-          instalacao_id: string | null
-          instalacao_status:
-            | Database["public"]["Enums"]["status_instalacao"]
-            | null
-          lead_id: string | null
-          nome: string | null
-          telefone: string | null
-          updated_at: string | null
-          veiculo_ano: number | null
-          veiculo_id: string | null
-          veiculo_marca: string | null
-          veiculo_modelo: string | null
-          veiculo_placa: string | null
-          veiculo_status: Database["public"]["Enums"]["status_veiculo"] | null
-          vendedor_id: string | null
-          vendedor_nome: string | null
-          vistoria_data: string | null
-          vistoria_id: string | null
-          vistoria_status: Database["public"]["Enums"]["status_vistoria"] | null
-          vistoria_tipo: Database["public"]["Enums"]["tipo_vistoria"] | null
-        }
-        Relationships: []
       }
       view_alertas_ativos: {
         Row: {
@@ -34695,13 +33210,6 @@ export type Database = {
             foreignKeyName: "indicacoes_associado_id_fkey"
             columns: ["associado_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "indicacoes_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -34744,13 +33252,6 @@ export type Database = {
             foreignKeyName: "indicacoes_indicador_id_fkey"
             columns: ["indicador_id"]
             isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
-          },
-          {
-            foreignKeyName: "indicacoes_indicador_id_fkey"
-            columns: ["indicador_id"]
-            isOneToOne: false
             referencedRelation: "view_alertas_ativos"
             referencedColumns: ["associado_id"]
           },
@@ -34788,13 +33289,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "indicacoes_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "indicacoes_programa_id_fkey"
@@ -35012,13 +33506,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_contratos_associado"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "fk_contratos_associado"
@@ -35245,13 +33732,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "associados"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "veiculos_associado_id_fkey"
-            columns: ["associado_id"]
-            isOneToOne: false
-            referencedRelation: "view_acompanhamento"
-            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "veiculos_associado_id_fkey"
