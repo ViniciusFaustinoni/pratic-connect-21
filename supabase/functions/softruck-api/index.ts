@@ -567,7 +567,8 @@ serve(async (req) => {
       case 'buscar-device-imei': {
         const { imei } = data as { imei: string };
         if (!imei) throw new Error('imei é obrigatório');
-        const endpoint = `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(imei.replace(/\D/g, ''))}`;
+        // Inclui vehicle (id + plate) para suportar read-back canônico após ativação.
+        const endpoint = `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(imei.replace(/\D/g, ''))}&includes[vehicle][]=plate&includes[vehicle][]=id`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }

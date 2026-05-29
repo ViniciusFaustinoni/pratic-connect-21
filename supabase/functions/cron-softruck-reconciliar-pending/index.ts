@@ -38,7 +38,9 @@ serve(async (req) => {
       .select("id, imei, plataforma, plataforma_device_id, plataforma_veiculo_id, softruck_integration_status, softruck_tentativas, softruck_last_attempt_at, veiculo_id, associado_id, associado_email")
       .eq("plataforma", "softruck")
       .eq("status", "instalado")
-      .eq("softruck_integration_status", "PENDING")
+      // Aceita ambos os cases — há ~1.911 registros legados com 'pending' (minúsculo)
+      // que ficavam invisíveis com .eq('PENDING'). Read-back novo grava sempre maiúsculo.
+      .in("softruck_integration_status", ["PENDING", "pending"])
       .lt("softruck_tentativas", 5)
       .or(`softruck_last_attempt_at.is.null,softruck_last_attempt_at.lt.${corteAtt}`)
       .not("veiculo_id", "is", null)

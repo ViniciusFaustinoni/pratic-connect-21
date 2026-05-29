@@ -40,7 +40,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import {
   useRastreador,
@@ -92,6 +92,7 @@ export function RastreadorDetailDrawer({
   const deleteRastreador = useDeleteRastreador();
   const { isDiretor } = usePermissions();
   const enviarComando = useEnviarComando();
+  const queryClient = useQueryClient();
 
   const [comandoDialog, setComandoDialog] = useState<{
     open: boolean;
@@ -169,6 +170,7 @@ export function RastreadorDetailDrawer({
 
   const [reconciliando, setReconciliando] = useState(false);
   const [reconciliarPreview, setReconciliarPreview] = useState<any>(null);
+  const [reprocessandoSoftruck, setReprocessandoSoftruck] = useState(false);
 
   const handleReconciliarSoftruck = async (apply: boolean) => {
     if (!rastreadorId) return;
@@ -190,6 +192,32 @@ export function RastreadorDetailDrawer({
       toast.error(e?.message || 'Falha ao reconciliar');
     } finally {
       setReconciliando(false);
+    }
+  };
+
+  const handleReprocessarSoftruck = async () => {
+    if (!rastreadorId) return;
+    setReprocessandoSoftruck(true);
+    try {
+      const { error } = await supabase
+        .from('rastreadores')
+        .update({
+          softruck_integration_status: 'PENDING',
+          softruck_tentativas: 0,
+          softruck_last_attempt_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', rastreadorId);
+      if (error) throw error;
+      const { toast } = await import('sonner');
+      toast.success('Reprocessamento enfileirado. O cron vai processar em até 10 min.');
+      await queryClient.invalidateQueries({ queryKey: ['rastreador', rastreadorId] });
+      await queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+    } catch (e: any) {
+      const { toast } = await import('sonner');
+      toast.error(e?.message || 'Falha ao enfileirar reprocessamento');
+    } finally {
+      setReprocessandoSoftruck(false);
     }
   };
 
@@ -293,6 +321,28 @@ export function RastreadorDetailDrawer({
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
+                  {(() => {
+                    const integStatus = (rastreador as any)?.softruck_integration_status as string | null;
+                    const ultimaCom = (rastreador as any)?.ultima_comunicacao;
+                    const precisaReprocessar =
+                      rastreador.plataforma === 'softruck'
+                      && (
+                        ['PENDING', 'pending', 'FAILED_AUTH', 'FAILED_DEVICE'].includes(integStatus || '')
+                        || (integStatus === 'SUCCESS' && !ultimaCom)
+                      );
+                    if (!precisaReprocessar) return null;
+                    return (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={reprocessandoSoftruck}
+                        onClick={handleReprocessarSoftruck}
+                        title="Rebaixa para PENDING e deixa o cron reprocessar em até 10 min"
+                      >
+                        {reprocessandoSoftruck ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Reprocessar Sincronização Softruck'}
+                      </Button>
+                    );
+                  })()}
                   <Button
                     size="sm"
                     variant="outline"
