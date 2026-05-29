@@ -77,7 +77,8 @@ serve(async (req) => {
     const { data: contrato, error: fetchError } = await supabase
       .from('contratos')
       .select(`
-        id, status, associado_id, veiculo_id, plano_id, valor_mensal, dia_vencimento, cotacao_id, tipo_entrada, origem_troca_titularidade_id, cadastro_aprovado,
+        id, status, associado_id, veiculo_id, plano_id, valor_mensal, dia_vencimento, cotacao_id, tipo_entrada, origem_troca_titularidade_id, cadastro_aprovado, documentos_aprovados_em,
+
         associado:associados!fk_contratos_associado (
           id, nome, dia_vencimento, logradouro, numero, bairro, cidade, uf, cep
         )
