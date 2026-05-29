@@ -686,34 +686,66 @@ serve(async (req) => {
     // que criamos/atualizamos localmente. Se algo divergir, grava PENDING para
     // o cron-softruck-reconciliar-pending reprocessar — eliminando casos como
     // LTC8G02 em que o sistema marcava SUCCESS sem o vínculo real existir lá.
+    //
+    // AUTO-CORREÇÃO: quando o read-back detectar vehicle_divergente (device
+    // existe mas aponta pra outro veículo), tenta corrigir automaticamente via
+    // o mesmo helper usado pela edge softruck-corrigir-vinculo: desvincula do
+    // errado, vincula ao correto, re-readback. Só atua em vehicle_divergente —
+    // demais motivos seguem como PENDING (sem desvincular nada).
     let readbackOk = false;
     let readbackReason: string | null = null;
     let readbackRemote: unknown = null;
-    try {
+    let correcaoAuto: unknown = null;
+
+    async function doReadback(): Promise<void> {
+      readbackOk = false;
+      readbackReason = null;
       const readbackResp = await callSoftruckApi(
-        supabaseUrl,
-        supabaseAnonKey,
-        'buscar-device-imei',
-        { imei }
+        supabaseUrl, supabaseAnonKey, 'buscar-device-imei', { imei }
       );
       if (!readbackResp.success) {
         readbackReason = `softruck_api_falhou:${readbackResp.error || 'sem_detalhe'}`;
+        return;
+      }
+      const remoteList = (readbackResp.data as { data?: Array<Record<string, any>> })?.data || [];
+      const remoteDevice = remoteList[0] || null;
+      readbackRemote = remoteDevice;
+      const remoteVehicleId =
+        remoteDevice?.relationships?.vehicle?.data?.id
+        || remoteDevice?.relationships?.vehicle?.id
+        || null;
+      if (!remoteDevice) {
+        readbackReason = 'device_ausente_na_softruck';
+      } else if (!remoteVehicleId) {
+        readbackReason = 'device_sem_vehicle_associado';
+      } else if (remoteVehicleId !== softruckVehicleId) {
+        readbackReason = `vehicle_divergente:remoto=${remoteVehicleId}/local=${softruckVehicleId}`;
       } else {
-        const remoteList = (readbackResp.data as { data?: Array<Record<string, any>> })?.data || [];
-        const remoteDevice = remoteList[0] || null;
-        readbackRemote = remoteDevice;
-        const remoteVehicleId =
-          remoteDevice?.relationships?.vehicle?.data?.id
-          || remoteDevice?.relationships?.vehicle?.id
-          || null;
-        if (!remoteDevice) {
-          readbackReason = 'device_ausente_na_softruck';
-        } else if (!remoteVehicleId) {
-          readbackReason = 'device_sem_vehicle_associado';
-        } else if (remoteVehicleId !== softruckVehicleId) {
-          readbackReason = `vehicle_divergente:remoto=${remoteVehicleId}/local=${softruckVehicleId}`;
-        } else {
+        readbackOk = true;
+      }
+    }
+
+    try {
+      await doReadback();
+
+      // Auto-correção em vehicle_divergente
+      if (!readbackOk && readbackReason?.startsWith('vehicle_divergente:') && softruckDeviceId && softruckVehicleId) {
+        console.warn('[Softruck Ativar] [8.4] vehicle_divergente detectado — tentando auto-correção...');
+        const { buildCallSoftruckApi, corrigirVinculoSoftruck } = await import('../_shared/softruck-corrigir.ts');
+        const callSoftruck = buildCallSoftruckApi(supabaseUrl, supabaseAnonKey);
+        const correcao = await corrigirVinculoSoftruck(callSoftruck, {
+          imei,
+          remoteDeviceId: softruckDeviceId,
+          softruckVehicleIdAlvo: softruckVehicleId,
+        });
+        correcaoAuto = correcao;
+        if (correcao.ok) {
           readbackOk = true;
+          readbackReason = null;
+          console.log('[Softruck Ativar] [8.4] Auto-correção bem-sucedida — vínculo agora correto.');
+        } else {
+          readbackReason = `vehicle_divergente_correcao_falhou:${correcao.motivoFalha || 'sem_detalhe'}`;
+          console.error('[Softruck Ativar] [8.4] Auto-correção falhou:', correcao.motivoFalha);
         }
       }
     } catch (rbErr) {
