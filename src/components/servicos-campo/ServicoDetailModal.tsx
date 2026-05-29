@@ -264,7 +264,11 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 );
               })()}
 
-              <RealizarVistoriaInternaButton servico={servico} />
+              <RealizarVistoriaInternaButton
+                servico={servico}
+                onBeforeOpen={() => onOpenChange(false)}
+              />
+
 
             </div>
 

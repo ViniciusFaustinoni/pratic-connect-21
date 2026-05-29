@@ -24,6 +24,13 @@ interface Props {
   /** Variante visual — usar `icon` para botão compacto em tabelas. */
   variant?: 'default' | 'icon';
   className?: string;
+  /**
+   * Callback síncrono executado ANTES de abrir o dialog interno.
+   * Quando este botão é usado dentro de outro modal (ex.: ServicoDetailModal),
+   * o pai deve fechar a si mesmo aqui para evitar empilhamento de Dialogs do
+   * Radix (que causa overlay duplicado / conteúdo invisível).
+   */
+  onBeforeOpen?: () => void;
 }
 
 const STATUS_TERMINAIS = new Set([
@@ -51,6 +58,7 @@ export function RealizarVistoriaInternaButton({
   servico,
   variant = 'default',
   className,
+  onBeforeOpen,
 }: Props) {
   const perms = usePermissions();
   const podeUsar = perms.isCoordenadorMonitoramento || perms.isDiretor || (perms as any).isAdminMaster || (perms as any).isDesenvolvedor;
@@ -83,8 +91,17 @@ export function RealizarVistoriaInternaButton({
       },
     });
     if (podeEmbedar) {
-      setDialogOpen(true);
+      // Se estiver dentro de outro Dialog, fecha o pai antes pra evitar
+      // empilhamento de overlays do Radix.
+      if (onBeforeOpen) {
+        onBeforeOpen();
+        // Espera o pai desmontar o overlay antes de abrir o nosso.
+        setTimeout(() => setDialogOpen(true), 120);
+      } else {
+        setDialogOpen(true);
+      }
     } else {
+      onBeforeOpen?.();
       toast.info('Abrindo tela de execução…', {
         description: 'A conclusão segue o mesmo fluxo do técnico.',
       });
@@ -112,7 +129,7 @@ export function RealizarVistoriaInternaButton({
         type="button"
         size="sm"
         className={cn(
-          'gap-1.5 h-9 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm font-medium',
+          'gap-1.5 h-9 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md font-semibold ring-2 ring-primary/30 ring-offset-1 ring-offset-background',
           className,
         )}
         onClick={handleClick}
