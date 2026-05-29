@@ -940,7 +940,10 @@ export function useProposta(contratoId: string | undefined) {
           pdf_assinado_url,
           updated_at,
           cadastro_aprovado,
+          documentos_aprovados_em,
+          documentos_aprovados_por,
           tipo_entrada
+
         `)
         .eq('id', contratoId)
         .single();
