@@ -100,8 +100,11 @@ export default function PropostaAnalise() {
     if (!id) return;
     setIsAprovandoDocs(true);
     try {
+      const { data: sess } = await supabase.auth.getUser();
+      const aprovado_por = sess?.user?.id;
+      if (!aprovado_por) throw new Error('Sessão inválida — faça login novamente.');
       const { data, error } = await supabase.functions.invoke('aprovar-documentos-cadastro', {
-        body: { contratoId: id },
+        body: { contrato_id: id, aprovado_por },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
