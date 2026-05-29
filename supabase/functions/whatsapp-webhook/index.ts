@@ -3427,7 +3427,7 @@ serve(async (req) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
             },
-            body: JSON.stringify({ telefone, texto: mensagemTexto, tipo_msg: tipoPrincipal }),
+            body: JSON.stringify({ telefone, texto: mensagemTexto, tipo_msg: tipoPrincipal, nome_contato: associado?.nome || data?.pushName || null }),
           });
         } catch (agentErr: any) {
           console.error(`[whatsapp-webhook] Erro delegação agente (cancelado):`, agentErr);
