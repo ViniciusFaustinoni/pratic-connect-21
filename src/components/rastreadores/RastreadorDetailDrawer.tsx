@@ -169,6 +169,7 @@ export function RastreadorDetailDrawer({
 
   const [reconciliando, setReconciliando] = useState(false);
   const [reconciliarPreview, setReconciliarPreview] = useState<any>(null);
+  const [reprocessandoSoftruck, setReprocessandoSoftruck] = useState(false);
 
   const handleReconciliarSoftruck = async (apply: boolean) => {
     if (!rastreadorId) return;
@@ -190,6 +191,32 @@ export function RastreadorDetailDrawer({
       toast.error(e?.message || 'Falha ao reconciliar');
     } finally {
       setReconciliando(false);
+    }
+  };
+
+  const handleReprocessarSoftruck = async () => {
+    if (!rastreadorId) return;
+    setReprocessandoSoftruck(true);
+    try {
+      const { error } = await supabase
+        .from('rastreadores')
+        .update({
+          softruck_integration_status: 'PENDING',
+          softruck_tentativas: 0,
+          softruck_last_attempt_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', rastreadorId);
+      if (error) throw error;
+      const { toast } = await import('sonner');
+      toast.success('Reprocessamento enfileirado. O cron vai processar em até 10 min.');
+      await queryClient.invalidateQueries({ queryKey: ['rastreador', rastreadorId] });
+      await queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+    } catch (e: any) {
+      const { toast } = await import('sonner');
+      toast.error(e?.message || 'Falha ao enfileirar reprocessamento');
+    } finally {
+      setReprocessandoSoftruck(false);
     }
   };
 
