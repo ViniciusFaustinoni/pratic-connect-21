@@ -606,7 +606,24 @@ function FotoCategoriaSection({ title, fotos, isOpen, onToggle, onViewFoto }: {
               className="group relative aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer border hover:border-primary transition-colors"
               onClick={() => onViewFoto({ url: foto.arquivo_url, tipo: foto.tipo })}
             >
-              <img src={foto.arquivo_url} alt={formatarTipoFotoVeiculo(foto.tipo)} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+              {isMidiaVideo(foto.arquivo_url, foto.tipo) ? (
+                <div className="w-full h-full bg-black flex items-center justify-center">
+                  <video
+                    src={foto.arquivo_url}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="bg-black/60 rounded-full p-2">
+                      <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <img src={foto.arquivo_url} alt={formatarTipoFotoVeiculo(foto.tipo)} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+              )}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                 <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
