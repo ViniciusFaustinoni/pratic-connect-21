@@ -224,6 +224,7 @@ export function RastreadorDetailDrawer({
 
   const isInstalled = rastreador?.status === 'instalado';
   const hasDivergencia = (rastreador as any)?.softruck_integration_status === 'DIVERGENCIA_DESVINCULO';
+  const hasFalhaVinculo = (rastreador as any)?.softruck_integration_status === 'FAILED_VINCULO';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
