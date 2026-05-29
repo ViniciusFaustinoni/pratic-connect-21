@@ -62,6 +62,59 @@ Deno.serve(async (req) => {
       console.log(`[agente-consultor-ia] Novo contato criado: ${telLimpo}`);
     }
 
+    // ---- 1B. RESOLVER NOME DO CONTATO (fallback p/ não tratar como "cliente") ----
+    if (contato && !contato.nome) {
+      let nomeResolvido: string | null = null;
+
+      // 1) pushName / nome do Chatwoot vindo do caller
+      if (nome_contato && typeof nome_contato === "string") {
+        const limpo = nome_contato.trim();
+        if (limpo && limpo.toLowerCase() !== "contato whatsapp" && limpo.toLowerCase() !== "desconhecido") {
+          nomeResolvido = limpo;
+        }
+      }
+
+      // 2) lead existente
+      if (!nomeResolvido) {
+        const { data: leadMatch } = await supabase
+          .from("leads")
+          .select("nome")
+          .eq("telefone", telLimpo)
+          .not("nome", "is", null)
+          .limit(1)
+          .maybeSingle();
+        if (leadMatch?.nome) nomeResolvido = leadMatch.nome;
+      }
+
+      // 3) última mensagem de entrada com nome_contato (caminho Chatwoot → fila)
+      if (!nomeResolvido) {
+        const { data: msgMatch } = await supabase
+          .from("whatsapp_mensagens")
+          .select("nome_contato")
+          .eq("telefone", telLimpo)
+          .eq("direcao", "entrada")
+          .not("nome_contato", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (msgMatch?.nome_contato) {
+          const limpo = msgMatch.nome_contato.trim();
+          if (limpo && limpo.toLowerCase() !== "contato whatsapp" && limpo.toLowerCase() !== "desconhecido") {
+            nomeResolvido = limpo;
+          }
+        }
+      }
+
+      if (nomeResolvido) {
+        await supabase
+          .from("agente_ia_contatos")
+          .update({ nome: nomeResolvido })
+          .eq("id", contato.id);
+        contato.nome = nomeResolvido;
+        console.log(`[agente-consultor-ia] Nome do contato resolvido: ${nomeResolvido} (tel: ${telLimpo})`);
+      }
+    }
+
     // ---- 2. VERIFICAR ATENDIMENTO HUMANO ----
     if (contato?.status === "atendimento_humano") {
       console.log(`[agente-consultor-ia] Contato em atendimento humano, ignorando: ${telLimpo}`);
