@@ -70,9 +70,10 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("[whatsapp-get-sender] Erro:", error);
+    // Sempre devolve 200 com fallback p/ não derrubar a UI; cliente trata sender="" como ausente
     return new Response(
-      JSON.stringify({ success: false, error: error.message, sender: "" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: false, error: error.message, sender: "", fallback: true }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
