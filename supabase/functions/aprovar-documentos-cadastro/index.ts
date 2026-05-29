@@ -42,7 +42,7 @@ serve(async (req) => {
     // 1. Carregar contrato
     const { data: contrato, error: errC } = await supabase
       .from('contratos')
-      .select('id, status, cadastro_aprovado, documentos_aprovados_em, tipo_entrada, origem_troca_titularidade_id')
+      .select('id, status, cadastro_aprovado, documentos_aprovados_em, tipo_entrada, origem_troca_titularidade_id, cotacao_id')
       .eq('id', contrato_id)
       .maybeSingle();
     if (errC) return json({ success: false, error: errC.message }, 500);
@@ -72,10 +72,13 @@ serve(async (req) => {
 
     // 4. Valida que TODOS os documentos do contrato estão aprovados.
     //    Mesma regra que a UI usa para liberar o botão.
+    const filtroDocs = contrato.cotacao_id
+      ? `contrato_id.eq.${contrato_id},cotacao_id.eq.${contrato.cotacao_id}`
+      : `contrato_id.eq.${contrato_id}`;
     const { data: docsContrato, error: errDocs } = await supabase
       .from('contratos_documentos')
-      .select('id, tipo, status')
-      .eq('contrato_id', contrato_id);
+      .select('id, tipo, status, contrato_id, cotacao_id')
+      .or(filtroDocs);
     if (errDocs) return json({ success: false, error: errDocs.message }, 500);
 
     const pendentes = (docsContrato || []).filter(
