@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    const { telefone, texto, tipo_msg, latitude, longitude } = await req.json();
+    const { telefone, texto, tipo_msg, latitude, longitude, nome_contato } = await req.json();
 
     if (!telefone) {
       return new Response(
