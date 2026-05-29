@@ -91,8 +91,17 @@ export function RealizarVistoriaInternaButton({
       },
     });
     if (podeEmbedar) {
-      setDialogOpen(true);
+      // Se estiver dentro de outro Dialog, fecha o pai antes pra evitar
+      // empilhamento de overlays do Radix.
+      if (onBeforeOpen) {
+        onBeforeOpen();
+        // Espera o pai desmontar o overlay antes de abrir o nosso.
+        setTimeout(() => setDialogOpen(true), 120);
+      } else {
+        setDialogOpen(true);
+      }
     } else {
+      onBeforeOpen?.();
       toast.info('Abrindo tela de execução…', {
         description: 'A conclusão segue o mesmo fluxo do técnico.',
       });
