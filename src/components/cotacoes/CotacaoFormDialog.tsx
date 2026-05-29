@@ -842,15 +842,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
     }
 
-    // Fallback: tabela legada
-    if (todasFaixas.length === 0) return null;
-    const matching = todasFaixas.filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
-    if (matching.length === 0) return null;
-    const linhaPlano = planosSelecionados[0]?.linha || null;
-    const preferred = linhaPlano ? matching.find(f => f.linha_slug === linhaPlano) : null;
-    const faixa = preferred || matching.sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0];
-    return { min: faixa.fipe_min, max: faixa.fipe_max };
-  }, [valorFipe, todasFaixas, planosSelecionados, planosCalculados, planoCoberturasMap, allEligibilityRules]);
+    // Fallback SEM plano de referência: ainda usa o motor moderno
+    // (`entity_eligibility_rules`, intervalo de 5k). Proibido cair em
+    // `tabelas_preco_mensalidade` (faixas legadas de 20k que distorcem o
+    // display — ver Regra do 1% caso KZA6C16).
+    const faixaSemPlano = obterFaixaFipePorEligibilityRules(
+      valorFipe,
+      allEligibilityRules as any
+    );
+    if (faixaSemPlano) {
+      return { min: faixaSemPlano.de, max: faixaSemPlano.ate - 0.01 };
+    }
+    return null;
+  }, [valorFipe, planosSelecionados, planosCalculados, planoCoberturasMap, allEligibilityRules]);
   // Marcas aceitas de motos
   const { data: marcasAceitasMotos } = useMarcasAceitasMotos();
 
