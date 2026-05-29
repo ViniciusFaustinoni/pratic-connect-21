@@ -530,30 +530,6 @@ export interface VeiculoCotacao {
   valor_fipe: number;
 }
 
-/** Resultado da cotação calculada */
-export interface ResultadoCotacao {
-  plano_id: string;
-  plano_nome: string;
-  plano_descricao: string | null;
-  valor_cota: number;
-  taxa_administrativa: number;
-  valor_rastreamento: number;
-  valor_assistencia: number;
-  valor_adesao: number;
-  valor_total_mensal: number;
-}
-
-/** Plano disponível para cotação */
-export interface PlanoParaCotacao {
-  id: string;
-  nome: string;
-  descricao: string | null;
-  valor_adesao_base: number;
-  percentual_cota: number;
-  taxa_administrativa: number;
-  valor_rastreamento: number;
-  ativo: boolean;
-}
 
 // ============================================
 // TIPOS AUXILIARES — MÉTRICAS
