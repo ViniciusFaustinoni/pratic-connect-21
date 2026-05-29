@@ -458,23 +458,15 @@ serve(async (req) => {
     }
 
     // Parse configurações
+    // NOTA: `marcas_exclusivas_moto` NÃO é mais lida aqui — a detecção moto/carro
+    // vive na RPC `fn_veiculo_precisa_rastreador` (fonte canônica). Os limites FIPE
+    // ainda são usados como fallback informativo em logs/respostas downstream.
     let fipeMinRastreador = FIPE_MINIMO_RASTREADOR_PADRAO;
     let fipeMinRastreadorMoto = FIPE_MINIMO_RASTREADOR_MOTO_PADRAO;
-    let marcasExclusivasMoto: string[] = [];
     if (configRes.data) {
       for (const cfg of configRes.data) {
         if (cfg.chave === 'operacional_fipe_minimo_rastreador') fipeMinRastreador = Number(cfg.valor) || FIPE_MINIMO_RASTREADOR_PADRAO;
         if (cfg.chave === 'operacional_fipe_minimo_rastreador_moto') fipeMinRastreadorMoto = Number(cfg.valor) || FIPE_MINIMO_RASTREADOR_MOTO_PADRAO;
-        if (cfg.chave === 'marcas_exclusivas_moto' && cfg.valor) {
-          try {
-            const raw = String(cfg.valor).trim();
-            marcasExclusivasMoto = raw.startsWith('[')
-              ? JSON.parse(raw)
-              : raw.split(',').map((m: string) => m.trim());
-          } catch {
-            marcasExclusivasMoto = [];
-          }
-        }
       }
     }
 
