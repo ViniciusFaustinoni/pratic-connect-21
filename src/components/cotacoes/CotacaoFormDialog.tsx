@@ -3213,93 +3213,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             {/* ============================================= */}
             {/* BLOCO 5 — DADOS COMERCIAIS                    */}
             {/* ============================================= */}
+            <SectionComercial
+              control={form.control}
+              podeAtribuirVendedor={podeAtribuirVendedor}
+              vendedores={vendedores}
+              vendedoresLoading={vendedoresLoading}
+              diaVencimento={diaVencimento}
+              setDiaVencimento={setDiaVencimento}
+              opcoesVencimento={opcoesVencimento as unknown as number[]}
+            />
 
-            {/* Consultor Responsável */}
-            {podeAtribuirVendedor && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 text-primary" />
-                  Consultor Responsável
-                </h3>
-                
-                <FormField
-                  control={form.control}
-                  name="vendedor_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Select 
-                        onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
-                        value={field.value || '_none'}
-                        disabled={vendedoresLoading}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            {vendedoresLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <SelectValue placeholder="Selecione um consultor" />
-                            )}
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="_none">Não atribuído</SelectItem>
-                          {vendedores.map((v) => (
-                            <SelectItem key={v.id} value={v.user_id}>
-                              {v.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            )}
-
-            {podeAtribuirVendedor && <Separator />}
-
-            {/* Data de Vencimento */}
-            <div id="bloco-dia-vencimento" className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                Data de Vencimento <span className="text-destructive">*</span>
-              </h3>
-              
-              <p className="text-xs text-muted-foreground">
-                Selecione o dia de vencimento das mensalidades
-              </p>
-              
-              <div className="grid grid-cols-2 gap-3">
-                {opcoesVencimento.map((dia) => (
-                  <div
-                    key={dia}
-                    onClick={() => setDiaVencimento(dia)}
-                    className={cn(
-                      "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md text-center",
-                      diaVencimento === dia
-                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                        : "border-border hover:border-primary/50"
-                    )}
-                  >
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      diaVencimento === dia && "text-primary"
-                    )}>
-                      {String(dia).padStart(2, '0')}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Todo dia {dia}
-                    </p>
-                    {diaVencimento === dia && (
-                      <div className="absolute top-2 right-2">
-                        <CheckCircle2 className="h-5 w-5 text-primary" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
 
             {/* BLOCO 4: RESUMO INLINE (quando planos selecionados) */}
             {planosSelecionados.length > 0 && (
