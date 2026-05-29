@@ -42,7 +42,7 @@ serve(async (req) => {
     // 1. Carregar contrato
     const { data: contrato, error: errC } = await supabase
       .from('contratos')
-      .select('id, status, cadastro_aprovado, documentos_aprovados_em, tipo_entrada, origem_troca_titularidade_id')
+      .select('id, status, cadastro_aprovado, documentos_aprovados_em, tipo_entrada, origem_troca_titularidade_id, cotacao_id')
       .eq('id', contrato_id)
       .maybeSingle();
     if (errC) return json({ success: false, error: errC.message }, 500);
