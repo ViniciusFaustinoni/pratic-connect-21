@@ -92,6 +92,13 @@ export type TipoDocumento =
 
 export type StatusCotacao = 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'expirada';
 
+/**
+ * StatusCotacao + 'visualizada' (estado derivado em runtime quando o link
+ * público é aberto pelo lead). Fonte única — não redefinir localmente em
+ * componentes.
+ */
+export type StatusCotacaoExtended = StatusCotacao | 'visualizada';
+
 export type StatusContrato = 'rascunho' | 'pendente' | 'pendente_assinatura' | 'enviado' | 'visualizado' | 'assinado' | 'ativo' | 'suspenso' | 'cancelado' | 'expirado';
 
 // Novos tipos para as tabelas adicionadas

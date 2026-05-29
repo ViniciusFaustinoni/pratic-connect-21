@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Send, Check, X, Eye, Car, Phone, User, MoreHorizontal, ClipboardCopy, ExternalLink, Link2, FileDown, Loader2, Plus, ArrowRight } from 'lucide-react';
+import { statusConfig, type StatusCotacaoExtended } from './statusConfig';
+export { statusConfig, type StatusCotacaoExtended };
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -21,65 +23,11 @@ import { TipoEntradaBadge } from '@/components/cotacoes/TipoEntradaBadge';
 import { FlagTravada } from '@/components/cotacoes/FlagTravada';
 import { FlagPlacaExpirando } from '@/components/cotacoes/FlagPlacaExpirando';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
-import type { StatusCotacao } from '@/types/database';
 import { toast } from 'sonner';
-
-export type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
 // Re-exporta a fonte única para retrocompatibilidade de imports
 import { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
 export { getEtapaVenda, etapaVendaConfig, type EtapaVenda };
-
-export const statusConfig: Record<StatusCotacaoExtended, { 
-  label: string; 
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  icon: typeof FileText 
-}> = {
-  rascunho: { 
-    label: 'Rascunho', 
-    color: 'text-yellow-600 dark:text-yellow-400', 
-    bgColor: 'bg-yellow-500/15',
-    borderColor: 'border-l-yellow-500',
-    icon: FileText 
-  },
-  enviada: { 
-    label: 'Enviada', 
-    color: 'text-blue-600 dark:text-blue-400', 
-    bgColor: 'bg-blue-500/15',
-    borderColor: 'border-l-blue-500',
-    icon: Send 
-  },
-  visualizada: { 
-    label: 'Visualizada', 
-    color: 'text-cyan-600 dark:text-cyan-400', 
-    bgColor: 'bg-cyan-500/15',
-    borderColor: 'border-l-cyan-500',
-    icon: Eye 
-  },
-  aceita: { 
-    label: 'Aceita', 
-    color: 'text-green-600 dark:text-green-400', 
-    bgColor: 'bg-green-500/15',
-    borderColor: 'border-l-green-500',
-    icon: Check 
-  },
-  recusada: { 
-    label: 'Recusada', 
-    color: 'text-red-600 dark:text-red-400', 
-    bgColor: 'bg-red-500/15',
-    borderColor: 'border-l-red-500',
-    icon: X 
-  },
-  expirada: { 
-    label: 'Expirada', 
-    color: 'text-muted-foreground', 
-    bgColor: 'bg-muted',
-    borderColor: 'border-l-muted-foreground/50',
-    icon: FileText 
-  },
-};
 
 export interface CotacoesTablePermissions {
   canEdit: boolean;
