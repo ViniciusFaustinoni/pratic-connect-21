@@ -129,7 +129,7 @@ export function RealizarVistoriaInternaButton({
         type="button"
         size="sm"
         className={cn(
-          'gap-1.5 h-9 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm font-medium',
+          'gap-1.5 h-9 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md font-semibold ring-2 ring-primary/30 ring-offset-1 ring-offset-background',
           className,
         )}
         onClick={handleClick}
