@@ -74,7 +74,7 @@ serve(async (req) => {
     //    Mesma regra que a UI usa para liberar o botão.
     const { data: docsContrato, error: errDocs } = await supabase
       .from('contratos_documentos')
-      .select('id, tipo_documento, status')
+      .select('id, tipo, status')
       .eq('contrato_id', contrato_id);
     if (errDocs) return json({ success: false, error: errDocs.message }, 500);
 
