@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight, DollarSign, Building2 } from 'lucide-react';
 import { buscarCep } from '@/lib/cep';
 import { MigracaoStepForm } from './MigracaoStepForm';
+import { normalizarTipoEntrada } from '@/lib/cotacoes/tipoEntrada';
 import { useFipe } from '@/hooks/useFipe';
 import { Button } from '@/components/ui/button';
 import {
