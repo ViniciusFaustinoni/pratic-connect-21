@@ -784,6 +784,9 @@ export default function PropostaAnalise() {
           planoTemRouboFurto={planoTemRouboFurto}
           aguardandoMonitoramentoVistoria={aguardandoMonitoramentoVistoria}
           aprovarApenasDocumentos={aprovarApenasDocumentos}
+          documentosAprovadosEm={documentosAprovadosEm ?? null}
+          onAprovarDocumentos={handleAprovarDocumentos}
+          isAprovandoDocumentos={isAprovandoDocs}
         />
       </div>
 
