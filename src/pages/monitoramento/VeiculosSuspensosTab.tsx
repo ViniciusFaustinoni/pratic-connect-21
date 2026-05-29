@@ -44,7 +44,7 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
       if (error) throw error;
 
       await registrarLog({
-        acao: 'atualizar',
+        acao: 'reprovar',
         modulo: 'monitoramento',
         descricao: `[VEICULO_NEGADO] ${v.placa} — ${motivo}`,
         tabela: 'veiculos',
