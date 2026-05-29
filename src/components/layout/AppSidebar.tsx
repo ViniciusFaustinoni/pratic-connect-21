@@ -475,11 +475,18 @@ const SUPER_GROUPS: SuperGroup[] = [
     moduleIds: ['vendas', 'cadastro'],
   },
   {
+    id: 'monitoramento',
+    label: 'Monitoramento',
+    icon: MapPin,
+    color: MENU_COLORS.monitoramento,
+    moduleIds: ['monitoramento'],
+  },
+  {
     id: 'relacionamento',
     label: 'Relacionamento',
     icon: Users,
     color: '#ef4444',
-    moduleIds: ['relacionamento', 'monitoramento', 'cobranca'],
+    moduleIds: ['relacionamento', 'cobranca'],
   },
   {
     id: 'administrativo',
