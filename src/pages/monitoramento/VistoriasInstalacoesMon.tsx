@@ -1,8 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ListChecks, Hand, History, Map as MapIcon, ShieldOff } from 'lucide-react';
+import { ListChecks, Hand, History, Map as MapIcon, ShieldOff, Ban } from 'lucide-react';
 import ServicosCampoUnificado from './ServicosCampoUnificado';
 import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
 import { useVeiculosSuspensos } from '@/hooks/useVeiculosSuspensos';
+import { useVeiculosNegados } from '@/hooks/useVeiculosNegados';
 import { Badge } from '@/components/ui/badge';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -12,11 +13,13 @@ import AlertaImprevistosPendentes from '@/components/monitoramento/AlertaImprevi
 const AtribuicaoManualTab = lazy(() => import('@/components/monitoramento/AtribuicaoManualTab'));
 const HistoricoAtribuicoesTab = lazy(() => import('@/components/monitoramento/HistoricoAtribuicoesTab'));
 const VeiculosSuspensosTab = lazy(() => import('./VeiculosSuspensosTab'));
+const VeiculosNegadosTab = lazy(() => import('./VeiculosNegadosTab'));
 const MapaTab = lazy(() => import('./Mapa'));
 
 export default function VistoriasInstalacoesMon() {
   const { data: manualAtiva } = useConfigAtribuicaoManual();
   const { data: suspensos } = useVeiculosSuspensos();
+  const { data: negados } = useVeiculosNegados();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const defaultTab = tabFromUrl || (manualAtiva ? 'atribuicao-manual' : 'servicos');
@@ -59,6 +62,15 @@ export default function VistoriasInstalacoesMon() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="negados" className="gap-2 shrink-0">
+              <Ban className="h-4 w-4" />
+              <span className="hidden sm:inline">Negados</span>
+              {negados && negados.length > 0 && (
+                <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                  {negados.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="mapa" className="gap-2 shrink-0">
               <MapIcon className="h-4 w-4" />
               <span className="hidden sm:inline">Mapa</span>
@@ -89,6 +101,14 @@ export default function VistoriasInstalacoesMon() {
             <VeiculosSuspensosTab />
           </Suspense>
         </TabsContent>
+
+        <TabsContent value="negados">
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <VeiculosNegadosTab />
+          </Suspense>
+        </TabsContent>
+
+
 
 
         <TabsContent value="mapa">

@@ -61,7 +61,8 @@ export function useVeiculosSuspensos() {
         `,
         )
         .eq('cobertura_suspensa', true)
-        .not('status', 'in', '(cancelado)')
+        // Exclui cancelados E negados: 'recusado' pertence à aba "Negados"
+        .not('status', 'in', '(cancelado,recusado)')
         .or(orFilter)
         .order('cobertura_suspensa_em', { ascending: true });
 
