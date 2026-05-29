@@ -343,7 +343,7 @@ export function PropostaApprovalStepper({
         )}
 
         {/* STEP 2: Fotos & Vistoria (oculto quando ocultarEtapaFotos) */}
-        {currentStep === 2 && !ocultarEtapaFotos && (
+        {currentStep === 2 && !ocultarEtapaFotos && subEtapa1Liberada && (
           <div className="space-y-4 animate-fade-in">
             <PropostaMidiaGrid
               video360Url={proposta.vistoria?.video_360_url}
@@ -397,7 +397,7 @@ export function PropostaApprovalStepper({
         )}
 
         {/* STEP FINAL: Aprovação Final (id 3 normal, id 2 quando ocultarEtapaFotos) */}
-        {currentStep === finalStepId && (
+        {currentStep === finalStepId && subEtapa1Liberada && (
           <div className="space-y-4 animate-fade-in">
             {/* Summary checklist */}
             <Card className="border-border">
