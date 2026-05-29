@@ -24,6 +24,13 @@ interface Props {
   /** Variante visual — usar `icon` para botão compacto em tabelas. */
   variant?: 'default' | 'icon';
   className?: string;
+  /**
+   * Callback síncrono executado ANTES de abrir o dialog interno.
+   * Quando este botão é usado dentro de outro modal (ex.: ServicoDetailModal),
+   * o pai deve fechar a si mesmo aqui para evitar empilhamento de Dialogs do
+   * Radix (que causa overlay duplicado / conteúdo invisível).
+   */
+  onBeforeOpen?: () => void;
 }
 
 const STATUS_TERMINAIS = new Set([
