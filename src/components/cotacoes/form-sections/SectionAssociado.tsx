@@ -27,13 +27,7 @@ export interface SectionAssociadoProps {
   buscaIndicador: string;
   setBuscaIndicador: (v: string) => void;
   buscandoIndicador: boolean;
-  resultadosIndicador: Array<{
-    id: string;
-    nome: string;
-    telefone?: string | null;
-    origem_sga?: boolean;
-    [k: string]: any;
-  }>;
+  resultadosIndicador: AssociadoSearchResult[];
 }
 
 export function SectionAssociado(props: SectionAssociadoProps) {
