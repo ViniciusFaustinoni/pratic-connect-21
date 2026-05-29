@@ -842,6 +842,9 @@ export function usePropostasPendentes() {
         return {
           ...contrato,
           cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
+          documentos_aprovados_em: (contrato as any).documentos_aprovados_em ?? null,
+          documentos_aprovados_por: (contrato as any).documentos_aprovados_por ?? null,
+
           tipo_etapa_analise: tipoEtapaAnalise,
           tempo_referencia: tempoReferencia ? new Date(tempoReferencia).toISOString() : contrato.data_assinatura,
           associado,
