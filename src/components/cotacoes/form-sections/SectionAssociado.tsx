@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cn } from '@/lib/utils';
-import { resolverAssociadoLocalId, type AssociadoSearchResult } from '@/hooks/useResolverAssociadoLocal';
+import { resolverAssociadoLocalId } from '@/hooks/useResolverAssociadoLocal';
+import type { AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 
 export interface SectionAssociadoProps {
   nomeAssociado: string;
