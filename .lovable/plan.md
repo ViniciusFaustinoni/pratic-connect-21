@@ -1,28 +1,50 @@
-## Problema
+# Consolidar tipos de status de cotação
 
-A IA Maya está chamando o lead de "cliente" em vez do nome real. Investigação:
+## Situação real no código (verificada)
 
-- O telefone do caso (5521985791044, "Julia Gurgel") **não está cadastrado em `associados`** → a Maya cai no fluxo "número desconhecido / lead".
-- Hoje, quando `isAssociado=false`, o `systemPrompt` de `agente-consultor-ia` não recebe nenhum nome — por isso o modelo recorre a "cliente".
-- O nome existe em dois lugares confiáveis: `data.pushName` no payload Evolution e `whatsapp_mensagens.nome_contato` (preenchido pelo `chatwoot-webhook` a partir de `meta.sender.name`). Nenhum dos dois é propagado para o agente.
+- `src/types/database.ts:93` — fonte canônica do banco: `StatusCotacao = 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'expirada'`.
+- `src/types/vendas.ts` — reexporta `StatusCotacao` e define `STATUS_COTACAO_LABELS`/`STATUS_COTACAO_COLORS` (5 estados, OK).
+- `src/components/cotacoes/CotacoesTable.tsx:27` — `export type StatusCotacaoExtended = StatusCotacao | 'visualizada'` + `statusConfig` local.
+- `src/components/cotacoes/CotacaoCard.tsx:21` — **redefine** `StatusCotacaoExtended` e **duplica** `statusConfig` (cópia divergente em potencial).
+- `src/components/cotacoes/CotacoesMobileList.tsx` — importa `StatusCotacaoExtended` e `statusConfig` de `CotacoesTable` (acoplamento ruim: tipo morando dentro de um componente).
+- `src/types/cotacaoPublica.ts > StatusCotacaoPublica` — tipo **legítimo e separado** (14 estados da jornada pública); fica fora do escopo.
 
-> Obs.: o texto "Olá Cliente, há uma atualização no seu atendimento Atualização PRATIC: Oii. Acompanhe pelo app." no print é um template HSM disparado pelo Chatwoot (não pela Maya) — ajuste do template é no painel do Chatwoot. O escopo desta tarefa é só o fallback de nome na IA, conforme você escolheu.
+Obs.: o item "types/cotacao.ts > StatusCotacaoExtended" citado no relato não existe; o tipo extended só vive nos 2 componentes.
+
+## Objetivo
+
+Uma única fonte de verdade para o status base e para o status estendido com `visualizada`, e um único `statusConfig` reutilizado.
 
 ## Mudanças
 
-### 1. `supabase/functions/agente-consultor-ia/index.ts`
-- Aceitar `nome_contato` opcional no body.
-- Resolver `nomeCliente` (apenas quando `!isDiretor && !isAssociado`) na ordem:
-  1. `body.nome_contato` (pushName ou nome do Chatwoot)
-  2. `leads.nome` do telefone (já é buscado em outro trecho — reaproveitar)
-  3. `whatsapp_mensagens.nome_contato` mais recente com `direcao='entrada'` para esse telefone (fallback para o caminho Chatwoot → fila → webhook sintético, que não carrega pushName)
-- Extrair primeiro nome (`nomeCliente.split(' ')[0]`) e, no `systemPrompt` de lead/desconhecido, instruir a Maya a tratar a pessoa por esse nome. Onde hoje cai em "cliente", passa a usar o primeiro nome quando disponível; mantém "cliente" como fallback final.
-- Não alterar fluxo de associado nem de diretor.
+### 1. `src/types/database.ts`
+- Manter `StatusCotacao` como está.
+- Adicionar:
+  ```ts
+  /** Status base + 'visualizada' (derivado em runtime quando o link público é aberto). */
+  export type StatusCotacaoExtended = StatusCotacao | 'visualizada';
+  ```
 
-### 2. `supabase/functions/whatsapp-webhook/index.ts`
-- Nos 3 `fetch` para `/functions/v1/agente-consultor-ia` (linhas ~3424, ~3504, ~3652), adicionar `nome_contato: data?.pushName || nomeContato || null` no body.
+### 2. Novo arquivo `src/components/cotacoes/statusConfig.ts`
+- Move o `statusConfig` (mapa `StatusCotacaoExtended → { label, color, icon, ... }`) que hoje vive em `CotacoesTable.tsx` para um módulo próprio.
+- Exporta `statusConfig` e reexporta o tipo via `export type { StatusCotacaoExtended } from '@/types/database'` para conveniência.
+
+### 3. `src/components/cotacoes/CotacoesTable.tsx`
+- Remover `export type StatusCotacaoExtended` e o `statusConfig` local.
+- Importar ambos de `./statusConfig`.
+- Manter o `export type { StatusCotacaoExtended }` reexportado (compat) — ou atualizar os imports dependentes.
+
+### 4. `src/components/cotacoes/CotacaoCard.tsx`
+- Remover a redefinição local de `StatusCotacaoExtended` e a duplicata de `statusConfig`.
+- Importar ambos de `./statusConfig`.
+
+### 5. `src/components/cotacoes/CotacoesMobileList.tsx`
+- Trocar o import de `./CotacoesTable` por `./statusConfig`.
+
+### 6. Verificação
+- `rg "StatusCotacaoExtended|statusConfig" src/components/cotacoes` deve mostrar só imports do novo módulo.
+- Build TS deve passar sem mudança de comportamento (mesmas chaves, mesmos valores).
 
 ## Fora de escopo
-- Template HSM "Olá Cliente…" do Chatwoot (ajuste é no painel do Chatwoot, não no nosso código).
-- Sincronizar o nome do contato no Chatwoot via API.
-- Mexer no prompt de associados.
+- `StatusCotacaoPublica` (jornada pública, conjunto de estados próprio e legítimo).
+- Qualquer mudança visual nos badges ou nas labels.
