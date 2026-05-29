@@ -3662,6 +3662,7 @@ serve(async (req) => {
             tipo_msg: tipoPrincipal,
             latitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLatitude : null,
             longitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLongitude : null,
+            nome_contato: nomeContato || data?.pushName || null,
           }),
         });
         const agentResult = await agentRes.json();
