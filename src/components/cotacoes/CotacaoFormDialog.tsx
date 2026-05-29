@@ -91,7 +91,7 @@ import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
 import { useVerificarPlacaOutroAssociado, type PlacaOutroAssociadoInfo } from '@/hooks/useVerificarPlacaOutroAssociado';
 import { PlacaOutroAssociadoModal } from '@/components/cotacoes/PlacaOutroAssociadoModal';
 import { useCotacaoDraft, type DraftPayload } from '@/hooks/useCotacaoDraft';
-import { DraftRestoreBanner } from '@/components/cotacao/DraftRestoreBanner';
+import { DraftRestoreBanner } from '@/components/cotacoes/DraftRestoreBanner';
 import { shouldBypassPlateGuards } from '@/components/cotacoes/plateGuardBypass';
 import { PerguntaZeroKmGate } from '@/components/cotacoes/PerguntaZeroKmGate';
 
