@@ -73,6 +73,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
+import { useContratosRealtime } from '@/hooks/useContratosRealtime';
 import { useDebounce } from '@/hooks/useDebounce';
 import { OutrosProcessosPanel } from '@/components/cotacoes/OutrosProcessosPanel';
 import { useOutrosProcessos } from '@/hooks/useOutrosProcessos';
@@ -257,6 +258,11 @@ export default function Cotacoes() {
     vendedorId: permissions.userId,
     viewScope: permissions.cotacao.viewScope,
   });
+
+  // Mudanças no contrato (Autentique: enviado → visualizado → assinado) precisam
+  // recalcular a etapa da venda na lista — sem isso, o badge fica congelado
+  // ex.: cliente já está assinando mas a tela mostra "Escolha de Vistoria".
+  useContratosRealtime();
 
   useEffect(() => {
     const leadParam = searchParams.get('lead');
