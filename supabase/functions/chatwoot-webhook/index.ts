@@ -45,14 +45,20 @@ Deno.serve(async (req) => {
     const msg = payload.messages?.[0] || {};
     const messageType = msg.message_type;
 
-    // message_type 0 = incoming (contato enviou)
-    if (messageType !== 0 && messageType !== "incoming") {
-      console.log(`[chatwoot-webhook] Mensagem não-incoming ignorada (type: ${messageType})`);
+    // message_type: 0/"incoming" = cliente enviou, 1/"outgoing" = agente/Maya respondeu.
+    // Ignoramos tipos 2 (activity) e 3 (template) por padrão.
+    const isIncoming = messageType === 0 || messageType === "incoming";
+    const isOutgoing = messageType === 1 || messageType === "outgoing";
+
+    if (!isIncoming && !isOutgoing) {
+      console.log(`[chatwoot-webhook] Mensagem ignorada (type: ${messageType})`);
       return new Response(
-        JSON.stringify({ success: true, ignorado: true, motivo: "Mensagem não é incoming" }),
+        JSON.stringify({ success: true, ignorado: true, motivo: `Tipo ${messageType} não suportado` }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const direcao = isIncoming ? "entrada" : "saida";
 
     // Extrair conteúdo da mensagem
     const content = msg.content || msg.processed_message_content || "";
@@ -75,14 +81,14 @@ Deno.serve(async (req) => {
     }
 
     if (!content || content.trim() === "") {
-      console.log(`[chatwoot-webhook] Mensagem vazia ignorada (tel: ${telefone})`);
+      console.log(`[chatwoot-webhook] Mensagem vazia ignorada (tel: ${telefone}, direcao: ${direcao})`);
       return new Response(
         JSON.stringify({ success: true, ignorado: true, motivo: "Mensagem vazia" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Nome do contato via meta.sender.name
+    // Nome do contato via meta.sender.name (sempre o cliente, independente da direção — usado para agrupar)
     const nomeContato = payload.meta?.sender?.name || "Desconhecido";
 
     // message_id: preferir source_id (wamid do WhatsApp), fallback id numérico
@@ -90,51 +96,57 @@ Deno.serve(async (req) => {
       ? `chatwoot_${msg.source_id}`
       : `chatwoot_${msg.id || Date.now()}`;
 
-    console.log(`[chatwoot-webhook] Processando msg de ${telefone} (${nomeContato}): "${content.substring(0, 80)}"`);
+    console.log(`[chatwoot-webhook] Processando ${direcao} de/para ${telefone} (${nomeContato}): "${content.substring(0, 80)}"`);
 
-    // Salvar na tabela whatsapp_mensagens
+    // Salvar na tabela whatsapp_mensagens (idempotente por message_id)
     const { error: msgError } = await supabase.from("whatsapp_mensagens").insert({
       telefone,
       nome_contato: nomeContato,
       tipo: "text",
       mensagem: content,
       status: "entregue",
-      direcao: "entrada",
+      direcao,
       message_id: messageId,
       referencia_tipo: "chatwoot",
     });
 
     if (msgError) {
-      console.error("[chatwoot-webhook] Erro ao salvar mensagem:", msgError.message);
+      console.error(`[chatwoot-webhook] Erro ao salvar mensagem (${direcao}):`, msgError.message);
+    } else if (direcao === "saida") {
+      console.log(`[chatwoot-webhook] ✓ Saída registrada (tel: ${telefone})`);
     }
 
-    // Inserir na fila IA para processamento assíncrono
-    const { error: filaError } = await supabase.from("whatsapp_fila_ia").insert({
-      telefone,
-      texto: content,
-      tipo_msg: "text",
-      message_id: messageId,
-      status: "pendente",
-      tentativas: 0,
-    });
+    // Só enfileira IA para entradas — saídas não devem disparar resposta da Maya
+    let filaError: { message: string } | null = null;
+    if (isIncoming) {
+      const { error } = await supabase.from("whatsapp_fila_ia").insert({
+        telefone,
+        texto: content,
+        tipo_msg: "text",
+        message_id: messageId,
+        status: "pendente",
+        tentativas: 0,
+      });
+      filaError = error;
 
-    if (filaError) {
-      console.error("[chatwoot-webhook] Erro ao inserir na fila IA:", filaError.message);
-    } else {
-      console.log(`[chatwoot-webhook] ✓ Mensagem enfileirada para IA (tel: ${telefone})`);
+      if (filaError) {
+        console.error("[chatwoot-webhook] Erro ao inserir na fila IA:", filaError.message);
+      } else {
+        console.log(`[chatwoot-webhook] ✓ Mensagem enfileirada para IA (tel: ${telefone})`);
 
-      // Fire-and-forget: disparar processamento da fila
-      try {
-        fetch(`${supabaseUrl}/functions/v1/processar-fila-ia`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({}),
-        }).catch(() => {});
-      } catch (_) {
-        // Ignora - o cron vai pegar
+        // Fire-and-forget: disparar processamento da fila
+        try {
+          fetch(`${supabaseUrl}/functions/v1/processar-fila-ia`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify({}),
+          }).catch(() => {});
+        } catch (_) {
+          // Ignora - o cron vai pegar
+        }
       }
     }
 
