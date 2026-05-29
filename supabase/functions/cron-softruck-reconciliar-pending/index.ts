@@ -87,6 +87,28 @@ serve(async (req) => {
           const body = await res.json().catch(() => ({}));
           resumo.push({ rastreador_id: r.id, imei, via: "reconciliar-pending", ok: res.ok, status: res.status, body });
         }
+
+        // Após o ciclo: se ainda PENDING e já bateu o limite de tentativas, promover
+        // a FAILED_VINCULO pra sair da fila e aparecer no Monitoramento como caso
+        // que exige intervenção manual (botão Reprocessar no drawer).
+        try {
+          const { data: pos } = await supabase
+            .from("rastreadores")
+            .select("softruck_integration_status, softruck_tentativas")
+            .eq("id", r.id).maybeSingle();
+          const tent = pos?.softruck_tentativas ?? 0;
+          const st = String(pos?.softruck_integration_status || "").toUpperCase();
+          if ((st === "PENDING") && tent >= 5) {
+            await supabase.from("rastreadores").update({
+              softruck_integration_status: "FAILED_VINCULO",
+              updated_at: new Date().toISOString(),
+            }).eq("id", r.id);
+            console.warn(`[cron-softruck-reconciliar-pending] rastreador ${r.id} promovido a FAILED_VINCULO (tentativas=${tent})`);
+            resumo.push({ rastreador_id: r.id, imei, promovido_a: "FAILED_VINCULO", tentativas: tent });
+          }
+        } catch (escErr) {
+          console.warn(`[cron-softruck-reconciliar-pending] erro check FAILED_VINCULO ${r.id}:`, escErr);
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(`[cron-softruck-reconciliar-pending] erro rastreador ${r.id}:`, msg);
