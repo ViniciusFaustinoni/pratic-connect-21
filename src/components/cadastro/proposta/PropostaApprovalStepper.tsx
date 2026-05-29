@@ -343,7 +343,7 @@ export function PropostaApprovalStepper({
         )}
 
         {/* STEP 2: Fotos & Vistoria (oculto quando ocultarEtapaFotos) */}
-        {currentStep === 2 && !ocultarEtapaFotos && (
+        {currentStep === 2 && !ocultarEtapaFotos && subEtapa1Liberada && (
           <div className="space-y-4 animate-fade-in">
             <PropostaMidiaGrid
               video360Url={proposta.vistoria?.video_360_url}
