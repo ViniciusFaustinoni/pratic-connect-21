@@ -1,8 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ListChecks, Hand, History, Map as MapIcon, ShieldOff } from 'lucide-react';
+import { ListChecks, Hand, History, Map as MapIcon, ShieldOff, Ban } from 'lucide-react';
 import ServicosCampoUnificado from './ServicosCampoUnificado';
 import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
 import { useVeiculosSuspensos } from '@/hooks/useVeiculosSuspensos';
+import { useVeiculosNegados } from '@/hooks/useVeiculosNegados';
 import { Badge } from '@/components/ui/badge';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -12,6 +13,7 @@ import AlertaImprevistosPendentes from '@/components/monitoramento/AlertaImprevi
 const AtribuicaoManualTab = lazy(() => import('@/components/monitoramento/AtribuicaoManualTab'));
 const HistoricoAtribuicoesTab = lazy(() => import('@/components/monitoramento/HistoricoAtribuicoesTab'));
 const VeiculosSuspensosTab = lazy(() => import('./VeiculosSuspensosTab'));
+const VeiculosNegadosTab = lazy(() => import('./VeiculosNegadosTab'));
 const MapaTab = lazy(() => import('./Mapa'));
 
 export default function VistoriasInstalacoesMon() {
