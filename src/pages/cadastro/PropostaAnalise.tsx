@@ -90,6 +90,36 @@ export default function PropostaAnalise() {
   const reprovarMutation = useReprovarProposta();
   const ativarRastreadorMutation = useAtivarRastreador();
 
+  // Sub-etapa 1 do Cadastro: aprovação dos documentos (gate para sub-etapa 2)
+  // Ver mem://logic/operations/cadastro-duas-subetapas
+  const documentosAprovadosEm = (proposta as any)?.documentos_aprovados_em as string | null | undefined;
+  const subEtapa1Liberada = !!documentosAprovadosEm;
+  const [isAprovandoDocs, setIsAprovandoDocs] = useState(false);
+
+  const handleAprovarDocumentos = async () => {
+    if (!id) return;
+    setIsAprovandoDocs(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('aprovar-documentos-cadastro', {
+        body: { contratoId: id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success('Documentos aprovados', {
+        description: 'Sub-etapa 1 concluída. Agora avalie a vistoria enxuta para finalizar.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+    } catch (err: any) {
+      console.error('[PropostaAnalise] aprovar-documentos-cadastro falhou:', err);
+      toast.error('Erro ao aprovar documentos', {
+        description: err?.message || 'Tente novamente.',
+      });
+    } finally {
+      setIsAprovandoDocs(false);
+    }
+  };
+
   // Encontrar próxima proposta
   const currentIndex = todasPropostas?.findIndex((p) => p.id === id) ?? -1;
   const nextProposta = currentIndex >= 0 && todasPropostas ? todasPropostas[currentIndex + 1] : null;
@@ -754,6 +784,9 @@ export default function PropostaAnalise() {
           planoTemRouboFurto={planoTemRouboFurto}
           aguardandoMonitoramentoVistoria={aguardandoMonitoramentoVistoria}
           aprovarApenasDocumentos={aprovarApenasDocumentos}
+          documentosAprovadosEm={documentosAprovadosEm ?? null}
+          onAprovarDocumentos={handleAprovarDocumentos}
+          isAprovandoDocumentos={isAprovandoDocs}
         />
       </div>
 
