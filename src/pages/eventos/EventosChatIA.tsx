@@ -42,9 +42,10 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         .from('whatsapp_mensagens')
         .select('telefone, nome_contato, mensagem, created_at, direcao, instancia_id, referencia_tipo')
         .order('created_at', { ascending: false })
-        .limit(1000);
+        .limit(5000);
       if (instanciasAtivas && instanciasAtivas.length > 0) {
-        q = q.in('instancia_id', instanciasAtivas);
+        // Inclui mensagens órfãs (instancia_id IS NULL) — webhooks antigos gravaram sem amarrar à instância
+        q = q.or(`instancia_id.is.null,instancia_id.in.(${instanciasAtivas.join(',')})`);
       }
       const { data, error } = await q;
       if (error) throw error;
