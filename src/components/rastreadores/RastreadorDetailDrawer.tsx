@@ -92,6 +92,7 @@ export function RastreadorDetailDrawer({
   const deleteRastreador = useDeleteRastreador();
   const { isDiretor } = usePermissions();
   const enviarComando = useEnviarComando();
+  const queryClient = useQueryClient();
 
   const [comandoDialog, setComandoDialog] = useState<{
     open: boolean;
