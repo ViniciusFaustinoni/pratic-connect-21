@@ -348,7 +348,10 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                               className="h-8 w-8"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/vendas/cotador?tipo_entrada=troca_titularidade&cotacao_id=${item.cotacao_id}&solicitacao_id=${item.solicitacao_troca_id ?? ''}`);
+                                // Abre o TrocaTimelineDrawer; dentro dele há o botão
+                                // "Realizar/Editar Cotação" que monta o CotacaoFormDialog
+                                // em modo Troca com cotacaoBase + origemTroca corretos.
+                                handleVerDetalhe(item);
                               }}
                             >
                               <Pencil className="h-4 w-4" />
