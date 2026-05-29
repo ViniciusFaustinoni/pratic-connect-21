@@ -1833,7 +1833,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             coberturasRemovidas: p.coberturasRemovidas || [],
           })),
           // Tipo da cotação (informativo) espelhado
-          tipo_entrada: (
+          tipo_entrada: normalizarTipoEntrada(
             origemTroca
               ? 'troca_titularidade'
               : origemSubstituicao
