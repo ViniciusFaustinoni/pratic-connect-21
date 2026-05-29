@@ -96,6 +96,8 @@ import { shouldBypassPlateGuards } from '@/components/cotacoes/plateGuardBypass'
 import { PerguntaZeroKmGate } from '@/components/cotacoes/PerguntaZeroKmGate';
 import { normalizarTipoEntrada } from '@/lib/cotacoes/tipoEntrada';
 import { SectionAssociado } from '@/components/cotacoes/form-sections/SectionAssociado';
+import { SectionComercial } from '@/components/cotacoes/form-sections/SectionComercial';
+import { SectionAcoes } from '@/components/cotacoes/form-sections/SectionAcoes';
 
 // Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
