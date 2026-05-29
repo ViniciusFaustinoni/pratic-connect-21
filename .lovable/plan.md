@@ -1,66 +1,102 @@
-# Normalizar `tipo_entrada` em todos os caminhos de escrita
+# Refatoração — CotacaoFormDialog (3.686 linhas → ~700)
 
-## Diagnóstico (varredura no código)
+## Objetivo
 
-Confirmado: `'substituicao'` e `'substituicao_placa'` representam a mesma coisa em `cotacoes.tipo_entrada` / `contratos.tipo_entrada`, mas são gravados em pontos distintos sem normalização:
+Quebrar o JSX monolítico em sub-componentes **por bloco visual**. Estado, hooks, validações, mutations e handlers **continuam todos no componente pai** — extraímos só apresentação. Zero mudança de lógica de negócio, zero risco no fluxo canônico de cotação.
 
-| Arquivo | Linha | O que grava hoje |
+## Princípios (não negociáveis)
+
+1. **Nada de lógica nova.** Só recortar JSX e passar props.
+2. **Estado fica no pai.** Hooks (`useState`, `useEffect`, `useMemo`, mutations, busca FIPE, validação de placa, detecção de tipo, cenário de adesão, modo 0KM, geração de PDF, WhatsApp) **não se movem**.
+3. **Sem novos contextos.** Passamos props explícitas — fica verboso, mas mantém o grafo de dados rastreável.
+4. **Modais externos saem com seu próprio arquivo** (já existem: `PlacaDuplicadaModal`, `VeiculoSGAModal`, `PlacaOutroAssociadoModal`) — só conferir que continuam isolados.
+5. **Memorias respeitadas:** fluxo canônico 8 etapas, gate 0KM, `normalizarTipoEntrada`, tri-fonte FIPE, regra 1%, dispensa de rastreador, integração SGA — nada disso é tocado.
+
+## Estrutura proposta
+
+Nova pasta: `src/components/cotacoes/form-sections/`
+
+| Componente | Linhas atuais (origem) | Responsabilidade visual |
 |---|---|---|
-| `src/components/substituicao/ModalDetalhesSubstituicao.tsx` | 80 | URL param `tipo_entrada=substituicao` (alias, fonte do bug) |
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | 1804, 1835 | Ternário inline — OK no fluxo canônico, mas vulnerável quando `tipoCotacao` vier do URL acima |
-| `src/components/contratos/ContratoWizard.tsx` | 798 | `tipo_entrada: tipoOperacao` cru |
-| `src/components/associados/reativacao/ReativacaoWizard.tsx` | 233 | `'reativacao'` (valor diferente, OK) |
-| `supabase/functions/contrato-gerar/index.ts` | 1018, 1192 | Já normaliza inline — vamos extrair para util |
+| `SectionAssociado.tsx` | 2259–2415 | Nome, telefone, email, indicação |
+| `SectionVeiculo.tsx` | 2416–2788 | Busca por placa, gate 0KM, FIPE com seletor de versão, seleção manual marca/modelo/ano, combustível, valor FIPE, alerta dupla aprovação |
+| `SectionCondicoes.tsx` | 2856–3056 | Região, uso, tipo da cotação, observação SGA, tipo de placa + alertas |
+| `SectionPlanos.tsx` | 3057–3342 | Grade de planos, valor adicional, cenário de adesão, taxa de filiação, alertas de adesão mínima e repasse volante |
+| `SectionComercial.tsx` | 3343–3433 | Consultor responsável, dia de vencimento |
+| `SectionResumo.tsx` | 3434–3575 | Resumo inline com planos selecionados, benefícios "ver mais", filiação/validade |
+| `SectionAcoes.tsx` | 3576–3594 | Footer sticky com botões salvar/cancelar |
 
-Leitores tolerantes (`autentique-create`, `autentique-create-by-token`, `template-utils`) seguem aceitando ambos como rede de segurança.
+Os blocos pré-formulário (banners `DraftRestoreBanner`, sem-permissão) ficam **inline no pai** — são 1–2 linhas cada.
 
-Fora de escopo: `useVistoriaManutencao` / `vistoriaManutencao.ts` — `resultado='substituicao'` é substituição de RASTREADOR, domínio diferente.
+## Como cada seção recebe estado
 
-## Mudanças
+Padrão único: a seção recebe um objeto `props` com os campos que lê e os setters/handlers que dispara. Exemplo:
 
-### 1. Util compartilhado (front)
-**Novo:** `src/lib/cotacoes/tipoEntrada.ts`
 ```ts
-export type TipoEntradaCanonico =
-  | 'adesao' | 'inclusao' | 'migracao' | 'reativacao'
-  | 'substituicao_placa' | 'troca_titularidade';
-
-export function normalizarTipoEntrada(v: string | null | undefined): TipoEntradaCanonico | null {
-  if (!v) return null;
-  if (v === 'substituicao') return 'substituicao_placa';
-  if (v === 'nova') return 'adesao';
-  return v as TipoEntradaCanonico;
-}
+// SectionVeiculo.tsx (assinatura ilustrativa)
+type Props = {
+  placa: string;
+  setPlaca: (v: string) => void;
+  isZeroKm: boolean | null;
+  onResponderGate0Km: (v: boolean) => void;
+  fipeResult: FipeResult | null;
+  variantesFipe: FipeVariante[];
+  versaoSelecionada: string | null;
+  onSelecionarVersao: (v: string) => void;
+  marca: string; modelo: string; ano: string; combustivel: string;
+  setMarca: ...; setModelo: ...; setAno: ...; setCombustivel: ...;
+  valorFipe: number; setValorFipe: ...;
+  alertaFipeAcimaLimite: boolean;
+  buscandoFipe: boolean;
+  // ... (apenas o que esta seção realmente usa)
+};
 ```
 
-### 2. Util compartilhado (edge)
-**Novo:** `supabase/functions/_shared/tipo-entrada.ts` — espelho exato (Deno-compatível).
+O pai monta cada bloco assim:
 
-### 3. Aplicar nos pontos de escrita
-- **`ModalDetalhesSubstituicao.tsx:80`** — trocar `tipo_entrada: 'substituicao'` por `'substituicao_placa'` no URLSearchParams. Causa raiz.
-- **`CotacaoFormDialog.tsx:1804, 1835`** — envolver o resultado do ternário com `normalizarTipoEntrada(...)`.
-- **`ContratoWizard.tsx:798`** — `tipo_entrada: normalizarTipoEntrada(tipoOperacao)`.
-- **`Cotacoes.tsx:286-288`** — aceitar ambos aliases ao ler URL param (`tipoEntrada === 'substituicao' || tipoEntrada === 'substituicao_placa'`).
-- **`contrato-gerar/index.ts:1018`** — substituir ternário inline por `normalizarTipoEntrada()` do novo shared.
-
-### 4. Migration (data backfill)
-```sql
-UPDATE public.cotacoes SET tipo_entrada = 'substituicao_placa'
-  WHERE tipo_entrada = 'substituicao';
-UPDATE public.contratos SET tipo_entrada = 'substituicao_placa'
-  WHERE tipo_entrada = 'substituicao';
-UPDATE public.cotacoes
-  SET dados_extras = jsonb_set(dados_extras, '{tipo_entrada}', '"substituicao_placa"')
-  WHERE dados_extras->>'tipo_entrada' = 'substituicao';
+```tsx
+<SectionVeiculo
+  placa={placa} setPlaca={setPlaca}
+  isZeroKm={isZeroKm} onResponderGate0Km={handleGate0Km}
+  // ...
+/>
 ```
-Sem CHECK constraint (valores legados de domínios paralelos podem existir); a normalização vira garantia via util.
 
-### 5. Verificação
-- `rg "'substituicao'" src --type ts` deve sobrar só nos leitores tolerantes (autentique/template-utils) e em `vistoriaManutencao` (outro domínio).
-- Build TS passa.
-- Query rápida pós-migration: `SELECT COUNT(*) FROM cotacoes WHERE tipo_entrada='substituicao'` deve dar 0.
+## Passos de execução (ordem obrigatória)
 
-## Fora de escopo
-- Remover a tolerância dos leitores (defesa em profundidade fica).
-- Renomear `'nova'` → `'adesao'` historicamente (só normaliza no novo write).
-- Domínio `vistoria_manutencao.resultado='substituicao'`.
+1. **Snapshot inicial** — `wc -l` antes e linhas dos `{/* BLOCO N */}` mapeadas (já feito, ver tabela).
+2. **Criar pasta** `src/components/cotacoes/form-sections/` com um `index.ts` que re-exporta.
+3. **Extrair uma seção por vez**, na ordem: Associado → Comercial → Acoes → Condicoes → Resumo → Planos → Veículo (das mais simples para as mais densas, para reduzir risco).
+4. Para cada extração:
+   - Copiar o JSX cru para o novo arquivo.
+   - Listar todos os símbolos referenciados → vira a `Props` da seção.
+   - Substituir o trecho no pai por `<SectionX ...props />`.
+   - Conferir build TS (`tsc --noEmit` roda automático no harness).
+5. **Não tocar** nas mutations, no `useEffect` de busca FIPE, no cálculo de planos, no `normalizarTipoEntrada`, nem nos modais externos.
+6. **Validação manual** ao final: abrir uma cotação nova, uma de substituição (com `normalizarTipoEntrada`), uma 0KM, e o fluxo Troca de Titularidade (que reusa este dialog via `TrocaTitularidadeDialog`).
+
+## O que NÃO está no escopo (explicitamente)
+
+- ❌ Mover hooks para custom hooks (`useCotacaoForm`, `useFipeLookup`, etc.) — fica para outra dívida técnica.
+- ❌ Introduzir Context/Zustand/Jotai.
+- ❌ Renomear campos, mudar validações, mexer em qualquer edge function ou query.
+- ❌ Refatorar `CotacaoFormDialog` para componente controlado/uncontrolled diferente.
+- ❌ Testes unitários novos (o objetivo declarado é só preparar o terreno; testes virão em ticket separado).
+
+## Resultado esperado
+
+- `CotacaoFormDialog.tsx`: ~3.686 → ~700–900 linhas (só hooks, handlers, montagem das seções e modais).
+- 7 arquivos novos em `form-sections/`, cada um <500 linhas.
+- Diff revisável: cada seção é um commit lógico de "mover JSX + criar Props".
+- Zero mudança comportamental observável pelo usuário.
+
+## Riscos e mitigação
+
+| Risco | Mitigação |
+|---|---|
+| Props explodirem (20+ por seção) | Aceitar verbosidade nesta fase; é o preço por não introduzir contexto. Agrupar em objetos só quando ≥30 props. |
+| Re-render do pai a cada keystroke vazar para todas as seções | Aceitável — comportamento já é esse hoje. Otimização com `React.memo` fica para depois (e exige estabilizar handlers com `useCallback`, que é mudança de lógica). |
+| Esquecer um símbolo no recorte | TS pega no build; reforçado pela ordem "simples → complexa". |
+| Quebrar `TrocaTitularidadeDialog` que consome este dialog | Conferir manualmente após extração; assinatura pública do `CotacaoFormDialog` não muda. |
+
+Aprovação para começar pela `SectionAssociado` (a mais isolada)?
