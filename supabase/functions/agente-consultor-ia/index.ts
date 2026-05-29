@@ -562,7 +562,8 @@ Se o contato pedir para falar com uma pessoa/atendente:
 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
 
 ## NOME DO CONTATO
-${contato?.nome || "Não informado ainda"}`;
+${contato?.nome || "Não informado ainda"}
+${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(contato.nome).split(/\s+/)[0]}") em todas as saudações e respostas. NUNCA use "cliente" como vocativo se você já tem o nome.` : `Você ainda não sabe o nome do contato. Em vez de "cliente", use saudações neutras (ex.: "Olá! 👋") até descobrir o nome.`}`;
 
       // ---- INJETAR ESTADO DO FLUXO NO PROMPT ----
       if (dadosCotacao && dadosCotacao.etapa) {
