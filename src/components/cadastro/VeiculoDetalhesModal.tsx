@@ -86,6 +86,16 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   selfie: 'Selfie com Documento', contrato: 'Contrato', outros: 'Outros',
 };
 
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.m4v', '.3gp'];
+function isMidiaVideo(url?: string | null, tipo?: string | null): boolean {
+  if (tipo) {
+    const t = tipo.toLowerCase();
+    if (t.startsWith('video') || t.includes('video_360') || t.includes('360')) return true;
+  }
+  const u = (url || '').toLowerCase().split('?')[0];
+  return VIDEO_EXTENSIONS.some((ext) => u.endsWith(ext) || u.includes(ext));
+}
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
