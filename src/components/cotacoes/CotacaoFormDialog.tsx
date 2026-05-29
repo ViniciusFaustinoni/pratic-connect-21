@@ -94,6 +94,7 @@ import { useCotacaoDraft, type DraftPayload } from '@/hooks/useCotacaoDraft';
 import { DraftRestoreBanner } from '@/components/cotacoes/DraftRestoreBanner';
 import { shouldBypassPlateGuards } from '@/components/cotacoes/plateGuardBypass';
 import { PerguntaZeroKmGate } from '@/components/cotacoes/PerguntaZeroKmGate';
+import { normalizarTipoEntrada } from '@/lib/cotacoes/tipoEntrada';
 
 // Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
