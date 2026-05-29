@@ -341,7 +341,10 @@ export function usePropostasPendentes() {
           vendedor_id,
           veiculo_id,
           cadastro_aprovado,
+          documentos_aprovados_em,
+          documentos_aprovados_por,
           tipo_entrada,
+
           updated_at
         `)
         .eq('status', 'assinado')
