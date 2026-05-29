@@ -349,8 +349,10 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
         excluirTiposEntrada,
       }),
     placeholderData: keepPreviousData,
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
+    // 30s para garantir refresh ao voltar à aba se algum evento de contrato/cotação
+    // escapar do realtime (ex.: lista aberta antes do contrato existir).
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: true,
   });
 }
 
