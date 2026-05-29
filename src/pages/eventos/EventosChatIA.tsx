@@ -42,9 +42,10 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         .from('whatsapp_mensagens')
         .select('telefone, nome_contato, mensagem, created_at, direcao, instancia_id, referencia_tipo')
         .order('created_at', { ascending: false })
-        .limit(1000);
+        .limit(5000);
       if (instanciasAtivas && instanciasAtivas.length > 0) {
-        q = q.in('instancia_id', instanciasAtivas);
+        // Inclui mensagens órfãs (instancia_id IS NULL) — webhooks antigos gravaram sem amarrar à instância
+        q = q.or(`instancia_id.is.null,instancia_id.in.(${instanciasAtivas.join(',')})`);
       }
       const { data, error } = await q;
       if (error) throw error;
@@ -83,7 +84,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
         (payload) => {
           const inst = (payload.new as any)?.instancia_id;
-          if (inst && instanciasAtivas.includes(inst)) {
+          if (!inst || (instanciasAtivas && instanciasAtivas.includes(inst))) {
             queryClient.invalidateQueries({ queryKey: ['chat-ia-conversas', instanciasAtivas] });
           }
         }
