@@ -29,7 +29,7 @@ export interface VeiculoNegado {
   placa: string;
   marca: string | null;
   modelo: string | null;
-  ano: string | null;
+  ano: number | null;
   motivo_recusa_veiculo: string | null;
   recusado_em: string | null;
   recusado_por_nome: string | null;
@@ -48,7 +48,7 @@ export function useVeiculosNegados() {
       const { data: veiculos, error } = await supabase
         .from('veiculos')
         .select(`
-          id, placa, marca, modelo, ano,
+          id, placa, marca, modelo,
           motivo_recusa_veiculo, updated_at,
           associado_id,
           associado:associados(nome, cpf)
@@ -137,7 +137,7 @@ export function useVeiculosNegados() {
           placa: v.placa,
           marca: v.marca,
           modelo: v.modelo,
-          ano: v.ano,
+          ano: null,
           motivo_recusa_veiculo: v.motivo_recusa_veiculo,
           recusado_em: log?.recusado_em ?? v.updated_at,
           recusado_por_nome: log?.recusado_por_nome ?? null,
