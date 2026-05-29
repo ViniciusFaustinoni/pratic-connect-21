@@ -1,10 +1,16 @@
 import { useState, useMemo } from 'react';
 
-import { ShieldOff, Search, ClipboardCheck, Loader2 } from 'lucide-react';
+import { ShieldOff, Search, ClipboardCheck, Loader2, Ban } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { useQueryClient } from '@tanstack/react-query';
 import { useVeiculosSuspensos, type VeiculoSuspenso } from '@/hooks/useVeiculosSuspensos';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
