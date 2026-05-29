@@ -9433,6 +9433,8 @@ export type Database = {
           data_inicio: string
           data_visualizacao: string | null
           dia_vencimento: number | null
+          documentos_aprovados_em: string | null
+          documentos_aprovados_por: string | null
           documentos_completos: boolean | null
           id: string
           lead_id: string | null
@@ -9563,6 +9565,8 @@ export type Database = {
           data_inicio?: string
           data_visualizacao?: string | null
           dia_vencimento?: number | null
+          documentos_aprovados_em?: string | null
+          documentos_aprovados_por?: string | null
           documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
@@ -9693,6 +9697,8 @@ export type Database = {
           data_inicio?: string
           data_visualizacao?: string | null
           dia_vencimento?: number | null
+          documentos_aprovados_em?: string | null
+          documentos_aprovados_por?: string | null
           documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
