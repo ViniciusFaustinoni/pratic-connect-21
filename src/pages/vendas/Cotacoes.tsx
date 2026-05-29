@@ -259,6 +259,11 @@ export default function Cotacoes() {
     viewScope: permissions.cotacao.viewScope,
   });
 
+  // Mudanças no contrato (Autentique: enviado → visualizado → assinado) precisam
+  // recalcular a etapa da venda na lista — sem isso, o badge fica congelado
+  // ex.: cliente já está assinando mas a tela mostra "Escolha de Vistoria".
+  useContratosRealtime();
+
   useEffect(() => {
     const leadParam = searchParams.get('lead');
     const novoParam = searchParams.get('novo');
