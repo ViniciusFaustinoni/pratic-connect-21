@@ -1801,7 +1801,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // ser definidos via fluxos de origem (origemTroca/origemSubstituicao).
         // Se o operador escolher esses valores no dropdown sem o fluxo canônico,
         // rebaixamos para 'adesao' para evitar cotação órfã sem solicitação vinculada.
-        tipo_entrada: (
+        tipo_entrada: normalizarTipoEntrada(
           origemTroca
             ? 'troca_titularidade'
             : origemSubstituicao
