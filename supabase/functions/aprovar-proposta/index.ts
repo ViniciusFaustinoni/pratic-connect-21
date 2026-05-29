@@ -220,6 +220,25 @@ serve(async (req) => {
       throw new Error(`Este contrato não pode ser aprovado. Status atual: ${contrato.status}`);
     }
 
+    // ── GATE: Sub-etapa 1 do Cadastro (aprovação de documentos) ────────────
+    // Canônico: o Cadastro trabalha em DUAS sub-etapas sequenciais.
+    //   1) Aprovação de documentos  → aprovar-documentos-cadastro
+    //   2) Aprovação da vistoria enxuta (esta edge)
+    // Troca de titularidade segue fluxo próprio (delegado acima) e não usa
+    // sub-etapas — por isso a checagem fica APÓS o early-return da troca.
+    if (!(contrato as any).documentos_aprovados_em) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          codigo: 'documentos_nao_aprovados',
+          error: 'documentos_nao_aprovados',
+          mensagem: 'Aprove primeiro a sub-etapa 1 (documentos) antes de aprovar a vistoria enxuta.',
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+
     // ── GATE: Situação Financeira (SGA) ────────────────────────────────────
     // Bloqueia aprovação se não houver registro liberador recente em
     // sga_situacao_check (≤ 24h). Liberador = !tem_debito OU bypass=true OU
