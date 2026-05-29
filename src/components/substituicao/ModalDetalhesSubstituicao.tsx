@@ -77,7 +77,7 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
     if (!sol) return;
     const snap = sol.associado_snapshot || {};
     const params = new URLSearchParams({
-      tipo_entrada: 'substituicao',
+      tipo_entrada: 'substituicao_placa',
       associado_id: sol.associado_id || '',
       veiculo_antigo_id: sol.veiculo_antigo_id || '',
       veiculo_antigo_placa: sol.veiculo_antigo_placa,

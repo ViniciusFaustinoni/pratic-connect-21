@@ -283,9 +283,9 @@ export default function Cotacoes() {
       setShowCotacaoForm(true);
       searchParams.delete('lead');
       setSearchParams(searchParams, { replace: true });
-    } else if (tipoEntrada === 'substituicao' || tipoEntrada === 'inclusao') {
+    } else if (tipoEntrada === 'substituicao' || tipoEntrada === 'substituicao_placa' || tipoEntrada === 'inclusao') {
       // Substituição/Inclusão: abrir modal de cotação direto com contexto
-      if (tipoEntrada === 'substituicao') {
+      if (tipoEntrada === 'substituicao' || tipoEntrada === 'substituicao_placa') {
         setSubstituicaoCtx({
           solicitacaoId: searchParams.get('solicitacao_substituicao_id') || '',
           associadoId: associadoId || '',
