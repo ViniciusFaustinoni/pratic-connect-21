@@ -119,16 +119,21 @@ export function PropostaApprovalStepper({
   planoTemRouboFurto = true,
   aguardandoMonitoramentoVistoria = false,
   aprovarApenasDocumentos = false,
+  documentosAprovadosEm = null,
+  onAprovarDocumentos,
+  isAprovandoDocumentos = false,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
   const cancelarDocsMutation = useCancelarDocumentosSolicitados();
 
+  // Sub-etapa 1 do Cadastro (aprovação dos documentos) é gate para sub-etapa 2.
+  // Ver mem://logic/operations/cadastro-duas-subetapas
+  const subEtapa1Liberada = !!documentosAprovadosEm;
+
   // Quando o cadastro NÃO avalia fotos (plano sem R&F ou vistoria agendada
   // ainda não realizada), o stepper fica com 2 etapas: Documentos + Liberação.
   const ocultarEtapaFotos = !cadastroAvaliaFotos;
-  // Autovistoria enxuta acima FIPE → a aprovação do Cadastro de fato libera R&F.
-  // Caso contrário, o Cadastro apenas encaminha ao Monitoramento (que dá a aprovação final).
   const liberaCoberturaRF = isAutovistoria && planoTemRouboFurto && cadastroAvaliaFotos;
   const stepFinal2 = liberaCoberturaRF ? STEP_LIBERAR_RF_2 : STEP_FINAL_2;
   const stepFinal3 = liberaCoberturaRF ? STEP_LIBERAR_RF_3 : STEP_FINAL_3;
@@ -137,20 +142,18 @@ export function PropostaApprovalStepper({
     : [STEP_DOCS, STEP_FOTOS, stepFinal3];
   const finalStepId = ocultarEtapaFotos ? 2 : 3;
 
-  // Step 1 validation: all documents approved (or no documents)
   const totalDocs = documentos.length;
   const docsAprovados = documentos.filter(d => d.status === 'aprovado').length;
   const docsPendentes = documentos.filter(d => d.status === 'pendente' || d.status === 'em_analise').length;
   const docsReprovados = documentos.filter(d => d.status === 'reprovado').length;
   const step1Complete = totalDocs === 0 || (docsPendentes === 0 && docsReprovados === 0);
 
-  // Step 2 validation: user confirmed photos reviewed
-  // Quando ocultarEtapaFotos, força true (não bloqueia aprovação).
   const temFotos = (proposta.vistoria?.fotos?.length || 0) > 0 || !!proposta.vistoria?.video_360_url;
   const step2Complete = ocultarEtapaFotos ? true : (fotosRevisadas || !temFotos);
 
+  // Gate de avanço: sub-etapa 2 só destrava quando sub-etapa 1 foi aprovada.
   const canAdvanceFromStep = (step: number): boolean => {
-    if (step === 1) return step1Complete;
+    if (step === 1) return step1Complete && subEtapa1Liberada;
     if (step === 2 && !ocultarEtapaFotos) return step2Complete;
     return true;
   };
