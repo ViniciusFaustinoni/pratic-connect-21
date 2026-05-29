@@ -791,6 +791,144 @@ export default function AprovacaoInstalacaoDetalhe() {
         />
       )}
 
+      {/* Vistoria do Técnico — informações textuais preenchidas em campo */}
+      {temInfoTecnica && (
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ClipboardCheck className="h-4 w-4 text-primary" />
+              Vistoria do Técnico
+              {vistoriaTecnico?.modalidade && (
+                <Badge variant="outline" className="text-[10px] uppercase">
+                  {vistoriaTecnico.modalidade}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(vistoriaTecnico?.km_atual || vistoriaTecnico?.quilometragem) && (
+                <div>
+                  <span className="text-muted-foreground text-xs">Quilometragem</span>
+                  <p className="font-medium text-foreground">
+                    {(vistoriaTecnico.km_atual || vistoriaTecnico.quilometragem).toLocaleString('pt-BR')} km
+                  </p>
+                </div>
+              )}
+              {vistoriaTecnico?.tecnico_nome && (
+                <div>
+                  <span className="text-muted-foreground text-xs">Técnico</span>
+                  <p className="font-medium text-foreground">{vistoriaTecnico.tecnico_nome}</p>
+                </div>
+              )}
+              {vistoriaTecnico?.concluida_em && (
+                <div>
+                  <span className="text-muted-foreground text-xs">Concluída em</span>
+                  <p className="font-medium text-foreground">
+                    {new Date(vistoriaTecnico.concluida_em).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              )}
+              {vistoriaTecnico?.status && (
+                <div>
+                  <span className="text-muted-foreground text-xs">Status</span>
+                  <p className="font-medium text-foreground capitalize">{String(vistoriaTecnico.status).replace(/_/g, ' ')}</p>
+                </div>
+              )}
+            </div>
+
+            {vistoriaTecnico?.avarias && (
+              <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Avarias</p>
+                <p className="text-foreground whitespace-pre-wrap">{vistoriaTecnico.avarias}</p>
+              </div>
+            )}
+            {vistoriaTecnico?.ressalvas && (
+              <div className="rounded-lg border border-warning/30 p-3 bg-warning/5">
+                <p className="text-xs font-semibold text-warning uppercase tracking-wide mb-1">Ressalvas</p>
+                <p className="text-foreground whitespace-pre-wrap">{vistoriaTecnico.ressalvas}</p>
+              </div>
+            )}
+            {vistoriaTecnico?.observacoes && (
+              <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações do técnico</p>
+                <p className="text-foreground whitespace-pre-wrap">{vistoriaTecnico.observacoes}</p>
+              </div>
+            )}
+            {vistoriaTecnico?.observacoes_analise && (
+              <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações da análise</p>
+                <p className="text-foreground whitespace-pre-wrap">{vistoriaTecnico.observacoes_analise}</p>
+              </div>
+            )}
+            {vistoriaTecnico?.motivo_reprovacao && (
+              <div className="rounded-lg border border-destructive/30 p-3 bg-destructive/5">
+                <p className="text-xs font-semibold text-destructive uppercase tracking-wide mb-1">Motivo de reprovação</p>
+                <p className="text-foreground whitespace-pre-wrap">{vistoriaTecnico.motivo_reprovacao}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Fotos da Vistoria Técnica — local do rastreador, avarias, mecânica */}
+      {tecnicoFotos.length > 0 && (
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Camera className="h-4 w-4 text-primary" />
+              Fotos da Vistoria Técnica ({tecnicoFotos.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(() => {
+              const grupos: Array<{ titulo: string; tipos: string[] }> = [
+                { titulo: 'Rastreador', tipos: ['local_rastreador', 'codigo_rastreador', 'teste_comunicacao'] },
+                { titulo: 'Avarias / Ressalvas', tipos: ['avarias'] },
+                { titulo: 'Mecânica', tipos: ['motor', 'motor_chassi', 'motor_direito', 'motor_esquerdo', 'painel_km', 'painel_odometro_ligado', 'painel_completo', 'bateria', 'bateria_validade'] },
+                { titulo: 'Outros', tipos: ['vistoriador_selfie', 'chave', 'chave_roda_macaco', 'farol'] },
+              ];
+              const usados = new Set<string>();
+              return grupos.map((g) => {
+                const fotosGrupo = tecnicoFotos.filter((f: any) => g.tipos.includes(f.tipo));
+                fotosGrupo.forEach((f: any) => usados.add(f.id));
+                if (fotosGrupo.length === 0) return null;
+                return (
+                  <div key={g.titulo}>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                      {g.titulo} ({fotosGrupo.length})
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {fotosGrupo.map((foto: any) => (
+                        <div
+                          key={foto.id}
+                          className="group relative aspect-square rounded-xl overflow-hidden border border-border cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                          onClick={() => setSelectedImage(foto.arquivo_url)}
+                        >
+                          <img
+                            src={foto.arquivo_url}
+                            alt={fotoLabels[foto.tipo] || foto.tipo}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                            <span className="text-white text-[10px] font-medium">
+                              {fotoLabels[foto.tipo] || foto.tipo}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
+
+
 
       {/* Documentação do Associado */}
       <Card className="border-border">
@@ -918,20 +1056,20 @@ export default function AprovacaoInstalacaoDetalhe() {
         </Card>
       )}
 
-      {/* Fotos */}
+      {/* Fotos do Veículo (gerais — exclui as fotos já exibidas no card técnico) */}
       <Card className="border-border">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Camera className="h-4 w-4 text-primary" />
-            Fotos da Instalação ({imageFotos.length})
+            Fotos do Veículo ({outrasFotos.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {imageFotos.length === 0 ? (
+          {outrasFotos.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhuma foto disponível</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {imageFotos.map((foto: any) => (
+              {outrasFotos.map((foto: any) => (
                 <div
                   key={foto.id}
                   className="group relative aspect-square rounded-xl overflow-hidden border border-border cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
@@ -954,6 +1092,7 @@ export default function AprovacaoInstalacaoDetalhe() {
           )}
         </CardContent>
       </Card>
+
 
       {/* Vídeos 360° */}
       {(videoInstalador || videoAssociado) && (
