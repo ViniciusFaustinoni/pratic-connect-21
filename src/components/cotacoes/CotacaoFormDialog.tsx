@@ -65,7 +65,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
-import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
+import { cotacaoSchema, emailSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
 
@@ -871,11 +871,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [marcas, tipoFipeSelecionado, marcasAceitasMotos]);
 
 
+  const emailAssociadoValido = useMemo(() => {
+    const e = emailAssociado.trim();
+    if (!e) return true; // opcional
+    return emailSchema.safeParse(e).success;
+  }, [emailAssociado]);
+
   const dadosAssociadoValidos = useMemo(() => {
     const nomeValido = nomeAssociado.trim().length >= 3;
-    const telefoneValido = telefoneAssociado.replace(/\D/g, '').length >= 10;
-    return nomeValido && telefoneValido;
-  }, [nomeAssociado, telefoneAssociado]);
+    const telefoneValido = telefoneAssociado.replace(/\D/g, '').length === 11;
+    return nomeValido && telefoneValido && emailAssociadoValido;
+  }, [nomeAssociado, telefoneAssociado, emailAssociadoValido]);
 
   // Alerta da categoria selecionada — dinâmico baseado nas regras de elegibilidade reais
   const alertaCategoria = useMemo(() => {
@@ -2285,11 +2291,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     value={telefoneAssociado}
                     onChange={setTelefoneAssociado}
                     className={cn(
-                      telefoneAssociado.length > 0 && telefoneAssociado.replace(/\D/g, '').length < 10 && "border-destructive"
+                      telefoneAssociado.length > 0 && telefoneAssociado.replace(/\D/g, '').length !== 11 && "border-destructive"
                     )}
                   />
-                  {telefoneAssociado.length > 0 && telefoneAssociado.replace(/\D/g, '').length < 10 && (
-                    <p className="text-xs text-destructive">Telefone inválido</p>
+                  {telefoneAssociado.length > 0 && telefoneAssociado.replace(/\D/g, '').length !== 11 && (
+                    <p className="text-xs text-destructive">Telefone deve ter 11 dígitos (DDD + celular)</p>
                   )}
                 </div>
                 
@@ -2304,7 +2310,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     placeholder="email@exemplo.com"
                     value={emailAssociado}
                     onChange={(e) => setEmailAssociado(e.target.value)}
+                    className={cn(
+                      emailAssociado.trim().length > 0 && !emailAssociadoValido && "border-destructive"
+                    )}
                   />
+                  {emailAssociado.trim().length > 0 && !emailAssociadoValido && (
+                    <p className="text-xs text-destructive">E-mail inválido</p>
+                  )}
                 </div>
 
                 {/* Indicação */}

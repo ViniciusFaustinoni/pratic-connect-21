@@ -19,6 +19,7 @@ import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
+import { maskTelefone, emailSchema } from '@/lib/validations';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -48,13 +49,6 @@ interface EtapaDadosAssociadoProps {
   onSubstituicao?: (associadoId: string) => void;
 }
 
-const formatPhone = (value: string): string => {
-  const cleaned = value.replace(/\D/g, '');
-  if (cleaned.length <= 2) return cleaned;
-  if (cleaned.length <= 7) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2)}`;
-  if (cleaned.length <= 11) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
-  return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7, 11)}`;
-};
 
 function formatCPF(cpf: string): string {
   const digits = cpf.replace(/\D/g, '');
@@ -298,7 +292,13 @@ export function EtapaDadosAssociado({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="email@exemplo.com"
+              className={cn(
+                email.trim().length > 0 && !emailSchema.safeParse(email.trim()).success && "border-destructive"
+              )}
             />
+            {email.trim().length > 0 && !emailSchema.safeParse(email.trim()).success && (
+              <p className="text-xs text-destructive">E-mail inválido</p>
+            )}
           </div>
 
           {/* Telefone/WhatsApp */}
@@ -310,10 +310,16 @@ export function EtapaDadosAssociado({
             <Input
               id="telefone1"
               value={telefone1}
-              onChange={(e) => setTelefone1(formatPhone(e.target.value))}
+              onChange={(e) => setTelefone1(maskTelefone(e.target.value))}
               placeholder="(00) 00000-0000"
               maxLength={15}
+              className={cn(
+                telefone1.length > 0 && telefone1.replace(/\D/g, '').length !== 11 && "border-destructive"
+              )}
             />
+            {telefone1.length > 0 && telefone1.replace(/\D/g, '').length !== 11 && (
+              <p className="text-xs text-destructive">Telefone deve ter 11 dígitos (DDD + celular)</p>
+            )}
           </div>
 
           {/* Telefone 2 */}
@@ -325,10 +331,16 @@ export function EtapaDadosAssociado({
             <Input
               id="telefone2"
               value={telefone2}
-              onChange={(e) => setTelefone2(formatPhone(e.target.value))}
+              onChange={(e) => setTelefone2(maskTelefone(e.target.value))}
               placeholder="(00) 00000-0000"
               maxLength={15}
+              className={cn(
+                telefone2.length > 0 && telefone2.replace(/\D/g, '').length !== 11 && "border-destructive"
+              )}
             />
+            {telefone2.length > 0 && telefone2.replace(/\D/g, '').length !== 11 && (
+              <p className="text-xs text-destructive">Telefone deve ter 11 dígitos (DDD + celular)</p>
+            )}
           </div>
         </div>
 

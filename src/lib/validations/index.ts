@@ -127,8 +127,7 @@ export const cpfSchema = z.string()
   .refine((val) => validateCPF(val), 'CPF inválido');
 
 export const telefoneSchema = z.string()
-  .min(14, 'Telefone inválido')
-  .max(15, 'Telefone inválido');
+  .refine((val) => val.replace(/\D/g, '').length === 11, 'Telefone deve ter 11 dígitos (DDD + celular)');
 
 export const emailSchema = z.string()
   .email('E-mail inválido')
