@@ -84,7 +84,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
         (payload) => {
           const inst = (payload.new as any)?.instancia_id;
-          if (inst && instanciasAtivas.includes(inst)) {
+          if (!inst || (instanciasAtivas && instanciasAtivas.includes(inst))) {
             queryClient.invalidateQueries({ queryKey: ['chat-ia-conversas', instanciasAtivas] });
           }
         }
