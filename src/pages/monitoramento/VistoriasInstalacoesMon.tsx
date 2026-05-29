@@ -62,6 +62,15 @@ export default function VistoriasInstalacoesMon() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="negados" className="gap-2 shrink-0">
+              <Ban className="h-4 w-4" />
+              <span className="hidden sm:inline">Negados</span>
+              {negados && negados.length > 0 && (
+                <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                  {negados.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="mapa" className="gap-2 shrink-0">
               <MapIcon className="h-4 w-4" />
               <span className="hidden sm:inline">Mapa</span>
@@ -92,6 +101,14 @@ export default function VistoriasInstalacoesMon() {
             <VeiculosSuspensosTab />
           </Suspense>
         </TabsContent>
+
+        <TabsContent value="negados">
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <VeiculosNegadosTab />
+          </Suspense>
+        </TabsContent>
+
+
 
 
         <TabsContent value="mapa">
