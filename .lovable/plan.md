@@ -1,60 +1,111 @@
-## Aviso de produção
+## Objetivo
 
-O `navigate('/vendas/cotador?...')` na linha 351 do `OutrosProcessosPanel.tsx` aponta para uma **rota inexistente** em `App.tsx`. O botão "Editar cotação" (lápis) da aba Outros Processos › Troca de Titularidade hoje cai em 404. Substituí-lo pelo `TrocaTimelineDrawer` (passo 3) **não interfere em nada que esteja funcionando** — é correção de bug latente, não mudança de fluxo vigente.
+Padronizar validação e máscara de **e-mail** e **telefone** no fluxo de cotação interno e no link público, usando exclusivamente os utilitários canônicos de `src/lib/validations/index.ts`. E-mail mantém obrigatoriedade atual de cada campo (não vira obrigatório onde é opcional). Telefone passa a exigir 11 dígitos com feedback em tempo real.
 
-## Confirmação final de dependências
+---
 
-- `src/hooks/useCotacao.ts` — único importador externo é `src/pages/vendas/Cotador.tsx:52` (`useCriarCotacao`). Os outros 5 exports (`usePlanosCotacao`, `calcularValoresCotacao`, `useCalcularCotacao` interno, `useCotacoesFiltradas`, `useCotacaoDetalhe`) têm zero consumidores.
-- `src/pages/vendas/Cotador.tsx` — sem rota em `App.tsx`; única referência externa é o `navigate` morto do passo 3.
-- `src/components/cotador/VehicleCategorySelect.tsx` — preservado (usado por `BenefitsSelector`, `EtapaCategoriaVeiculo`).
-- `src/hooks/usePlanosCotacao.ts`, `src/hooks/useCalcularCotacao.ts`, `src/hooks/useCotacoes.ts` — não tocar.
+## 1. Ajuste no schema canônico (não cria utilitário novo, corrige o existente)
 
-## Passos
+`src/lib/validations/index.ts` — `telefoneSchema` (linhas 129-131)
 
-### 1. Deletar `src/pages/vendas/Cotador.tsx`
-Remoção total. Sem ajustes em `App.tsx` (não há rota registrada).
+Hoje: `z.string().min(14).max(15)` — aceita 10 dígitos (fixo) e não valida formato.
 
-### 2. Deletar `src/hooks/useCotacao.ts`
-Remoção total do arquivo. Não restará importador algum após o passo 1.
-
-### 3. Corrigir `src/components/cotacoes/OutrosProcessosPanel.tsx:343-356`
-
-O `OutroProcessoItem` no panel não traz `associado_antigo_id` nem `veiculo_origem_id` (campos exigidos por `origemTroca` do `CotacaoFormDialog`). O padrão canônico que JÁ existe e já carrega esses dados é o `TrocaTimelineDrawer` — ele já está importado no panel (linha 20) e já monta o `CotacaoFormDialog` com `cotacaoBase` + `origemTroca` corretos (ver `TrocaTimelineDrawer.tsx:341-358`).
-
-Mudança: o botão lápis (Pencil) passa a abrir o mesmo `TrocaTimelineDrawer` que o botão olho (Eye), reaproveitando `handleVerDetalhe(item)`. O drawer já oferece o botão "Realizar/Editar Cotação" dentro dele, que abre o `CotacaoFormDialog` em modo Troca com todos os parâmetros corretos.
-
-Diff conceitual em `OutrosProcessosPanel.tsx` (linhas 343-356):
-
-```tsx
-{item.tipo === 'troca_titularidade' && item.pode_editar ? (
-  <Tooltip><TooltipTrigger asChild>
-    <Button
-      size="icon"
-      variant="ghost"
-      className="h-8 w-8"
-      onClick={(e) => {
-        e.stopPropagation();
-        handleVerDetalhe(item);   // abre TrocaTimelineDrawer; dentro dele há "Realizar/Editar Cotação"
-      }}
-    >
-      <Pencil className="h-4 w-4" />
-    </Button>
-  </TooltipTrigger><TooltipContent>Editar cotação (planos, região, cenário, uso)</TooltipContent></Tooltip>
-) : ( ... )}
+Trocar por:
+```ts
+export const telefoneSchema = z.string()
+  .refine((val) => val.replace(/\D/g, '').length === 11, 'Telefone deve ter 11 dígitos (DDD + celular)');
 ```
 
-Nenhuma nova prop, nenhum novo state, nenhum novo import.
+Justificativa: a regra canônica solicitada é "exatamente 11 dígitos (DDD + 9 móvel)". `emailSchema` já está adequado (`.email().or(z.literal(''))`) — não muda.
 
-## Validação pós-mudança
+Risco: outros consumidores de `telefoneSchema` (ex.: `leadSchema`, `associadoSchema`) passam a exigir 11 dígitos. Isto é o comportamento desejado segundo a regra canônica; se algum formulário hoje aceita fixo de 10, ficará vermelho até receber celular. Aceitar isso como hardening intencional.
 
-- `rg -n "useCotacao'|from.*hooks/useCotacao\b|pages/vendas/Cotador|/vendas/cotador" src/` deve retornar zero matches.
-- Build TypeScript limpo (sem referências quebradas).
-- Smoke manual: abrir Outros Processos › Troca de Titularidade, clicar no lápis de uma linha editável, confirmar que o `TrocaTimelineDrawer` abre e o `CotacaoFormDialog` em modo Troca abre por dentro.
+---
 
-## Não tocar
+## 2. CotacaoFormDialog (fluxo interno)
 
-- `src/components/cotador/VehicleCategorySelect.tsx`
-- `src/hooks/usePlanosCotacao.ts`
-- `src/hooks/useCalcularCotacao.ts`
-- `src/hooks/useCotacoes.ts`
-- Qualquer rota, edge function ou trigger DB.
+`src/components/cotacoes/CotacaoFormDialog.tsx`
+
+**Telefone (linha 2284)** — hoje já usa `<TelefoneInput>` (máscara OK). Adicionar:
+- Erro inline abaixo do campo quando `telefoneAssociado.replace(/\D/g,'').length > 0 && length !== 11`.
+- Bloquear submit já existente (`length < 10`) trocar para `length !== 11`.
+
+**E-mail (linha 2302)** — hoje só `type="email"`. Adicionar:
+- Validar com `emailSchema.safeParse(emailAssociado)` no `onChange` (debounce não necessário).
+- Mostrar erro inline "E-mail inválido" abaixo do input quando preenchido e inválido.
+- Não bloquear submit (campo continua opcional).
+- Adicionar bloqueio condicional: se preenchido e inválido, impedir submit (toast).
+
+---
+
+## 3. EtapaDadosAssociado (stepper interno)
+
+`src/components/cotacao/EtapaDadosAssociado.tsx`
+
+- **Remover** `formatPhone` local (linha 51).
+- **Manter** `formatCPF` local (fora do escopo desta task).
+- **Importar** `maskTelefone` e `telefoneSchema` de `@/lib/validations`.
+- **Importar** `emailSchema` de `@/lib/validations`.
+- Trocar `setTelefone1(formatPhone(...))` → `setTelefone1(maskTelefone(...))` (linha 313).
+- Trocar `setTelefone2(formatPhone(...))` → `setTelefone2(maskTelefone(...))` (linha 328).
+- Adicionar erro inline em `telefone1`: vermelho + texto quando `digits.length > 0 && digits.length !== 11`. (Obrigatório → bloqueia avançar.)
+- Adicionar erro inline em `telefone2`: igual ao acima, **mas** só valida se preenchido (opcional). Máscara aplicada sempre.
+- E-mail (linha 295): trocar uso da `EMAIL_REGEX` (em `Cotacao.tsx:290`) por `emailSchema.safeParse(...)`. Mostrar erro inline em tempo real no input do `EtapaDadosAssociado`. O bloqueio no submit (`Cotacao.tsx:289-291`) também passa a usar `emailSchema`.
+
+---
+
+## 4. EtapaDadosPessoaisDocumentos (link público)
+
+`src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`
+
+- **Remover** `formatTelefone` local (linha 226).
+- **Importar** `maskTelefone`, `telefoneSchema`, `emailSchema` de `@/lib/validations`.
+- Trocar `setTelefone(formatTelefone(...))` → `setTelefone(maskTelefone(...))` (linha 1296).
+- **Telefone (1291)**: adicionar erro inline quando dígitos !== 11. Como é obrigatório (`temContato`), o check `temContato` passa a exigir `telefoneSchema.safeParse(telefone).success`.
+- **E-mail (1277)**: adicionar `emailSchema.safeParse(email).success` no `temContato`. Erro inline visual abaixo do input.
+
+---
+
+## 5. FormularioDadosPessoais (decisão pontual)
+
+`src/components/cotacao-publica/FormularioDadosPessoais.tsx:79` é a **terceira duplicata** (`formatTelefone`).
+
+Conforme diagnóstico anterior, é fallback **fora do fluxo principal** (RHF+Zod legado). Duas opções:
+
+- **(A) Recomendado:** substituir também — manter consistência total. Remove a duplicata e usa `maskTelefone` no `onChange` (linha 175). O `telefoneSchema` já é importado/usado no schema do form, então ganha 11-dígitos automaticamente após o passo 1.
+- **(B)** Deixar como está — fora do fluxo principal.
+
+Plano adota **(A)** por padrão (custo trivial, zero risco, alinhamento total). Se preferir (B), avise antes de eu executar.
+
+---
+
+## 6. Fora do escopo (não tocar)
+
+- CPF, CNH, data de nascimento, placa, CEP, chassi, RENAVAM, qualquer campo monetário.
+- Outras telas que usam `formatPhone` apenas para **exibição** (tabelas, cards, termos): `CotacoesTable`, `CotacoesMobileList`, `LeadDetalhe`, `ContratoDetalhe`, `AssociadoHeroHeader`, `TermoFiliacaoTemplate`, `ModalDetalhesTroca`, etc. — não são inputs, ficam intocados.
+- `EMAIL_REGEX` em `CorrigirEmailDialog.tsx:18` — não é input de cotação (ferramenta admin de correção pós-fato); fica fora do escopo, sinalizo para limpeza futura.
+- Regras de obrigatoriedade existentes (e-mail opcional onde já é opcional).
+
+---
+
+## Validação pós-implementação
+
+1. `rg "formatPhone|formatTelefone" src/components/cotacao src/components/cotacao-publica src/components/cotacoes/CotacaoFormDialog.tsx` deve retornar zero matches (somente o `formatCPF` em `EtapaDadosAssociado` permanece, fora deste escopo).
+2. `rg "EMAIL_REGEX" src/components/cotacao src/components/cotacao-publica src/pages/vendas/Cotacao.tsx` zero matches.
+3. Smoke manual:
+   - CotacaoFormDialog: digitar `(11) 99999-99` → erro inline; completar até 11 → erro some. E-mail vazio = OK; `foo@bar` → erro inline; `foo@bar.com` → OK.
+   - EtapaDadosAssociado: idem para telefone1/telefone2 e email.
+   - Link público (EtapaDadosPessoaisDocumentos): idem; botão "Continuar" só libera com e-mail válido + telefone 11 dígitos.
+
+---
+
+## Resumo das alterações por arquivo
+
+| Arquivo | Mudança |
+|---|---|
+| `src/lib/validations/index.ts` | `telefoneSchema` → refine 11 dígitos |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | E-mail: erro inline + emailSchema; telefone: 11 dígitos no canProceed/submit |
+| `src/components/cotacao/EtapaDadosAssociado.tsx` | Remove `formatPhone`, usa `maskTelefone`+`telefoneSchema`+`emailSchema`, erro inline tel1/tel2/email |
+| `src/pages/vendas/Cotacao.tsx` | Troca `EMAIL_REGEX` por `emailSchema` no submit |
+| `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` | Remove `formatTelefone`, usa canônicos, `temContato` valida com schemas |
+| `src/components/cotacao-publica/FormularioDadosPessoais.tsx` | Remove `formatTelefone`, usa `maskTelefone` (opção A) |
