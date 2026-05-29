@@ -13,63 +13,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { StatusCotacao } from '@/types/database';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
-
-type StatusCotacaoExtended = StatusCotacao | 'visualizada';
-
-const statusConfig: Record<StatusCotacaoExtended, { 
-  label: string; 
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  icon: typeof FileText 
-}> = {
-  rascunho: { 
-    label: 'Rascunho', 
-    color: 'text-yellow-600 dark:text-yellow-400', 
-    bgColor: 'bg-yellow-500/20',
-    borderColor: 'border-l-yellow-500',
-    icon: FileText 
-  },
-  enviada: { 
-    label: 'Enviada', 
-    color: 'text-blue-600 dark:text-blue-400', 
-    bgColor: 'bg-blue-500/20',
-    borderColor: 'border-l-blue-500',
-    icon: Send 
-  },
-  visualizada: { 
-    label: 'Visualizada', 
-    color: 'text-cyan-600 dark:text-cyan-400', 
-    bgColor: 'bg-cyan-500/20',
-    borderColor: 'border-l-cyan-500',
-    icon: Eye 
-  },
-  aceita: { 
-    label: 'Aceita', 
-    color: 'text-green-600 dark:text-green-400', 
-    bgColor: 'bg-green-500/20',
-    borderColor: 'border-l-green-500',
-    icon: Check 
-  },
-  recusada: { 
-    label: 'Recusada', 
-    color: 'text-red-600 dark:text-red-400', 
-    bgColor: 'bg-red-500/20',
-    borderColor: 'border-l-red-500',
-    icon: X 
-  },
-  expirada: { 
-    label: 'Expirada', 
-    color: 'text-muted-foreground', 
-    bgColor: 'bg-muted',
-    borderColor: 'border-l-muted-foreground',
-    icon: FileText 
-  },
-};
+import { statusConfig, type StatusCotacaoExtended } from './statusConfig';
 
 // Fonte única de verdade para etapa da venda
 import { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
