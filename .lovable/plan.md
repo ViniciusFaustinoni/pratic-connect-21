@@ -1,41 +1,28 @@
-## Diagnóstico
+## Problema
 
-A tela `/eventos/chat-ia` mostra apenas as mensagens recebidas (entrada) dos clientes — as respostas enviadas pela Maya/agentes via Chatwoot nunca aparecem.
+A IA Maya está chamando o lead de "cliente" em vez do nome real. Investigação:
 
-**Causa raiz confirmada no banco:**
-- Últimos 7 dias: 54 mensagens `referencia_tipo='chatwoot'`, **todas `direcao='entrada'`**. Zero saídas Chatwoot.
-- As únicas saídas persistidas são de outros canais (`cobranca_csv` e Evolution/Meta direto, `referencia_tipo=NULL`).
-- No caso da Julia Gurgel (+55 21 98579-1044), só existem 2 entradas (`Oioi`, `Oie`) — as respostas que a IA/operador enviaram pelo Chatwoot não foram gravadas.
+- O telefone do caso (5521985791044, "Julia Gurgel") **não está cadastrado em `associados`** → a Maya cai no fluxo "número desconhecido / lead".
+- Hoje, quando `isAssociado=false`, o `systemPrompt` de `agente-consultor-ia` não recebe nenhum nome — por isso o modelo recorre a "cliente".
+- O nome existe em dois lugares confiáveis: `data.pushName` no payload Evolution e `whatsapp_mensagens.nome_contato` (preenchido pelo `chatwoot-webhook` a partir de `meta.sender.name`). Nenhum dos dois é propagado para o agente.
 
-**Origem do bug** — `supabase/functions/chatwoot-webhook/index.ts` linhas 48-55:
-```ts
-// message_type 0 = incoming (contato enviou)
-if (messageType !== 0 && messageType !== "incoming") {
-  // ignora silenciosamente — saídas nunca chegam ao whatsapp_mensagens
-  return { ignorado: true, motivo: "Mensagem não é incoming" };
-}
-```
-O webhook descarta toda mensagem `outgoing` do Chatwoot, então a saída do agente/Maya nunca é gravada e a UI fica sem o lado direito da conversa.
+> Obs.: o texto "Olá Cliente, há uma atualização no seu atendimento Atualização PRATIC: Oii. Acompanhe pelo app." no print é um template HSM disparado pelo Chatwoot (não pela Maya) — ajuste do template é no painel do Chatwoot. O escopo desta tarefa é só o fallback de nome na IA, conforme você escolheu.
 
-## Plano
+## Mudanças
 
-Editar **apenas** `supabase/functions/chatwoot-webhook/index.ts`:
+### 1. `supabase/functions/agente-consultor-ia/index.ts`
+- Aceitar `nome_contato` opcional no body.
+- Resolver `nomeCliente` (apenas quando `!isDiretor && !isAssociado`) na ordem:
+  1. `body.nome_contato` (pushName ou nome do Chatwoot)
+  2. `leads.nome` do telefone (já é buscado em outro trecho — reaproveitar)
+  3. `whatsapp_mensagens.nome_contato` mais recente com `direcao='entrada'` para esse telefone (fallback para o caminho Chatwoot → fila → webhook sintético, que não carrega pushName)
+- Extrair primeiro nome (`nomeCliente.split(' ')[0]`) e, no `systemPrompt` de lead/desconhecido, instruir a Maya a tratar a pessoa por esse nome. Onde hoje cai em "cliente", passa a usar o primeiro nome quando disponível; mantém "cliente" como fallback final.
+- Não alterar fluxo de associado nem de diretor.
 
-1. **Aceitar `message_type` outgoing** (Chatwoot usa `1` ou `"outgoing"`) além do incoming já tratado. Continuar ignorando `template`/`activity` (tipos 2 e 3).
-2. Determinar `direcao` pelo tipo:
-   - incoming (0) → `entrada` (comportamento atual)
-   - outgoing (1) → `saida` (novo)
-3. Para saídas, **não enfileirar na `whatsapp_fila_ia`** — só entradas devem disparar a IA. O bloco de fila/dispatch fica condicionado a `direcao === 'entrada'`.
-4. Para saídas, preservar `nome_contato` (continua sendo o nome do contato/cliente para agrupamento) e usar o mesmo `messageId` (`chatwoot_<source_id>`) para o `message_id` — o backfill natural cuida do resto.
-5. Adicionar log dedicado `[chatwoot-webhook] Saída registrada (tel: ...)` para auditoria.
-
-Nada muda no frontend: `ChatPanel` já renderiza saídas no lado direito quando `direcao !== 'entrada'`, e `EventosChatIA` já inclui mensagens com `instancia_id IS NULL`.
+### 2. `supabase/functions/whatsapp-webhook/index.ts`
+- Nos 3 `fetch` para `/functions/v1/agente-consultor-ia` (linhas ~3424, ~3504, ~3652), adicionar `nome_contato: data?.pushName || nomeContato || null` no body.
 
 ## Fora de escopo
-
-- Backfill das saídas históricas que já foram descartadas (não dá pra recuperar — Chatwoot não reenvia).
-- Mudanças visuais na bolha "Maya IA" vs "Agente humano" (hoje tudo que não é entrada é rotulado "Maya IA"; podemos separar depois se quiser distinguir agente humano vs bot).
-
-## Validação
-
-Após o deploy, qualquer nova resposta enviada pela Maya/agente no Chatwoot aparecerá no Chat IA do lado direito em tempo real (Realtime já está montado no `ChatPanel`).
+- Template HSM "Olá Cliente…" do Chatwoot (ajuste é no painel do Chatwoot, não no nosso código).
+- Sincronizar o nome do contato no Chatwoot via API.
+- Mexer no prompt de associados.

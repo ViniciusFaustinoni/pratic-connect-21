@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    const { telefone, texto, tipo_msg, latitude, longitude } = await req.json();
+    const { telefone, texto, tipo_msg, latitude, longitude, nome_contato } = await req.json();
 
     if (!telefone) {
       return new Response(
@@ -60,6 +60,59 @@ Deno.serve(async (req) => {
         .single();
       contato = novoContato;
       console.log(`[agente-consultor-ia] Novo contato criado: ${telLimpo}`);
+    }
+
+    // ---- 1B. RESOLVER NOME DO CONTATO (fallback p/ não tratar como "cliente") ----
+    if (contato && !contato.nome) {
+      let nomeResolvido: string | null = null;
+
+      // 1) pushName / nome do Chatwoot vindo do caller
+      if (nome_contato && typeof nome_contato === "string") {
+        const limpo = nome_contato.trim();
+        if (limpo && limpo.toLowerCase() !== "contato whatsapp" && limpo.toLowerCase() !== "desconhecido") {
+          nomeResolvido = limpo;
+        }
+      }
+
+      // 2) lead existente
+      if (!nomeResolvido) {
+        const { data: leadMatch } = await supabase
+          .from("leads")
+          .select("nome")
+          .eq("telefone", telLimpo)
+          .not("nome", "is", null)
+          .limit(1)
+          .maybeSingle();
+        if (leadMatch?.nome) nomeResolvido = leadMatch.nome;
+      }
+
+      // 3) última mensagem de entrada com nome_contato (caminho Chatwoot → fila)
+      if (!nomeResolvido) {
+        const { data: msgMatch } = await supabase
+          .from("whatsapp_mensagens")
+          .select("nome_contato")
+          .eq("telefone", telLimpo)
+          .eq("direcao", "entrada")
+          .not("nome_contato", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (msgMatch?.nome_contato) {
+          const limpo = msgMatch.nome_contato.trim();
+          if (limpo && limpo.toLowerCase() !== "contato whatsapp" && limpo.toLowerCase() !== "desconhecido") {
+            nomeResolvido = limpo;
+          }
+        }
+      }
+
+      if (nomeResolvido) {
+        await supabase
+          .from("agente_ia_contatos")
+          .update({ nome: nomeResolvido })
+          .eq("id", contato.id);
+        contato.nome = nomeResolvido;
+        console.log(`[agente-consultor-ia] Nome do contato resolvido: ${nomeResolvido} (tel: ${telLimpo})`);
+      }
     }
 
     // ---- 2. VERIFICAR ATENDIMENTO HUMANO ----
@@ -509,7 +562,8 @@ Se o contato pedir para falar com uma pessoa/atendente:
 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
 
 ## NOME DO CONTATO
-${contato?.nome || "Não informado ainda"}`;
+${contato?.nome || "Não informado ainda"}
+${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(contato.nome).split(/\s+/)[0]}") em todas as saudações e respostas. NUNCA use "cliente" como vocativo se você já tem o nome.` : `Você ainda não sabe o nome do contato. Em vez de "cliente", use saudações neutras (ex.: "Olá! 👋") até descobrir o nome.`}`;
 
       // ---- INJETAR ESTADO DO FLUXO NO PROMPT ----
       if (dadosCotacao && dadosCotacao.etapa) {

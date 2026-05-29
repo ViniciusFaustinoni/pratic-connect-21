@@ -3427,7 +3427,7 @@ serve(async (req) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
             },
-            body: JSON.stringify({ telefone, texto: mensagemTexto, tipo_msg: tipoPrincipal }),
+            body: JSON.stringify({ telefone, texto: mensagemTexto, tipo_msg: tipoPrincipal, nome_contato: associado?.nome || data?.pushName || null }),
           });
         } catch (agentErr: any) {
           console.error(`[whatsapp-webhook] Erro delegação agente (cancelado):`, agentErr);
@@ -3511,6 +3511,7 @@ serve(async (req) => {
               telefone,
               texto: mensagemTexto,
               tipo_msg: tipoPrincipal,
+              nome_contato: lead?.nome || data?.pushName || null,
             }),
           });
         } catch (agentErr: any) {
@@ -3661,6 +3662,7 @@ serve(async (req) => {
             tipo_msg: tipoPrincipal,
             latitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLatitude : null,
             longitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLongitude : null,
+            nome_contato: nomeContato || data?.pushName || null,
           }),
         });
         const agentResult = await agentRes.json();
