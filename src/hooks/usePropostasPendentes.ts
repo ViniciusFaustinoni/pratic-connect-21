@@ -1550,6 +1550,9 @@ export function useProposta(contratoId: string | undefined) {
       const result: PropostaPendente = {
         ...contrato,
         cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
+        documentos_aprovados_em: (contrato as any).documentos_aprovados_em ?? null,
+        documentos_aprovados_por: (contrato as any).documentos_aprovados_por ?? null,
+
         tipo_etapa_analise: tipoEtapaAnaliseSingle,
         tempo_referencia: (contrato as any).updated_at || (contrato as any).data_assinatura || null,
         associado,
