@@ -3367,19 +3367,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             </div>
 
             {/* BLOCO 5: AÇÕES - sticky no rodapé */}
-            <div className="sticky bottom-0 bg-background border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 flex items-center justify-end">
-              <Button 
-                type="submit" 
-                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos}
-              >
-                {(createCotacao.isPending || updateCotacao.isPending) ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Check className="h-4 w-4 mr-1" />
-                )}
-                {isEditando ? 'Salvar Alterações' : 'Criar Cotação'}
-              </Button>
-            </div>
+            <SectionAcoes
+              isPending={createCotacao.isPending || updateCotacao.isPending}
+              isEditando={isEditando}
+              podeSubmeter={
+                !(createCotacao.isPending || updateCotacao.isPending) &&
+                planosSelecionados.length > 0 &&
+                (valorAdesao > 0 || isCenarioIsento) &&
+                dadosAssociadoValidos
+              }
+            />
+
             
           </form>
         </Form>
