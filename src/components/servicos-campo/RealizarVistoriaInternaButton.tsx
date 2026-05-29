@@ -58,6 +58,7 @@ export function RealizarVistoriaInternaButton({
   servico,
   variant = 'default',
   className,
+  onBeforeOpen,
 }: Props) {
   const perms = usePermissions();
   const podeUsar = perms.isCoordenadorMonitoramento || perms.isDiretor || (perms as any).isAdminMaster || (perms as any).isDesenvolvedor;
