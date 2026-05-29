@@ -160,18 +160,31 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
         </div>
 
         {podeExecutar && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={loading}
-            onClick={handleExecutar}
-            className="gap-1.5 h-9 border-primary/40 text-primary hover:bg-primary/5 shrink-0"
-            title="Realizar vistoria interna (Coordenador de Monitoramento)"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
-            Realizar Vistoria Interna
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading}
+              onClick={handleExecutar}
+              className="gap-1.5 h-9 border-primary/40 text-primary hover:bg-primary/5"
+              title="Realizar vistoria interna (Coordenador de Monitoramento)"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+              Realizar Vistoria Interna
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setNegarOpen(true)}
+              className="gap-1.5 h-9 border-destructive/40 text-destructive hover:bg-destructive/5"
+              title="Marcar veículo como Negado (move para aba Negados)"
+            >
+              <Ban className="h-4 w-4" />
+              Marcar como Negado
+            </Button>
+          </div>
         )}
       </CardContent>
       <VistoriaInternaDialog
@@ -179,6 +192,38 @@ function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: bo
         onOpenChange={setDialogOpen}
         servicoId={servicoIdAberto}
       />
+      <AlertDialog open={negarOpen} onOpenChange={setNegarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar {v.placa} como Negado?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O veículo sairá da aba Veículos Suspensos e irá para a aba Negados.
+              Todos os serviços ativos vinculados serão cancelados automaticamente.
+              O contrato e o histórico são preservados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Motivo da negação</label>
+            <Textarea
+              value={motivoNegacao}
+              onChange={(e) => setMotivoNegacao(e.target.value)}
+              placeholder="Descreva o motivo da negação…"
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={negando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleNegar(); }}
+              disabled={negando}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {negando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Ban className="h-4 w-4 mr-1" />}
+              Confirmar negação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
