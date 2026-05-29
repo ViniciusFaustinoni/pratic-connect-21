@@ -141,3 +141,30 @@ export function somarCoberturasPorValorFipe(
   }
   return soma;
 }
+
+/**
+ * Resolve a faixa FIPE atual (de/ate) percorrendo TODAS as regras
+ * `fipe_range` ativas em `entity_eligibility_rules`, sem depender de
+ * plano/cobertura selecionados nem da tabela legada
+ * `tabelas_preco_mensalidade`.
+ *
+ * Usada como fonte única de fronteira no Estágio A da Regra do 1% e como
+ * fallback do display de faixa no modal quando ainda não há plano de
+ * referência.
+ */
+export function obterFaixaFipePorEligibilityRules(
+  valorFipe: number,
+  allEligibilityRules: EligibilityRuleLite[]
+): { de: number; ate: number } | null {
+  if (!valorFipe || valorFipe <= 0) return null;
+
+  for (const rule of allEligibilityRules) {
+    if (rule.rule_type !== 'fipe_range' || !rule.is_active) continue;
+    const faixas = rule?.rule_config?.faixas as FipeRangeFaixa[] | undefined;
+    if (!faixas || faixas.length === 0) continue;
+    const faixa = faixas.find(f => valorFipe >= f.de && valorFipe < f.ate);
+    if (faixa) return { de: faixa.de, ate: faixa.ate };
+  }
+
+  return null;
+}

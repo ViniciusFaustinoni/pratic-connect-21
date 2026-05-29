@@ -75,7 +75,7 @@ import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useConfigDuplaAprovacao } from '@/hooks/useAprovacoesFipeDiretoria';
 import { useTabelasPreco } from '@/hooks/usePlanos';
-import { obterFaixaFipeAtual, obterFaixaFipeAnterior, somarCoberturasPorValorFipe } from '@/utils/fipeFaixa';
+import { obterFaixaFipeAtual, obterFaixaFipeAnterior, somarCoberturasPorValorFipe, obterFaixaFipePorEligibilityRules } from '@/utils/fipeFaixa';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
@@ -685,19 +685,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     // — ex: FIPE 44.921 (faixa 40.000–44.999,99) com −1% = 44.471,79 continua
     // na MESMA faixa, logo não há redução real possível.
     if (planosSelecionados.length === 0) {
-      // Usa o catálogo legado como referência genérica de fronteira (mesma
-      // fonte que alimenta o texto "Faixa enquadrada" na UI). Quando o
-      // catálogo ainda não carregou, mantém o comportamento otimista anterior
-      // pra não regredir ambientes vazios.
-      const faixaAtualGenerica = todasFaixas.length > 0
-        ? todasFaixas
-            .filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max)
-            .sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0]
-        : null;
+      // Fonte única de fronteira: regras `fipe_range` ativas (intervalo de 5k).
+      // Não usar mais `todasFaixas` / `tabelas_preco_mensalidade` (legado de 20k)
+      // — fazia 100% dos veículos no meio de uma faixa larga parecerem
+      // inelegíveis preliminarmente. Quando nenhuma regra fipe_range existir,
+      // mantém o comportamento otimista anterior.
+      const faixaAtualGenerica = obterFaixaFipePorEligibilityRules(
+        valorFipe,
+        allEligibilityRules as any
+      );
 
       const elegivelPreliminar = !faixaAtualGenerica
         ? true
-        : valorReduzido < faixaAtualGenerica.fipe_min;
+        : valorReduzido < faixaAtualGenerica.de;
 
       return {
         elegivel: elegivelPreliminar,
@@ -842,15 +842,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
     }
 
-    // Fallback: tabela legada
-    if (todasFaixas.length === 0) return null;
-    const matching = todasFaixas.filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
-    if (matching.length === 0) return null;
-    const linhaPlano = planosSelecionados[0]?.linha || null;
-    const preferred = linhaPlano ? matching.find(f => f.linha_slug === linhaPlano) : null;
-    const faixa = preferred || matching.sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0];
-    return { min: faixa.fipe_min, max: faixa.fipe_max };
-  }, [valorFipe, todasFaixas, planosSelecionados, planosCalculados, planoCoberturasMap, allEligibilityRules]);
+    // Fallback SEM plano de referência: ainda usa o motor moderno
+    // (`entity_eligibility_rules`, intervalo de 5k). Proibido cair em
+    // `tabelas_preco_mensalidade` (faixas legadas de 20k que distorcem o
+    // display — ver Regra do 1% caso KZA6C16).
+    const faixaSemPlano = obterFaixaFipePorEligibilityRules(
+      valorFipe,
+      allEligibilityRules as any
+    );
+    if (faixaSemPlano) {
+      return { min: faixaSemPlano.de, max: faixaSemPlano.ate - 0.01 };
+    }
+    return null;
+  }, [valorFipe, planosSelecionados, planosCalculados, planoCoberturasMap, allEligibilityRules]);
   // Marcas aceitas de motos
   const { data: marcasAceitasMotos } = useMarcasAceitasMotos();
 
