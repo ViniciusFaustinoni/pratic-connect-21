@@ -213,8 +213,16 @@ export interface PropostaPendente {
    * Detectado inspecionando os nomes das coberturas do plano via regex /roubo|furto/i.
    */
   plano_tem_roubo_furto: boolean;
-  /** True quando o Cadastro já aprovou a proposta (flag em contratos.cadastro_aprovado). */
+  /** True quando o Cadastro já aprovou a proposta integralmente (sub-etapas 1 e 2). */
   cadastro_aprovado: boolean;
+  /**
+   * Sub-etapa 1 do Cadastro (aprovação dos documentos).
+   * Quando NOT NULL, a UI libera a sub-etapa 2 (vistoria enxuta).
+   * Quando NULL, o caso ainda está na sub-etapa 1 (aprovação de documentos pendente).
+   */
+  documentos_aprovados_em: string | null;
+  documentos_aprovados_por: string | null;
+
   /**
    * Tipo de adesão (origem da cotação/contrato).
    * Ex.: 'comum' | 'troca_titularidade' | 'substituicao_placa' | 'inclusao'.
