@@ -51,6 +51,15 @@ interface PropostaApprovalStepperProps {
    * Monitoramento" no resumo.
    */
   aprovarApenasDocumentos?: boolean;
+  /**
+   * Sub-etapa 1 do Cadastro — timestamp da aprovação dos documentos.
+   * Quando NULL, sub-etapa 2 (fotos + aprovação final) fica BLOQUEADA.
+   * Ver mem://logic/operations/cadastro-duas-subetapas
+   */
+  documentosAprovadosEm?: string | null;
+  /** Handler invocado pelo botão "Aprovar Documentos" (sub-etapa 1). */
+  onAprovarDocumentos?: () => void | Promise<void>;
+  isAprovandoDocumentos?: boolean;
 }
 
 
