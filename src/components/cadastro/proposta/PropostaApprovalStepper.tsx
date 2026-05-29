@@ -397,7 +397,7 @@ export function PropostaApprovalStepper({
         )}
 
         {/* STEP FINAL: Aprovação Final (id 3 normal, id 2 quando ocultarEtapaFotos) */}
-        {currentStep === finalStepId && (
+        {currentStep === finalStepId && subEtapa1Liberada && (
           <div className="space-y-4 animate-fade-in">
             {/* Summary checklist */}
             <Card className="border-border">
