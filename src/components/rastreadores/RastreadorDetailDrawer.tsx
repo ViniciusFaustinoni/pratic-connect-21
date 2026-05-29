@@ -302,11 +302,19 @@ export function RastreadorDetailDrawer({
             </DialogHeader>
 
             {(hasDivergencia || rastreador.plataforma === 'softruck') && (
-              <div className="mt-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+              <div className={
+                hasFalhaVinculo
+                  ? "mt-4 flex items-center justify-between gap-3 rounded-md border border-red-400 bg-red-50 dark:bg-red-950/30 px-3 py-2"
+                  : "mt-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2"
+              }>
                 <div className="flex items-start gap-2 text-sm">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600" />
+                  <AlertTriangle className={`h-4 w-4 mt-0.5 ${hasFalhaVinculo ? 'text-red-600' : 'text-amber-600'}`} />
                   <div>
-                    {hasDivergencia ? (
+                    {hasFalhaVinculo ? (
+                      <p className="font-medium text-red-900 dark:text-red-200">
+                        Falha de vínculo Softruck — 5 tentativas automáticas sem sucesso. Use "Reprocessar Sincronização Softruck" para nova tentativa manual.
+                      </p>
+                    ) : hasDivergencia ? (
                       <p className="font-medium text-amber-900 dark:text-amber-200">
                         Divergência com Softruck — placa vinculada localmente sem correspondência no Softruck.
                       </p>
@@ -329,17 +337,17 @@ export function RastreadorDetailDrawer({
                     const precisaReprocessar =
                       rastreador.plataforma === 'softruck'
                       && (
-                        ['PENDING', 'pending', 'FAILED_AUTH', 'FAILED_DEVICE'].includes(integStatus || '')
+                        ['PENDING', 'pending', 'FAILED_AUTH', 'FAILED_DEVICE', 'FAILED_VINCULO'].includes(integStatus || '')
                         || (integStatus === 'SUCCESS' && !ultimaCom)
                       );
                     if (!precisaReprocessar) return null;
                     return (
                       <Button
                         size="sm"
-                        variant="secondary"
+                        variant={hasFalhaVinculo ? 'destructive' : 'secondary'}
                         disabled={reprocessandoSoftruck}
                         onClick={handleReprocessarSoftruck}
-                        title="Rebaixa para PENDING e deixa o cron reprocessar em até 10 min"
+                        title="Executa desvincular→vincular→ativar→read-back na Softruck (correção do vínculo device↔veículo)"
                       >
                         {reprocessandoSoftruck ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Reprocessar Sincronização Softruck'}
                       </Button>
