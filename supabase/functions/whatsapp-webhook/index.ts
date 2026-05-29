@@ -3511,6 +3511,7 @@ serve(async (req) => {
               telefone,
               texto: mensagemTexto,
               tipo_msg: tipoPrincipal,
+              nome_contato: lead?.nome || data?.pushName || null,
             }),
           });
         } catch (agentErr: any) {
