@@ -286,7 +286,60 @@ export function PropostaApprovalStepper({
               onReprovarDocumento={onReprovarDocumento}
               onReverterReprovacao={onReverterReprovacaoDocumento}
             />
+
+            {/* SUB-ETAPA 1 — Botão "Aprovar Documentos" */}
+            {step1Complete && !subEtapa1Liberada && podeAprovar && (
+              <Button
+                className="w-full h-12 text-base font-bold bg-success hover:bg-success/90 text-white shadow"
+                onClick={() => onAprovarDocumentos?.()}
+                disabled={isAprovandoDocumentos || !onAprovarDocumentos}
+                size="lg"
+              >
+                {isAprovandoDocumentos ? (
+                  <>
+                    <span className="animate-spin mr-2">⏳</span>
+                    Aprovando documentos...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-2 h-5 w-5" />
+                    Aprovar Documentos (sub-etapa 1)
+                  </>
+                )}
+              </Button>
+            )}
+
+            {subEtapa1Liberada && (
+              <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-success/10 border border-success/30">
+                <CheckCircle className="h-5 w-5 text-success shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-success">
+                    Sub-etapa 1 concluída — documentos aprovados
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Avance para a sub-etapa 2 (vistoria enxuta) para finalizar a análise.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
+        )}
+
+        {/* SUB-ETAPA 2 bloqueada — gate visual quando documentos ainda não foram aprovados */}
+        {currentStep !== 1 && !subEtapa1Liberada && (
+          <Card className="border-2 border-warning/40 bg-warning/5">
+            <CardContent className="p-6 text-center space-y-2">
+              <AlertCircle className="h-10 w-10 text-warning mx-auto" />
+              <p className="text-base font-bold text-warning">Sub-etapa 2 bloqueada</p>
+              <p className="text-sm text-muted-foreground">
+                Aprove primeiro os documentos (sub-etapa 1) para liberar a análise da vistoria enxuta e a aprovação final.
+              </p>
+              <Button variant="outline" onClick={() => setCurrentStep(1)} className="mt-2">
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Voltar para Documentos
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
         {/* STEP 2: Fotos & Vistoria (oculto quando ocultarEtapaFotos) */}
