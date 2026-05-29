@@ -80,13 +80,17 @@ serve(async (req) => {
       status: contrato.status,
     };
 
-    // ---- Reverte contrato (trigger trg_protege_cadastro_aprovado exige aprovado_por e aprovado_em nulos) ----
+    // ---- Reverte contrato — zera AMBAS as sub-etapas do Cadastro ----
+    // Sub-etapa 1 (documentos): documentos_aprovados_em / documentos_aprovados_por
+    // Sub-etapa 2 (vistoria enxuta): cadastro_aprovado / aprovado_em / aprovado_por
     const { error: errUpdate } = await supabase
       .from('contratos')
       .update({
         cadastro_aprovado: false,
         aprovado_por: null,
         aprovado_em: null,
+        documentos_aprovados_em: null,
+        documentos_aprovados_por: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', contrato_id);
@@ -97,6 +101,7 @@ serve(async (req) => {
       }
       return json({ error: msg }, 500);
     }
+
 
     // ---- Reabre cotação para a fila do Cadastro ----
     if (contrato.cotacao_id) {
