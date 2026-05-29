@@ -21,6 +21,54 @@ import { ptBR } from 'date-fns/locale';
 import { VistoriaInternaDialog } from '@/components/monitoramento/VistoriaInternaDialog';
 
 function VeiculoCard({ v, podeExecutar }: { v: VeiculoSuspenso; podeExecutar: boolean }) {
+  const qc = useQueryClient();
+  const [negarOpen, setNegarOpen] = useState(false);
+  const [motivoNegacao, setMotivoNegacao] = useState('');
+  const [negando, setNegando] = useState(false);
+
+  const handleNegar = async () => {
+    const motivo = motivoNegacao.trim();
+    if (motivo.length < 5) {
+      toast.error('Informe o motivo da negação (mínimo 5 caracteres).');
+      return;
+    }
+    setNegando(true);
+    try {
+      const { error } = await supabase
+        .from('veiculos')
+        .update({
+          status: 'recusado',
+          motivo_recusa_veiculo: motivo,
+        })
+        .eq('id', v.id);
+      if (error) throw error;
+
+      await registrarLog({
+        acao: 'atualizar',
+        modulo: 'monitoramento',
+        descricao: `[VEICULO_NEGADO] ${v.placa} — ${motivo}`,
+        tabela: 'veiculos',
+        entidade_id: v.id,
+        dados_novos: {
+          placa: v.placa,
+          motivo,
+          origem: 'monitoramento_veiculos_suspensos',
+        },
+      });
+
+      toast.success(`${v.placa} marcado como negado.`);
+      setNegarOpen(false);
+      setMotivoNegacao('');
+      qc.invalidateQueries({ queryKey: ['veiculos-suspensos-instalacao'] });
+      qc.invalidateQueries({ queryKey: ['veiculos-negados'] });
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Falha ao negar veículo', { description: e?.message ?? 'Tente novamente.' });
+    } finally {
+      setNegando(false);
+    }
+  };
+
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [servicoIdAberto, setServicoIdAberto] = useState<string | null>(null);
