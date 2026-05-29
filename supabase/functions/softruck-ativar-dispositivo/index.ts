@@ -681,19 +681,79 @@ serve(async (req) => {
       console.log('[Softruck Ativar] Veículo ativado com sucesso');
     }
 
+    // ===== 8.4. READ-BACK CANÔNICO ANTES DE GRAVAR SUCCESS =====
+    // Confirma na Softruck que o device existe E está vinculado ao mesmo vehicle
+    // que criamos/atualizamos localmente. Se algo divergir, grava PENDING para
+    // o cron-softruck-reconciliar-pending reprocessar — eliminando casos como
+    // LTC8G02 em que o sistema marcava SUCCESS sem o vínculo real existir lá.
+    let readbackOk = false;
+    let readbackReason: string | null = null;
+    let readbackRemote: unknown = null;
+    try {
+      const readbackResp = await callSoftruckApi(
+        supabaseUrl,
+        supabaseAnonKey,
+        'buscar-device-imei',
+        { imei }
+      );
+      if (!readbackResp.success) {
+        readbackReason = `softruck_api_falhou:${readbackResp.error || 'sem_detalhe'}`;
+      } else {
+        const remoteList = (readbackResp.data as { data?: Array<Record<string, any>> })?.data || [];
+        const remoteDevice = remoteList[0] || null;
+        readbackRemote = remoteDevice;
+        const remoteVehicleId =
+          remoteDevice?.relationships?.vehicle?.data?.id
+          || remoteDevice?.relationships?.vehicle?.id
+          || null;
+        if (!remoteDevice) {
+          readbackReason = 'device_ausente_na_softruck';
+        } else if (!remoteVehicleId) {
+          readbackReason = 'device_sem_vehicle_associado';
+        } else if (remoteVehicleId !== softruckVehicleId) {
+          readbackReason = `vehicle_divergente:remoto=${remoteVehicleId}/local=${softruckVehicleId}`;
+        } else {
+          readbackOk = true;
+        }
+      }
+    } catch (rbErr) {
+      readbackReason = `readback_exception:${(rbErr as Error)?.message || 'erro'}`;
+    }
+
+    if (!readbackOk) {
+      console.warn(`[Softruck Ativar] [8.4] Read-back falhou: ${readbackReason}`);
+    } else {
+      console.log('[Softruck Ativar] [8.4] Read-back confirmado — vínculo real existe na Softruck');
+    }
+
     // ===== 8.5. UPDATE FINAL CANÔNICO ANTES DE QUALQUER POLLING =====
-    // CRÍTICO: gravar IDs + status SUCCESS + sincronizar veiculos.softruck_vehicle_id
+    // CRÍTICO: gravar IDs + status (SUCCESS ou PENDING conforme read-back)
     // ANTES do GPS. Se o runtime cair durante o polling, o registro não fica fantasma
-    // (casos RUM0H01 / QPW4H53). Polling de GPS vai para fila assíncrona.
+    // (casos RUM0H01 / QPW4H53). Polling de GPS vai para fila assíncrona,
+    // mas SOMENTE quando o read-back confirmou o vínculo.
     {
+      const statusFinal: IntegrationStatus = readbackOk ? 'SUCCESS' : 'PENDING';
+      const responseRawBase: Record<string, unknown> = {
+        softruckVehicleId,
+        softruckDeviceId,
+        softruckChipId,
+        softruckUserId,
+        gps_polling: readbackOk ? 'pendente_async' : 'bloqueado_aguardando_readback',
+      };
+      if (!readbackOk) {
+        responseRawBase.readback_failed = true;
+        responseRawBase.readback_reason = readbackReason;
+        responseRawBase.readback_remote = readbackRemote;
+      }
+
       const updEarly: Record<string, unknown> = {
         plataforma_device_id: softruckDeviceId,
         plataforma_veiculo_id: softruckVehicleId,
         softruck_chip_id: softruckChipId || null,
-        softruck_integration_status: 'SUCCESS',
+        softruck_integration_status: statusFinal,
         softruck_last_attempt_at: new Date().toISOString(),
         softruck_payload_sent: payloadSent,
-        softruck_response_raw: { softruckVehicleId, softruckDeviceId, softruckChipId, softruckUserId, gps_polling: 'pendente_async' },
+        softruck_response_raw: responseRawBase,
         updated_at: new Date().toISOString(),
       };
       if (rastreador.status !== 'instalado') {
@@ -702,22 +762,31 @@ serve(async (req) => {
         updEarly.associado_email = associadoEmail;
         updEarly.status = 'instalado';
       }
+      // Quando read-back falhar, zerar tentativas para que o cron retome imediatamente.
+      if (!readbackOk) {
+        updEarly.softruck_tentativas = 0;
+      }
+
       const { error: upEarlyErr } = await supabase.from('rastreadores').update(updEarly).eq('id', rastreador.id);
       if (upEarlyErr) throw new Error(`UPDATE final rastreador: ${upEarlyErr.message}`);
       if (softruckVehicleId) {
         await supabase.from('veiculos').update({ softruck_vehicle_id: softruckVehicleId }).eq('id', veiculoId);
       }
-      // Enfileirar polling GPS assíncrono — falha não bloqueia
-      try {
-        await supabase.from('softruck_gps_poll_queue').insert({
-          rastreador_id: rastreador.id,
-          softruck_device_id: softruckDeviceId,
-          softruck_vehicle_id: softruckVehicleId,
-          status: 'pending',
-          next_run_at: new Date().toISOString(),
-        });
-      } catch (qErr) {
-        console.warn('[Softruck Ativar] falha enfileirar gps poll:', qErr);
+      // Enfileirar polling GPS assíncrono — APENAS se read-back confirmou. Falha não bloqueia.
+      if (readbackOk) {
+        try {
+          await supabase.from('softruck_gps_poll_queue').insert({
+            rastreador_id: rastreador.id,
+            softruck_device_id: softruckDeviceId,
+            softruck_vehicle_id: softruckVehicleId,
+            status: 'pending',
+            next_run_at: new Date().toISOString(),
+          });
+        } catch (qErr) {
+          console.warn('[Softruck Ativar] falha enfileirar gps poll:', qErr);
+        }
+      } else {
+        console.warn('[Softruck Ativar] GPS poll NÃO enfileirado — registro ficou PENDING aguardando reconciliação');
       }
     }
 
