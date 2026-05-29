@@ -321,6 +321,28 @@ export function RastreadorDetailDrawer({
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
+                  {(() => {
+                    const integStatus = (rastreador as any)?.softruck_integration_status as string | null;
+                    const ultimaCom = (rastreador as any)?.ultima_comunicacao;
+                    const precisaReprocessar =
+                      rastreador.plataforma === 'softruck'
+                      && (
+                        ['PENDING', 'pending', 'FAILED_AUTH', 'FAILED_DEVICE'].includes(integStatus || '')
+                        || (integStatus === 'SUCCESS' && !ultimaCom)
+                      );
+                    if (!precisaReprocessar) return null;
+                    return (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={reprocessandoSoftruck}
+                        onClick={handleReprocessarSoftruck}
+                        title="Rebaixa para PENDING e deixa o cron reprocessar em até 10 min"
+                      >
+                        {reprocessandoSoftruck ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Reprocessar Sincronização Softruck'}
+                      </Button>
+                    );
+                  })()}
                   <Button
                     size="sm"
                     variant="outline"
