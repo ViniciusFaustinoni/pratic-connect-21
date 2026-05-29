@@ -73,6 +73,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
+import { useContratosRealtime } from '@/hooks/useContratosRealtime';
 import { useDebounce } from '@/hooks/useDebounce';
 import { OutrosProcessosPanel } from '@/components/cotacoes/OutrosProcessosPanel';
 import { useOutrosProcessos } from '@/hooks/useOutrosProcessos';
