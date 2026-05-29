@@ -1,0 +1,1 @@
+UPDATE public.rastreadores SET softruck_integration_status='FAILED_VINCULO', updated_at=now() WHERE id='9ac6603f-1a16-4596-801b-fe4661379232';
