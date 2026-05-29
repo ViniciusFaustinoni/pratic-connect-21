@@ -12,35 +12,10 @@ const corsHeaders = {
 const FIPE_MINIMO_RASTREADOR_PADRAO = 30000;
 const FIPE_MINIMO_RASTREADOR_MOTO_PADRAO = 9000;
 
-// Keywords que indicam motocicleta (paridade com src/data/vistoriaConfigCompleta.ts)
-const MOTO_KEYWORDS = [
-  'moto', 'motocicleta', 'ciclomotor', 'triciclo', 'scooter',
-  'nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop',
-  'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr',
-  'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'factor',
-  'dl ', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
-  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', ' riva',
-  'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
-  'elite', 'adv', 'sh ', 'sh-', 'lead', 'xadv', 'x-adv', 'transalp',
-  'nmax', 'xtz', 'xj6', 'mt-', 'mt ', 'crypton',
-  'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
-];
-
-function detectarTipoVeiculo(
-  marca: string | null | undefined,
-  modelo: string | null | undefined,
-  marcasExclusivasMoto: string[]
-): 'moto' | 'automovel' {
-  const marcaNorm = (marca || '').trim().toUpperCase();
-  if (marcaNorm && marcasExclusivasMoto.some(m => marcaNorm === m.toUpperCase().trim())) {
-    return 'moto';
-  }
-  if (modelo) {
-    const modeloLower = ` ${modelo.toLowerCase()} `;
-    if (MOTO_KEYWORDS.some(kw => modeloLower.includes(kw))) return 'moto';
-  }
-  return 'automovel';
-}
+// Detecção moto/automóvel canônica vive na RPC `fn_veiculo_precisa_rastreador`
+// (que consulta `configuracoes.marcas_exclusivas_moto` + keywords no banco).
+// Não há heurística local nesta edge — qualquer decisão por tipo de veículo
+// deve ser delegada à RPC.
 
 function precisaRastreador(
   valorFipe: number | null | undefined,
@@ -513,11 +488,11 @@ serve(async (req) => {
       const valorFipe = (veiculo as any).valor_fipe || 0;
 
       // CANÔNICO: usar RPC `fn_veiculo_precisa_rastreador` como fonte única de verdade.
-      // A heurística local (detectarTipoVeiculo + precisaRastreador) falhava em casos como
-      // Honda ADV 150 (catálogo marcas_modelos classificava como 'carro'), causando
-      // `dispensa_rastreador=true` indevido. A RPC centraliza: Diesel sempre exige; FIPE
-      // mínimo carro vs moto via configurações; detecção moto via marcas_exclusivas_moto
-      // + keywords de modelo. Mesma fonte usada por triggers e UI.
+      // Heurística local foi removida (falhava em casos como Honda ADV 150, que o catálogo
+      // marcas_modelos classificava como 'carro', causando `dispensa_rastreador=true` indevido).
+      // A RPC centraliza: Diesel sempre exige; FIPE mínimo carro vs moto via configurações;
+      // detecção moto via marcas_exclusivas_moto + keywords de modelo. Mesma fonte usada
+      // por triggers e UI.
       let veiculoPrecisaRastreador = true;
       try {
         const { data: precisa, error: rpcErr } = await supabase
@@ -528,9 +503,6 @@ serve(async (req) => {
         console.warn(`[aprovar-proposta] RPC fn_veiculo_precisa_rastreador falhou para ${veiculoId} (${(e as Error).message}); fallback fail-safe=true`);
         veiculoPrecisaRastreador = true;
       }
-      const tipoVeiculo: 'moto' | 'automovel' = detectarTipoVeiculo(
-        (veiculo as any).marca, (veiculo as any).modelo, marcasExclusivasMoto,
-      ); // mantido apenas para logging/contexto
 
       const instalacaoDesteVeiculo = jaTemInstalacaoConcluida && (instalacaoConcluida as any)?.veiculo_id === veiculoId;
       // REGRA CORE: ativação SEMPRE via edge `ativar-associado` (lock + CAS + log + SGA).
@@ -542,7 +514,7 @@ serve(async (req) => {
       // em_analise, sem código Hinova) e mantinha o caso preso na fila de Cadastro.
       const statusVeiculo = 'instalacao_pendente';
 
-      console.log(`[aprovar-proposta] Veículo ${veiculo.placa} (${tipoVeiculo}, FIPE R$${valorFipe}): precisaRastreador=${veiculoPrecisaRastreador}, instalacaoJaConcluida=${instalacaoDesteVeiculo}, status=${statusVeiculo} (ativação real virá pela aprovação da vistoria → ativar-associado)`);
+      console.log(`[aprovar-proposta] Veículo ${veiculo.placa} (FIPE R$${valorFipe}): precisaRastreador=${veiculoPrecisaRastreador}, instalacaoJaConcluida=${instalacaoDesteVeiculo}, status=${statusVeiculo} (ativação real virá pela aprovação da vistoria → ativar-associado)`);
 
       if (!veiculoPrecisaRastreador) algumProtecao360SemRastreador = true;
       if (veiculoPrecisaRastreador) algumPrecisouRastreador = true;
