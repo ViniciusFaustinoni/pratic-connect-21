@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import { validateCPF } from '@/lib/validations';
+import { validateCPF, maskTelefone } from '@/lib/validations';
 
 const schema = z.object({
   nome: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
@@ -76,13 +76,6 @@ export function FormularioDadosPessoais({
     return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9)}`;
   };
 
-  const formatTelefone = (value: string) => {
-    const numbers = value.replace(/\D/g, '').slice(0, 11);
-    if (numbers.length <= 2) return `(${numbers}`;
-    if (numbers.length <= 7)
-      return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
-    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`;
-  };
 
   const buscarCep = async (cep: string) => {
     const cepLimpo = cep.replace(/\D/g, '');
@@ -172,7 +165,7 @@ export function FormularioDadosPessoais({
                 {...register('telefone')}
                 placeholder="(00) 00000-0000"
                 onChange={(e) => {
-                  e.target.value = formatTelefone(e.target.value);
+                  e.target.value = maskTelefone(e.target.value);
                 }}
               />
               {errors.telefone && (

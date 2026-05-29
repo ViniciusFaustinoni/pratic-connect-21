@@ -11,6 +11,7 @@ import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeftRight } from 'lucide-react';
+import { emailSchema } from '@/lib/validations';
 
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 
@@ -287,8 +288,7 @@ export default function CotacaoPage() {
     // Validação de email — Autentique rejeita signers com email sem @/malformado
     // (validation: format_is_invalid). Bloquear no front evita cotação travada na etapa Contrato.
     const emailTrim = (emailAssociado || '').trim();
-    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    if (!emailTrim || !EMAIL_REGEX.test(emailTrim)) {
+    if (!emailTrim || !emailSchema.safeParse(emailTrim).success) {
       toast.error('E-mail do solicitante inválido. Verifique se contém "@" e domínio válido (ex.: nome@dominio.com).');
       return;
     }

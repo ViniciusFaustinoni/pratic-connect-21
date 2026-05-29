@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { validateCPF } from '@/lib/validations';
+import { validateCPF, maskTelefone, emailSchema } from '@/lib/validations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -202,7 +202,9 @@ export function EtapaDadosPessoaisDocumentos({
   const temDadosVeiculo = isZeroKm
     ? !!dadosExtraidos.veiculo_chassi
     : !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
-  const temContato = !!(email && telefone);
+  const emailValido = !!email && emailSchema.safeParse(email.trim()).success;
+  const telefoneValido = !!telefone && telefone.replace(/\D/g, '').length === 11;
+  const temContato = emailValido && telefoneValido;
 
   // Sub-flags para avisos no checklist:
   const motorExtraido = !!(dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor);
@@ -223,13 +225,6 @@ export function EtapaDadosPessoaisDocumentos({
     }
   }, [crlvSemDados, mostrarManualVeiculo]);
 
-  const formatTelefone = (value: string) => {
-    const cleaned = value.replace(/\D/g, '');
-    if (cleaned.length <= 10) {
-      return cleaned.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
-    }
-    return cleaned.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
-  };
 
   // Callback quando documentos mudam
   const handleDocumentsChange = useCallback((docs: DocumentoUnificado[]) => {
@@ -1280,8 +1275,14 @@ export function EtapaDadosPessoaisDocumentos({
                 placeholder="seu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-background/50"
+                className={cn(
+                  "bg-background/50",
+                  email.trim().length > 0 && !emailSchema.safeParse(email.trim()).success && "border-destructive"
+                )}
               />
+              {email.trim().length > 0 && !emailSchema.safeParse(email.trim()).success && (
+                <p className="text-xs text-destructive">E-mail inválido</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="telefone" className="flex items-center gap-2">
@@ -1293,10 +1294,16 @@ export function EtapaDadosPessoaisDocumentos({
                 type="tel"
                 placeholder="(00) 00000-0000"
                 value={telefone}
-                onChange={(e) => setTelefone(formatTelefone(e.target.value))}
-                className="bg-background/50"
+                onChange={(e) => setTelefone(maskTelefone(e.target.value))}
+                className={cn(
+                  "bg-background/50",
+                  telefone.length > 0 && telefone.replace(/\D/g, '').length !== 11 && "border-destructive"
+                )}
                 maxLength={15}
               />
+              {telefone.length > 0 && telefone.replace(/\D/g, '').length !== 11 && (
+                <p className="text-xs text-destructive">Telefone deve ter 11 dígitos (DDD + celular)</p>
+              )}
             </div>
           </div>
         </CardContent>
