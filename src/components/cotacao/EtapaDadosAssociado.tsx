@@ -20,6 +20,7 @@ import { DebitosCard } from '@/components/cotacao/DebitosCard';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
 import { maskTelefone, emailSchema } from '@/lib/validations';
+import { cn } from '@/lib/utils';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
