@@ -777,6 +777,9 @@ serve(async (req) => {
         responseRawBase.readback_reason = readbackReason;
         responseRawBase.readback_remote = readbackRemote;
       }
+      if (correcaoAuto) {
+        responseRawBase.correcao_auto = correcaoAuto;
+      }
 
       const updEarly: Record<string, unknown> = {
         plataforma_device_id: softruckDeviceId,
