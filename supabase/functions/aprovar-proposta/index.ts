@@ -12,35 +12,10 @@ const corsHeaders = {
 const FIPE_MINIMO_RASTREADOR_PADRAO = 30000;
 const FIPE_MINIMO_RASTREADOR_MOTO_PADRAO = 9000;
 
-// Keywords que indicam motocicleta (paridade com src/data/vistoriaConfigCompleta.ts)
-const MOTO_KEYWORDS = [
-  'moto', 'motocicleta', 'ciclomotor', 'triciclo', 'scooter',
-  'nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop',
-  'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr',
-  'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'factor',
-  'dl ', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
-  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', ' riva',
-  'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
-  'elite', 'adv', 'sh ', 'sh-', 'lead', 'xadv', 'x-adv', 'transalp',
-  'nmax', 'xtz', 'xj6', 'mt-', 'mt ', 'crypton',
-  'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
-];
-
-function detectarTipoVeiculo(
-  marca: string | null | undefined,
-  modelo: string | null | undefined,
-  marcasExclusivasMoto: string[]
-): 'moto' | 'automovel' {
-  const marcaNorm = (marca || '').trim().toUpperCase();
-  if (marcaNorm && marcasExclusivasMoto.some(m => marcaNorm === m.toUpperCase().trim())) {
-    return 'moto';
-  }
-  if (modelo) {
-    const modeloLower = ` ${modelo.toLowerCase()} `;
-    if (MOTO_KEYWORDS.some(kw => modeloLower.includes(kw))) return 'moto';
-  }
-  return 'automovel';
-}
+// Detecção moto/automóvel canônica vive na RPC `fn_veiculo_precisa_rastreador`
+// (que consulta `configuracoes.marcas_exclusivas_moto` + keywords no banco).
+// Não há heurística local nesta edge — qualquer decisão por tipo de veículo
+// deve ser delegada à RPC.
 
 function precisaRastreador(
   valorFipe: number | null | undefined,
