@@ -515,7 +515,18 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
               <X className="h-5 w-5" />
             </Button>
             <div className="flex items-center justify-center min-h-[60vh] p-4">
-              <img src={fotoPreview?.url} alt={fotoPreview?.tipo || 'Foto'} className="max-w-full max-h-[80vh] object-contain" />
+              {fotoPreview && isMidiaVideo(fotoPreview.url, fotoPreview.tipo) ? (
+                <video
+                  key={fotoPreview.url}
+                  src={fotoPreview.url}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-w-full max-h-[80vh] object-contain"
+                />
+              ) : (
+                <img src={fotoPreview?.url} alt={fotoPreview?.tipo || 'Foto'} className="max-w-full max-h-[80vh] object-contain" />
+              )}
             </div>
             <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white p-3 text-center">
               {fotoPreview?.tipo && formatarTipoFotoVeiculo(fotoPreview.tipo)}
