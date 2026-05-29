@@ -93,7 +93,7 @@ serve(async (req) => {
         success: false,
         codigo: 'documentos_pendentes',
         error: 'Há documentos ainda não aprovados.',
-        pendentes: pendentes.map((p: any) => ({ id: p.id, tipo: p.tipo_documento, status: p.status })),
+        pendentes: pendentes.map((p: any) => ({ id: p.id, tipo: p.tipo, status: p.status })),
       }, 409);
     }
 
