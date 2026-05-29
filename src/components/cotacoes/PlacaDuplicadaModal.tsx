@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
-import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
+import { IgnorarAvisoSGADialog } from '@/components/cotacoes/IgnorarAvisoSGADialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';

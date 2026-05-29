@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { PlacaOutroAssociadoInfo } from '@/hooks/useVerificarPlacaOutroAssociado';
 import { useNavigate } from 'react-router-dom';
-import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
+import { IgnorarAvisoSGADialog } from '@/components/cotacoes/IgnorarAvisoSGADialog';
 
 interface PlacaOutroAssociadoModalProps {
   open: boolean;

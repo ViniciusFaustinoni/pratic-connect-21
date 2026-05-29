@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { IgnorarAvisoSGADialog } from '@/components/cotacao/IgnorarAvisoSGADialog';
+import { IgnorarAvisoSGADialog } from '@/components/cotacoes/IgnorarAvisoSGADialog';
 
 interface VeiculoSGAModalProps {
   open: boolean;
