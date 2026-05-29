@@ -213,8 +213,16 @@ export interface PropostaPendente {
    * Detectado inspecionando os nomes das coberturas do plano via regex /roubo|furto/i.
    */
   plano_tem_roubo_furto: boolean;
-  /** True quando o Cadastro já aprovou a proposta (flag em contratos.cadastro_aprovado). */
+  /** True quando o Cadastro já aprovou a proposta integralmente (sub-etapas 1 e 2). */
   cadastro_aprovado: boolean;
+  /**
+   * Sub-etapa 1 do Cadastro (aprovação dos documentos).
+   * Quando NOT NULL, a UI libera a sub-etapa 2 (vistoria enxuta).
+   * Quando NULL, o caso ainda está na sub-etapa 1 (aprovação de documentos pendente).
+   */
+  documentos_aprovados_em: string | null;
+  documentos_aprovados_por: string | null;
+
   /**
    * Tipo de adesão (origem da cotação/contrato).
    * Ex.: 'comum' | 'troca_titularidade' | 'substituicao_placa' | 'inclusao'.
@@ -341,7 +349,10 @@ export function usePropostasPendentes() {
           vendedor_id,
           veiculo_id,
           cadastro_aprovado,
+          documentos_aprovados_em,
+          documentos_aprovados_por,
           tipo_entrada,
+
           updated_at
         `)
         .eq('status', 'assinado')
@@ -831,6 +842,9 @@ export function usePropostasPendentes() {
         return {
           ...contrato,
           cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
+          documentos_aprovados_em: (contrato as any).documentos_aprovados_em ?? null,
+          documentos_aprovados_por: (contrato as any).documentos_aprovados_por ?? null,
+
           tipo_etapa_analise: tipoEtapaAnalise,
           tempo_referencia: tempoReferencia ? new Date(tempoReferencia).toISOString() : contrato.data_assinatura,
           associado,
@@ -926,7 +940,10 @@ export function useProposta(contratoId: string | undefined) {
           pdf_assinado_url,
           updated_at,
           cadastro_aprovado,
+          documentos_aprovados_em,
+          documentos_aprovados_por,
           tipo_entrada
+
         `)
         .eq('id', contratoId)
         .single();
@@ -1536,6 +1553,9 @@ export function useProposta(contratoId: string | undefined) {
       const result: PropostaPendente = {
         ...contrato,
         cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
+        documentos_aprovados_em: (contrato as any).documentos_aprovados_em ?? null,
+        documentos_aprovados_por: (contrato as any).documentos_aprovados_por ?? null,
+
         tipo_etapa_analise: tipoEtapaAnaliseSingle,
         tempo_referencia: (contrato as any).updated_at || (contrato as any).data_assinatura || null,
         associado,
