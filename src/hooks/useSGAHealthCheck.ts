@@ -12,6 +12,32 @@ export interface SGAHealthCheck {
   fila_falhas: number;
   veiculos_nao_sincronizados: number;
   erro_mensagem: string | null;
+  taxa_sucesso_24h: number | null;
+  total_operacoes_24h: number | null;
+}
+
+export interface SGASuccessRateRow {
+  action: string;
+  total: number;
+  ok: number;
+  falha: number;
+  taxa_sucesso: number | null;
+  duracao_media_ms: number | null;
+  ultimo_erro: string | null;
+  ultimo_erro_em: string | null;
+}
+
+export function useSGASuccessRateByAction(janelaHoras: 24 | 168) {
+  return useQuery({
+    queryKey: ['sga-success-rate-by-action', janelaHoras],
+    queryFn: async (): Promise<SGASuccessRateRow[]> => {
+      const { data, error } = await supabase.rpc('sga_success_rate_by_action' as any, {
+        janela_horas: janelaHoras,
+      });
+      if (error) throw error;
+      return (data || []) as SGASuccessRateRow[];
+    },
+  });
 }
 
 export interface SGAQueueItem {
