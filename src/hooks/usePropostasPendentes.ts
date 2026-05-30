@@ -1139,6 +1139,25 @@ export function useProposta(contratoId: string | undefined) {
             km_atual: vistoriaData.km_atual,
             video_360_url: vistoriaData.video_360_url,
           };
+        } else if (vistoriaData.modalidade === 'autovistoria' && contrato.cotacao_id) {
+          const { data: fotosLegadoAutovistoria } = await supabase
+            .from('cotacoes_vistoria_fotos')
+            .select('id, tipo, arquivo_url, created_at')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: true });
+
+          if (fotosLegadoAutovistoria && fotosLegadoAutovistoria.length > 0) {
+            vistoria = {
+              id: vistoriaData.id,
+              status: vistoriaData.status || 'pendente',
+              tipo: 'autovistoria',
+              modalidade: 'autovistoria',
+              fotos: fotosLegadoAutovistoria as VistoriaFotoInfo[],
+              observacoes: vistoriaData.observacoes,
+              km_atual: vistoriaData.km_atual,
+              video_360_url: vistoriaData.video_360_url,
+            };
+          }
         }
       }
 
