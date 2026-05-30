@@ -363,7 +363,18 @@ export default function IntegracaoSGAHinova() {
         </TabsContent>
 
         {/* Logs Tab */}
-        <TabsContent value="logs">
+        <TabsContent value="logs" className="space-y-3">
+          {logsActionFilter && (
+            <div className="flex items-center justify-between rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="border-primary/40 text-primary">Filtrando por ação</Badge>
+                <span className="font-mono font-semibold">{logsActionFilter}</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setLogsActionFilter(null)}>
+                <X className="h-4 w-4 mr-1" /> Limpar
+              </Button>
+            </div>
+          )}
           <Card>
             <Table>
               <TableHeader>
@@ -376,13 +387,13 @@ export default function IntegracaoSGAHinova() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {logs.length === 0 ? (
+                {filteredLogs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       Nenhum log encontrado
                     </TableCell>
                   </TableRow>
-                ) : logs.map(log => (
+                ) : filteredLogs.map(log => (
                   <TableRow key={log.id}>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatDateFull(log.created_at)}
@@ -401,6 +412,7 @@ export default function IntegracaoSGAHinova() {
             </Table>
           </Card>
         </TabsContent>
+
 
         {/* Pending Vehicles Tab */}
         <TabsContent value="pending">
