@@ -311,7 +311,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setVeiculoAntigoId(result.veiculoId);
     setVeiculoAntigoPlaca(result.placa);
     setVeiculoAntigoModelo(`${result.marca} ${result.modelo}`);
+    setPlacaNova('');
   };
+
 
   const handleSelectAssociado = async (associado: AssociadoSearchResult) => {
     if (selectedTipo === 'substituicao') {
