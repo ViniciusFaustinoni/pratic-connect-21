@@ -1857,7 +1857,9 @@ ${beneficiosFormatados}
 // com whatsapp_mensagens (incluindo templates Meta enviados, lembretes, cobranças etc.)
 // para que a IA tenha contexto do que foi enviado ao associado nas últimas 2h.
 async function getConversationHistory(supabase: any, associadoId: string, telefone: string) {
-  const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  // Janela alinhada com a política Meta (24h) — templates disparados pela manhã
+  // recebem resposta horas depois e a IA precisa do contexto para continuar o fluxo.
+  const janelaAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   // Variantes de telefone para casar com whatsapp_mensagens (que pode estar com/sem 55)
   const telLimpo = (telefone || "").replace(/\D/g, "");
@@ -1870,7 +1872,7 @@ async function getConversationHistory(supabase: any, associadoId: string, telefo
       .from("chat_mensagens_ia")
       .select("role, content, created_at, message_id")
       .eq("associado_id", associadoId)
-      .gte("created_at", duasHorasAtras)
+      .gte("created_at", janelaAtras)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
