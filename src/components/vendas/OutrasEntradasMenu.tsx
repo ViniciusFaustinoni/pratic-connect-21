@@ -269,8 +269,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setVeiculoAntigoId(null);
     setVeiculoAntigoPlaca('');
     setVeiculoAntigoModelo('');
+    setPlacaNova('');
     setMigracaoCpf('');
   }, [selectedTipo]);
+
 
   // Merge associado + placa results
   const mergedAssociadoResults = (() => {
