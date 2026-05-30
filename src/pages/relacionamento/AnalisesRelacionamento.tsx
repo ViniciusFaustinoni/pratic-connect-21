@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,9 +12,18 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Search, ClipboardCheck, FileSignature } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
-  useAnalisesRelacionamento, TIPO_CFG, STATUS_CFG,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Search, ClipboardCheck, FileSignature, AlertTriangle } from 'lucide-react';
+import {
+  useAnalisesRelacionamento,
+  useUltimaAnaliseRecebida,
+  TIPO_CFG, STATUS_CFG,
   type AnaliseRelacionamento,
   type AnaliseRelacionamentoStatus, type AnaliseRelacionamentoTipo,
 } from '@/hooks/useAnalisesRelacionamento';
