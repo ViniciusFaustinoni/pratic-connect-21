@@ -46,7 +46,7 @@ export async function registrarCliqueBloqueado(
     enviarTelemetria(subEtapa, motivos),
     registrarLog({
       acao: 'visualizar',
-      modulo: 'cadastro',
+      modulo: 'contratos',
       descricao: `[CLIQUE_BLOQUEADO] sub-etapa ${subEtapa} — motivos: ${motivos.join(', ')}`,
       entidade_id: contratoId,
       tabela: 'contratos',
