@@ -97,8 +97,7 @@ Deno.serve(async (req) => {
       cpf = String(aLocal.cpf || '').replace(/\D/g, '');
     }
 
-    const cpf = String(sga.associado?.cpf || '').replace(/\D/g, '');
-    if (cpf.length !== 11) return json(400, { error: 'CPF do associado SGA inválido' });
+    if (cpf.length !== 11) return json(400, { error: 'CPF do associado inválido (SGA/local)' });
 
     // 2. Importa associado para base local (idempotente)
     // IMPORTANTE: importar-associado-sga exige Authorization (JWT de usuário).
