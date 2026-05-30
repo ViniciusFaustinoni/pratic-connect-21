@@ -144,46 +144,31 @@ export function EnviarTesteDialog({ open, onOpenChange }: Props) {
 
   const destinatarioValido = EMAIL_RE.test(destinatario.trim());
 
-  async function selecionarAssociado(a: AssociadoSearchResult) {
+  function selecionarAssociado(a: AssociadoSearchResult) {
     setAssociadoSelecionado(a);
     setBuscaAssociado('');
-    setCarregandoAssociado(true);
-    try {
-      const novasVars: Record<string, string> = {
-        nome_cliente: a.nome ?? '',
-        data: new Date().toLocaleDateString('pt-BR'),
-      };
-
-      // Sugere e-mail do associado como destinatário se ainda estiver vazio
-      if (!destinatario && a.id) {
-        const { data: assocFull } = await supabase
-          .from('associados')
-          .select('email')
-          .eq('id', a.id)
-          .maybeSingle();
-        if (assocFull?.email) setDestinatario(assocFull.email);
-      }
-
-      // Busca veículo ativo principal pra puxar a placa
-      if (a.id) {
-        const { data: veiculo } = await supabase
-          .from('veiculos')
-          .select('placa, status')
-          .eq('associado_id', a.id)
-          .in('status', ['ativo', 'instalacao_pendente', 'em_analise'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (veiculo?.placa) novasVars.placa = veiculo.placa;
-      }
-
-      setAssociadoVars(novasVars);
-    } catch (e) {
-      console.warn('[EnviarTesteDialog] erro ao popular vars do associado:', e);
-    } finally {
-      setCarregandoAssociado(false);
-    }
+    // Pré-popula as vars que não dependem de I/O.
+    // E-mail e placa entram via efeito assim que usePreviewAssociadoData resolve.
+    setAssociadoVars({
+      nome_cliente: a.nome ?? '',
+      data: new Date().toLocaleDateString('pt-BR'),
+    });
   }
+
+  // Aplica dados resolvidos do hook (e-mail + placa) quando chegarem.
+  useEffect(() => {
+    if (!associadoSelecionado || !previewData) return;
+    if (previewData.placa) {
+      setAssociadoVars((s) =>
+        s.placa === previewData.placa ? s : { ...s, placa: previewData.placa! },
+      );
+    }
+    if (!destinatario && previewData.email) {
+      setDestinatario(previewData.email);
+    }
+    // destinatario intencionalmente fora das deps: só sugerimos quando estava vazio na hora.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [associadoSelecionado, previewData]);
 
   function limparAssociado() {
     setAssociadoSelecionado(null);
