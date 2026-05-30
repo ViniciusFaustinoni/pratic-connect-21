@@ -132,10 +132,11 @@ Deno.serve(async (req) => {
 
     // 3. Snapshots
     const associadoSnapshot = {
-      ...sga.associado,
-      codigo_associado: sga.codigo_associado,
-      saldo_devedor_total: sga.saldo_devedor_total,
-      tem_debito: sga.tem_debito,
+      ...(associadoSgaInfo || {}),
+      codigo_associado: codigoAssociadoSga,
+      saldo_devedor_total: sga?.saldo_devedor_total ?? 0,
+      tem_debito: sga?.tem_debito ?? false,
+      origem: sga?.encontrado ? 'sga' : 'local_fallback',
     };
     const veiculoSnapshot = {
       ...veiculoSga,
@@ -160,7 +161,7 @@ Deno.serve(async (req) => {
       .from('solicitacoes_substituicao_placa')
       .insert({
         associado_id: associadoLocalId,
-        sga_codigo_associado: sga.codigo_associado || null,
+        sga_codigo_associado: codigoAssociadoSga,
         sga_codigo_veiculo: veiculoSga.codigo_veiculo || null,
         veiculo_antigo_id: veiculoLocal?.id || null,
         veiculo_antigo_placa: placaLimpa,
