@@ -282,19 +282,6 @@ export function ConfirmationStep({ state, updateState, onBack, onSubmit, isSubmi
             </label>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="generate-link" 
-              checked={state.generateQuoteLink}
-              onCheckedChange={(checked) => updateState({ generateQuoteLink: !!checked })}
-            />
-            <label
-              htmlFor="generate-link"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Gerar link de cotação pública automaticamente
-            </label>
-          </div>
         </div>
       </div>
 
@@ -310,10 +297,7 @@ export function ConfirmationStep({ state, updateState, onBack, onSubmit, isSubmi
               Criando...
             </>
           ) : (
-            <>
-              Criar Lead
-              {state.generateQuoteLink && ' e Gerar Link'}
-            </>
+            <>Criar Lead</>
           )}
         </Button>
       </div>

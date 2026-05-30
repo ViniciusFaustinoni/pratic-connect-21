@@ -54,9 +54,7 @@ export interface NewLeadFlowState {
   processingStatus: ProcessingStatus;
   selectedVendedor: string;
   isWorkVehicle: boolean;
-  generateQuoteLink: boolean;
   createdLeadId: string | null;
-  publicQuoteToken: string | null;
   origem: string;
 }
 
@@ -72,9 +70,7 @@ const initialState: NewLeadFlowState = {
   processingStatus: { plate: 'idle', document: 'idle' },
   selectedVendedor: '',
   isWorkVehicle: false,
-  generateQuoteLink: true,
   createdLeadId: null,
-  publicQuoteToken: null,
   origem: 'whatsapp',
 };
 
