@@ -66,6 +66,14 @@ interface PropostaApprovalStepperProps {
   /** Handler invocado pelo botão "Aprovar Documentos" (sub-etapa 1). */
   onAprovarDocumentos?: () => void | Promise<void>;
   isAprovandoDocumentos?: boolean;
+  /**
+   * Gates ativos que impedem o avanço (vindos de `resolverGatesAprovacaoCadastro`).
+   * Exibidos como banner inline + tooltip nos botões disabled.
+   * Memória: mem://logic/operations/cadastro-duas-subetapas (UI canônica)
+   */
+  gatesAtivos?: GateAprovacao[];
+  /** Id do contrato (usado pela telemetria de clique abortado). */
+  contratoId?: string;
 }
 
 
