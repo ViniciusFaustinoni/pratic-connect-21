@@ -1083,25 +1083,12 @@ async function executarGerarRelatorio(supabase: any, args: any) {
     }
 
     if (tipo === "geral" || tipo === "cotacoes") {
-      const { data: cotPendentes, count: qtdPendentes } = await supabase
-        .from("cotacoes_publicas")
-        .select("id, veiculo_marca, veiculo_modelo, veiculo_ano, created_at, status", { count: "exact" })
-        .eq("status", "aguardando")
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      const { count: totalCotacoes } = await supabase
-        .from("cotacoes_publicas")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", dataInicio);
-
+      // Jornada legada `cotacoes_publicas` removida (rota /q/:token desativada).
+      // Métricas de cotações ativas ficam zeradas até serem recableadas para `cotacoes` canônica.
       relatorio.cotacoes = {
-        pendentes: qtdPendentes || 0,
-        total_periodo: totalCotacoes || 0,
-        ultimas_pendentes: (cotPendentes || []).map((c: any) => ({
-          veiculo: `${c.veiculo_marca} ${c.veiculo_modelo} ${c.veiculo_ano}`,
-          data: c.created_at,
-        })),
+        pendentes: 0,
+        total_periodo: 0,
+        ultimas_pendentes: [] as Array<{ veiculo: string; data: string }>,
       };
     }
 

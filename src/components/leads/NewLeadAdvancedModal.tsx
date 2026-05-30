@@ -79,7 +79,6 @@ export function NewLeadAdvancedModal({ open, onOpenChange, onSuccess }: NewLeadA
         {flow.state.step === 'success' && (
           <SuccessStep
             leadId={flow.state.createdLeadId}
-            token={flow.state.publicQuoteToken}
             telefone={flow.state.telefone}
             onClose={handleSuccess}
           />

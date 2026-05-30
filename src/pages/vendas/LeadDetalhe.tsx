@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Phone, Mail, Car, Edit, MessageSquare, Loader2, 
   FileText, ArrowRightLeft, Trash2, User, Clock, Calendar, 
-  Tag, DollarSign, MoreVertical, MapPin, StickyNote, CalendarClock,
-  Link2, Copy, ExternalLink, CheckCircle2, MessageCircle
+  Tag, DollarSign, MoreVertical, MapPin, StickyNote, CalendarClock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +40,7 @@ import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { AgendarFollowupDialog } from '@/components/leads/AgendarFollowupDialog';
 import { VeiculoPerfilAlert } from '@/components/leads/VeiculoPerfilAlert';
 import { HistoricoConversaWhatsApp } from '@/components/whatsapp/HistoricoConversaWhatsApp';
-import { useCriarCotacaoPublica } from '@/hooks/useCotacaoPublica';
+
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -113,10 +112,6 @@ function LeadDetalheContent() {
   const [showMoverModal, setShowMoverModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showFollowupDialog, setShowFollowupDialog] = useState(false);
-  const [linkCotacao, setLinkCotacao] = useState<string | null>(null);
-  const [linkCopiado, setLinkCopiado] = useState(false);
-  
-  const criarCotacaoPublica = useCriarCotacaoPublica();
 
   const handleMoverEtapa = async (novaEtapa: EtapaLead, observacao: string, motivoPerda?: string) => {
     if (!lead) return;
@@ -154,51 +149,6 @@ function LeadDetalheContent() {
     window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
   };
 
-  const handleGerarLinkCotacao = async () => {
-    if (!lead) return;
-    
-    try {
-      // Buscar região da cotação mais recente deste lead (se existir)
-      const regiaoFromCotacao = cotacoes?.[0]?.regiao || 'rj';
-      const combustivelFromCotacao = cotacoes?.[0]?.veiculo_combustivel || cotacoes?.[0]?.combustivel || undefined;
-
-      const result = await criarCotacaoPublica.mutateAsync({
-        leadId: lead.id,
-        vendedorId: lead.vendedor_id || undefined,
-        veiculoMarca: lead.veiculo_marca || undefined,
-        veiculoModelo: lead.veiculo_modelo || undefined,
-        veiculoAno: lead.veiculo_ano || undefined,
-        veiculoPlaca: lead.veiculo_placa || undefined,
-        veiculoCombustivel: combustivelFromCotacao,
-        valorFipe: lead.veiculo_fipe || undefined,
-        regiao: regiaoFromCotacao,
-      });
-      
-      const link = `${window.location.origin}/q/${result.token}`;
-      setLinkCotacao(link);
-      toast.success('Link de cotação gerado com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao gerar link de cotação');
-    }
-  };
-
-  const handleCopiarLink = () => {
-    if (linkCotacao) {
-      navigator.clipboard.writeText(linkCotacao);
-      setLinkCopiado(true);
-      toast.success('Link copiado!');
-      setTimeout(() => setLinkCopiado(false), 2000);
-    }
-  };
-
-  const handleEnviarLinkWhatsApp = () => {
-    if (!lead || !linkCotacao) return;
-    const phone = lead.telefone.replace(/\D/g, '');
-    const message = encodeURIComponent(
-      `Olá ${lead.nome}! 🚗\n\nSeguem as informações da sua cotação de proteção veicular:\n\n${linkCotacao}\n\nQualquer dúvida, estou à disposição!`
-    );
-    window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
-  };
 
   // Calcular dias no funil
   const diasNoFunil = lead ? differenceInDays(new Date(), new Date(lead.created_at)) : 0;
@@ -336,19 +286,6 @@ function LeadDetalheContent() {
             </Button>
             <Button 
               variant="outline"
-              onClick={handleGerarLinkCotacao}
-              disabled={criarCotacaoPublica.isPending}
-              className="shadow-md border-primary/50 hover:bg-primary/5"
-            >
-              {criarCotacaoPublica.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Link2 className="mr-2 h-4 w-4 text-primary" />
-              )}
-              Gerar Link
-            </Button>
-            <Button 
-              variant="outline"
               onClick={() => setShowFollowupDialog(true)}
               className="shadow-md"
             >
@@ -357,48 +294,6 @@ function LeadDetalheContent() {
             </Button>
           </div>
 
-          {/* Link de Cotação Gerado */}
-          {linkCotacao && (
-            <div className="mt-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <p className="text-xs text-primary font-medium uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Link de Cotação Gerado
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-background rounded border p-2 font-mono text-sm truncate">
-                  {linkCotacao}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopiarLink}
-                  className="shrink-0"
-                >
-                  {linkCopiado ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(linkCotacao, '_blank')}
-                  className="shrink-0"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-              </div>
-              <Button
-                size="sm"
-                onClick={handleEnviarLinkWhatsApp}
-                className="mt-3 bg-green-600 hover:bg-green-700 text-white"
-              >
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Enviar via WhatsApp
-              </Button>
-            </div>
-          )}
 
           {/* Próxima ação agendada */}
           {lead.data_proxima_acao && (

@@ -1,102 +1,62 @@
-# Refatoração — CotacaoFormDialog (3.686 linhas → ~700)
+# Remover jornada legada `/q/:token` (CotacaoPublicaCompleta)
 
-## Objetivo
+## Evidência coletada
 
-Quebrar o JSX monolítico em sub-componentes **por bloco visual**. Estado, hooks, validações, mutations e handlers **continuam todos no componente pai** — extraímos só apresentação. Zero mudança de lógica de negócio, zero risco no fluxo canônico de cotação.
-
-## Princípios (não negociáveis)
-
-1. **Nada de lógica nova.** Só recortar JSX e passar props.
-2. **Estado fica no pai.** Hooks (`useState`, `useEffect`, `useMemo`, mutations, busca FIPE, validação de placa, detecção de tipo, cenário de adesão, modo 0KM, geração de PDF, WhatsApp) **não se movem**.
-3. **Sem novos contextos.** Passamos props explícitas — fica verboso, mas mantém o grafo de dados rastreável.
-4. **Modais externos saem com seu próprio arquivo** (já existem: `PlacaDuplicadaModal`, `VeiculoSGAModal`, `PlacaOutroAssociadoModal`) — só conferir que continuam isolados.
-5. **Memorias respeitadas:** fluxo canônico 8 etapas, gate 0KM, `normalizarTipoEntrada`, tri-fonte FIPE, regra 1%, dispensa de rastreador, integração SGA — nada disso é tocado.
-
-## Estrutura proposta
-
-Nova pasta: `src/components/cotacoes/form-sections/`
-
-| Componente | Linhas atuais (origem) | Responsabilidade visual |
-|---|---|---|
-| `SectionAssociado.tsx` | 2259–2415 | Nome, telefone, email, indicação |
-| `SectionVeiculo.tsx` | 2416–2788 | Busca por placa, gate 0KM, FIPE com seletor de versão, seleção manual marca/modelo/ano, combustível, valor FIPE, alerta dupla aprovação |
-| `SectionCondicoes.tsx` | 2856–3056 | Região, uso, tipo da cotação, observação SGA, tipo de placa + alertas |
-| `SectionPlanos.tsx` | 3057–3342 | Grade de planos, valor adicional, cenário de adesão, taxa de filiação, alertas de adesão mínima e repasse volante |
-| `SectionComercial.tsx` | 3343–3433 | Consultor responsável, dia de vencimento |
-| `SectionResumo.tsx` | 3434–3575 | Resumo inline com planos selecionados, benefícios "ver mais", filiação/validade |
-| `SectionAcoes.tsx` | 3576–3594 | Footer sticky com botões salvar/cancelar |
-
-Os blocos pré-formulário (banners `DraftRestoreBanner`, sem-permissão) ficam **inline no pai** — são 1–2 linhas cada.
-
-## Como cada seção recebe estado
-
-Padrão único: a seção recebe um objeto `props` com os campos que lê e os setters/handlers que dispara. Exemplo:
-
-```ts
-// SectionVeiculo.tsx (assinatura ilustrativa)
-type Props = {
-  placa: string;
-  setPlaca: (v: string) => void;
-  isZeroKm: boolean | null;
-  onResponderGate0Km: (v: boolean) => void;
-  fipeResult: FipeResult | null;
-  variantesFipe: FipeVariante[];
-  versaoSelecionada: string | null;
-  onSelecionarVersao: (v: string) => void;
-  marca: string; modelo: string; ano: string; combustivel: string;
-  setMarca: ...; setModelo: ...; setAno: ...; setCombustivel: ...;
-  valorFipe: number; setValorFipe: ...;
-  alertaFipeAcimaLimite: boolean;
-  buscandoFipe: boolean;
-  // ... (apenas o que esta seção realmente usa)
-};
-```
-
-O pai monta cada bloco assim:
-
-```tsx
-<SectionVeiculo
-  placa={placa} setPlaca={setPlaca}
-  isZeroKm={isZeroKm} onResponderGate0Km={handleGate0Km}
-  // ...
-/>
-```
-
-## Passos de execução (ordem obrigatória)
-
-1. **Snapshot inicial** — `wc -l` antes e linhas dos `{/* BLOCO N */}` mapeadas (já feito, ver tabela).
-2. **Criar pasta** `src/components/cotacoes/form-sections/` com um `index.ts` que re-exporta.
-3. **Extrair uma seção por vez**, na ordem: Associado → Comercial → Acoes → Condicoes → Resumo → Planos → Veículo (das mais simples para as mais densas, para reduzir risco).
-4. Para cada extração:
-   - Copiar o JSX cru para o novo arquivo.
-   - Listar todos os símbolos referenciados → vira a `Props` da seção.
-   - Substituir o trecho no pai por `<SectionX ...props />`.
-   - Conferir build TS (`tsc --noEmit` roda automático no harness).
-5. **Não tocar** nas mutations, no `useEffect` de busca FIPE, no cálculo de planos, no `normalizarTipoEntrada`, nem nos modais externos.
-6. **Validação manual** ao final: abrir uma cotação nova, uma de substituição (com `normalizarTipoEntrada`), uma 0KM, e o fluxo Troca de Titularidade (que reusa este dialog via `TrocaTitularidadeDialog`).
-
-## O que NÃO está no escopo (explicitamente)
-
-- ❌ Mover hooks para custom hooks (`useCotacaoForm`, `useFipeLookup`, etc.) — fica para outra dívida técnica.
-- ❌ Introduzir Context/Zustand/Jotai.
-- ❌ Renomear campos, mudar validações, mexer em qualquer edge function ou query.
-- ❌ Refatorar `CotacaoFormDialog` para componente controlado/uncontrolled diferente.
-- ❌ Testes unitários novos (o objetivo declarado é só preparar o terreno; testes virão em ticket separado).
-
-## Resultado esperado
-
-- `CotacaoFormDialog.tsx`: ~3.686 → ~700–900 linhas (só hooks, handlers, montagem das seções e modais).
-- 7 arquivos novos em `form-sections/`, cada um <500 linhas.
-- Diff revisável: cada seção é um commit lógico de "mover JSX + criar Props".
-- Zero mudança comportamental observável pelo usuário.
-
-## Riscos e mitigação
-
-| Risco | Mitigação |
+| Indicador | Resultado |
 |---|---|
-| Props explodirem (20+ por seção) | Aceitar verbosidade nesta fase; é o preço por não introduzir contexto. Agrupar em objetos só quando ≥30 props. |
-| Re-render do pai a cada keystroke vazar para todas as seções | Aceitável — comportamento já é esse hoje. Otimização com `React.memo` fica para depois (e exige estabilizar handlers com `useCallback`, que é mudança de lógica). |
-| Esquecer um símbolo no recorte | TS pega no build; reforçado pela ordem "simples → complexa". |
-| Quebrar `TrocaTitularidadeDialog` que consome este dialog | Conferir manualmente após extração; assinatura pública do `CotacaoFormDialog` não muda. |
+| Tabela `cotacoes_publicas` (DB) | **0 registros** — nenhum link `/q/` ativo no mundo real |
+| Rota `/q/:token` em App.tsx | Existe (linha 442) — única consumidora da página |
+| Geradores de link `/q/${token}` | 2 pontos vivos: `LeadDetalhe.tsx:177` e `new-lead-flow/SuccessStep.tsx:17` (ambos gravam em `cotacoes_publicas`) |
+| Página `CotacaoPublicaCompleta.tsx` | Importada **só** de App.tsx |
+| Hook `useCotacaoPublica` + `useCriarCotacaoPublica` | Consumidos só por `CotacaoPublicaCompleta`, `LeadDetalhe`, `SuccessStep` e `useNewLeadFlow` |
+| Type `StatusCotacaoPublica` | Usado só dentro de `types/cotacaoPublica.ts` e da página morta |
+| `useCalcularCotacao` | **Compartilhado** com `substituicao/StepFinanceiro.tsx` e `substituicao/StepBeneficios.tsx` → **NÃO deletar** |
+| Tabelas DB associadas | `cotacoes_publicas`, `cotacoes_publicas_historico`, `cotacoes_publicas_fotos` |
 
-Aprovação para começar pela `SectionAssociado` (a mais isolada)?
+**Conclusão:** jornada morta. Como `cotacoes_publicas` está vazia, não há cliente em campo dependendo dela. Remoção é segura, sem necessidade de redirect `/q/ → /cotacao/`.
+
+## Escopo da remoção
+
+### Front-end (deletar)
+- `src/pages/public/CotacaoPublicaCompleta.tsx`
+- `src/types/cotacaoPublica.ts`
+- `src/hooks/useCotacaoPublica.ts`
+- Rota e import lazy em `src/App.tsx` (linhas 41 e 442)
+
+### Front-end (substituir geradores de link)
+- `LeadDetalhe.tsx`: remover botão "Gerar link de cotação" e todos os handlers/states associados (`criarCotacaoPublica`, `linkCotacao`, `setLinkCopiado`, `handleCopiarLink`, `handleEnviarLinkWhatsApp`, `setLinkCotacao`). O fluxo canônico de gerar link agora é via cotação propriamente dita (`CotacaoFormDialog` + `/cotacao/:token`).
+- `new-lead-flow/SuccessStep.tsx`: remover o bloco de link público `/q/`. A tela de sucesso de novo lead vira **só** "lead criado, agora gere uma cotação para enviar link" — sem auto-gerar `cotacoes_publicas`.
+- `useNewLeadFlow.ts:368`: remover o insert em `cotacoes_publicas` e o retorno de `token`. Ajustar a interface para não emitir mais `token`.
+
+### Hooks compartilhados (PRESERVAR)
+- `useCalcularCotacao` — usado por `substituicao/StepFinanceiro` e `StepBeneficios`. **Manter intacto.** É dívida técnica separada (ERRO futuro: `tabelas_preco_mensalidade` em StepFinanceiro/Beneficios), fora do escopo deste ticket.
+
+### Banco de dados
+Tabelas vazias (0 registros). DROP seguro em migration:
+
+```sql
+DROP TABLE IF EXISTS public.cotacoes_publicas_fotos CASCADE;
+DROP TABLE IF EXISTS public.cotacoes_publicas_historico CASCADE;
+DROP TABLE IF EXISTS public.cotacoes_publicas CASCADE;
+```
+
+> Confirmar antes: nenhum trigger/edge function externa as referencia. (Verificarei `supabase/functions` antes da migration; se houver consumidor, ajusto.)
+
+## Validação após remoção
+
+1. `tsc` limpo (typegen do Supabase regenerado deixará de exportar `cotacoes_publicas*`).
+2. `rg "cotacoes_publicas|StatusCotacaoPublica|CotacaoPublicaCompleta|/q/"` deve voltar vazio.
+3. Fluxo "Novo Lead" funciona até a tela de sucesso sem botão de link (lead salvo no DB).
+4. Tela de detalhe do lead funciona sem botão "Gerar link de cotação".
+5. Vendedor envia link para cliente via `CotacaoFormDialog` → `/cotacao/:token` (caminho canônico já existente).
+
+## Fora de escopo
+
+- Refatorar `useCalcularCotacao` ou eliminar `tabelas_preco_mensalidade` no fluxo de Substituição (dívida separada já registrada na Core memory).
+- Mudar UX do "Novo Lead" além de remover o link. Discussão sobre encadear `CotacaoFormDialog` a partir do SuccessStep fica para outro ticket — aqui só removemos a jornada morta.
+
+## Risco
+
+Baixo. `cotacoes_publicas` zerado em produção = nenhum cliente em fluxo. Único risco residual: edge function ou cron escondida que escreve em `cotacoes_publicas`. Verifico em `supabase/functions/` antes de rodar a migration; se houver, abro decisão.
+
+Aprovado para executar?
