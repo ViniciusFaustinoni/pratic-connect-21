@@ -393,8 +393,12 @@ async function enviarViaMeta(
           if (retryResponse.ok) {
             const retryMessageId = retryResult.messages?.[0]?.id;
             await supabase.from("whatsapp_mensagens").insert({
-              telefone: telefoneFormatado, tipo: "text", mensagem,
+              telefone: telefoneFormatado,
+              tipo: templateName ? "template" : "text",
+              mensagem,
               direcao: "saida", status: 'enviada', message_id: retryMessageId,
+              template_id: templateName || null,
+              template_variaveis: templateName ? { body: bodyParams, button: buttonParams } : null,
               provedor: "meta_oficial",
             });
             console.log(`[whatsapp-send-text] ✓ Meta (retry #1 button split): ${telefoneFormatado} - ID: ${retryMessageId}`);
@@ -434,8 +438,12 @@ async function enviarViaMeta(
 
   const statusLabel = templateName ? 'enviada' : 'enviada_texto_livre';
   await supabase.from("whatsapp_mensagens").insert({
-    telefone: telefoneFormatado, tipo: "text", mensagem,
+    telefone: telefoneFormatado,
+    tipo: templateName ? "template" : "text",
+    mensagem,
     direcao: "saida", status: statusLabel, message_id: messageId,
+    template_id: templateName || null,
+    template_variaveis: templateName ? { body: bodyParams, button: buttonParams } : null,
     provedor: "meta_oficial",
   });
 
