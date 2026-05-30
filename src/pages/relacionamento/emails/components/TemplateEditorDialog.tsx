@@ -152,7 +152,44 @@ export function TemplateEditorDialog({ template, onOpenChange }: Props) {
               Você edita só o conteúdo do meio.
             </p>
           </div>
+
+          {validacao.desconhecidas.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Variáveis não reconhecidas</AlertTitle>
+              <AlertDescription>
+                <p className="mb-2 text-sm">
+                  Essas variáveis aparecem no template mas não estão na lista de variáveis suportadas deste fluxo.
+                  No envio real elas serão substituídas por <strong>vazio</strong>.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {validacao.desconhecidas.map((v) => (
+                    <Badge key={v} variant="destructive" className="font-mono text-xs">
+                      {`{{${v}}}`}
+                    </Badge>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {validacao.naoUsadas.length > 0 && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Variáveis declaradas mas não usadas</AlertTitle>
+              <AlertDescription>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {validacao.naoUsadas.map((v) => (
+                    <Badge key={v} variant="outline" className="font-mono text-xs">
+                      {`{{${v}}}`}
+                    </Badge>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
+
 
         <DialogFooter className="items-center justify-between sm:justify-between">
           {dirty ? (
