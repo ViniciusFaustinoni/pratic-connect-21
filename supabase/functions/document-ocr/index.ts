@@ -185,6 +185,12 @@ const DIGIT_SWAPS: Array<[string, string]> = [
   ['0', '9'], ['9', '0'],
   ['3', '8'], ['8', '3'],
   ['2', '7'], ['7', '2'],
+  // Pares adicionais observados em CRLVs com fonte serifada/esmaecida
+  ['1', '3'], ['3', '1'],   // caso KOU6D37 lido como KOU6D17
+  ['3', '5'], ['5', '3'],
+  ['3', '9'], ['9', '3'],
+  ['1', '4'], ['4', '1'],
+  ['4', '7'], ['7', '4'],
 ];
 
 const PLACA_MERCOSUL_RE = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
@@ -2411,6 +2417,21 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
         if (v.field === 'placa') {
           const ocrPlaca = String(raw).replace(/[^A-Z0-9]/gi, '').toUpperCase();
           const candidatosOCR = gerarCandidatosPlaca(ocrPlaca).filter(p => validatePlaca(p));
+
+          // 0) CROSS-CHECK DIRETO COM dadosEsperados.placa (mais barato e confiável).
+          // Quando o front passa a placa esperada da cotação, se ela estiver entre
+          // os candidatos saneados, adota imediatamente — fecha o caso mesmo sem
+          // texto nativo do PDF ou registro pré-existente no banco.
+          const placaEsperadaRaw =
+            (dadosEsperados as any)?.placa ?? (dadosEsperados as any)?.placa_esperada ?? null;
+          if (placaEsperadaRaw) {
+            const placaEsperada = String(placaEsperadaRaw).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            if (validatePlaca(placaEsperada) && candidatosOCR.includes(placaEsperada) && placaEsperada !== ocrPlaca) {
+              console.log(`[OCR] Placa confirmada via dadosEsperados: "${ocrPlaca}" → "${placaEsperada}"`);
+              d.placa = placaEsperada;
+            }
+          }
+
 
           if (extractedPdfText) {
             const candidatosNativos = extractCandidatesFromText(extractedPdfText, 'placa').filter(p => validatePlaca(p));
