@@ -29,10 +29,17 @@ const formatDate = (iso: string | null) =>
 export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChange }: Props) {
   const { data, isLoading, isError, reconsultar, bypass } =
     useSituacaoFinanceiraCadastro({ contratoId, solicitacaoTrocaId });
-  const { isDiretor } = usePermissions();
+  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+  const podeBypass = !!(isDiretor || isCoordenadorMonitoramento);
   const registrarAviso = useRegistrarAvisoSGA();
   const [bypassOpen, setBypassOpen] = useState(false);
+  const [bypassOrigem, setBypassOrigem] = useState<'inconclusivo' | 'inadimplente' | 'erro_consulta_sga'>('inadimplente');
   const [motivo, setMotivo] = useState('');
+
+  const abrirBypass = (origem: 'inconclusivo' | 'inadimplente' | 'erro_consulta_sga') => {
+    setBypassOrigem(origem);
+    setBypassOpen(true);
+  };
 
   // Notifica o pai
   const liberado = !!data?.liberado;
