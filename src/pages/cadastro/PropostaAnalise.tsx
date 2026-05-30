@@ -53,6 +53,8 @@ import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDo
 import { ReverterReprovacaoDocumentoDialog, type NovoStatusReversao } from '@/components/cadastro/ReverterReprovacaoDocumentoDialog';
 import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
 import { registrarLog } from '@/hooks/useAuditLog';
+import { resolverGatesAprovacaoCadastro } from '@/lib/cadastro/gatesAprovacaoCadastro';
+import { toastErroEdge } from '@/lib/ui/toastErroEdge';
 import {
   PropostaHeroHeader,
   PropostaDetalhesTabs,
