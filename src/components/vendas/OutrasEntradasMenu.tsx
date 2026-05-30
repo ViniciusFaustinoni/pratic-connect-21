@@ -154,6 +154,24 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     isSubstituicao && !!selectedAssociadoId,
   );
 
+  // Veículo NOVO (substituição) — precisa NÃO existir no SGA.
+  // Se existir, é caso de Troca de Titularidade.
+  const placaNovaLimpa = (placaNova || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const PLACA_REGEX_NOVA = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+  const placaNovaValida = PLACA_REGEX_NOVA.test(placaNovaLimpa);
+  const placaNovaIgualAntiga = placaNovaValida && placaNovaLimpa === (veiculoAntigoPlaca || '').toUpperCase();
+  const {
+    data: sgaVeiculoNovo,
+    isLoading: loadingSgaVeiculoNovo,
+  } = useSgaVeiculoAssociado(
+    placaNovaLimpa,
+    isSubstituicao && !!selectedAssociadoId && placaNovaValida && !placaNovaIgualAntiga,
+  );
+  const novoEhTroca = !!sgaVeiculoNovo?.encontrado && !sgaVeiculoNovo?.erro_transitorio;
+  const novoSgaTransitorio = !!sgaVeiculoNovo?.erro_transitorio;
+  const novoLiberadoSubstituicao = placaNovaValida && !placaNovaIgualAntiga && !loadingSgaVeiculoNovo && !novoEhTroca && !novoSgaTransitorio && sgaVeiculoNovo !== undefined;
+
+
   // Debt check for selected associado (substituicao/inclusao)
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);
   const { data: bloqueioInclusaoAtivo } = useInclusaoBloqueioDebito();
