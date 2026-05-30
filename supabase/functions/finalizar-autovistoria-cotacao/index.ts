@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     // 1. Cotação
     const { data: cotacao, error: errCot } = await supabase
       .from('cotacoes')
-      .select('id, numero, nome_solicitante, telefone1_solicitante, tipo_vistoria, veiculo_placa, veiculo_chassi, km_atual, status_contratacao, vistoria_concluida_em')
+      .select('id, numero, nome_solicitante, telefone1_solicitante, tipo_vistoria, veiculo_placa, veiculo_chassi, veiculo_marca, veiculo_modelo, veiculo_combustivel, valor_fipe, tipo_veiculo, km_atual, status_contratacao, vistoria_concluida_em')
       .eq('id', cotacaoId)
       .maybeSingle();
 
