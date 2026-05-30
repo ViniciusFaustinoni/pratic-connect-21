@@ -757,17 +757,110 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                             </Alert>
                           )
                         ) : (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
                               <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
                               <span className="text-sm font-medium">Associado elegível para substituição</span>
                             </div>
-                            <Button className="w-full" onClick={handleProsseguir}>
-                              Prosseguir — Cotar novo veículo
-                            </Button>
+
+                            {/* Placa do veículo NOVO — precisa NÃO existir no SGA */}
+                            <div className="space-y-2">
+                              <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Placa do veículo novo
+                              </label>
+                              <div className="relative">
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                  placeholder="Placa do veículo NOVO..."
+                                  className="pl-9 h-9 uppercase"
+                                  value={placaNova}
+                                  onChange={(e) => setPlacaNova(e.target.value.toUpperCase())}
+                                  maxLength={7}
+                                />
+                              </div>
+
+                              {placaNova && !placaNovaValida && (
+                                <p className="text-xs text-muted-foreground">
+                                  Digite uma placa válida (Mercosul ou antiga).
+                                </p>
+                              )}
+
+                              {placaNovaIgualAntiga && (
+                                <Alert variant="destructive">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <AlertDescription className="text-xs">
+                                    A placa nova não pode ser igual à atual.
+                                  </AlertDescription>
+                                </Alert>
+                              )}
+
+                              {placaNovaValida && !placaNovaIgualAntiga && loadingSgaVeiculoNovo && (
+                                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">Consultando SGA…</span>
+                                </div>
+                              )}
+
+                              {placaNovaValida && !placaNovaIgualAntiga && !loadingSgaVeiculoNovo && novoSgaTransitorio && (
+                                <SgaTransientAlert
+                                  motivo={sgaVeiculoNovo?.motivo ?? null}
+                                  descricao="Não foi possível confirmar agora se a placa nova já está no SGA. Tente novamente em instantes."
+                                />
+                              )}
+
+                              {novoEhTroca && (
+                                <Alert className="border-warning/40 bg-warning/10">
+                                  <Info className="h-4 w-4 text-warning" />
+                                  <AlertTitle className="text-xs font-bold uppercase tracking-wide text-warning">
+                                    Este veículo já existe no SGA
+                                  </AlertTitle>
+                                  <AlertDescription className="text-xs leading-relaxed space-y-2">
+                                    <p>
+                                      A placa <span className="font-mono font-semibold">{placaNovaLimpa}</span> já pertence a outro
+                                      associado no SGA. Isso não é uma substituição — é uma <strong>Troca de Titularidade</strong>.
+                                    </p>
+                                    {sgaVeiculoNovo?.veiculo && (
+                                      <p className="text-[11px] text-muted-foreground">
+                                        {sgaVeiculoNovo.veiculo.marca} {sgaVeiculoNovo.veiculo.modelo}
+                                        {sgaVeiculoNovo.associado?.nome ? ` · ${sgaVeiculoNovo.associado.nome}` : ''}
+                                      </p>
+                                    )}
+                                  </AlertDescription>
+                                </Alert>
+                              )}
+
+                              {novoLiberadoSubstituicao && (
+                                <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                  <span className="text-xs text-emerald-700 dark:text-emerald-300">
+                                    Veículo novo não cadastrado no SGA — apto a substituição.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {novoEhTroca ? (
+                              <Button
+                                className="w-full"
+                                onClick={handleProsseguirComoTroca}
+                                disabled={redirecionandoTroca}
+                              >
+                                {redirecionandoTroca && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                Prosseguir com Troca de Titularidade
+                              </Button>
+                            ) : (
+                              <Button
+                                className="w-full"
+                                onClick={handleProsseguir}
+                                disabled={!novoLiberadoSubstituicao}
+                              >
+                                Prosseguir — Cotar novo veículo
+                              </Button>
+                            )}
                           </div>
                         )}
                       </div>
+
                     ) : (
                       <div className="p-1">
                         {loadingPlacas && searchTerm.length >= 3 && (
