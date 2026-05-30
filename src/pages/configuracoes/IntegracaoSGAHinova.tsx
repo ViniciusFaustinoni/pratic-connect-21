@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Building2, CheckCircle, XCircle, RefreshCw, Trash2,
   Play, Clock, AlertTriangle, Activity, Loader2, Wifi, WifiOff,
-  List, Send, Settings, HeartPulse, Download,
+  List, Send, Settings, HeartPulse, Download, BarChart3, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import { useSGAHealthCheck, type SGAQueueItem } from '@/hooks/useSGAHealthCheck'
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
 import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
 import { SGAQueueItemDetailModal } from '@/components/integracoes/SGAQueueItemDetailModal';
+import { SGAVisaoGeralPorAction } from '@/components/integracoes/SGAVisaoGeralPorAction';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -71,6 +72,18 @@ export default function IntegracaoSGAHinova() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [queueFilter, setQueueFilter] = useState<string>('all');
   const [detailItem, setDetailItem] = useState<SGAQueueItem | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [logsActionFilter, setLogsActionFilter] = useState<string | null>(null);
+
+  const filteredLogs = useMemo(
+    () => (logsActionFilter ? logs.filter(l => l.action === logsActionFilter) : logs),
+    [logs, logsActionFilter],
+  );
+
+  const handleSelectAction = (action: string) => {
+    setLogsActionFilter(action);
+    setActiveTab('logs');
+  };
 
   const lastCheck = healthChecks[0];
   const filteredQueue = useMemo(() => {
@@ -220,13 +233,16 @@ export default function IntegracaoSGAHinova() {
 
 
       {/* Tabs */}
-      <Tabs defaultValue="queue" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
+          <TabsTrigger value="overview" className="gap-1.5">
+            <BarChart3 className="h-4 w-4" /> Visão Geral
+          </TabsTrigger>
           <TabsTrigger value="queue" className="gap-1.5">
             <List className="h-4 w-4" /> Fila ({queueCounts.total})
           </TabsTrigger>
           <TabsTrigger value="logs" className="gap-1.5">
-            <Activity className="h-4 w-4" /> Logs ({logs.length})
+            <Activity className="h-4 w-4" /> Logs ({filteredLogs.length})
           </TabsTrigger>
           <TabsTrigger value="pending" className="gap-1.5">
             <Send className="h-4 w-4" /> Pendentes ({pendingVehicles.length})
@@ -241,6 +257,12 @@ export default function IntegracaoSGAHinova() {
             <Send className="h-4 w-4" /> Teste Boletos
           </TabsTrigger>
         </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview">
+          <SGAVisaoGeralPorAction onSelectAction={handleSelectAction} />
+        </TabsContent>
+
 
         {/* Queue Tab */}
         <TabsContent value="queue" className="space-y-4">
@@ -341,7 +363,18 @@ export default function IntegracaoSGAHinova() {
         </TabsContent>
 
         {/* Logs Tab */}
-        <TabsContent value="logs">
+        <TabsContent value="logs" className="space-y-3">
+          {logsActionFilter && (
+            <div className="flex items-center justify-between rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="border-primary/40 text-primary">Filtrando por ação</Badge>
+                <span className="font-mono font-semibold">{logsActionFilter}</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setLogsActionFilter(null)}>
+                <X className="h-4 w-4 mr-1" /> Limpar
+              </Button>
+            </div>
+          )}
           <Card>
             <Table>
               <TableHeader>
@@ -354,13 +387,13 @@ export default function IntegracaoSGAHinova() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {logs.length === 0 ? (
+                {filteredLogs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       Nenhum log encontrado
                     </TableCell>
                   </TableRow>
-                ) : logs.map(log => (
+                ) : filteredLogs.map(log => (
                   <TableRow key={log.id}>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatDateFull(log.created_at)}
@@ -379,6 +412,7 @@ export default function IntegracaoSGAHinova() {
             </Table>
           </Card>
         </TabsContent>
+
 
         {/* Pending Vehicles Tab */}
         <TabsContent value="pending">

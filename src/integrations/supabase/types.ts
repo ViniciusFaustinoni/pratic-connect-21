@@ -26765,7 +26765,9 @@ export type Database = {
           fila_falhas: number | null
           fila_pendentes: number | null
           id: string
+          taxa_sucesso_24h: number | null
           tempo_resposta_ms: number | null
+          total_operacoes_24h: number | null
           veiculos_nao_sincronizados: number | null
         }
         Insert: {
@@ -26775,7 +26777,9 @@ export type Database = {
           fila_falhas?: number | null
           fila_pendentes?: number | null
           id?: string
+          taxa_sucesso_24h?: number | null
           tempo_resposta_ms?: number | null
+          total_operacoes_24h?: number | null
           veiculos_nao_sincronizados?: number | null
         }
         Update: {
@@ -26785,7 +26789,9 @@ export type Database = {
           fila_falhas?: number | null
           fila_pendentes?: number | null
           id?: string
+          taxa_sucesso_24h?: number | null
           tempo_resposta_ms?: number | null
+          total_operacoes_24h?: number | null
           veiculos_nao_sincronizados?: number | null
         }
         Relationships: []
@@ -35639,6 +35645,19 @@ export type Database = {
       }
       resolver_codigo_sga_cor: { Args: { p_cor: string }; Returns: number }
       set_audit_origem: { Args: { origem: string }; Returns: undefined }
+      sga_success_rate_by_action: {
+        Args: { janela_horas?: number }
+        Returns: {
+          action: string
+          duracao_media_ms: number
+          falha: number
+          ok: number
+          taxa_sucesso: number
+          total: number
+          ultimo_erro: string
+          ultimo_erro_em: string
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sync_instalacao_from_cotacao: {

@@ -65,7 +65,25 @@ serve(async (req) => {
       .eq('status', 'ativo')
       .eq('sincronizado_hinova', false);
 
-    // 4. Store result
+    // 4. Taxa de sucesso global das últimas 24h (via RPC SQL — exclui 'skipped')
+    let taxaSucesso24h: number | null = null;
+    let totalOperacoes24h = 0;
+    try {
+      const { data: porAction, error: rpcErr } = await supabase.rpc(
+        'sga_success_rate_by_action',
+        { janela_horas: 24 },
+      );
+      if (rpcErr) throw rpcErr;
+      const rows = (porAction || []) as Array<{ total: number; ok: number }>;
+      const sumTotal = rows.reduce((s, r) => s + Number(r.total || 0), 0);
+      const sumOk = rows.reduce((s, r) => s + Number(r.ok || 0), 0);
+      totalOperacoes24h = sumTotal;
+      taxaSucesso24h = sumTotal > 0 ? Number((sumOk / sumTotal).toFixed(4)) : null;
+    } catch (e: any) {
+      console.warn('[cron-sga-health-check] Falha ao calcular taxa 24h:', e?.message);
+    }
+
+    // 5. Store result
     await supabase.from('sga_health_checks').insert({
       conexao_ok: conexaoOk,
       tempo_resposta_ms: tempoMs,
@@ -73,14 +91,24 @@ serve(async (req) => {
       fila_falhas: falhas || 0,
       veiculos_nao_sincronizados: naoSincronizados || 0,
       erro_mensagem: erroMensagem,
+      taxa_sucesso_24h: taxaSucesso24h,
+      total_operacoes_24h: totalOperacoes24h,
     });
 
-    // 5. Notify admins if issues detected
-    const hasIssues = !conexaoOk || (falhas || 0) > 5;
+    // 6. Notify admins if issues detected
+    const taxaBaixa =
+      taxaSucesso24h !== null && totalOperacoes24h >= 20 && taxaSucesso24h < 0.85;
+    const hasIssues = !conexaoOk || (falhas || 0) > 5 || taxaBaixa;
     if (hasIssues) {
-      const mensagem = !conexaoOk
-        ? `⚠️ SGA Hinova: Conexão com API falhou. ${erroMensagem}`
-        : `⚠️ SGA Hinova: ${falhas} itens com falha na fila de sincronização`;
+      let mensagem: string;
+      if (!conexaoOk) {
+        mensagem = `⚠️ SGA Hinova: Conexão com API falhou. ${erroMensagem}`;
+      } else if (taxaBaixa) {
+        const pct = Math.round((taxaSucesso24h as number) * 100);
+        mensagem = `⚠️ SGA Hinova: taxa de sucesso caiu para ${pct}% nas últimas 24h (${totalOperacoes24h} operações).`;
+      } else {
+        mensagem = `⚠️ SGA Hinova: ${falhas} itens com falha na fila de sincronização`;
+      }
 
       // Get admin user IDs
       const { data: admins } = await supabase
