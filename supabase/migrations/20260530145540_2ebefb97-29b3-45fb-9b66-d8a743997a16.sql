@@ -1,0 +1,1 @@
+UPDATE cotacoes SET status_contratacao='pagamento_ok' WHERE id='862e46b6-a3d0-4e80-82e6-9714dca38df5' AND status_contratacao='contrato_assinado';
