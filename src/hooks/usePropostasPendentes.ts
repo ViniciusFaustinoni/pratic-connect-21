@@ -1127,45 +1127,48 @@ export function useProposta(contratoId: string | undefined) {
         .maybeSingle();
 
       if (vistoriaData?.id) {
-        // Buscar fotos da tabela vistoria_fotos
-        const { data: fotosVistoria } = await supabase
-          .from('vistoria_fotos')
-          .select('id, tipo, arquivo_url, created_at')
-          .eq('vistoria_id', vistoriaData.id)
-          .order('created_at', { ascending: true });
+        const isAutovistoriaV = vistoriaData.modalidade === 'autovistoria';
+        // CANÔNICO: para autovistoria, SEMPRE unir vistoria_fotos (nova) +
+        // cotacoes_vistoria_fotos (legado), dedup por `tipo`. Antes, o legado
+        // só entrava quando vistoria_fotos era 0 — caso LUIZ FERNANDO (1 foto
+        // nova + 3 legadas) ficava com fotos.length=1, autovistoriaCompleta=false,
+        // tipoEtapaAnalise='agendamento_confirmado' e botão "Liberar R&F" sumia.
+        const [{ data: fotosVistoria }, fotosLegadoQ] = await Promise.all([
+          supabase
+            .from('vistoria_fotos')
+            .select('id, tipo, arquivo_url, created_at')
+            .eq('vistoria_id', vistoriaData.id)
+            .order('created_at', { ascending: true }),
+          isAutovistoriaV && contrato.cotacao_id
+            ? supabase
+                .from('cotacoes_vistoria_fotos')
+                .select('id, tipo, arquivo_url, created_at')
+                .eq('cotacao_id', contrato.cotacao_id)
+                .order('created_at', { ascending: true })
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
 
-        if (fotosVistoria && fotosVistoria.length > 0) {
+        const novas = (fotosVistoria || []) as VistoriaFotoInfo[];
+        const legadas = (fotosLegadoQ?.data || []) as VistoriaFotoInfo[];
+        const tiposMaterializados = new Set(novas.map((f) => f.tipo));
+        const fotos = isAutovistoriaV
+          ? [...novas, ...legadas.filter((f) => !tiposMaterializados.has(f.tipo))]
+          : novas;
+
+        if (fotos.length > 0) {
           vistoria = {
             id: vistoriaData.id,
             status: vistoriaData.status || 'pendente',
-            tipo: vistoriaData.modalidade === 'autovistoria' ? 'autovistoria' : 'agendada',
+            tipo: isAutovistoriaV ? 'autovistoria' : 'agendada',
             modalidade: vistoriaData.modalidade || undefined,
-            fotos: fotosVistoria as VistoriaFotoInfo[],
+            fotos,
             observacoes: vistoriaData.observacoes,
             km_atual: vistoriaData.km_atual,
             video_360_url: vistoriaData.video_360_url,
           };
-        } else if (vistoriaData.modalidade === 'autovistoria' && contrato.cotacao_id) {
-          const { data: fotosLegadoAutovistoria } = await supabase
-            .from('cotacoes_vistoria_fotos')
-            .select('id, tipo, arquivo_url, created_at')
-            .eq('cotacao_id', contrato.cotacao_id)
-            .order('created_at', { ascending: true });
-
-          if (fotosLegadoAutovistoria && fotosLegadoAutovistoria.length > 0) {
-            vistoria = {
-              id: vistoriaData.id,
-              status: vistoriaData.status || 'pendente',
-              tipo: 'autovistoria',
-              modalidade: 'autovistoria',
-              fotos: fotosLegadoAutovistoria as VistoriaFotoInfo[],
-              observacoes: vistoriaData.observacoes,
-              km_atual: vistoriaData.km_atual,
-              video_360_url: vistoriaData.video_360_url,
-            };
-          }
         }
       }
+
 
       // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
       //    Importante: acima da FIPE é canônico coexistir autovistoria enxuta
