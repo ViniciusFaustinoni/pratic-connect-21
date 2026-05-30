@@ -653,6 +653,117 @@ serve(async (req) => {
           .eq('id', agendamentoBaseId);
         console.log('[CriarInstalacaoPosPagamento] agendamentos_base back-linked:', agendamentoBaseId);
       }
+
+      // 6.2 SUBSTITUIÇÃO: criar serviço extra de RETIRADA do veículo antigo,
+      // no mesmo agendamento_base (mesma visita do técnico). Idempotente.
+      // Critério: cotação tem solicitacao_substituicao_id em dados_extras OU
+      // tipo_entrada='substituicao_placa'. Só cria se o veículo antigo tiver
+      // rastreador vinculado (senão não há o que retirar).
+      try {
+        const { data: cotSub } = await supabase
+          .from('cotacoes')
+          .select('tipo_entrada, dados_extras')
+          .eq('id', cotacaoId)
+          .maybeSingle();
+        const dadosExtras = (cotSub as any)?.dados_extras || {};
+        const solicitacaoSubId: string | null = dadosExtras?.solicitacao_substituicao_id || null;
+        const ehSubstituicao =
+          (cotSub as any)?.tipo_entrada === 'substituicao_placa' || !!solicitacaoSubId;
+
+        if (ehSubstituicao) {
+          let veiculoAntigoId: string | null = dadosExtras?.veiculo_antigo_id || null;
+          let contratoAntigoId: string | null = null;
+
+          if (solicitacaoSubId) {
+            const { data: sol } = await supabase
+              .from('solicitacoes_substituicao_placa')
+              .select('veiculo_antigo_id, associado_id')
+              .eq('id', solicitacaoSubId)
+              .maybeSingle();
+            if (sol?.veiculo_antigo_id) veiculoAntigoId = sol.veiculo_antigo_id;
+          }
+
+          if (!veiculoAntigoId) {
+            console.warn('[CriarInstalacaoPosPagamento][substituicao] veiculo_antigo_id ausente — retirada não criada');
+          } else {
+            // Idempotência: já existe serviço de retirada vivo para este veículo+agendamento?
+            const { data: retExistente } = await supabase
+              .from('servicos')
+              .select('id')
+              .eq('tipo', 'vistoria_retirada')
+              .eq('veiculo_id', veiculoAntigoId)
+              .eq(agendamentoBaseId ? 'agendamento_base_id' : 'cotacao_id', agendamentoBaseId || cotacaoId)
+              .not('status', 'in', '(concluida,aprovada,reprovada,cancelada)')
+              .limit(1)
+              .maybeSingle();
+
+            if (retExistente?.id) {
+              console.log('[CriarInstalacaoPosPagamento][substituicao] retirada já existe:', retExistente.id);
+            } else {
+              // Buscar rastreador vinculado ao veículo antigo
+              const { data: rastr } = await supabase
+                .from('rastreadores')
+                .select('id, imei')
+                .eq('veiculo_id', veiculoAntigoId)
+                .maybeSingle();
+
+              // Contrato antigo (para vincular)
+              const { data: contratoAntigoRow } = await supabase
+                .from('contratos')
+                .select('id')
+                .eq('veiculo_id', veiculoAntigoId)
+                .in('status', ['ativo', 'aguardando_instalacao', 'assinado'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              contratoAntigoId = contratoAntigoRow?.id || null;
+
+              const periodoValidoRet = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : 'manha';
+              const servicoRetirada: any = {
+                tipo: 'vistoria_retirada',
+                status: 'agendada',
+                data_agendada: dataAgendada,
+                hora_agendada: null,
+                periodo: periodoValidoRet,
+                veiculo_id: veiculoAntigoId,
+                associado_id: contrato.associado_id,
+                contrato_id: contratoAntigoId,
+                cotacao_id: cotacaoId,
+                agendamento_base_id: agendamentoBaseId,
+                rastreador_id: rastr?.id || null,
+                imei_rastreador: rastr?.imei || null,
+                origem: 'substituicao_placa',
+                local_vistoria: localVistoriaForce,
+                cep: endereco.cep,
+                logradouro: endereco.logradouro,
+                numero: endereco.numero,
+                bairro: endereco.bairro,
+                cidade: endereco.cidade,
+                uf: endereco.estado,
+                latitude: endereco.latitude || null,
+                longitude: endereco.longitude || null,
+                permite_encaixe: permiteEncaixe,
+                observacoes: 'Retirada do veículo antigo (substituição de placa)',
+                motivo_retirada: 'substituicao',
+              };
+
+              const { data: novoSrv, error: srvErr } = await supabase
+                .from('servicos')
+                .insert(servicoRetirada)
+                .select('id')
+                .single();
+
+              if (srvErr) {
+                console.error('[CriarInstalacaoPosPagamento][substituicao] falha ao criar serviço de retirada:', srvErr);
+              } else {
+                console.log('[CriarInstalacaoPosPagamento][substituicao] ✓ serviço de retirada criado:', novoSrv.id, '(rastreador:', rastr?.id || 'nenhum', ')');
+              }
+            }
+          }
+        }
+      } catch (subErr) {
+        console.warn('[CriarInstalacaoPosPagamento][substituicao] bloco retirada falhou (não bloqueante):', subErr);
+      }
     }
     // (bloco "dataAgendada && !cadastroAprovado" removido — agora sempre materializa quando há data)
 
