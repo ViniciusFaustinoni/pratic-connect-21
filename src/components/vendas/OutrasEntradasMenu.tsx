@@ -249,6 +249,8 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     if (!open) {
       setSearchTerm('');
       setMigracaoCpf('');
+      setPlacaNova('');
+
 
       if (!showTrocaTitularidade && !showMigracao) {
         setSelectedTipo(null);
