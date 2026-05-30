@@ -36,6 +36,21 @@ interface EnderecoForm {
   estado: string;
 }
 
+export interface AgendamentoRicoPayload {
+  dataAgendada: string;
+  periodo: 'manha' | 'tarde';
+  endereco: {
+    cep: string;
+    logradouro: string;
+    numero: string;
+    bairro: string;
+    cidade: string;
+    estado: string;
+  };
+  responsavel: { euMesmo: boolean; nome?: string; telefone?: string };
+  permiteEncaixe: boolean;
+}
+
 export interface AgendamentoVistoriaProps {
   cotacaoId: string;
   onConfirmar: (dataAgendada?: string, periodoAgendado?: string) => void;
@@ -51,6 +66,11 @@ export interface AgendamentoVistoriaProps {
 
   // Quando true, não chama edge function — apenas coleta dados e chama onConfirmar
   skipMutation?: boolean;
+
+  // Callback opcional com payload COMPLETO (usado pela substituição com
+  // locais diferentes para enviar 2 agendamentos numa única edge). Disparado
+  // junto com onConfirmar quando skipMutation=true.
+  onConfirmarRico?: (payload: AgendamentoRicoPayload) => void;
 }
 
 export function AgendamentoVistoria({ 
@@ -59,7 +79,8 @@ export function AgendamentoVistoria({
   contexto,
   tipoVistoria,
   enderecoInicial,
-  skipMutation = false
+  skipMutation = false,
+  onConfirmarRico,
 }: AgendamentoVistoriaProps) {
   // Estados
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
