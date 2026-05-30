@@ -39,6 +39,12 @@ export function TemplateEditor() {
 
   const dirty = assunto !== tpl.assunto || corpo !== tpl.corpo;
 
+  // Validação de variáveis (regex aceita [A-Za-z0-9_], comparação case-insensitive)
+  const validacao = useMemo(
+    () => validarTemplate({ assunto, corpo, declaradas: VARIAVEIS_TEMPLATE.map((v) => ({ code: v.code, label: v.label })) }),
+    [assunto, corpo],
+  );
+
   const inserirVariavel = (code: string) => {
     const el = corpoRef.current;
     if (!el) {
