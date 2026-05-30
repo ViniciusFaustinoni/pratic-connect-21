@@ -18,6 +18,7 @@ import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/Agenda
 import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import { AgendamentoBaseResumo } from '@/components/cotacao-publica/AgendamentoBaseResumo';
 import { AgendamentoSubstituicao } from '@/components/cotacao-publica/AgendamentoSubstituicao';
+import { AgendamentoSubstituicaoSeparado } from '@/components/cotacao-publica/AgendamentoSubstituicaoSeparado';
 import { NavegacaoEtapas } from '@/components/cotacao-publica/NavegacaoEtapas';
 import { TelaAnaliseTrocaTitularidade } from '@/components/troca-titularidade/TelaAnaliseTrocaTitularidade';
 import { useSolicitacaoTrocaPublicaPorCotacao } from '@/hooks/useSolicitacaoTrocaPublica';
