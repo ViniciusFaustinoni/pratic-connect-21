@@ -1,60 +1,68 @@
-# Problema
+## Contexto
 
-Quando um template Meta é disparado pelo sistema (ex.: lembrete de instalação, cobrança, confirmação de vistoria) e o associado responde minutos/horas depois, a Maya IA não entende o contexto e responde de forma genérica (frequentemente como "mensagem fria").
+Cotação LPL1312 (sub-FIPE, FIPE R$ 22.508, carro `<` R$ 30k, status `pagamento_ok`) chegou na etapa de autovistoria completa mas tem **zero fotos** em `cotacoes_vistoria_fotos` e **zero objetos** no bucket. Investigação confirmou:
 
-# Causa raiz (duas falhas combinadas)
+- Bucket `cotacoes-vistoria` em produção: `public=true`, `file_size_limit=200MB`, `allowed_mime_types` inclui `image/*` + `video/mp4|webm|quicktime` — **OK**.
+- RLS de `cotacoes_vistoria_fotos`: política permite `anon` com base em `token_publico` — **OK**.
+- Pipeline de upload (`useUploadFotoCotacaoVistoria` → `publicSupabase.storage.upload` → upsert em `cotacoes_vistoria_fotos`) está correto.
+- Edge `finalizar-autovistoria-cotacao` **NÃO valida quantidade mínima de fotos nem presença de vídeo** — aceita finalizar com qualquer coisa, inclusive zero.
+- Cada tentativa de upload (sucesso ou erro) **não gera log** — impossível distinguir abandono do cliente de falha real.
 
-**1. `whatsapp-send-text` grava template Meta como `tipo: "text"` (sem template_id)**
+A causa do caso LPL1312 é compatível com abandono, mas hoje não temos **prova** disso nem **gate de servidor** que garanta que sub-FIPE só conclui com o set obrigatório.
 
-Em `supabase/functions/whatsapp-send-text/index.ts`, no envio bem-sucedido via Meta API (linhas 436–440 e retry em 395–399), o registro em `whatsapp_mensagens` sempre usa:
+## Objetivo
 
-```
-tipo: "text", mensagem: <fallback texto>
-```
+1. Garantir que uma cotação sub-FIPE só consiga **concluir** quando o set canônico (31 carro / 15 moto + `video_360`) estiver persistido.
+2. Gerar **observabilidade** por upload — toda falha vira evento rastreável.
+3. Validar com **teste E2E interno** chamando a edge function.
 
-mesmo quando `templateName` foi usado. Não persiste `template_id` nem `template_variaveis`.
+## Plano
 
-Consequência: o `getConversationHistory` da Maya (whatsapp-webhook, linha 1898) **só rotula como `[Template enviado:…]` quando `w.tipo === "template"`**. Como o tipo está `"text"`, a IA recebe apenas o corpo do fallback sem nenhuma marcação de continuidade — e a regra "Continuidade de templates" do system prompt (linhas 270–273) nunca dispara.
+### Camada A — Gate no servidor (`finalizar-autovistoria-cotacao`)
 
-**2. Janela de contexto fixa em 2 horas**
+Em `supabase/functions/finalizar-autovistoria-cotacao/index.ts`, antes de criar a `vistorias` (linha 170):
 
-`getConversationHistory` (whatsapp-webhook, linha 1860) filtra `whatsapp_mensagens` por `created_at >= now - 2h`. No caso do screenshot, o template foi enviado às 07:00 e o "Sim" chegou às 09:14 — **2h14min depois, fora da janela**. A IA recebeu o histórico sem o template, perdendo o gatilho de continuidade.
+- Resolver `veiculoSubFipe` (já feito nas linhas 58–123).
+- Resolver `tipoVeiculo` (`carro` / `moto`) a partir de `cotacoes.tipo_veiculo`.
+- Se `veiculoSubFipe === true`, importar o adapter canônico `getFotosVistoriaSubFipe` (mover para `_shared` ou replicar o filtro em runtime Deno lendo a config) e calcular a lista de `tipo` esperados.
+- Comparar com `fotosArr.map(f => f.tipo)`:
+  - Se faltar qualquer `tipo` obrigatório (visivelCliente !== false), retornar HTTP `409` com payload `{ code: 'AUTOVISTORIA_INCOMPLETA', faltantes: string[], esperadas: N, recebidas: M }`.
+  - Vídeo (`video_360`) entra na mesma checagem.
+- Não alterar comportamento para fluxo ≥FIPE (autovistoria opcional/enxuta segue como hoje).
 
-Templates Meta abrem janela de 24h pela política da própria Meta, então qualquer resposta dentro desse intervalo deveria ter contexto.
+### Camada B — Auditoria por upload (`useUploadFotoCotacaoVistoria`)
 
-# Correção (escopo mínimo)
+Em `src/hooks/useCotacaoVistoria.ts`:
 
-### A. Registrar templates Meta corretamente em `whatsapp-send-text`
+- No `onError` (linha 228) e no `onSuccess` (linha 225), gravar em `logs_auditoria` via `publicSupabase` com `acao='criar'` + descrição prefixada `[autovistoria_upload]` ou `[autovistoria_upload_falhou]` contendo:
+  - `cotacao_id`, `fotoId`, `fileSize`, `mime`, `mensagem` (no erro), `duracaoMs`
+- Respeitar a CHECK de 38 valores (memória `logs-auditoria-vigia-universal`) — usar fallback `acao='criar'` + descrição rastreável.
+- Sem toast novo (já existe), sem mudança de UX.
 
-Nos 3 pontos de insert pós-envio bem-sucedido via Meta com template (linhas 395–399 retry e 436–440 principal), quando `templateName` estiver presente, gravar:
+### Camada C — Teste E2E interno
 
-```
-tipo: "template",
-template_id: templateName,
-template_variaveis: { params: paramsArray, components: components },  // o que estiver disponível no escopo
-mensagem: mensagem  // mantém o fallback textual para leitura humana
-```
+Após deploy das mudanças A+B, executar contra a edge real (`supabase--curl_edge_functions`):
 
-Não tocar nos inserts de erro/bloqueio (linhas 139, 288, 422) — esses já estão consistentes com o que aconteceu. Não tocar nos envios de texto livre (sem template_name).
+1. **Setup**: criar uma cotação sub-FIPE de teste via SQL (placa fake, FIPE R$ 20k, carro) com `token_publico` definido.
+2. **Cenário 1 — incompleto**: chamar `finalizar-autovistoria-cotacao` com `{ cotacaoId }` sem nenhuma foto. **Esperado**: `409 AUTOVISTORIA_INCOMPLETA` com `faltantes.length === 32` (31 + vídeo).
+3. **Cenário 2 — parcial**: inserir 5 fotos via `publicSupabase` direto (apenas DB, sem storage real). Chamar a edge. **Esperado**: `409` com `faltantes.length === 27`.
+4. **Cenário 3 — completo**: popular as 31 fotos + `video_360` em `cotacoes_vistoria_fotos`. Chamar a edge. **Esperado**: `200 success=true`, `vistorias` criada, `vistoria_fotos` com 32 rows copiadas, `servicos` com `tipo='vistoria_entrada'`, `status='em_analise'` (sub-FIPE entra no Cadastro).
+5. **Limpeza**: marcar cotação de teste com `_TESTE_E2E_AUTOVISTORIA` no número e remover registros ao fim.
 
-### B. Ampliar janela do histórico da IA
+Reportar resultado de cada cenário (status code, payload, contagens no DB).
 
-Em `supabase/functions/whatsapp-webhook/index.ts`, função `getConversationHistory` (linha 1860):
+## Detalhes técnicos
 
-- Trocar a janela de **2h** por **24h** (alinhada com a janela de atendimento Meta).
-- Manter o `limit(20)` em cada fonte e o corte final `slice(-15)` para não estourar contexto da IA — apenas a peneira temporal expande.
+**Arquivos tocados:**
+- `supabase/functions/finalizar-autovistoria-cotacao/index.ts` — gate sub-FIPE.
+- `src/hooks/useCotacaoVistoria.ts` — auditoria por upload.
+- `supabase/functions/_shared/fotosVistoriaSubFipe.ts` (novo) — versão Deno do adapter (apenas a lista de `tipo` esperados por `tipo_veiculo`, sem dependência do front).
 
-### C. Verificação
+**Fora de escopo (sinalizado mas não tocado agora):**
+- Fila operacional "autovistoria sub-FIPE parada > 24h" — pode virar tarefa separada.
+- Indicador granular no UI de quais fotos faltam (botão "Finalizar" já desabilita até `todasEnviadas`).
+- Compressão/retry mais robusto — fluxo atual já comprime + retry de vídeo.
 
-Após o deploy, reproduzir o cenário: enviar um template Meta de teste, aguardar ~3h, responder "Sim", e confirmar via `supabase--edge_function_logs whatsapp-webhook` que a Maya processa como continuação (e não chama tools como "mensagem fria").
-
-# Arquivos afetados
-
-- `supabase/functions/whatsapp-send-text/index.ts` — 2 inserts (retry e principal) para gravar `tipo: "template"` quando há `templateName`
-- `supabase/functions/whatsapp-webhook/index.ts` — alterar `duasHorasAtras` (linha 1860) para janela de 24h e renomear variável
-
-# Fora de escopo
-
-- Não alterar `chatwoot-webhook`, hooks de frontend, ou templates específicos.
-- Não tocar nos inserts que já gravam `tipo: "template"` corretamente (disparar-cobranca-csv-meta, enviar-lembretes-vencimento etc.).
-- Não alterar o system prompt da Maya — a regra de continuidade de templates já existe e funciona quando o histórico chega marcado corretamente.
+**Riscos:**
+- O gate A pode quebrar cotações sub-FIPE **legadas** que ficaram com fotos parciais e estavam para ser finalizadas. Mitigação: filtrar `faltantes` por `categoria !== 'avarias'` (opcional) e checar antes se existem cotações nesse estado.
+- Auditoria em `logs_auditoria` aumenta volume — usar amostragem só em erro (sucesso pode ficar de fora se ficar pesado).
