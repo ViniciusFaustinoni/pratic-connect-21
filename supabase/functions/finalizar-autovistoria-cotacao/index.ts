@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
           if (fipe > 0) {
             veiculoSubFipe = isMoto ? fipe < fipeMinMoto : fipe < fipeMinCarro;
           }
+          tipoVeiculoSubFipe = isMoto ? 'moto' : 'carro';
           console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} marca="${marca}" modelo="${modelo}" isMoto=${isMoto} fipe=${fipe} subFipe=${veiculoSubFipe}`);
         }
       }
