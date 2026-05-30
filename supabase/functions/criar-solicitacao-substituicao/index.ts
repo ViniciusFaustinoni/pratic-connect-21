@@ -47,12 +47,55 @@ Deno.serve(async (req) => {
       return json(502, { error: 'Falha ao consultar SGA: ' + sgaResp.error.message });
     }
     const sga = sgaResp.data as any;
-    if (!sga?.encontrado) {
-      return json(404, { error: 'Veículo não localizado no SGA para a placa informada' });
+
+    // Se SGA retornou transitório, NÃO afirmamos "não encontrado" — pedimos retry
+    if (sga?.erro_transitorio) {
+      return json(503, {
+        error: 'API SGA temporariamente indisponível. Tente novamente em instantes.',
+        erro_transitorio: true,
+        motivo: sga.motivo || null,
+      });
     }
-    const veiculoSga = (sga.veiculos || []).find((v: any) => String(v.placa).toUpperCase() === placaLimpa)
-      || sga.veiculos?.[0];
-    if (!veiculoSga) return json(404, { error: 'Veículo SGA sem placa correspondente' });
+
+    let veiculoSga: any = null;
+    let associadoSgaInfo: any = null;
+    let codigoAssociadoSga: number | null = null;
+    let cpf = '';
+
+    if (sga?.encontrado) {
+      veiculoSga = (sga.veiculos || []).find((v: any) => String(v.placa).toUpperCase() === placaLimpa)
+        || sga.veiculos?.[0];
+      if (!veiculoSga) return json(404, { error: 'Veículo SGA sem placa correspondente' });
+      associadoSgaInfo = sga.associado;
+      codigoAssociadoSga = sga.codigo_associado || null;
+      cpf = String(sga.associado?.cpf || '').replace(/\D/g, '');
+    } else {
+      // FALLBACK: SGA não tem (instabilidade ou veículo local não sincronizado).
+      // Resolve via base local: veiculos.placa → associado_id → associados.cpf.
+      const { data: vLocal } = await admin
+        .from('veiculos')
+        .select('id, placa, marca, modelo, ano, chassi, renavam, associado_id, codigo_veiculo_sga, associados(id, nome, cpf, email, telefone, codigo_hinova)')
+        .eq('placa', placaLimpa)
+        .maybeSingle();
+      if (!vLocal || !vLocal.associados) {
+        return json(404, { error: 'Veículo não localizado no SGA nem na base local para a placa informada' });
+      }
+      const aLocal: any = vLocal.associados;
+      veiculoSga = {
+        codigo_veiculo: vLocal.codigo_veiculo_sga || null,
+        placa: vLocal.placa,
+        marca: vLocal.marca,
+        modelo: vLocal.modelo,
+        ano: vLocal.ano,
+        chassi: vLocal.chassi,
+        renavam: vLocal.renavam,
+        saldo_devedor: 0,
+        boletos_abertos: [],
+      };
+      associadoSgaInfo = { nome: aLocal.nome, cpf: aLocal.cpf, email: aLocal.email, telefone: aLocal.telefone };
+      codigoAssociadoSga = aLocal.codigo_hinova ? Number(aLocal.codigo_hinova) : null;
+      cpf = String(aLocal.cpf || '').replace(/\D/g, '');
+    }
 
     const cpf = String(sga.associado?.cpf || '').replace(/\D/g, '');
     if (cpf.length !== 11) return json(400, { error: 'CPF do associado SGA inválido' });
@@ -89,10 +132,11 @@ Deno.serve(async (req) => {
 
     // 3. Snapshots
     const associadoSnapshot = {
-      ...sga.associado,
-      codigo_associado: sga.codigo_associado,
-      saldo_devedor_total: sga.saldo_devedor_total,
-      tem_debito: sga.tem_debito,
+      ...(associadoSgaInfo || {}),
+      codigo_associado: codigoAssociadoSga,
+      saldo_devedor_total: sga?.saldo_devedor_total ?? 0,
+      tem_debito: sga?.tem_debito ?? false,
+      origem: sga?.encontrado ? 'sga' : 'local_fallback',
     };
     const veiculoSnapshot = {
       ...veiculoSga,
@@ -117,7 +161,7 @@ Deno.serve(async (req) => {
       .from('solicitacoes_substituicao_placa')
       .insert({
         associado_id: associadoLocalId,
-        sga_codigo_associado: sga.codigo_associado || null,
+        sga_codigo_associado: codigoAssociadoSga,
         sga_codigo_veiculo: veiculoSga.codigo_veiculo || null,
         veiculo_antigo_id: veiculoLocal?.id || null,
         veiculo_antigo_placa: placaLimpa,
