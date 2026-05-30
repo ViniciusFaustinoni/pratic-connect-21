@@ -2418,6 +2418,21 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
           const ocrPlaca = String(raw).replace(/[^A-Z0-9]/gi, '').toUpperCase();
           const candidatosOCR = gerarCandidatosPlaca(ocrPlaca).filter(p => validatePlaca(p));
 
+          // 0) CROSS-CHECK DIRETO COM dadosEsperados.placa (mais barato e confiável).
+          // Quando o front passa a placa esperada da cotação, se ela estiver entre
+          // os candidatos saneados, adota imediatamente — fecha o caso mesmo sem
+          // texto nativo do PDF ou registro pré-existente no banco.
+          const placaEsperadaRaw =
+            (dadosEsperados as any)?.placa ?? (dadosEsperados as any)?.placa_esperada ?? null;
+          if (placaEsperadaRaw) {
+            const placaEsperada = String(placaEsperadaRaw).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            if (validatePlaca(placaEsperada) && candidatosOCR.includes(placaEsperada) && placaEsperada !== ocrPlaca) {
+              console.log(`[OCR] Placa confirmada via dadosEsperados: "${ocrPlaca}" → "${placaEsperada}"`);
+              d.placa = placaEsperada;
+            }
+          }
+
+
           if (extractedPdfText) {
             const candidatosNativos = extractCandidatesFromText(extractedPdfText, 'placa').filter(p => validatePlaca(p));
 
