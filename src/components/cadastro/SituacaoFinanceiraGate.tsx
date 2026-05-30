@@ -29,10 +29,17 @@ const formatDate = (iso: string | null) =>
 export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChange }: Props) {
   const { data, isLoading, isError, reconsultar, bypass } =
     useSituacaoFinanceiraCadastro({ contratoId, solicitacaoTrocaId });
-  const { isDiretor } = usePermissions();
+  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+  const podeBypass = !!(isDiretor || isCoordenadorMonitoramento);
   const registrarAviso = useRegistrarAvisoSGA();
   const [bypassOpen, setBypassOpen] = useState(false);
+  const [bypassOrigem, setBypassOrigem] = useState<'inconclusivo' | 'inadimplente' | 'erro_consulta_sga'>('inadimplente');
   const [motivo, setMotivo] = useState('');
+
+  const abrirBypass = (origem: 'inconclusivo' | 'inadimplente' | 'erro_consulta_sga') => {
+    setBypassOrigem(origem);
+    setBypassOpen(true);
+  };
 
   // Notifica o pai
   const liberado = !!data?.liberado;
@@ -40,6 +47,84 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
   if (data && onChange) {
     queueMicrotask(() => onChange(liberado));
   }
+
+  const tituloDialog =
+    bypassOrigem === 'inconclusivo'
+      ? 'Bypass de verificação inconclusiva (auditado)'
+      : bypassOrigem === 'erro_consulta_sga'
+        ? 'Prosseguir sem consulta ao SGA (auditado)'
+        : 'Bypass de inadimplência (auditado)';
+
+  const descricaoDialog =
+    bypassOrigem === 'inconclusivo'
+      ? 'Confirme que verificou manualmente os boletos do CPF no painel SGA. Esta ação será registrada com seu nome.'
+      : bypassOrigem === 'erro_consulta_sga'
+        ? 'A consulta ao SGA falhou. Prossiga apenas se confirmou a situação financeira por outro meio. Esta ação será registrada com seu nome.'
+        : 'Esta ação será registrada com seu nome e ficará disponível na auditoria SGA. Descreva o motivo da liberação manual.';
+
+  const placeholderDialog =
+    bypassOrigem === 'inconclusivo'
+      ? 'Ex.: verificado no SGA, sem boletos vencidos em nenhuma matrícula…'
+      : bypassOrigem === 'erro_consulta_sga'
+        ? 'Ex.: SGA indisponível, situação confirmada por contato direto com o financeiro…'
+        : 'Ex.: pagamento confirmado por cópia de comprovante anexado…';
+
+  const onConfirmBypass = () =>
+    bypass.mutate(motivo.trim(), {
+      onSuccess: async () => {
+        try {
+          await registrarAviso.mutateAsync({
+            tipo: 'cadastro_situacao_financeira_pendente',
+            titulo: `Bypass (${bypassOrigem}) no Cadastro`,
+            mensagem:
+              bypassOrigem === 'inadimplente'
+                ? `Saldo devedor ${data?.check?.saldo_devedor ?? 0} (${data?.check?.qtd_boletos_abertos ?? 0} boleto(s)).`
+                : bypassOrigem === 'inconclusivo'
+                  ? 'Gate inconclusivo (SGA sem sinal). Verificado manualmente.'
+                  : 'Consulta ao SGA falhou. Operador prosseguiu manualmente.',
+            decisao: 'ignorado_prosseguiu',
+            motivo: motivo.trim(),
+            contrato_id: contratoId ?? null,
+            cpf: data?.check?.cpf ?? null,
+            detalhes: {
+              origem_resultado: bypassOrigem,
+              saldo_devedor: data?.check?.saldo_devedor,
+              qtd_boletos_abertos: data?.check?.qtd_boletos_abertos,
+              solicitacao_troca_id: solicitacaoTrocaId ?? null,
+            },
+          });
+        } catch (e) {
+          console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
+        }
+        toast.success('Bypass registrado — análise liberada');
+        setBypassOpen(false);
+        setMotivo('');
+      },
+      onError: (e: any) => toast.error(e?.message || 'Falha ao registrar bypass'),
+    });
+
+  const bypassDialog = (
+    <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{tituloDialog}</DialogTitle>
+          <DialogDescription>{descricaoDialog}</DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          placeholder={placeholderDialog}
+          rows={4}
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setBypassOpen(false)}>Cancelar</Button>
+          <Button disabled={motivo.trim().length < 5 || bypass.isPending} onClick={onConfirmBypass}>
+            Confirmar bypass
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (isLoading) {
     return (
@@ -57,25 +142,37 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
 
   if (isError || !data) {
     return (
-      <Card className="border-amber-500/40 bg-amber-50 dark:bg-amber-950/20">
-        <CardContent className="p-4 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-              Não foi possível consultar o SGA
-            </p>
-            <p className="text-xs text-amber-800/80 dark:text-amber-200/70">
-              A análise pode prosseguir, mas tente novamente para ter um diagnóstico atualizado.
-            </p>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => reconsultar.mutate()} disabled={reconsultar.isPending}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
-            Tentar novamente
-          </Button>
-        </CardContent>
-      </Card>
+      <>
+        <Card className="border-amber-500/40 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Não foi possível consultar o SGA
+              </p>
+              <p className="text-xs text-amber-800/80 dark:text-amber-200/70">
+                Tente novamente para ter um diagnóstico atualizado. Sem uma consulta recente, a aprovação fica bloqueada.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button size="sm" variant="outline" onClick={() => reconsultar.mutate()} disabled={reconsultar.isPending}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
+                Tentar novamente
+              </Button>
+              {podeBypass && (
+                <Button size="sm" variant="outline" onClick={() => abrirBypass('erro_consulta_sga')}>
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  Ignorar e Prosseguir
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        {bypassDialog}
+      </>
     );
   }
+
 
   const check = data.check;
   const verificadoEm = new Date(check.verificado_em).toLocaleString('pt-BR');
@@ -139,69 +236,21 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
                 <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
                 Consultar SGA novamente
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
-                <KeyRound className="h-4 w-4 mr-2" />
-                Ignorar e Prosseguir
-              </Button>
+              {podeBypass && (
+                <Button size="sm" variant="outline" onClick={() => abrirBypass('inconclusivo')}>
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  Ignorar e Prosseguir
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Bypass de verificação inconclusiva (auditado)</DialogTitle>
-              <DialogDescription>
-                Confirme que verificou manualmente os boletos do CPF no painel SGA.
-                Esta ação será registrada com seu nome.
-              </DialogDescription>
-            </DialogHeader>
-            <Textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Ex.: verificado no SGA, sem boletos vencidos em nenhuma matrícula…"
-              rows={4}
-            />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setBypassOpen(false)}>Cancelar</Button>
-              <Button
-                disabled={motivo.trim().length < 5 || bypass.isPending}
-                onClick={() =>
-                  bypass.mutate(motivo.trim(), {
-                    onSuccess: async () => {
-                      try {
-                        await registrarAviso.mutateAsync({
-                          tipo: 'cadastro_situacao_financeira_pendente',
-                          titulo: 'Bypass de verificação inconclusiva no Cadastro',
-                          mensagem: 'Gate inconclusivo (SGA sem sinal). Verificado manualmente.',
-                          decisao: 'ignorado_prosseguiu',
-                          motivo: motivo.trim(),
-                          contrato_id: contratoId ?? null,
-                          cpf: data?.check?.cpf ?? null,
-                          detalhes: {
-                            origem_resultado: 'inconclusivo',
-                            solicitacao_troca_id: solicitacaoTrocaId ?? null,
-                          },
-                        });
-                      } catch (e) {
-                        console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
-                      }
-                      toast.success('Bypass registrado — análise liberada');
-                      setBypassOpen(false);
-                      setMotivo('');
-                    },
-                    onError: (e: any) => toast.error(e?.message || 'Falha ao registrar bypass'),
-                  })
-                }
-              >
-                Confirmar bypass
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {bypassDialog}
       </>
     );
   }
+
 
   // Bypass anterior já liberou
   if (check.bypass) {
@@ -387,68 +436,18 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
               <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
               Consultar SGA novamente
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
-              <KeyRound className="h-4 w-4 mr-2" />
-              Ignorar e Prosseguir
-            </Button>
+            {podeBypass && (
+              <Button size="sm" variant="outline" onClick={() => abrirBypass('inadimplente')}>
+                <KeyRound className="h-4 w-4 mr-2" />
+                Ignorar e Prosseguir
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Bypass de inadimplência (auditado)</DialogTitle>
-            <DialogDescription>
-              Esta ação será registrada com seu nome e ficará disponível na auditoria SGA.
-              Descreva o motivo da liberação manual.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={motivo}
-            onChange={(e) => setMotivo(e.target.value)}
-            placeholder="Ex.: pagamento confirmado por cópia de comprovante anexado…"
-            rows={4}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBypassOpen(false)}>Cancelar</Button>
-            <Button
-              disabled={motivo.trim().length < 5 || bypass.isPending}
-              onClick={() =>
-                bypass.mutate(motivo.trim(), {
-                  onSuccess: async () => {
-                    // Registrar também em cotacao_avisos_sga para o histórico ir pro SGA
-                    try {
-                      await registrarAviso.mutateAsync({
-                        tipo: 'cadastro_situacao_financeira_pendente',
-                        titulo: 'Bypass de inadimplência no Cadastro',
-                        mensagem: `Saldo devedor ${data?.check?.saldo_devedor ?? 0} (${data?.check?.qtd_boletos_abertos ?? 0} boleto(s)).`,
-                        decisao: 'ignorado_prosseguiu',
-                        motivo: motivo.trim(),
-                        contrato_id: contratoId ?? null,
-                        cpf: data?.check?.cpf ?? null,
-                        detalhes: {
-                          saldo_devedor: data?.check?.saldo_devedor,
-                          qtd_boletos_abertos: data?.check?.qtd_boletos_abertos,
-                          solicitacao_troca_id: solicitacaoTrocaId ?? null,
-                        },
-                      });
-                    } catch (e) {
-                      console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
-                    }
-                    toast.success('Bypass registrado — análise liberada');
-                    setBypassOpen(false);
-                    setMotivo('');
-                  },
-                  onError: (e: any) => toast.error(e?.message || 'Falha ao registrar bypass'),
-                })
-              }
-            >
-              Confirmar bypass
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {bypassDialog}
     </>
   );
 }
+
