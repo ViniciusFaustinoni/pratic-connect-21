@@ -126,6 +126,21 @@ Deno.serve(async (req) => {
           console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} marca="${marca}" modelo="${modelo}" isMoto=${isMoto} fipe=${fipe} subFipe=${veiculoSubFipe}`);
         }
       }
+
+      // FALLBACK canônico: quando não há row em `veiculos` (cotação órfã pré-contrato),
+      // resolve sub-FIPE por `cotacoes.tipo_veiculo` + `cotacoes.valor_fipe` +
+      // `cotacoes.veiculo_combustivel`. Sem isso o gate jamais dispara nessas cotações.
+      if (!veicRow) {
+        const fipeCot = Number((cotacao as any).valor_fipe || 0);
+        const combCot = String((cotacao as any).veiculo_combustivel || '').toLowerCase();
+        const tipoCot = String((cotacao as any).tipo_veiculo || '').toLowerCase();
+        if (fipeCot > 0 && combCot !== 'diesel' && (tipoCot === 'carro' || tipoCot === 'moto')) {
+          const isMoto = tipoCot === 'moto';
+          veiculoSubFipe = isMoto ? fipeCot < fipeMinMoto : fipeCot < fipeMinCarro;
+          tipoVeiculoSubFipe = isMoto ? 'moto' : 'carro';
+          console.log(`[finalizar-autovistoria] (fallback cotacoes) cotacao=${cotacao.numero} tipo=${tipoCot} fipe=${fipeCot} subFipe=${veiculoSubFipe}`);
+        }
+      }
     } catch (e) {
       console.warn('[finalizar-autovistoria] Falha detect sub-FIPE (segue como ≥30k):', e);
     }
