@@ -805,8 +805,11 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                               {placaNovaValida && !placaNovaIgualAntiga && !loadingSgaVeiculoNovo && novoSgaTransitorio && (
                                 <SgaTransientAlert
                                   motivo={sgaVeiculoNovo?.motivo ?? null}
+                                  onRetry={() => refetchSgaVeiculoNovo()}
+                                  loading={loadingSgaVeiculoNovo}
                                   descricao="Não foi possível confirmar agora se a placa nova já está no SGA. Tente novamente em instantes."
                                 />
+
                               )}
 
                               {novoEhTroca && (
