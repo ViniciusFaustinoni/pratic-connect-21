@@ -1879,7 +1879,7 @@ async function getConversationHistory(supabase: any, associadoId: string, telefo
       .from("whatsapp_mensagens")
       .select("direcao, tipo, mensagem, template_id, template_variaveis, media_filename, created_at, message_id")
       .in("telefone", telefonesBusca)
-      .gte("created_at", duasHorasAtras)
+      .gte("created_at", janelaAtras)
       .order("created_at", { ascending: false })
       .limit(20),
   ]);
