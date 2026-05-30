@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     const FIPE_MIN_CARRO = 30000;
     const FIPE_MIN_MOTO = 9000;
     let veiculoSubFipe = false;
-    try {
+    let tipoVeiculoSubFipe: TipoVeiculoSubFipe = 'carro';
       const { data: cfgRows } = await supabase
         .from('configuracoes')
         .select('chave, valor')
