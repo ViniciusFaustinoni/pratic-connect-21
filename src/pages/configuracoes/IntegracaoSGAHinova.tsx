@@ -233,13 +233,16 @@ export default function IntegracaoSGAHinova() {
 
 
       {/* Tabs */}
-      <Tabs defaultValue="queue" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
+          <TabsTrigger value="overview" className="gap-1.5">
+            <BarChart3 className="h-4 w-4" /> Visão Geral
+          </TabsTrigger>
           <TabsTrigger value="queue" className="gap-1.5">
             <List className="h-4 w-4" /> Fila ({queueCounts.total})
           </TabsTrigger>
           <TabsTrigger value="logs" className="gap-1.5">
-            <Activity className="h-4 w-4" /> Logs ({logs.length})
+            <Activity className="h-4 w-4" /> Logs ({filteredLogs.length})
           </TabsTrigger>
           <TabsTrigger value="pending" className="gap-1.5">
             <Send className="h-4 w-4" /> Pendentes ({pendingVehicles.length})
@@ -254,6 +257,12 @@ export default function IntegracaoSGAHinova() {
             <Send className="h-4 w-4" /> Teste Boletos
           </TabsTrigger>
         </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview">
+          <SGAVisaoGeralPorAction onSelectAction={handleSelectAction} />
+        </TabsContent>
+
 
         {/* Queue Tab */}
         <TabsContent value="queue" className="space-y-4">
