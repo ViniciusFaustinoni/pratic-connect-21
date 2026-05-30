@@ -38,7 +38,7 @@ const VistoriaPrestador = lazy(() => import("./pages/public/VistoriaPrestador"))
 const VistoriaPublica = lazy(() => import("./pages/public/VistoriaPublica"));
 const AssumirInstalacaoVistoria = lazy(() => import("./pages/public/AssumirInstalacaoVistoria"));
 const CotacaoPublicaPage = lazy(() => import("./pages/public/CotacaoPublica"));
-const CotacaoPublicaCompleta = lazy(() => import("./pages/public/CotacaoPublicaCompleta"));
+
 const CotacaoContratacao = lazy(() => import("./pages/public/CotacaoContratacao"));
 const AcompanhamentoProposta = lazy(() => import("./pages/public/AcompanhamentoProposta"));
 const TrackingAssistencia = lazy(() => import("./pages/public/TrackingAssistencia"));
@@ -439,7 +439,7 @@ const App = () => (
             {/* Public Quote Page */}
             <Route path="/cotacao/:token" element={<CotacaoContratacao />} />
             <Route path="/cotacao-visualizar/:token" element={<CotacaoPublicaPage />} />
-            <Route path="/q/:token" element={<CotacaoPublicaCompleta />} />
+            
             
             {/* Public Proposal Tracking Page */}
             <Route path="/acompanhar/:token" element={<AcompanhamentoProposta />} />
