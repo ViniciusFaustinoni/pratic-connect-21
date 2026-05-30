@@ -156,6 +156,8 @@ Deno.serve(async (req) => {
       aguardar_instalacao = false,
       cotacao_id = null,
       metadata = {},
+      sga_enqueue,
+
     } = body || ({} as AtivarBody);
 
     if (!associado_id || !source) {
