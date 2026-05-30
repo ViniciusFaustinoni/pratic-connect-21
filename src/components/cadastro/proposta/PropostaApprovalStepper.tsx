@@ -136,10 +136,39 @@ export function PropostaApprovalStepper({
   documentosAprovadosEm = null,
   onAprovarDocumentos,
   isAprovandoDocumentos = false,
+  gatesAtivos = [],
+  contratoId,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
   const cancelarDocsMutation = useCancelarDocumentosSolicitados();
+
+  const gatesSub1 = gatesParaBotao(gatesAtivos, 1);
+  const gatesSub2 = gatesParaBotao(gatesAtivos, 2);
+
+  const tooltipGates = (gs: GateAprovacao[]) =>
+    gs.length === 0 ? null : (
+      <div className="space-y-1.5 max-w-xs">
+        <p className="text-xs font-semibold">Não é possível avançar:</p>
+        <ul className="text-xs space-y-1 list-disc pl-4">
+          {gs.map((g) => (
+            <li key={g.id}>
+              <span className="font-semibold">{g.label}.</span>{' '}
+              <span className="opacity-90">{g.comoDestravar}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+
+  const handleCliqueBloqueado = (subEtapa: 1 | 2, gs: GateAprovacao[]) => {
+    if (!contratoId || gs.length === 0) return;
+    void registrarCliqueBloqueado({
+      contratoId,
+      subEtapa,
+      motivos: gs.map((g) => g.id),
+    });
+  };
 
   // Sub-etapa 1 do Cadastro (aprovação dos documentos) é gate para sub-etapa 2.
   // Ver mem://logic/operations/cadastro-duas-subetapas
