@@ -238,7 +238,28 @@ export function AgendamentoVistoria({
 
     try {
       if (skipMutation) {
-        // Substituição: apenas retorna dados sem chamar edge function
+        // Substituição (locais diferentes): apenas retorna dados sem chamar edge.
+        // Dispara callback rico com payload completo, se fornecido.
+        if (onConfirmarRico) {
+          onConfirmarRico({
+            dataAgendada: dataFormatadaFinal,
+            periodo: periodoSelecionado as 'manha' | 'tarde',
+            endereco: {
+              cep: endereco.cep,
+              logradouro: endereco.logradouro,
+              numero: endereco.numero,
+              bairro: endereco.bairro,
+              cidade: endereco.cidade,
+              estado: endereco.estado,
+            },
+            responsavel: {
+              euMesmo: responsavel === 'eu',
+              nome: responsavel === 'outro' ? nomeResponsavel : undefined,
+              telefone: responsavel === 'outro' ? telefoneResponsavel : undefined,
+            },
+            permiteEncaixe,
+          });
+        }
         onConfirmar(dataFormatadaFinal, periodoSelecionado);
         return;
       }
