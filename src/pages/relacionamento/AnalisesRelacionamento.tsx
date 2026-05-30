@@ -176,6 +176,8 @@ export default function AnalisesRelacionamento() {
       />
     </div>
   );
+}
+
 function UltimoCasoChip() {
   const { data, isLoading } = useUltimaAnaliseRecebida();
 
