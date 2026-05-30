@@ -1,62 +1,77 @@
-# Remover jornada legada `/q/:token` (CotacaoPublicaCompleta)
+# ERRO 09 — Detecção moto/carro duplicada em 4 lugares
 
-## Evidência coletada
+## Diagnóstico atual
 
-| Indicador | Resultado |
-|---|---|
-| Tabela `cotacoes_publicas` (DB) | **0 registros** — nenhum link `/q/` ativo no mundo real |
-| Rota `/q/:token` em App.tsx | Existe (linha 442) — única consumidora da página |
-| Geradores de link `/q/${token}` | 2 pontos vivos: `LeadDetalhe.tsx:177` e `new-lead-flow/SuccessStep.tsx:17` (ambos gravam em `cotacoes_publicas`) |
-| Página `CotacaoPublicaCompleta.tsx` | Importada **só** de App.tsx |
-| Hook `useCotacaoPublica` + `useCriarCotacaoPublica` | Consumidos só por `CotacaoPublicaCompleta`, `LeadDetalhe`, `SuccessStep` e `useNewLeadFlow` |
-| Type `StatusCotacaoPublica` | Usado só dentro de `types/cotacaoPublica.ts` e da página morta |
-| `useCalcularCotacao` | **Compartilhado** com `substituicao/StepFinanceiro.tsx` e `substituicao/StepBeneficios.tsx` → **NÃO deletar** |
-| Tabelas DB associadas | `cotacoes_publicas`, `cotacoes_publicas_historico`, `cotacoes_publicas_fotos` |
+A detecção já está **parcialmente** centralizada no banco: `fn_veiculo_precisa_rastreador(_veiculo_id)` (migration `20260523145659`) usa a sequência canônica **`marcas_modelos.tipo_veiculo` → `configuracoes.marcas_exclusivas_moto` → regex de keywords no modelo**. Edge `aprovar-proposta` já delega a decisão de rastreador a essa RPC e o comentário interno avisa: *"marcas_exclusivas_moto NÃO é mais lida aqui"*.
 
-**Conclusão:** jornada morta. Como `cotacoes_publicas` está vazia, não há cliente em campo dependendo dela. Remoção é segura, sem necessidade de redirect `/q/ → /cotacao/`.
+O problema residual é que **a classificação moto/carro em si** (não só a decisão de rastreador) continua duplicada para os casos em que o veículo ainda **não tem id** (cotação em digitação, link público, autovistoria, calculadora de preço) ou quando o consumidor é frontend puro:
 
-## Escopo da remoção
+| # | Arquivo | O que faz | Fonte |
+|---|---|---|---|
+| 1 | `src/data/vistoriaConfigCompleta.ts` | `MOTO_KEYWORDS` (~70 palavras) + `detectarTipoVeiculo(api, modelo, marca)` | Local |
+| 2 | `src/hooks/useDetectarTipoVeiculo.ts` | Lê `configuracoes.marcas_exclusivas_moto` + cataloga em `marcas_modelos` + fallback keywords | DB parcial |
+| 3 | `src/pages/public/CotacaoContratacao.tsx` | `detectarTipoVeiculoDaCotacao` reusa o de #1 + fallback por `categoria`/`veiculo_categoria` | Local |
+| 4 | `supabase/functions/contrato-gerar/index.ts` | `MOTO_MODEL_KEYWORDS` (subset) + leitura de `marcas_exclusivas_moto` + `MOTO_BRANDS` interno | Híbrido |
+| 5 | `supabase/functions/aprovar-proposta/index.ts` | Já delegou para a RPC, mas ainda tem heurística `tipoVeiculo.includes('moto')` para o snapshot (linha 819) | Misto |
+| – | `src/hooks/useSolicitarVistoriaTecnico.ts`, `CalculadoraPreco.tsx`, `PrestadorInstalacao.tsx`, `VistoriaPrestador.tsx`, `VistoriaPublica.tsx`, `InstaladorChecklist.tsx`, `ExecutarVistoriaCompleta.tsx`, `useAprovacaoMonitoramento.ts`, `PropostaDetalhesTabs.tsx` | Consumidores de `detectarTipoVeiculo` de #1 (síncrono, sem id) | Local |
 
-### Front-end (deletar)
-- `src/pages/public/CotacaoPublicaCompleta.tsx`
-- `src/types/cotacaoPublica.ts`
-- `src/hooks/useCotacaoPublica.ts`
-- Rota e import lazy em `src/App.tsx` (linhas 41 e 442)
+Resultado: para adicionar uma marca como CFMoto/Dafra hoje, o operador precisa editar **`vistoriaConfigCompleta.ts` + `contrato-gerar/index.ts`** e ainda esperar que `configuracoes.marcas_exclusivas_moto` cubra os casos novos.
 
-### Front-end (substituir geradores de link)
-- `LeadDetalhe.tsx`: remover botão "Gerar link de cotação" e todos os handlers/states associados (`criarCotacaoPublica`, `linkCotacao`, `setLinkCopiado`, `handleCopiarLink`, `handleEnviarLinkWhatsApp`, `setLinkCotacao`). O fluxo canônico de gerar link agora é via cotação propriamente dita (`CotacaoFormDialog` + `/cotacao/:token`).
-- `new-lead-flow/SuccessStep.tsx`: remover o bloco de link público `/q/`. A tela de sucesso de novo lead vira **só** "lead criado, agora gere uma cotação para enviar link" — sem auto-gerar `cotacoes_publicas`.
-- `useNewLeadFlow.ts:368`: remover o insert em `cotacoes_publicas` e o retorno de `token`. Ajustar a interface para não emitir mais `token`.
+## Estratégia
 
-### Hooks compartilhados (PRESERVAR)
-- `useCalcularCotacao` — usado por `substituicao/StepFinanceiro` e `StepBeneficios`. **Manter intacto.** É dívida técnica separada (ERRO futuro: `tabelas_preco_mensalidade` em StepFinanceiro/Beneficios), fora do escopo deste ticket.
+Promover a **mesma sequência canônica** (catálogo → marcas exclusivas → keywords) para uma RPC que aceita `(marca, modelo)` em texto — não exige `veiculo_id`. Toda a app passa a consultar essa fonte única; a lista de keywords no frontend vira **só fallback síncrono offline** (link público sem rede, primeira renderização).
 
-### Banco de dados
-Tabelas vazias (0 registros). DROP seguro em migration:
+Não tocar em `fn_veiculo_precisa_rastreador` — ela continua sendo a autoridade quando há `veiculo_id` e já está testada em triggers/edges.
 
-```sql
-DROP TABLE IF EXISTS public.cotacoes_publicas_fotos CASCADE;
-DROP TABLE IF EXISTS public.cotacoes_publicas_historico CASCADE;
-DROP TABLE IF EXISTS public.cotacoes_publicas CASCADE;
-```
+## Mudanças
 
-> Confirmar antes: nenhum trigger/edge function externa as referencia. (Verificarei `supabase/functions` antes da migration; se houver consumidor, ajusto.)
+### 1. Banco — RPC nova `fn_detectar_tipo_veiculo(marca text, modelo text) returns text`
 
-## Validação após remoção
+Migration nova, função `STABLE SECURITY DEFINER`, mesma sequência da `fn_veiculo_precisa_rastreador` (passos 2 + 3a + 3b extraídos), retorna `'moto'` ou `'carro'`. Refatorar `fn_veiculo_precisa_rastreador` para chamar a nova RPC internamente (passo 2/3 viram `IF fn_detectar_tipo_veiculo(v_marca, v_modelo) = 'moto' THEN v_is_moto := true`), preservando comportamento e regex existente.
 
-1. `tsc` limpo (typegen do Supabase regenerado deixará de exportar `cotacoes_publicas*`).
-2. `rg "cotacoes_publicas|StatusCotacaoPublica|CotacaoPublicaCompleta|/q/"` deve voltar vazio.
-3. Fluxo "Novo Lead" funciona até a tela de sucesso sem botão de link (lead salvo no DB).
-4. Tela de detalhe do lead funciona sem botão "Gerar link de cotação".
-5. Vendedor envia link para cliente via `CotacaoFormDialog` → `/cotacao/:token` (caminho canônico já existente).
+`GRANT EXECUTE ON FUNCTION ... TO anon, authenticated, service_role` para o frontend público poder chamar via `supabase.rpc`.
 
-## Fora de escopo
+### 2. Frontend — hook único `useDetectarTipoVeiculo`
 
-- Refatorar `useCalcularCotacao` ou eliminar `tabelas_preco_mensalidade` no fluxo de Substituição (dívida separada já registrada na Core memory).
-- Mudar UX do "Novo Lead" além de remover o link. Discussão sobre encadear `CotacaoFormDialog` a partir do SuccessStep fica para outro ticket — aqui só removemos a jornada morta.
+Reescrever `src/hooks/useDetectarTipoVeiculo.ts` para chamar `supabase.rpc('fn_detectar_tipo_veiculo', { marca, modelo })` quando há marca; manter `staleTime` longo (já tem 10min) por par marca+modelo. Snapshot canônico (`snapshotTipo`) continua vencendo. Fallback síncrono via keywords só quando a RPC falha ou está carregando.
+
+### 3. Frontend — `src/data/vistoriaConfigCompleta.ts`
+
+`MOTO_KEYWORDS` e `detectarTipoVeiculo` ficam, mas com JSDoc `@deprecated FALLBACK SÍNCRONO. Prefira useDetectarTipoVeiculo (consulta DB canônico).` Nenhum import é removido — os consumidores listed na tabela são síncronos por natureza e ficam usando a versão local como fallback aceitável. Em PRs futuras esses sites podem migrar para o hook caso virem assíncronos.
+
+### 4. Edge function `contrato-gerar`
+
+Substituir `MOTO_MODEL_KEYWORDS` + leitura local de `marcas_exclusivas_moto` + `MOTO_BRANDS` por uma chamada `supabaseAdmin.rpc('fn_detectar_tipo_veiculo', { marca, modelo })`. Sanity-check anti-Chevrolet vira parte da RPC (regex extra para marcas "obviamente de carro" — opcional, manter no edge se a regra for sensível a UX).
+
+### 5. Edge function `aprovar-proposta`
+
+A heurística `tipoVeiculo.includes('moto')` da linha 819 (snapshot da autovistoria enxuta) também passa a chamar `fn_detectar_tipo_veiculo` quando `tipoVeiculo` vem nulo/genérico. Resto do arquivo já delega à RPC.
+
+### 6. `CotacaoContratacao.tsx`
+
+`detectarTipoVeiculoDaCotacao` passa a usar `useDetectarTipoVeiculo` (já é React). Preserva fallback por `categoria`/`veiculo_categoria` como `snapshotTipo`.
+
+## Não-objetivos
+
+- Não tocar nas triggers/migrations de `fn_veiculo_precisa_rastreador` além do refactor interno para reusar `fn_detectar_tipo_veiculo`.
+- Não remover `MOTO_KEYWORDS` do frontend — vira fallback marcado como deprecated.
+- Não tocar nos consumidores síncronos legados (`InstaladorChecklist`, `VistoriaPublica`, etc.) que já são robustos para o uso atual; migrações pontuais quando alguém mexer na tela.
+- Não criar tabela `marcas_moto` nova — `configuracoes.marcas_exclusivas_moto` + `marcas_modelos.tipo_veiculo` já cobrem.
+
+## Validação
+
+1. Migration aplicada; `psql` confirma `SELECT fn_detectar_tipo_veiculo('Honda','CG 160')` = `moto` e `('Chevrolet','Onix')` = `carro`.
+2. `SELECT fn_veiculo_precisa_rastreador(<id_moto_fipe_8k>)` = `false`, `<id_moto_fipe_12k>` = `true` (paridade com antes).
+3. `contrato-gerar` e `aprovar-proposta` sem regressão nos casos de teste existentes (`Marllon KRF8B74`, `ANDERSON/SRZ2E82`).
+4. `rg "MOTO_KEYWORDS|MOTO_MODEL_KEYWORDS"` mostra só `vistoriaConfigCompleta.ts` (com banner deprecated) e zero ocorrências em `supabase/functions/`.
+5. Hook `useDetectarTipoVeiculo` continua retornando síncronamente para `snapshotTipo` (sem regressão de loading flicker).
+
+## Memória
+
+Atualizar Core memory para apontar `fn_detectar_tipo_veiculo` como fonte canônica (revisar a entrada `[Vehicle detection]` em `mem://logic/operations/vehicle-type-detection-source`).
 
 ## Risco
 
-Baixo. `cotacoes_publicas` zerado em produção = nenhum cliente em fluxo. Único risco residual: edge function ou cron escondida que escreve em `cotacoes_publicas`. Verifico em `supabase/functions/` antes de rodar a migration; se houver, abro decisão.
+Médio. A RPC nova herda regex/keywords já em produção via `fn_veiculo_precisa_rastreador`, então o blast radius do refactor é controlado. Risco principal: latência extra no `contrato-gerar` (uma RPC a mais). Mitigado por cache de `marcas_modelos.tipo_veiculo` (lookup direto) e regex local na própria RPC.
 
 Aprovado para executar?

@@ -816,13 +816,25 @@ serve(async (req) => {
               // (2 fotos motor+chassi + vídeo 360°) acima da FIPE mínima.
               // Roteiro completo (31/15) é sub-FIPE → Monitoramento decide R/F,
               // NÃO o Cadastro. Memória: mem://logic/operations/cadastro-escopo-canonico
-              const isMotoVeic = (tipoVeiculo || '').toLowerCase().includes('moto');
+              // Detecção moto/carro via RPC canônica fn_detectar_tipo_veiculo
+              // (mesma fonte usada por fn_veiculo_precisa_rastreador).
+              let isMotoVeic = false;
+              try {
+                const { data: tipoDet } = await supabase.rpc('fn_detectar_tipo_veiculo', {
+                  _marca: (veiculo as any).marca || '',
+                  _modelo: veiculo.modelo || '',
+                });
+                isMotoVeic = tipoDet === 'moto';
+              } catch (e) {
+                console.warn('[aprovar-proposta] fn_detectar_tipo_veiculo falhou, assumindo carro:', e);
+              }
               const minCompleta = isMotoVeic ? 15 : 31;
               const temFotosEnxuta =
                 (nFotos ?? 0) >= 2 &&
                 (nFotos ?? 0) < minCompleta &&
                 temVideo360;
               const temFotosLegado = false; // Desativado por regra canônica.
+
 
               if (temFotosEnxuta || temFotosLegado) {
                 await supabase

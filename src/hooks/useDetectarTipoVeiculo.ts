@@ -5,97 +5,63 @@ import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 type TipoVeiculoResult = 'carro' | 'moto';
 
 /**
- * Detecção dinâmica de tipo de veículo em 3 regras:
- * 1. Marca exclusiva de moto (config `marcas_exclusivas_moto` da tabela `configuracoes`)
- * 2. Marca mista (Honda, Yamaha etc.) → consulta `marcas_modelos` por categoria
- * 3. Fallback síncrono via MOTO_KEYWORDS
+ * Detecção canônica de tipo de veículo (carro|moto).
+ *
+ * Fonte da verdade: RPC `fn_detectar_tipo_veiculo(marca, modelo)` no banco —
+ * mesma sequência usada por `fn_veiculo_precisa_rastreador` e pela edge
+ * `contrato-gerar` (catálogo `marcas_modelos.tipo_veiculo` →
+ * `configuracoes.marcas_exclusivas_moto` → regex de keywords).
+ *
+ * Ordem de prioridade:
+ *  1. `snapshotTipo` (cotacoes.tipo_veiculo / contratos.tipo_veiculo) — vence.
+ *  2. Tipo explícito da API de placa (`tipoVeiculoApi`).
+ *  3. RPC canônica (cacheada por 10min/par marca+modelo).
+ *  4. Fallback síncrono `detectarTipoVeiculo` (keywords locais) enquanto a
+ *     RPC carrega ou falha.
  */
 export function useDetectarTipoVeiculo(
   marca: string | undefined | null,
   modelo: string | undefined | null,
   tipoVeiculoApi?: string | null,
-  /**
-   * Snapshot canônico (cotacoes.tipo_veiculo / contratos.tipo_veiculo). Quando
-   * presente, vence sobre todas as heurísticas. Ver
-   * `mem://logic/operations/vehicle-type-detection-source`.
-   */
-  snapshotTipo?: 'carro' | 'moto' | null
+  snapshotTipo?: 'carro' | 'moto' | null,
 ) {
-  const marcaNorm = (marca || '').trim().toUpperCase();
-  const modeloNorm = (modelo || '').trim().toUpperCase();
+  const marcaNorm = (marca || '').trim();
+  const modeloNorm = (modelo || '').trim();
 
-  const { data: tipoFromDb, isLoading } = useQuery({
-    queryKey: ['detectar-tipo-veiculo', marcaNorm, modeloNorm, snapshotTipo ?? null],
+  const { data: tipoFromRpc, isLoading } = useQuery({
+    queryKey: ['fn_detectar_tipo_veiculo', marcaNorm.toUpperCase(), modeloNorm.toUpperCase()],
     queryFn: async (): Promise<TipoVeiculoResult | null> => {
-      // Snapshot canônico sempre vence.
-      if (snapshotTipo === 'moto' || snapshotTipo === 'carro') return snapshotTipo;
-      if (!marcaNorm) return null;
-
-      // ── Regra 1: Marcas exclusivas de moto (tabela configuracoes) ──
-      const { data: configData } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'marcas_exclusivas_moto')
-        .maybeSingle();
-
-      if (configData?.valor) {
-        try {
-          let marcasList: string[] = [];
-          const raw = configData.valor.trim();
-          if (raw.startsWith('[')) {
-            marcasList = JSON.parse(raw).map((m: string) => m.toUpperCase().trim());
-          } else {
-            marcasList = raw.split(',').map((m: string) => m.toUpperCase().trim());
-          }
-
-          if (marcasList.some(m => marcaNorm === m)) {
-            return 'moto';
-          }
-        } catch {
-          // Ignora parse error, segue para regra 2
-        }
+      if (!marcaNorm && !modeloNorm) return null;
+      const { data, error } = await supabase.rpc('fn_detectar_tipo_veiculo', {
+        _marca: marcaNorm,
+        _modelo: modeloNorm,
+      });
+      if (error) {
+        console.warn('[useDetectarTipoVeiculo] RPC falhou, caindo em fallback síncrono', error);
+        return null;
       }
-
-      // ── Regra 2: Consulta marcas_modelos ──
-      // Se a marca existe apenas com modelos de moto na tabela marcas_modelos, é moto
-      if (modeloNorm) {
-        // Buscar modelos que contenham o primeiro token do modelo
-        const firstToken = modeloNorm.split(' ')[0];
-        const { data } = await supabase
-          .from('marcas_modelos')
-          .select('modelo')
-          .ilike('marca', marcaNorm)
-          .ilike('modelo', `%${firstToken}%`)
-          .eq('ativo', true)
-          .limit(5);
-
-        // Se encontrou na marcas_modelos, o veículo existe no catálogo
-        // A detecção de moto depende das marcas exclusivas (regra 1) e keywords (regra 3)
-        if (data && data.length > 0) {
-          // Marca está no catálogo com esse modelo — não é conclusivo para moto
-          // Segue para fallback
-        }
-      }
-
-      // Regra 2b: Só marca, sem modelo — se a marca está SOMENTE em configuracoes marcas_exclusivas_moto
-      // Já tratado na regra 1. Fallback abaixo.
-
-      return null;
+      return data === 'moto' ? 'moto' : 'carro';
     },
-    enabled: !!marcaNorm || snapshotTipo === 'moto' || snapshotTipo === 'carro',
+    enabled: !snapshotTipo && (!!marcaNorm || !!modeloNorm),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
   });
 
-  // Regra 3: Fallback síncrono por keywords (último recurso)
   const tipoVeiculo: TipoVeiculoResult = (() => {
-    if (tipoFromDb) return tipoFromDb;
-    // Prioridade: tipo explícito da API de placa
+    // 1) Snapshot canônico sempre vence.
+    if (snapshotTipo === 'moto' || snapshotTipo === 'carro') return snapshotTipo;
+
+    // 2) Tipo explícito da API de placa.
     if (tipoVeiculoApi) {
       const apiNorm = tipoVeiculoApi.toUpperCase();
       if (apiNorm.includes('MOTO') || apiNorm.includes('CICLO') || apiNorm.includes('TRICICLO')) return 'moto';
       if (apiNorm.includes('AUTO') || apiNorm.includes('CAMION') || apiNorm.includes('UTILITARIO')) return 'carro';
     }
+
+    // 3) RPC canônica.
+    if (tipoFromRpc) return tipoFromRpc;
+
+    // 4) Fallback síncrono (sem rede / antes da RPC resolver).
     if (!marca && !modelo) return 'carro';
     const tipo = detectarTipoVeiculo(undefined, modelo, marca);
     return tipo === 'moto' ? 'moto' : 'carro';
@@ -105,11 +71,12 @@ export function useDetectarTipoVeiculo(
 }
 
 /**
- * Versão para cotação pública usando publicSupabase.
+ * Versão para cotação pública. A RPC `fn_detectar_tipo_veiculo` é GRANTed
+ * para `anon`, então o cliente público funciona sem mudanças.
  */
 export function useDetectarTipoVeiculoPublico(
   marca: string | undefined | null,
-  modelo: string | undefined | null
+  modelo: string | undefined | null,
 ) {
   return useDetectarTipoVeiculo(marca, modelo);
 }

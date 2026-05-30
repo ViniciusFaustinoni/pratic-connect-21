@@ -885,6 +885,16 @@ const MOTO_REGEX = new RegExp(
   'i'
 );
 
+/**
+ * @deprecated FALLBACK SÍNCRONO. Use `useDetectarTipoVeiculo` para a fonte
+ * canônica (RPC `fn_detectar_tipo_veiculo` no banco, que reusa
+ * `marcas_modelos.tipo_veiculo` + `configuracoes.marcas_exclusivas_moto`).
+ *
+ * Esta função permanece para casos verdadeiramente síncronos (offline,
+ * primeira renderização, helpers fora de componente React) — adicionar uma
+ * nova marca/keyword AQUI sem replicar no banco causará divergência entre
+ * frontend e edge functions.
+ */
 export function detectarTipoVeiculo(
   tipoVeiculoStr?: string | null,
   modelo?: string | null,
@@ -896,6 +906,7 @@ export function detectarTipoVeiculo(
    */
   tipoSnapshot?: 'carro' | 'moto' | null
 ): TipoVeiculo {
+
   if (tipoSnapshot === 'moto') return 'moto';
   if (tipoSnapshot === 'carro') return 'automovel';
 
