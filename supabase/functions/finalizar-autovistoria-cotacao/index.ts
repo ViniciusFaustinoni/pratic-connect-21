@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import { checarCompletudeAutovistoriaSubFipe, type TipoVeiculoSubFipe } from '../_shared/fotosVistoriaSubFipe.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,7 +47,7 @@ Deno.serve(async (req) => {
     // 1. Cotação
     const { data: cotacao, error: errCot } = await supabase
       .from('cotacoes')
-      .select('id, numero, nome_solicitante, telefone1_solicitante, tipo_vistoria, veiculo_placa, veiculo_chassi, km_atual, status_contratacao, vistoria_concluida_em')
+      .select('id, numero, nome_solicitante, telefone1_solicitante, tipo_vistoria, veiculo_placa, veiculo_chassi, veiculo_marca, veiculo_modelo, veiculo_combustivel, valor_fipe, tipo_veiculo, km_atual, status_contratacao, vistoria_concluida_em')
       .eq('id', cotacaoId)
       .maybeSingle();
 
@@ -61,6 +62,7 @@ Deno.serve(async (req) => {
     const FIPE_MIN_CARRO = 30000;
     const FIPE_MIN_MOTO = 9000;
     let veiculoSubFipe = false;
+    let tipoVeiculoSubFipe: TipoVeiculoSubFipe = 'carro';
     try {
       const { data: cfgRows } = await supabase
         .from('configuracoes')
@@ -120,7 +122,23 @@ Deno.serve(async (req) => {
           if (fipe > 0) {
             veiculoSubFipe = isMoto ? fipe < fipeMinMoto : fipe < fipeMinCarro;
           }
+          tipoVeiculoSubFipe = isMoto ? 'moto' : 'carro';
           console.log(`[finalizar-autovistoria] cotacao=${cotacao.numero} marca="${marca}" modelo="${modelo}" isMoto=${isMoto} fipe=${fipe} subFipe=${veiculoSubFipe}`);
+        }
+      }
+
+      // FALLBACK canônico: quando não há row em `veiculos` (cotação órfã pré-contrato),
+      // resolve sub-FIPE por `cotacoes.tipo_veiculo` + `cotacoes.valor_fipe` +
+      // `cotacoes.veiculo_combustivel`. Sem isso o gate jamais dispara nessas cotações.
+      if (!veicRow) {
+        const fipeCot = Number((cotacao as any).valor_fipe || 0);
+        const combCot = String((cotacao as any).veiculo_combustivel || '').toLowerCase();
+        const tipoCot = String((cotacao as any).tipo_veiculo || '').toLowerCase();
+        if (fipeCot > 0 && combCot !== 'diesel' && (tipoCot === 'carro' || tipoCot === 'moto')) {
+          const isMoto = tipoCot === 'moto';
+          veiculoSubFipe = isMoto ? fipeCot < fipeMinMoto : fipeCot < fipeMinCarro;
+          tipoVeiculoSubFipe = isMoto ? 'moto' : 'carro';
+          console.log(`[finalizar-autovistoria] (fallback cotacoes) cotacao=${cotacao.numero} tipo=${tipoCot} fipe=${fipeCot} subFipe=${veiculoSubFipe}`);
         }
       }
     } catch (e) {
@@ -163,6 +181,35 @@ Deno.serve(async (req) => {
     const fotosArr = fotos ?? [];
     const videoFoto = fotosArr.find((f) => f.tipo === 'video_360' || f.tipo === 'video');
     const videoUrl = videoFoto?.arquivo_url ?? null;
+
+    // 4.b GATE sub-FIPE: bloqueia finalização se o set canônico estiver incompleto.
+    // Só roda na PRIMEIRA finalização (sem vistoria existente). Idempotência preservada:
+    // re-chamada após sucesso passa pelo branch `vistoriaExistente`.
+    if (veiculoSubFipe && !vistoriaExistente) {
+      const completude = checarCompletudeAutovistoriaSubFipe({
+        tipo: tipoVeiculoSubFipe,
+        fotosEnviadas: fotosArr.map((f) => f.tipo),
+      });
+      if (!completude.ok) {
+        console.warn('[finalizar-autovistoria] sub-FIPE incompleta', {
+          cotacaoId,
+          tipo: tipoVeiculoSubFipe,
+          faltantes: completude.obrigatoriasFaltantes,
+          videoFaltante: completude.videoFaltante,
+          recebidas: completude.recebidas,
+        });
+        return jsonResponse({
+          success: false,
+          code: 'AUTOVISTORIA_INCOMPLETA',
+          error: 'Autovistoria sub-FIPE incompleta — faltam fotos obrigatórias ou vídeo 360°.',
+          tipoVeiculo: tipoVeiculoSubFipe,
+          faltantes: completude.obrigatoriasFaltantes,
+          videoFaltante: completude.videoFaltante,
+          esperadasMin: completude.esperadasMin,
+          recebidas: completude.recebidas,
+        }, 409);
+      }
+    }
 
     let vistoriaId = vistoriaExistente?.id ?? null;
     let createdVistoria = false;

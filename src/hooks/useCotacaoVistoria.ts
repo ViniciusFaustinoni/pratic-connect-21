@@ -225,10 +225,23 @@ export function useUploadFotoCotacaoVistoria() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', variables.cotacaoId] });
     },
-    onError: (err) => {
+    onError: (err, variables) => {
       // VideoUploadError já mostrou toast específico — evita duplicar.
       if (!(err instanceof VideoUploadError)) {
         toast.error('Erro ao enviar arquivo');
+      }
+      // Auditoria: gravar tentativa falha em logs_auditoria (anon via publicSupabase).
+      // Respeita CHECK de 38 valores: usa acao='criar' + descricao prefixada rastreável.
+      try {
+        const mensagem = err instanceof Error ? err.message : String(err);
+        void publicSupabase.from('logs_auditoria').insert({
+          acao: 'criar',
+          entidade: 'cotacoes_vistoria_fotos',
+          entidade_id: variables?.cotacaoId ?? null,
+          descricao: `[autovistoria_upload_falhou] cotacao=${variables?.cotacaoId} foto=${variables?.fotoId} size=${variables?.file?.size ?? 0} mime=${variables?.file?.type ?? ''} erro=${mensagem.slice(0, 200)}`,
+        });
+      } catch (_) {
+        // Nunca quebrar fluxo por falha no log.
       }
     }
   });
