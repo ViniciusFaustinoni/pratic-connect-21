@@ -436,68 +436,18 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
               <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
               Consultar SGA novamente
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
-              <KeyRound className="h-4 w-4 mr-2" />
-              Ignorar e Prosseguir
-            </Button>
+            {podeBypass && (
+              <Button size="sm" variant="outline" onClick={() => abrirBypass('inadimplente')}>
+                <KeyRound className="h-4 w-4 mr-2" />
+                Ignorar e Prosseguir
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Bypass de inadimplência (auditado)</DialogTitle>
-            <DialogDescription>
-              Esta ação será registrada com seu nome e ficará disponível na auditoria SGA.
-              Descreva o motivo da liberação manual.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={motivo}
-            onChange={(e) => setMotivo(e.target.value)}
-            placeholder="Ex.: pagamento confirmado por cópia de comprovante anexado…"
-            rows={4}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBypassOpen(false)}>Cancelar</Button>
-            <Button
-              disabled={motivo.trim().length < 5 || bypass.isPending}
-              onClick={() =>
-                bypass.mutate(motivo.trim(), {
-                  onSuccess: async () => {
-                    // Registrar também em cotacao_avisos_sga para o histórico ir pro SGA
-                    try {
-                      await registrarAviso.mutateAsync({
-                        tipo: 'cadastro_situacao_financeira_pendente',
-                        titulo: 'Bypass de inadimplência no Cadastro',
-                        mensagem: `Saldo devedor ${data?.check?.saldo_devedor ?? 0} (${data?.check?.qtd_boletos_abertos ?? 0} boleto(s)).`,
-                        decisao: 'ignorado_prosseguiu',
-                        motivo: motivo.trim(),
-                        contrato_id: contratoId ?? null,
-                        cpf: data?.check?.cpf ?? null,
-                        detalhes: {
-                          saldo_devedor: data?.check?.saldo_devedor,
-                          qtd_boletos_abertos: data?.check?.qtd_boletos_abertos,
-                          solicitacao_troca_id: solicitacaoTrocaId ?? null,
-                        },
-                      });
-                    } catch (e) {
-                      console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
-                    }
-                    toast.success('Bypass registrado — análise liberada');
-                    setBypassOpen(false);
-                    setMotivo('');
-                  },
-                  onError: (e: any) => toast.error(e?.message || 'Falha ao registrar bypass'),
-                })
-              }
-            >
-              Confirmar bypass
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {bypassDialog}
     </>
   );
 }
+
