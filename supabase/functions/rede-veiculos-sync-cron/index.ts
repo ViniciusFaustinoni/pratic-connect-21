@@ -22,17 +22,29 @@ serve(async (req) => {
   console.log("[rede-veiculos-sync-cron] start");
 
   try {
-    // Pega associados ativos com pelo menos um veículo vinculado na Rede.
+    // Pega veículos vinculados à Rede, priorizando os mais antigos em updated_at.
+    // Ordenação determinística garante que TODOS os associados vinculados sejam alcançados
+    // ao longo dos ciclos (antes ficava preso nos primeiros 50 sem ordem).
     const { data: veiculos, error } = await supabase
       .from("veiculos")
-      .select("associado_id")
+      .select("associado_id, updated_at")
       .not("rede_veiculos_veiculo_id", "is", null)
       .not("associado_id", "is", null)
+      .order("updated_at", { ascending: true, nullsFirst: true })
       .limit(2000);
 
     if (error) throw error;
 
-    const uniqueAssociados = Array.from(new Set((veiculos ?? []).map((v: any) => v.associado_id))).slice(0, 50);
+    // Dedup mantendo o mais antigo de cada associado e processa até 200 por ciclo.
+    const seen = new Set<string>();
+    const uniqueAssociados: string[] = [];
+    for (const v of (veiculos ?? []) as Array<{ associado_id: string }>) {
+      if (!seen.has(v.associado_id)) {
+        seen.add(v.associado_id);
+        uniqueAssociados.push(v.associado_id);
+        if (uniqueAssociados.length >= 200) break;
+      }
+    }
 
     console.log(`[rede-veiculos-sync-cron] processando ${uniqueAssociados.length} associados`);
 

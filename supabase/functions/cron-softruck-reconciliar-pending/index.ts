@@ -57,8 +57,34 @@ serve(async (req) => {
       const isPlaceholder = !!r.plataforma_device_id && /^\d{14,17}$/.test(r.plataforma_device_id) && r.plataforma_device_id === imei;
 
       try {
+        // ============ PROBE INVERSO OBRIGATÓRIO ============
+        // Antes de re-vincular qualquer coisa, conferir o estado remoto.
+        // Se o device existe na Softruck SEM vehicle e localmente está com veiculo_id,
+        // é um desvínculo manual no painel — refletir local e PULAR a re-ativação.
+        const probeRes = await fetch(`${supabaseUrl}/functions/v1/softruck-reconciliar-pending`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ rastreador_id: r.id }),
+        });
+        const probeBody = await probeRes.json().catch(() => ({}));
+
+        // softruck-reconciliar-pending já cobre: desvínculo remoto (auto_desvinculo_remoto),
+        // já reconciliado (already_reconciled), e fechamento canônico do UPDATE final (applied:true).
+        if (probeBody?.action === "auto_desvinculo_remoto") {
+          resumo.push({ rastreador_id: r.id, imei, via: "probe-inverso", desvinculo_remoto: true, ok: true });
+          continue; // NÃO chama ativar — seria re-vinculação indevida
+        }
+        if (probeBody?.applied === true) {
+          resumo.push({ rastreador_id: r.id, imei, via: "reconciliar-pending", ok: true, status: probeRes.status });
+          continue;
+        }
+
+        // Caminhos onde reconciliar-pending não fechou: device não existe, placa divergente, etc.
+        // Aí sim cai no fluxo de ativação canônico (placeholder/sem device_id) ou tenta de novo.
         if (isPlaceholder || !r.plataforma_device_id) {
-          // Re-ativar pelo caminho canônico (já reseta placeholder internamente)
           const res = await fetch(`${supabaseUrl}/functions/v1/softruck-ativar-dispositivo`, {
             method: "POST",
             headers: {
@@ -75,17 +101,8 @@ serve(async (req) => {
           const body = await res.json().catch(() => ({}));
           resumo.push({ rastreador_id: r.id, imei, via: "ativar-dispositivo", ok: res.ok, status: res.status, body });
         } else {
-          // Tem device_id real Softruck e veiculo_id real — fechar UPDATE final
-          const res = await fetch(`${supabaseUrl}/functions/v1/softruck-reconciliar-pending`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${serviceKey}`,
-            },
-            body: JSON.stringify({ rastreador_id: r.id }),
-          });
-          const body = await res.json().catch(() => ({}));
-          resumo.push({ rastreador_id: r.id, imei, via: "reconciliar-pending", ok: res.ok, status: res.status, body });
+          // probe já tentou, devolveu não-applied + não-desvínculo (ex.: placa_divergente / device_nao_existe)
+          resumo.push({ rastreador_id: r.id, imei, via: "reconciliar-pending", ok: false, status: probeRes.status, body: probeBody });
         }
 
         // Após o ciclo: se ainda PENDING e já bateu o limite de tentativas, promover
@@ -113,6 +130,47 @@ serve(async (req) => {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(`[cron-softruck-reconciliar-pending] erro rastreador ${r.id}:`, msg);
         resumo.push({ rastreador_id: r.id, imei, error: msg });
+      }
+    }
+
+    // ============ SEGUNDO LOTE: PROBE INVERSO EM SUCCESS ANTIGOS ============
+    // Cobre o gap "rastreador SUCCESS desvinculado no painel sem webhook DISASSOCIATED".
+    // Lote pequeno por execução, ordenado pelos mais antigos — varre toda a base em alguns dias.
+    const sucessoCorte = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // só toca quem não foi olhado há > 1h
+    const { data: instaladosSuccess } = await supabase
+      .from("rastreadores")
+      .select("id, imei, veiculo_id, status, softruck_integration_status, updated_at")
+      .eq("plataforma", "softruck")
+      .eq("status", "instalado")
+      .eq("softruck_integration_status", "SUCCESS")
+      .not("veiculo_id", "is", null)
+      .lt("updated_at", sucessoCorte)
+      .order("updated_at", { ascending: true, nullsFirst: true })
+      .limit(15);
+
+    for (const r of instaladosSuccess || []) {
+      try {
+        const probeRes = await fetch(`${supabaseUrl}/functions/v1/softruck-reconciliar-pending`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ rastreador_id: r.id }),
+        });
+        const probeBody = await probeRes.json().catch(() => ({}));
+
+        if (probeBody?.action === "auto_desvinculo_remoto") {
+          resumo.push({ rastreador_id: r.id, imei: r.imei, lote: "success_sweep", desvinculo_remoto: true });
+        } else if (probeBody?.reason === "already_reconciled") {
+          // toca updated_at pra sair do topo da fila do próximo ciclo
+          await supabase.from("rastreadores").update({ updated_at: new Date().toISOString() }).eq("id", r.id);
+        } else {
+          resumo.push({ rastreador_id: r.id, imei: r.imei, lote: "success_sweep", probe: probeBody });
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        resumo.push({ rastreador_id: r.id, imei: r.imei, lote: "success_sweep", error: msg });
       }
     }
 

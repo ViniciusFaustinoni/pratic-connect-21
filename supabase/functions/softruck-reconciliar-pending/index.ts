@@ -174,11 +174,88 @@ serve(async (req) => {
       || null;
 
     if (!remoteVehicleId) {
+      // === AUTO-DESVÍNCULO REVERSO ===
+      // Device existe na Softruck mas vehicle vazio = desvínculo manual no painel da plataforma.
+      // Refletir localmente em vez de re-vincular. Mesma rotina canônica de rastreador-reconciliar-softruck.
+      if (dry_run) {
+        return new Response(JSON.stringify({
+          applied: false, dry_run: true, reason: "device_sem_vehicle_reverse_unbind",
+          message: "Device existe na Softruck SEM veículo associado — desvínculo remoto detectado. Aplicaria desvínculo local.",
+          device_id: remoteDeviceId,
+          local: { veiculo_id: rast.veiculo_id, placa: veic.placa },
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const reverseAt = new Date().toISOString();
+      const veiculoIdAnterior = rast.veiculo_id;
+      const placaAnterior = veic.placa;
+      const statusAnterior = rast.status;
+
+      // Zera o softruck_vehicle_id no veículo (se estava setado)
+      if (veic.softruck_vehicle_id) {
+        await supabase.from("veiculos")
+          .update({ softruck_vehicle_id: null })
+          .eq("id", veiculoIdAnterior);
+      }
+
+      // Desvincula rastreador localmente
+      const { error: upDesvErr } = await supabase
+        .from("rastreadores")
+        .update({
+          veiculo_id: null,
+          plataforma_veiculo_id: null,
+          status: "estoque",
+          softruck_integration_status: "RECONCILIADO_REMOTO",
+          softruck_last_attempt_at: reverseAt,
+          softruck_response_raw: {
+            auto_desvinculo_remoto: true,
+            source: "softruck-reconciliar-pending",
+            detected_at: reverseAt,
+            invoker: isService ? "service" : invokerId,
+            veiculo_id_anterior: veiculoIdAnterior,
+            placa_anterior: placaAnterior,
+            remote: { device_id: remoteDeviceId, vehicle: null },
+          },
+          updated_at: reverseAt,
+        })
+        .eq("id", rast.id);
+      if (upDesvErr) throw new Error(`auto-desvínculo update rastreadores: ${upDesvErr.message}`);
+
+      // Histórico canônico
+      await supabase.from("rastreadores_vinculo_historico").insert({
+        rastreador_id: rast.id,
+        veiculo_id_anterior: veiculoIdAnterior,
+        veiculo_id_novo: null,
+        status_anterior: statusAnterior,
+        status_novo: "estoque",
+        placa_anterior: placaAnterior,
+        placa_nova: null,
+        alterado_por: invokerId,
+        alterado_por_nome: isService ? "cron/service" : null,
+        origem: "auto_desvinculo_remoto_softruck",
+        contexto: { softruck_device_id: remoteDeviceId, source: "softruck-reconciliar-pending" },
+      });
+
+      // Log API
+      await supabase.from("rastreadores_api_logs").insert({
+        rastreador_id: rast.id,
+        veiculo_id: veiculoIdAnterior,
+        plataforma: "softruck",
+        operacao: "AUTO_DESVINCULO_REMOTO",
+        request: { rastreador_id, imei, invoker: isService ? "service" : invokerId },
+        response: { device_id: remoteDeviceId, vehicle: null, applied: true },
+        status: "sucesso",
+      });
+
       return new Response(JSON.stringify({
-        applied: false, reason: "device_sem_vehicle",
-        message: "Device existe na Softruck mas não tem veículo associado. Use rastreador-reconciliar-softruck (desvínculo) ou refaça a ativação.",
+        applied: true,
+        action: "auto_desvinculo_remoto",
+        reason: "device_sem_vehicle",
+        rastreador_id: rast.id,
+        veiculo_id_anterior: veiculoIdAnterior,
+        placa_anterior: placaAnterior,
         device_id: remoteDeviceId,
-      }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Comparar placas (normalizando)
