@@ -1,55 +1,51 @@
 ## Objetivo
 
-No modal **Substituição de Placa**, exigir também a placa do **veículo novo** e consultar o SGA. Se a placa nova **existir no SGA**, bloquear a substituição e oferecer um botão para abrir automaticamente o modal de **Troca de Titularidade** (com o associado anterior já resolvido a partir da placa antiga).
+Depois que a cotação de Substituição é gerada (via `CotacaoFormDialog` com `origemSubstituicao`), o link público já segue o caminho canônico (plano → termo Autentique → autovistoria/agendamento → pagamento). A única diferença em relação a uma cotação comum é **na hora do agendamento**:
 
-Regra: substituição só é permitida quando o veículo novo **não está** no SGA.
+- Hoje: cria 1 serviço (instalação do veículo novo).
+- Alvo: criar **2 serviços de campo** no mesmo agendamento_base:
+  1. `instalacao` para o **veículo novo** (fluxo idêntico ao atual).
+  2. `vistoria_retirada` para o **veículo antigo** (retirada do rastreador).
 
-## Mudanças (somente UI/orquestração — sem backend novo)
+O resto (fila de Monitoramento, aprovação administrativa, conclusão da instalação) permanece igual — o serviço de retirada já é um tipo existente (`vistoria_retirada`, com edges `concluir-retirada` / `processar-pos-retirada` em produção).
 
-### 1. `src/components/vendas/OutrasEntradasMenu.tsx`
+## Mudanças
 
-**a) Novo estado**
-- `placaNova: string` + `setPlacaNova`
-- Resetar junto com os demais no `useEffect` de fechamento.
+### 1. `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
 
-**b) Consulta SGA da placa nova**
-- Reusar o hook existente `useSgaVeiculoAssociado(placaNova, isSubstituicao && !!selectedAssociadoId)`.
-- Já retorna `{ encontrado, veiculo, associado, erro_transitorio }` — não criar edge nova.
+Após materializar a instalação + serviço `instalacao` do veículo novo, detectar substituição e enfileirar a retirada do antigo:
 
-**c) UI dentro do bloco `selectedAssociadoId` da Substituição (após o snapshot SGA do veículo antigo, antes do botão "Prosseguir")**
-- Input: "Placa do veículo novo…" (uppercase, regex placa Mercosul/antiga aplicada).
-- Estados visuais:
-  - Digitando / placa incompleta → hint cinza.
-  - `isLoading` → spinner "Consultando SGA…".
-  - `erro_transitorio` → alerta âmbar (reusa `SgaTransientAlert`).
-  - **`encontrado === true`** → Alert destacado:
-    > "Este veículo já pertence a outro associado no SGA — não é uma substituição. Use **Troca de Titularidade**."
-    + amostra curta (placa, marca/modelo SGA, nome do associado SGA).
-    + Botão **"Prosseguir com Troca de Titularidade"** (variant default).
-  - **`encontrado === false`** → check verde "Veículo novo não cadastrado no SGA — apto a substituição".
+- Ler `cotacoes.dados_extras.solicitacao_substituicao_id` (e/ou `tipo_entrada='substituicao_placa'`).
+- Carregar `solicitacoes_substituicao_placa` → obter `veiculo_antigo_id`, `associado_id`, snapshot da placa antiga.
+- Criar 1 serviço extra:
+  - `tipo='vistoria_retirada'`
+  - `veiculo_id = veiculo_antigo_id`
+  - `associado_id`, `contrato_id` (antigo, se houver), `cotacao_id` (a nova)
+  - `agendamento_base_id` = mesmo da instalação (mesma visita do técnico)
+  - `status='agendada'`, `data_agendamento` = mesma da instalação
+  - `origem='substituicao_placa'`, `instalacao_origem_id`/`vistoria_origem_id` nulos
+- Idempotência: checar se já existe `servicos` `vistoria_retirada` ativo para `(veiculo_antigo_id, agendamento_base_id)` antes de inserir (mesmo padrão da instalação).
+- Logging via `insertAuditLog` com `acao='criar'` e descrição `[substituicao] serviço de retirada criado`.
 
-**d) Habilitação do botão "Prosseguir — Cotar novo veículo"**
-- Só habilita quando: `placaNova` válida + consulta concluída + `!encontrado` + `!erro_transitorio`.
+### 2. UI — sem mudanças estruturais
 
-**e) Handler `handleProsseguirComoTroca`** (quando SGA novo retorna `encontrado`)
-1. Pega o associado anterior (dono do veículo antigo) — já temos `selectedAssociadoId` (codigo SGA), `selectedAssociadoNome`, `selectedAssociadoCpf` vindos de `handleSelectPlaca`.
-2. Importa o associado anterior do SGA para obter o UUID local: `supabase.functions.invoke('importar-associado-sga', { body: { cpf: selectedAssociadoCpf } })` — mesmo caminho já usado em `handleSelectAssociado` para troca (linhas 307–337). Tratamento de erro idêntico.
-3. Substitui `selectedAssociadoId` pelo UUID local retornado, seta `selectedCodigoHinova`.
-4. `setShowTrocaTitularidade(true)` + `setTimeout(() => onOpenChange(false), 0)` (mesmo padrão da linha 348–351, evita race com reset do `useEffect`).
-5. `TrocaTitularidadeDialog` abre normalmente com o associado anterior já carregado.
+- Fila Serviços de Campo, Atribuição Manual, Monitoramento e link do prestador já tratam `vistoria_retirada` (já que retirada avulsa existe). Apenas verificar visualmente após o build que os 2 serviços aparecem como itens distintos do mesmo agendamento.
+- `useServicosCampoUnificado` agrupa por (associado+veiculo); retirada ficará num grupo separado (veículo antigo), instalação no grupo do veículo novo — comportamento desejado.
 
-**f) Reset**
-- Quando o usuário muda a placa nova, limpar mensagens anteriores (estado derivado do hook, basta resetar `placaNova`).
+### 3. Pós-conclusão
+
+- Instalação concluída segue caminho canônico (Monitoramento aprova → `ativar-associado`).
+- Retirada concluída já dispara `processar-pos-retirada` (desvincula rastreador do veículo antigo) — sem alterações.
+- `efetivar-substituicao` continua sendo o passo de cancelamento do veículo antigo após aprovação administrativa — não muda neste escopo.
 
 ## Fora de escopo
 
-- Nenhuma edge function nova (reusa `sga-buscar-veiculo-associado` via `useSgaVeiculoAssociado` e `importar-associado-sga`).
-- Sem alterações em `criar-solicitacao-substituicao`, schema, RLS, ou `TrocaTitularidadeDialog`.
-- Sem alteração em outros fluxos (Inclusão / Troca direta).
+- Nenhuma alteração em `efetivar-substituicao`, `aprovar-proposta`, fila de Monitoramento, `concluir-retirada`, `processar-pos-retirada` ou banco.
+- Nenhuma mudança no fluxo público (`CotacaoContratacao`) — já é canônico.
+- Nenhuma migração de schema (tipos e colunas necessários já existem: `servicos.tipo='vistoria_retirada'`, `origem`, `agendamento_base_id`).
 
-## Critério de aceite
+## Riscos / pontos de atenção
 
-1. Em Substituição, com placa antiga selecionada, o segundo campo "placa do veículo novo" aparece.
-2. Placa nova **achada no SGA** ⇒ botão "Prosseguir" some, surge alerta + botão "Prosseguir com Troca de Titularidade" que fecha o modal atual e abre o de Troca já com o associado anterior preenchido.
-3. Placa nova **não achada no SGA** ⇒ check verde + botão "Prosseguir — Cotar novo veículo" habilitado, fluxo segue como hoje.
-4. Erro transitório do SGA na placa nova ⇒ banner âmbar com retry, "Prosseguir" desabilitado.
+- **Idempotência**: `criar-instalacao-pos-pagamento` é chamada por vários gatilhos (asaas-webhook, aprovar-proposta, agendar-vistoria-*). O bloco novo precisa do mesmo `INSERT ... ON CONFLICT`/pré-check usado para a instalação, senão geramos múltiplas retiradas.
+- **Veículo antigo sem rastreador físico**: se `solicitacao_substituicao.veiculo_antigo_id` aponta para veículo que dispensa rastreador, **não** criar retirada (não há o que retirar). Critério: existir `rastreadores` vinculado a `veiculo_antigo_id`.
+- **Data**: usar exatamente a `data_agendamento` da instalação — não default `hoje` (regra canônica `instalacao-data-agendada-source`).
