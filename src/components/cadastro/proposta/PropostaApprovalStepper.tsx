@@ -214,7 +214,32 @@ export function PropostaApprovalStepper({
   };
 
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="space-y-4">
+      {/* Banner canônico de gates ativos — substitui o silêncio do pointer-events-none */}
+      {gatesAtivos.length > 0 && (
+        <div className="rounded-lg border-2 border-warning/40 bg-warning/10 p-4">
+          <div className="flex items-start gap-3">
+            <Lock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-warning">
+                Aprovação bloqueada — {gatesAtivos.length} pendência(s)
+              </p>
+              <ul className="mt-2 space-y-1.5 text-xs text-foreground">
+                {gatesAtivos.map((g) => (
+                  <li key={g.id} className="flex items-start gap-2">
+                    <span className="text-warning mt-0.5">•</span>
+                    <span>
+                      <strong>{g.label}.</strong>{' '}
+                      <span className="text-muted-foreground">{g.comoDestravar}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Stepper Bar */}
       <Card className="border-border bg-card overflow-hidden">
         <CardContent className="p-4">
