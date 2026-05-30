@@ -145,6 +145,12 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   })();
   const loadingPlacas = loadingPlacasSga || loadingPlacasLocal;
 
+  // Amostragem SGA do veículo + associado para o card de confirmação (Substituição).
+  const { data: sgaSnapshot, isLoading: loadingSgaSnapshot } = useSgaVeiculoAssociado(
+    veiculoAntigoPlaca,
+    isSubstituicao && !!selectedAssociadoId,
+  );
+
   // Debt check for selected associado (substituicao/inclusao)
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);
   const { data: bloqueioInclusaoAtivo } = useInclusaoBloqueioDebito();
