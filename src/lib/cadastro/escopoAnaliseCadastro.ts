@@ -97,7 +97,9 @@ export function resolverEscopoAnaliseCadastro(
     !isAutovistoria &&
     (proposta?.tipo_vistoria === 'agendada_base' ||
       proposta?.tipo_vistoria === 'agendada' ||
-      (!!proposta?.vistoria && proposta?.vistoria?.modalidade !== 'autovistoria'));
+      (!!proposta?.vistoria &&
+        proposta?.vistoria?.modalidade !== 'autovistoria' &&
+        proposta?.vistoria?.tipo !== 'autovistoria'));
 
   const isVistoriaAgendadaSemFotos =
     !isAutovistoria &&
