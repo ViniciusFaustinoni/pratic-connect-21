@@ -1139,13 +1139,33 @@ export function useProposta(contratoId: string | undefined) {
             km_atual: vistoriaData.km_atual,
             video_360_url: vistoriaData.video_360_url,
           };
+        } else if (vistoriaData.modalidade === 'autovistoria' && contrato.cotacao_id) {
+          const { data: fotosLegadoAutovistoria } = await supabase
+            .from('cotacoes_vistoria_fotos')
+            .select('id, tipo, arquivo_url, created_at')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: true });
+
+          if (fotosLegadoAutovistoria && fotosLegadoAutovistoria.length > 0) {
+            vistoria = {
+              id: vistoriaData.id,
+              status: vistoriaData.status || 'pendente',
+              tipo: 'autovistoria',
+              modalidade: 'autovistoria',
+              fotos: fotosLegadoAutovistoria as VistoriaFotoInfo[],
+              observacoes: vistoriaData.observacoes,
+              km_atual: vistoriaData.km_atual,
+              video_360_url: vistoriaData.video_360_url,
+            };
+          }
         }
       }
 
       // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado, apenas se tiver cotacao_id)
-      //    Só conta como vistoria entregue se a cotação AINDA está em modo
-      //    'autovistoria'. Se o associado migrou para 'agendada'/'agendada_base',
-      //    as fotos parciais antigas são lixo e NÃO podem liberar R&F.
+      //    Importante: acima da FIPE é canônico coexistir autovistoria enxuta
+      //    + instalação agendada. Portanto NÃO descartar a mídia legacy só porque
+      //    existe instalação/agendamento paralelo; basta a cotação continuar em
+      //    modo autovistoria para que o Cadastro avalie fotos + vídeo 360°.
       if (!vistoria && contrato.cotacao_id) {
         const { data: cotTipo } = await supabase
           .from('cotacoes')
@@ -1156,7 +1176,7 @@ export function useProposta(contratoId: string | undefined) {
         if (cotTipo?.tipo_vistoria === 'autovistoria') {
           const { data: vistoriaCotacao } = await supabase
             .from('vistorias')
-            .select('video_360_url, observacoes, km_atual')
+            .select('id, status, video_360_url, observacoes, km_atual, created_at')
             .eq('cotacao_id', contrato.cotacao_id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -1170,8 +1190,8 @@ export function useProposta(contratoId: string | undefined) {
 
           if (fotosLegado && fotosLegado.length > 0) {
             vistoria = {
-              id: contrato.cotacao_id,
-              status: 'pendente',
+              id: vistoriaCotacao?.id || contrato.cotacao_id,
+              status: vistoriaCotacao?.status || 'pendente',
               tipo: 'autovistoria',
               modalidade: 'autovistoria',
               fotos: fotosLegado as VistoriaFotoInfo[],
