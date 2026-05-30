@@ -14,6 +14,7 @@ import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssocia
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 import { ModalDetalhesSubstituicao } from '@/components/substituicao/ModalDetalhesSubstituicao';
+import { useSgaVeiculoAssociado } from '@/hooks/useSgaVeiculoAssociado';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
 import { DebitosCard } from '@/components/cotacoes/DebitosCard';
 import { SgaTransientAlert } from '@/components/cotacoes/SgaTransientAlert';
