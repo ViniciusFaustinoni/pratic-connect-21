@@ -480,11 +480,10 @@ export function EtapaPagamentoCotacao({
   // Tentar novamente
   const tentarNovamente = async () => {
     setErro(null);
-    const idContrato = await buscarContrato();
-    if (idContrato) {
-      await criarCobranca(idContrato);
-    }
+    // Reexecuta inicializar — cobre tanto cobrança ASAAS quanto adesão isenta (edge confirmar-adesao-zerada).
+    await inicializar();
   };
+
 
   // Formatar moeda
   const formatCurrency = (value: number) => {
