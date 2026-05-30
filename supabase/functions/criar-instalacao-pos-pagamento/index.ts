@@ -681,7 +681,7 @@ serve(async (req) => {
 
 
 
-        if (ehSubstituicao) {
+        if (ehSubstituicao && !agendamentosSeparados) {
           let veiculoAntigoId: string | null = dadosExtras?.veiculo_antigo_id || null;
           let contratoAntigoId: string | null = null;
 
