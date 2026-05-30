@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,13 +11,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Save, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Save, Loader2, AlertTriangle, Info } from 'lucide-react';
 import {
   useUpdateEmailSuspensaoTemplateItem,
   type EmailSuspensaoTemplateItem,
 } from '@/hooks/emails-suspensao/useTemplatesList';
 import { EmailBodyEditor } from './EmailBodyEditor';
 import { wrapPraticcarEmail } from '../lib/wrapPraticcarEmail';
+import { validarTemplate } from '../lib/validarVariaveisTemplate';
 
 interface Props {
   template: EmailSuspensaoTemplateItem | null;
