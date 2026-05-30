@@ -35277,6 +35277,10 @@ export type Database = {
         Returns: string
       }
       fn_detectar_limbo_ativacao: { Args: never; Returns: Json }
+      fn_detectar_tipo_veiculo: {
+        Args: { _marca: string; _modelo: string }
+        Returns: string
+      }
       fn_determinar_numero_parcela_cobranca: {
         Args: { p_cobranca_id: string }
         Returns: number
