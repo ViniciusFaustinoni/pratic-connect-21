@@ -348,6 +348,16 @@ Deno.serve(async (req) => {
         }
       }
 
+      // SGA enqueue (idempotente por _correlation_id determinístico)
+      if (sga_enqueue?.enabled === true) {
+        const r = await executarSgaEnqueue(supabase, { associado_id, veiculo_id, actor_id, sga_enqueue });
+        if (!r.ok) {
+          parciais.push({ alvo: 'sga_enqueue', id: veiculo_id, erro: r.erro });
+        } else {
+          sideEffects.sga_enqueue = 'ok';
+        }
+      }
+
       const partialIdem = parciais.length > 0;
       // Log da reativação idempotente para auditoria
       await supabase.from('ativacao_status_log').insert({
