@@ -1,3 +1,29 @@
+/**
+ * Fila Análises de Relacionamento — ingestão canônica
+ *
+ * A tabela `analises_relacionamento` é alimentada EXCLUSIVAMENTE por 3 triggers
+ * no banco, todos via helper `fn_criar_analise_relacionamento`:
+ *
+ * 1. trg_analise_relacionamento_cancelamento_voluntario
+ *    → tabela: contratos
+ *    → disparo: UPDATE de autentique_cancelamento_assinado_em (NULL → not null)
+ *    → tipo: cancelamento_voluntario
+ *
+ * 2. trg_analise_relacionamento_troca
+ *    → tabela: solicitacoes_troca_titularidade
+ *    → disparo: UPDATE de termo_cancelamento_assinado_em (NULL → not null)
+ *    → tipo: troca_titularidade
+ *
+ * 3. trg_analise_relacionamento_substituicao
+ *    → tabela: solicitacoes_substituicao_placa
+ *    → disparo: UPDATE de termo_cancelamento_assinado_em (NULL → not null)
+ *    → tipo: substituicao
+ *
+ * Qualquer regressão na fila (silenciosa / vazia inesperadamente)
+ * deve ser investigada primeiro nesses 3 triggers + fn_criar_analise_relacionamento.
+ * NENHUM código frontend insere diretamente nesta tabela.
+ */
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -192,6 +218,47 @@ export function useResolverAnalise() {
       qc.invalidateQueries({ queryKey: ['analises-relacionamento'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Erro ao resolver caso'),
+  });
+}
+
+export interface UltimaAnaliseInfo {
+  createdAt: string;
+  diasDesde: number;
+  total30d: number;
+}
+
+export function useUltimaAnaliseRecebida() {
+  return useQuery<UltimaAnaliseInfo | null>({
+    queryKey: ['ultima-analise-recebida'],
+    queryFn: async () => {
+      const [ultimo, total] = await Promise.all([
+        (supabase as any)
+          .from('analises_relacionamento')
+          .select('created_at')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        (supabase as any)
+          .from('analises_relacionamento')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+      ]);
+
+      if (ultimo.error) throw ultimo.error;
+      if (!ultimo.data) return null; // tabela vazia → sem chip
+
+      const createdAt: string = ultimo.data.created_at;
+      const diasDesde = Math.floor(
+        (Date.now() - new Date(createdAt).getTime()) / 86400000
+      );
+
+      return {
+        createdAt,
+        diasDesde,
+        total30d: total.count ?? 0,
+      };
+    },
+    staleTime: 60_000,
   });
 }
 

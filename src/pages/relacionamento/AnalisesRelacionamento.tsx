@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,9 +12,18 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Search, ClipboardCheck, FileSignature } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
-  useAnalisesRelacionamento, TIPO_CFG, STATUS_CFG,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Search, ClipboardCheck, FileSignature, AlertTriangle } from 'lucide-react';
+import {
+  useAnalisesRelacionamento,
+  useUltimaAnaliseRecebida,
+  TIPO_CFG, STATUS_CFG,
   type AnaliseRelacionamento,
   type AnaliseRelacionamentoStatus, type AnaliseRelacionamentoTipo,
 } from '@/hooks/useAnalisesRelacionamento';
@@ -40,11 +49,15 @@ export default function AnalisesRelacionamento() {
         </div>
       </div>
 
+      <UltimoCasoChip />
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Fila</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <BannerFilaSilenciosa />
+
           <Tabs value={status} onValueChange={(v) => setStatus(v as any)}>
             <TabsList>
               <TabsTrigger value="pendente">Pendentes</TabsTrigger>
@@ -164,5 +177,87 @@ export default function AnalisesRelacionamento() {
         onOpenChange={(o) => { if (!o) setSelecionada(null); }}
       />
     </div>
+  );
+}
+
+function UltimoCasoChip() {
+  const { data, isLoading } = useUltimaAnaliseRecebida();
+
+  if (isLoading || data === null) return null;
+
+  const { diasDesde, total30d } = data;
+
+  let variant: 'default' | 'amber' | 'destructive' = 'default';
+  if (diasDesde > 30) variant = 'destructive';
+  else if (diasDesde > 7) variant = 'amber';
+
+  const tempo =
+    diasDesde === 0
+      ? 'hoje'
+      : formatDistanceToNowStrict(new Date(data.createdAt), {
+          locale: ptBR,
+          addSuffix: true,
+        });
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-2">
+            {variant === 'destructive' && (
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            )}
+            <Badge
+              variant="outline"
+              className={
+                variant === 'destructive'
+                  ? 'border-destructive text-destructive'
+                  : variant === 'amber'
+                    ? 'border-amber-500 text-amber-700 dark:text-amber-300'
+                    : 'border-muted-foreground text-muted-foreground'
+              }
+            >
+              Último caso: {tempo}
+            </Badge>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs space-y-1">
+          <p className="font-medium">Origem da ingestão</p>
+          <p className="text-xs text-muted-foreground">
+            3 triggers preenchem esta fila:
+          </p>
+          <ul className="list-disc pl-4 text-xs text-muted-foreground">
+            <li>contratos.autentique_cancelamento_assinado_em</li>
+            <li>solicitacoes_troca_titularidade.termo_cancelamento_assinado_em</li>
+            <li>solicitacoes_substituicao_placa.termo_cancelamento_assinado_em</li>
+          </ul>
+          <p className="text-xs text-muted-foreground pt-1">
+            Total nos últimos 30 dias: <strong>{total30d}</strong>
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function BannerFilaSilenciosa() {
+  const { data } = useUltimaAnaliseRecebida();
+  if (!data || data.diasDesde <= 14) return null;
+
+  return (
+    <Alert variant="destructive" className="mb-3">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertTitle>Fila silenciosa há {data.diasDesde} dias</AlertTitle>
+      <AlertDescription>
+        Sem novos casos desde {format(new Date(data.createdAt), 'dd/MM/yyyy', { locale: ptBR })}.
+        Verifique se os triggers de assinatura de termo de cancelamento estão ativos:
+        {' '}
+        <code className="text-xs bg-muted px-1 rounded">trg_analise_relacionamento_cancelamento_voluntario</code>,
+        {' '}
+        <code className="text-xs bg-muted px-1 rounded">trg_analise_relacionamento_troca</code>,
+        {' '}
+        <code className="text-xs bg-muted px-1 rounded">trg_analise_relacionamento_substituicao</code>.
+      </AlertDescription>
+    </Alert>
   );
 }
