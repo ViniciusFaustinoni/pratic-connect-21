@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import { checarCompletudeAutovistoriaSubFipe, type TipoVeiculoSubFipe } from '../_shared/fotosVistoriaSubFipe.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
