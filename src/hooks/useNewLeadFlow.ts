@@ -356,43 +356,14 @@ export function useNewLeadFlow() {
         descricao: `Lead "${lead.nome}" criado via formulário avançado`,
       });
 
-      let token: string | undefined;
-
-      // 2. Criar cotação pública se solicitado
-      if (state.generateQuoteLink) {
-        const { data: cotacao, error: cotacaoError } = await (supabase as any)
-          .from('cotacoes_publicas')
-          .insert({
-            lead_id: lead.id,
-            vendedor_id: state.selectedVendedor || null,
-            veiculo_marca: state.vehicleData?.marca || null,
-            veiculo_modelo: modeloCanonico,
-            veiculo_ano: state.vehicleData?.ano ? parseInt(state.vehicleData.ano.split('/')[0]) : null,
-            veiculo_placa: state.vehicleData?.placa || null,
-            valor_fipe: state.fipeData?.valor || null,
-            veiculo_cor: state.vehicleData?.cor || null,
-            veiculo_combustivel: state.vehicleData?.combustivel || null,
-            status: 'aguardando',
-          })
-          .select()
-          .single();
-
-        if (cotacaoError) {
-          console.error('Erro ao criar cotação:', cotacaoError);
-          toast.warning('Lead criado, mas houve erro ao gerar link de cotação');
-        } else {
-          token = cotacao.token;
-        }
-      }
-
-      updateState({ 
+      updateState({
         createdLeadId: lead.id,
-        publicQuoteToken: token || null,
         step: 'success'
       });
 
       toast.success('Lead criado com sucesso!');
-      return { leadId: lead.id, token };
+      return { leadId: lead.id };
+
 
     } catch (error) {
       console.error('Erro ao criar lead:', error);
