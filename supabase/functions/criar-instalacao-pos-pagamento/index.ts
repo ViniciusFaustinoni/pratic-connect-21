@@ -670,6 +670,17 @@ serve(async (req) => {
         const ehSubstituicao =
           (cotSub as any)?.tipo_entrada === 'substituicao_placa' || !!solicitacaoSubId;
 
+        // GUARD: substituição com agendamentos SEPARADOS (locais diferentes).
+        // A edge `criar-substituicao-agendamentos-separados` já materializou o
+        // serviço de retirada com sua própria data/endereço — não criar de novo
+        // aqui (caso contrário duplicaríamos a retirada e ainda no endereço errado).
+        const agendamentosSeparados = !!dadosExtras?.substituicao_agendamentos_separados;
+        if (ehSubstituicao && agendamentosSeparados) {
+          console.log('[CriarInstalacaoPosPagamento][substituicao] flag substituicao_agendamentos_separados=true — bloco 6.2 (retirada) pulado');
+        }
+
+
+
         if (ehSubstituicao) {
           let veiculoAntigoId: string | null = dadosExtras?.veiculo_antigo_id || null;
           let contratoAntigoId: string | null = null;
