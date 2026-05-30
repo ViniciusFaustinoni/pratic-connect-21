@@ -778,5 +778,6 @@ export function PropostaApprovalStepper({
         )}
       </div>
     </div>
+    </TooltipProvider>
   );
 }
