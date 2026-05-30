@@ -21,12 +21,12 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Send, AlertCircle, CheckCircle2, Search, X, User } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useEnviarEmailTeste } from '@/hooks/emails-suspensao/useEnviarEmailTeste';
 import {
   useEmailSuspensaoTemplatesList,
   type EmailSuspensaoTemplateItem,
 } from '@/hooks/emails-suspensao/useTemplatesList';
+import { usePreviewAssociadoData } from '@/hooks/emails-suspensao/usePreviewAssociadoData';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { extrairVariaveisSet } from '../lib/validarVariaveisTemplate';
 
