@@ -185,6 +185,12 @@ const DIGIT_SWAPS: Array<[string, string]> = [
   ['0', '9'], ['9', '0'],
   ['3', '8'], ['8', '3'],
   ['2', '7'], ['7', '2'],
+  // Pares adicionais observados em CRLVs com fonte serifada/esmaecida
+  ['1', '3'], ['3', '1'],   // caso KOU6D37 lido como KOU6D17
+  ['3', '5'], ['5', '3'],
+  ['3', '9'], ['9', '3'],
+  ['1', '4'], ['4', '1'],
+  ['4', '7'], ['7', '4'],
 ];
 
 const PLACA_MERCOSUL_RE = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;

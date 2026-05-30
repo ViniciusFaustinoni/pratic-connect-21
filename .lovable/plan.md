@@ -1,68 +1,60 @@
-## Contexto
+## Diagnóstico
 
-Cotação LPL1312 (sub-FIPE, FIPE R$ 22.508, carro `<` R$ 30k, status `pagamento_ok`) chegou na etapa de autovistoria completa mas tem **zero fotos** em `cotacoes_vistoria_fotos` e **zero objetos** no bucket. Investigação confirmou:
+O CRLV anexado tem `PLACA KOU6D37` (confirmado no texto do PDF), mas o OCR está retornando `KOU6D17` — o dígito **3** foi lido como **1** na posição 5 (Mercosul: 6º caractere).
 
-- Bucket `cotacoes-vistoria` em produção: `public=true`, `file_size_limit=200MB`, `allowed_mime_types` inclui `image/*` + `video/mp4|webm|quicktime` — **OK**.
-- RLS de `cotacoes_vistoria_fotos`: política permite `anon` com base em `token_publico` — **OK**.
-- Pipeline de upload (`useUploadFotoCotacaoVistoria` → `publicSupabase.storage.upload` → upsert em `cotacoes_vistoria_fotos`) está correto.
-- Edge `finalizar-autovistoria-cotacao` **NÃO valida quantidade mínima de fotos nem presença de vídeo** — aceita finalizar com qualquer coisa, inclusive zero.
-- Cada tentativa de upload (sucesso ou erro) **não gera log** — impossível distinguir abandono do cliente de falha real.
+Hoje o `document-ocr` tem três defesas de saneamento de placa:
 
-A causa do caso LPL1312 é compatível com abandono, mas hoje não temos **prova** disso nem **gate de servidor** que garanta que sub-FIPE só conclui com o set obrigatório.
+1. **Swaps visuais (`DIGIT_SWAPS`)** em `supabase/functions/document-ocr/index.ts` (linhas 180-188): cobrem 6↔8, 0↔8, 5↔6, 1↔7, 0↔9, 3↔8, 2↔7 — **NÃO cobre 1↔3**, que é exatamente a confusão deste caso (e bem comum em CRLVs com fonte serifada apertada).
+2. **Cross-check com texto nativo do PDF** (linhas 2411-2431): só funciona quando `extractedPdfText` está populado e a regex acha a placa correta lá. Para este CRLV-e o texto deveria existir, mas se o PDF cair no caminho de rasterização (unpdf falhou / score baixo) a defesa some.
+3. **Cross-check com banco por CPF** (linhas 2433-2498): só dispara se a placa correta já existir em `veiculos.placa` ou `cotacoes.placa` do CPF — em fluxo de nova cotação isso normalmente já está populado (a placa cotada está em `cotacoes.placa`), MAS depende de `KOU6D37` estar nos `placasParaTestar`, e isso só acontece se algum swap a gere a partir de `KOU6D17`. Sem o swap 1↔3, ela nunca entra na lista e o banco nunca é consultado com ela.
 
-## Objetivo
+Conclusão: a causa raiz é a ausência do par `1↔3` (e alguns vizinhos visuais frequentes) em `DIGIT_SWAPS`. Reforço secundário: o endpoint aceita `dadosEsperados` no body mas nunca usa a `placa` esperada da cotação como âncora de cross-check direto — então mesmo quando o front sabe que a placa cotada é `KOU6D37`, essa informação não chega ao saneador.
 
-1. Garantir que uma cotação sub-FIPE só consiga **concluir** quando o set canônico (31 carro / 15 moto + `video_360`) estiver persistido.
-2. Gerar **observabilidade** por upload — toda falha vira evento rastreável.
-3. Validar com **teste E2E interno** chamando a edge function.
+## Mudança proposta
 
-## Plano
+Escopo cirúrgico em **um único arquivo**: `supabase/functions/document-ocr/index.ts`.
 
-### Camada A — Gate no servidor (`finalizar-autovistoria-cotacao`)
+### 1. Ampliar `DIGIT_SWAPS` com pares visuais que faltam
 
-Em `supabase/functions/finalizar-autovistoria-cotacao/index.ts`, antes de criar a `vistorias` (linha 170):
+Adicionar pares simétricos para confusões reais já observadas em CRLVs:
 
-- Resolver `veiculoSubFipe` (já feito nas linhas 58–123).
-- Resolver `tipoVeiculo` (`carro` / `moto`) a partir de `cotacoes.tipo_veiculo`.
-- Se `veiculoSubFipe === true`, importar o adapter canônico `getFotosVistoriaSubFipe` (mover para `_shared` ou replicar o filtro em runtime Deno lendo a config) e calcular a lista de `tipo` esperados.
-- Comparar com `fotosArr.map(f => f.tipo)`:
-  - Se faltar qualquer `tipo` obrigatório (visivelCliente !== false), retornar HTTP `409` com payload `{ code: 'AUTOVISTORIA_INCOMPLETA', faltantes: string[], esperadas: N, recebidas: M }`.
-  - Vídeo (`video_360`) entra na mesma checagem.
-- Não alterar comportamento para fluxo ≥FIPE (autovistoria opcional/enxuta segue como hoje).
+```ts
+['1', '3'], ['3', '1'],   // caso KOU6D37 → KOU6D17
+['3', '5'], ['5', '3'],   // serifa apertada
+['3', '9'], ['9', '3'],   // base curva ambígua
+['1', '4'], ['4', '1'],   // traço vertical
+['4', '7'], ['7', '4'],   // topo serrilhado
+```
 
-### Camada B — Auditoria por upload (`useUploadFotoCotacaoVistoria`)
+Mantém o limite "1 swap por candidato" já garantido pelo `gerarCandidatosPlaca`, então o conjunto continua pequeno (<40 itens).
 
-Em `src/hooks/useCotacaoVistoria.ts`:
+### 2. Usar `dadosEsperados.placa` como cross-check direto
 
-- No `onError` (linha 228) e no `onSuccess` (linha 225), gravar em `logs_auditoria` via `publicSupabase` com `acao='criar'` + descrição prefixada `[autovistoria_upload]` ou `[autovistoria_upload_falhou]` contendo:
-  - `cotacao_id`, `fotoId`, `fileSize`, `mime`, `mensagem` (no erro), `duracaoMs`
-- Respeitar a CHECK de 38 valores (memória `logs-auditoria-vigia-universal`) — usar fallback `acao='criar'` + descrição rastreável.
-- Sem toast novo (já existe), sem mudança de UX.
+Dentro do bloco `if (v.field === 'placa')` (linha 2411), antes do cross-check com banco, adicionar:
 
-### Camada C — Teste E2E interno
+- Se `dadosEsperados?.placa` existir e for válida pelo `validatePlaca`, gerar `candidatosOCR` a partir da placa lida e:
+  - Se a placa esperada estiver entre eles, adotar imediatamente (`d.placa = placaEsperada`) e logar `[OCR] Placa confirmada via dadosEsperados`.
+  - Caso contrário, deixar os demais cross-checks (PDF nativo, banco) seguirem normalmente.
 
-Após deploy das mudanças A+B, executar contra a edge real (`supabase--curl_edge_functions`):
+Isso fecha o caso mesmo quando:
+- O PDF não tem texto nativo extraível (escaneado).
+- O CPF ainda não tem registro em `veiculos`/`cotacoes` (cotações muito novas com índice fora de sincronia).
 
-1. **Setup**: criar uma cotação sub-FIPE de teste via SQL (placa fake, FIPE R$ 20k, carro) com `token_publico` definido.
-2. **Cenário 1 — incompleto**: chamar `finalizar-autovistoria-cotacao` com `{ cotacaoId }` sem nenhuma foto. **Esperado**: `409 AUTOVISTORIA_INCOMPLETA` com `faltantes.length === 32` (31 + vídeo).
-3. **Cenário 2 — parcial**: inserir 5 fotos via `publicSupabase` direto (apenas DB, sem storage real). Chamar a edge. **Esperado**: `409` com `faltantes.length === 27`.
-4. **Cenário 3 — completo**: popular as 31 fotos + `video_360` em `cotacoes_vistoria_fotos`. Chamar a edge. **Esperado**: `200 success=true`, `vistorias` criada, `vistoria_fotos` com 32 rows copiadas, `servicos` com `tipo='vistoria_entrada'`, `status='em_analise'` (sub-FIPE entra no Cadastro).
-5. **Limpeza**: marcar cotação de teste com `_TESTE_E2E_AUTOVISTORIA` no número e remover registros ao fim.
+### 3. Não mexer em `useDocumentoOCR.ts` por enquanto
 
-Reportar resultado de cada cenário (status code, payload, contagens no DB).
+O hook já encaminha o body inteiro via `supabase.functions.invoke`. Os consumidores que enviam OCR de CRLV em contexto de cotação já passam `cpfEsperado`; aqueles que ainda não passam `dadosEsperados.placa` continuarão funcionando — só não vão se beneficiar do cross-check direto. Fica como follow-up opcional adicionar `dadosEsperados: { placa: cotacao.placa }` nos call-sites de upload de CRLV (não é necessário pra fechar este bug, basta a Camada 1).
 
-## Detalhes técnicos
+### 4. Verificação
 
-**Arquivos tocados:**
-- `supabase/functions/finalizar-autovistoria-cotacao/index.ts` — gate sub-FIPE.
-- `src/hooks/useCotacaoVistoria.ts` — auditoria por upload.
-- `supabase/functions/_shared/fotosVistoriaSubFipe.ts` (novo) — versão Deno do adapter (apenas a lista de `tipo` esperados por `tipo_veiculo`, sem dependência do front).
+- Reprocessar manualmente o CRLV anexado via UI de Cadastro → confirmar que `placa` retorna `KOU6D37` e não dispara mais o aviso "placa do CRLV não corresponde".
+- Checar logs da edge `document-ocr` por mensagem `[OCR] Placa confirmada via banco (CPF ...)` ou `[OCR] Placa cross-check OCR↔PDF` para confirmar qual camada resolveu.
 
-**Fora de escopo (sinalizado mas não tocado agora):**
-- Fila operacional "autovistoria sub-FIPE parada > 24h" — pode virar tarefa separada.
-- Indicador granular no UI de quais fotos faltam (botão "Finalizar" já desabilita até `todasEnviadas`).
-- Compressão/retry mais robusto — fluxo atual já comprime + retry de vídeo.
+## Fora de escopo
 
-**Riscos:**
-- O gate A pode quebrar cotações sub-FIPE **legadas** que ficaram com fotos parciais e estavam para ser finalizadas. Mitigação: filtrar `faltantes` por `categoria !== 'avarias'` (opcional) e checar antes se existem cotações nesse estado.
-- Auditoria em `logs_auditoria` aumenta volume — usar amostragem só em erro (sucesso pode ficar de fora se ficar pesado).
+- Reescrever o prompt do Gemini.
+- Alterar o fluxo de comparação de placa do front (`placasEquivalentes` em `src/lib/placa-utils.ts`) — esse já tolera as confusões letra↔dígito; o que falta é só letra do OCR vir correta.
+- Bloqueio/banner novo na UI: o banner atual já é o comportamento esperado quando o saneamento falha.
+
+## Arquivos tocados
+
+- `supabase/functions/document-ocr/index.ts` (constante `DIGIT_SWAPS` + bloco de cross-check de placa).
