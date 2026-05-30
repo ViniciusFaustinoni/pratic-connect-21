@@ -14,6 +14,7 @@ import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssocia
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 import { ModalDetalhesSubstituicao } from '@/components/substituicao/ModalDetalhesSubstituicao';
+import { useSgaVeiculoAssociado } from '@/hooks/useSgaVeiculoAssociado';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
 import { DebitosCard } from '@/components/cotacoes/DebitosCard';
 import { SgaTransientAlert } from '@/components/cotacoes/SgaTransientAlert';
@@ -143,6 +144,12 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     return Array.from(map.values());
   })();
   const loadingPlacas = loadingPlacasSga || loadingPlacasLocal;
+
+  // Amostragem SGA do veículo + associado para o card de confirmação (Substituição).
+  const { data: sgaSnapshot, isLoading: loadingSgaSnapshot } = useSgaVeiculoAssociado(
+    veiculoAntigoPlaca,
+    isSubstituicao && !!selectedAssociadoId,
+  );
 
   // Debt check for selected associado (substituicao/inclusao)
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);
@@ -571,6 +578,81 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                             </p>
                           </div>
                         </div>
+
+                        {/* Snapshot SGA — apenas amostragem informativa */}
+                        {loadingSgaSnapshot ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Consultando SGA…</span>
+                          </div>
+                        ) : sgaSnapshot?.erro_transitorio ? (
+                          <div className="rounded-lg border border-border bg-muted/30 p-3">
+                            <span className="text-xs text-muted-foreground">
+                              Dados do SGA temporariamente indisponíveis.
+                            </span>
+                          </div>
+                        ) : sgaSnapshot?.encontrado && (sgaSnapshot.veiculo || sgaSnapshot.associado) ? (
+                          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+                            {sgaSnapshot.veiculo && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                                  Veículo (SGA)
+                                </p>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                                  {sgaSnapshot.veiculo.marca && (
+                                    <div><span className="text-muted-foreground">Marca:</span> <span className="font-medium">{sgaSnapshot.veiculo.marca}</span></div>
+                                  )}
+                                  {sgaSnapshot.veiculo.modelo && (
+                                    <div><span className="text-muted-foreground">Modelo:</span> <span className="font-medium">{sgaSnapshot.veiculo.modelo}</span></div>
+                                  )}
+                                  {sgaSnapshot.veiculo.ano_modelo && (
+                                    <div><span className="text-muted-foreground">Ano:</span> <span className="font-medium">{sgaSnapshot.veiculo.ano_fabricacao || '—'}/{sgaSnapshot.veiculo.ano_modelo}</span></div>
+                                  )}
+                                  {sgaSnapshot.veiculo.valor_fipe != null && (
+                                    <div><span className="text-muted-foreground">FIPE:</span> <span className="font-medium">{formatCurrency(sgaSnapshot.veiculo.valor_fipe)}</span></div>
+                                  )}
+                                  {sgaSnapshot.veiculo.chassi && (
+                                    <div className="col-span-2"><span className="text-muted-foreground">Chassi:</span> <span className="font-mono text-[11px]">{sgaSnapshot.veiculo.chassi}</span></div>
+                                  )}
+                                  {sgaSnapshot.veiculo.renavam && (
+                                    <div><span className="text-muted-foreground">RENAVAM:</span> <span className="font-mono text-[11px]">{sgaSnapshot.veiculo.renavam}</span></div>
+                                  )}
+                                  {sgaSnapshot.veiculo.descricao_situacao && (
+                                    <div><span className="text-muted-foreground">Situação:</span> <span className="font-medium">{sgaSnapshot.veiculo.descricao_situacao}</span></div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {sgaSnapshot.associado && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                                  Associado (SGA)
+                                </p>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                                  {sgaSnapshot.associado.cpf && (
+                                    <div><span className="text-muted-foreground">CPF:</span> <span className="font-mono text-[11px]">{sgaSnapshot.associado.cpf}</span></div>
+                                  )}
+                                  {sgaSnapshot.associado.telefone_celular && (
+                                    <div><span className="text-muted-foreground">Celular:</span> <span className="font-medium">{sgaSnapshot.associado.telefone_celular}</span></div>
+                                  )}
+                                  {sgaSnapshot.associado.email && (
+                                    <div className="col-span-2 truncate"><span className="text-muted-foreground">E-mail:</span> <span className="font-medium">{sgaSnapshot.associado.email}</span></div>
+                                  )}
+                                  {(sgaSnapshot.associado.cidade || sgaSnapshot.associado.estado) && (
+                                    <div className="col-span-2"><span className="text-muted-foreground">Cidade:</span> <span className="font-medium">{[sgaSnapshot.associado.cidade, sgaSnapshot.associado.estado].filter(Boolean).join(' / ')}</span></div>
+                                  )}
+                                  {sgaSnapshot.associado.dia_vencimento && (
+                                    <div><span className="text-muted-foreground">Venc.:</span> <span className="font-medium">dia {sgaSnapshot.associado.dia_vencimento}</span></div>
+                                  )}
+                                  {sgaSnapshot.associado.descricao_situacao && (
+                                    <div><span className="text-muted-foreground">Situação:</span> <span className="font-medium">{sgaSnapshot.associado.descricao_situacao}</span></div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+
 
                         {loadingDebitos ? (
                           <div className="flex items-center justify-center py-6">
