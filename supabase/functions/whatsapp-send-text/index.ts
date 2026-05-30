@@ -438,8 +438,12 @@ async function enviarViaMeta(
 
   const statusLabel = templateName ? 'enviada' : 'enviada_texto_livre';
   await supabase.from("whatsapp_mensagens").insert({
-    telefone: telefoneFormatado, tipo: "text", mensagem,
+    telefone: telefoneFormatado,
+    tipo: templateName ? "template" : "text",
+    mensagem,
     direcao: "saida", status: statusLabel, message_id: messageId,
+    template_id: templateName || null,
+    template_variaveis: templateName ? { body: bodyParams, button: buttonParams } : null,
     provedor: "meta_oficial",
   });
 
