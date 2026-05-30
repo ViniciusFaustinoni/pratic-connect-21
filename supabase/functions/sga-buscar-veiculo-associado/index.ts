@@ -15,6 +15,7 @@ import {
   getHinovaSession,
   buscarVeiculoPorPlaca,
   HinovaTransientError,
+  HinovaNotFoundError,
   calcularProximoRetry,
 } from '../_shared/hinova-client.ts';
 
