@@ -236,69 +236,21 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
                 <RefreshCw className={`h-4 w-4 mr-2 ${reconsultar.isPending ? 'animate-spin' : ''}`} />
                 Consultar SGA novamente
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setBypassOpen(true)}>
-                <KeyRound className="h-4 w-4 mr-2" />
-                Ignorar e Prosseguir
-              </Button>
+              {podeBypass && (
+                <Button size="sm" variant="outline" onClick={() => abrirBypass('inconclusivo')}>
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  Ignorar e Prosseguir
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Bypass de verificação inconclusiva (auditado)</DialogTitle>
-              <DialogDescription>
-                Confirme que verificou manualmente os boletos do CPF no painel SGA.
-                Esta ação será registrada com seu nome.
-              </DialogDescription>
-            </DialogHeader>
-            <Textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Ex.: verificado no SGA, sem boletos vencidos em nenhuma matrícula…"
-              rows={4}
-            />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setBypassOpen(false)}>Cancelar</Button>
-              <Button
-                disabled={motivo.trim().length < 5 || bypass.isPending}
-                onClick={() =>
-                  bypass.mutate(motivo.trim(), {
-                    onSuccess: async () => {
-                      try {
-                        await registrarAviso.mutateAsync({
-                          tipo: 'cadastro_situacao_financeira_pendente',
-                          titulo: 'Bypass de verificação inconclusiva no Cadastro',
-                          mensagem: 'Gate inconclusivo (SGA sem sinal). Verificado manualmente.',
-                          decisao: 'ignorado_prosseguiu',
-                          motivo: motivo.trim(),
-                          contrato_id: contratoId ?? null,
-                          cpf: data?.check?.cpf ?? null,
-                          detalhes: {
-                            origem_resultado: 'inconclusivo',
-                            solicitacao_troca_id: solicitacaoTrocaId ?? null,
-                          },
-                        });
-                      } catch (e) {
-                        console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
-                      }
-                      toast.success('Bypass registrado — análise liberada');
-                      setBypassOpen(false);
-                      setMotivo('');
-                    },
-                    onError: (e: any) => toast.error(e?.message || 'Falha ao registrar bypass'),
-                  })
-                }
-              >
-                Confirmar bypass
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {bypassDialog}
       </>
     );
   }
+
 
   // Bypass anterior já liberou
   if (check.bypass) {
