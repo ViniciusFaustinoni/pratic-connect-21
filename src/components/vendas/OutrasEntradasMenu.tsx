@@ -77,6 +77,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [veiculoAntigoId, setVeiculoAntigoId] = useState<string | null>(null);
   const [veiculoAntigoPlaca, setVeiculoAntigoPlaca] = useState('');
   const [veiculoAntigoModelo, setVeiculoAntigoModelo] = useState('');
+  // Substituição: placa do veículo NOVO (precisa NÃO existir no SGA)
+  const [placaNova, setPlacaNova] = useState('');
+  const [redirecionandoTroca, setRedirecionandoTroca] = useState(false);
 
   // Migração CPF
   const [migracaoCpf, setMigracaoCpf] = useState('');
