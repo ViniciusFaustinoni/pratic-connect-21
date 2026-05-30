@@ -72,6 +72,18 @@ export default function IntegracaoSGAHinova() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [queueFilter, setQueueFilter] = useState<string>('all');
   const [detailItem, setDetailItem] = useState<SGAQueueItem | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [logsActionFilter, setLogsActionFilter] = useState<string | null>(null);
+
+  const filteredLogs = useMemo(
+    () => (logsActionFilter ? logs.filter(l => l.action === logsActionFilter) : logs),
+    [logs, logsActionFilter],
+  );
+
+  const handleSelectAction = (action: string) => {
+    setLogsActionFilter(action);
+    setActiveTab('logs');
+  };
 
   const lastCheck = healthChecks[0];
   const filteredQueue = useMemo(() => {
