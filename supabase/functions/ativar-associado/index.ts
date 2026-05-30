@@ -62,6 +62,58 @@ interface AtivarBody {
   cotacao_id?: string | null;
   // Metadata livre para o log
   metadata?: Record<string, unknown>;
+  // Enfileira sync SGA (Hinova) dentro do mesmo fluxo da ativação.
+  // Substitui o enqueue_integration standalone que vivia no hook do caller —
+  // garante que o SGA não fica perdido se o browser fecha entre o retorno desta
+  // edge e a chamada client-side. Falha de enqueue entra em parciais[] (207).
+  sga_enqueue?: {
+    enabled: boolean;
+    status_sga_destino?: 'ativo' | 'pendente';
+    force_resync_media?: boolean;
+    etapa_origem?: string;
+    motivo_decisao?: string;
+  };
+}
+
+// Executa o enqueue do SGA usando _correlation_id determinístico (sem Date.now())
+// para que retries via cron / reexecução do caller sejam idempotentes.
+async function executarSgaEnqueue(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    associado_id: string;
+    veiculo_id: string | null;
+    actor_id: string | null;
+    sga_enqueue: NonNullable<AtivarBody['sga_enqueue']>;
+  },
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const { associado_id, veiculo_id, actor_id, sga_enqueue } = params;
+  if (!veiculo_id) {
+    return { ok: false, erro: 'sga_enqueue requer veiculo_id' };
+  }
+  const etapaOrigem = sga_enqueue.etapa_origem || 'ativar_associado';
+  try {
+    const { error } = await (supabase as any).rpc('enqueue_integration', {
+      _integration: 'sga',
+      _operation: 'hinova_sync',
+      _payload: {
+        veiculo_id,
+        associado_id,
+        status_sga_destino: sga_enqueue.status_sga_destino || 'ativo',
+        force_resync_media: sga_enqueue.force_resync_media === true,
+        etapa_origem: etapaOrigem,
+        motivo_decisao: sga_enqueue.motivo_decisao || `Ativação via edge ativar-associado (${etapaOrigem})`,
+      },
+      // determinístico por (veiculo, etapa) — retries não criam nova linha
+      _correlation_id: `sga:hinova:${veiculo_id}:${etapaOrigem}`,
+      _max_attempts: 5,
+      _delay_seconds: 0,
+      _created_by: actor_id,
+    });
+    if (error) return { ok: false, erro: error.message };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, erro: e?.message || String(e) };
+  }
 }
 
 function jsonResponse(body: unknown, status = 200) {
