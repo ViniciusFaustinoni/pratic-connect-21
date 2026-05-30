@@ -176,11 +176,16 @@ export default function PropostaAnalise() {
     aguardandoMonitoramentoVistoria,
   } = resolverEscopoAnaliseCadastro(proposta as any, { isMoto });
 
+  const aguardandoExecucaoReal =
+    aguardandoExecucao &&
+    !autovistoriaCompleta &&
+    !temFotosOuVideo;
+
 
   const podeAprovar =
     proposta?.status === 'assinado' &&
     !proposta?.tem_documento_pendente &&
-    (!aguardandoExecucao || aprovarApenasDocumentos) &&
+    (!aguardandoExecucaoReal || aprovarApenasDocumentos) &&
     sgaLiberado;
 
   // Estado final (já aprovado / reprovado / cancelado)
@@ -677,7 +682,7 @@ export default function PropostaAnalise() {
       )}
 
       {/* Banner: aguardando execução da vistoria/instalação (analista pode revisar docs mas não aprovar) */}
-      {!isFinalizada && aguardandoExecucao && !aprovarApenasDocumentos && (
+      {!isFinalizada && aguardandoExecucaoReal && !aprovarApenasDocumentos && (
         <div className="rounded-lg border-2 border-info/40 bg-info/10 p-4">
           <div className="flex items-start gap-3">
             <ClipboardCheck className="h-5 w-5 text-info mt-0.5 shrink-0" />
@@ -771,7 +776,7 @@ export default function PropostaAnalise() {
       )}
 
       {/* ZONA 2: Stepper de Aprovação por Etapas */}
-      <div className={!isFinalizada && !sgaLiberado ? 'opacity-50 pointer-events-none' : ''}>
+      <div>
         <PropostaApprovalStepper
           proposta={proposta}
           documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
