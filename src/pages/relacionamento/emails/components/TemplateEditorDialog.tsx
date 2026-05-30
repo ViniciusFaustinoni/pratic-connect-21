@@ -59,6 +59,16 @@ export function TemplateEditorDialog({ template, onOpenChange }: Props) {
 
   const dirty = assunto !== template.assunto || corpo !== template.corpo;
 
+  const validacao = useMemo(
+    () =>
+      validarTemplate({
+        assunto,
+        corpo,
+        declaradas: (template.variaveis_disponiveis ?? []).map((v) => ({ code: v.code, label: v.label })),
+      }),
+    [assunto, corpo, template.variaveis_disponiveis],
+  );
+
   const inserirVariavel = (code: string) => {
     if (insertVarRef.current) {
       insertVarRef.current(code);
