@@ -15,6 +15,7 @@ import {
   getHinovaSession,
   buscarVeiculoPorPlaca,
   HinovaTransientError,
+  HinovaNotFoundError,
   calcularProximoRetry,
 } from '../_shared/hinova-client.ts';
 
@@ -210,6 +211,10 @@ serve(async (req) => {
     const resp: RespOk = { encontrado: true, veiculo, associado };
     return json(200, resp);
   } catch (e: any) {
+    // 404/406 confirmados pelo Hinova significam "placa não cadastrada" — não é erro.
+    if (e instanceof HinovaNotFoundError) {
+      return json(200, empty);
+    }
     if (e instanceof HinovaTransientError) {
       const retry = calcularProximoRetry(e.reason);
       console.warn('[sga-buscar-veiculo-associado] transitório:', e.reason, e.message);
