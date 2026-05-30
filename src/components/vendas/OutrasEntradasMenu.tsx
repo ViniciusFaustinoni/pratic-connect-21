@@ -419,6 +419,55 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     }
   };
 
+  // Quando a placa NOVA da substituição existe no SGA, na verdade é Troca de Titularidade.
+  // Importa o associado anterior (dono atual) e abre o dialog de Troca.
+  const handleProsseguirComoTroca = async () => {
+    if (!selectedAssociadoCpf) {
+      toast.error('Associado anterior sem CPF — não é possível redirecionar para Troca');
+      return;
+    }
+    const cpfLimpo = selectedAssociadoCpf.replace(/\D/g, '');
+    if (cpfLimpo.length !== 11) {
+      toast.error('CPF do associado anterior inválido');
+      return;
+    }
+    setRedirecionandoTroca(true);
+    try {
+      toast.info('Importando associado anterior do SGA...');
+      const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
+        body: { cpf: cpfLimpo },
+      });
+      if (error) {
+        let msgAmigavel: string | undefined;
+        try {
+          const anyErr = error as any;
+          if (anyErr?.context && typeof anyErr.context.json === 'function') {
+            const body = await anyErr.context.json();
+            msgAmigavel = body?.error;
+          }
+        } catch { /* ignore */ }
+        throw new Error(msgAmigavel || error.message);
+      }
+      const msgAmigavel = (data as any)?.error;
+      if (msgAmigavel) throw new Error(msgAmigavel);
+      const associadoLocalId = (data as any)?.associado_id;
+      if (!associadoLocalId) throw new Error('Falha ao localizar associado após import do SGA');
+
+      // Troca pelo UUID local e mantém nome/cpf/codigo Hinova
+      setSelectedAssociadoId(associadoLocalId);
+      setSelectedAssociadoCpf(cpfLimpo);
+      setSelectedCodigoHinova(sgaSnapshot?.associado?.codigo_associado ?? null);
+      // Abre Troca ANTES de fechar pai (evita reset prematuro do useEffect)
+      setShowTrocaTitularidade(true);
+      setTimeout(() => onOpenChange(false), 0);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao redirecionar para Troca de Titularidade');
+    } finally {
+      setRedirecionandoTroca(false);
+    }
+  };
+
+
   const handleNovaCotacao = () => {
     onOpenChange(false);
     onNovaCotacao();
