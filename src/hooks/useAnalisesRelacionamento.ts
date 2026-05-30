@@ -221,6 +221,47 @@ export function useResolverAnalise() {
   });
 }
 
+export interface UltimaAnaliseInfo {
+  createdAt: string;
+  diasDesde: number;
+  total30d: number;
+}
+
+export function useUltimaAnaliseRecebida() {
+  return useQuery<UltimaAnaliseInfo | null>({
+    queryKey: ['ultima-analise-recebida'],
+    queryFn: async () => {
+      const [ultimo, total] = await Promise.all([
+        (supabase as any)
+          .from('analises_relacionamento')
+          .select('created_at')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        (supabase as any)
+          .from('analises_relacionamento')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+      ]);
+
+      if (ultimo.error) throw ultimo.error;
+      if (!ultimo.data) return null; // tabela vazia → sem chip
+
+      const createdAt: string = ultimo.data.created_at;
+      const diasDesde = Math.floor(
+        (Date.now() - new Date(createdAt).getTime()) / 86400000
+      );
+
+      return {
+        createdAt,
+        diasDesde,
+        total30d: total.count ?? 0,
+      };
+    },
+    staleTime: 60_000,
+  });
+}
+
 export async function uploadAnexoRelacionamento(
   analiseId: string,
   file: File,
