@@ -1154,6 +1154,29 @@ export default function CotacaoContratacao() {
                       veiculoNovoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ')}
                       onConfirm={(mesmoLocal) => setSubstituicaoMesmoLocal(mesmoLocal)}
                     />
+                  ) : isSubstituicao && substituicaoMesmoLocal === false && !cotacao?.vistoria_concluida_em ? (
+                    <AgendamentoSubstituicaoSeparado
+                      cotacaoId={cotacao.id}
+                      veiculoAntigoPlaca={dadosExtras?.veiculo_antigo_placa || '???'}
+                      veiculoAntigoModelo={dadosExtras?.veiculo_antigo_modelo || ''}
+                      veiculoNovoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ')}
+                      enderecoInicialNovo={{
+                        cep: cotacao.cliente_cep || '',
+                        logradouro: cotacao.cliente_logradouro || '',
+                        numero: cotacao.cliente_numero || '',
+                        complemento: cotacao.cliente_complemento || '',
+                        bairro: cotacao.cliente_bairro || '',
+                        cidade: cotacao.cliente_cidade || '',
+                        estado: cotacao.cliente_uf || '',
+                      }}
+                      onComplete={async () => {
+                        await queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
+                        await refetch();
+                        const idx = navOrder.indexOf(4);
+                        const next = idx >= 0 && idx < navOrder.length - 1 ? navOrder[idx + 1] : 5;
+                        setEtapaAtual(next);
+                      }}
+                    />
                   ) : cotacao?.vistoria_concluida_em ? (
                     <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
