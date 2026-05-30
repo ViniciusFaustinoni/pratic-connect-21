@@ -11,14 +11,10 @@ type Plano = Database['public']['Tables']['planos']['Row'];
 
 const APP_BASE_URL = 'https://app.praticcar.org';
 
-export interface DocumentoAnexado {
-  id: string;
-  tipo: string;
-  arquivo_nome: string | null;
-  arquivo_url: string;
-  status: string;
-  created_at: string;
-}
+// Tipo canônico centralizado em src/types/documentos.ts. Re-exportado para
+// preservar compatibilidade com consumidores que importam daqui.
+export type { DocumentoAnexado } from '@/types/documentos';
+import type { DocumentoAnexado } from '@/types/documentos';
 
 export interface VistoriaFotoInfo {
   id: string;
