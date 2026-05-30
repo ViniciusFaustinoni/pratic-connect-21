@@ -528,6 +528,55 @@ Deno.serve(async (req) => {
       },
     });
 
+    // ----- 10.1) Alerta de ativação concorrente -----
+    // Se outro caller diferente tentou ativar o mesmo associado em < 5 min,
+    // sinaliza no console e em logs_auditoria. Não bloqueia a resposta — o
+    // CAS+lock garantem idempotência; isto serve para identificar lógica
+    // redundante entre os 7 callers documentados acima.
+    try {
+      const sourceFull = `edge:ativar-associado<-${source}${partial ? ':parcial' : ''}`;
+      const { data: recentes } = await supabase
+        .from('ativacao_status_log')
+        .select('source, created_at')
+        .eq('associado_id', associado_id)
+        .in('to_status', ['ativo', 'ativo_parcial'])
+        .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+        .neq('source', sourceFull)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const anterior = recentes?.[0];
+      if (anterior) {
+        const gapMs = Date.now() - new Date(anterior.created_at as string).getTime();
+        console.warn('[ativar-associado][race] dupla ativação <5min', {
+          associado_id,
+          source_atual: sourceFull,
+          source_anterior: anterior.source,
+          gap_ms: gapMs,
+        });
+        await insertAuditLog(supabase, {
+          usuario_id: actor_id ?? null,
+          usuario_nome: 'sistema',
+          acao: 'criar',
+          modulo: 'configuracoes',
+          descricao: `[ATIVACAO_CONCORRENTE] ${anterior.source} → ${sourceFull} em ${gapMs}ms`,
+          tabela: 'ativacao_status_log',
+          registro_id: associado_id,
+          dados_novos: {
+            associado_id,
+            contrato_id: targetContratoId,
+            source_atual: sourceFull,
+            source_anterior: anterior.source,
+            gap_ms: gapMs,
+          },
+        });
+      }
+    } catch (raceErr) {
+      console.warn('[ativar-associado] alerta concorrência falhou (não bloqueante):', raceErr);
+    }
+
+
+
     if (partial) {
       return jsonResponse({
         success: false,
