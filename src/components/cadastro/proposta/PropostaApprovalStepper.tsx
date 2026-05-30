@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { 
   FileText, Camera, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft,
-  AlertCircle, Eye, MapPin, XCircle
+  AlertCircle, Eye, MapPin, XCircle, Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
 import { PropostaMidiaGrid } from './PropostaMidiaGrid';
@@ -16,6 +17,11 @@ import type { PropostaPendente, VistoriaFotoInfo } from '@/hooks/usePropostasPen
 import type { DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 import { useCancelarDocumentosSolicitados } from '@/hooks/useCancelarDocumentosSolicitados';
 import { formatPeriodoLabel } from '@/lib/periodo-utils';
+import {
+  type GateAprovacao,
+  gatesParaBotao,
+} from '@/lib/cadastro/gatesAprovacaoCadastro';
+import { registrarCliqueBloqueado } from '@/lib/cadastro/telemetriaCliqueBloqueado';
 
 interface PropostaApprovalStepperProps {
   proposta: PropostaPendente;
