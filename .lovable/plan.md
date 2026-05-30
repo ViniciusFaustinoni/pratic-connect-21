@@ -1,69 +1,85 @@
-# Desvinculação reversa Softruck/Rede — fechar gaps
+# Substituição: 2 agendamentos quando locais diferentes
 
-## Diagnóstico do caso do anexo
+## Estado atual
 
-Operador retirou o rastreador → desvinculou na **Softruck** às 15:06 de 28/05 → de madrugada (02:21 de 29/05) o sistema **re-vinculou sozinho**.
+Hoje a Substituição no link público já mostra a pergunta **"Os dois veículos estarão no mesmo local?"** (`AgendamentoSubstituicao.tsx`), mas a resposta vira só um flag de UI (`substituicaoMesmoLocal`) que **nunca chega no backend**. Independente da escolha, o fluxo cai em **uma única `EtapaVistoria`**, gera **1 `agendamento_base`** e o `criar-instalacao-pos-pagamento` materializa **2 serviços no mesmo agendamento** (`instalacao` do veículo novo + `vistoria_retirada` do veículo antigo, mesmo endereço, mesma data, mesmo período).
 
-Reconstituí o fluxo:
+A mensagem na UI já promete "Dois agendamentos separados" para a opção "Não", mas isso não acontece de fato.
+
+## O que muda
+
+### Comportamento
+
+- **Mesmo local** (sem mudança): continua como hoje — 1 `agendamento_base` com 2 serviços no mesmo endereço/data/período.
+- **Locais diferentes** (novo comportamento): cliente preenche **dois formulários de agendamento**, em sequência, **instalação primeiro, depois retirada**, cada um com data/período/endereço próprios e totalmente independentes (sem trava de ordem cronológica entre eles).
+
+### Fluxo na etapa "Vistoria" do link público (substituição)
 
 ```text
-1. Retirada física do rastreador  →  nosso lado segue com veiculo_id preenchido,
-                                     status='instalado', softruck_integration_status='PENDING'
-2. Desvínculo manual no painel Softruck (15:06 28/05)
-   • Webhook DEVICES.DISASSOCIATED da Softruck NÃO chegou
-     (ou foi ignorado/atrasado) → nosso veiculo_id NÃO foi zerado
-3. Cron `cron-softruck-reconciliar-pending` (cada 10 min) pega o rastreador:
-   • veiculo_id != null  + status='instalado' + PENDING
-   • chama `softruck-ativar-dispositivo` / `softruck-reconciliar-pending`
-   • re-cria o vínculo na plataforma → "Associado em 02:21 29/05"
+[AgendamentoSubstituicao "mesmo local?"]
+        │
+   ┌────┴─────┐
+   │          │
+  SIM        NÃO
+   │          │
+   │   [Form 1: INSTALAÇÃO (veículo novo)]
+   │          │  (data + período + endereço novo)
+   │          ▼
+   │   [Form 2: RETIRADA (veículo antigo)]
+   │          │  (data + período + endereço antigo)
+   │          ▼
+   │   confirma os dois → cria 2 agendamentos_base separados
+   │
+   └─→ [EtapaVistoria normal] → 1 agendamento_base + 2 serviços
 ```
 
-Hoje o sistema só reflete desvínculo remoto quando:
-- **Softruck**: chega o webhook `DEVICES.DISASSOCIATED` (instável, ver memória), OU alguém aciona manualmente `rastreador-reconciliar-softruck` no drawer.
-- **Rede Veículos**: cron `rede-veiculos-sync-cron` (30 min) processa os primeiros 50 associados — limit 50 hardcoded.
+UI:
+- Cabeçalho mostra os dois veículos com badges "1 de 2 – Instalação (novo)" e "2 de 2 – Retirada (antigo)".
+- Botão "Voltar para o veículo anterior" no Form 2 para corrigir o Form 1 antes de confirmar.
+- Confirma só no final, em uma chamada única ao backend (atômica).
 
-## Causa raiz
+## Detalhes técnicos
 
-Os crons de reconciliação são **unidirecionais para a frente** (PENDING → vincular). Não fazem o probe inverso antes de re-vincular, então um desvínculo manual na plataforma é interpretado como "vínculo perdido — refazer".
+### Frontend
 
-## Plano (3 ajustes, ordem de importância)
+1. `src/components/cotacao-publica/AgendamentoSubstituicao.tsx`
+   - Mantém a pergunta inicial. Sem mudança visual relevante.
 
-### 1. Probe inverso obrigatório antes de re-vincular (Softruck)
+2. `src/pages/public/CotacaoContratacao.tsx` (etapa 4, ramo `isSubstituicao`)
+   - Quando `substituicaoMesmoLocal === true` → renderiza `EtapaVistoria` como hoje.
+   - Quando `substituicaoMesmoLocal === false` → renderiza um novo wrapper `AgendamentoSubstituicaoSeparado` (componente novo) que reusa internamente o mesmo formulário de agendamento da `EtapaVistoria` em dois passos.
 
-Em `cron-softruck-reconciliar-pending` e `softruck-reconciliar-pending`, **antes** de chamar `softruck-ativar-dispositivo`/PATCH de associação:
+3. Novo componente `src/components/cotacao-publica/AgendamentoSubstituicaoSeparado.tsx`
+   - Encapsula 2 passos visuais (instalação → retirada) com estado local (`dadosInstalacao`, `dadosRetirada`).
+   - Reaproveita o mesmo formulário de endereço/data/período que `AgendamentoVistoria` já usa (extraído para um subcomponente puro, se necessário).
+   - No "Confirmar", chama uma nova edge function única que recebe os dois payloads.
 
-- GET `/devices?imei=...` na Softruck.
-- Se o device existe mas `relationships.vehicle` está vazio **E** nosso `veiculo_id` não-nulo já tem mais de N minutos sem mudança → tratar como desvínculo remoto: aplicar a mesma rotina canônica de `rastreador-reconciliar-softruck` (linhas 180–218): zerar `veiculo_id`, `plataforma_veiculo_id`, status → `estoque`, marcar `softruck_integration_status='RECONCILIADO_REMOTO'`, gravar `rastreadores_vinculo_historico` com `origem='auto_desvinculo_remoto_softruck'`.
-- Notificar Monitoramento (`notificacoes_internas`) com severidade alta — operador precisa saber que houve mexida no painel externo.
+### Backend
 
-### 2. Reconciliação Softruck cobrindo `instalado` "SUCCESS" também
+4. Nova edge function `supabase/functions/criar-substituicao-agendamentos-separados/index.ts`
+   - Input: `{ cotacao_id, instalacao: {data, periodo, endereco}, retirada: {data, periodo, endereco} }`.
+   - Reusa a mesma rotina interna de `criar-instalacao-pos-pagamento` para o serviço de instalação (com seu próprio `agendamento_base`), e cria um **segundo `agendamento_base`** + serviço `vistoria_retirada` para o veículo antigo, com data/endereço próprios.
+   - Idempotência: chave `(cotacao_id, "separado")` para não duplicar em re-submit; também idempotente por `(veiculo_antigo_id)` para a retirada (já existe na lógica atual).
+   - Marca `cotacoes.dados_extras.substituicao_agendamentos_separados = true` para auditoria.
 
-Hoje o cron só olha `softruck_integration_status IN ('PENDING','pending')`. Rastreador que ficou em SUCCESS e foi desvinculado depois no painel **nunca é varrido**. Criar uma varredura paralela leve (mesmo cron, segundo lote, menor frequência — ex.: a cada hora) que pega N rastreadores Softruck `status='instalado'` + `SUCCESS` ordenados por `updated_at ASC`, faz o GET descrito acima e aplica desvínculo local quando o device está sem vehicle remoto. Isso fecha o gap "webhook DISASSOCIATED nunca chegou".
+5. `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+   - Bloco 6.2 (retirada) ganha um guard: **pula** a criação da retirada quando `dados_extras.substituicao_agendamentos_separados === true` (porque a edge nova já fez).
+   - Quando flag ausente / false → comportamento atual (1 agendamento, 2 serviços).
 
-### 3. Cron Rede Veículos: subir o teto e priorizar mais antigos
+### Banco / regras canônicas
 
-`rede-veiculos-sync-cron` hoje limita a 50 associados sem ordenação determinística — associados além do 50º não recebem sync nunca. Mudar para:
-- Ordenar por `veiculos.updated_at ASC` (mais antigos primeiro), ou usar uma coluna `rede_veiculos_last_sync_at` em `veiculos` (criar via migration) para round-robin real.
-- Aumentar o batch para 200 e quebrar em chunks paralelos pequenos (não derruba o endpoint da Rede).
+- A regra "1 agendamento ativo por origem" (trigger `trg_sync_agendamento_base_on_servico_terminal`) continua valendo: aqui são **duas origens diferentes** (veículo novo vs. veículo antigo), então 2 `agendamento_base` é legítimo.
+- Memória `mem://logic/operations/substituicao-2-servicos-agendamento` será atualizada para descrever as duas variantes (mesmo local vs. separado).
+- Nenhuma migração de schema necessária.
 
-A função `rede-veiculos-sincronizar-status` já tem a lógica reversa correta (linhas 147–235 do edge) — só precisa ser disparada para todos os vinculados.
+### Compatibilidade
 
-## Validação pós-deploy
+- Não afeta substituições já materializadas (idempotência por flag em `dados_extras`).
+- Não afeta Troca de Titularidade (que continua sem agendamento de retirada — veículo é só transferido).
+- Não afeta Nova Adesão nem Sub-FIPE.
 
-1. Forçar manualmente um device Softruck "instalado/SUCCESS" → desvincular no painel da Softruck → aguardar ciclo do cron → confirmar:
-   - `rastreadores.veiculo_id = NULL`, `status='estoque'`, `softruck_integration_status='RECONCILIADO_REMOTO'`
-   - linha em `rastreadores_vinculo_historico` com `origem='auto_desvinculo_remoto_softruck'`
-   - notificação em Monitoramento
-2. Mesmo teste pela Rede Veículos — confirmar que associado fora dos primeiros 50 agora é alcançado.
-3. Rever o caso do anexo: ao reaplicar o cenário (desvínculo manual no painel + esperar), o cron NÃO pode mais re-vincular.
+## Validação
 
-## Pendência paralela já registrada (não entra nesta rodada)
-
-- Investigar instabilidade do webhook Softruck `DEVICES.DISASSOCIATED` — quando chega/quando não chega. Sem o webhook estável, o polling é o fallback canônico, mas o ideal é entender por que o evento não dispara em desvínculos via painel.
-
-## Fora de escopo
-
-- Mudar o modelo de "device_id próprio IMEI placeholder" (não relacionado ao gap reverso).
-- Backfill histórico de rastreadores que sofreram re-vinculação indevida — depende de auditoria caso a caso após a correção entrar.
-
-Atualização de memória após implementação: refinar `mem://logic/operations/softtruck-desvinculo-bidirecional` para deixar explícito que cron faz probe inverso antes de re-vincular e que cobertura inclui status SUCCESS, não só PENDING.
+- E2E manual com a credencial admin (cotação de substituição, optar por "locais diferentes"): conferir aparecem os 2 forms, depois confirmar e checar no banco que existem **2 linhas em `agendamentos_base`** ligadas à cotação, com 1 serviço cada (`instalacao` e `vistoria_retirada`).
+- Caso "mesmo local": confere que permanece 1 `agendamento_base` com 2 serviços (regressão).
+- Verifica filas: ambos serviços aparecem na fila de atribuição do Monitoramento, cada um na sua data.
