@@ -167,6 +167,35 @@ Deno.serve(async (req) => {
     const videoFoto = fotosArr.find((f) => f.tipo === 'video_360' || f.tipo === 'video');
     const videoUrl = videoFoto?.arquivo_url ?? null;
 
+    // 4.b GATE sub-FIPE: bloqueia finalização se o set canônico estiver incompleto.
+    // Só roda na PRIMEIRA finalização (sem vistoria existente). Idempotência preservada:
+    // re-chamada após sucesso passa pelo branch `vistoriaExistente`.
+    if (veiculoSubFipe && !vistoriaExistente) {
+      const completude = checarCompletudeAutovistoriaSubFipe({
+        tipo: tipoVeiculoSubFipe,
+        fotosEnviadas: fotosArr.map((f) => f.tipo),
+      });
+      if (!completude.ok) {
+        console.warn('[finalizar-autovistoria] sub-FIPE incompleta', {
+          cotacaoId,
+          tipo: tipoVeiculoSubFipe,
+          faltantes: completude.obrigatoriasFaltantes,
+          videoFaltante: completude.videoFaltante,
+          recebidas: completude.recebidas,
+        });
+        return jsonResponse({
+          success: false,
+          code: 'AUTOVISTORIA_INCOMPLETA',
+          error: 'Autovistoria sub-FIPE incompleta — faltam fotos obrigatórias ou vídeo 360°.',
+          tipoVeiculo: tipoVeiculoSubFipe,
+          faltantes: completude.obrigatoriasFaltantes,
+          videoFaltante: completude.videoFaltante,
+          esperadasMin: completude.esperadasMin,
+          recebidas: completude.recebidas,
+        }, 409);
+      }
+    }
+
     let vistoriaId = vistoriaExistente?.id ?? null;
     let createdVistoria = false;
 
