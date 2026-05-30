@@ -200,7 +200,47 @@ export type TipoDocumentoAnexo =
   | 'foto_chassi'
   | 'outro';
 
-// Interface completa para documento anexado
+/**
+ * Dados OCR opcionais aninhados em um documento anexado (CNH, CRLV, etc.).
+ */
+export interface DocumentoAnexadoOcr {
+  validado_ocr?: boolean;
+  dados?: {
+    // CNH
+    nome?: string;
+    numero_registro?: string;
+    rg?: string;
+    validade?: string;
+    // CRLV
+    cor?: string;
+    combustivel?: string;
+    motor?: string;
+    placa?: string;
+    renavam?: string;
+    chassi?: string;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Tipo canônico operacional de documento anexado — usado na fila do Cadastro
+ * (hook usePropostasPendentes + componente DocumentosAnexadosCard).
+ *
+ * Diferente de {@link DocumentoAnexadoCompleto}, que é a versão "rica" usada
+ * no painel Autentique (DocumentosAnexadosPanel/DocumentoAnexadoCard) com
+ * status/tipo tipados, campos de assinatura digital e análise manual.
+ */
+export interface DocumentoAnexado {
+  id: string;
+  tipo: string;
+  arquivo_url: string;
+  arquivo_nome?: string | null;
+  status: string;
+  created_at: string;
+  ocr_resultado?: DocumentoAnexadoOcr;
+}
+
+// Interface completa para documento anexado (painel Autentique)
 export interface DocumentoAnexadoCompleto {
   id: string;
   tipo: TipoDocumentoAnexo;
