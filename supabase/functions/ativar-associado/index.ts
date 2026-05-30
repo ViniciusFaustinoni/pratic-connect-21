@@ -5,9 +5,33 @@
 // - Idempotente: se já 'ativo', retorna sucesso sem reexecutar side effects.
 // - Valida campos obrigatórios via fn_validar_campos_ativacao.
 // - Loga origem (source) para auditoria via ativacao_status_log.
+//
+// ────────────────────────────────────────────────────────────────────────────
+// MATRIZ CANÔNICA DE CALLERS AUTORIZADOS
+// (regra mem://architecture/activation/single-source-activation — qualquer
+//  caller novo PRECISA ser adicionado aqui e revisado em code review)
+//
+//  # | Caller                                          | source                                          | Momento do fluxo                                  | allowed_from esperado
+//  --|-------------------------------------------------|-------------------------------------------------|---------------------------------------------------|----------------------------------------------------------------------------------------------
+//  1 | edge: aprovar-proposta                          | edge:aprovar-proposta                           | Cadastro aprova proposta sem rastreador físico    | aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado
+//  2 | edge: aprovar-troca-monitoramento               | edge:aprovar-troca-monitoramento                | Monitoramento aprova troca de titularidade        | assinado, aguardando_instalacao, pendente
+//  3 | edge: criar-instalacao-pos-pagamento            | edge:criar-instalacao-pos-pagamento             | Pagamento confirmado + instalação materializada   | default (assinado, aguardando_instalacao, pendente)
+//  4 | cron: reconciliar-contratos-pos-monitoramento   | cron:reconciliar-contratos-pos-monitoramento    | Cron 15min destrava contratos parados (assinado)  | assinado, aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado
+//  5 | edge: softruck-ativar-dispositivo               | edge:softruck-ativar-dispositivo                | Read-back Softruck confirmou vínculo IMEI↔veículo | default (assinado, aguardando_instalacao, pendente)
+//  6 | hook: useAprovacaoMonitoramento (UI)            | hook:useAprovacaoMonitoramento                  | Coordenador aprova manualmente na Aprovação       | assinado, aguardando_instalacao, pendente, em_analise, documentacao_pendente, aprovado
+//  7 | hook: useVistoriaCompletaAnalise (UI)           | hook:useVistoriaCompletaAnalise                 | Análise da vistoria completa pelo coordenador     | assinado, aguardando_instalacao, pendente, em_analise, documentacao_pendente, aprovado
+//
+// Side-effects além do status do associado/contrato/veículo: integração SGA
+// (sga_sync_queue), Softruck/Rede (vínculo), cotacoes.status_contratacao,
+// historico_status_contratos. O CAS + advisory lock garantem que uma 2ª chamada
+// concorrente vira no-op idempotente — não há risco de dupla ativação real, mas
+// a presença de 2 callers diferentes em < 5 min é sinal de lógica redundante
+// e dispara alerta de auditoria (ver bloco "Alerta de ativação concorrente").
+// ────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { translateDbError } from '../_shared/db-error-translator.ts';
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -503,6 +527,55 @@ Deno.serve(async (req) => {
         ...metadata,
       },
     });
+
+    // ----- 10.1) Alerta de ativação concorrente -----
+    // Se outro caller diferente tentou ativar o mesmo associado em < 5 min,
+    // sinaliza no console e em logs_auditoria. Não bloqueia a resposta — o
+    // CAS+lock garantem idempotência; isto serve para identificar lógica
+    // redundante entre os 7 callers documentados acima.
+    try {
+      const sourceFull = `edge:ativar-associado<-${source}${partial ? ':parcial' : ''}`;
+      const { data: recentes } = await supabase
+        .from('ativacao_status_log')
+        .select('source, created_at')
+        .eq('associado_id', associado_id)
+        .in('to_status', ['ativo', 'ativo_parcial'])
+        .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+        .neq('source', sourceFull)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const anterior = recentes?.[0];
+      if (anterior) {
+        const gapMs = Date.now() - new Date(anterior.created_at as string).getTime();
+        console.warn('[ativar-associado][race] dupla ativação <5min', {
+          associado_id,
+          source_atual: sourceFull,
+          source_anterior: anterior.source,
+          gap_ms: gapMs,
+        });
+        await insertAuditLog(supabase, {
+          usuario_id: actor_id ?? null,
+          usuario_nome: 'sistema',
+          acao: 'criar',
+          modulo: 'configuracoes',
+          descricao: `[ATIVACAO_CONCORRENTE] ${anterior.source} → ${sourceFull} em ${gapMs}ms`,
+          tabela: 'ativacao_status_log',
+          registro_id: associado_id,
+          dados_novos: {
+            associado_id,
+            contrato_id: targetContratoId,
+            source_atual: sourceFull,
+            source_anterior: anterior.source,
+            gap_ms: gapMs,
+          },
+        });
+      }
+    } catch (raceErr) {
+      console.warn('[ativar-associado] alerta concorrência falhou (não bloqueante):', raceErr);
+    }
+
+
 
     if (partial) {
       return jsonResponse({

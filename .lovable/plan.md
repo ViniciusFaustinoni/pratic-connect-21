@@ -1,33 +1,69 @@
-## ERRO 12 — Estado atual
+# ERRO 13 — Endurecer ativar-associado (documentação + alerta)
 
-A funcionalidade do gate SGA financeiro já existe em `SituacaoFinanceiraGate.tsx` (botão "Consultar SGA novamente" + bypass auditado nos casos INCONCLUSIVO e INADIMPLENTE). Esta correção fecha os dois gaps restantes.
+## Diagnóstico (estado atual)
 
-## Mudanças
+`ativar-associado` já é o **único caminho canônico** para promover associado/contrato/veículo a `ativo` (regra de memória `mem://architecture/activation/single-source-activation`). Já tem:
 
-**1. Bypass também no estado de erro do SGA** (`src/components/cadastro/SituacaoFinanceiraGate.tsx`, bloco `if (isError || !data)` linhas 58–78)
+- `pg_advisory_xact_lock` por `associado_id`
+- CAS via `.in('status', allowed_from_assoc)` no UPDATE
+- Coerção `aguardar_instalacao=true → cobertura flags=false`
+- Guard de rastreador físico para Diesel / FIPE≥
+- Log em `ativacao_status_log` com `source` (já preenchido por todos os callers)
 
-Hoje o bloco só mostra "Tentar novamente". Se a edge falha de verdade, não existe registro recente em `sga_situacao_check` e o backend bloqueia com 409 `inadimplencia_sga_pendente`. Vou adicionar:
+O que **falta**: rastreabilidade explícita de quem pode chamar com qual `allowed_from`, e detecção quando dois callers diferentes batem no mesmo associado quase simultaneamente (sinal de race / lógica duplicada).
 
-- Botão "Ignorar e Prosseguir" (`KeyRound`) ao lado de "Tentar novamente"
-- Reutiliza o mesmo `Dialog` de motivo já existente (extrair em variável compartilhada para não duplicar o JSX entre os três estados que abrem o bypass)
-- O `onSuccess` do bypass espelha em `cotacao_avisos_sga` com `detalhes.origem_resultado: 'erro_consulta_sga'` para diferenciar dos outros casos na auditoria
-- Texto curto do card: "Não foi possível consultar o SGA. Tente novamente ou prossiga sob sua responsabilidade — a ação será registrada."
+### Callers reais hoje (7, não 5)
 
-**2. Esconder bypass para quem não tem permissão**
+| # | Caller | `source` | `allowed_from` |
+|---|---|---|---|
+| 1 | `aprovar-proposta` (edge) | `edge:aprovar-proposta` | `aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado` |
+| 2 | `aprovar-troca-monitoramento` (edge) | `edge:aprovar-troca-monitoramento` | `assinado, aguardando_instalacao, pendente` |
+| 3 | `criar-instalacao-pos-pagamento` (edge) | `edge:criar-instalacao-pos-pagamento` | default da edge |
+| 4 | `reconciliar-contratos-pos-monitoramento` (cron) | `cron:reconciliar-contratos-pos-monitoramento` | `assinado, aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado` |
+| 5 | `softruck-ativar-dispositivo` (edge) | `edge:softruck-ativar-dispositivo` | default da edge |
+| 6 | `useAprovacaoMonitoramento` (hook UI) | `hook:useAprovacaoMonitoramento` | `assinado, aguardando_instalacao, pendente, em_analise, documentacao_pendente, aprovado` |
+| 7 | `useVistoriaCompletaAnalise` (hook UI) | `hook:useVistoriaCompletaAnalise` | mesmo do anterior |
 
-Usar `usePermissions().hasPermission('cadastro.bypass_inadimplencia_sga')` (a permissão já é checada pela edge na linha 132). Quando `false`, o botão "Ignorar e Prosseguir" não é renderizado em nenhum dos três estados (INCONCLUSIVO, INADIMPLENTE, erro). O `RefreshCw`/Consultar SGA novamente continua visível para todos.
+## Escopo da correção
 
-A edge `verificar-situacao-financeira-cadastro` já valida e retorna 403 `sem_permissao_bypass` — a UI só evita mostrar um botão que daria erro.
+Apenas observabilidade + documentação. **Sem mudança de regra funcional** — não vamos restringir `allowed_from` por caller agora (risco de quebrar fluxos válidos em produção).
 
-## Detalhes técnicos
+### 1. Bloco de documentação canônica em `supabase/functions/ativar-associado/index.ts`
 
-- Verificar se `hasPermission` aceita a chave `'cadastro.bypass_inadimplencia_sga'`; se a chave não estiver tipada no `PermissionKey`, usar a RPC `has_permission` via hook leve ou cast `as PermissionKey` consistente com o resto do projeto (confirmar lendo o `PermissionKey` antes do edit).
-- Extrair o `<Dialog>` de bypass em uma constante JSX local dentro do componente (parametrizada por `origem_resultado` para a auditoria) para não triplicar o bloco.
-- Nenhuma mudança no backend, edge functions, migrations ou no `aprovar-proposta`. Mudança puramente de UI.
-- Sem mudança em `ModalDetalhesTroca.tsx` — herda automaticamente porque consome o mesmo componente.
+Comentário no topo do arquivo listando os 7 callers autorizados, em qual momento do fluxo cada um dispara e qual é o `allowed_from` esperado. Serve como referência única — qualquer caller novo deve aparecer aqui.
 
-## Verificação
+### 2. Alerta de ativação concorrente
 
-- Build TypeScript passa
-- Render manual mental dos 4 estados: loading, erro (NOVO bypass), inconclusivo (bypass), inadimplente (bypass), OK
-- Para usuário sem permissão: botão de bypass não aparece em nenhum estado
+Adicionar, logo após o INSERT em `ativacao_status_log`, uma checagem leve:
+
+```text
+SELECT source, created_at
+FROM   ativacao_status_log
+WHERE  associado_id = :assoc
+  AND  to_status    = 'ativo'
+  AND  created_at  >= now() - interval '5 minutes'
+  AND  source <> :source_atual
+ORDER  BY created_at DESC
+LIMIT  1;
+```
+
+Se retornar linha, registrar:
+
+- `console.warn('[ativar-associado][race] dupla ativação <5min', { associado_id, source_atual, source_anterior, gap_ms })`
+- `logs_auditoria` com `acao='criar'` e descrição `[ATIVACAO_CONCORRENTE] {source_anterior} → {source_atual} em {gap_ms}ms` (passa pelo helper `insertAuditLog` para respeitar a regra `mem://logic/audit/logs-auditoria-vigia-universal`)
+
+Não bloqueia a resposta — só sinaliza. O CAS+lock já garantem que a 2ª ativação é no-op idempotente; o alerta serve pra debugar e identificar caller redundante.
+
+### 3. Sem migração de schema
+
+`ativacao_status_log` já tem `source` e `created_at` — basta consultar.
+
+## Arquivos tocados
+
+- `supabase/functions/ativar-associado/index.ts` — comentário-cabeçalho com matriz de callers + query de detecção pós-INSERT do log
+
+## Fora de escopo (registrar como dívida)
+
+- Restringir `allowed_from` por caller (exige saneamento de dados em prod antes)
+- Painel admin pra visualizar ativações concorrentes (sai do log via dashboard existente)
+- Memória de projeto pra fixar a matriz de callers (sugiro criar `mem://architecture/activation/callers-matrix` depois que aprovar)
