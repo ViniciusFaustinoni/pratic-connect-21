@@ -1,103 +1,69 @@
+# Desvinculação reversa Softruck/Rede — fechar gaps
 
-## Diagnóstico
+## Diagnóstico do caso do anexo
 
-### Por que o LUIZ FERNANDO ainda não aprova
+Operador retirou o rastreador → desvinculou na **Softruck** às 15:06 de 28/05 → de madrugada (02:21 de 29/05) o sistema **re-vinculou sozinho**.
 
-Confirmado no banco:
+Reconstituí o fluxo:
 
-- `contrato.documentos_aprovados_em` ✅ preenchido (sub-etapa 1 ok)
-- `contrato.cadastro_aprovado = false` (sub-etapa 2 pendente)
-- `cotacoes.status_contratacao = aguardando_aprovacao_cadastro` ✅
-- `vistorias`: `modalidade = autovistoria`, `video_360_url` ✅ preenchido
-- `vistoria_fotos`: **1 foto**
-- `cotacoes_vistoria_fotos` (legado): **3 fotos** (chassi, motor, selfie da autovistoria original)
-
-**Bug**: o hook `usePropostasPendentes` (modal single e listagem) só busca `cotacoes_vistoria_fotos` como **fallback** quando `vistoria_fotos.length === 0`. Como LUIZ tem 1 foto em `vistoria_fotos`, o hook ignora as 3 fotos legadas → `proposta.vistoria.fotos.length = 1`.
-
-Cascata do bug:
-
-```
-fotos.length = 1
- ↓
-autovistoriaCompleta = (1 >= 2 && temVideo) || 1 >= 31  →  false
- ↓
-isAutovistoriaEnxutaAcimaFipe = false
- ↓
-cadastroAvaliaFotos = false   E   aprovarApenasDocumentos = false
- ↓
-tipoEtapaAnaliseSingle = 'agendamento_confirmado'  (existe instalação agendada paralela)
- ↓
-aguardandoExecucao = true  E  aprovarApenasDocumentos = false
- ↓
-podeAprovar = false  →  botão "Aprovar Proposta / Liberar R&F" desaparece silenciosamente
+```text
+1. Retirada física do rastreador  →  nosso lado segue com veiculo_id preenchido,
+                                     status='instalado', softruck_integration_status='PENDING'
+2. Desvínculo manual no painel Softruck (15:06 28/05)
+   • Webhook DEVICES.DISASSOCIATED da Softruck NÃO chegou
+     (ou foi ignorado/atrasado) → nosso veiculo_id NÃO foi zerado
+3. Cron `cron-softruck-reconciliar-pending` (cada 10 min) pega o rastreador:
+   • veiculo_id != null  + status='instalado' + PENDING
+   • chama `softruck-ativar-dispositivo` / `softruck-reconciliar-pending`
+   • re-cria o vínculo na plataforma → "Associado em 02:21 29/05"
 ```
 
-É **exatamente o mesmo padrão** do caso Marllon/KRF8B74 e do `video_360_url` desincronizado: dado fragmentado entre `vistoria_fotos` (nova) e `cotacoes_vistoria_fotos` (legado), e o consumer não faz união.
+Hoje o sistema só reflete desvínculo remoto quando:
+- **Softruck**: chega o webhook `DEVICES.DISASSOCIATED` (instável, ver memória), OU alguém aciona manualmente `rastreador-reconciliar-softruck` no drawer.
+- **Rede Veículos**: cron `rede-veiculos-sync-cron` (30 min) processa os primeiros 50 associados — limit 50 hardcoded.
 
-### Por que apareceram 7 pendências no Cadastro
+## Causa raiz
 
-Consultei a tabela: existem **7 contratos** com `status='assinado'` e `cadastro_aprovado=false`. Os outros 6 não são novos — são casos antigos (de 22/04 a 29/05) que **já estavam pendentes**. A fila estava mostrando 6 antes, agora mostra 7 (LUIZ voltou pra fila após o hotfix anterior). Nada foi criado a mais.
+Os crons de reconciliação são **unidirecionais para a frente** (PENDING → vincular). Não fazem o probe inverso antes de re-vincular, então um desvínculo manual na plataforma é interpretado como "vínculo perdido — refazer".
 
-Vou anotar isso no fechamento para o usuário não ficar com a dúvida. Não há ação corretiva sobre os outros 6 — eles devem seguir o fluxo natural de análise.
+## Plano (3 ajustes, ordem de importância)
 
----
+### 1. Probe inverso obrigatório antes de re-vincular (Softruck)
 
-## Plano (3 itens, escopo cirúrgico)
+Em `cron-softruck-reconciliar-pending` e `softruck-reconciliar-pending`, **antes** de chamar `softruck-ativar-dispositivo`/PATCH de associação:
 
-### 1. Hotfix dos dados do LUIZ FERNANDO
+- GET `/devices?imei=...` na Softruck.
+- Se o device existe mas `relationships.vehicle` está vazio **E** nosso `veiculo_id` não-nulo já tem mais de N minutos sem mudança → tratar como desvínculo remoto: aplicar a mesma rotina canônica de `rastreador-reconciliar-softruck` (linhas 180–218): zerar `veiculo_id`, `plataforma_veiculo_id`, status → `estoque`, marcar `softruck_integration_status='RECONCILIADO_REMOTO'`, gravar `rastreadores_vinculo_historico` com `origem='auto_desvinculo_remoto_softruck'`.
+- Notificar Monitoramento (`notificacoes_internas`) com severidade alta — operador precisa saber que houve mexida no painel externo.
 
-Materializar as 3 fotos legadas em `vistoria_fotos` (assim qualquer leitor — UI nova, edge de aprovação, futura migration — vê o set completo, e o LUIZ destrava agora). Não rebobina nada do contrato.
+### 2. Reconciliação Softruck cobrindo `instalado` "SUCCESS" também
 
-```sql
--- migration
-INSERT INTO vistoria_fotos (vistoria_id, tipo, arquivo_url, created_at)
-SELECT
-  '8a617730-9cce-4ca9-a1b0-c69f6b529801'::uuid,
-  cvf.tipo,
-  cvf.arquivo_url,
-  cvf.created_at
-FROM cotacoes_vistoria_fotos cvf
-WHERE cvf.cotacao_id = 'fe7e833c-5d0b-49ab-9307-91346bc47758'
-  AND NOT EXISTS (
-    SELECT 1 FROM vistoria_fotos vf
-    WHERE vf.vistoria_id = '8a617730-9cce-4ca9-a1b0-c69f6b529801'
-      AND vf.arquivo_url = cvf.arquivo_url
-  );
+Hoje o cron só olha `softruck_integration_status IN ('PENDING','pending')`. Rastreador que ficou em SUCCESS e foi desvinculado depois no painel **nunca é varrido**. Criar uma varredura paralela leve (mesmo cron, segundo lote, menor frequência — ex.: a cada hora) que pega N rastreadores Softruck `status='instalado'` + `SUCCESS` ordenados por `updated_at ASC`, faz o GET descrito acima e aplica desvínculo local quando o device está sem vehicle remoto. Isso fecha o gap "webhook DISASSOCIATED nunca chegou".
 
--- audit log [HOTFIX]
-```
+### 3. Cron Rede Veículos: subir o teto e priorizar mais antigos
 
-Resultado esperado: `vistoria_fotos.count = 4`, `autovistoriaCompleta=true`, `tipoEtapaAnalise='vistoria_concluida'`, `cadastroAvaliaFotos=true`, `liberaCoberturaRF=true`, botão **"Liberar Cobertura Roubo e Furto"** aparece.
+`rede-veiculos-sync-cron` hoje limita a 50 associados sem ordenação determinística — associados além do 50º não recebem sync nunca. Mudar para:
+- Ordenar por `veiculos.updated_at ASC` (mais antigos primeiro), ou usar uma coluna `rede_veiculos_last_sync_at` em `veiculos` (criar via migration) para round-robin real.
+- Aumentar o batch para 200 e quebrar em chunks paralelos pequenos (não derruba o endpoint da Rede).
 
-### 2. Correção canônica do merge no hook (raiz)
+A função `rede-veiculos-sincronizar-status` já tem a lógica reversa correta (linhas 147–235 do edge) — só precisa ser disparada para todos os vinculados.
 
-Em `src/hooks/usePropostasPendentes.ts` (duas ocorrências: listagem ~linha 540 e single ~linha 1123): quando `vistoria.modalidade === 'autovistoria'` e `contrato.cotacao_id` existe, **sempre** unir `vistoria_fotos` + `cotacoes_vistoria_fotos` (dedup por `arquivo_url`), em vez de tratar legado como fallback condicional.
+## Validação pós-deploy
 
-Isso elimina toda uma classe de casos futuros idênticos ao LUIZ — qualquer autovistoria que tenha 1 foto materializada na nova tabela e o resto preso no legado deixa de quebrar o stepper.
+1. Forçar manualmente um device Softruck "instalado/SUCCESS" → desvincular no painel da Softruck → aguardar ciclo do cron → confirmar:
+   - `rastreadores.veiculo_id = NULL`, `status='estoque'`, `softruck_integration_status='RECONCILIADO_REMOTO'`
+   - linha em `rastreadores_vinculo_historico` com `origem='auto_desvinculo_remoto_softruck'`
+   - notificação em Monitoramento
+2. Mesmo teste pela Rede Veículos — confirmar que associado fora dos primeiros 50 agora é alcançado.
+3. Rever o caso do anexo: ao reaplicar o cenário (desvínculo manual no painel + esperar), o cron NÃO pode mais re-vincular.
 
-Não altera comportamento de vistoria presencial (continua só `vistoria_fotos`).
+## Pendência paralela já registrada (não entra nesta rodada)
 
-### 3. Validação manual logado como admin
+- Investigar instabilidade do webhook Softruck `DEVICES.DISASSOCIATED` — quando chega/quando não chega. Sem o webhook estável, o polling é o fallback canônico, mas o ideal é entender por que o evento não dispara em desvínculos via painel.
 
-Após (1) e (2), entrar como `admin@teste.com / 123456789123456789`, abrir o caso do LUIZ em `/cadastro/proposta-pendentes`, confirmar:
+## Fora de escopo
 
-- Stepper mostra 3 etapas (Docs / Fotos / Liberar R&F)
-- Etapa 1 ✅
-- Etapa 2 mostra as 4 fotos + vídeo, marca "Fotos revisadas"
-- Botão verde **"Liberar Cobertura Roubo e Furto"** ativo
-- Clique invoca `aprovar-proposta`, contrato vai pra `cadastro_aprovado=true`, `cotacao.status_contratacao` avança
+- Mudar o modelo de "device_id próprio IMEI placeholder" (não relacionado ao gap reverso).
+- Backfill histórico de rastreadores que sofreram re-vinculação indevida — depende de auditoria caso a caso após a correção entrar.
 
-Se o clique funcionar end-to-end, encerro.
-
----
-
-## Fora de escopo (registrado pra próxima rodada)
-
-- Trigger de sync `cotacoes_vistoria_fotos → vistoria_fotos` (raiz do problema de dados fragmentados). Já estava na lista de pendências da rodada anterior. **Não entra agora**, mas vou reforçar o registro.
-- Os outros 6 contratos pendentes — fluxo natural do analista, sem ação minha.
-
----
-
-## Resposta ao usuário no fechamento
-
-Vou deixar claro: (a) destravei seu caso; (b) os 7 que apareceram não foram criados agora — 6 já estavam pendentes há semanas, são casos legítimos pro analista trabalhar; (c) o merge corrigido evita o mesmo bug em casos futuros.
+Atualização de memória após implementação: refinar `mem://logic/operations/softtruck-desvinculo-bidirecional` para deixar explícito que cron faz probe inverso antes de re-vincular e que cobertura inclui status SUCCESS, não só PENDING.
