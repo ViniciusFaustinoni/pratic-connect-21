@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Save, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Save, Loader2, AlertTriangle, Info } from 'lucide-react';
 import {
   useEmailSuspensaoTemplate,
   useUpdateEmailSuspensaoTemplate,
@@ -16,6 +17,7 @@ import {
   VARIAVEIS_TEMPLATE,
   renderTemplateEmailSuspensao,
 } from '@/hooks/emails-suspensao/template';
+import { validarTemplate } from '../lib/validarVariaveisTemplate';
 
 export function TemplateEditor() {
   const { data: tpl, isLoading } = useEmailSuspensaoTemplate();
