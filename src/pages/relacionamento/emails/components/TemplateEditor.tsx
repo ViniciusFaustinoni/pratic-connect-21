@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Save, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Save, Loader2, AlertTriangle, Info } from 'lucide-react';
 import {
   useEmailSuspensaoTemplate,
   useUpdateEmailSuspensaoTemplate,
@@ -16,6 +17,7 @@ import {
   VARIAVEIS_TEMPLATE,
   renderTemplateEmailSuspensao,
 } from '@/hooks/emails-suspensao/template';
+import { validarTemplate } from '../lib/validarVariaveisTemplate';
 
 export function TemplateEditor() {
   const { data: tpl, isLoading } = useEmailSuspensaoTemplate();
@@ -36,6 +38,12 @@ export function TemplateEditor() {
   if (!tpl) return null;
 
   const dirty = assunto !== tpl.assunto || corpo !== tpl.corpo;
+
+  // Validação de variáveis (regex aceita [A-Za-z0-9_], comparação case-insensitive)
+  const validacao = useMemo(
+    () => validarTemplate({ assunto, corpo, declaradas: VARIAVEIS_TEMPLATE.map((v) => ({ code: v.code, label: v.label })) }),
+    [assunto, corpo],
+  );
 
   const inserirVariavel = (code: string) => {
     const el = corpoRef.current;
@@ -103,6 +111,43 @@ export function TemplateEditor() {
               className="font-mono text-sm"
             />
           </div>
+
+          {validacao.desconhecidas.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Variáveis não reconhecidas</AlertTitle>
+              <AlertDescription>
+                <p className="mb-2 text-sm">
+                  Essas variáveis aparecem no template mas não estão na lista de variáveis suportadas.
+                  No envio real elas serão substituídas por <strong>vazio</strong>.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {validacao.desconhecidas.map((v) => (
+                    <Badge key={v} variant="destructive" className="font-mono text-xs">
+                      {`{{${v}}}`}
+                    </Badge>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {validacao.naoUsadas.length > 0 && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Variáveis declaradas mas não usadas</AlertTitle>
+              <AlertDescription>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {validacao.naoUsadas.map((v) => (
+                    <Badge key={v} variant="outline" className="font-mono text-xs">
+                      {`{{${v}}}`}
+                    </Badge>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
 
           <div className="flex items-center justify-between">
             {dirty ? (
