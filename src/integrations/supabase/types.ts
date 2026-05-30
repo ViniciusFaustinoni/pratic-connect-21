@@ -35268,6 +35268,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      fn_confirmar_adesao_zerada: {
+        Args: { p_cotacao_id: string; p_origem: string }
+        Returns: {
+          contrato_id: string
+          erro: string
+          idempotente: boolean
+          ok: boolean
+          status_contratacao: string
+        }[]
+      }
       fn_criar_analise_relacionamento: {
         Args: {
           _associado_id: string

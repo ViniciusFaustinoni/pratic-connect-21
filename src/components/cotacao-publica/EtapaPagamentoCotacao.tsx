@@ -240,113 +240,133 @@ export function EtapaPagamentoCotacao({
     }
   }, [valorAdesao, clienteNome, clienteEmail, clienteCpf]);
 
-  // 3. Inicializar fluxo - verificar se já está pago ANTES de buscar/criar cobrança
-  useEffect(() => {
-    const inicializar = async () => {
-      // Primeiro, verificar se a cotação já tem contrato
-      const { data: cotacao } = await publicSupabase
-        .from('cotacoes')
-        .select('contrato_gerado_id, vendedor_id')
-        .eq('id', cotacaoId)
-        .single();
+  // Server-authoritative: chama edge `confirmar-adesao-zerada` que executa
+  // atomicamente (marca adesao_paga + promove status_contratacao='pagamento_ok'
+  // + materializa instalação quando há agendamento). Idempotente.
+  // Sem catch silencioso: erro real volta pra UI e mantém o usuário na etapa.
+  const confirmarAdesaoIsenta = useCallback(async (
+    origem: 'adesao_zerada' | 'agencia_em_maos',
+    idContratoUI: string,
+    msgUI: string,
+  ): Promise<boolean> => {
+    try {
+      const { data, error } = await publicSupabase.functions.invoke('confirmar-adesao-zerada', {
+        body: { cotacao_id: cotacaoId, origem },
+      });
 
-      if (cotacao?.contrato_gerado_id) {
-        // Verificar se o contrato já está pago OU isento por agência
-        const { data: contrato } = await publicSupabase
-          .from('contratos')
-          .select('adesao_paga, adesao_isenta_agencia, vendedor_id')
-          .eq('id', cotacao.contrato_gerado_id)
-          .maybeSingle();
-
-        if (contrato?.adesao_paga) {
-          console.log('[EtapaPagamento] Contrato já está pago!');
-          setContratoId(cotacao.contrato_gerado_id);
-          setEtapaInterna('pago');
-          return;
-        }
-
-        // ===== AGÊNCIA RECEBE EM MÃOS: pular cobrança ASAAS =====
-        const vendedorId = (contrato as any)?.vendedor_id || cotacao?.vendedor_id;
-        if (vendedorId) {
-          const { data: vendedor } = await publicSupabase
-            .from('profiles')
-            .select('tipo, agencia_forma_recebimento')
-            .eq('user_id', vendedorId)
-            .maybeSingle();
-
-          if (vendedor?.tipo === 'agencia' && (vendedor as any)?.agencia_forma_recebimento === 'em_maos') {
-            console.log('[EtapaPagamento] Agência em modo "em_maos" — adesão recebida diretamente pela agência');
-            setMsgAdesaoZerada('Sua adesão foi confirmada diretamente pela agência responsável. Nenhum pagamento é devido no sistema.');
-
-            await publicSupabase
-              .from('contratos')
-              .update({
-                adesao_paga: true,
-                adesao_isenta_agencia: true,
-              } as any)
-              .eq('id', cotacao.contrato_gerado_id);
-
-            try {
-              await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
-                body: { cotacaoId, skipPaymentCheck: true },
-              });
-            } catch (instErr) {
-              console.error('[EtapaPagamento] Erro ao criar instalação (agência em mãos):', instErr);
-            }
-
-            setContratoId(cotacao.contrato_gerado_id);
-            setAdesaoZerada(true);
-            setEtapaInterna('pago');
-            setTimeout(() => onPagamentoConfirmado(), 1500);
-            return;
+      // Erro de rede / 5xx fora do contrato success/false
+      if (error && !data) {
+        let mensagem = 'Não conseguimos confirmar sua adesão isenta agora. Tente novamente em instantes.';
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            mensagem = body?.mensagem || body?.error || mensagem;
           }
-        }
+        } catch { /* ignore */ }
+        setErro(mensagem);
+        setEtapaInterna('erro');
+        return false;
       }
 
-      // ===== ADESÃO ZERADA: pular cobrança ASAAS =====
-      if (valorAdesao <= 0) {
-        console.log('[EtapaPagamento] Adesão zerada — pulando cobrança ASAAS');
+      if (!data?.success) {
+        const mensagem = data?.mensagem || data?.error || 'Falha ao confirmar adesão isenta.';
+        setErro(mensagem);
+        setEtapaInterna('erro');
+        return false;
+      }
 
-        const { data: configMsg } = await publicSupabase
-          .from('configuracoes')
-          .select('valor')
-          .eq('chave', 'comissao_ext_msg_adesao_zero')
-          .maybeSingle();
+      setContratoId(idContratoUI);
+      setMsgAdesaoZerada(msgUI);
+      setAdesaoZerada(true);
+      setEtapaInterna('pago');
+      setTimeout(() => onPagamentoConfirmado(), 1500);
+      return true;
+    } catch (e: any) {
+      console.error('[EtapaPagamento] confirmar-adesao-zerada inesperado:', e);
+      setErro('Não conseguimos confirmar sua adesão isenta agora. Tente novamente em instantes; se persistir, fale com o suporte.');
+      setEtapaInterna('erro');
+      return false;
+    }
+  }, [cotacaoId, onPagamentoConfirmado]);
 
-        const msg = configMsg?.valor || 'Parabéns! Sua adesão foi isenta. Bem-vindo à Praticcar!';
-        setMsgAdesaoZerada(msg);
+  // 3. Inicializar fluxo - verificar se já está pago ANTES de buscar/criar cobrança
+  const inicializar = useCallback(async () => {
+    setErro(null);
+    // Primeiro, verificar se a cotação já tem contrato
+    const { data: cotacao } = await publicSupabase
+      .from('cotacoes')
+      .select('contrato_gerado_id, vendedor_id')
+      .eq('id', cotacaoId)
+      .single();
 
-        // Buscar contrato existente (não gera novo)
-        const idContrato = await buscarContrato();
-        if (!idContrato) return;
+    if (cotacao?.contrato_gerado_id) {
+      // Verificar se o contrato já está pago OU isento por agência
+      const { data: contrato } = await publicSupabase
+        .from('contratos')
+        .select('adesao_paga, adesao_isenta_agencia, vendedor_id')
+        .eq('id', cotacao.contrato_gerado_id)
+        .maybeSingle();
 
-        await publicSupabase
-          .from('contratos')
-          .update({ adesao_paga: true })
-          .eq('id', idContrato);
-
-        try {
-          await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
-            body: { cotacaoId, skipPaymentCheck: true },
-          });
-        } catch (instErr) {
-          console.error('[EtapaPagamento] Erro ao criar instalação (adesão zerada):', instErr);
-        }
-
-        setAdesaoZerada(true);
+      if (contrato?.adesao_paga) {
+        console.log('[EtapaPagamento] Contrato já está pago!');
+        setContratoId(cotacao.contrato_gerado_id);
         setEtapaInterna('pago');
-        setTimeout(() => onPagamentoConfirmado(), 1500);
         return;
       }
 
-      // Se não está pago, buscar contrato existente e criar cobrança
-      const idContrato = await buscarContrato();
-      if (idContrato) {
-        await criarCobranca(idContrato);
+      // ===== AGÊNCIA RECEBE EM MÃOS: server-authoritative via edge =====
+      const vendedorId = (contrato as any)?.vendedor_id || cotacao?.vendedor_id;
+      if (vendedorId) {
+        const { data: vendedor } = await publicSupabase
+          .from('profiles')
+          .select('tipo, agencia_forma_recebimento')
+          .eq('user_id', vendedorId)
+          .maybeSingle();
+
+        if (vendedor?.tipo === 'agencia' && (vendedor as any)?.agencia_forma_recebimento === 'em_maos') {
+          console.log('[EtapaPagamento] Agência em "em_maos" — chamando confirmar-adesao-zerada');
+          await confirmarAdesaoIsenta(
+            'agencia_em_maos',
+            cotacao.contrato_gerado_id,
+            'Sua adesão foi confirmada diretamente pela agência responsável. Nenhum pagamento é devido no sistema.',
+          );
+          return;
+        }
       }
-    };
+    }
+
+    // ===== ADESÃO ZERADA: server-authoritative via edge =====
+    if (valorAdesao <= 0) {
+      console.log('[EtapaPagamento] Adesão zerada — chamando confirmar-adesao-zerada');
+
+      const { data: configMsg } = await publicSupabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'comissao_ext_msg_adesao_zero')
+        .maybeSingle();
+
+      const msg = configMsg?.valor || 'Parabéns! Sua adesão foi isenta. Bem-vindo à Praticcar!';
+
+      // Buscar contrato existente (não gera novo) — necessário para setContratoId na UI
+      const idContrato = await buscarContrato();
+      if (!idContrato) return; // buscarContrato já setou erro
+
+      await confirmarAdesaoIsenta('adesao_zerada', idContrato, msg);
+      return;
+    }
+
+    // Se não está pago, buscar contrato existente e criar cobrança
+    const idContrato = await buscarContrato();
+    if (idContrato) {
+      await criarCobranca(idContrato);
+    }
+  }, [cotacaoId, buscarContrato, criarCobranca, valorAdesao, confirmarAdesaoIsenta]);
+
+  useEffect(() => {
     inicializar();
-  }, [cotacaoId, buscarContrato, criarCobranca, valorAdesao, onPagamentoConfirmado]);
+  }, [inicializar]);
+
 
   // 4. Polling automático para verificar pagamento - consulta diretamente na API do Asaas
   useEffect(() => {
@@ -460,11 +480,10 @@ export function EtapaPagamentoCotacao({
   // Tentar novamente
   const tentarNovamente = async () => {
     setErro(null);
-    const idContrato = await buscarContrato();
-    if (idContrato) {
-      await criarCobranca(idContrato);
-    }
+    // Reexecuta inicializar — cobre tanto cobrança ASAAS quanto adesão isenta (edge confirmar-adesao-zerada).
+    await inicializar();
   };
+
 
   // Formatar moeda
   const formatCurrency = (value: number) => {
