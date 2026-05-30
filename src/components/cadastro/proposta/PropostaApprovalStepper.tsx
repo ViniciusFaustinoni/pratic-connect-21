@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { 
   FileText, Camera, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft,
-  AlertCircle, Eye, MapPin, XCircle
+  AlertCircle, Eye, MapPin, XCircle, Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
 import { PropostaMidiaGrid } from './PropostaMidiaGrid';
@@ -16,6 +17,11 @@ import type { PropostaPendente, VistoriaFotoInfo } from '@/hooks/usePropostasPen
 import type { DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 import { useCancelarDocumentosSolicitados } from '@/hooks/useCancelarDocumentosSolicitados';
 import { formatPeriodoLabel } from '@/lib/periodo-utils';
+import {
+  type GateAprovacao,
+  gatesParaBotao,
+} from '@/lib/cadastro/gatesAprovacaoCadastro';
+import { registrarCliqueBloqueado } from '@/lib/cadastro/telemetriaCliqueBloqueado';
 
 interface PropostaApprovalStepperProps {
   proposta: PropostaPendente;
@@ -60,6 +66,14 @@ interface PropostaApprovalStepperProps {
   /** Handler invocado pelo botão "Aprovar Documentos" (sub-etapa 1). */
   onAprovarDocumentos?: () => void | Promise<void>;
   isAprovandoDocumentos?: boolean;
+  /**
+   * Gates ativos que impedem o avanço (vindos de `resolverGatesAprovacaoCadastro`).
+   * Exibidos como banner inline + tooltip nos botões disabled.
+   * Memória: mem://logic/operations/cadastro-duas-subetapas (UI canônica)
+   */
+  gatesAtivos?: GateAprovacao[];
+  /** Id do contrato (usado pela telemetria de clique abortado). */
+  contratoId?: string;
 }
 
 
@@ -122,10 +136,39 @@ export function PropostaApprovalStepper({
   documentosAprovadosEm = null,
   onAprovarDocumentos,
   isAprovandoDocumentos = false,
+  gatesAtivos = [],
+  contratoId,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
   const cancelarDocsMutation = useCancelarDocumentosSolicitados();
+
+  const gatesSub1 = gatesParaBotao(gatesAtivos, 1);
+  const gatesSub2 = gatesParaBotao(gatesAtivos, 2);
+
+  const tooltipGates = (gs: GateAprovacao[]) =>
+    gs.length === 0 ? null : (
+      <div className="space-y-1.5 max-w-xs">
+        <p className="text-xs font-semibold">Não é possível avançar:</p>
+        <ul className="text-xs space-y-1 list-disc pl-4">
+          {gs.map((g) => (
+            <li key={g.id}>
+              <span className="font-semibold">{g.label}.</span>{' '}
+              <span className="opacity-90">{g.comoDestravar}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+
+  const handleCliqueBloqueado = (subEtapa: 1 | 2, gs: GateAprovacao[]) => {
+    if (!contratoId || gs.length === 0) return;
+    void registrarCliqueBloqueado({
+      contratoId,
+      subEtapa,
+      motivos: gs.map((g) => g.id),
+    });
+  };
 
   // Sub-etapa 1 do Cadastro (aprovação dos documentos) é gate para sub-etapa 2.
   // Ver mem://logic/operations/cadastro-duas-subetapas
@@ -171,7 +214,32 @@ export function PropostaApprovalStepper({
   };
 
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="space-y-4">
+      {/* Banner canônico de gates ativos — substitui o silêncio do pointer-events-none */}
+      {gatesAtivos.length > 0 && (
+        <div className="rounded-lg border-2 border-warning/40 bg-warning/10 p-4">
+          <div className="flex items-start gap-3">
+            <Lock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-warning">
+                Aprovação bloqueada — {gatesAtivos.length} pendência(s)
+              </p>
+              <ul className="mt-2 space-y-1.5 text-xs text-foreground">
+                {gatesAtivos.map((g) => (
+                  <li key={g.id} className="flex items-start gap-2">
+                    <span className="text-warning mt-0.5">•</span>
+                    <span>
+                      <strong>{g.label}.</strong>{' '}
+                      <span className="text-muted-foreground">{g.comoDestravar}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Stepper Bar */}
       <Card className="border-border bg-card overflow-hidden">
         <CardContent className="p-4">
@@ -710,5 +778,6 @@ export function PropostaApprovalStepper({
         )}
       </div>
     </div>
+    </TooltipProvider>
   );
 }
