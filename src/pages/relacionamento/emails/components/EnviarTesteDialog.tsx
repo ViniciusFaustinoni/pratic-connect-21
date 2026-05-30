@@ -69,8 +69,10 @@ export function EnviarTesteDialog({ open, onOpenChange }: Props) {
   const [buscaAssociado, setBuscaAssociado] = useState('');
   const [associadoSelecionado, setAssociadoSelecionado] = useState<AssociadoSearchResult | null>(null);
   const [associadoVars, setAssociadoVars] = useState<Record<string, string>>({});
-  const [carregandoAssociado, setCarregandoAssociado] = useState(false);
   const { data: resultadosBusca = [] } = useAssociadoSearch(buscaAssociado);
+  const { data: previewData, isFetching: carregandoAssociado } = usePreviewAssociadoData(
+    associadoSelecionado?.id ?? null,
+  );
 
   useEffect(() => {
     if (open && !templateKey && templates.length > 0) {
