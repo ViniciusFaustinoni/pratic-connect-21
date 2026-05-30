@@ -23,33 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-interface DocumentoDadosOCR {
-  // Campos da CNH
-  nome?: string;
-  numero_registro?: string;
-  rg?: string;
-  validade?: string;
-  // Campos do CRLV
-  cor?: string;
-  combustivel?: string;
-  motor?: string;
-  placa?: string;
-  renavam?: string;
-  chassi?: string;
-}
-
-interface DocumentoAnexado {
-  id: string;
-  tipo: string;
-  arquivo_url: string;
-  status: string;
-  created_at: string;
-  ocr_resultado?: {
-    validado_ocr?: boolean;
-    dados?: DocumentoDadosOCR;
-    [key: string]: unknown;
-  };
-}
+import type { DocumentoAnexado } from '@/types/documentos';
 
 // Labels para tipos de documento
 const TIPO_DOC_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }> = {
