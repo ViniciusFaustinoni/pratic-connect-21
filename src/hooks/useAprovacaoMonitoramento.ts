@@ -290,7 +290,11 @@ export function useAprovarInstalacaoMonitoramento() {
         contratoId = instalacao?.contrato_id ?? null;
       }
 
-      // 2. Ativação atômica via edge function única (lock + CAS + log)
+      // 2. Ativação atômica via edge function única (lock + CAS + log).
+      // SGA enqueue agora roda DENTRO da edge, na mesma transição lógica, via
+      // `sga_enqueue`. Falha de enqueue entra em `parciais[]` → 207 promocao_parcial,
+      // e o toast existente já cobre o retry. Elimina a janela em que o browser
+      // fechava após o CAS e antes do enqueue_integration standalone.
       const { data: ativacao, error: ativacaoError } = await supabase.functions.invoke('ativar-associado', {
         body: {
           associado_id: data.associadoId,
@@ -304,6 +308,13 @@ export function useAprovarInstalacaoMonitoramento() {
           ativar_cobertura_roubo_furto: true,
           allowed_from: ['assinado', 'aguardando_instalacao', 'pendente', 'em_analise', 'documentacao_pendente', 'aprovado'],
           metadata: { observacoes: data.observacoes ?? null },
+          sga_enqueue: {
+            enabled: true,
+            status_sga_destino: 'ativo',
+            force_resync_media: true,
+            etapa_origem: 'aprovacao_monitoramento',
+            motivo_decisao: 'Reenvio de fotos pós-vistoria após aprovação do monitoramento',
+          },
         },
       });
 
@@ -325,7 +336,6 @@ export function useAprovarInstalacaoMonitoramento() {
         throw new Error(detailMsg);
       }
       if (ativacao && ativacao.success === false && !ativacao.idempotente) {
-        // PR-A2: promoção parcial = associado virou ativo mas algum side-effect falhou.
         if (ativacao.error === 'promocao_parcial') {
           const err: any = new Error(ativacao.mensagem || 'Promoção parcial — alguns alvos não foram atualizados.');
           err.code = 'promocao_parcial';
@@ -338,26 +348,6 @@ export function useAprovarInstalacaoMonitoramento() {
       }
 
 
-      // 4. Garantir ativação no SGA via fila com retry (idempotente)
-      // force_resync_media=true: o sync inicial roda na aprovação cadastral, ANTES das fotos
-      // de vistoria existirem. Sem essa flag, o guard de idempotência pula o reenvio aqui e
-      // as fotos NUNCA chegam à Hinova. Reaproveita códigos existentes (busca por CPF/placa).
-      await supabase.rpc('enqueue_integration', {
-        _integration: 'sga',
-        _operation: 'hinova_sync',
-        _payload: {
-          veiculo_id: data.veiculoId,
-          associado_id: data.associadoId,
-          status_sga_destino: 'ativo',
-          force_resync_media: true,
-          etapa_origem: 'aprovacao_monitoramento',
-          motivo_decisao: 'Reenvio de fotos pós-vistoria após aprovação do monitoramento',
-        },
-        _correlation_id: `sga:hinova:${data.veiculoId}:aprovacao_monitoramento:${Date.now()}`,
-        _max_attempts: 5,
-        _delay_seconds: 0,
-        _created_by: profile?.id ?? null,
-      });
 
       // 5. Registrar histórico
       await supabase.from('associados_historico').insert({
