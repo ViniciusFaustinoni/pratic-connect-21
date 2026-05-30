@@ -1,69 +1,107 @@
-# ERRO 13 — Endurecer ativar-associado (documentação + alerta)
+# ERRO 14 — Observabilidade da integração SGA Hinova
 
-## Diagnóstico (estado atual)
+## Diagnóstico — o que já existe
 
-`ativar-associado` já é o **único caminho canônico** para promover associado/contrato/veículo a `ativo` (regra de memória `mem://architecture/activation/single-source-activation`). Já tem:
+A tela canônica `/configuracoes/integracoes/sga-hinova` (`IntegracaoSGAHinova.tsx`) já cobre quase tudo o que o item 14 pede:
 
-- `pg_advisory_xact_lock` por `associado_id`
-- CAS via `.in('status', allowed_from_assoc)` no UPDATE
-- Coerção `aguardar_instalacao=true → cobertura flags=false`
-- Guard de rastreador físico para Diesel / FIPE≥
-- Log em `ativacao_status_log` com `source` (já preenchido por todos os callers)
+- **Fila** (`sga_sync_queue`) com filtros `pendente / falha / falha_permanente` e contadores.
+- **Logs** (`sga_sync_logs`) — últimas execuções com `action / status / erro`.
+- **Pendentes** — veículos `ativo` ainda `sincronizado_hinova=false`.
+- **Health Check** (`IntegracaoHealthPanel` + `sga_health_checks`) com Online/Offline, tempo de resposta, uptime % e histórico das últimas 20 verificações.
+- **Alerta automático**: `cron-sga-health-check` já notifica diretores quando `!conexao_ok` ou `fila_falhas > 5`, com link para a tela.
 
-O que **falta**: rastreabilidade explícita de quem pode chamar com qual `allowed_from`, e detecção quando dois callers diferentes batem no mesmo associado quase simultaneamente (sinal de race / lógica duplicada).
+Memória `mem://infrastructure/integrations/sga-sync-queue-canonical` confirma que essa tela é a fonte da verdade — nenhum dashboard paralelo deve ser criado.
 
-### Callers reais hoje (7, não 5)
+## O que falta (e justifica a correção)
 
-| # | Caller | `source` | `allowed_from` |
-|---|---|---|---|
-| 1 | `aprovar-proposta` (edge) | `edge:aprovar-proposta` | `aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado` |
-| 2 | `aprovar-troca-monitoramento` (edge) | `edge:aprovar-troca-monitoramento` | `assinado, aguardando_instalacao, pendente` |
-| 3 | `criar-instalacao-pos-pagamento` (edge) | `edge:criar-instalacao-pos-pagamento` | default da edge |
-| 4 | `reconciliar-contratos-pos-monitoramento` (cron) | `cron:reconciliar-contratos-pos-monitoramento` | `assinado, aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado` |
-| 5 | `softruck-ativar-dispositivo` (edge) | `edge:softruck-ativar-dispositivo` | default da edge |
-| 6 | `useAprovacaoMonitoramento` (hook UI) | `hook:useAprovacaoMonitoramento` | `assinado, aguardando_instalacao, pendente, em_analise, documentacao_pendente, aprovado` |
-| 7 | `useVistoriaCompletaAnalise` (hook UI) | `hook:useVistoriaCompletaAnalise` | mesmo do anterior |
+1. **Taxa de sucesso por tipo de operação** — `sga_sync_logs.action` é o eixo natural para detectar regressão por endpoint. Hoje só vemos a lista crua de logs.
+2. **Alerta cego à degradação silenciosa** — se a API responde 200 mas operações começam a falhar, a conexão segue OK e a fila pode ficar < 5 falhas; o alerta atual não dispara.
 
 ## Escopo da correção
 
-Apenas observabilidade + documentação. **Sem mudança de regra funcional** — não vamos restringir `allowed_from` por caller agora (risco de quebrar fluxos válidos em produção).
+Mudança puramente de observabilidade — sem nova tela e sem nova edge function.
 
-### 1. Bloco de documentação canônica em `supabase/functions/ativar-associado/index.ts`
+### 1. Agregação no banco (SQL, não client-side)
 
-Comentário no topo do arquivo listando os 7 callers autorizados, em qual momento do fluxo cada um dispara e qual é o `allowed_from` esperado. Serve como referência única — qualquer caller novo deve aparecer aqui.
+Nova função SQL `public.sga_success_rate_by_action(janela_horas int)` (SECURITY DEFINER, `SET search_path = public`), retornando uma linha por `action`:
 
-### 2. Alerta de ativação concorrente
+```sql
+CREATE OR REPLACE FUNCTION public.sga_success_rate_by_action(janela_horas int DEFAULT 24)
+RETURNS TABLE (
+  action text,
+  total bigint,
+  ok bigint,
+  falha bigint,
+  taxa_sucesso numeric,
+  duracao_media_ms numeric,
+  ultimo_erro text,
+  ultimo_erro_em timestamptz
+)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT
+    l.action,
+    COUNT(*) FILTER (WHERE l.status <> 'skipped')            AS total,
+    COUNT(*) FILTER (WHERE l.status = 'ok')                  AS ok,
+    COUNT(*) FILTER (WHERE l.status NOT IN ('ok','skipped')) AS falha,
+    CASE WHEN COUNT(*) FILTER (WHERE l.status <> 'skipped') = 0 THEN NULL
+         ELSE ROUND(
+           COUNT(*) FILTER (WHERE l.status = 'ok')::numeric
+           / NULLIF(COUNT(*) FILTER (WHERE l.status <> 'skipped'), 0),
+         4) END                                              AS taxa_sucesso,
+    ROUND(AVG(l.duracao_ms) FILTER (WHERE l.status <> 'skipped'), 0) AS duracao_media_ms,
+    (ARRAY_AGG(l.error_message ORDER BY l.created_at DESC)
+       FILTER (WHERE l.status NOT IN ('ok','skipped')))[1]   AS ultimo_erro,
+    MAX(l.created_at) FILTER (WHERE l.status NOT IN ('ok','skipped')) AS ultimo_erro_em
+  FROM   public.sga_sync_logs l
+  WHERE  l.created_at >= now() - make_interval(hours => janela_horas)
+  GROUP  BY l.action
+  ORDER  BY taxa_sucesso ASC NULLS LAST, total DESC;
+$$;
 
-Adicionar, logo após o INSERT em `ativacao_status_log`, uma checagem leve:
-
-```text
-SELECT source, created_at
-FROM   ativacao_status_log
-WHERE  associado_id = :assoc
-  AND  to_status    = 'ativo'
-  AND  created_at  >= now() - interval '5 minutes'
-  AND  source <> :source_atual
-ORDER  BY created_at DESC
-LIMIT  1;
+GRANT EXECUTE ON FUNCTION public.sga_success_rate_by_action(int) TO authenticated, service_role;
 ```
 
-Se retornar linha, registrar:
+`skipped` fica fora tanto do numerador quanto do denominador. Linhas sem `ok|skipped` (ex.: `falha`, `erro`, `timeout`) contam como falha.
 
-- `console.warn('[ativar-associado][race] dupla ativação <5min', { associado_id, source_atual, source_anterior, gap_ms })`
-- `logs_auditoria` com `acao='criar'` e descrição `[ATIVACAO_CONCORRENTE] {source_anterior} → {source_atual} em {gap_ms}ms` (passa pelo helper `insertAuditLog` para respeitar a regra `mem://logic/audit/logs-auditoria-vigia-universal`)
+### 2. Aba "Visão Geral" em `IntegracaoSGAHinova.tsx`
 
-Não bloqueia a resposta — só sinaliza. O CAS+lock já garantem que a 2ª ativação é no-op idempotente; o alerta serve pra debugar e identificar caller redundante.
+- Primeira aba da `TabsList`.
+- Toggle de janela: **24h** / **7 dias** (passa `janela_horas` para a RPC).
+- Novo hook `useSGASuccessRateByAction(janelaHoras)` chama `supabase.rpc('sga_success_rate_by_action', { janela_horas: janelaHoras })`.
+- Renderiza um grid de cards (um por `action`) ordenado pela própria RPC (taxa ascendente).
+- Cada card linka para a aba **Logs** já filtrada por aquela `action` (adicionar filtro por `action` na aba de logs).
 
-### 3. Sem migração de schema
+### 3. Gatilho de alerta por taxa de erro (cron-sga-health-check)
 
-`ativacao_status_log` já tem `source` e `created_at` — basta consultar.
+Em `supabase/functions/cron-sga-health-check/index.ts`, antes do INSERT em `sga_health_checks`:
+
+- Chamar `sga_success_rate_by_action(24)`, agregar globalmente (somatório de `ok` e `total` excluindo `skipped`) e calcular `taxa_global_24h = sum(ok) / sum(total)`.
+- Persistir `taxa_sucesso_24h` e `total_operacoes_24h` em `sga_health_checks` (migração leve: 2 colunas nullable).
+- Estender `hasIssues`: dispara também quando `total_operacoes_24h >= 20` E `taxa_sucesso_24h < 0.85`.
+- Mensagem inclui a taxa: `⚠️ SGA Hinova: taxa de sucesso caiu para 82% nas últimas 24h (45 operações).`
+
+### 4. Migração mínima
+
+```sql
+ALTER TABLE public.sga_health_checks
+  ADD COLUMN IF NOT EXISTS taxa_sucesso_24h    numeric(5,4),
+  ADD COLUMN IF NOT EXISTS total_operacoes_24h integer;
+
+-- + função sga_success_rate_by_action acima
+```
+
+Sem novas tabelas e sem alteração de RLS.
+
+## Fora de escopo
+
+- Refatorar as 65 edges para reduzir o acoplamento ao SGA — reconhecido como problema estrutural sem solução simples.
+- Alertas por canal externo (Slack/e-mail) — depende de infra que o projeto ainda não tem.
+- Dashboard separado fora de `Integrações › SGA Hinova` (proibido pela memória `sga-sync-queue-canonical`).
 
 ## Arquivos tocados
 
-- `supabase/functions/ativar-associado/index.ts` — comentário-cabeçalho com matriz de callers + query de detecção pós-INSERT do log
-
-## Fora de escopo (registrar como dívida)
-
-- Restringir `allowed_from` por caller (exige saneamento de dados em prod antes)
-- Painel admin pra visualizar ativações concorrentes (sai do log via dashboard existente)
-- Memória de projeto pra fixar a matriz de callers (sugiro criar `mem://architecture/activation/callers-matrix` depois que aprovar)
+- `supabase/migrations/<timestamp>_sga_observabilidade.sql` — 2 colunas em `sga_health_checks` + função `sga_success_rate_by_action`.
+- `supabase/functions/cron-sga-health-check/index.ts` — usa RPC, persiste taxa, novo trigger de alerta (85%).
+- `src/hooks/useSGAHealthCheck.ts` — tipo `SGAHealthCheck` ganha as 2 colunas; novo hook `useSGASuccessRateByAction`.
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — nova aba `Visão Geral` + filtro por `action` na aba Logs.
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — badge da taxa 24h.
