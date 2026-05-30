@@ -5,9 +5,33 @@
 // - Idempotente: se já 'ativo', retorna sucesso sem reexecutar side effects.
 // - Valida campos obrigatórios via fn_validar_campos_ativacao.
 // - Loga origem (source) para auditoria via ativacao_status_log.
+//
+// ────────────────────────────────────────────────────────────────────────────
+// MATRIZ CANÔNICA DE CALLERS AUTORIZADOS
+// (regra mem://architecture/activation/single-source-activation — qualquer
+//  caller novo PRECISA ser adicionado aqui e revisado em code review)
+//
+//  # | Caller                                          | source                                          | Momento do fluxo                                  | allowed_from esperado
+//  --|-------------------------------------------------|-------------------------------------------------|---------------------------------------------------|----------------------------------------------------------------------------------------------
+//  1 | edge: aprovar-proposta                          | edge:aprovar-proposta                           | Cadastro aprova proposta sem rastreador físico    | aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado
+//  2 | edge: aprovar-troca-monitoramento               | edge:aprovar-troca-monitoramento                | Monitoramento aprova troca de titularidade        | assinado, aguardando_instalacao, pendente
+//  3 | edge: criar-instalacao-pos-pagamento            | edge:criar-instalacao-pos-pagamento             | Pagamento confirmado + instalação materializada   | default (assinado, aguardando_instalacao, pendente)
+//  4 | cron: reconciliar-contratos-pos-monitoramento   | cron:reconciliar-contratos-pos-monitoramento    | Cron 15min destrava contratos parados (assinado)  | assinado, aguardando_instalacao, aguardando_aprovacao_monitoramento, em_analise, documentacao_pendente, aprovado
+//  5 | edge: softruck-ativar-dispositivo               | edge:softruck-ativar-dispositivo                | Read-back Softruck confirmou vínculo IMEI↔veículo | default (assinado, aguardando_instalacao, pendente)
+//  6 | hook: useAprovacaoMonitoramento (UI)            | hook:useAprovacaoMonitoramento                  | Coordenador aprova manualmente na Aprovação       | assinado, aguardando_instalacao, pendente, em_analise, documentacao_pendente, aprovado
+//  7 | hook: useVistoriaCompletaAnalise (UI)           | hook:useVistoriaCompletaAnalise                 | Análise da vistoria completa pelo coordenador     | assinado, aguardando_instalacao, pendente, em_analise, documentacao_pendente, aprovado
+//
+// Side-effects além do status do associado/contrato/veículo: integração SGA
+// (sga_sync_queue), Softruck/Rede (vínculo), cotacoes.status_contratacao,
+// historico_status_contratos. O CAS + advisory lock garantem que uma 2ª chamada
+// concorrente vira no-op idempotente — não há risco de dupla ativação real, mas
+// a presença de 2 callers diferentes em < 5 min é sinal de lógica redundante
+// e dispara alerta de auditoria (ver bloco "Alerta de ativação concorrente").
+// ────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { translateDbError } from '../_shared/db-error-translator.ts';
+import { insertAuditLog } from '../_shared/auditLog.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
