@@ -356,7 +356,7 @@ export function PropostaApprovalStepper({
             />
 
             {/* SUB-ETAPA 1 — Botão "Aprovar Documentos" */}
-            {step1Complete && !subEtapa1Liberada && podeAprovar && (
+            {step1Complete && !subEtapa1Liberada && gatesSub1.length === 0 && (
               <Button
                 className="w-full h-12 text-base font-bold bg-success hover:bg-success/90 text-white shadow"
                 onClick={() => onAprovarDocumentos?.()}
