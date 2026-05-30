@@ -56,6 +56,8 @@ export default function AnalisesRelacionamento() {
           <CardTitle className="text-base">Fila</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <BannerFilaSilenciosa />
+
           <Tabs value={status} onValueChange={(v) => setStatus(v as any)}>
             <TabsList>
               <TabsTrigger value="pendente">Pendentes</TabsTrigger>
