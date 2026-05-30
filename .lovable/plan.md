@@ -1,62 +1,55 @@
 ## Objetivo
 
-Criar uma edge function dedicada que consulta apenas os dois endpoints do Hinova citados — `GET /veiculo/buscar/:placa/placa` e `GET /associado/buscar/:cpf/cpf` — e devolve um snapshot cru para exibição (amostragem) no modal "Substituição de Placa".
+No modal **Substituição de Placa**, exigir também a placa do **veículo novo** e consultar o SGA. Se a placa nova **existir no SGA**, bloquear a substituição e oferecer um botão para abrir automaticamente o modal de **Troca de Titularidade** (com o associado anterior já resolvido a partir da placa antiga).
 
-Não há mudança de regra de negócio, banco ou fluxo: a edge atual `sga-buscar-associado-completo` (que também busca boletos e agrega vários veículos) **continua sendo a fonte canônica** para a verificação de débito/elegibilidade. A nova edge serve só pra enriquecer o card de exibição.
+Regra: substituição só é permitida quando o veículo novo **não está** no SGA.
 
-## O que será feito
+## Mudanças (somente UI/orquestração — sem backend novo)
 
-### 1. Nova edge `supabase/functions/sga-buscar-veiculo-associado/index.ts`
+### 1. `src/components/vendas/OutrasEntradasMenu.tsx`
 
-- Input: `{ placa: string }` (sanitizado p/ A-Z0-9).
-- Fluxo:
-  1. `getHinovaSession`
-  2. `buscarVeiculoPorPlaca(session, placa)` → pega `codigo_associado` + payload cru do veículo
-  3. Se achou, `GET /associado/buscar/:cpf/cpf` (reusa o padrão já existente em `fetchAssociadoMeta`) com o CPF retornado pelo veículo
-  4. Retorna 200 com:
-     ```ts
-     {
-       encontrado: boolean,
-       veiculo: {
-         placa, chassi, marca, modelo,
-         ano_fabricacao, ano_modelo,
-         valor_fipe, codigo_fipe,
-         codigo_veiculo, codigo_situacao, descricao_situacao,
-         renavam, codigo_cor, codigo_combustivel,
-       } | null,
-       associado: {
-         codigo_associado, nome, cpf,
-         email, telefone_celular, telefone_fixo,
-         logradouro, numero, complemento, bairro, cidade, estado, cep,
-         data_nascimento, dia_vencimento,
-         descricao_situacao,
-       } | null,
-       erro_transitorio?: boolean, motivo?: string
-     }
-     ```
-- Mesma política de erro transitório usada em `sga-buscar-associado-completo`: 200 com `erro_transitorio:true` em vez de 5xx (pra não quebrar a UI).
-- Sem boletos, sem agregação por CPF, sem listar outros veículos — é só amostragem.
+**a) Novo estado**
+- `placaNova: string` + `setPlacaNova`
+- Resetar junto com os demais no `useEffect` de fechamento.
 
-### 2. Hook fino `src/hooks/useSgaVeiculoAssociado.ts`
+**b) Consulta SGA da placa nova**
+- Reusar o hook existente `useSgaVeiculoAssociado(placaNova, isSubstituicao && !!selectedAssociadoId)`.
+- Já retorna `{ encontrado, veiculo, associado, erro_transitorio }` — não criar edge nova.
 
-- `useQuery` por placa (≥ 7 chars), dispara só quando o usuário seleciona o veículo no modal (`enabled: !!selectedAssociadoId`).
-- Retorna `{ data, isLoading, erroTransitorio }`.
+**c) UI dentro do bloco `selectedAssociadoId` da Substituição (após o snapshot SGA do veículo antigo, antes do botão "Prosseguir")**
+- Input: "Placa do veículo novo…" (uppercase, regex placa Mercosul/antiga aplicada).
+- Estados visuais:
+  - Digitando / placa incompleta → hint cinza.
+  - `isLoading` → spinner "Consultando SGA…".
+  - `erro_transitorio` → alerta âmbar (reusa `SgaTransientAlert`).
+  - **`encontrado === true`** → Alert destacado:
+    > "Este veículo já pertence a outro associado no SGA — não é uma substituição. Use **Troca de Titularidade**."
+    + amostra curta (placa, marca/modelo SGA, nome do associado SGA).
+    + Botão **"Prosseguir com Troca de Titularidade"** (variant default).
+  - **`encontrado === false`** → check verde "Veículo novo não cadastrado no SGA — apto a substituição".
 
-### 3. UI — `src/components/vendas/OutrasEntradasMenu.tsx`
+**d) Habilitação do botão "Prosseguir — Cotar novo veículo"**
+- Só habilita quando: `placaNova` válida + consulta concluída + `!encontrado` + `!erro_transitorio`.
 
-- Dentro do bloco `isSubstituicao && selectedAssociadoId` (linhas ~563–612), abaixo do bloco atual de nome/modelo/elegibilidade, inserir um card colapsado de amostragem com os campos retornados pela nova edge.
-- Layout: 2 colunas pequenas, tipografia `text-xs text-muted-foreground` para rótulos e `text-sm` para valores; nada de mudança visual no botão "Prosseguir" nem na lógica de bloqueio por débito.
-- Loader inline enquanto `isLoading`.
-- Se `erroTransitorio`, mostrar nota discreta "Dados do SGA temporariamente indisponíveis" sem bloquear o botão.
+**e) Handler `handleProsseguirComoTroca`** (quando SGA novo retorna `encontrado`)
+1. Pega o associado anterior (dono do veículo antigo) — já temos `selectedAssociadoId` (codigo SGA), `selectedAssociadoNome`, `selectedAssociadoCpf` vindos de `handleSelectPlaca`.
+2. Importa o associado anterior do SGA para obter o UUID local: `supabase.functions.invoke('importar-associado-sga', { body: { cpf: selectedAssociadoCpf } })` — mesmo caminho já usado em `handleSelectAssociado` para troca (linhas 307–337). Tratamento de erro idêntico.
+3. Substitui `selectedAssociadoId` pelo UUID local retornado, seta `selectedCodigoHinova`.
+4. `setShowTrocaTitularidade(true)` + `setTimeout(() => onOpenChange(false), 0)` (mesmo padrão da linha 348–351, evita race com reset do `useEffect`).
+5. `TrocaTitularidadeDialog` abre normalmente com o associado anterior já carregado.
 
-## Fora do escopo
+**f) Reset**
+- Quando o usuário muda a placa nova, limpar mensagens anteriores (estado derivado do hook, basta resetar `placaNova`).
 
-- Não toca em `sga-buscar-associado-completo`, `useBuscaPlaca`, `criar-solicitacao-substituicao` nem em nada do fluxo de elegibilidade/débito.
-- Não altera banco, RLS, triggers ou tipos.
-- Não muda o caminho da cotação subsequente — o snapshot é só visual.
+## Fora de escopo
 
-## Arquivos afetados
+- Nenhuma edge function nova (reusa `sga-buscar-veiculo-associado` via `useSgaVeiculoAssociado` e `importar-associado-sga`).
+- Sem alterações em `criar-solicitacao-substituicao`, schema, RLS, ou `TrocaTitularidadeDialog`.
+- Sem alteração em outros fluxos (Inclusão / Troca direta).
 
-- **novo** `supabase/functions/sga-buscar-veiculo-associado/index.ts`
-- **novo** `src/hooks/useSgaVeiculoAssociado.ts`
-- **editado** `src/components/vendas/OutrasEntradasMenu.tsx` (apenas o trecho de exibição da Substituição)
+## Critério de aceite
+
+1. Em Substituição, com placa antiga selecionada, o segundo campo "placa do veículo novo" aparece.
+2. Placa nova **achada no SGA** ⇒ botão "Prosseguir" some, surge alerta + botão "Prosseguir com Troca de Titularidade" que fecha o modal atual e abre o de Troca já com o associado anterior preenchido.
+3. Placa nova **não achada no SGA** ⇒ check verde + botão "Prosseguir — Cotar novo veículo" habilitado, fluxo segue como hoje.
+4. Erro transitório do SGA na placa nova ⇒ banner âmbar com retry, "Prosseguir" desabilitado.
