@@ -176,16 +176,10 @@ export default function PropostaAnalise() {
     aguardandoMonitoramentoVistoria,
   } = resolverEscopoAnaliseCadastro(proposta as any, { isMoto });
 
-  const aguardandoExecucaoReal =
-    aguardandoExecucao &&
-    !autovistoriaCompleta &&
-    !temFotosOuVideo;
-
-
   const podeAprovar =
     proposta?.status === 'assinado' &&
     !proposta?.tem_documento_pendente &&
-    (!aguardandoExecucaoReal || aprovarApenasDocumentos) &&
+    (!aguardandoExecucao || aprovarApenasDocumentos) &&
     sgaLiberado;
 
   // Estado final (já aprovado / reprovado / cancelado)
@@ -682,7 +676,7 @@ export default function PropostaAnalise() {
       )}
 
       {/* Banner: aguardando execução da vistoria/instalação (analista pode revisar docs mas não aprovar) */}
-      {!isFinalizada && aguardandoExecucaoReal && !aprovarApenasDocumentos && (
+      {!isFinalizada && aguardandoExecucao && !aprovarApenasDocumentos && (
         <div className="rounded-lg border-2 border-info/40 bg-info/10 p-4">
           <div className="flex items-start gap-3">
             <ClipboardCheck className="h-5 w-5 text-info mt-0.5 shrink-0" />
