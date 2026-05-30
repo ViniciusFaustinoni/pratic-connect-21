@@ -163,6 +163,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const {
     data: sgaVeiculoNovo,
     isLoading: loadingSgaVeiculoNovo,
+    refetch: refetchSgaVeiculoNovo,
   } = useSgaVeiculoAssociado(
     placaNovaLimpa,
     isSubstituicao && !!selectedAssociadoId && placaNovaValida && !placaNovaIgualAntiga,
