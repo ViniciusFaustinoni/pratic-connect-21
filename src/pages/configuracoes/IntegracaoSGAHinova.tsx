@@ -17,6 +17,7 @@ import { useSGAHealthCheck, type SGAQueueItem } from '@/hooks/useSGAHealthCheck'
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
 import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
 import { SGAQueueItemDetailModal } from '@/components/integracoes/SGAQueueItemDetailModal';
+import { SGAVisaoGeralPorAction } from '@/components/integracoes/SGAVisaoGeralPorAction';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
