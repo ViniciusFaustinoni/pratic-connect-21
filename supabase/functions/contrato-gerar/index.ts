@@ -146,109 +146,59 @@ function nomesCoincidem(a?: string | null, b?: string | null): boolean {
   return intersecao >= 2;
 }
 
-// Keywords de modelo como fallback de último recurso (sem marcas hardcoded)
-const MOTO_MODEL_KEYWORDS = [
-  'nxr', 'bros', 'cg', 'biz', 'pop', 'xre', 'cb ', 'cbr', 'cbx', 'pcx', 'sh ',
-  'fazer', 'ybr', 'factor', 'crosser', 'lander', 'tenere', 'mt-', 'xt ',
-  'gsx', 'intruder', 'burgman', 'v-strom', 'hayabusa',
-  'ninja', 'z900', 'z800', 'versys', 'vulcan',
-  'motocicleta', 'moto ', 'scooter', 'triciclo',
-  'elite', 'adv', 'lead', 'xadv', 'x-adv', 'transalp', 'nmax', 'xtz', 'xj6',
-  'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon', 'sahara',
-];
-
-// Marcas exclusivamente automotivas — espelhado de src/data/vistoriaConfigCompleta.ts.
-// Usadas para sanity-check: se uma `categoriaExistente='moto'` chega de uma cotação
-// poluída mas a marca está aqui, ignoramos a string e detectamos do zero.
-const CARRO_BRANDS_LOCAL = new Set([
-  'CHEVROLET', 'GM', 'GENERAL MOTORS',
-  'VOLKSWAGEN', 'VW',
-  'FIAT', 'FORD', 'TOYOTA', 'HYUNDAI', 'RENAULT', 'PEUGEOT',
-  'CITROEN', 'CITROËN', 'JEEP', 'NISSAN', 'MITSUBISHI', 'KIA',
-  'AUDI', 'MERCEDES-BENZ', 'MERCEDES', 'VOLVO', 'LAND ROVER', 'PORSCHE',
-  'SUBARU', 'MAZDA', 'CHERY', 'CAOA', 'CAOA CHERY', 'RAM', 'DODGE',
-  'JAGUAR', 'MINI', 'LEXUS', 'JAC', 'GWM', 'BYD', 'SMART', 'TROLLER', 'IVECO',
-]);
-
-/** Detecção dinâmica via banco (3 regras), com fallback para keywords de modelo */
+/**
+ * Detecção dinâmica de categoria de veículo.
+ *
+ * Fonte canônica: RPC `fn_detectar_tipo_veiculo(marca, modelo)` no banco —
+ * mesma sequência (catálogo `marcas_modelos.tipo_veiculo` → config
+ * `marcas_exclusivas_moto` → regex de keywords) usada por
+ * `fn_veiculo_precisa_rastreador` e pelo hook `useDetectarTipoVeiculo`.
+ *
+ * Esta função apenas mapeia o retorno (`carro`|`moto`) para os strings
+ * "Automóvel"/"Motocicleta" que o resto do edge (Hinova/contrato) espera, e
+ * preserva uma `categoriaExistente` coerente quando já vier preenchida.
+ */
 async function detectarCategoriaVeiculo(
   supabase: any,
   marca?: string,
   modelo?: string,
   categoriaExistente?: string
 ): Promise<string> {
-  const marcaNorm = (marca || '').trim().toUpperCase();
-  const modeloNorm = (modelo || '').trim().toUpperCase();
+  const marcaNorm = (marca || '').trim();
+  const modeloNorm = (modelo || '').trim();
 
-  // Sanity-check: se a categoria existente diz "moto" mas a marca é
-  // notoriamente de carro (e o modelo não tem keyword de moto), ignoramos
-  // a string poluída e detectamos do zero.
-  const categoriaIndicaMoto = categoriaExistente
-    ? /moto|motocicleta|ciclomotor|triciclo/i.test(categoriaExistente)
-    : false;
-  const marcaEhCarro = marcaNorm ? CARRO_BRANDS_LOCAL.has(marcaNorm) : false;
-  const modeloTemKeywordMoto = modeloNorm
-    ? MOTO_MODEL_KEYWORDS.some(kw => modeloNorm.toLowerCase().includes(kw))
-    : false;
-  const categoriaPoluida = categoriaIndicaMoto && marcaEhCarro && !modeloTemKeywordMoto;
-
-  if (!categoriaPoluida && categoriaExistente && categoriaExistente !== 'nenhuma') {
-    return categoriaExistente;
-  }
-  if (categoriaPoluida) {
-    console.warn('[detectarCategoriaVeiculo] Ignorando categoria poluída', {
-      marca, modelo, categoriaExistente,
+  // Consulta canônica.
+  let tipo: 'carro' | 'moto' = 'carro';
+  try {
+    const { data, error } = await supabase.rpc('fn_detectar_tipo_veiculo', {
+      _marca: marcaNorm,
+      _modelo: modeloNorm,
     });
+    if (!error && (data === 'carro' || data === 'moto')) {
+      tipo = data;
+    }
+  } catch (e) {
+    console.warn('[detectarCategoriaVeiculo] RPC falhou, assumindo carro', e);
   }
 
-  // Sanity-check: se chegou aqui (carro com categoria poluída), o resultado vem
-  // direto da regra 3 (keywords de modelo) — força "Automóvel" se a marca é de carro.
-  if (categoriaPoluida && marcaEhCarro && !modeloTemKeywordMoto) {
-    return 'Automóvel';
-  }
-
-  // Regra 1: Marcas exclusivas de moto (tabela configuracoes)
-  if (marcaNorm) {
-    const { data: configData } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'marcas_exclusivas_moto')
-      .maybeSingle();
-
-    if (configData?.valor) {
-      try {
-        const raw = configData.valor.trim();
-        const marcasList: string[] = raw.startsWith('[')
-          ? JSON.parse(raw).map((m: string) => m.toUpperCase().trim())
-          : raw.split(',').map((m: string) => m.toUpperCase().trim());
-        if (marcasList.some(m => marcaNorm.includes(m) || m.includes(marcaNorm))) {
-          return 'Motocicleta';
-        }
-      } catch { /* ignora parse error */ }
+  // Preserva categoria existente quando coerente com a detecção canônica.
+  // (Ex.: "Táxi", "Leilão" etc. — categorias especiais que não dizem moto/carro.)
+  if (categoriaExistente && categoriaExistente !== 'nenhuma') {
+    const categoriaIndicaMoto = /moto|motocicleta|ciclomotor|triciclo/i.test(categoriaExistente);
+    const categoriaIndicaCarro = /autom[oó]vel|carro|caminh[aã]o|utilit[aá]rio/i.test(categoriaExistente);
+    // Conflito direto com a detecção canônica → categoria poluída, ignora.
+    if ((tipo === 'moto' && categoriaIndicaCarro) || (tipo === 'carro' && categoriaIndicaMoto)) {
+      console.warn('[detectarCategoriaVeiculo] Categoria existente conflita com RPC, ignorando', {
+        marca, modelo, categoriaExistente, tipoCanonico: tipo,
+      });
+    } else {
+      return categoriaExistente;
     }
   }
 
-  // Regra 2: Marca mista → consulta marcas_modelos (tabela unificada)
-  if (marcaNorm && modeloNorm) {
-    const firstToken = modeloNorm.split(' ')[0];
-    const { data } = await supabase
-      .from('marcas_modelos')
-      .select('modelo')
-      .ilike('marca', marcaNorm)
-      .ilike('modelo', `%${firstToken}%`)
-      .eq('ativo', true)
-      .limit(5);
-
-    // Se encontrou na marcas_modelos, é um veículo catalogado.
-    // A detecção de moto depende das marcas exclusivas (regra 1) e keywords (regra 3).
-    // Não é conclusivo aqui, segue para fallback.
-  }
-
-  // Regra 3: Fallback — keywords de modelo apenas
-  const texto = `${modelo || ''}`.toLowerCase();
-  const isMoto = MOTO_MODEL_KEYWORDS.some(kw => texto.includes(kw));
-  return isMoto ? 'Motocicleta' : 'Automóvel';
+  return tipo === 'moto' ? 'Motocicleta' : 'Automóvel';
 }
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
