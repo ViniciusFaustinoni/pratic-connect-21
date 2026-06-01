@@ -171,6 +171,19 @@ function removeDiacritics(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+function tokenizeModelo(s: string): string[] {
+  return s.split(/[\s/]+/).filter(Boolean);
+}
+
+/**
+ * Match canônico família × variante: "mais específico ganha".
+ * Uma entry casa quando TODOS os tokens do entry.modelo estão presentes como
+ * tokens exatos no ctx.modelo. Score = nº de tokens da entry. Desempate por
+ * length(modelo) → ordem do array (com warn pra auditoria).
+ *
+ * Wildcards (TODOS/QUALQUER/ALL/"") casam com score 0 — perdem pra qualquer
+ * entry específica.
+ */
 export function findModelEligibility(
   rule: Pick<EligibilityRule, 'rule_config'>,
   ctx: VehicleContext
@@ -178,44 +191,90 @@ export function findModelEligibility(
   const modelos = (rule.rule_config as any)?.modelos || [];
   if (!Array.isArray(modelos) || modelos.length === 0) return null;
 
-  for (const entry of modelos) {
+  const ctxMarca = removeDiacritics((ctx.marca || '').toUpperCase());
+  const ctxModelo = removeDiacritics((ctx.modelo || '').toUpperCase());
+  const ctxTokenSet = new Set(tokenizeModelo(ctxModelo));
+
+  type Candidate = {
+    entry: any;
+    score: number;
+    entryModeloLength: number;
+    index: number;
+  };
+  const candidates: Candidate[] = [];
+
+  for (let i = 0; i < modelos.length; i++) {
+    const entry = modelos[i];
     if (typeof entry !== 'object' || !entry.status) continue;
 
-    const ctxMarca = removeDiacritics((ctx.marca || '').toUpperCase());
     const entryMarca = removeDiacritics((entry.marca || '').toUpperCase());
     const marcaOk = !entryMarca || ctxMarca.includes(entryMarca) || entryMarca.includes(ctxMarca);
+    if (!marcaOk) continue;
 
-    const ctxModelo = removeDiacritics((ctx.modelo || '').toUpperCase());
-    const ctxModeloFirstToken = ctxModelo.split(/[\s/]+/)[0] || '';
     const entryModelo = removeDiacritics((entry.modelo || '').toUpperCase());
-    const entryModeloFirstToken = entryModelo.split(/[\s/]+/)[0] || '';
     const modeloWildcard = ['TODOS', 'QUALQUER', 'ALL', ''].includes(entryModelo);
-    // Match aceita: substring bidirecional OU primeiro-token bidirecional
-    // (FIPE devolve "GOL 1.0 MI TOTAL FLEX 8V 4P" e regras em geral guardam só "GOL")
-    const modeloOk = modeloWildcard
-      || ctxModelo.includes(entryModelo)
-      || entryModelo.includes(ctxModelo)
-      || (!!entryModeloFirstToken && ctxModeloFirstToken === entryModeloFirstToken)
-      || (!!entryModeloFirstToken && ctxModelo.includes(entryModeloFirstToken))
-      || (!!ctxModeloFirstToken && entryModelo.includes(ctxModeloFirstToken));
-    if (!marcaOk || !modeloOk) continue;
+    const entryTokens = tokenizeModelo(entryModelo);
 
-    // Check year range if defined
+    let score: number;
+    if (modeloWildcard) {
+      score = 0;
+    } else {
+      if (entryTokens.length === 0) continue;
+      const allTokensPresent = entryTokens.every(t => ctxTokenSet.has(t));
+      if (!allTokensPresent) continue;
+      score = entryTokens.length;
+    }
+
+    // Filtros adicionais (ano, combustível) — não afetam score, apenas eliminam
     if (entry.ano_min != null && ctx.anoVeiculo < entry.ano_min) continue;
     if (entry.ano_max != null && ctx.anoVeiculo > entry.ano_max) continue;
-
-    // Check combustivel if not 'qualquer'
     if (entry.combustivel && entry.combustivel !== 'qualquer') {
       if ((ctx.combustivel || '').toLowerCase() !== entry.combustivel.toLowerCase()) continue;
     }
 
-    return {
-      status: entry.status as 'aceito' | 'limitado' | 'negado',
-      coberturaFipe: entry.cobertura_fipe ?? 100,
-    };
+    candidates.push({
+      entry,
+      score,
+      entryModeloLength: entryModelo.length,
+      index: i,
+    });
   }
 
-  return null;
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.entryModeloLength !== a.entryModeloLength) return b.entryModeloLength - a.entryModeloLength;
+    return a.index - b.index;
+  });
+
+  const winner = candidates[0];
+
+  if (candidates.length > 1) {
+    const tied = candidates.filter(
+      c => c.score === winner.score && c.entryModeloLength === winner.entryModeloLength,
+    );
+    if (tied.length > 1) {
+      console.warn(
+        '[findModelEligibility] empate entre cadastros — escolhido o primeiro do array',
+        {
+          marca: ctxMarca,
+          modelo: ctxModelo,
+          empatados: tied.map(t => ({
+            modelo: t.entry.modelo,
+            status: t.entry.status,
+            ano_min: t.entry.ano_min,
+            ano_max: t.entry.ano_max,
+          })),
+        },
+      );
+    }
+  }
+
+  return {
+    status: winner.entry.status as 'aceito' | 'limitado' | 'negado',
+    coberturaFipe: winner.entry.cobertura_fipe ?? 100,
+  };
 }
 
 export interface VehicleContext {
@@ -279,13 +338,23 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
         return true;
       }
       // Legacy format: modelos as string array or single marca/modelo
+      // Mesma lógica de tokens do findModelEligibility (todos os tokens da entry
+      // devem ser tokens exatos do veículo) — evita falso match Corolla→Fielder etc.
+      const ctxModeloNorm = removeDiacritics((ctx.modelo || '').toUpperCase());
+      const ctxTokenSetLegacy = new Set(tokenizeModelo(ctxModeloNorm));
+      const matchModeloLegacy = (raw: string): boolean => {
+        const norm = removeDiacritics((raw || '').toUpperCase());
+        const tokens = tokenizeModelo(norm);
+        if (tokens.length === 0) return true;
+        return tokens.every(t => ctxTokenSetLegacy.has(t));
+      };
       const marcaMatch = !cfg.marca || removeDiacritics((ctx.marca || '').toUpperCase()).includes(removeDiacritics(cfg.marca.toUpperCase()));
       const legacyModelos: string[] = modelosArr;
       let modeloMatch: boolean;
       if (legacyModelos.length > 0) {
-        modeloMatch = legacyModelos.some((m: string) => removeDiacritics((ctx.modelo || '').toUpperCase()).includes(removeDiacritics(m.toUpperCase())));
+        modeloMatch = legacyModelos.some((m: string) => matchModeloLegacy(m));
       } else {
-        modeloMatch = !cfg.modelo || removeDiacritics((ctx.modelo || '').toUpperCase()).includes(removeDiacritics(cfg.modelo.toUpperCase()));
+        modeloMatch = !cfg.modelo || matchModeloLegacy(cfg.modelo);
       }
       const versaoMatch = !cfg.versao || (ctx.versao || '').toUpperCase().includes(cfg.versao.toUpperCase());
       const match2 = marcaMatch && (legacyModelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
