@@ -66,10 +66,11 @@ export function useServicosParaAtribuir() {
       if (instalacaoIds.length > 0) {
         const { data: todosLinks } = await supabase
           .from('instalacao_prestador_links')
-          .select('instalacao_id, status, escopo');
+          .select('instalacao_id, status, escopo')
+          .in('instalacao_id', instalacaoIds);
 
         const porInstalacao = new Map<string, Array<{ status: string; escopo: string | null }>>();
-        for (const l of (todosLinks || []).filter((x: any) => instalacaoIds.includes(x.instalacao_id))) {
+        for (const l of todosLinks || []) {
           const arr = porInstalacao.get((l as any).instalacao_id) || [];
           arr.push({ status: (l as any).status, escopo: (l as any).escopo });
           porInstalacao.set((l as any).instalacao_id, arr);
