@@ -116,7 +116,13 @@ const COTACAO_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'war
   aceita: { label: 'Aceita', tone: 'ok' },
   recusada: { label: 'Recusada', tone: 'danger' },
   expirada: { label: 'Expirada', tone: 'danger' },
+  cancelada: { label: 'Cancelada', tone: 'danger' },
 };
+
+// Hardening: status desconhecidos com semântica negativa nunca devem virar 'info' (azul).
+function fallbackTone(raw: string): 'info' | 'danger' {
+  return /^(cancel|reprov|expir|recus|falh|err)/i.test(raw) ? 'danger' : 'info';
+}
 
 function deriveEtapa(
   tipo: TipoOutroProcesso,
@@ -131,10 +137,11 @@ function deriveEtapa(
         ? { label: 'Aguardando novo titular', tone: 'info' }
         : { label: 'Termo pendente', tone: 'warn' };
     }
-    return TROCA_STATUS_LABELS[trocaStatus] ?? { label: humanizeStatus(trocaStatus), tone: 'info' };
+    return TROCA_STATUS_LABELS[trocaStatus] ?? { label: humanizeStatus(trocaStatus), tone: fallbackTone(trocaStatus) };
   }
-  return COTACAO_STATUS_LABELS[cotacaoStatus] ?? { label: humanizeStatus(cotacaoStatus), tone: 'info' };
+  return COTACAO_STATUS_LABELS[cotacaoStatus] ?? { label: humanizeStatus(cotacaoStatus), tone: fallbackTone(cotacaoStatus) };
 }
+
 
 function deriveTermoStatus(troca: any | null): OutroProcessoItem['termo_status'] {
   if (!troca) return 'nao_aplicavel';
