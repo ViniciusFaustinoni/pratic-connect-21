@@ -16,6 +16,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
   const [telefoneSelecionado, setTelefoneSelecionado] = useState<string | null>(null);
   const [nomeContato, setNomeContato] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
