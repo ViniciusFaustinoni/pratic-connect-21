@@ -533,6 +533,9 @@ serve(async (req) => {
         
         const deviceName = `${veiculo.placa} - ${veiculo.modelo || 'Veículo'}`.substring(0, 21);
         
+        // Softruck mai/26 passou a exigir relationships.type em POST /v2/devices.
+        // tipoId GPS canônico observado em devices existentes em produção (ver memória softruck-api-sintaxe-query).
+        const SOFTRUCK_DEVICE_TYPE_ID_GPS = 'kov8pZ58aQ93KgV';
         const criarDeviceResult = await callSoftruckApi(
           supabaseUrl,
           supabaseAnonKey,
@@ -542,6 +545,7 @@ serve(async (req) => {
             nome: deviceName,
             veiculoId: softruckVehicleId,
             chipId: softruckChipId, // Vincular chip se existir
+            tipoId: SOFTRUCK_DEVICE_TYPE_ID_GPS,
           }
         );
 
