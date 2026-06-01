@@ -407,9 +407,9 @@ serve(async (req) => {
           page?: number; 
           search?: string;
         };
-        // Softruck enum fechado: [batch, plate, code, vin, type, brand, model, year, description, registration_number, color, user_names, deactivated_at].
-        // Os atributos `_name` (type_name/brand_name/model_name) NÃO existem — quebra com validation_failed.
-        let endpoint = `/v2/vehicles?attributes[]=plate&attributes[]=vin&attributes[]=type&attributes[]=brand&attributes[]=model&attributes[]=year&attributes[]=color&limit=${limit}&page=${page}`;
+        // Softruck v2 (mai/26): `attributes` e `includes[xxx]` aceitam CSV string, NÃO array bracket.
+        // Enum fechado attributes: [batch, plate, code, vin, type, brand, model, year, description, registration_number, color, user_names, deactivated_at].
+        let endpoint = `/v2/vehicles?attributes=plate,vin,type,brand,model,year,color&limit=${limit}&page=${page}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
