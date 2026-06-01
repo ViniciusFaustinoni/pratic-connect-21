@@ -338,13 +338,23 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
         return true;
       }
       // Legacy format: modelos as string array or single marca/modelo
+      // Mesma lógica de tokens do findModelEligibility (todos os tokens da entry
+      // devem ser tokens exatos do veículo) — evita falso match Corolla→Fielder etc.
+      const ctxModeloNorm = removeDiacritics((ctx.modelo || '').toUpperCase());
+      const ctxTokenSetLegacy = new Set(tokenizeModelo(ctxModeloNorm));
+      const matchModeloLegacy = (raw: string): boolean => {
+        const norm = removeDiacritics((raw || '').toUpperCase());
+        const tokens = tokenizeModelo(norm);
+        if (tokens.length === 0) return true;
+        return tokens.every(t => ctxTokenSetLegacy.has(t));
+      };
       const marcaMatch = !cfg.marca || removeDiacritics((ctx.marca || '').toUpperCase()).includes(removeDiacritics(cfg.marca.toUpperCase()));
       const legacyModelos: string[] = modelosArr;
       let modeloMatch: boolean;
       if (legacyModelos.length > 0) {
-        modeloMatch = legacyModelos.some((m: string) => removeDiacritics((ctx.modelo || '').toUpperCase()).includes(removeDiacritics(m.toUpperCase())));
+        modeloMatch = legacyModelos.some((m: string) => matchModeloLegacy(m));
       } else {
-        modeloMatch = !cfg.modelo || removeDiacritics((ctx.modelo || '').toUpperCase()).includes(removeDiacritics(cfg.modelo.toUpperCase()));
+        modeloMatch = !cfg.modelo || matchModeloLegacy(cfg.modelo);
       }
       const versaoMatch = !cfg.versao || (ctx.versao || '').toUpperCase().includes(cfg.versao.toUpperCase());
       const match2 = marcaMatch && (legacyModelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
