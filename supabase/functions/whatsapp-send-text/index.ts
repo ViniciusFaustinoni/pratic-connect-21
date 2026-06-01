@@ -450,16 +450,18 @@ async function enviarViaMeta(
     tipo: templateName ? "template" : "text",
     mensagem,
     direcao: "saida", status: "enviada", message_id: messageId,
-    template_id: templateName || null,
-    template_variaveis: templateName ? { body: bodyParams, button: buttonParams } : null,
+    // template_id é uuid; templateName é o NOME (string) → guardamos em template_variaveis.nome
+    template_variaveis: templateName ? { nome: templateName, body: bodyParams, button: buttonParams } : null,
     provedor: "meta_oficial",
   });
   if (insertErr) {
-    console.error("[whatsapp-send-text] ⚠️ Falha ao persistir mensagem enviada (Meta):", insertErr);
+    console.error("[whatsapp-send-text] ⚠️ insert FAIL (meta ok):", JSON.stringify(insertErr), "payload_keys:", Object.keys({ telefoneFormatado, mensagem, messageId, templateName }));
+  } else {
+    console.log("[whatsapp-send-text] ✓ persisted whatsapp_mensagens id=ok message_id=", messageId);
   }
 
   console.log(`[whatsapp-send-text] ✓ Meta: ${telefoneFormatado} - ID: ${messageId}`);
-  return { success: true, message_id: messageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
+  return { success: true, message_id: messageId, telefone: telefoneFormatado, provedor: 'meta_oficial', persisted: !insertErr };
 }
 
 // ====== MAIN ======
