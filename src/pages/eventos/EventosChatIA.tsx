@@ -134,6 +134,27 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     staleTime: 300000,
   });
 
+  // Telefones com transbordo ativo (IA pausada por intervenção humana, transbordo de boleto, etc.)
+  const { data: transbordoMap } = useQuery({
+    queryKey: ['chat-ia-transbordo-ativo'],
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const sb: any = supabase;
+      const { data, error } = await sb
+        .from('whatsapp_ia_pausas')
+        .select('telefone, motivo, pausada_ate')
+        .gt('pausada_ate', new Date().toISOString());
+      if (error) throw error;
+      const map = new Map<string, { motivo: string }>();
+      (data ?? []).forEach((r: any) => {
+        if (r?.telefone) map.set(String(r.telefone), { motivo: String(r.motivo ?? '') });
+      });
+      return map;
+    },
+  });
+
+
   // Telefones elegíveis para escopo Monitoramento (associados com veículo/serviço/rastreador operacional)
   const { data: telefonesMonitoramento } = useQuery({
     queryKey: ['monitoramento-telefones-elegiveis'],
