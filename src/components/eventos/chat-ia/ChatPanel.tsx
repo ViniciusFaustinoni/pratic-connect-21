@@ -126,15 +126,49 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
         toast.success('Áudio enviado!');
         resetAudio();
       } else {
-        const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
-          // allow_text=true: atendimento humano manual dentro da janela 24h vai como
-          // texto livre — sem isso, Meta API cai no auto-fallback de template e a
-          // mensagem real do atendente nunca chega ao associado.
-          body: { telefone, mensagem: texto.trim(), allow_text: true },
-        });
-        if (error) throw error;
-        if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
+        const conteudo = texto.trim();
+        const telefoneLimpoOp = telefone.replace(/\D/g, '');
+        const telefoneNorm = telefoneLimpoOp.startsWith('55') ? telefoneLimpoOp : `55${telefoneLimpoOp}`;
+        const tempId = `pending-${Date.now()}`;
+        const optimistic: WhatsAppMensagem = {
+          id: tempId,
+          telefone: telefoneNorm,
+          direcao: 'saida',
+          status: 'enviando',
+          tipo: 'text',
+          mensagem: conteudo,
+          created_at: new Date().toISOString(),
+        } as WhatsAppMensagem;
+        setPendingMessages((prev) => [...prev, optimistic]);
         setTexto('');
+
+        try {
+          const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+            // allow_text=true: atendimento humano manual dentro da janela 24h vai como
+            // texto livre — sem isso, Meta API cai no auto-fallback de template e a
+            // mensagem real do atendente nunca chega ao associado.
+            body: { telefone, mensagem: conteudo, allow_text: true },
+          });
+          if (error) throw error;
+          if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
+
+          // Edge expõe persisted=false quando o INSERT em whatsapp_mensagens falhou.
+          // Nesse caso mantemos a bolha como 'enviada' (chegou ao associado), mas
+          // logamos pra investigação — não some do chat.
+          if (data?.persisted === false) {
+            console.warn('[ChatPanel] mensagem enviada à Meta mas NÃO persistida no DB');
+          }
+          setPendingMessages((prev) =>
+            prev.map((p) => (p.id === tempId ? { ...p, status: 'enviada' } : p))
+          );
+        } catch (sendErr: any) {
+          setPendingMessages((prev) =>
+            prev.map((p) =>
+              p.id === tempId ? { ...p, status: 'erro', erro_mensagem: sendErr?.message } : p
+            ) as WhatsAppMensagem[]
+          );
+          throw sendErr;
+        }
       }
       // Pausa IA por 10 minutos após intervenção humana
       try { await pausarPorIntervencao(); } catch (e) { console.warn('falha ao pausar IA', e); }
