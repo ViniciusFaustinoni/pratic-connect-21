@@ -136,7 +136,22 @@ Deno.serve(async (req) => {
 
     if (updErr) {
       console.error('[aprovar-troca-cadastro] update error:', updErr);
-      throw new Error(updErr.message || 'Falha ao atualizar solicitação');
+      // Propagação canônica: UPDATE crítico na solicitação de troca não pode ser
+      // engolido como 500/200. Retorna 502 + Retry-After para que o cliente
+      // (front + supervisores) entendam que vale insistir.
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'falha_aprovar_troca_cadastro',
+          code: 'falha_aprovar_troca_cadastro',
+          detail: updErr.message || 'Falha ao atualizar solicitação de troca',
+          hint: 'A aprovação não foi persistida. Tente novamente em 1 minuto; se persistir, abrir incidente.',
+        }),
+        {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+        },
+      );
     }
 
     if (!updated || updated.length === 0) {

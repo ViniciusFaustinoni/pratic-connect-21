@@ -151,12 +151,16 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: unknown) {
+  } catch (error: any) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.error('[asaas-verificar-cota-sinistro] Erro:', errorMessage);
+    const code = error?.__code ?? 'erro_verificar_cota_sinistro';
+    const status = error?.__status ?? 500;
+    console.error('[asaas-verificar-cota-sinistro] Erro:', { code, status, errorMessage });
+    const extraHeaders: Record<string, string> = { ...corsHeaders, 'Content-Type': 'application/json' };
+    if (status === 502) extraHeaders['Retry-After'] = '60';
     return new Response(
-      JSON.stringify({ success: false, pago: false, erro: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, pago: false, erro: errorMessage, code }),
+      { status, headers: extraHeaders }
     );
   }
 });
@@ -175,7 +179,12 @@ async function atualizarSinistro(supabase: any, sinistroId: string, statusAtual:
 
   if (updateError) {
     console.error('[asaas-verificar-cota-sinistro] Erro ao atualizar sinistro:', updateError);
-    return;
+    // Financeiro sensível — não pode engolir UPDATE de cota_paga. Propaga via
+    // exception para o caller retornar 502 + Retry-After.
+    throw Object.assign(new Error(updateError.message || 'falha_marcar_cota_paga'), {
+      __code: 'falha_marcar_cota_paga',
+      __status: 502,
+    });
   }
 
   await supabase
