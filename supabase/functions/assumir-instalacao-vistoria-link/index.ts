@@ -189,6 +189,10 @@ Deno.serve(async (req) => {
     //   - instalador_responsavel_id → usado pela view view_vistorias_mapa para popular
     //                                 o vistoriador_id (e refletir no Mapa > Atribuições)
     //   - status='agendada'         → consistente com AtribuirInstaladorDialog
+    //
+    // PR-A1: erros aqui PROPAGAM como 502 + Retry-After. Antes eram console.error
+    // silencioso → técnico abria o link, recebia redirect, mas o mapa não atualizava.
+    const parciais: string[] = []
     if (link.instalacao_id) {
       const { error: updInstErr } = await supabase
         .from('instalacoes')
@@ -200,6 +204,18 @@ Deno.serve(async (req) => {
         .eq('id', link.instalacao_id)
       if (updInstErr) {
         console.error('[assumir-instalacao-vistoria-link] erro atualizando instalacoes:', updInstErr)
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: 'falha_assumir_instalacao',
+            error: updInstErr.message,
+            hint: 'Não foi possível vincular a instalação ao técnico. Tente novamente em alguns segundos.',
+          }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+          },
+        )
       }
 
       // Materializa a atribuição no(s) serviço(s) ativos derivados desta instalação.
@@ -213,6 +229,18 @@ Deno.serve(async (req) => {
 
       if (servSelErr) {
         console.error('[assumir-instalacao-vistoria-link] erro lendo servicos:', servSelErr)
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: 'falha_assumir_servicos',
+            error: servSelErr.message,
+            hint: 'Não foi possível localizar os serviços vinculados à instalação. Tente novamente.',
+          }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+          },
+        )
       } else if (servicosAtivos && servicosAtivos.length > 0) {
         const ids = servicosAtivos.map((s: any) => s.id)
         const { error: updServErr } = await supabase
@@ -221,9 +249,21 @@ Deno.serve(async (req) => {
           .in('id', ids)
         if (updServErr) {
           console.error('[assumir-instalacao-vistoria-link] erro atualizando servicos:', updServErr)
+          return new Response(
+            JSON.stringify({
+              success: false,
+              code: 'falha_assumir_servicos',
+              error: updServErr.message,
+              hint: 'Instalação foi vinculada, mas os serviços não. Reabra o link.',
+            }),
+            {
+              status: 502,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+            },
+          )
         }
 
-        // Log de atribuição (mesmo padrão do useAtribuicaoManual.ts)
+        // Log de atribuição (não-bloqueante — só registro auxiliar).
         const logRows = ids.map((sid: string) => ({
           servico_id: sid,
           profissional_id: userId,
@@ -236,6 +276,7 @@ Deno.serve(async (req) => {
           .insert(logRows as any)
         if (logErr) {
           console.error('[assumir-instalacao-vistoria-link] erro log atribuicao:', logErr)
+          parciais.push('log_atribuicao')
         }
       }
     }
@@ -245,6 +286,7 @@ Deno.serve(async (req) => {
         success: true,
         instalacao_id: link.instalacao_id,
         redirect_to: link.instalacao_id ? `/instalador/vistoria/${link.instalacao_id}` : null,
+        parciais: parciais.length ? parciais : undefined,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
