@@ -1,51 +1,65 @@
-## Diagnóstico
+## O que aconteceu com LUT8D25 (revisado)
 
-Validei nos logs e no banco:
+Cotação `COT-20260530-114923367-501` / contrato `CTR-20260601115931-I2AFMT` / instalação `25ba4038-28d3-481a-8406-a6543970e05a` / prestador `2711db6e…`.
 
-1. Operador envia "Boa tarde resposta" em `/eventos/chat-ia` para `5521982244909` às 18:59:02.
-2. Edge `whatsapp-send-text` loga **`✓ Meta: ... wamid.HBgN...`** → Meta API aceitou e o associado recebeu no celular.
-3. Imediatamente depois aparece **`shutdown`** da function e **NENHUM** `[whatsapp-send-text] ⚠️ Falha ao persistir` é logado.
-4. Query no banco em `whatsapp_mensagens` por esse `message_id` / `telefone` / janela horária: **0 linhas saída após 18:58:30**. Nem a resposta da Maya nem a do operador foram persistidas.
-5. Tabela `whatsapp_mensagens` não tem trigger BEFORE INSERT, não é particionada, `status='enviada'` e `tipo='text'` estão dentro do CHECK, e não há UNIQUE em `message_id`. RLS é bypassado (service role).
+### Linha do tempo confirmada (01/06/2026)
+
+1. 14:21–14:26 — autovistoria enxuta materializada (chassi + motor + vídeo 360°) → `vistorias.ff5c23e0` (modalidade `autovistoria`, status `aprovada`).
+2. 14:55 — Cadastro aprovou documentos.
+3. 15:04 — `aprovar-proposta` criou contrato aprovado + `instalacoes.25ba4038` (`status=agendada`, `data_agendada=02/06`) + `servicos.7794e6a0` (`tipo=instalacao`, `status=agendada`).
+4. 15:09 — coordenador atribuiu prestador externo → instalação foi para `aguardando_prestador`.
+5. **19:02–19:07** — prestador realmente fez o trabalho: subiu **30+ fotos** para `storage/vistoria-prestador-fotos/ac4f2321-2372-4424-a2d7-61d0fd1dde5f/*.jpg` (chassi, motor, capô aberto, painel completo, todas as portas, estepe, odômetro, etc.).
+6. 19:08:14 — fim da vistoria. `concluir-instalacao-prestador` rodou parcialmente:
+   - ✓ Gerou laudo PDF em `storage/documentos/laudos/…/Laudo_Vistoria_LUT8D25_1780340897381.pdf`.
+   - ✓ Gravou log de auditoria "Vistoria prestador concluída" (com descrição em branco "— Veículo (---) —" porque o lookup já tinha falhado).
+   - ✗ **NÃO** materializou a `vistorias` presencial.
+   - ✗ **NÃO** atualizou `instalacoes.25ba4038.status` (segue `aguardando_prestador`, `concluida_em=NULL`).
+   - ✗ **NÃO** atualizou `servicos.7794e6a0.status` (segue `agendada`).
+   - ✗ `instalacao_prestador_links.ac4f2321…` não está na tabela (deletado ou nunca commitado depois do erro).
+
+### Por que não vai para a fila de Monitoramento
+
+A query da Aprovação de Associados filtra `servicos.tipo IN ('instalacao','vistoria_entrada') AND status='concluida'`. Como o serviço segue `agendada` e a instalação segue `aguardando_prestador`, o caso é invisível na fila — e o link público continua mostrando "Agendar Instalação" porque `etapaPendentePublica` enxerga instalação ainda não concluída.
 
 ### Causa raiz
 
-O código-fonte de `supabase/functions/whatsapp-send-text/index.ts` **já** tem `status: "enviada"` + captura de `insertErr`. Mas o runtime que respondeu às 18:59 **não emitiu o log de erro nem persistiu**. Duas hipóteses, ambas tratadas pelo plano:
+`concluir-instalacao-prestador` rodou sem transação: subiu as fotos no Storage e gerou laudo, mas as gravações de DB (criar vistoria, fechar instalação, fechar serviço, atualizar link) falharam silenciosamente em algum ponto e ninguém abortou — exatamente o anti-padrão "Vigia universal logs_auditoria" + memória "Fotos prestador materializadas".
 
-- **A — Deploy desatualizado**: a versão rodando ainda é a antiga (`status: 'enviada_texto_livre'`), que violava o CHECK do `whatsapp_mensagens.status` e o `insert(...)` sem destruturar `error` engolia o `PostgrestError` silenciosamente. Como Lovable às vezes atrasa o deploy de edge functions, **precisamos forçar redeploy**.
-- **B — Algum outro erro de insert que continue passando despercebido** (ex.: payload com campo inesperado em outro caminho `insert` anterior à correção). Vamos blindar: logar erro com `JSON.stringify` e devolver `persisted:false` na resposta da function para o front conseguir reagir.
+## Plano de ação
 
-A regra de negócio que o usuário descreveu (IA responde sempre, operador interrompe naquela conversa, Transbordo lista os interrompidos) **já está correta** — `pausarPorIntervencao()` é por telefone e dura 10 min; outros contatos seguem com a IA. Não precisa mexer.
+### 1. Hotfix do caso LUT8D25 (saneamento de dados)
 
-## Plano
+Migração pontual idempotente, reconstruindo a partir do que existe no Storage:
 
-### 1. Forçar redeploy do edge function `whatsapp-send-text`
-Garante que a versão em execução é a que tem `status: "enviada"` + captura de `insertErr`.
+- Criar `vistorias` presencial vinculada ao contrato/veículo/instalação `25ba4038` (modalidade `presencial`, `status=concluida`, `concluida_em=2026-06-01 19:08:14Z`, `instalacao_id=25ba4038…`, herdando contrato/cotacao/associado/veículo).
+- Inserir em `vistoria_fotos` uma entrada por arquivo do bucket `vistoria-prestador-fotos/ac4f2321-…/` (tipo derivado do nome do arquivo: `chassi`, `motor`, `painel_completo`, `odometro`, `frente`, etc.).
+- Vincular o laudo (`storage/documentos/laudos/…Laudo_Vistoria_LUT8D25_…pdf`) à vistoria.
+- Atualizar `instalacoes.25ba4038`: `status='concluida'`, `concluida_em=2026-06-01 19:08:14Z`.
+- Atualizar `servicos.7794e6a0`: `status='concluida'`, `concluida_em=2026-06-01 19:08:14Z`.
+- Registrar log de auditoria explicando que é saneamento da falha de `concluir-instalacao-prestador`.
 
-### 2. Blindar persistência e observabilidade no `whatsapp-send-text/index.ts`
-- Trocar todos os `await supabase.from("whatsapp_mensagens").insert({...})` que ainda **não** destruturam `error` (existe pelo menos no `retry #1 button split` e no caminho Evolution) para `const { error: insertErr } = await ...` e logar com `console.error("[whatsapp-send-text] insert FAIL:", JSON.stringify(insertErr))`.
-- Incluir `persisted: !insertErr` no objeto de retorno do caminho Meta (success path) para o front saber se gravou.
+Triggers existentes (`fn_reativar_cobertura_pos_instalacao` + reconciliação pós-instalação) vão religar a cobertura e deixar o caso pronto para Monitoramento aprovar.
 
-### 3. Render otimista no `ChatPanel.tsx`
-Mesmo com persistência consertada, há um gap de ~1 s entre o `invoke` retornar e o `refetch`/realtime trazer a linha. Hoje a bolha do operador some nesse intervalo. Solução:
+### 2. Hardening da edge `concluir-instalacao-prestador`
 
-- Manter uma `pendingMessages` state local: ao clicar enviar, empurra `{ id: tempId, telefone, mensagem, direcao:'saida', status:'enviando', created_at: now() }`.
-- Concatenar `pendingMessages` ao array de `mensagens` na renderização, deduplicando por `message_id` quando o registro real chegar via realtime/refetch.
-- Se a edge devolver `persisted: false` ou `error`, marcar a pendente como `status:'erro'` com botão "Reenviar".
+Para não voltar a acontecer:
 
-### 4. Verificação
-- Enviar uma mensagem manual em `/eventos/chat-ia` para um número com janela 24h aberta.
-- Conferir no banco: `SELECT * FROM whatsapp_mensagens WHERE direcao='saida' AND created_at > now() - interval '2 minutes'` retorna a linha.
-- Conferir no chat: a bolha aparece imediatamente (otimista) e persiste após o refetch.
-- Conferir no log do edge: aparece `✓ Meta:` e **nenhum** `insert FAIL`.
+- Envolver toda a cascata de gravação (vistoria + vistoria_fotos + update instalação + update serviço + update link) em sequência com `try/catch` e checagem de `error` em **cada** `insert/update`. Qualquer erro → 5xx com `code` claro e **não** deletar o link.
+- Após gravar, **reler** `instalacoes.status` e `servicos.status` (read-back) — se não ficaram `concluida`, retornar erro e enfileirar retry em `sga_sync_queue`/fila já existente, em vez de criar fila nova.
+- Garantir que o log de auditoria use `insertAuditLog` com ação canônica para o lookup de placa/veículo não falhar silencioso (o "Veículo (---)" do log atual é sintoma).
+- Não confiar em `link_id` que não veio do banco — fazer `select … where id = … for update` antes de marcar concluída.
 
-## Arquivos tocados
+### 3. Validação
 
-- `supabase/functions/whatsapp-send-text/index.ts` — blindagem dos `insert` restantes + `persisted` no retorno.
-- `src/components/eventos/chat-ia/ChatPanel.tsx` — render otimista + estado `pendingMessages` + reenviar.
-- (Operação) Redeploy explícito de `whatsapp-send-text`.
+Após o hotfix:
+- Conferir que `servicos.7794e6a0.status='concluida'` e `instalacoes.25ba4038.status='concluida'`.
+- Conferir que LUT8D25 aparece em Monitoramento › Aprovações › Aprovação de Associados.
+- Conferir que o link público de COT-20260530-114923367-501 deixa de mostrar "Agendar Instalação".
+- Conferir que as fotos do prestador aparecem na tela de Aprovação (via `vistoria_fotos`).
+
+Após o deploy da edge corrigida, monitorar próximo caso de conclusão de prestador externo para confirmar que não há mais "vistoria prestador concluída" fantasma em `logs_auditoria` sem cascata.
 
 ## Fora de escopo
 
-- A regra "IA continua para outros contatos" já está correta (pausa por telefone, 10 min). Não mexer.
-- Transbordo já existe em `/relacionamento/transbordos` (`TransbordosRelacionamento.tsx` + `useTransbordosAtivos`). Não duplicar.
+- Não tocar no link público nem em `etapaPendentePublica` — o comportamento atual reflete o estado real do banco; após o hotfix, o caso some sozinho.
+- Não tocar na fila do Monitoramento — o filtro está correto, só faltava o serviço estar `concluida`.
