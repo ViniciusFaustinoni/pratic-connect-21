@@ -1,79 +1,65 @@
-# IA: 2ª via de boleto via SGA + transbordo
+# Tela de Transbordos em Relacionamento
 
-Adicionar à IA do WhatsApp Meta (assistente que já atende associados via `whatsapp-meta-webhook` → `whatsapp_fila_ia` → `assistente-chat`) um sub-fluxo dedicado a **2ª via de boleto**: associado pede boleto → IA pergunta CPF → consulta SGA → confirma veículo/placa → consulta boletos no SGA → envia boleto **ou** faz transbordo conforme regra de prazo.
+## Objetivo
 
-## Escopo
+Criar nova tela `/relacionamento/transbordos` (item no sidebar de Relacionamento) listando todos os transbordos ativos (atendimentos que a IA transferiu para humano), com clique abrindo a conversa no chat existente e botão **Concluir** que finaliza o atendimento e zera o contexto da IA para a próxima interação.
 
-- **Quando dispara:** quando o associado conhecido envia mensagem com intenção de boleto/2ª via (palavras-chave + reconhecimento pela IA). Não afeta o fluxo de sinistro, assistência, troca, etc.
-- **Quando NÃO dispara:** mensagens de número desconhecido continuam indo para `agente-consultor-ia` (não é alvo desta entrega).
+## Arquitetura
 
-## Comportamento desejado (passo a passo)
+Reutiliza a infra já criada (`whatsapp_ia_pausas` + `agente_consultor_contatos.status='atendimento_humano'`). Adiciona:
 
-1. **IA pergunta CPF** do associado (mesmo já estando vinculado pelo telefone, porque a consulta no SGA usa CPF).
-2. **Busca SGA** via `sga-buscar-associado-completo` (endpoint `/buscar/cpf`, já existente — não cria nada novo).
-3. **1 veículo** → IA responde: "Encontrei seu cadastro e o veículo placa **XXX-0000**. Quer a 2ª via do boleto?". Confirmação positiva → vai pro passo 5 com essa placa.
-4. **>1 veículo** → IA lista as placas e pergunta de qual veículo é o boleto. Cliente responde com a placa.
-5. **Consulta boletos** no SGA via endpoint `/listar/boleto-associado-veiculo` filtrando por `placa` e janela `data_vencimento_inicial`/`final` = hoje−30d até hoje+60d, `link_boleto: true`. Pega o **boleto aberto mais relevante** (preferência: vencimento mais próximo).
-6. **Decisão por prazo do boleto (regra do usuário):**
-   - **Não vencido OU vencido há ≤ 5 dias** → IA envia mensagem com: linha digitável, link do boleto, PIX copia-e-cola e QR Code (imagem).
-   - **Vencido há ≥ 6 dias** → IA envia mensagem amigável "vou transferir você para um humano" e dispara o **transbordo** (sem mandar o boleto).
+1. **Sidebar** — novo item `Transbordo` em Relacionamento.
+2. **Rota + página** `/relacionamento/transbordos` → `TransbordosRelacionamento.tsx`.
+3. **Botão Concluir** no header do chat (`EventosChatIA`), visível só quando a conversa selecionada está em transbordo.
+4. **Corte de contexto da IA** — nova coluna `contexto_cortado_em` em `whatsapp_ia_pausas` (ou tabela paralela leve). O `getConversationHistory` do `whatsapp-webhook` passa a respeitar esse floor (`Math.max(janela24h, contexto_cortado_em)`), garantindo que a próxima conversa começa do zero.
 
-## Transbordo
+## Tela `/relacionamento/transbordos`
 
-- Atualiza `contato_ia.status='atendimento_humano'` (padrão já usado por `agente-consultor-ia`) para a IA parar de responder esse telefone.
-- O chat em `/eventos/chat-ia` passa a destacar esse contato com **badge "Transbordo (boleto)"** em cor de alerta (amber/orange) e cor de borda diferente no card da lista, para o Relacionamento priorizar.
-- Mensagem ao cliente: "Vou te transferir para um atendente humano agora. Em breve alguém vai continuar o atendimento por aqui."
+Lista (tabela / cards) das linhas de `whatsapp_ia_pausas` com `pausada_ate > now()`, enriquecida com:
 
-## Mudanças técnicas
+- Nome do associado (join via `associados.telefone/whatsapp` por dígitos normalizados; fallback "Número desconhecido" + telefone).
+- Avatar.
+- Motivo (`transbordo_boleto` → "Boleto vencido"; `intervencao_humana` → "Intervenção humana"; `transbordo_humano` → "Solicitação do associado").
+- Início (`created_at`) e tempo aguardando.
+- Última mensagem (preview) — opcional, busca leve em `whatsapp_mensagens`.
+- Ação: linha clicável → navega para `/eventos/chat-ia?telefone=<tel>` (parametrizar seleção inicial no `EventosChatIA`).
 
-**Sem mudanças de schema.** `contato_ia` e `whatsapp_meta_templates` já existem; o status `atendimento_humano` já é o canônico.
+Filtros simples: busca por nome/telefone + filtro por motivo. Realtime via `refetchInterval` 15s (mesmo padrão do `transbordoMap` existente).
 
-**Edge function `assistente-chat`** (`supabase/functions/assistente-chat/index.ts`):
-- Adicionar 3 tools novas:
-  - `identificar_associado_sga(cpf)` — invoca `sga-buscar-associado-completo`; retorna nome, lista de veículos.
-  - `consultar_boletos_placa(placa)` — invoca um novo wrapper edge `sga-listar-boletos-placa` (chama `POST /listar/boleto-associado-veiculo` com `placa` + janela 90d e `link_boleto:true`) ou estende `sga-listar-boletos-associado` para aceitar placa direta — a escolha vai depender da assinatura atual da função (avaliar em build).
-  - `transbordo_atendimento(motivo)` — seta `contato_ia.status='atendimento_humano'` para o telefone da conversa e devolve OK.
-- Atualizar o **system prompt** com o fluxo acima (regras explícitas: pedir CPF antes de qualquer outra coisa quando intenção for boleto/2ª via; nunca enviar boleto sem confirmação da placa; regra dos 6 dias).
-- A IA decide envio do boleto via mensagem direta (linha digitável + link + PIX) e, quando houver `pix.qrcode` no retorno SGA, dispara `whatsapp-send-media` com a imagem do QR.
+## Botão "Concluir atendimento"
 
-**UI `/eventos/chat-ia`** (`src/components/eventos/chat-ia/*` — lista de contatos):
-- Adicionar leitura de `agente_consultor_contatos.status` (ou tabela equivalente onde a IA pausa) pelo telefone do contato.
-- Renderizar badge "Transbordo" (cor amber) e destacar borda do card quando `status='atendimento_humano'`.
-- Filtro opcional na toolbar: "Somente transbordo".
+Renderizado no header da conversa ativa em `EventosChatIA` quando o telefone selecionado tem transbordo. Ao clicar:
 
-## Detalhes técnicos
+1. `UPDATE whatsapp_ia_pausas SET pausada_ate = now(), contexto_cortado_em = now(), motivo = 'encerrado_humano' WHERE telefone = ...` (efetivamente expira a pausa e marca corte).
+2. `UPDATE agente_consultor_contatos SET status = 'ativo' WHERE telefone = ...` (devolve o controle pra IA).
+3. Invalida queries `chat-ia-transbordo-ativo` e a lista de transbordos.
+4. Toast "Atendimento concluído".
 
-```text
-WhatsApp (Meta)
-   │
-   ▼
-whatsapp-meta-webhook  ──► (associado conhecido) ──► whatsapp_fila_ia
-                                                          │
-                                                          ▼
-                                                   assistente-chat
-                                       (novo) ─── tools SGA + transbordo
-                                                          │
-                                  ┌───────────────────────┼────────────────────────┐
-                                  ▼                       ▼                        ▼
-                       identificar_associado    consultar_boletos_placa     transbordo_atendimento
-                            (CPF→SGA)              (placa→SGA boletos)        (contato_ia=atendimento_humano)
+## Corte de contexto da IA
+
+Adicionar `contexto_cortado_em timestamptz NULL` em `whatsapp_ia_pausas` (linha já é por telefone — PK ideal pra isso). O `getConversationHistory` em `whatsapp-webhook/index.ts` faz uma leitura prévia da pausa por telefone e usa:
+
+```ts
+const corte = pausa?.contexto_cortado_em ? new Date(pausa.contexto_cortado_em) : null;
+const janelaAtras = new Date(Math.max(Date.now() - 24*3600*1000, corte?.getTime() ?? 0)).toISOString();
 ```
 
-Critérios de decisão do boleto (calculados na própria tool):
-- `diasVencido = max(0, hoje - data_vencimento)` em dias úteis-cor (corridos basta).
-- `≤ 5` → envia conteúdo. `≥ 6` → transbordo.
-- Quando vários boletos abertos: prioriza o **mais antigo em aberto**; se todos ≥6d, transbordo imediato.
+Assim, qualquer mensagem trocada antes do "Concluir" some do contexto enviado ao Gemini — a próxima interação do associado nasce limpa.
 
-## O que NÃO faz parte desta entrega
+## Mudanças técnicas (resumo)
 
-- Não altera o fluxo de número desconhecido (`agente-consultor-ia`).
-- Não altera o fluxo de cobrança em massa via CSV (`disparar-cobranca-csv-meta`).
-- Não muda schema do banco.
-- Não cria tela de relatório de transbordos (só o badge no chat).
+- **Migration:** `ALTER TABLE public.whatsapp_ia_pausas ADD COLUMN contexto_cortado_em timestamptz NULL;`
+- **Sidebar:** novo item em `AppSidebar.tsx` (Relacionamento).
+- **Rota:** `App.tsx` registra `<Route path="/relacionamento/transbordos" element={<TransbordosRelacionamento />} />`.
+- **Nova página:** `src/pages/relacionamento/TransbordosRelacionamento.tsx`.
+- **Hook:** `src/hooks/useTransbordosAtivos.ts` (lista enriquecida + mutation `concluirTransbordo`).
+- **Edit `EventosChatIA.tsx`:**
+  - Aceitar `?telefone=` na URL e selecionar a conversa automaticamente.
+  - Renderizar botão "Concluir atendimento" no header quando há transbordo ativo no telefone selecionado.
+- **Edit `whatsapp-webhook/index.ts`:** `getConversationHistory` respeita `contexto_cortado_em`.
 
-## Verificação pós-deploy
+## Fora de escopo
 
-1. Mensagem "preciso do boleto" enviada por um associado conhecido com 1 veículo → IA pede CPF → após CPF, confirma placa e envia boleto.
-2. Mesma mensagem para associado com 2+ veículos → IA pergunta a placa → envia boleto da placa escolhida.
-3. Simular boleto vencido há 7+ dias (associado de teste) → IA não envia, marca transbordo e badge aparece em `/eventos/chat-ia`.
-4. Conferir logs de `assistente-chat` para confirmar chamadas às novas tools e às edges SGA.
+- Não cria histórico de transbordos concluídos (lista mostra só ativos). Se quiser histórico depois, adicionamos tab "Concluídos" buscando pausas expiradas com `motivo='encerrado_humano'`.
+- Não muda o comportamento de pausa por intervenção manual (10 min) já existente.
+- Sem permissões/roles novas — segue as do módulo Relacionamento.

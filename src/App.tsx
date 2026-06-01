@@ -213,6 +213,8 @@ const DashboardVendaExterna = lazy(() => import("./pages/financeiro/DashboardVen
 const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
 const RelacionamentoTrocas = lazy(() => import("./pages/cobranca/RelacionamentoTrocas"));
 const AnalisesRelacionamento = lazy(() => import("./pages/relacionamento/AnalisesRelacionamento"));
+const TransbordosRelacionamento = lazy(() => import("./pages/relacionamento/TransbordosRelacionamento"));
+
 const EmailsRelacionamento = lazy(() => import("./pages/relacionamento/emails/EmailsRelacionamento"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
@@ -630,6 +632,7 @@ const App = () => (
               <Route path="/relacionamento/troca-titularidade" element={<TrocaTitularidade />} />
               <Route path="/relacionamento/debitos" element={<RelacionamentoTrocas />} />
               <Route path="/relacionamento/analises" element={<AnalisesRelacionamento />} />
+              <Route path="/relacionamento/transbordos" element={<TransbordosRelacionamento />} />
               <Route path="/relacionamento/emails" element={<EmailsRelacionamento />} />
               <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               

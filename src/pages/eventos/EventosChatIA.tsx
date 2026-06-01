@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { ConversasList, type ConversaAgrupada } from '@/components/eventos/chat-ia/ConversasList';
 import { ChatPanel } from '@/components/eventos/chat-ia/ChatPanel';
 import { useAuth } from '@/contexts/AuthContext';
+
 
 interface EventosChatIAProps {
   drawerVariant?: 'relacionamento' | 'eventos' | 'monitoramento';
@@ -14,6 +16,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
   const [telefoneSelecionado, setTelefoneSelecionado] = useState<string | null>(null);
   const [nomeContato, setNomeContato] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
@@ -267,12 +270,35 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     );
   }, [mensagens, associados, escopo, telefonesMonitoramento, leiturasMap, transbordoMap]);
 
+  // Abre conversa automaticamente quando vem com ?telefone= (ex.: vindo de /relacionamento/transbordos)
+  useEffect(() => {
+    const telParam = searchParams.get('telefone');
+    if (!telParam || !conversas.length) return;
+    const digits = telParam.replace(/\D/g, '');
+    const match = conversas.find((c) => {
+      const cd = c.telefone.replace(/\D/g, '');
+      return cd === digits || cd === `55${digits}` || `55${cd}` === digits;
+    });
+    if (match && match.telefone !== telefoneSelecionado) {
+      setTelefoneSelecionado(match.telefone);
+      setNomeContato(match.nome_contato);
+      setAvatarUrl(match.avatar_url);
+      marcarLido(match.telefone);
+    }
+    // Limpa o param após selecionar para não reaplicar em re-renders
+    if (match) {
+      searchParams.delete('telefone');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, conversas, telefoneSelecionado, marcarLido, setSearchParams]);
+
   const handleSelectConversa = (conversa: ConversaAgrupada) => {
     setTelefoneSelecionado(conversa.telefone);
     setNomeContato(conversa.nome_contato);
     setAvatarUrl(conversa.avatar_url);
     marcarLido(conversa.telefone);
   };
+
 
   const handleMarcarTodasLidas = useCallback(async () => {
     if (!userId) return;

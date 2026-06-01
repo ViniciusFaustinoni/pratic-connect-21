@@ -33288,6 +33288,7 @@ export type Database = {
       whatsapp_ia_pausas: {
         Row: {
           atendente_id: string | null
+          contexto_cortado_em: string | null
           created_at: string
           motivo: string
           pausada_ate: string
@@ -33296,6 +33297,7 @@ export type Database = {
         }
         Insert: {
           atendente_id?: string | null
+          contexto_cortado_em?: string | null
           created_at?: string
           motivo: string
           pausada_ate: string
@@ -33304,6 +33306,7 @@ export type Database = {
         }
         Update: {
           atendente_id?: string | null
+          contexto_cortado_em?: string | null
           created_at?: string
           motivo?: string
           pausada_ate?: string

@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { WhatsAppMensagem } from '@/types/whatsapp';
 import { useIaPausa } from '@/hooks/useIaPausa';
+import { useConcluirTransbordo } from '@/hooks/useTransbordosAtivos';
 import { ContatoDetalheDrawer } from './ContatoDetalheDrawer';
 import { ContatoDetalheEventosDrawer } from './ContatoDetalheEventosDrawer';
 
@@ -44,6 +45,8 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
 
   const { data: mensagens, isLoading, refetch } = useWhatsAppHistorico(telefone, 200);
   const { pausa, ativa: iaPausada, pausarPorIntervencao } = useIaPausa(telefone);
+  const concluirTransbordo = useConcluirTransbordo();
+  const isTransbordo = iaPausada && !!pausa && ((pausa.motivo as string) === 'transbordo_boleto' || (pausa.motivo as string) === 'transbordo_humano');
 
   // Realtime subscription
   useEffect(() => {
@@ -229,24 +232,45 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <button
-        type="button"
-        onClick={() => setDrawerAberto(true)}
-        className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card hover:bg-muted/50 transition-colors text-left"
-        title="Ver detalhes do contato"
-      >
-        <UserAvatar src={avatarUrl} name={nomeContato} size="md" />
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm truncate">{nomeContato || 'Contato'}</p>
-          <p className="text-xs text-muted-foreground">{formatarTelefone(telefone)}</p>
-        </div>
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+        <button
+          type="button"
+          onClick={() => setDrawerAberto(true)}
+          className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+          title="Ver detalhes do contato"
+        >
+          <UserAvatar src={avatarUrl} name={nomeContato} size="md" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm truncate">{nomeContato || 'Contato'}</p>
+            <p className="text-xs text-muted-foreground">{formatarTelefone(telefone)}</p>
+          </div>
+        </button>
         {iaPausada && pausa && (
           <Badge variant="outline" className="gap-1 text-amber-600 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30">
             <BotOff className="h-3 w-3" />
             IA pausada até {format(new Date(pausa.pausada_ate), 'HH:mm')}
           </Badge>
         )}
-      </button>
+        {isTransbordo && (
+          <Button
+            size="sm"
+            variant="default"
+            disabled={concluirTransbordo.isPending}
+            onClick={async () => {
+              if (!telefone) return;
+              try {
+                await concluirTransbordo.mutateAsync(telefone);
+                toast.success('Atendimento concluído. IA liberada e contexto zerado.');
+              } catch (e: any) {
+                toast.error(e?.message ?? 'Falha ao concluir transbordo');
+              }
+            }}
+          >
+            {concluirTransbordo.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Concluir atendimento'}
+          </Button>
+        )}
+      </div>
+
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden relative">
