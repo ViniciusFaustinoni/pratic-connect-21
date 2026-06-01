@@ -99,17 +99,41 @@ Deno.serve(async (req) => {
       rastreadorVinculado = { id: rast.id, imei: rast.imei, plataforma: rast.plataforma }
     }
 
-    // ── AÇÃO 1: Atualizar instalação (já com rastreador físico vinculado) ──
-    await supabase
-      .from('instalacoes')
-      .update({
-        status: 'concluida',
-        concluida_em: agora,
-        rastreador_id: rastreadorVinculado?.id ?? null,
-        imei_rastreador: rastreadorVinculado?.imei ?? null,
-        updated_at: agora,
-      })
-      .eq('id', link.instalacao_id)
+    // ── AÇÃO 1: Atualizar instalação (PROPAGA erro do guard — não pode ser silencioso) ──
+    // Escopo 'somente_fotos': prestador só coleta evidências; a instalação física
+    // ainda precisa ser feita por outro técnico/prestador. Por isso NÃO fechamos
+    // instalacoes.status='concluida' aqui — fica aberta aguardando próxima atribuição.
+    // Pendência registrada para próxima rodada: badge "aguardando próximo prestador
+    // após fotos concluídas" na Atribuição Manual + notificação ao coordenador.
+    if (escopoLink === 'fotos_instalacao') {
+      const { error: instErr } = await supabase
+        .from('instalacoes')
+        .update({
+          status: 'concluida',
+          concluida_em: agora,
+          rastreador_id: rastreadorVinculado?.id ?? null,
+          imei_rastreador: rastreadorVinculado?.imei ?? null,
+          updated_at: agora,
+        })
+        .eq('id', link.instalacao_id)
+
+      if (instErr) {
+        // Antes era silencioso: link era marcado como concluído mesmo com
+        // instalação travada pelo guard (caso LUT8D25 fingerprint).
+        console.error('[concluir-instalacao-prestador] Falha ao concluir instalação:', instErr)
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: 'instalacao_nao_pode_ser_concluida',
+            error: instErr.message,
+            hint: 'Verifique se o veículo exige rastreador físico (Diesel, Carro FIPE ≥ R$ 30k, Moto FIPE ≥ R$ 9k). Se exigir, é obrigatório informar o IMEI. O link NÃO foi consumido.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else {
+      console.log(`[concluir-instalacao-prestador] Escopo 'somente_fotos' → instalação ${link.instalacao_id} permanece aberta para próxima atribuição.`)
+    }
 
     // Vincular rastreador → veículo/associado no DB (Softruck é chamado mais abaixo)
     if (rastreadorVinculado && instVeic?.veiculo_id) {
@@ -123,6 +147,7 @@ Deno.serve(async (req) => {
         })
         .eq('id', rastreadorVinculado.id)
     }
+
 
     // ── AÇÃO 2: Atualizar link ──
     const { error: linkUpdateErr } = await supabase
