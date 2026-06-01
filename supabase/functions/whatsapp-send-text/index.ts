@@ -436,16 +436,21 @@ async function enviarViaMeta(
 
   const messageId = result.messages?.[0]?.id;
 
-  const statusLabel = templateName ? 'enviada' : 'enviada_texto_livre';
-  await supabase.from("whatsapp_mensagens").insert({
+  // CHECK em whatsapp_mensagens só aceita: pendente|enviando|enviada|entregue|lida|erro|cancelada.
+  // 'enviada_texto_livre' violava o CHECK e o insert falhava silenciosamente — a mensagem chegava
+  // ao associado mas não persistia, sumindo do chat. Canonical: 'enviada'.
+  const { error: insertErr } = await supabase.from("whatsapp_mensagens").insert({
     telefone: telefoneFormatado,
     tipo: templateName ? "template" : "text",
     mensagem,
-    direcao: "saida", status: statusLabel, message_id: messageId,
+    direcao: "saida", status: "enviada", message_id: messageId,
     template_id: templateName || null,
     template_variaveis: templateName ? { body: bodyParams, button: buttonParams } : null,
     provedor: "meta_oficial",
   });
+  if (insertErr) {
+    console.error("[whatsapp-send-text] ⚠️ Falha ao persistir mensagem enviada (Meta):", insertErr);
+  }
 
   console.log(`[whatsapp-send-text] ✓ Meta: ${telefoneFormatado} - ID: ${messageId}`);
   return { success: true, message_id: messageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
