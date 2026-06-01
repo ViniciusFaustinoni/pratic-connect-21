@@ -30,6 +30,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   const [enviando, setEnviando] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [drawerAberto, setDrawerAberto] = useState(false);
+  const [pendingMessages, setPendingMessages] = useState<WhatsAppMensagem[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +48,24 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   const { pausa, ativa: iaPausada, pausarPorIntervencao } = useIaPausa(telefone);
   const concluirTransbordo = useConcluirTransbordo();
   const isTransbordo = iaPausada && !!pausa && ((pausa.motivo as string) === 'transbordo_boleto' || (pausa.motivo as string) === 'transbordo_humano');
+
+  // Limpa pendentes que já apareceram no histórico (por message_id, ou heurística texto+janela)
+  useEffect(() => {
+    if (!pendingMessages.length || !mensagens?.length) return;
+    setPendingMessages((prev) =>
+      prev.filter((p) => {
+        return !mensagens.some((m) =>
+          m.direcao === 'saida' &&
+          m.mensagem === p.mensagem &&
+          Math.abs(new Date(m.created_at).getTime() - new Date(p.created_at).getTime()) < 60_000
+        );
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensagens]);
+
+  // Reseta pendentes ao trocar de contato
+  useEffect(() => { setPendingMessages([]); }, [telefone]);
 
   // Realtime subscription
   useEffect(() => {
