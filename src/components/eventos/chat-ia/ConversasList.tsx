@@ -176,6 +176,10 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
             {conversasFiltradas.map((conversa) => {
               const isCobranca = !!conversa.ultima_cobranca;
               const isUnread = conversa.unread_count > 0;
+              const isTransbordo = !!conversa.transbordo;
+              const transbordoLabel = conversa.transbordo?.motivo === 'transbordo_boleto'
+                ? 'Transbordo · Boleto'
+                : 'Transbordo';
               const tempoCobranca = isCobranca
                 ? formatDistanceToNowStrict(new Date(conversa.ultima_cobranca!), { locale: ptBR, addSuffix: false })
                 : null;
