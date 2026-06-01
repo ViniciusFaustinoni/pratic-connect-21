@@ -133,6 +133,32 @@ Deno.serve(async (req) => {
       }
     } else {
       console.log(`[concluir-instalacao-prestador] Escopo 'somente_fotos' → instalação ${link.instalacao_id} permanece aberta para próxima atribuição.`)
+
+      // Handoff "fotos concluídas → rota" visível: notifica coordenadores de
+      // Monitoramento para que reatribuam a instalação física. Sem isso o
+      // serviço reaparece silenciosamente na Atribuição Manual e pode virar
+      // órfão. Não-bloqueante por design.
+      try {
+        const { data: instInfo } = await supabase
+          .from('instalacoes')
+          .select('id, associados:associado_id(nome), veiculos:veiculo_id(placa, chassi)')
+          .eq('id', link.instalacao_id)
+          .maybeSingle()
+        const assocNome = (instInfo as any)?.associados?.nome || 'Associado'
+        const placa = (instInfo as any)?.veiculos?.placa || (instInfo as any)?.veiculos?.chassi || 'sem placa'
+
+        await supabase.from('notificacoes_sistema').insert({
+          titulo: 'Instalação aguardando técnico para a rota',
+          mensagem: `Prestador concluiu as fotos de ${assocNome} (${placa}). Falta atribuir técnico para a instalação física do rastreador.`,
+          tipo: 'aviso',
+          destino: 'role',
+          destino_role: 'coordenador_monitoramento',
+          link: `/monitoramento?aba=atribuicao&aguardando_rota=1`,
+          expira_em: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+      } catch (notifErr) {
+        console.warn('[concluir-instalacao-prestador] notificação handoff falhou (não bloqueante):', notifErr)
+      }
     }
 
     // Vincular rastreador → veículo/associado no DB (Softruck é chamado mais abaixo)
