@@ -53,9 +53,12 @@ async function listAll(path: string, attrs: string[], token: string): Promise<an
   const limit = 100;
   let page = 1;
   const all: any[] = [];
+  // Softruck v2 (mai/26): /v2/vehicles rejeita attributes[]=. /v2/devices ainda aceita.
+  // Suprimimos attributes[] em /v2/vehicles; outros paths mantêm o filtro.
+  const useAttrs = attrs.length > 0 && !path.startsWith('/v2/vehicles');
   for (;;) {
-    const qs = attrs.map(a => `attributes[]=${a}`).join('&');
-    const data = await sr('GET', `${path}?${qs}&limit=${limit}&page=${page}`, token);
+    const qs = useAttrs ? attrs.map(a => `attributes[]=${a}`).join('&') + '&' : '';
+    const data = await sr('GET', `${path}?${qs}limit=${limit}&page=${page}`, token);
     const arr = (data?.data ?? []) as any[];
     all.push(...arr);
     if (arr.length < limit) break;

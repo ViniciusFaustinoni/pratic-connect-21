@@ -360,7 +360,8 @@ serve(async (req) => {
           page?: number; 
           search?: string;
         };
-        let endpoint = `/v2/enterprises?attributes[]=name&attributes[]=cnpj&attributes[]=timezone&attributes[]=fantasy_name&limit=${limit}&page=${page}`;
+        // Softruck v2 (mai/26): /v2/enterprises rejeita attributes[]=. Usar payload default.
+        let endpoint = `/v2/enterprises?limit=${limit}&page=${page}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
@@ -369,14 +370,15 @@ serve(async (req) => {
       case 'buscar-enterprise': {
         const { enterpriseId } = data as { enterpriseId: string };
         if (!enterpriseId) throw new Error('enterpriseId é obrigatório');
-        const endpoint = `/v2/enterprises/${enterpriseId}?attributes[]=name&attributes[]=cnpj&attributes[]=timezone&attributes[]=fantasy_name&attributes[]=phone1&attributes[]=email`;
+        // Softruck v2 (mai/26): /v2/enterprises rejeita attributes[]=. Payload default.
+        const endpoint = `/v2/enterprises/${enterpriseId}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }
 
       case 'descobrir-enterprise-id': {
         const { cnpj } = data as { cnpj?: string };
-        let endpoint = `/v2/enterprises?attributes[]=name&attributes[]=cnpj&limit=10`;
+        let endpoint = `/v2/enterprises?limit=10`;
         if (cnpj) {
           endpoint = `/v2/enterprises?filters[enterprises.cnpj][eq]=${encodeURIComponent(cnpj.replace(/\D/g, ''))}`;
         }
@@ -714,7 +716,8 @@ serve(async (req) => {
           page?: number; 
           search?: string;
         };
-        let endpoint = `/v2/chips?attributes[]=serial&attributes[]=number&attributes[]=carrier&attributes[]=service_provider&includes[device][]=name&includes[device][]=imei&limit=${limit}&page=${page}`;
+        // Softruck v2 (mai/26): /v2/chips rejeita attributes[]= E includes[device][]=. Payload default.
+        let endpoint = `/v2/chips?limit=${limit}&page=${page}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
@@ -724,7 +727,8 @@ serve(async (req) => {
         const { serial, chipId } = data as { serial?: string; chipId?: string };
         
         if (chipId) {
-          const endpoint = `/v2/chips/${chipId}?includes[device][]=name&includes[device][]=imei`;
+          // Softruck v2 (mai/26): /v2/chips rejeita includes[device][]=. Payload default.
+          const endpoint = `/v2/chips/${chipId}`;
           result = await softruckRequest('GET', endpoint, token);
         } else if (serial) {
           const endpoint = `/v2/chips?filters[chips.serial][eq]=${encodeURIComponent(serial)}`;
@@ -809,7 +813,8 @@ serve(async (req) => {
           page?: number; 
           search?: string;
         };
-        let endpoint = `/v2/users?attributes[]=username&attributes[]=name&attributes[]=email&attributes[]=cpf&attributes[]=phone1&limit=${limit}&page=${page}`;
+        // Softruck v2 (mai/26): /v2/users rejeita attributes[]=. Payload default.
+        let endpoint = `/v2/users?limit=${limit}&page=${page}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
@@ -824,7 +829,8 @@ serve(async (req) => {
         };
         
         if (userId) {
-          const endpoint = `/v2/users/${userId}?attributes[]=username&attributes[]=name&attributes[]=email&attributes[]=cpf&attributes[]=phone1`;
+          // Softruck v2 (mai/26): /v2/users rejeita attributes[]=. Payload default.
+          const endpoint = `/v2/users/${userId}`;
           result = await softruckRequest('GET', endpoint, token);
         } else if (username) {
           const endpoint = `/v2/users?filters[users.username][eq]=${encodeURIComponent(username)}`;

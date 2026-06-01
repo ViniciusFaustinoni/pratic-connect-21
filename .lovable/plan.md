@@ -1,94 +1,72 @@
-## Pendências aprovadas — 3 frentes
+# Correções pós-diagnóstico Softruck
 
-Continuação da rodada anterior (edges propagam erro real). Mesma filosofia: nenhuma operação crítica de banco pode ser engolida em silêncio.
+## 1. Causa real do FAILED_DEVICE em IMEIs novos — incluir `tipoId` no criar-device
 
----
+**Problema**: `softruck-ativar-dispositivo` chama `criar-device` sem `tipoId`. Softruck mai/26 passou a exigir `body.data[0].relationships.type`. Qualquer IMEI genuinamente novo na Softruck falha (caso 868018075843808, 6 tentativas, FAILED_DEVICE).
 
-### Frente 1 (prioridade alta) — Handoff "fotos concluídas → rota" visível
+**Fix**:
+- Resolver o `tipoId` GPS canônico uma única vez (constante baseada no que JÁ está em produção: devices existentes têm `relationships.type.id = "kov8pZ58aQ93KgV"`, vindo do GET buscar-device-imei do 843824). Confirmar via `listar-roles` ou consulta `/v2/devices/types` e fixar como constante `SOFTRUCK_DEVICE_TYPE_ID_GPS`.
+- `supabase/functions/softruck-ativar-dispositivo/index.ts` linha 540-545: passar `tipoId: SOFTRUCK_DEVICE_TYPE_ID_GPS` no payload do criar-device.
+- Após deploy, retentar manualmente o 868018075843808 e confirmar SUCCESS via read-back.
 
-**Problema:** quando link de prestador é `escopo='somente_fotos'` e o prestador conclui, as fotos são materializadas mas a `instalacoes` fica **aberta esperando próximo técnico para a rota**. Hoje isso é invisível: nenhum badge, filtro ou notificação. Coordenador esquece → instalação órfã.
+## 2. Reverter sintaxe dos 3 endpoints comprovadamente quebrados
 
-**Mudanças:**
+Testes diretos confirmaram 400 validation_failed nestes endpoints — Softruck endureceu a validação SÓ neles:
 
-1. **`useServicosParaAtribuir`** (`src/hooks/useAtribuicaoManual.ts`): incluir flag `aguardando_rota_pos_fotos` no item normalizado quando existir `instalacao_prestador_links.escopo='somente_fotos'` com `status='concluida'` para a mesma `instalacao_origem_id`, e nenhum link `fotos_instalacao` ativo. Hoje o filtro do hook exclui qualquer link não-terminal — `concluida` já passa, então o serviço reaparece na fila, mas sem sinalização.
+| Endpoint | Arquivo:linha | Mudança |
+|---|---|---|
+| `/v2/enterprises` (listar/buscar) | `softruck-api/index.ts:363,372,379` e `rastreador-testar-conexao/index.ts:15` | Remover `attributes[]=…` (deixar payload default) |
+| `/v2/chips` (listar/buscar) | `softruck-api/index.ts:717,727` | Remover `attributes[]=…` E `includes[device][]=…` (rejeitados juntos) |
+| `/v2/users` (listar/buscar) | `softruck-api/index.ts:812,827` | Remover `attributes[]=…` |
+| `softruck-validar-ids/index.ts:57` | mesmo padrão | Revisar conforme endpoint que valida |
 
-2. **`AtribuicaoManualTab.tsx`**:
-   - Novo `Badge variant="secondary"` âmbar `"Aguardando técnico p/ rota"` no `DraggableServico` quando `servico.aguardando_rota_pos_fotos`.
-   - Novo filtro/aba na lista lateral: chip "Pós-fotos sem rota" (contador) que filtra apenas estes.
-   - Ordenação: prioridade visual no topo dentro do dia.
+Testar cada um após o fix (`listar-enterprises`, `listar-chips`, `listar-usuarios` → esperar 200).
 
-3. **`concluir-instalacao-prestador`** (edge): após materializar fotos com `escopo='somente_fotos'`, disparar **notificação ao coordenador** via `whatsapp-send-text` (template novo `instalacao_aguardando_rota_pos_fotos`) ou — se template não existir ainda — registro em `notificacoes_internas` (canal já consumido pelo sino do Monitoramento). Decisão: **registro interno** primeiro (sem dependência de template Meta aprovado), template Meta vira pendência separada.
+## 3. Deixar como está — comprovadamente funcionando
 
-4. **Memória nova:** `mem://logic/operations/handoff-fotos-rota-visibilidade` documentando o ciclo.
+Testes diretos retornaram 200 nestes (NÃO mexer):
 
----
+- `/v2/devices?attributes[]=&includes[vehicle][]=plate&includes[chip][]=serial` (listar-devices, linha 563) ✅
+- `/v2/devices?...&includes[vehicle][]=plate` (buscar-device-imei, linha 574; resolver linhas 136/138; rastreador-posicao:239; softruck-reconciliar-pending:147; sync-rastreadores:120) ✅
+- `/v2/vehicles/{id}?includes[devices]=csv` (buscar-veiculo-id, linha 430) ✅
+- `/v2/vehicles` sem `attributes` (listar-veiculos, linha 412) ✅
 
-### Frente 2 (prioridade média) — Edges restantes propagam erro real
+Os demais 6 sites não-testados que usam `/v2/devices`, `/v2/vehicles/{id}/associations/*`, `/v2/vehicles/{id}/tracking/{deviceId}` ou `/v2/vehicles?includes[X][]=` ficam intocados — não há sinal de quebra; testar só se incidente real aparecer.
 
-**Padrão canônico aplicado:**
-- UPDATE crítico falha → `502` + `Retry-After: 60` + `code` estruturado.
-- INSERT log/auditoria falha → seguir, mas marcar `parciais[]` na resposta.
+## 4. Atualizar a memória `mem://logic/integrations/softruck-api-sintaxe-query` com o modelo real
 
-**Arquivos:**
+A versão atual diz "Softruck rejeitou array-bracket; usa CSV". É falso e leva a refactor errado (foi o que aconteceu nos 3 GETs). Reescrever para modelo per-endpoint baseado em evidência:
 
-a) **`assumir-instalacao-vistoria-link/index.ts`** (linhas 192–240). É o auto-assume pelo link público do técnico. Hoje 4 falhas silenciosas: update `instalacoes`, select `servicos`, update `servicos`, insert `servicos_atribuicoes_log`.
-   - Propagar `updInstErr` e `updServErr` como `502` com codes `falha_assumir_instalacao` e `falha_assumir_servicos`. O técnico vê mensagem clara em vez de redirect para tela vazia.
-   - `logErr` continua não-bloqueante (apenas log) — incluir em `parciais` da resposta de sucesso.
+```
+Softruck v2 (mai/26): validação é POR ENDPOINT, não uniforme.
 
-b) **`ativar-associado/index.ts`** linhas 515/554/567 (bloco "promoção parcial"). Hoje warn + continue. Risco: contrato vira `ativo`, veículo continua `instalacao_pendente` invisível.
-   - Manter `warn` para diagnóstico mas adicionar campo `parciais: ['veiculo'|'cotacao'|'contrato']` na resposta de sucesso (já existe estrutura). UI mostra alerta "ativação parcial — reprocesse".
-   - **Não** transformar em 502 aqui porque o lock de ativação é único — reexecutar dispararia idempotência. Em vez disso: novo cron `reconciliar-ativacao-parcial` (15min) varre `associados.status='ativo'` cujo veículo/contrato/cotação ainda não estão sincronizados e reaplica o trecho. Cron entra como pendência separada — nesta rodada só expomos `parciais[]`.
+- /v2/devices: aceita tudo (attributes[]=, includes[X][]=, CSV).
+- /v2/vehicles (listar): rejeita attributes[]= e attributes=csv. Usar sem attributes.
+- /v2/vehicles/{id}: aceita includes[X]=csv (NÃO array-bracket; "id" rejeitado no enum).
+- /v2/enterprises, /v2/users: rejeitam attributes[]=.
+- /v2/chips: rejeitam attributes[]= E includes[device][]=.
 
-c) **`agendar-vistoria-presencial`** e **`agendar-vistoria-completa`**: revisão confirmou que UPDATE crítico em `cotacoes` (linhas 180 e 161) **já lança throw** → cai no catch geral → `500`. Suficiente. **Nenhuma mudança nesta rodada.**
+POST /v2/devices: relationships.type é OBRIGATÓRIO. Todo criar-device tem que passar tipoId (constante SOFTRUCK_DEVICE_TYPE_ID_GPS). Sem ele → 400 validation_failed "body.data[0].relationships.type is required" e FAILED_DEVICE no rastreador.
 
----
+Antes de migrar qualquer endpoint, TESTAR com curl_edge_functions — não assumir uniformidade.
+```
 
-### Frente 3 — Varredura sistemática `console.(error|warn).*update`
+## 5. Não-ações conscientes
 
-Auditoria identificou ~60 ocorrências. Categorização e ação:
+- As 2 falhas antigas com `softruck_response_raw=NULL` (imeis 356430070876858 e 868018074976674, criados em 04–05/abr/2026) são **lotes legados** retentados pelo cron em 01/06 03h, antes do envelope estar deployado. Não é regressão — não tocar.
+- Os 6 sites não-testados acima ficam como estão. Documentar como "verificar caso a caso se incidente surgir".
 
-| Categoria | Ação |
-|---|---|
-| UPDATE crítico engolido (Frente 2) | corrigir agora |
-| UPDATE não-crítico (whatsapp confirm, log, contador) | manter — está correto |
-| INSERT auditoria/log/alerta | manter — não-bloqueante por design |
-| UPDATE admin (senha, email) | já retornam erro — OK |
-| UPDATE em fluxos legados | listar em `mem://debt/edges-pending-propagation` para próxima rodada |
+## Ordem de execução
 
-**Lista que entra em débito documentado (não corrigir agora):**
-- `autentique-cancel/index.ts:76`
-- `autentique-status/index.ts:177`
-- `autentique-vistoria-create/index.ts:356`
-- `chassi-ocr/index.ts:218`
-- `whatsapp-webhook/index.ts:76,204,233,1869`
-- `atribuir-proxima-tarefa/index.ts:795`
-- `aprovar-troca-cadastro/index.ts:138`
-- `criar-sinistro/index.ts:622`
-- `asaas-verificar-cota-sinistro/index.ts:177`
-- `app-criar-conta-cliente/index.ts:240`, `app-criar-senha/index.ts:162`
+1. Resolver `SOFTRUCK_DEVICE_TYPE_ID_GPS` (chamar `listar-roles` ou `/v2/devices/types`; fallback: reusar `kov8pZ58aQ93KgV` que já está em produção).
+2. Item 1 (criar-device + tipoId) — deploy.
+3. Item 2 (3 endpoints quebrados) — deploy.
+4. Retentar 868018075843808 → confirmar SUCCESS.
+5. Item 4 (memória).
 
-Critério: fluxos com retry natural (cron, polling, próxima ação do usuário) toleram log silencioso por enquanto. Os críticos restantes ficam como Frente 4 estrutural.
+## Critérios de aceite
 
----
-
-### Arquivos a alterar nesta rodada
-
-- `src/hooks/useAtribuicaoManual.ts` — flag `aguardando_rota_pos_fotos`
-- `src/components/monitoramento/AtribuicaoManualTab.tsx` — badge + filtro
-- `supabase/functions/concluir-instalacao-prestador/index.ts` — notificação interna pós-`somente_fotos`
-- `supabase/functions/assumir-instalacao-vistoria-link/index.ts` — propagar 502
-- `supabase/functions/ativar-associado/index.ts` — expor `parciais[]`
-- Memórias: `handoff-fotos-rota-visibilidade` (nova) + `edges-pending-propagation` (débito)
-
-**Não altera:** schema do banco, `agendar-vistoria-*`, edges Asaas/Autentique (já feitas).
-
----
-
-### Pendências que ficam para próxima rodada
-
-1. Cron `reconciliar-ativacao-parcial` (15 min) consumindo `parciais[]`.
-2. Template Meta `instalacao_aguardando_rota_pos_fotos` (depende de aprovação Meta).
-3. Frente 4 estrutural: ~10 edges de fluxos legados listadas em `edges-pending-propagation`.
-4. Auditoria de RPCs `RETURNS TABLE` com nomes OUT ambíguos (do QUJ4C96 — confirmar se a migração já cobriu todas).
-
-Após sua aprovação, implemento na ordem: Frente 1 → Frente 2 → memórias.
+- `curl_edge_functions listar-enterprises`, `listar-chips`, `listar-usuarios` → 200.
+- 868018075843808 final: `softruck_integration_status='SUCCESS'`, `plataforma_device_id` populado.
+- Novo IMEI (qualquer um nunca antes visto na Softruck) ativado via `softruck-ativar-dispositivo` → SUCCESS (não FAILED_DEVICE).
+- Memória `softruck-api-sintaxe-query` reflete modelo per-endpoint + regra `relationships.type` obrigatório em POST /v2/devices.

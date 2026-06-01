@@ -12,7 +12,8 @@ const BASE_URL = 'https://api.softruck.com';
 // Função para descobrir Enterprise ID automaticamente
 async function descobrirEnterpriseId(token: string, publicKey: string): Promise<{ id: string; nome: string; cnpj?: string } | null> {
   try {
-    const response = await fetch(`${BASE_URL}/v2/enterprises?attributes[]=name&attributes[]=cnpj&limit=10`, {
+    // Softruck v2 (mai/26): /v2/enterprises rejeita attributes[]=. Payload default.
+    const response = await fetch(`${BASE_URL}/v2/enterprises?limit=10`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
