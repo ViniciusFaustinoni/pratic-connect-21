@@ -23,6 +23,8 @@ export interface ConversaAgrupada {
   ultima_cobranca: string | null;
   /** Mensagens recebidas (direcao='entrada') ainda não lidas pelo operador atual. */
   unread_count: number;
+  /** Quando preenchido, indica que a IA está pausada por transbordo (intervenção humana solicitada). */
+  transbordo?: { motivo: string } | null;
 }
 
 interface ConversasListProps {
