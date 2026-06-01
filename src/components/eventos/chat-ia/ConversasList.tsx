@@ -229,8 +229,9 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                   className={cn(
                     'w-full flex items-start gap-3 px-3 py-3 text-left hover:bg-muted/50 transition-colors',
                     telefoneSelecionado === conversa.telefone && 'bg-muted',
-                    isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50',
-                    !isCobranca && isUnread && cn('border-l-4', attentionBorder, attentionBg)
+                    isTransbordo && 'bg-red-50 dark:bg-red-950/30 border-l-4 border-l-red-500 hover:bg-red-100 dark:hover:bg-red-950/50',
+                    !isTransbordo && isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50',
+                    !isTransbordo && !isCobranca && isUnread && cn('border-l-4', attentionBorder, attentionBg)
                   )}
                 >
                   <div className="relative shrink-0">
