@@ -43,20 +43,50 @@ Deno.serve(async (req) => {
 
     const agora = new Date().toISOString()
 
-    // ── AÇÃO 1: Atualizar status da origem ──
+    // ── AÇÃO 1: Atualizar status da origem (PROPAGA erro — não pode ser silencioso) ──
+    // Antes, instErr era só console.error e seguia adiante; quando o guard
+    // trg_guard_instalacao_concluida_exige_rastreador bloqueava (FIPE acima sem IMEI),
+    // o link era marcado concluido mesmo com instalação travada em aguardando_prestador,
+    // serviço travado em agendada, sem vistoria materializada (caso LUT8D25 — 01/06/26).
     if (link.instalacao_id) {
       const { error: instErr } = await supabase
         .from('instalacoes')
-        .update({ status: 'concluida', updated_at: agora })
+        .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
         .eq('id', link.instalacao_id)
-      if (instErr) console.error('Erro ao atualizar instalação:', instErr)
+      if (instErr) {
+        console.error('[concluir-vistoria-prestador] Falha ao concluir instalação:', instErr)
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: 'instalacao_nao_pode_ser_concluida',
+            error: instErr.message,
+            hint: 'Verifique se o veículo exige rastreador. Se exigir, o link precisa ser atribuído com escopo "Fotos + Instalação" para coletar o IMEI. O link NÃO foi consumido.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     } else if (link.vistoria_id) {
-      // Vistoria-only (vistoria base sem instalação) — marca como concluída para análise
       const { error: vErr } = await supabase
         .from('vistorias')
         .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
         .eq('id', link.vistoria_id)
-      if (vErr) console.error('Erro ao atualizar vistoria:', vErr)
+      if (vErr) {
+        console.error('[concluir-vistoria-prestador] Falha ao concluir vistoria:', vErr)
+        return new Response(
+          JSON.stringify({ success: false, code: 'vistoria_nao_pode_ser_concluida', error: vErr.message }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
+    // ── AÇÃO 1b: Cascata para servicos (sem isto, some da fila Aprovação de Associados) ──
+    if (link.instalacao_id) {
+      const { error: servErr } = await supabase
+        .from('servicos')
+        .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
+        .eq('instalacao_origem_id', link.instalacao_id)
+        .in('status', ['agendada', 'em_rota', 'em_andamento', 'em_execucao', 'aguardando_prestador'])
+      if (servErr) console.error('[concluir-vistoria-prestador] Falha ao cascatear servicos (não bloqueante):', servErr)
     }
 
     // ── AÇÃO 2: Invalidar o token + salvar evidências ──
@@ -77,6 +107,65 @@ Deno.serve(async (req) => {
         JSON.stringify({ success: false, error: 'Erro ao concluir vistoria' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // ── AÇÃO 2b: Materializar vistoria + vistoria_fotos canônicas (idempotente) ──
+    // Memória "Fotos prestador materializadas": tela de Aprovação lê de
+    // contratos→vistorias→vistoria_fotos. Sem essa ponte as fotos ficam isoladas.
+    if (link.instalacao_id && fotos_vistoria && typeof fotos_vistoria === 'object') {
+      try {
+        const { data: instMat } = await supabase
+          .from('instalacoes')
+          .select('id, contrato_id, associado_id, veiculo_id, cotacao_id, imei_rastreador, created_at')
+          .eq('id', link.instalacao_id)
+          .maybeSingle()
+
+        if (instMat?.contrato_id) {
+          const { data: existingVistoria } = await supabase
+            .from('vistorias')
+            .select('id')
+            .eq('instalacao_id', link.instalacao_id)
+            .maybeSingle()
+
+          let vistoriaIdMat = existingVistoria?.id as string | undefined
+          if (!vistoriaIdMat) {
+            const { data: newVistoria, error: errVistoria } = await supabase
+              .from('vistorias')
+              .insert({
+                instalacao_id: instMat.id,
+                contrato_id: instMat.contrato_id,
+                associado_id: instMat.associado_id,
+                veiculo_id: instMat.veiculo_id,
+                cotacao_id: instMat.cotacao_id,
+                tipo: 'entrada',
+                modalidade: 'presencial',
+                origem: 'prestador',
+                status: 'concluida',
+                iniciada_em: instMat.created_at ?? agora,
+                concluida_em: agora,
+                imei_rastreador: instMat.imei_rastreador,
+                dados_parciais: { checklist_data: checklist_data ?? null, origem_link: link.id },
+              })
+              .select('id')
+              .single()
+            if (errVistoria) throw errVistoria
+            vistoriaIdMat = newVistoria.id
+          }
+
+          if (vistoriaIdMat) {
+            const entries = Object.entries(fotos_vistoria as Record<string, unknown>)
+              .filter(([t, u]) => typeof t === 'string' && typeof u === 'string' && (u as string).length > 0)
+              .map(([t, u]) => ({ vistoria_id: vistoriaIdMat, tipo: t, arquivo_url: u as string, visivel_cliente: true }))
+            if (entries.length > 0) {
+              await supabase.from('vistoria_fotos').delete().eq('vistoria_id', vistoriaIdMat)
+              const { error: errFotos } = await supabase.from('vistoria_fotos').insert(entries)
+              if (errFotos) console.error('[concluir-vistoria-prestador] Falha ao materializar vistoria_fotos:', errFotos)
+            }
+          }
+        }
+      } catch (matErr) {
+        console.error('[concluir-vistoria-prestador] Falha ao materializar vistoria (não bloqueante):', matErr)
+      }
     }
 
     // ── Buscar dados completos para ações seguintes ──
