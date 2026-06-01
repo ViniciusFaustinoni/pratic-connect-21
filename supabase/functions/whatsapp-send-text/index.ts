@@ -289,12 +289,13 @@ async function enviarViaMeta(
 
     if (!fbTmpl) {
       // Nenhum fallback aprovado/habilitado — aí sim bloqueia e registra
-      await supabase.from("whatsapp_mensagens").insert({
+      const { error: eNoFb } = await supabase.from("whatsapp_mensagens").insert({
         telefone: telefoneFormatado, tipo: "text", mensagem,
         direcao: "saida", status: "erro",
         erro_mensagem: `Bloqueado: Meta API ativa requer template_name e nenhum fallback (${fallbackCandidates.join(', ')}) está APPROVED ou habilitado.`,
         provedor: "meta_oficial",
       });
+      if (eNoFb) console.error("[whatsapp-send-text] insert FAIL (sem fallback):", JSON.stringify(eNoFb));
       throw new Error(`Meta API ativa: template_name obrigatório e nenhum fallback disponível.`);
     }
 
