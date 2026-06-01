@@ -2066,13 +2066,33 @@ ${beneficiosFormatados}
 async function getConversationHistory(supabase: any, associadoId: string, telefone: string) {
   // Janela alinhada com a política Meta (24h) — templates disparados pela manhã
   // recebem resposta horas depois e a IA precisa do contexto para continuar o fluxo.
-  const janelaAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let floorMs = Date.now() - 24 * 60 * 60 * 1000;
 
   // Variantes de telefone para casar com whatsapp_mensagens (que pode estar com/sem 55)
   const telLimpo = (telefone || "").replace(/\D/g, "");
   const telefonesBusca = [telLimpo];
   if (telLimpo.startsWith("55") && telLimpo.length >= 12) telefonesBusca.push(telLimpo.substring(2));
   if (!telLimpo.startsWith("55") && telLimpo.length >= 10) telefonesBusca.push("55" + telLimpo);
+
+  // Respeita o corte de contexto definido ao concluir um transbordo:
+  // qualquer mensagem anterior ao corte some do histórico enviado à IA,
+  // forçando a próxima interação a nascer "limpa".
+  try {
+    const { data: pausaRow } = await supabase
+      .from("whatsapp_ia_pausas")
+      .select("contexto_cortado_em")
+      .in("telefone", telefonesBusca)
+      .order("contexto_cortado_em", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+    const corte = pausaRow?.contexto_cortado_em ? new Date(pausaRow.contexto_cortado_em).getTime() : 0;
+    if (corte > floorMs) floorMs = corte;
+  } catch (_e) {
+    // Falha não-bloqueante — segue com janela de 24h padrão.
+  }
+
+  const janelaAtras = new Date(floorMs).toISOString();
+
 
   const [iaRes, waRes] = await Promise.all([
     supabase
