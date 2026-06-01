@@ -1,65 +1,43 @@
-# Tela de Transbordos em Relacionamento
+## Problema
 
-## Objetivo
+No **Relacionamento › Chat**, mensagens digitadas pelo atendente humano não chegam ao associado. A IA responde normalmente, mas o envio manual "some".
 
-Criar nova tela `/relacionamento/transbordos` (item no sidebar de Relacionamento) listando todos os transbordos ativos (atendimentos que a IA transferiu para humano), com clique abrindo a conversa no chat existente e botão **Concluir** que finaliza o atendimento e zera o contexto da IA para a próxima interação.
+## Causa raiz
 
-## Arquitetura
+O `ChatPanel.tsx` (`handleEnviar`) invoca a edge function `whatsapp-send-text` apenas com `{ telefone, mensagem }`.
 
-Reutiliza a infra já criada (`whatsapp_ia_pausas` + `agente_consultor_contatos.status='atendimento_humano'`). Adiciona:
+Quando o provedor ativo é a **Meta API** (caso atual em produção), `whatsapp-send-text/index.ts` só envia texto livre quando o caller passa `allow_text: true`. Sem essa flag, a função cai no bloco de **auto-fallback de template** (linha 267 do edge): substitui a mensagem digitada pelo template aprovado `notificacao_atendimento_pratic`, jogando o texto do atendente como variável de "detalhes".
 
-1. **Sidebar** — novo item `Transbordo` em Relacionamento.
-2. **Rota + página** `/relacionamento/transbordos` → `TransbordosRelacionamento.tsx`.
-3. **Botão Concluir** no header do chat (`EventosChatIA`), visível só quando a conversa selecionada está em transbordo.
-4. **Corte de contexto da IA** — nova coluna `contexto_cortado_em` em `whatsapp_ia_pausas` (ou tabela paralela leve). O `getConversationHistory` do `whatsapp-webhook` passa a respeitar esse floor (`Math.max(janela24h, contexto_cortado_em)`), garantindo que a próxima conversa começa do zero.
+Resultado prático:
+- O associado recebe (na melhor hipótese) uma notificação genérica de "Atualização PRATIC" — não a resposta do atendente.
+- Se o template fallback não estiver APPROVED/habilitado, o envio é bloqueado com erro registrado em `whatsapp_mensagens.status='erro'`.
+- A IA funciona porque ela já é chamada com o contexto correto via webhook.
 
-## Tela `/relacionamento/transbordos`
+Atendimento humano sempre ocorre **dentro da janela de 24h** (porque é uma resposta a uma conversa aberta pelo associado), então texto livre é o caminho correto e legítimo pela Meta.
 
-Lista (tabela / cards) das linhas de `whatsapp_ia_pausas` com `pausada_ate > now()`, enriquecida com:
+## Correção
 
-- Nome do associado (join via `associados.telefone/whatsapp` por dígitos normalizados; fallback "Número desconhecido" + telefone).
-- Avatar.
-- Motivo (`transbordo_boleto` → "Boleto vencido"; `intervencao_humana` → "Intervenção humana"; `transbordo_humano` → "Solicitação do associado").
-- Início (`created_at`) e tempo aguardando.
-- Última mensagem (preview) — opcional, busca leve em `whatsapp_mensagens`.
-- Ação: linha clicável → navega para `/eventos/chat-ia?telefone=<tel>` (parametrizar seleção inicial no `EventosChatIA`).
+**1 arquivo, 1 linha de mudança efetiva** em `src/components/eventos/chat-ia/ChatPanel.tsx`:
 
-Filtros simples: busca por nome/telefone + filtro por motivo. Realtime via `refetchInterval` 15s (mesmo padrão do `transbordoMap` existente).
-
-## Botão "Concluir atendimento"
-
-Renderizado no header da conversa ativa em `EventosChatIA` quando o telefone selecionado tem transbordo. Ao clicar:
-
-1. `UPDATE whatsapp_ia_pausas SET pausada_ate = now(), contexto_cortado_em = now(), motivo = 'encerrado_humano' WHERE telefone = ...` (efetivamente expira a pausa e marca corte).
-2. `UPDATE agente_consultor_contatos SET status = 'ativo' WHERE telefone = ...` (devolve o controle pra IA).
-3. Invalida queries `chat-ia-transbordo-ativo` e a lista de transbordos.
-4. Toast "Atendimento concluído".
-
-## Corte de contexto da IA
-
-Adicionar `contexto_cortado_em timestamptz NULL` em `whatsapp_ia_pausas` (linha já é por telefone — PK ideal pra isso). O `getConversationHistory` em `whatsapp-webhook/index.ts` faz uma leitura prévia da pausa por telefone e usa:
+Adicionar `allow_text: true` no body do invoke de `whatsapp-send-text` dentro de `handleEnviar`:
 
 ```ts
-const corte = pausa?.contexto_cortado_em ? new Date(pausa.contexto_cortado_em) : null;
-const janelaAtras = new Date(Math.max(Date.now() - 24*3600*1000, corte?.getTime() ?? 0)).toISOString();
+const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+  body: { telefone, mensagem: texto.trim(), allow_text: true },
+});
 ```
-
-Assim, qualquer mensagem trocada antes do "Concluir" some do contexto enviado ao Gemini — a próxima interação do associado nasce limpa.
-
-## Mudanças técnicas (resumo)
-
-- **Migration:** `ALTER TABLE public.whatsapp_ia_pausas ADD COLUMN contexto_cortado_em timestamptz NULL;`
-- **Sidebar:** novo item em `AppSidebar.tsx` (Relacionamento).
-- **Rota:** `App.tsx` registra `<Route path="/relacionamento/transbordos" element={<TransbordosRelacionamento />} />`.
-- **Nova página:** `src/pages/relacionamento/TransbordosRelacionamento.tsx`.
-- **Hook:** `src/hooks/useTransbordosAtivos.ts` (lista enriquecida + mutation `concluirTransbordo`).
-- **Edit `EventosChatIA.tsx`:**
-  - Aceitar `?telefone=` na URL e selecionar a conversa automaticamente.
-  - Renderizar botão "Concluir atendimento" no header quando há transbordo ativo no telefone selecionado.
-- **Edit `whatsapp-webhook/index.ts`:** `getConversationHistory` respeita `contexto_cortado_em`.
 
 ## Fora de escopo
 
-- Não cria histórico de transbordos concluídos (lista mostra só ativos). Se quiser histórico depois, adicionamos tab "Concluídos" buscando pausas expiradas com `motivo='encerrado_humano'`.
-- Não muda o comportamento de pausa por intervenção manual (10 min) já existente.
-- Sem permissões/roles novas — segue as do módulo Relacionamento.
+- `whatsapp-send-media` (envio de áudio/arquivo) — mídia não passa pelo fallback de template, segue funcionando.
+- Edge function `whatsapp-send-text` — sem mudanças; o comportamento atual está correto (proteção contra disparos automáticos de texto livre fora da janela).
+- Outros call sites que disparam templates programáticos — devem continuar sem `allow_text`.
+
+## Validação
+
+Após o deploy:
+1. Entrar como admin em **Relacionamento › Chat**.
+2. Abrir uma conversa com transbordo ativo.
+3. Enviar uma mensagem de texto.
+4. Conferir no WhatsApp do associado que chega o texto exato digitado (não um template).
+5. Conferir em `whatsapp_mensagens` que a linha tem `provedor='meta_oficial'`, `status='enviada_texto_livre'`, `tipo='text'`.
