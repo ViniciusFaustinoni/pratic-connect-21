@@ -53,6 +53,8 @@ interface BoletoAberto {
   linha_digitavel: string | null;
   link_boleto: string | null;
   situacao_label: string;
+  pix_copia_cola: string | null;
+  pix_qrcode_base64: string | null;
 }
 
 interface VeiculoSGA {
