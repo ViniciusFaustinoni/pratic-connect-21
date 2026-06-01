@@ -407,7 +407,9 @@ serve(async (req) => {
           page?: number; 
           search?: string;
         };
-        let endpoint = `/v2/vehicles?attributes[]=plate&attributes[]=vin&attributes[]=type_name&attributes[]=brand_name&attributes[]=model_name&attributes[]=year&attributes[]=color&limit=${limit}&page=${page}`;
+        // Softruck enum fechado: [batch, plate, code, vin, type, brand, model, year, description, registration_number, color, user_names, deactivated_at].
+        // Os atributos `_name` (type_name/brand_name/model_name) NÃO existem — quebra com validation_failed.
+        let endpoint = `/v2/vehicles?attributes[]=plate&attributes[]=vin&attributes[]=type&attributes[]=brand&attributes[]=model&attributes[]=year&attributes[]=color&limit=${limit}&page=${page}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
