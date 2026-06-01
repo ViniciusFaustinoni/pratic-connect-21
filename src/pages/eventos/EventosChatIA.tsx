@@ -233,7 +233,12 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         (!lastRead || new Date(msg.created_at).getTime() > new Date(lastRead).getTime());
 
       if (!mapa.has(tel)) {
-        const assoc = avatarMap.get(tel.replace(/\D/g, ''));
+        const telDigits = tel.replace(/\D/g, '');
+        const assoc = avatarMap.get(telDigits);
+        const transbordo =
+          transbordoMap?.get(telDigits) ||
+          (telDigits.startsWith('55') ? transbordoMap?.get(telDigits.slice(2)) : transbordoMap?.get(`55${telDigits}`)) ||
+          null;
         mapa.set(tel, {
           telefone: tel,
           nome_contato: msg.nome_contato || assoc?.nome || null,
@@ -244,6 +249,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
           ultima_direcao: msg.direcao,
           ultima_cobranca: isCobranca ? msg.created_at : null,
           unread_count: isUnreadMsg ? 1 : 0,
+          transbordo,
         });
       } else {
         const c = mapa.get(tel)!;
@@ -259,7 +265,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     return Array.from(mapa.values()).sort(
       (a, b) => new Date(b.ultima_mensagem).getTime() - new Date(a.ultima_mensagem).getTime()
     );
-  }, [mensagens, associados, escopo, telefonesMonitoramento, leiturasMap]);
+  }, [mensagens, associados, escopo, telefonesMonitoramento, leiturasMap, transbordoMap]);
 
   const handleSelectConversa = (conversa: ConversaAgrupada) => {
     setTelefoneSelecionado(conversa.telefone);
