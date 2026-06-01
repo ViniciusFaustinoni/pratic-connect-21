@@ -1,0 +1,1 @@
+ALTER TABLE public.whatsapp_ia_pausas ADD COLUMN IF NOT EXISTS contexto_cortado_em timestamptz NULL;
