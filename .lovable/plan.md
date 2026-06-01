@@ -1,65 +1,94 @@
-## O que aconteceu com LUT8D25 (revisado)
+## Pendências aprovadas — 3 frentes
 
-Cotação `COT-20260530-114923367-501` / contrato `CTR-20260601115931-I2AFMT` / instalação `25ba4038-28d3-481a-8406-a6543970e05a` / prestador `2711db6e…`.
+Continuação da rodada anterior (edges propagam erro real). Mesma filosofia: nenhuma operação crítica de banco pode ser engolida em silêncio.
 
-### Linha do tempo confirmada (01/06/2026)
+---
 
-1. 14:21–14:26 — autovistoria enxuta materializada (chassi + motor + vídeo 360°) → `vistorias.ff5c23e0` (modalidade `autovistoria`, status `aprovada`).
-2. 14:55 — Cadastro aprovou documentos.
-3. 15:04 — `aprovar-proposta` criou contrato aprovado + `instalacoes.25ba4038` (`status=agendada`, `data_agendada=02/06`) + `servicos.7794e6a0` (`tipo=instalacao`, `status=agendada`).
-4. 15:09 — coordenador atribuiu prestador externo → instalação foi para `aguardando_prestador`.
-5. **19:02–19:07** — prestador realmente fez o trabalho: subiu **30+ fotos** para `storage/vistoria-prestador-fotos/ac4f2321-2372-4424-a2d7-61d0fd1dde5f/*.jpg` (chassi, motor, capô aberto, painel completo, todas as portas, estepe, odômetro, etc.).
-6. 19:08:14 — fim da vistoria. `concluir-instalacao-prestador` rodou parcialmente:
-   - ✓ Gerou laudo PDF em `storage/documentos/laudos/…/Laudo_Vistoria_LUT8D25_1780340897381.pdf`.
-   - ✓ Gravou log de auditoria "Vistoria prestador concluída" (com descrição em branco "— Veículo (---) —" porque o lookup já tinha falhado).
-   - ✗ **NÃO** materializou a `vistorias` presencial.
-   - ✗ **NÃO** atualizou `instalacoes.25ba4038.status` (segue `aguardando_prestador`, `concluida_em=NULL`).
-   - ✗ **NÃO** atualizou `servicos.7794e6a0.status` (segue `agendada`).
-   - ✗ `instalacao_prestador_links.ac4f2321…` não está na tabela (deletado ou nunca commitado depois do erro).
+### Frente 1 (prioridade alta) — Handoff "fotos concluídas → rota" visível
 
-### Por que não vai para a fila de Monitoramento
+**Problema:** quando link de prestador é `escopo='somente_fotos'` e o prestador conclui, as fotos são materializadas mas a `instalacoes` fica **aberta esperando próximo técnico para a rota**. Hoje isso é invisível: nenhum badge, filtro ou notificação. Coordenador esquece → instalação órfã.
 
-A query da Aprovação de Associados filtra `servicos.tipo IN ('instalacao','vistoria_entrada') AND status='concluida'`. Como o serviço segue `agendada` e a instalação segue `aguardando_prestador`, o caso é invisível na fila — e o link público continua mostrando "Agendar Instalação" porque `etapaPendentePublica` enxerga instalação ainda não concluída.
+**Mudanças:**
 
-### Causa raiz
+1. **`useServicosParaAtribuir`** (`src/hooks/useAtribuicaoManual.ts`): incluir flag `aguardando_rota_pos_fotos` no item normalizado quando existir `instalacao_prestador_links.escopo='somente_fotos'` com `status='concluida'` para a mesma `instalacao_origem_id`, e nenhum link `fotos_instalacao` ativo. Hoje o filtro do hook exclui qualquer link não-terminal — `concluida` já passa, então o serviço reaparece na fila, mas sem sinalização.
 
-`concluir-instalacao-prestador` rodou sem transação: subiu as fotos no Storage e gerou laudo, mas as gravações de DB (criar vistoria, fechar instalação, fechar serviço, atualizar link) falharam silenciosamente em algum ponto e ninguém abortou — exatamente o anti-padrão "Vigia universal logs_auditoria" + memória "Fotos prestador materializadas".
+2. **`AtribuicaoManualTab.tsx`**:
+   - Novo `Badge variant="secondary"` âmbar `"Aguardando técnico p/ rota"` no `DraggableServico` quando `servico.aguardando_rota_pos_fotos`.
+   - Novo filtro/aba na lista lateral: chip "Pós-fotos sem rota" (contador) que filtra apenas estes.
+   - Ordenação: prioridade visual no topo dentro do dia.
 
-## Plano de ação
+3. **`concluir-instalacao-prestador`** (edge): após materializar fotos com `escopo='somente_fotos'`, disparar **notificação ao coordenador** via `whatsapp-send-text` (template novo `instalacao_aguardando_rota_pos_fotos`) ou — se template não existir ainda — registro em `notificacoes_internas` (canal já consumido pelo sino do Monitoramento). Decisão: **registro interno** primeiro (sem dependência de template Meta aprovado), template Meta vira pendência separada.
 
-### 1. Hotfix do caso LUT8D25 (saneamento de dados)
+4. **Memória nova:** `mem://logic/operations/handoff-fotos-rota-visibilidade` documentando o ciclo.
 
-Migração pontual idempotente, reconstruindo a partir do que existe no Storage:
+---
 
-- Criar `vistorias` presencial vinculada ao contrato/veículo/instalação `25ba4038` (modalidade `presencial`, `status=concluida`, `concluida_em=2026-06-01 19:08:14Z`, `instalacao_id=25ba4038…`, herdando contrato/cotacao/associado/veículo).
-- Inserir em `vistoria_fotos` uma entrada por arquivo do bucket `vistoria-prestador-fotos/ac4f2321-…/` (tipo derivado do nome do arquivo: `chassi`, `motor`, `painel_completo`, `odometro`, `frente`, etc.).
-- Vincular o laudo (`storage/documentos/laudos/…Laudo_Vistoria_LUT8D25_…pdf`) à vistoria.
-- Atualizar `instalacoes.25ba4038`: `status='concluida'`, `concluida_em=2026-06-01 19:08:14Z`.
-- Atualizar `servicos.7794e6a0`: `status='concluida'`, `concluida_em=2026-06-01 19:08:14Z`.
-- Registrar log de auditoria explicando que é saneamento da falha de `concluir-instalacao-prestador`.
+### Frente 2 (prioridade média) — Edges restantes propagam erro real
 
-Triggers existentes (`fn_reativar_cobertura_pos_instalacao` + reconciliação pós-instalação) vão religar a cobertura e deixar o caso pronto para Monitoramento aprovar.
+**Padrão canônico aplicado:**
+- UPDATE crítico falha → `502` + `Retry-After: 60` + `code` estruturado.
+- INSERT log/auditoria falha → seguir, mas marcar `parciais[]` na resposta.
 
-### 2. Hardening da edge `concluir-instalacao-prestador`
+**Arquivos:**
 
-Para não voltar a acontecer:
+a) **`assumir-instalacao-vistoria-link/index.ts`** (linhas 192–240). É o auto-assume pelo link público do técnico. Hoje 4 falhas silenciosas: update `instalacoes`, select `servicos`, update `servicos`, insert `servicos_atribuicoes_log`.
+   - Propagar `updInstErr` e `updServErr` como `502` com codes `falha_assumir_instalacao` e `falha_assumir_servicos`. O técnico vê mensagem clara em vez de redirect para tela vazia.
+   - `logErr` continua não-bloqueante (apenas log) — incluir em `parciais` da resposta de sucesso.
 
-- Envolver toda a cascata de gravação (vistoria + vistoria_fotos + update instalação + update serviço + update link) em sequência com `try/catch` e checagem de `error` em **cada** `insert/update`. Qualquer erro → 5xx com `code` claro e **não** deletar o link.
-- Após gravar, **reler** `instalacoes.status` e `servicos.status` (read-back) — se não ficaram `concluida`, retornar erro e enfileirar retry em `sga_sync_queue`/fila já existente, em vez de criar fila nova.
-- Garantir que o log de auditoria use `insertAuditLog` com ação canônica para o lookup de placa/veículo não falhar silencioso (o "Veículo (---)" do log atual é sintoma).
-- Não confiar em `link_id` que não veio do banco — fazer `select … where id = … for update` antes de marcar concluída.
+b) **`ativar-associado/index.ts`** linhas 515/554/567 (bloco "promoção parcial"). Hoje warn + continue. Risco: contrato vira `ativo`, veículo continua `instalacao_pendente` invisível.
+   - Manter `warn` para diagnóstico mas adicionar campo `parciais: ['veiculo'|'cotacao'|'contrato']` na resposta de sucesso (já existe estrutura). UI mostra alerta "ativação parcial — reprocesse".
+   - **Não** transformar em 502 aqui porque o lock de ativação é único — reexecutar dispararia idempotência. Em vez disso: novo cron `reconciliar-ativacao-parcial` (15min) varre `associados.status='ativo'` cujo veículo/contrato/cotação ainda não estão sincronizados e reaplica o trecho. Cron entra como pendência separada — nesta rodada só expomos `parciais[]`.
 
-### 3. Validação
+c) **`agendar-vistoria-presencial`** e **`agendar-vistoria-completa`**: revisão confirmou que UPDATE crítico em `cotacoes` (linhas 180 e 161) **já lança throw** → cai no catch geral → `500`. Suficiente. **Nenhuma mudança nesta rodada.**
 
-Após o hotfix:
-- Conferir que `servicos.7794e6a0.status='concluida'` e `instalacoes.25ba4038.status='concluida'`.
-- Conferir que LUT8D25 aparece em Monitoramento › Aprovações › Aprovação de Associados.
-- Conferir que o link público de COT-20260530-114923367-501 deixa de mostrar "Agendar Instalação".
-- Conferir que as fotos do prestador aparecem na tela de Aprovação (via `vistoria_fotos`).
+---
 
-Após o deploy da edge corrigida, monitorar próximo caso de conclusão de prestador externo para confirmar que não há mais "vistoria prestador concluída" fantasma em `logs_auditoria` sem cascata.
+### Frente 3 — Varredura sistemática `console.(error|warn).*update`
 
-## Fora de escopo
+Auditoria identificou ~60 ocorrências. Categorização e ação:
 
-- Não tocar no link público nem em `etapaPendentePublica` — o comportamento atual reflete o estado real do banco; após o hotfix, o caso some sozinho.
-- Não tocar na fila do Monitoramento — o filtro está correto, só faltava o serviço estar `concluida`.
+| Categoria | Ação |
+|---|---|
+| UPDATE crítico engolido (Frente 2) | corrigir agora |
+| UPDATE não-crítico (whatsapp confirm, log, contador) | manter — está correto |
+| INSERT auditoria/log/alerta | manter — não-bloqueante por design |
+| UPDATE admin (senha, email) | já retornam erro — OK |
+| UPDATE em fluxos legados | listar em `mem://debt/edges-pending-propagation` para próxima rodada |
+
+**Lista que entra em débito documentado (não corrigir agora):**
+- `autentique-cancel/index.ts:76`
+- `autentique-status/index.ts:177`
+- `autentique-vistoria-create/index.ts:356`
+- `chassi-ocr/index.ts:218`
+- `whatsapp-webhook/index.ts:76,204,233,1869`
+- `atribuir-proxima-tarefa/index.ts:795`
+- `aprovar-troca-cadastro/index.ts:138`
+- `criar-sinistro/index.ts:622`
+- `asaas-verificar-cota-sinistro/index.ts:177`
+- `app-criar-conta-cliente/index.ts:240`, `app-criar-senha/index.ts:162`
+
+Critério: fluxos com retry natural (cron, polling, próxima ação do usuário) toleram log silencioso por enquanto. Os críticos restantes ficam como Frente 4 estrutural.
+
+---
+
+### Arquivos a alterar nesta rodada
+
+- `src/hooks/useAtribuicaoManual.ts` — flag `aguardando_rota_pos_fotos`
+- `src/components/monitoramento/AtribuicaoManualTab.tsx` — badge + filtro
+- `supabase/functions/concluir-instalacao-prestador/index.ts` — notificação interna pós-`somente_fotos`
+- `supabase/functions/assumir-instalacao-vistoria-link/index.ts` — propagar 502
+- `supabase/functions/ativar-associado/index.ts` — expor `parciais[]`
+- Memórias: `handoff-fotos-rota-visibilidade` (nova) + `edges-pending-propagation` (débito)
+
+**Não altera:** schema do banco, `agendar-vistoria-*`, edges Asaas/Autentique (já feitas).
+
+---
+
+### Pendências que ficam para próxima rodada
+
+1. Cron `reconciliar-ativacao-parcial` (15 min) consumindo `parciais[]`.
+2. Template Meta `instalacao_aguardando_rota_pos_fotos` (depende de aprovação Meta).
+3. Frente 4 estrutural: ~10 edges de fluxos legados listadas em `edges-pending-propagation`.
+4. Auditoria de RPCs `RETURNS TABLE` com nomes OUT ambíguos (do QUJ4C96 — confirmar se a migração já cobriu todas).
+
+Após sua aprovação, implemento na ordem: Frente 1 → Frente 2 → memórias.
