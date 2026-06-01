@@ -161,22 +161,36 @@ serve(async (req) => {
           .eq('id', payment.externalReference);
         
         if (updateContratoError) {
+          // PROPAGA o erro: 502 + Retry-After:60 → ASAAS recoloca o evento na fila.
+          // Antes, console.error + continue deixava o contrato sem adesao_paga e o
+          // webhook respondia 200 (caso QUJ4C96 fingerprint estendido).
           console.error('[asaas-webhook] Erro ao atualizar contrato via fallback:', updateContratoError);
-        } else {
-          console.log(`[asaas-webhook] Contrato ${payment.externalReference} atualizado via fallback`);
-          
-          // Registrar no histórico
-          await supabase.from('contratos_historico').insert({
-            contrato_id: payment.externalReference,
-            evento: 'adesao_paga',
-            descricao: `Pagamento de adesão confirmado via webhook fallback - R$ ${payment.value.toFixed(2)}`,
-            dados: { 
-              asaas_id: payment.id, 
-              valor: payment.value,
-              forma_pagamento: payment.billingType,
-              fallback: true,
-            },
+          return new Response(JSON.stringify({
+            success: false,
+            code: 'falha_fallback_adesao_paga',
+            error: 'Não foi possível registrar o pagamento agora. Reentregue o webhook em alguns segundos.',
+            detalhe: updateContratoError.message,
+          }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
           });
+        }
+
+        console.log(`[asaas-webhook] Contrato ${payment.externalReference} atualizado via fallback`);
+
+        // Registrar no histórico
+        await supabase.from('contratos_historico').insert({
+          contrato_id: payment.externalReference,
+          evento: 'adesao_paga',
+          descricao: `Pagamento de adesão confirmado via webhook fallback - R$ ${payment.value.toFixed(2)}`,
+          dados: { 
+            asaas_id: payment.id, 
+            valor: payment.value,
+            forma_pagamento: payment.billingType,
+            fallback: true,
+          },
+        });
+
 
           // === PONTUAR NOVA ADESÃO (FALLBACK) ===
           try {
@@ -320,8 +334,8 @@ serve(async (req) => {
           } catch (instalacaoErr) {
             console.error('[asaas-webhook] Erro ao criar instalação (fallback):', instalacaoErr);
           }
-        }
       }
+
 
       // Mapear status do ASAAS para status interno
       const statusMap: Record<string, string> = {
