@@ -697,6 +697,54 @@ const tools = [
     },
   },
 },
+{
+  type: "function",
+  function: {
+    name: "consultar_associado_sga_por_cpf",
+    description: "Consulta a base SGA (Hinova) pelo CPF do associado e retorna os veículos vinculados. Use SOMENTE no fluxo de '2ª via de boleto' depois que o associado informar o CPF. Não use para confirmar identidade fora desse fluxo.",
+    parameters: {
+      type: "object",
+      properties: {
+        cpf: { type: "string", description: "CPF do associado (apenas dígitos ou com máscara — a função normaliza)" },
+      },
+      required: ["cpf"],
+    },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "consultar_boletos_sga_por_placa",
+    description: "Lista boletos no SGA (Hinova) para uma placa específica do associado e devolve linha digitável, link, PIX copia-e-cola e QR Code quando disponíveis. Já calcula 'dias_vencido' e a recomendação: 'enviar_boleto' (não vencido ou ≤5 dias) ou 'transbordo' (≥6 dias). Use APENAS após consultar_associado_sga_por_cpf e confirmar a placa.",
+    parameters: {
+      type: "object",
+      properties: {
+        cpf: { type: "string", description: "CPF do associado já validado no passo anterior" },
+        placa: { type: "string", description: "Placa do veículo do qual o cliente quer o boleto" },
+      },
+      required: ["cpf", "placa"],
+    },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "transbordo_atendimento_humano",
+    description: "Faz o TRANSBORDO do atendimento para um humano do time de Relacionamento. Use SOMENTE quando a regra do fluxo de boleto exigir (ex.: boleto vencido há 6 dias ou mais) ou em outro impasse que exija intervenção humana. Pausa a IA por 24h para esse telefone e destaca o contato na fila do Relacionamento.",
+    parameters: {
+      type: "object",
+      properties: {
+        motivo: { type: "string", description: "Motivo legível para o operador (ex.: 'Boleto vencido há 9 dias — placa ABC1D23')" },
+        categoria: {
+          type: "string",
+          enum: ["boleto_vencido", "outro"],
+          description: "Categoria do transbordo. 'boleto_vencido' é o caso canônico do fluxo de 2ª via.",
+        },
+      },
+      required: ["motivo"],
+    },
+  },
+},
 ];
 
 // Executa tools
