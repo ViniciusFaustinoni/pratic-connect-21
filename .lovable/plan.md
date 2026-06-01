@@ -1,45 +1,102 @@
 ## Problema
 
-No fluxo de Substituição de Placa, o operador já informa a placa do **novo veículo** no card inicial (`OutrasEntradasMenu`), o sistema valida no SGA e cria a `solicitacoes_substituicao_placa`. Quando o modal de Cotação Rápida abre em seguida (badge "Substituição de Placa · RVW1A14"), o campo de placa aparece vazio e o operador precisa digitar tudo de novo.
+O toast `Acquiring an exclusive Navigator LockManager lock 'lock:sb-…-auth-token' timed out waiting 10000ms` aparece ao clicar **Criar Cotação** no modal de Substituição de Placa (e pode ocorrer em qualquer fluxo autenticado depois que dispara). A cotação foi calculada normalmente; quem falha é o cliente Supabase de auth.
 
-Causa raiz: a placa nova é coletada e validada localmente em `OutrasEntradasMenu`, mas **nunca é persistida** — a tabela `solicitacoes_substituicao_placa` só guarda os dados do veículo antigo. Logo, nem o `ModalDetalhesSubstituicao` nem `Cotacoes.tsx` têm de onde ler a placa nova para repassar ao `CotacaoFormDialog`.
+Hoje, durante os 10 s em que o lock fica esperando, o botão "Criar Cotação" **não dá nenhum feedback visual** — o operador acha que o clique não pegou e clica de novo, agravando o problema.
 
-## Mudança
+## Causa raiz
 
-Persistir a placa nova na solicitação e propagá-la até o `CotacaoFormDialog`, que já trava o campo placa (`disabled` em `!!origemSubstituicao`) — só precisa receber o valor inicial.
+`src/integrations/supabase/client.ts` envolve o `fetch` global com `fetchWithTimeout` que **aborta requests de `/auth/v1/` após 15 s** (linhas 35–93). Quando essa aborção acontece:
 
-### 1. Banco (migration)
-- `ALTER TABLE public.solicitacoes_substituicao_placa ADD COLUMN veiculo_novo_placa text;`
-- Sem backfill: solicitações antigas seguem sem o valor (campo opcional).
+1. O `@supabase/auth-js` estava segurando o `navigator.locks` lock `sb-…-auth-token` durante o request.
+2. O abort externo derruba o fetch mas o lock fica **preso** até a aba fechar.
+3. Qualquer chamada subsequente de auth (`getSession`, refresh automático, etc.) espera 10 s e lança o erro.
 
-### 2. Edge `criar-solicitacao-substituicao`
-- Aceitar `placa_nova` no body (validar regex placa Mercosul/antiga).
-- Gravar em `veiculo_novo_placa` no INSERT.
+O modal de Substituição é apenas onde aparece porque o handler de criar encadeia `createCotacao.mutateAsync` → `chamarEdge` → `supabase.auth.getSession()` (linha 1996 de `CotacaoFormDialog.tsx`).
 
-### 3. `OutrasEntradasMenu.tsx`
-- Enviar `placa_nova: placaNovaLimpa` na invocação da edge (linha ~398).
+## Correção
 
-### 4. `ModalDetalhesSubstituicao.tsx`
-- Incluir `veiculo_novo_placa` nos `URLSearchParams` montados em `handleCriarCotacao` quando presente.
+### 1. `src/integrations/supabase/client.ts` — não abortar requests de `/auth/v1/`
 
-### 5. `src/pages/vendas/Cotacoes.tsx`
-- Ler `veiculo_novo_placa` do `searchParams` e guardar em `substituicaoCtx.veiculoNovoPlaca`.
-- Passar adiante em `origemSubstituicao` e em `cotacaoBase.veiculo_placa` (substituir o atual `null`).
+Remover o timeout para chamadas de auth. O risco de uma chamada pendurada é menor do que o de wedgear o lock. Para `/auth/v1/` o navegador já tem timeout de TCP próprio.
 
-### 6. `CotacaoFormDialog.tsx`
-- Estender `origemSubstituicao` com `veiculoNovoPlaca?: string`.
-- No mount/`useEffect` de abertura, quando houver `origemSubstituicao?.veiculoNovoPlaca`, fazer `setPlaca(formatado)` antes do render do input. O input já está `disabled={!!origemSubstituicao}` (linha 2823) — apenas precisa do valor inicial.
-- Disparar a auto-busca FIPE existente (`autoBuscaPlacaRef`) com essa placa para já popular marca/modelo/ano.
+```ts
+const fetchWithTimeout: typeof fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : (input as Request).url;
+  const isAuthCall = url.includes('/auth/v1/');
 
-### 7. Hook `useSolicitacaoSubstituicao`
-- Garantir que o `select` retorna a nova coluna (`*` ou adicionar `veiculo_novo_placa`).
+  // Auth: sem AbortController nosso — deixa o supabase-js controlar o ciclo
+  // de vida do lock. Abortar /auth/v1/ wedgeia o navigator.locks e quebra
+  // qualquer chamada autenticada subsequente até a aba fechar.
+  if (isAuthCall) {
+    const start = performance.now();
+    let status = 0;
+    try {
+      const res = await fetch(input, init);
+      status = res.status;
+      // mantém o bloco existente de 401 → forceLocalLogout
+      return res;
+    } finally {
+      recordCall({ url, method, status, durationMs: performance.now() - start, isTimeout: false });
+    }
+  }
 
-## Fora de escopo
-- Backfill de solicitações antigas.
-- Edição da placa nova dentro do modal de cotação (continua travada, como hoje).
-- Mudanças no fluxo de Troca de Titularidade.
+  // Demais endpoints (REST/Edge): mantém o timeout de 25 s como hoje.
+};
+```
+
+### 2. `src/integrations/supabase/client.ts` — usar `processLock` (defesa em profundidade)
+
+`@supabase/supabase-js` exporta `processLock`, um lock in-memory single-tab que **não usa `navigator.locks`**, eliminando completamente a classe inteira de bug.
+
+```ts
+import { createClient, processLock } from '@supabase/supabase-js';
+
+export const supabase = createClient<LooseDatabase>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    storage: localStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+    lock: processLock,
+  },
+  global: { fetch: fetchWithTimeout },
+});
+```
+
+### 3. `src/components/cotacoes/CotacaoFormDialog.tsx` — feedback de carregamento no botão "Criar Cotação"
+
+Hoje o botão **não muda de estado** enquanto o submit está rodando. Quando o erro do lock acontece, o operador espera 10 s sem ver nada se mexer e tende a clicar de novo.
+
+Mudanças mínimas (sem alterar lógica de negócio):
+
+- Derivar `const isSubmitting = createCotacao.isPending || updateCotacao.isPending;` (já existem as mutations no escopo).
+- No botão de confirmação dentro do `ConfirmDialog` ("Criar Cotação" / "Atualizar Cotação"):
+  - `disabled={isSubmitting}`
+  - Renderizar `<Loader2 className="h-4 w-4 animate-spin" />` + label "Criando cotação…" / "Atualizando…" enquanto `isSubmitting`.
+- O label e o ícone do botão principal "Criar Cotação" (no rodapé do modal) também ganham `disabled={isSubmitting}` + spinner, evitando duplo clique antes da abertura do confirm dialog quando o submit já está em curso.
+- Reaproveitar o `Loader2` de `lucide-react` que já é importado em vários pontos do projeto — sem nova dependência.
+- A animação é via Tailwind `animate-spin` (utilitário nativo). Não precisa de keyframe novo.
+
+Comportamento resultante: clicou → botão fica `disabled` com spinner + texto "Criando cotação…" até o `toast.success` ou o `toast.error`. Operador entende imediatamente que o sistema está trabalhando.
+
+## O que NÃO é a causa (descartado)
+
+- Não é o `usePlanosCotacao` nem o catálogo: a grade do plano renderizou (Select Basic R$ 347,80 visível no screenshot).
+- Não é a edge `vincular-cotacao-substituicao`: o vínculo é feito por `supabase.from('solicitacoes_substituicao_placa').update(...)` direto (linha 2119), não por edge function.
+- Não é múltiplas instâncias de `createClient`: só existe uma (`src/integrations/supabase/client.ts`).
 
 ## Validação
-1. Iniciar nova Substituição em `/vendas/cotacoes`, informar placa nova (ex.: `ABC1D23`) e prosseguir.
-2. Abrir Detalhes da Substituição → "Criar Cotação".
-3. Confirmar que o modal de Cotação Rápida abre com `ABC1D23` já preenchido, travado, e que o botão de busca FIPE funciona com ela.
+
+1. **Recarregar a aba** (libera o lock atual preso) e abrir a substituição da placa **RVW1A14 → LTB4J74** novamente.
+2. Clicar **Criar Cotação** → o botão deve mostrar imediatamente o spinner + "Criando cotação…", criar a cotação, redirecionar para `/vendas/cotacoes?abrir=…` e mostrar o toast verde.
+3. Repetir 3× sem recarregar para confirmar que o lock não wedgeia mais.
+4. Conferir no console que não há nenhum `Acquiring an exclusive Navigator LockManager lock` durante a sessão.
+
+## Arquivos tocados
+
+- `src/integrations/supabase/client.ts` — correção do lock (itens 1 e 2).
+- `src/components/cotacoes/CotacaoFormDialog.tsx` — animação de carregamento no botão (item 3).
+
+## Fora deste plano
+
+- O assunto separado dos planos "Até 30 Mil" aparecendo em FIPE alto fica para a próxima ação — sem mistura com este hotfix.
