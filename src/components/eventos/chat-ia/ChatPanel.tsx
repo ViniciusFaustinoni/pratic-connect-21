@@ -30,6 +30,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   const [enviando, setEnviando] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [drawerAberto, setDrawerAberto] = useState(false);
+  const [pendingMessages, setPendingMessages] = useState<WhatsAppMensagem[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +48,24 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   const { pausa, ativa: iaPausada, pausarPorIntervencao } = useIaPausa(telefone);
   const concluirTransbordo = useConcluirTransbordo();
   const isTransbordo = iaPausada && !!pausa && ((pausa.motivo as string) === 'transbordo_boleto' || (pausa.motivo as string) === 'transbordo_humano');
+
+  // Limpa pendentes que já apareceram no histórico (por message_id, ou heurística texto+janela)
+  useEffect(() => {
+    if (!pendingMessages.length || !mensagens?.length) return;
+    setPendingMessages((prev) =>
+      prev.filter((p) => {
+        return !mensagens.some((m) =>
+          m.direcao === 'saida' &&
+          m.mensagem === p.mensagem &&
+          Math.abs(new Date(m.created_at).getTime() - new Date(p.created_at).getTime()) < 60_000
+        );
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensagens]);
+
+  // Reseta pendentes ao trocar de contato
+  useEffect(() => { setPendingMessages([]); }, [telefone]);
 
   // Realtime subscription
   useEffect(() => {
@@ -107,15 +126,49 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
         toast.success('Áudio enviado!');
         resetAudio();
       } else {
-        const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
-          // allow_text=true: atendimento humano manual dentro da janela 24h vai como
-          // texto livre — sem isso, Meta API cai no auto-fallback de template e a
-          // mensagem real do atendente nunca chega ao associado.
-          body: { telefone, mensagem: texto.trim(), allow_text: true },
-        });
-        if (error) throw error;
-        if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
+        const conteudo = texto.trim();
+        const telefoneLimpoOp = telefone.replace(/\D/g, '');
+        const telefoneNorm = telefoneLimpoOp.startsWith('55') ? telefoneLimpoOp : `55${telefoneLimpoOp}`;
+        const tempId = `pending-${Date.now()}`;
+        const optimistic: WhatsAppMensagem = {
+          id: tempId,
+          telefone: telefoneNorm,
+          direcao: 'saida',
+          status: 'enviando',
+          tipo: 'text',
+          mensagem: conteudo,
+          created_at: new Date().toISOString(),
+        } as WhatsAppMensagem;
+        setPendingMessages((prev) => [...prev, optimistic]);
         setTexto('');
+
+        try {
+          const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+            // allow_text=true: atendimento humano manual dentro da janela 24h vai como
+            // texto livre — sem isso, Meta API cai no auto-fallback de template e a
+            // mensagem real do atendente nunca chega ao associado.
+            body: { telefone, mensagem: conteudo, allow_text: true },
+          });
+          if (error) throw error;
+          if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
+
+          // Edge expõe persisted=false quando o INSERT em whatsapp_mensagens falhou.
+          // Nesse caso mantemos a bolha como 'enviada' (chegou ao associado), mas
+          // logamos pra investigação — não some do chat.
+          if (data?.persisted === false) {
+            console.warn('[ChatPanel] mensagem enviada à Meta mas NÃO persistida no DB');
+          }
+          setPendingMessages((prev) =>
+            prev.map((p) => (p.id === tempId ? { ...p, status: 'enviada' } : p))
+          );
+        } catch (sendErr: any) {
+          setPendingMessages((prev) =>
+            prev.map((p) =>
+              p.id === tempId ? { ...p, status: 'erro', erro_mensagem: sendErr?.message } : p
+            ) as WhatsAppMensagem[]
+          );
+          throw sendErr;
+        }
       }
       // Pausa IA por 10 minutos após intervenção humana
       try { await pausarPorIntervencao(); } catch (e) { console.warn('falha ao pausar IA', e); }
@@ -283,16 +336,16 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
               <div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : !mensagens?.length ? (
+            ) : !mensagens?.length && !pendingMessages.length ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
                 <p className="text-sm">Nenhuma mensagem</p>
               </div>
             ) : (
-              mensagens.map((msg, index) => {
+              ([...(mensagens ?? []), ...pendingMessages] as WhatsAppMensagem[]).map((msg, index, arr) => {
                 const isEntrada = msg.direcao === 'entrada';
                 const showDate = index === 0 ||
-                  new Date(mensagens[index - 1].created_at).toDateString() !==
+                  new Date(arr[index - 1].created_at).toDateString() !==
                   new Date(msg.created_at).toDateString();
 
                 return (

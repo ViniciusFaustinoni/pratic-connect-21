@@ -78,18 +78,21 @@ async function enviarViaEvolution(
 
   if (!response.ok) {
     console.error("[whatsapp-send-text] Erro Evolution:", result);
-    await supabase.from("whatsapp_mensagens").insert({
+    const { error: e1 } = await supabase.from("whatsapp_mensagens").insert({
       instancia_id: instancia.id, telefone: telefoneFormatado, tipo: "text",
       mensagem, direcao: "saida", status: "erro",
       erro_mensagem: result.message || result.error || "Erro desconhecido",
     });
+    if (e1) console.error("[whatsapp-send-text] insert FAIL (evolution erro):", JSON.stringify(e1));
     throw new Error(result.message || "Erro ao enviar");
   }
 
-  await supabase.from("whatsapp_mensagens").insert({
+  const { error: e2 } = await supabase.from("whatsapp_mensagens").insert({
     instancia_id: instancia.id, telefone: telefoneFormatado, tipo: "text",
     mensagem, direcao: "saida", status: "enviada", message_id: result.key?.id,
+    provedor: "evolution",
   });
+  if (e2) console.error("[whatsapp-send-text] insert FAIL (evolution ok):", JSON.stringify(e2));
 
   console.log(`[whatsapp-send-text] ✓ Evolution: ${telefoneFormatado} - ID: ${result.key?.id}`);
   return { success: true, message_id: result.key?.id, telefone: telefoneFormatado, provedor: 'evolution' };
@@ -136,12 +139,13 @@ async function enviarViaMeta(
     // Gate de disparo local — independente do status na Meta
     if (template.disparo_habilitado === false) {
       console.warn(`[whatsapp-send-text] 🚫 Template '${templateName}' com disparo desabilitado localmente. Envio bloqueado.`);
-      await supabase.from("whatsapp_mensagens").insert({
+      const { error: eBloq } = await supabase.from("whatsapp_mensagens").insert({
         telefone: telefoneFormatado, tipo: "template", mensagem: `[${templateName}]`,
-        direcao: "saida", status: "bloqueado",
+        direcao: "saida", status: "erro",
         erro_mensagem: `template_disparo_desabilitado: '${templateName}' está com disparo pausado em Configurações › Integrações › WhatsApp › Templates Meta.`,
         provedor: "meta_oficial",
       });
+      if (eBloq) console.error("[whatsapp-send-text] insert FAIL (template bloqueado):", JSON.stringify(eBloq));
       throw new Error(`template_disparo_desabilitado: '${templateName}' está com disparo pausado.`);
     }
 
@@ -285,12 +289,13 @@ async function enviarViaMeta(
 
     if (!fbTmpl) {
       // Nenhum fallback aprovado/habilitado — aí sim bloqueia e registra
-      await supabase.from("whatsapp_mensagens").insert({
+      const { error: eNoFb } = await supabase.from("whatsapp_mensagens").insert({
         telefone: telefoneFormatado, tipo: "text", mensagem,
         direcao: "saida", status: "erro",
         erro_mensagem: `Bloqueado: Meta API ativa requer template_name e nenhum fallback (${fallbackCandidates.join(', ')}) está APPROVED ou habilitado.`,
         provedor: "meta_oficial",
       });
+      if (eNoFb) console.error("[whatsapp-send-text] insert FAIL (sem fallback):", JSON.stringify(eNoFb));
       throw new Error(`Meta API ativa: template_name obrigatório e nenhum fallback disponível.`);
     }
 
@@ -392,17 +397,17 @@ async function enviarViaMeta(
           
           if (retryResponse.ok) {
             const retryMessageId = retryResult.messages?.[0]?.id;
-            await supabase.from("whatsapp_mensagens").insert({
+            const { error: eRetry } = await supabase.from("whatsapp_mensagens").insert({
               telefone: telefoneFormatado,
               tipo: templateName ? "template" : "text",
               mensagem,
               direcao: "saida", status: 'enviada', message_id: retryMessageId,
-              template_id: templateName || null,
-              template_variaveis: templateName ? { body: bodyParams, button: buttonParams } : null,
+              template_variaveis: templateName ? { nome: templateName, body: bodyParams, button: buttonParams } : null,
               provedor: "meta_oficial",
             });
+            if (eRetry) console.error("[whatsapp-send-text] insert FAIL (meta retry):", JSON.stringify(eRetry));
             console.log(`[whatsapp-send-text] ✓ Meta (retry #1 button split): ${telefoneFormatado} - ID: ${retryMessageId}`);
-            return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
+            return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial', persisted: !eRetry };
           }
           
           console.warn("[whatsapp-send-text] Retry #1 (button split) falhou:", JSON.stringify(retryResult));
@@ -423,13 +428,14 @@ async function enviarViaMeta(
       errorMsg = "Mensagem não enviada: o contato não interagiu nas últimas 24h. Use um template aprovado para iniciar a conversa.";
     }
 
-    await supabase.from("whatsapp_mensagens").insert({
+    const { error: eMetaErr } = await supabase.from("whatsapp_mensagens").insert({
       telefone: telefoneFormatado, tipo: "text", mensagem,
       direcao: "saida", status: "erro", 
       erro_codigo: String(errorCode || errorSubCode || ''),
       erro_mensagem: errorMsg,
       provedor: "meta_oficial",
     });
+    if (eMetaErr) console.error("[whatsapp-send-text] insert FAIL (meta erro):", JSON.stringify(eMetaErr));
 
     throw new Error(errorMsg);
   }
@@ -444,16 +450,18 @@ async function enviarViaMeta(
     tipo: templateName ? "template" : "text",
     mensagem,
     direcao: "saida", status: "enviada", message_id: messageId,
-    template_id: templateName || null,
-    template_variaveis: templateName ? { body: bodyParams, button: buttonParams } : null,
+    // template_id é uuid; templateName é o NOME (string) → guardamos em template_variaveis.nome
+    template_variaveis: templateName ? { nome: templateName, body: bodyParams, button: buttonParams } : null,
     provedor: "meta_oficial",
   });
   if (insertErr) {
-    console.error("[whatsapp-send-text] ⚠️ Falha ao persistir mensagem enviada (Meta):", insertErr);
+    console.error("[whatsapp-send-text] ⚠️ insert FAIL (meta ok):", JSON.stringify(insertErr), "payload_keys:", Object.keys({ telefoneFormatado, mensagem, messageId, templateName }));
+  } else {
+    console.log("[whatsapp-send-text] ✓ persisted whatsapp_mensagens id=ok message_id=", messageId);
   }
 
   console.log(`[whatsapp-send-text] ✓ Meta: ${telefoneFormatado} - ID: ${messageId}`);
-  return { success: true, message_id: messageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
+  return { success: true, message_id: messageId, telefone: telefoneFormatado, provedor: 'meta_oficial', persisted: !insertErr };
 }
 
 // ====== MAIN ======
