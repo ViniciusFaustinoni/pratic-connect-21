@@ -19,14 +19,16 @@ const json = (status: number, body: unknown) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-// Estados de cotação onde ainda dá pra cancelar tudo limpinho
-const COTACAO_CANCELAVEL = new Set([
-  'lead',
-  'em_negociacao',
-  'aguardando_documentos',
-  'aguardando_termo',
-  'aguardando_pagamento',
-  'aguardando_assinatura',
+// Estados de cotação onde a substituição já está "consumada" (pós assinatura+pagamento).
+// Tudo que NÃO estiver nesta lista é considerado pré-assinatura e pode ser cancelado limpo.
+const COTACAO_CONSUMADA = new Set([
+  'assinado',
+  'pago',
+  'aguardando_instalacao',
+  'vistoria_concluida',
+  'aguardando_aprovacao_cadastro',
+  'aguardando_aprovacao_monitoramento',
+  'ativo',
 ]);
 
 Deno.serve(async (req) => {
