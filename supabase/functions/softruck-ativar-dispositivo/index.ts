@@ -1011,8 +1011,35 @@ serve(async (req) => {
       } else if (errorMessage.includes('associar') || errorMessage.includes('association')) {
         status = 'FAILED_ASSOCIATION';
       }
-      
-      await updateIntegrationStatus(supabase, rastreadorId, status, errorMessage, payloadSent);
+
+      // PRESERVAR raw já gravado por updateIntegrationStatus anterior (criar-veiculo / criar-device etc).
+      // O catch root só sobrescreve o envelope quando ainda não há contexto upstream registrado.
+      let preservedRaw: unknown = undefined;
+      let preservedOperation: string | undefined = undefined;
+      try {
+        const { data: existing } = await supabase
+          .from('rastreadores')
+          .select('softruck_response_raw')
+          .eq('id', rastreadorId)
+          .maybeSingle();
+        const env = existing?.softruck_response_raw as { operation?: string; raw?: unknown } | null;
+        if (env && env.raw && env.operation && env.operation !== 'preflight') {
+          preservedRaw = env.raw;
+          preservedOperation = env.operation;
+        }
+      } catch (readErr) {
+        console.warn('[Softruck Ativar] falha ao ler raw anterior no catch:', readErr);
+      }
+
+      await updateIntegrationStatus(
+        supabase,
+        rastreadorId,
+        status,
+        errorMessage,
+        payloadSent,
+        preservedRaw ?? { kind: 'runtime_throw', message: errorMessage, stack: error instanceof Error ? error.stack : null },
+        preservedOperation ?? 'runtime_throw',
+      );
     }
 
     // Tentar registrar log de erro
