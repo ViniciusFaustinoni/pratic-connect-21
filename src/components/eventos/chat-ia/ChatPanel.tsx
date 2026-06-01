@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { WhatsAppMensagem } from '@/types/whatsapp';
 import { useIaPausa } from '@/hooks/useIaPausa';
+import { useConcluirTransbordo } from '@/hooks/useTransbordosAtivos';
 import { ContatoDetalheDrawer } from './ContatoDetalheDrawer';
 import { ContatoDetalheEventosDrawer } from './ContatoDetalheEventosDrawer';
 
