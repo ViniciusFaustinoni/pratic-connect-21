@@ -1,76 +1,36 @@
-# Cancelada azul vs Cancelada vermelha — diagnóstico e fix
+# Substituição — cotação deve permitir os 6 dias de vencimento
 
-## Por que algumas Cancelada são azuis e outras vermelhas
+## Diagnóstico
 
-A aba "Outros Processos" monta cada linha por um de **dois caminhos diferentes**, e cada caminho tem o seu próprio mapa de status:
-
-```
-Linha tem cotação criada?
-├── SIM → bloco "via cotação"  → usa COTACAO_STATUS_LABELS  ← BUG aqui
-└── NÃO → bloco "só solicitação" → usa etapaMap próprio
-```
-
-Arquivo: `src/hooks/useOutrosProcessos.ts`
-
-| Linha do screenshot | Tem cotação? | Caminho | Mapa usado | Resultado |
-|---|---|---|---|---|
-| LTB4J74 (COT-…-183) | sim | cotação | `COTACAO_STATUS_LABELS` | "Cancelada" sem entrada → fallback `humanizeStatus` + tone **`info`** → **azul** |
-| RVW1A14 (—) | não | substituição direta | `etapaMap` interno | `cancelada: { tone: 'danger' }` → **vermelho** |
-| QOO5C17 (—) | não | substituição direta | `etapaMap` interno | `cancelada: { tone: 'danger' }` → **vermelho** |
-
-Olhando o código (linhas 113–119):
+`CotacaoFormDialog` decide os dias de vencimento por `calcularOpcoesVencimento(hoje)`, que devolve **só 2 opções** (regra de janela de faturamento ASAAS para nova adesão).
 
 ```ts
-const COTACAO_STATUS_LABELS = {
-  rascunho:    { ..., tone: 'warn' },
-  enviada:     { ..., tone: 'info' },
-  aceita:      { ..., tone: 'ok' },
-  recusada:    { ..., tone: 'danger' },
-  expirada:    { ..., tone: 'danger' },
-  // ❌ 'cancelada' não existe aqui
-};
+// CotacaoFormDialog.tsx, linha 361
+const opcoesVencimento = useMemo((): [number, number] => {
+  const hoje = new Date().getDate();
+  return calcularOpcoesVencimento(hoje);  // ex.: [5, 10]
+}, []);
 ```
 
-E o fallback (linha 136):
+Substituição **não é nova adesão**: reaproveita contrato/mensalidade já existentes e o `efetivar-substituicao` aceita qualquer dia válido. Tanto que `StepFinanceiro.tsx:599` já mostra os 6 dias `[5, 10, 15, 20, 25, 30]`. A divergência acontece quando o consultor avança e abre o `CotacaoFormDialog` para criar a nova cotação — volta a só 2 opções.
 
-```ts
-return COTACAO_STATUS_LABELS[cotacaoStatus]
-  ?? { label: humanizeStatus(cotacaoStatus), tone: 'info' };  // ← cai aqui = azul
-```
+## Fix (escopo mínimo)
 
-Resumo: o mesmo conceito ("cancelada") tem **dois donos** no código, e só um foi preenchido. Quando o segundo cai no fallback, vira `info` (azul) em vez de `danger` (vermelho).
+Mudanças apenas em UI, sem migration, sem edge:
 
-## Fix
+1. **`src/components/cotacoes/CotacaoFormDialog.tsx`** — quando `origemSubstituicao` existir, usar o set completo `[5, 10, 15, 20, 25, 30]` no lugar de `calcularOpcoesVencimento(hoje)`. Tipo do `opcoesVencimento` passa a ser `readonly number[]` (já é assim em `SectionComercialProps.opcoesVencimento`). A validação no submit (linha 1684) já usa `opcoesVencimento.includes(...)`, então acompanha sozinha.
 
-Uma única mudança em `src/hooks/useOutrosProcessos.ts`:
+2. **`src/components/cotacoes/form-sections/SectionComercial.tsx`** — o grid hoje é `grid-cols-2`. Trocar para `grid-cols-3` quando `opcoesVencimento.length > 2`, para os 6 cards renderizarem em 2 linhas × 3 colunas sem ficar espremido.
 
-1. Adicionar a entrada faltante em `COTACAO_STATUS_LABELS`:
-   ```ts
-   cancelada: { label: 'Cancelada', tone: 'danger' },
-   ```
+## Fora do escopo (proposital)
 
-Isso já basta para uniformizar todas as Cancelada como vermelhas, independente do caminho (cotação ou solicitação).
+- **Troca de titularidade**: pelo mesmo raciocínio também poderia abrir os 6, mas o pedido foi substituição. Posso estender se você quiser — me avisa.
+- **Nova adesão**: continua com a janela de 2 opções (regra ASAAS).
 
-## Hardening opcional (recomendo)
+## Validação
 
-Para não acontecer de novo com outros status, vale também:
+- Abrir cotação por dentro do fluxo de Substituição → bloco "Data de Vencimento" mostra 6 cards.
+- Selecionar dia 25 (ou qualquer fora da janela de "hoje") → submit aceita.
+- Abrir cotação nova adesão normal → continua com 2 opções.
 
-2. No fallback do `humanizeStatus`, detectar palavras-chave de cancelamento/reprovação e devolver tone `danger` em vez de `info`:
-   ```ts
-   const fallbackTone = /^(cancel|reprov|expir|recus|falh|err)/i.test(cotacaoStatus)
-     ? 'danger'
-     : 'info';
-   ```
-
-Isso é defesa contra qualquer status novo que aparecer no enum sem alguém lembrar de atualizar o mapa.
-
-## Sem migrations, sem mudanças de dados
-
-Fix é 100% UI. Não toca banco, não toca edges, não toca outras telas. `TipoEntradaBadge`, `TrocaTitularidadeBadge` e `statusConfig` continuam intactos.
-
-## O que aprovar
-
-- **(A)** Só o fix (item 1) — uniformiza imediato
-- **(B)** Fix + hardening (itens 1 e 2) — recomendado
-
-Me confirma A ou B que eu mudo para build mode.
+Confirma que faço só substituição, ou estendo para troca também?

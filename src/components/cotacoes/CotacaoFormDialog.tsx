@@ -357,11 +357,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [fipeLimiteSolicitado, setFipeLimiteSolicitado] = useState(false);
   const { data: configDuplaAprovacao } = useConfigDuplaAprovacao();
 
-  // Função para calcular opções de vencimento baseado no dia atual
-  const opcoesVencimento = useMemo((): [number, number] => {
+  // Função para calcular opções de vencimento baseado no dia atual.
+  // Substituição reaproveita contrato/mensalidade existentes e o `efetivar-substituicao`
+  // aceita qualquer dia válido — por isso liberamos os 6 dias canônicos nesse fluxo.
+  const opcoesVencimento = useMemo((): readonly number[] => {
+    if (origemSubstituicao) return [5, 10, 15, 20, 25, 30] as const;
     const hoje = new Date().getDate();
     return calcularOpcoesVencimento(hoje);
-  }, []);
+  }, [origemSubstituicao]);
 
   // Pré-seleciona a primeira opção válida quando o consultor ainda não escolheu.
   // Mantém a escolha existente se já houver — apenas garante que nunca fique null.
