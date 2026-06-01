@@ -167,6 +167,7 @@ export interface CotacaoFormDialogProps {
     veiculoAntigoId: string;
     veiculoAntigoPlaca: string;
     veiculoAntigoModelo: string;
+    veiculoNovoPlaca?: string;
   } | null;
 }
 
