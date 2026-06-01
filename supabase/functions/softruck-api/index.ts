@@ -407,7 +407,9 @@ serve(async (req) => {
           page?: number; 
           search?: string;
         };
-        let endpoint = `/v2/vehicles?attributes[]=plate&attributes[]=vin&attributes[]=type_name&attributes[]=brand_name&attributes[]=model_name&attributes[]=year&attributes[]=color&limit=${limit}&page=${page}`;
+        // Softruck v2 (mai/26) rejeita tanto `attributes[]=plate` (array) quanto `attributes=plate,vin` (CSV).
+        // Sem `attributes`, devolve o payload default completo — suficiente para os consumers da UI.
+        let endpoint = `/v2/vehicles?limit=${limit}&page=${page}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
@@ -424,8 +426,8 @@ serve(async (req) => {
       case 'buscar-veiculo-id': {
         const { veiculoId } = data as { veiculoId: string };
         if (!veiculoId) throw new Error('veiculoId é obrigatório');
-        // Softruck v2: usar singular `device` (igual aos demais endpoints). Plural `devices` retorna validation_failed.
-        const endpoint = `/v2/vehicles/${veiculoId}?includes[device][]=name&includes[device][]=imei&includes[device][]=code&includes[enterprise][]=name`;
+        // Softruck v2 (mai/26): `includes[devices]` aceita CSV, NÃO array bracket. Plural `devices` (singular rejeitado).
+        const endpoint = `/v2/vehicles/${veiculoId}?includes[devices]=name,imei,code&includes[enterprise]=name`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }
@@ -567,8 +569,9 @@ serve(async (req) => {
       case 'buscar-device-imei': {
         const { imei } = data as { imei: string };
         if (!imei) throw new Error('imei é obrigatório');
-        // Inclui vehicle (id + plate) para suportar read-back canônico após ativação.
-        const endpoint = `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(imei.replace(/\D/g, ''))}&includes[vehicle][]=plate&includes[vehicle][]=id`;
+        // Softruck enum fechado para includes[vehicle]: [plate, vin, code]. `id` retorna validation_failed.
+        // O id do vehicle vem no `relationships.vehicle.data.id` da resposta, não precisa estar em includes.
+        const endpoint = `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(imei.replace(/\D/g, ''))}&includes[vehicle][]=plate`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }
