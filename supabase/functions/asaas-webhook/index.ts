@@ -334,8 +334,8 @@ serve(async (req) => {
           } catch (instalacaoErr) {
             console.error('[asaas-webhook] Erro ao criar instalação (fallback):', instalacaoErr);
           }
-        }
       }
+
 
       // Mapear status do ASAAS para status interno
       const statusMap: Record<string, string> = {
