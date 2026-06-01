@@ -140,6 +140,7 @@ export default function Cotacoes() {
     veiculoAntigoId: string;
     veiculoAntigoPlaca: string;
     veiculoAntigoModelo: string;
+    veiculoNovoPlaca?: string;
     nome: string;
     telefone: string;
     email: string;
