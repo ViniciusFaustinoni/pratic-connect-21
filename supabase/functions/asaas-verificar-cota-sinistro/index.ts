@@ -151,12 +151,16 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: unknown) {
+  } catch (error: any) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.error('[asaas-verificar-cota-sinistro] Erro:', errorMessage);
+    const code = error?.__code ?? 'erro_verificar_cota_sinistro';
+    const status = error?.__status ?? 500;
+    console.error('[asaas-verificar-cota-sinistro] Erro:', { code, status, errorMessage });
+    const extraHeaders: Record<string, string> = { ...corsHeaders, 'Content-Type': 'application/json' };
+    if (status === 502) extraHeaders['Retry-After'] = '60';
     return new Response(
-      JSON.stringify({ success: false, pago: false, erro: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, pago: false, erro: errorMessage, code }),
+      { status, headers: extraHeaders }
     );
   }
 });
