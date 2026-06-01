@@ -537,22 +537,13 @@ serve(async (req) => {
     // Marcar como assinado
     if (overallStatus === "signed") {
       console.log("[autentique-sync-contrato] ✓ Documento assinado! Atualizando banco...");
-      
-      const { error: updateError } = await supabase
-        .from("contratos")
-        .update({
-          status: "assinado",
-          autentique_status: "signed",
-          data_assinatura: effectiveSignedAt,
-        })
-        .eq("id", contrato.id);
 
-      if (updateError) {
-        console.error("[autentique-sync-contrato] Erro ao atualizar contrato:", updateError);
-        throw updateError;
-      }
+      // Ordem canônica: cotação → contrato → histórico.
+      // Por que: a cotação é onde guards podem rejeitar (status_contratacao
+      // canônico, RPCs ambíguas). Se ela falha, abortamos ANTES de marcar
+      // o contrato como assinado. Próximo poll re-executa idempotentemente.
 
-      // ═══ NOVO: Sincronizar cotacoes.status_contratacao para contrato_assinado ═══
+      // (1) Cotação PRIMEIRO
       if (contrato.cotacao_id) {
         const { error: cotacaoUpdateError } = await supabase
           .from("cotacoes")
@@ -565,10 +556,43 @@ serve(async (req) => {
 
         if (cotacaoUpdateError) {
           console.error("[autentique-sync-contrato] Erro ao atualizar cotação:", cotacaoUpdateError);
-        } else {
-          console.log("[autentique-sync-contrato] ✓ Cotação atualizada para contrato_assinado");
+          return new Response(
+            JSON.stringify({
+              success: false,
+              code: "falha_sync_cotacao_contrato_assinado",
+              error: "Não foi possível sincronizar a assinatura agora. Tente novamente em instantes.",
+              detalhe: cotacaoUpdateError.message,
+            }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } }
+          );
         }
+        console.log("[autentique-sync-contrato] ✓ Cotação atualizada para contrato_assinado");
       }
+
+      // (2) Contrato (visível na UI)
+      const { error: updateError } = await supabase
+        .from("contratos")
+        .update({
+          status: "assinado",
+          autentique_status: "signed",
+          data_assinatura: effectiveSignedAt,
+        })
+        .eq("id", contrato.id);
+
+      if (updateError) {
+        console.error("[autentique-sync-contrato] Erro ao atualizar contrato:", updateError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: "falha_marcar_contrato_assinado",
+            error: "Não foi possível registrar a assinatura no contrato agora. Tente novamente em instantes.",
+            detalhe: updateError.message,
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } }
+        );
+      }
+
+
 
       await supabase.from("contratos_historico").insert({
         contrato_id: contrato.id,
