@@ -292,6 +292,7 @@ export default function Cotacoes() {
           veiculoAntigoId: searchParams.get('veiculo_antigo_id') || '',
           veiculoAntigoPlaca: searchParams.get('veiculo_antigo_placa') || '',
           veiculoAntigoModelo: searchParams.get('veiculo_antigo_modelo') || '',
+          veiculoNovoPlaca: searchParams.get('veiculo_novo_placa') || '',
           nome: searchParams.get('associado_nome') || '',
           telefone: searchParams.get('associado_telefone') || '',
           email: searchParams.get('associado_email') || '',
