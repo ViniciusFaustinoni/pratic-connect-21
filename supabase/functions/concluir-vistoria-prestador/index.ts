@@ -43,29 +43,15 @@ Deno.serve(async (req) => {
 
     const agora = new Date().toISOString()
 
-    // ── AÇÃO 1: Atualizar status da origem (PROPAGA erro — não pode ser silencioso) ──
-    // Antes, instErr era só console.error e seguia adiante; quando o guard
-    // trg_guard_instalacao_concluida_exige_rastreador bloqueava (FIPE acima sem IMEI),
-    // o link era marcado concluido mesmo com instalação travada em aguardando_prestador,
-    // serviço travado em agendada, sem vistoria materializada (caso LUT8D25 — 01/06/26).
-    if (link.instalacao_id) {
-      const { error: instErr } = await supabase
-        .from('instalacoes')
-        .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
-        .eq('id', link.instalacao_id)
-      if (instErr) {
-        console.error('[concluir-vistoria-prestador] Falha ao concluir instalação:', instErr)
-        return new Response(
-          JSON.stringify({
-            success: false,
-            code: 'instalacao_nao_pode_ser_concluida',
-            error: instErr.message,
-            hint: 'Verifique se o veículo exige rastreador. Se exigir, o link precisa ser atribuído com escopo "Fotos + Instalação" para coletar o IMEI. O link NÃO foi consumido.',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-    } else if (link.vistoria_id) {
+    // ── AÇÃO 1: NUNCA mexer em instalacoes.status aqui ──
+    // Princípio canônico: vistoria_prestador_links é SEMPRE vistoria pura
+    // (sem IMEI, sem rastreador). O instalacao_id existe só para ancorar a
+    // vistoria ao serviço físico, NÃO para fechar a instalação. Quem fecha
+    // instalações é a edge concluir-instalacao-prestador (escopo
+    // 'fotos_instalacao') após coleta do IMEI obrigatório. Sem essa
+    // separação, FIPE acima sem IMEI fechava silenciosamente o link mas
+    // deixava a instalação travada pelo guard (caso LUT8D25 — 01/06/26).
+    if (link.vistoria_id) {
       const { error: vErr } = await supabase
         .from('vistorias')
         .update({ status: 'concluida', concluida_em: agora, updated_at: agora })
@@ -80,6 +66,8 @@ Deno.serve(async (req) => {
     }
 
     // ── AÇÃO 1b: Cascata para servicos (sem isto, some da fila Aprovação de Associados) ──
+    // Vistoria pura fecha o serviço associado (só fotos, sem IMEI). Se houver
+    // instalação física pendente, ela permanece aberta até concluir-instalacao-prestador.
     if (link.instalacao_id) {
       const { error: servErr } = await supabase
         .from('servicos')
@@ -88,6 +76,7 @@ Deno.serve(async (req) => {
         .in('status', ['agendada', 'em_rota', 'em_andamento', 'em_execucao', 'aguardando_prestador'])
       if (servErr) console.error('[concluir-vistoria-prestador] Falha ao cascatear servicos (não bloqueante):', servErr)
     }
+
 
     // ── AÇÃO 2: Invalidar o token + salvar evidências ──
     const { error: linkUpdateErr } = await supabase
