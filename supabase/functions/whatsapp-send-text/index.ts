@@ -428,13 +428,14 @@ async function enviarViaMeta(
       errorMsg = "Mensagem não enviada: o contato não interagiu nas últimas 24h. Use um template aprovado para iniciar a conversa.";
     }
 
-    await supabase.from("whatsapp_mensagens").insert({
+    const { error: eMetaErr } = await supabase.from("whatsapp_mensagens").insert({
       telefone: telefoneFormatado, tipo: "text", mensagem,
       direcao: "saida", status: "erro", 
       erro_codigo: String(errorCode || errorSubCode || ''),
       erro_mensagem: errorMsg,
       provedor: "meta_oficial",
     });
+    if (eMetaErr) console.error("[whatsapp-send-text] insert FAIL (meta erro):", JSON.stringify(eMetaErr));
 
     throw new Error(errorMsg);
   }
