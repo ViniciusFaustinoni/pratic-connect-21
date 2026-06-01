@@ -174,6 +174,7 @@ Deno.serve(async (req) => {
         sga_codigo_veiculo: veiculoSga.codigo_veiculo || null,
         veiculo_antigo_id: veiculoLocal?.id || null,
         veiculo_antigo_placa: placaLimpa,
+        veiculo_novo_placa: placaNovaLimpa,
         veiculo_antigo_snapshot: veiculoSnapshot,
         associado_snapshot: associadoSnapshot,
         status: 'aguardando_termo',
