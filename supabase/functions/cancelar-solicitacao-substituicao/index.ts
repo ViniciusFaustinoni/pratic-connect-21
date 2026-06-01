@@ -19,14 +19,16 @@ const json = (status: number, body: unknown) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-// Estados de cotação onde ainda dá pra cancelar tudo limpinho
-const COTACAO_CANCELAVEL = new Set([
-  'lead',
-  'em_negociacao',
-  'aguardando_documentos',
-  'aguardando_termo',
-  'aguardando_pagamento',
-  'aguardando_assinatura',
+// Estados de cotação onde a substituição já está "consumada" (pós assinatura+pagamento).
+// Tudo que NÃO estiver nesta lista é considerado pré-assinatura e pode ser cancelado limpo.
+const COTACAO_CONSUMADA = new Set([
+  'assinado',
+  'pago',
+  'aguardando_instalacao',
+  'vistoria_concluida',
+  'aguardando_aprovacao_cadastro',
+  'aguardando_aprovacao_monitoramento',
+  'ativo',
 ]);
 
 Deno.serve(async (req) => {
@@ -88,7 +90,13 @@ Deno.serve(async (req) => {
         const statusAtual = String(cot.status_contratacao || cot.status || '').toLowerCase();
         if (statusAtual === 'cancelada') {
           // ok, já cancelada
-        } else if (COTACAO_CANCELAVEL.has(statusAtual) || !statusAtual) {
+        } else if (COTACAO_CONSUMADA.has(statusAtual)) {
+          return json(409, {
+            error: `A cotação vinculada já avançou (${statusAtual}). Use o fluxo de cancelamento de contrato.`,
+            codigo: 'cotacao_avancada',
+            status_atual: statusAtual,
+          });
+        } else {
           const { error: updErr } = await admin
             .from('cotacoes')
             .update({
@@ -99,19 +107,12 @@ Deno.serve(async (req) => {
             } as any)
             .eq('id', sol.cotacao_id);
           if (updErr) {
-            // Pode não ter alguma coluna — tenta versão mínima
             await admin
               .from('cotacoes')
               .update({ status_contratacao: 'cancelada' } as any)
               .eq('id', sol.cotacao_id);
           }
           cotacao_cancelada = true;
-        } else {
-          return json(409, {
-            error: `A cotação vinculada já avançou (${statusAtual}). Use o fluxo de cancelamento de contrato.`,
-            codigo: 'cotacao_avancada',
-            status_atual: statusAtual,
-          });
         }
       }
     }
