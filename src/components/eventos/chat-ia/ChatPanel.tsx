@@ -108,7 +108,10 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
         resetAudio();
       } else {
         const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
-          body: { telefone, mensagem: texto.trim() },
+          // allow_text=true: atendimento humano manual dentro da janela 24h vai como
+          // texto livre — sem isso, Meta API cai no auto-fallback de template e a
+          // mensagem real do atendente nunca chega ao associado.
+          body: { telefone, mensagem: texto.trim(), allow_text: true },
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
