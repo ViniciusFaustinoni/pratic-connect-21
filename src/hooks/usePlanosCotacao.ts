@@ -366,23 +366,45 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Filtrar coberturas: remove as inelegíveis, mantém o plano
       const coberturasDoPlano = coberturasDoPlanoRaw.filter((pc: any) => {
         const cobId = pc.cobertura_id;
+        const cobNome = pc.coberturas?.nome || 'Cobertura';
         const cobRules = allEligibilityRules
           .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
           .filter(r => r.rule_type !== 'fipe_range')
           .filter(r => !planoRuleTypes.has(r.rule_type)); // sobrescrita pelo plano
         if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
-          const cobNome = pc.coberturas?.nome || 'Cobertura';
           coberturasRemovidas.push(cobNome);
           console.log(`[ELEGIBILIDADE] ${plano.nome}: cobertura "${cobNome}" removida por regra`);
           return false;
+        }
+        // R2: fipe_range é a faixa de preço da cobertura. Se a cobertura tem fipe_range
+        // configurado e NENHUMA faixa cobre o FIPE da cotação, a cobertura não tem
+        // preço aplicável → removê-la (e potencialmente derrubar o plano fantasma).
+        if (!planoRuleTypes.has('fipe_range')) {
+          const fipeRangeRule = allEligibilityRules.find(
+            r => r.entity_type === 'cobertura' && r.entity_id === cobId && r.rule_type === 'fipe_range' && r.is_active
+          );
+          if (fipeRangeRule) {
+            const faixas = (fipeRangeRule.rule_config as any)?.faixas || [];
+            const faixaOk = faixas.some((f: any) => valorFipe >= f.de && valorFipe < f.ate);
+            if (!faixaOk) {
+              coberturasRemovidas.push(cobNome);
+              console.log(`[ELEGIBILIDADE] ${plano.nome}: cobertura "${cobNome}" removida — sem faixa de preço aplicável ao FIPE R$ ${valorFipe}`);
+              return false;
+            }
+          }
         }
         return true;
       });
 
       // Se todas as coberturas core foram removidas por regras, descartar o plano
       if (coberturasDoPlano.length === 0 && coberturasDoPlanoRaw.length > 0) {
-        console.log(`[ELEGIBILIDADE] ${plano.nome}: descartado — todas as coberturas removidas por regras`);
-        negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Todas as coberturas foram removidas por regras de elegibilidade' });
+        console.log(`[ELEGIBILIDADE] ${plano.nome}: descartado — todas as coberturas removidas por regras (FIPE R$ ${valorFipe})`);
+        negados.push({
+          planoId: plano.id,
+          planoNome: plano.nome,
+          linha: linha || '',
+          motivo: `Nenhuma cobertura tem faixa de preço aplicável ao FIPE R$ ${valorFipe.toLocaleString('pt-BR')}`,
+        });
         continue;
       }
 
