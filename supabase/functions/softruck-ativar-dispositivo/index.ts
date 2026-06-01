@@ -336,12 +336,13 @@ serve(async (req) => {
       .single();
 
     if (veiculoError || !veiculo) {
-      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', `Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`, payloadSent);
-      throw new Error(`Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`);
+      const msg = `Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`;
+      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', msg, payloadSent, { kind: 'preflight-veiculo-local', veiculoId, error: veiculoError?.message ?? null }, 'preflight-veiculo-local');
+      throw new Error(msg);
     }
 
     if (!veiculo.placa && !veiculo.chassi) {
-      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', 'Veículo sem placa e sem chassi cadastrados', payloadSent);
+      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', 'Veículo sem placa e sem chassi cadastrados', payloadSent, { kind: 'preflight-veiculo-local', veiculoId, motivo: 'sem_placa_e_sem_chassi' }, 'preflight-veiculo-local');
       throw new Error('Veículo sem placa e sem chassi cadastrados');
     }
     // 0KM: se não houver placa real (ou placeholder "0KM*"), usa o chassi como plate na Softruck.
