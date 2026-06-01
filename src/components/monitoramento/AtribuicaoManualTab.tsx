@@ -364,6 +364,7 @@ export default function AtribuicaoManualTab() {
   const podeForcarDevolucao = !!(isDiretor || isCoordenadorMonitoramento);
 
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+  const [somenteAguardandoRota, setSomenteAguardandoRota] = useState(false);
   const [busca, setBusca] = useState('');
   const [dragging, setDragging] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ servico: any; vistoriadorId: string } | null>(null);
