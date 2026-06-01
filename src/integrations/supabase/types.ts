@@ -29913,6 +29913,7 @@ export type Database = {
           veiculo_antigo_id: string | null
           veiculo_antigo_placa: string
           veiculo_antigo_snapshot: Json
+          veiculo_novo_placa: string | null
         }
         Insert: {
           associado_id?: string | null
@@ -29941,6 +29942,7 @@ export type Database = {
           veiculo_antigo_id?: string | null
           veiculo_antigo_placa: string
           veiculo_antigo_snapshot?: Json
+          veiculo_novo_placa?: string | null
         }
         Update: {
           associado_id?: string | null
@@ -29969,6 +29971,7 @@ export type Database = {
           veiculo_antigo_id?: string | null
           veiculo_antigo_placa?: string
           veiculo_antigo_snapshot?: Json
+          veiculo_novo_placa?: string | null
         }
         Relationships: [
           {

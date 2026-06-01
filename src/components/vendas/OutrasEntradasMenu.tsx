@@ -395,7 +395,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
         if (!placa) { toast.error('Placa não selecionada'); return; }
         toast.info('Criando solicitação de substituição...');
         const { data, error } = await supabase.functions.invoke('criar-solicitacao-substituicao', {
-          body: { placa },
+          body: { placa, placa_nova: placaNovaLimpa || null },
         });
         if (error) {
           let msg: string | undefined;

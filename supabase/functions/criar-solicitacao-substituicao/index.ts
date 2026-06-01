@@ -18,9 +18,14 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { placa } = await req.json();
+    const body = await req.json();
+    const { placa, placa_nova } = body || {};
     const placaLimpa = String(placa || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
     if (!placaLimpa || placaLimpa.length < 6) return json(400, { error: 'Placa inválida' });
+    const placaNovaLimpa = String(placa_nova || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
+    if (placaNovaLimpa && !/^[A-Z]{3}[0-9][0-9A-Z][0-9]{2}$/.test(placaNovaLimpa)) {
+      return json(400, { error: 'Placa nova inválida' });
+    }
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -169,6 +174,7 @@ Deno.serve(async (req) => {
         sga_codigo_veiculo: veiculoSga.codigo_veiculo || null,
         veiculo_antigo_id: veiculoLocal?.id || null,
         veiculo_antigo_placa: placaLimpa,
+        veiculo_novo_placa: placaNovaLimpa,
         veiculo_antigo_snapshot: veiculoSnapshot,
         associado_snapshot: associadoSnapshot,
         status: 'aguardando_termo',
