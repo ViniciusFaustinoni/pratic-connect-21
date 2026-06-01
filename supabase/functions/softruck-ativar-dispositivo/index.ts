@@ -57,34 +57,106 @@ type IntegrationStatus =
   | 'FAILED_USER'
   | 'CREATED_BUT_NOT_ACTIVATED';
 
-// Chamar softruck-api edge function
+// Envelope cru padronizado retornado por callSoftruckApi — preserva contexto
+// suficiente para investigação posterior (operação, HTTP status, body parseado).
+interface SoftruckRawEnvelope {
+  operation: string;
+  http_status: number | null;
+  body: unknown;
+}
+
+interface CallSoftruckResult {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  raw: SoftruckRawEnvelope;
+}
+
+// Tenta extrair o JSON cru da mensagem de erro produzida por softruck-api
+// (formato canônico: "Softruck API error: <status> - <jsonBody>").
+function parseUpstreamErrorBody(errorMsg: string | undefined): { http_status: number | null; body: unknown } {
+  if (!errorMsg) return { http_status: null, body: null };
+  const m = errorMsg.match(/Softruck API error:\s*(\d+)\s*-\s*([\s\S]+)$/);
+  if (!m) return { http_status: null, body: errorMsg };
+  const status = Number(m[1]);
+  const raw = m[2];
+  try {
+    return { http_status: status, body: JSON.parse(raw) };
+  } catch {
+    return { http_status: status, body: raw };
+  }
+}
+
+// Chamar softruck-api edge function — agora retorna `raw` com operation+status+body
+// para que qualquer falha grave seja gravada em `rastreadores.softruck_response_raw`
+// com contexto suficiente para investigar sem reabrir os logs da Softruck.
 async function callSoftruckApi(
   supabaseUrl: string,
   supabaseKey: string,
   operation: string,
   data: Record<string, unknown>
-): Promise<{ success: boolean; data?: unknown; error?: string }> {
-  const response = await fetch(`${supabaseUrl}/functions/v1/softruck-api`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${supabaseKey}`,
-    },
-    body: JSON.stringify({ operation, data }),
-  });
+): Promise<CallSoftruckResult> {
+  let httpStatus: number | null = null;
+  let parsed: { success?: boolean; data?: unknown; error?: string; operation?: string } = {};
+  let bodyText = '';
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/softruck-api`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ operation, data }),
+    });
+    httpStatus = response.status;
+    bodyText = await response.text();
+    try {
+      parsed = JSON.parse(bodyText);
+    } catch {
+      parsed = { success: false, error: `Resposta não-JSON de softruck-api: ${bodyText.slice(0, 500)}` };
+    }
+  } catch (netErr) {
+    const msg = netErr instanceof Error ? netErr.message : String(netErr);
+    return {
+      success: false,
+      error: `falha_rede_softruck_api:${msg}`,
+      raw: { operation, http_status: null, body: { kind: 'fetch_error', message: msg } },
+    };
+  }
 
-  const result = await response.json();
-  return result;
+  // Quando upstream falhou, o body útil está embutido em `parsed.error` ("Softruck API error: 400 - {...}")
+  if (!parsed.success) {
+    const upstream = parseUpstreamErrorBody(parsed.error);
+    return {
+      success: false,
+      data: parsed.data,
+      error: parsed.error,
+      raw: {
+        operation,
+        http_status: upstream.http_status ?? httpStatus,
+        body: upstream.body ?? parsed,
+      },
+    };
+  }
+
+  return {
+    success: true,
+    data: parsed.data,
+    raw: { operation, http_status: httpStatus, body: parsed.data },
+  };
 }
 
 // Atualizar status de integração no rastreador (e incrementa softruck_tentativas quando NÃO é SUCCESS)
+// O `responseRaw` é SEMPRE envelopado como {operation, ts, raw} para que toda falha
+// seja diagnosticável sem reabrir logs externos.
 async function updateIntegrationStatus(
   supabase: any,
   rastreadorId: string | null,
   status: IntegrationStatus,
   _errorMessage?: string,
   payloadSent?: unknown,
-  responseRaw?: unknown
+  responseRaw?: unknown,
+  operation?: string
 ) {
   if (!rastreadorId) {
     console.warn('[Softruck Ativar] rastreadorId não disponível para atualizar status');
@@ -92,11 +164,34 @@ async function updateIntegrationStatus(
   }
 
   try {
+    // Envelopar SEMPRE como {operation, ts, raw} — formato canônico desta rodada.
+    let envelope: Record<string, unknown> | null = null;
+    if (responseRaw !== undefined && responseRaw !== null) {
+      const r = responseRaw as Record<string, unknown>;
+      // Se já é um SoftruckRawEnvelope (vindo de callSoftruckApi.raw), use-o como `raw`.
+      const isRawEnvelope = r && typeof r === 'object' && 'operation' in r && 'body' in r;
+      // Se é um CallSoftruckResult inteiro, extrai o `.raw` interno.
+      const isCallResult = r && typeof r === 'object' && 'raw' in r && (r as any).raw && typeof (r as any).raw === 'object' && 'body' in ((r as any).raw as object);
+      const rawPayload = isRawEnvelope ? r : (isCallResult ? (r as any).raw : r);
+      envelope = {
+        operation: operation || (rawPayload as any)?.operation || 'unknown',
+        ts: new Date().toISOString(),
+        raw: rawPayload,
+      };
+      if (_errorMessage) envelope.error_message = _errorMessage;
+    } else if (operation || _errorMessage) {
+      envelope = {
+        operation: operation || 'unknown',
+        ts: new Date().toISOString(),
+        raw: { kind: 'no_upstream_response', message: _errorMessage || null },
+      };
+    }
+
     const update: Record<string, unknown> = {
       softruck_integration_status: status,
       softruck_last_attempt_at: new Date().toISOString(),
       softruck_payload_sent: payloadSent || null,
-      softruck_response_raw: responseRaw || null,
+      softruck_response_raw: envelope,
       updated_at: new Date().toISOString(),
     };
 
@@ -112,7 +207,7 @@ async function updateIntegrationStatus(
 
     await supabase.from('rastreadores').update(update).eq('id', rastreadorId);
 
-    console.log(`[Softruck Ativar] Status de integração atualizado: ${status}`);
+    console.log(`[Softruck Ativar] Status de integração atualizado: ${status} (op=${operation || 'n/a'})`);
   } catch (err) {
     console.error('[Softruck Ativar] Erro ao atualizar status de integração:', err);
   }
@@ -169,7 +264,7 @@ serve(async (req) => {
     rastreadorId = rastreador.id;
 
     // Atualizar status para PENDING
-    await updateIntegrationStatus(supabase, rastreadorId, 'PENDING', undefined, payloadSent);
+    await updateIntegrationStatus(supabase, rastreadorId, 'PENDING', undefined, payloadSent, { kind: 'preflight', stage: 'init' }, 'preflight');
 
     if (rastreador.plataforma !== 'softruck') {
       console.log(`[Softruck Ativar] Rastreador ${imei} não é Softruck (plataforma: ${rastreador.plataforma}). Pulando integração.`);
@@ -241,12 +336,13 @@ serve(async (req) => {
       .single();
 
     if (veiculoError || !veiculo) {
-      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', `Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`, payloadSent);
-      throw new Error(`Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`);
+      const msg = `Veículo não encontrado: ${veiculoError?.message || 'ID inválido'}`;
+      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', msg, payloadSent, { kind: 'preflight-veiculo-local', veiculoId, error: veiculoError?.message ?? null }, 'preflight-veiculo-local');
+      throw new Error(msg);
     }
 
     if (!veiculo.placa && !veiculo.chassi) {
-      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', 'Veículo sem placa e sem chassi cadastrados', payloadSent);
+      await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', 'Veículo sem placa e sem chassi cadastrados', payloadSent, { kind: 'preflight-veiculo-local', veiculoId, motivo: 'sem_placa_e_sem_chassi' }, 'preflight-veiculo-local');
       throw new Error('Veículo sem placa e sem chassi cadastrados');
     }
     // 0KM: se não houver placa real (ou placeholder "0KM*"), usa o chassi como plate na Softruck.
@@ -321,7 +417,7 @@ serve(async (req) => {
           }
           
           if (!softruckVehicleId) {
-            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', criarVeiculoResult.error, payloadSent, criarVeiculoResult);
+            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', criarVeiculoResult.error, payloadSent, criarVeiculoResult.raw, 'criar-veiculo');
             throw new Error(`Erro ao criar veículo na Softruck: ${criarVeiculoResult.error}`);
           }
         } else {
@@ -467,7 +563,7 @@ serve(async (req) => {
           }
           
           if (!softruckDeviceId) {
-            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_DEVICE', criarDeviceResult.error, payloadSent, criarDeviceResult);
+            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_DEVICE', criarDeviceResult.error, payloadSent, criarDeviceResult.raw, 'criar-device');
             throw new Error(`Erro ao criar device na Softruck: ${criarDeviceResult.error}`);
           }
         } else {
@@ -915,8 +1011,35 @@ serve(async (req) => {
       } else if (errorMessage.includes('associar') || errorMessage.includes('association')) {
         status = 'FAILED_ASSOCIATION';
       }
-      
-      await updateIntegrationStatus(supabase, rastreadorId, status, errorMessage, payloadSent);
+
+      // PRESERVAR raw já gravado por updateIntegrationStatus anterior (criar-veiculo / criar-device etc).
+      // O catch root só sobrescreve o envelope quando ainda não há contexto upstream registrado.
+      let preservedRaw: unknown = undefined;
+      let preservedOperation: string | undefined = undefined;
+      try {
+        const { data: existing } = await supabase
+          .from('rastreadores')
+          .select('softruck_response_raw')
+          .eq('id', rastreadorId)
+          .maybeSingle();
+        const env = existing?.softruck_response_raw as { operation?: string; raw?: unknown } | null;
+        if (env && env.raw && env.operation && env.operation !== 'preflight') {
+          preservedRaw = env.raw;
+          preservedOperation = env.operation;
+        }
+      } catch (readErr) {
+        console.warn('[Softruck Ativar] falha ao ler raw anterior no catch:', readErr);
+      }
+
+      await updateIntegrationStatus(
+        supabase,
+        rastreadorId,
+        status,
+        errorMessage,
+        payloadSent,
+        preservedRaw ?? { kind: 'runtime_throw', message: errorMessage, stack: error instanceof Error ? error.stack : null },
+        preservedOperation ?? 'runtime_throw',
+      );
     }
 
     // Tentar registrar log de erro
