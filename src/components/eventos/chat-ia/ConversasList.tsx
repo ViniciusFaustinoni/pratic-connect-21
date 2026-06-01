@@ -306,6 +306,15 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                           ⏱ há {tempoRelativo}
                         </span>
                       )}
+                      {isTransbordo && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] py-0 px-1.5 h-4 border-red-500 text-red-700 dark:text-red-400 bg-red-100/60 dark:bg-red-950/50 gap-0.5 animate-pulse"
+                        >
+                          <AlertCircle className="h-2.5 w-2.5" />
+                          {transbordoLabel}
+                        </Badge>
+                      )}
                       {isCobranca && (
                         <Badge
                           variant="outline"
