@@ -46,7 +46,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   const { data: mensagens, isLoading, refetch } = useWhatsAppHistorico(telefone, 200);
   const { pausa, ativa: iaPausada, pausarPorIntervencao } = useIaPausa(telefone);
   const concluirTransbordo = useConcluirTransbordo();
-  const isTransbordo = iaPausada && !!pausa && (pausa.motivo === 'transbordo_boleto' || (pausa.motivo as string) === 'transbordo_humano');
+  const isTransbordo = iaPausada && !!pausa && ((pausa.motivo as string) === 'transbordo_boleto' || (pausa.motivo as string) === 'transbordo_humano');
 
   // Realtime subscription
   useEffect(() => {
