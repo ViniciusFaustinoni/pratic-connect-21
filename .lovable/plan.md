@@ -1,85 +1,45 @@
-# Substituição: 2 agendamentos quando locais diferentes
+## Problema
 
-## Estado atual
+No fluxo de Substituição de Placa, o operador já informa a placa do **novo veículo** no card inicial (`OutrasEntradasMenu`), o sistema valida no SGA e cria a `solicitacoes_substituicao_placa`. Quando o modal de Cotação Rápida abre em seguida (badge "Substituição de Placa · RVW1A14"), o campo de placa aparece vazio e o operador precisa digitar tudo de novo.
 
-Hoje a Substituição no link público já mostra a pergunta **"Os dois veículos estarão no mesmo local?"** (`AgendamentoSubstituicao.tsx`), mas a resposta vira só um flag de UI (`substituicaoMesmoLocal`) que **nunca chega no backend**. Independente da escolha, o fluxo cai em **uma única `EtapaVistoria`**, gera **1 `agendamento_base`** e o `criar-instalacao-pos-pagamento` materializa **2 serviços no mesmo agendamento** (`instalacao` do veículo novo + `vistoria_retirada` do veículo antigo, mesmo endereço, mesma data, mesmo período).
+Causa raiz: a placa nova é coletada e validada localmente em `OutrasEntradasMenu`, mas **nunca é persistida** — a tabela `solicitacoes_substituicao_placa` só guarda os dados do veículo antigo. Logo, nem o `ModalDetalhesSubstituicao` nem `Cotacoes.tsx` têm de onde ler a placa nova para repassar ao `CotacaoFormDialog`.
 
-A mensagem na UI já promete "Dois agendamentos separados" para a opção "Não", mas isso não acontece de fato.
+## Mudança
 
-## O que muda
+Persistir a placa nova na solicitação e propagá-la até o `CotacaoFormDialog`, que já trava o campo placa (`disabled` em `!!origemSubstituicao`) — só precisa receber o valor inicial.
 
-### Comportamento
+### 1. Banco (migration)
+- `ALTER TABLE public.solicitacoes_substituicao_placa ADD COLUMN veiculo_novo_placa text;`
+- Sem backfill: solicitações antigas seguem sem o valor (campo opcional).
 
-- **Mesmo local** (sem mudança): continua como hoje — 1 `agendamento_base` com 2 serviços no mesmo endereço/data/período.
-- **Locais diferentes** (novo comportamento): cliente preenche **dois formulários de agendamento**, em sequência, **instalação primeiro, depois retirada**, cada um com data/período/endereço próprios e totalmente independentes (sem trava de ordem cronológica entre eles).
+### 2. Edge `criar-solicitacao-substituicao`
+- Aceitar `placa_nova` no body (validar regex placa Mercosul/antiga).
+- Gravar em `veiculo_novo_placa` no INSERT.
 
-### Fluxo na etapa "Vistoria" do link público (substituição)
+### 3. `OutrasEntradasMenu.tsx`
+- Enviar `placa_nova: placaNovaLimpa` na invocação da edge (linha ~398).
 
-```text
-[AgendamentoSubstituicao "mesmo local?"]
-        │
-   ┌────┴─────┐
-   │          │
-  SIM        NÃO
-   │          │
-   │   [Form 1: INSTALAÇÃO (veículo novo)]
-   │          │  (data + período + endereço novo)
-   │          ▼
-   │   [Form 2: RETIRADA (veículo antigo)]
-   │          │  (data + período + endereço antigo)
-   │          ▼
-   │   confirma os dois → cria 2 agendamentos_base separados
-   │
-   └─→ [EtapaVistoria normal] → 1 agendamento_base + 2 serviços
-```
+### 4. `ModalDetalhesSubstituicao.tsx`
+- Incluir `veiculo_novo_placa` nos `URLSearchParams` montados em `handleCriarCotacao` quando presente.
 
-UI:
-- Cabeçalho mostra os dois veículos com badges "1 de 2 – Instalação (novo)" e "2 de 2 – Retirada (antigo)".
-- Botão "Voltar para o veículo anterior" no Form 2 para corrigir o Form 1 antes de confirmar.
-- Confirma só no final, em uma chamada única ao backend (atômica).
+### 5. `src/pages/vendas/Cotacoes.tsx`
+- Ler `veiculo_novo_placa` do `searchParams` e guardar em `substituicaoCtx.veiculoNovoPlaca`.
+- Passar adiante em `origemSubstituicao` e em `cotacaoBase.veiculo_placa` (substituir o atual `null`).
 
-## Detalhes técnicos
+### 6. `CotacaoFormDialog.tsx`
+- Estender `origemSubstituicao` com `veiculoNovoPlaca?: string`.
+- No mount/`useEffect` de abertura, quando houver `origemSubstituicao?.veiculoNovoPlaca`, fazer `setPlaca(formatado)` antes do render do input. O input já está `disabled={!!origemSubstituicao}` (linha 2823) — apenas precisa do valor inicial.
+- Disparar a auto-busca FIPE existente (`autoBuscaPlacaRef`) com essa placa para já popular marca/modelo/ano.
 
-### Frontend
+### 7. Hook `useSolicitacaoSubstituicao`
+- Garantir que o `select` retorna a nova coluna (`*` ou adicionar `veiculo_novo_placa`).
 
-1. `src/components/cotacao-publica/AgendamentoSubstituicao.tsx`
-   - Mantém a pergunta inicial. Sem mudança visual relevante.
-
-2. `src/pages/public/CotacaoContratacao.tsx` (etapa 4, ramo `isSubstituicao`)
-   - Quando `substituicaoMesmoLocal === true` → renderiza `EtapaVistoria` como hoje.
-   - Quando `substituicaoMesmoLocal === false` → renderiza um novo wrapper `AgendamentoSubstituicaoSeparado` (componente novo) que reusa internamente o mesmo formulário de agendamento da `EtapaVistoria` em dois passos.
-
-3. Novo componente `src/components/cotacao-publica/AgendamentoSubstituicaoSeparado.tsx`
-   - Encapsula 2 passos visuais (instalação → retirada) com estado local (`dadosInstalacao`, `dadosRetirada`).
-   - Reaproveita o mesmo formulário de endereço/data/período que `AgendamentoVistoria` já usa (extraído para um subcomponente puro, se necessário).
-   - No "Confirmar", chama uma nova edge function única que recebe os dois payloads.
-
-### Backend
-
-4. Nova edge function `supabase/functions/criar-substituicao-agendamentos-separados/index.ts`
-   - Input: `{ cotacao_id, instalacao: {data, periodo, endereco}, retirada: {data, periodo, endereco} }`.
-   - Reusa a mesma rotina interna de `criar-instalacao-pos-pagamento` para o serviço de instalação (com seu próprio `agendamento_base`), e cria um **segundo `agendamento_base`** + serviço `vistoria_retirada` para o veículo antigo, com data/endereço próprios.
-   - Idempotência: chave `(cotacao_id, "separado")` para não duplicar em re-submit; também idempotente por `(veiculo_antigo_id)` para a retirada (já existe na lógica atual).
-   - Marca `cotacoes.dados_extras.substituicao_agendamentos_separados = true` para auditoria.
-
-5. `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
-   - Bloco 6.2 (retirada) ganha um guard: **pula** a criação da retirada quando `dados_extras.substituicao_agendamentos_separados === true` (porque a edge nova já fez).
-   - Quando flag ausente / false → comportamento atual (1 agendamento, 2 serviços).
-
-### Banco / regras canônicas
-
-- A regra "1 agendamento ativo por origem" (trigger `trg_sync_agendamento_base_on_servico_terminal`) continua valendo: aqui são **duas origens diferentes** (veículo novo vs. veículo antigo), então 2 `agendamento_base` é legítimo.
-- Memória `mem://logic/operations/substituicao-2-servicos-agendamento` será atualizada para descrever as duas variantes (mesmo local vs. separado).
-- Nenhuma migração de schema necessária.
-
-### Compatibilidade
-
-- Não afeta substituições já materializadas (idempotência por flag em `dados_extras`).
-- Não afeta Troca de Titularidade (que continua sem agendamento de retirada — veículo é só transferido).
-- Não afeta Nova Adesão nem Sub-FIPE.
+## Fora de escopo
+- Backfill de solicitações antigas.
+- Edição da placa nova dentro do modal de cotação (continua travada, como hoje).
+- Mudanças no fluxo de Troca de Titularidade.
 
 ## Validação
-
-- E2E manual com a credencial admin (cotação de substituição, optar por "locais diferentes"): conferir aparecem os 2 forms, depois confirmar e checar no banco que existem **2 linhas em `agendamentos_base`** ligadas à cotação, com 1 serviço cada (`instalacao` e `vistoria_retirada`).
-- Caso "mesmo local": confere que permanece 1 `agendamento_base` com 2 serviços (regressão).
-- Verifica filas: ambos serviços aparecem na fila de atribuição do Monitoramento, cada um na sua data.
+1. Iniciar nova Substituição em `/vendas/cotacoes`, informar placa nova (ex.: `ABC1D23`) e prosseguir.
+2. Abrir Detalhes da Substituição → "Criar Cotação".
+3. Confirmar que o modal de Cotação Rápida abre com `ABC1D23` já preenchido, travado, e que o botão de busca FIPE funciona com ela.
