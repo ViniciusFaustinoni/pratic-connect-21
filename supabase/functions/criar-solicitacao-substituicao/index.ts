@@ -72,21 +72,26 @@ Deno.serve(async (req) => {
     } else {
       // FALLBACK: SGA não tem (instabilidade ou veículo local não sincronizado).
       // Resolve via base local: veiculos.placa → associado_id → associados.cpf.
-      const { data: vLocal } = await admin
+      const placaComHifen = `${placaLimpa.slice(0, 3)}-${placaLimpa.slice(3)}`;
+      const { data: vLocal, error: vLocalErr } = await admin
         .from('veiculos')
-        .select('id, placa, marca, modelo, ano, chassi, renavam, associado_id, codigo_veiculo_sga, associados(id, nome, cpf, email, telefone, codigo_hinova)')
-        .eq('placa', placaLimpa)
+        .select('id, placa, marca, modelo, ano_modelo, ano_fabricacao, chassi, renavam, associado_id, codigo_hinova, associados(id, nome, cpf, email, telefone, codigo_hinova)')
+        .in('placa', [placaLimpa, placaComHifen])
         .maybeSingle();
+      if (vLocalErr) {
+        console.error('[criar-solicitacao-substituicao] erro fallback local:', vLocalErr);
+        return json(500, { error: 'Erro ao consultar base local: ' + vLocalErr.message });
+      }
       if (!vLocal || !vLocal.associados) {
         return json(404, { error: 'Veículo não localizado no SGA nem na base local para a placa informada' });
       }
       const aLocal: any = vLocal.associados;
       veiculoSga = {
-        codigo_veiculo: vLocal.codigo_veiculo_sga || null,
+        codigo_veiculo: vLocal.codigo_hinova ? Number(vLocal.codigo_hinova) : null,
         placa: vLocal.placa,
         marca: vLocal.marca,
         modelo: vLocal.modelo,
-        ano: vLocal.ano,
+        ano: vLocal.ano_modelo || vLocal.ano_fabricacao || null,
         chassi: vLocal.chassi,
         renavam: vLocal.renavam,
         saldo_devedor: 0,
