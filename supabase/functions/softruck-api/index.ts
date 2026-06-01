@@ -569,8 +569,9 @@ serve(async (req) => {
       case 'buscar-device-imei': {
         const { imei } = data as { imei: string };
         if (!imei) throw new Error('imei é obrigatório');
-        // Inclui vehicle (id + plate) para suportar read-back canônico após ativação.
-        const endpoint = `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(imei.replace(/\D/g, ''))}&includes[vehicle][]=plate&includes[vehicle][]=id`;
+        // Softruck enum fechado para includes[vehicle]: [plate, vin, code]. `id` retorna validation_failed.
+        // O id do vehicle vem no `relationships.vehicle.data.id` da resposta, não precisa estar em includes.
+        const endpoint = `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(imei.replace(/\D/g, ''))}&includes[vehicle][]=plate`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }
