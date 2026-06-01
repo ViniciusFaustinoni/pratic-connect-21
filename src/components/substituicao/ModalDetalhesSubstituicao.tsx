@@ -87,6 +87,9 @@ export function ModalDetalhesSubstituicao({ solicitacaoId, open, onOpenChange }:
       associado_telefone: snap.telefone || '',
       associado_email: snap.email || '',
     });
+    if ((sol as any).veiculo_novo_placa) {
+      params.set('veiculo_novo_placa', String((sol as any).veiculo_novo_placa));
+    }
     onOpenChange(false);
     navigate(`/vendas/cotacoes?${params.toString()}`);
   };
