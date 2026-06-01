@@ -264,7 +264,7 @@ serve(async (req) => {
     rastreadorId = rastreador.id;
 
     // Atualizar status para PENDING
-    await updateIntegrationStatus(supabase, rastreadorId, 'PENDING', undefined, payloadSent);
+    await updateIntegrationStatus(supabase, rastreadorId, 'PENDING', undefined, payloadSent, { kind: 'preflight', stage: 'init' }, 'preflight');
 
     if (rastreador.plataforma !== 'softruck') {
       console.log(`[Softruck Ativar] Rastreador ${imei} não é Softruck (plataforma: ${rastreador.plataforma}). Pulando integração.`);
