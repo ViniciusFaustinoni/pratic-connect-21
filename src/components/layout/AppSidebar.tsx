@@ -83,6 +83,7 @@ import {
   Wallet,
   Bug,
   Percent,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
