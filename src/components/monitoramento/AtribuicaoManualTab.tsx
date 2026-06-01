@@ -81,6 +81,15 @@ function DraggableServico({ servico }: { servico: any }) {
             {servico.permite_encaixe && (
               <Badge variant="secondary" className="text-[10px]">Encaixe</Badge>
             )}
+            {servico.aguardando_rota_pos_fotos && (
+              <Badge
+                variant="secondary"
+                className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800"
+                title="Prestador já concluiu as fotos. Falta atribuir técnico para a instalação física do rastreador."
+              >
+                ⚠ Aguardando técnico p/ rota
+              </Badge>
+            )}
           </div>
           <p className="text-sm font-medium truncate">{assoc?.nome || 'Sem nome'}</p>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -355,6 +364,7 @@ export default function AtribuicaoManualTab() {
   const podeForcarDevolucao = !!(isDiretor || isCoordenadorMonitoramento);
 
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+  const [somenteAguardandoRota, setSomenteAguardandoRota] = useState(false);
   const [busca, setBusca] = useState('');
   const [dragging, setDragging] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ servico: any; vistoriadorId: string } | null>(null);
@@ -389,7 +399,10 @@ export default function AtribuicaoManualTab() {
     });
   };
 
+  const totalAguardandoRota = (servicos || []).filter((s: any) => s.aguardando_rota_pos_fotos).length;
+
   const servicosFiltrados = (servicos || []).filter(s => {
+    if (somenteAguardandoRota && !(s as any).aguardando_rota_pos_fotos) return false;
     if (filtroTipo !== 'todos' && s.tipo !== filtroTipo) return false;
     if (busca) {
       const term = busca.toLowerCase();
@@ -407,13 +420,20 @@ export default function AtribuicaoManualTab() {
     return true;
   });
 
-  // Group by date
+  // Group by date — prioriza no topo de cada dia os "Aguardando técnico p/ rota"
   const grouped = servicosFiltrados.reduce<Record<string, any[]>>((acc, s) => {
     const key = s.data_agendada;
     if (!acc[key]) acc[key] = [];
     acc[key].push(s);
     return acc;
   }, {});
+  for (const key of Object.keys(grouped)) {
+    grouped[key].sort((a: any, b: any) => {
+      const ap = a.aguardando_rota_pos_fotos ? 0 : 1;
+      const bp = b.aguardando_rota_pos_fotos ? 0 : 1;
+      return ap - bp;
+    });
+  }
 
   const handleDragStart = (event: DragStartEvent) => {
     setDragging(event.active.data.current);
@@ -590,6 +610,24 @@ export default function AtribuicaoManualTab() {
                   </SelectContent>
                 </Select>
               </div>
+              {totalAguardandoRota > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSomenteAguardandoRota(v => !v)}
+                  className={cn(
+                    'mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                    somenteAguardandoRota
+                      ? 'bg-amber-500 text-white border-amber-600'
+                      : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800 dark:hover:bg-amber-900'
+                  )}
+                  title="Instalações cujo prestador já enviou as fotos e ainda aguardam técnico para a instalação física do rastreador"
+                >
+                  ⚠ Pós-fotos sem rota
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-white/30 text-[10px] font-semibold">
+                    {totalAguardandoRota}
+                  </span>
+                </button>
+              )}
             </CardHeader>
             <CardContent className="space-y-4 max-h-[65vh] overflow-y-auto">
               {Object.keys(grouped).length === 0 && (
