@@ -58,16 +58,38 @@ export function useServicosParaAtribuir() {
         .filter(Boolean);
 
       let instalacoesComLinkAtivo = new Set<string>();
+      // Instalações cujo último ciclo de prestador foi 'somente_fotos' concluído,
+      // sem nenhum link 'fotos_instalacao' ativo — ficam aguardando técnico de rota
+      // para a instalação física do rastreador. Sem sinalização, o coordenador
+      // não percebe e a instalação vira órfã.
+      let instalacoesAguardandoRotaPosFotos = new Set<string>();
       if (instalacaoIds.length > 0) {
-        const { data: linksAtivos } = await supabase
+        const { data: todosLinks } = await supabase
           .from('instalacao_prestador_links')
-          .select('instalacao_id, status')
-          .in('instalacao_id', instalacaoIds)
-          .not('status', 'in', '(cancelada,expirado,concluida)');
+          .select('instalacao_id, status, escopo');
 
-        instalacoesComLinkAtivo = new Set(
-          (linksAtivos || []).map((l: any) => l.instalacao_id)
-        );
+        const porInstalacao = new Map<string, Array<{ status: string; escopo: string | null }>>();
+        for (const l of (todosLinks || []).filter((x: any) => instalacaoIds.includes(x.instalacao_id))) {
+          const arr = porInstalacao.get((l as any).instalacao_id) || [];
+          arr.push({ status: (l as any).status, escopo: (l as any).escopo });
+          porInstalacao.set((l as any).instalacao_id, arr);
+        }
+
+        const ATIVOS = new Set(['aguardando', 'aceito', 'em_rota', 'em_execucao']);
+        for (const [instId, links] of porInstalacao.entries()) {
+          const temAtivoFotosInstalacao = links.some(
+            l => ATIVOS.has(l.status) && l.escopo !== 'somente_fotos'
+          );
+          const temAtivoQualquer = links.some(l => ATIVOS.has(l.status));
+          if (temAtivoQualquer) instalacoesComLinkAtivo.add(instId);
+
+          const temConcluidoSomenteFotos = links.some(
+            l => l.status === 'concluida' && l.escopo === 'somente_fotos'
+          );
+          if (temConcluidoSomenteFotos && !temAtivoFotosInstalacao) {
+            instalacoesAguardandoRotaPosFotos.add(instId);
+          }
+        }
       }
 
       let vistoriasComLinkAtivo = new Set<string>();
@@ -86,20 +108,27 @@ export function useServicosParaAtribuir() {
       // Filtra serviços sem contrato aprovado (defesa em profundidade contra
       // regressões no trigger). Serviços sem contrato vinculado são tolerados
       // (ex.: vistorias avulsas criadas manualmente).
-      const servicosFiltrados = (servicos || []).filter((s: any) => {
-        if (s.instalacao_origem_id && instalacoesComLinkAtivo.has(s.instalacao_origem_id)) {
-          return false;
-        }
-        if (s.vistoria_origem_id && vistoriasComLinkAtivo.has(s.vistoria_origem_id)) {
-          return false;
-        }
-        if (!s.contrato_id) return true;
-        // Vistorias de troca de titularidade têm aprovação independente
-        // (assinatura do termo de cancelamento + aprovação do Cadastro do antigo titular).
-        // O contrato do novo titular só é marcado aprovado_em em efetivar-troca-titularidade.
-        if (s.origem === 'troca_titularidade') return true;
-        return !!s.contrato?.aprovado_em;
-      });
+      const servicosFiltrados = (servicos || [])
+        .filter((s: any) => {
+          if (s.instalacao_origem_id && instalacoesComLinkAtivo.has(s.instalacao_origem_id)) {
+            return false;
+          }
+          if (s.vistoria_origem_id && vistoriasComLinkAtivo.has(s.vistoria_origem_id)) {
+            return false;
+          }
+          if (!s.contrato_id) return true;
+          // Vistorias de troca de titularidade têm aprovação independente
+          // (assinatura do termo de cancelamento + aprovação do Cadastro do antigo titular).
+          // O contrato do novo titular só é marcado aprovado_em em efetivar-troca-titularidade.
+          if (s.origem === 'troca_titularidade') return true;
+          return !!s.contrato?.aprovado_em;
+        })
+        .map((s: any) => ({
+          ...s,
+          aguardando_rota_pos_fotos:
+            !!s.instalacao_origem_id &&
+            instalacoesAguardandoRotaPosFotos.has(s.instalacao_origem_id),
+        }));
 
       // Fetch base inspections without technician assigned
       const { data: baseItems, error: baseError } = await supabase
