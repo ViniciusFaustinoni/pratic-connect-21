@@ -81,6 +81,15 @@ function DraggableServico({ servico }: { servico: any }) {
             {servico.permite_encaixe && (
               <Badge variant="secondary" className="text-[10px]">Encaixe</Badge>
             )}
+            {servico.aguardando_rota_pos_fotos && (
+              <Badge
+                variant="secondary"
+                className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800"
+                title="Prestador já concluiu as fotos. Falta atribuir técnico para a instalação física do rastreador."
+              >
+                ⚠ Aguardando técnico p/ rota
+              </Badge>
+            )}
           </div>
           <p className="text-sm font-medium truncate">{assoc?.nome || 'Sem nome'}</p>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
