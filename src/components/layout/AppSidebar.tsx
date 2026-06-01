@@ -250,6 +250,7 @@ const menuConfig: {
       color: MENU_COLORS.eventos,
       items: [
         { title: 'Chat', url: '/eventos/chat-ia', icon: MessageCircle },
+        { title: 'Transbordo', url: '/relacionamento/transbordos', icon: ArrowRightLeft },
         { title: 'Análises', url: '/relacionamento/analises', icon: ClipboardCheck },
         { title: 'E-mails', url: '/relacionamento/emails', icon: Mail, permission: 'canManageEmailsSuspensao' },
         { title: 'Cobranças', url: '/financeiro/cobrancas/emissao?sub=csv', icon: Receipt },
