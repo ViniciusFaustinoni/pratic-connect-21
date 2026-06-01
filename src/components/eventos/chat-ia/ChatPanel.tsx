@@ -336,16 +336,16 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
               <div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : !mensagens?.length ? (
+            ) : !mensagens?.length && !pendingMessages.length ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
                 <p className="text-sm">Nenhuma mensagem</p>
               </div>
             ) : (
-              mensagens.map((msg, index) => {
+              ([...(mensagens ?? []), ...pendingMessages] as WhatsAppMensagem[]).map((msg, index, arr) => {
                 const isEntrada = msg.direcao === 'entrada';
                 const showDate = index === 0 ||
-                  new Date(mensagens[index - 1].created_at).toDateString() !==
+                  new Date(arr[index - 1].created_at).toDateString() !==
                   new Date(msg.created_at).toDateString();
 
                 return (
