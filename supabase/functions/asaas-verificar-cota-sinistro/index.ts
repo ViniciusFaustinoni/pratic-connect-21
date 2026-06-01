@@ -175,7 +175,12 @@ async function atualizarSinistro(supabase: any, sinistroId: string, statusAtual:
 
   if (updateError) {
     console.error('[asaas-verificar-cota-sinistro] Erro ao atualizar sinistro:', updateError);
-    return;
+    // Financeiro sensível — não pode engolir UPDATE de cota_paga. Propaga via
+    // exception para o caller retornar 502 + Retry-After.
+    throw Object.assign(new Error(updateError.message || 'falha_marcar_cota_paga'), {
+      __code: 'falha_marcar_cota_paga',
+      __status: 502,
+    });
   }
 
   await supabase
