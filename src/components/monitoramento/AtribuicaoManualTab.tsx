@@ -399,7 +399,10 @@ export default function AtribuicaoManualTab() {
     });
   };
 
+  const totalAguardandoRota = (servicos || []).filter((s: any) => s.aguardando_rota_pos_fotos).length;
+
   const servicosFiltrados = (servicos || []).filter(s => {
+    if (somenteAguardandoRota && !(s as any).aguardando_rota_pos_fotos) return false;
     if (filtroTipo !== 'todos' && s.tipo !== filtroTipo) return false;
     if (busca) {
       const term = busca.toLowerCase();
@@ -417,13 +420,20 @@ export default function AtribuicaoManualTab() {
     return true;
   });
 
-  // Group by date
+  // Group by date — prioriza no topo de cada dia os "Aguardando técnico p/ rota"
   const grouped = servicosFiltrados.reduce<Record<string, any[]>>((acc, s) => {
     const key = s.data_agendada;
     if (!acc[key]) acc[key] = [];
     acc[key].push(s);
     return acc;
   }, {});
+  for (const key of Object.keys(grouped)) {
+    grouped[key].sort((a: any, b: any) => {
+      const ap = a.aguardando_rota_pos_fotos ? 0 : 1;
+      const bp = b.aguardando_rota_pos_fotos ? 0 : 1;
+      return ap - bp;
+    });
+  }
 
   const handleDragStart = (event: DragStartEvent) => {
     setDragging(event.active.data.current);
