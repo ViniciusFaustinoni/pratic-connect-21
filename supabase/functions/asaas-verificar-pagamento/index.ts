@@ -107,7 +107,12 @@ serve(async (req) => {
     if (statusPago.includes(asaasData.status)) {
       console.log('[asaas-verificar-pagamento] Pagamento confirmado! Atualizando banco...');
 
-      // Atualizar status da cobrança
+      // Ordem canônica: cotação → contrato → histórico.
+      // Por que: se a cotação falha (guard, RPC ambígua, race), abortamos ANTES
+      // de marcar adesao_paga=true e antes de inserir histórico. O retry do
+      // próximo poll re-executa tudo idempotentemente.
+
+      // (1) Atualizar status da cobrança (idempotente)
       const { error: updateCobrancaError } = await supabase
         .from('asaas_cobrancas')
         .update({ 
@@ -123,20 +128,7 @@ serve(async (req) => {
         console.error('[asaas-verificar-pagamento] Erro ao atualizar cobrança:', updateCobrancaError);
       }
 
-      // Atualizar contrato
-      const { error: updateContratoError } = await supabase
-        .from('contratos')
-        .update({ 
-          adesao_paga: true,
-          adesao_paga_em: new Date().toISOString(),
-        })
-        .eq('id', contratoId);
-
-      if (updateContratoError) {
-        console.error('[asaas-verificar-pagamento] Erro ao atualizar contrato:', updateContratoError);
-      }
-
-      // Buscar cotação vinculada ao contrato
+      // (2) Atualizar cotação PRIMEIRO (ponto onde guards podem rejeitar)
       const { data: cotacao } = await supabase
         .from('cotacoes')
         .select('id')
@@ -154,10 +146,43 @@ serve(async (req) => {
 
         if (updateCotacaoError) {
           console.error('[asaas-verificar-pagamento] Erro ao atualizar cotação:', updateCotacaoError);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              pago: false,
+              code: 'falha_atualizar_cotacao',
+              erro: 'Não foi possível confirmar o pagamento agora. Tente novamente em instantes.',
+              detalhe: updateCotacaoError.message,
+            }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' } }
+          );
         }
       }
 
-      // Registrar no histórico
+      // (3) Atualizar contrato (visível no painel/UI)
+      const { error: updateContratoError } = await supabase
+        .from('contratos')
+        .update({ 
+          adesao_paga: true,
+          adesao_paga_em: new Date().toISOString(),
+        })
+        .eq('id', contratoId);
+
+      if (updateContratoError) {
+        console.error('[asaas-verificar-pagamento] Erro ao atualizar contrato:', updateContratoError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            pago: false,
+            code: 'falha_marcar_adesao_paga',
+            erro: 'Não foi possível confirmar o pagamento agora. Tente novamente em instantes.',
+            detalhe: updateContratoError.message,
+          }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' } }
+        );
+      }
+
+      // (4) Registrar no histórico (não-idempotente — só após (2) e (3) OK)
       await supabase
         .from('contratos_historico')
         .insert({
@@ -184,6 +209,7 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     // Pagamento ainda não confirmado
     console.log('[asaas-verificar-pagamento] Pagamento ainda pendente:', asaasData.status);
