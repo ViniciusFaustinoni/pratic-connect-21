@@ -417,7 +417,7 @@ serve(async (req) => {
           }
           
           if (!softruckVehicleId) {
-            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', criarVeiculoResult.error, payloadSent, criarVeiculoResult);
+            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_VEHICLE', criarVeiculoResult.error, payloadSent, criarVeiculoResult.raw, 'criar-veiculo');
             throw new Error(`Erro ao criar veículo na Softruck: ${criarVeiculoResult.error}`);
           }
         } else {
