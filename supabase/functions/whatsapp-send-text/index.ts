@@ -78,18 +78,21 @@ async function enviarViaEvolution(
 
   if (!response.ok) {
     console.error("[whatsapp-send-text] Erro Evolution:", result);
-    await supabase.from("whatsapp_mensagens").insert({
+    const { error: e1 } = await supabase.from("whatsapp_mensagens").insert({
       instancia_id: instancia.id, telefone: telefoneFormatado, tipo: "text",
       mensagem, direcao: "saida", status: "erro",
       erro_mensagem: result.message || result.error || "Erro desconhecido",
     });
+    if (e1) console.error("[whatsapp-send-text] insert FAIL (evolution erro):", JSON.stringify(e1));
     throw new Error(result.message || "Erro ao enviar");
   }
 
-  await supabase.from("whatsapp_mensagens").insert({
+  const { error: e2 } = await supabase.from("whatsapp_mensagens").insert({
     instancia_id: instancia.id, telefone: telefoneFormatado, tipo: "text",
     mensagem, direcao: "saida", status: "enviada", message_id: result.key?.id,
+    provedor: "evolution",
   });
+  if (e2) console.error("[whatsapp-send-text] insert FAIL (evolution ok):", JSON.stringify(e2));
 
   console.log(`[whatsapp-send-text] ✓ Evolution: ${telefoneFormatado} - ID: ${result.key?.id}`);
   return { success: true, message_id: result.key?.id, telefone: telefoneFormatado, provedor: 'evolution' };
