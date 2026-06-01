@@ -426,8 +426,8 @@ serve(async (req) => {
       case 'buscar-veiculo-id': {
         const { veiculoId } = data as { veiculoId: string };
         if (!veiculoId) throw new Error('veiculoId é obrigatório');
-        // Softruck v2 EXIGE plural `devices` (singular `device` retorna "includes.device is not allowed").
-        const endpoint = `/v2/vehicles/${veiculoId}?includes[devices][]=name&includes[devices][]=imei&includes[devices][]=code&includes[enterprise][]=name`;
+        // Softruck v2 (mai/26): `includes[devices]` aceita CSV, NÃO array bracket. Plural `devices` (singular rejeitado).
+        const endpoint = `/v2/vehicles/${veiculoId}?includes[devices]=name,imei,code&includes[enterprise]=name`;
         result = await softruckRequest('GET', endpoint, token);
         break;
       }
