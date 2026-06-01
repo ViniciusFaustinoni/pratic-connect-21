@@ -563,7 +563,7 @@ serve(async (req) => {
           }
           
           if (!softruckDeviceId) {
-            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_DEVICE', criarDeviceResult.error, payloadSent, criarDeviceResult);
+            await updateIntegrationStatus(supabase, rastreadorId, 'FAILED_DEVICE', criarDeviceResult.error, payloadSent, criarDeviceResult.raw, 'criar-device');
             throw new Error(`Erro ao criar device na Softruck: ${criarDeviceResult.error}`);
           }
         } else {
