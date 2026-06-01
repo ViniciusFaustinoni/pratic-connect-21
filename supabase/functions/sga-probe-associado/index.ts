@@ -45,16 +45,23 @@ Deno.serve(async (req) => {
       const cpfFmt = `${cpfDigitos.slice(0,3)}.${cpfDigitos.slice(3,6)}.${cpfDigitos.slice(6,9)}-${cpfDigitos.slice(9,11)}`;
       await probe('cpf_digits', `/associado/buscar/${cpfDigitos}/cpf`);
       await probe('cpf_fmt', `/associado/buscar/${encodeURIComponent(cpfFmt)}/cpf`);
-      // Tentativas alternativas (caso a API aceite outros caminhos)
-      await probe('cpf_alt_listar', `/listar/associado/cpf/${cpfDigitos}`);
-      await probe('cpf_alt_consultar', `/associado/consultar/${cpfDigitos}/cpf`);
+      // Variantes de "listar" / "consultar" / "todos" que algumas APIs Hinova expõem
+      await probe('listar_assoc_cpf', `/associado/listar/${cpfDigitos}/cpf`);
+      await probe('listar_assoc_situacao_inativo', `/associado/listar?cpf=${cpfDigitos}&situacao=2`);
+      await probe('listar_assoc_situacao_todas', `/associado/listar?cpf=${cpfDigitos}`);
+      await probe('listar_todos_cpf', `/listar/associados?cpf=${cpfDigitos}`);
+      await probe('consultar_cpf', `/consultar/associado/${cpfDigitos}/cpf`);
+      await probe('associado_existe', `/associado/existe/${cpfDigitos}`);
+      await probe('listar_situacoes_associado', `/listar/situacao-associado`);
     }
     if (placa) {
       await probe('placa_buscar', `/veiculo/buscar/${placa}/placa`);
       await probe('placa_sit_fin', `/buscar/situacao-financeira-veiculo/${placa}`);
+      await probe('placa_listar', `/veiculo/listar?placa=${placa}`);
     }
     if (chassi) {
       await probe('chassi_buscar', `/veiculo/buscar/${chassi}/chassi`);
+      await probe('chassi_listar', `/veiculo/listar?chassi=${chassi}`);
     }
 
     return new Response(JSON.stringify({ ok: true, apiUrl, probes }, null, 2), {
