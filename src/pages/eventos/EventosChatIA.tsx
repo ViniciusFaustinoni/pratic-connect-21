@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { ConversasList, type ConversaAgrupada } from '@/components/eventos/chat-ia/ConversasList';
 import { ChatPanel } from '@/components/eventos/chat-ia/ChatPanel';
 import { useAuth } from '@/contexts/AuthContext';
+
 
 interface EventosChatIAProps {
   drawerVariant?: 'relacionamento' | 'eventos' | 'monitoramento';
