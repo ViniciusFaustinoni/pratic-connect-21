@@ -23,6 +23,8 @@ export interface ConversaAgrupada {
   ultima_cobranca: string | null;
   /** Mensagens recebidas (direcao='entrada') ainda não lidas pelo operador atual. */
   unread_count: number;
+  /** Quando preenchido, indica que a IA está pausada por transbordo (intervenção humana solicitada). */
+  transbordo?: { motivo: string } | null;
 }
 
 interface ConversasListProps {
@@ -174,6 +176,10 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
             {conversasFiltradas.map((conversa) => {
               const isCobranca = !!conversa.ultima_cobranca;
               const isUnread = conversa.unread_count > 0;
+              const isTransbordo = !!conversa.transbordo;
+              const transbordoLabel = conversa.transbordo?.motivo === 'transbordo_boleto'
+                ? 'Transbordo · Boleto'
+                : 'Transbordo';
               const tempoCobranca = isCobranca
                 ? formatDistanceToNowStrict(new Date(conversa.ultima_cobranca!), { locale: ptBR, addSuffix: false })
                 : null;
@@ -223,8 +229,9 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                   className={cn(
                     'w-full flex items-start gap-3 px-3 py-3 text-left hover:bg-muted/50 transition-colors',
                     telefoneSelecionado === conversa.telefone && 'bg-muted',
-                    isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50',
-                    !isCobranca && isUnread && cn('border-l-4', attentionBorder, attentionBg)
+                    isTransbordo && 'bg-red-50 dark:bg-red-950/30 border-l-4 border-l-red-500 hover:bg-red-100 dark:hover:bg-red-950/50',
+                    !isTransbordo && isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50',
+                    !isTransbordo && !isCobranca && isUnread && cn('border-l-4', attentionBorder, attentionBg)
                   )}
                 >
                   <div className="relative shrink-0">
@@ -298,6 +305,15 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
                         >
                           ⏱ há {tempoRelativo}
                         </span>
+                      )}
+                      {isTransbordo && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] py-0 px-1.5 h-4 border-red-500 text-red-700 dark:text-red-400 bg-red-100/60 dark:bg-red-950/50 gap-0.5 animate-pulse"
+                        >
+                          <AlertCircle className="h-2.5 w-2.5" />
+                          {transbordoLabel}
+                        </Badge>
                       )}
                       {isCobranca && (
                         <Badge

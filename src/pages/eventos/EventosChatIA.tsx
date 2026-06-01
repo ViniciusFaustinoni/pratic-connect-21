@@ -134,6 +134,27 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     staleTime: 300000,
   });
 
+  // Telefones com transbordo ativo (IA pausada por intervenção humana, transbordo de boleto, etc.)
+  const { data: transbordoMap } = useQuery({
+    queryKey: ['chat-ia-transbordo-ativo'],
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const sb: any = supabase;
+      const { data, error } = await sb
+        .from('whatsapp_ia_pausas')
+        .select('telefone, motivo, pausada_ate')
+        .gt('pausada_ate', new Date().toISOString());
+      if (error) throw error;
+      const map = new Map<string, { motivo: string }>();
+      (data ?? []).forEach((r: any) => {
+        if (r?.telefone) map.set(String(r.telefone), { motivo: String(r.motivo ?? '') });
+      });
+      return map;
+    },
+  });
+
+
   // Telefones elegíveis para escopo Monitoramento (associados com veículo/serviço/rastreador operacional)
   const { data: telefonesMonitoramento } = useQuery({
     queryKey: ['monitoramento-telefones-elegiveis'],
@@ -212,7 +233,12 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         (!lastRead || new Date(msg.created_at).getTime() > new Date(lastRead).getTime());
 
       if (!mapa.has(tel)) {
-        const assoc = avatarMap.get(tel.replace(/\D/g, ''));
+        const telDigits = tel.replace(/\D/g, '');
+        const assoc = avatarMap.get(telDigits);
+        const transbordo =
+          transbordoMap?.get(telDigits) ||
+          (telDigits.startsWith('55') ? transbordoMap?.get(telDigits.slice(2)) : transbordoMap?.get(`55${telDigits}`)) ||
+          null;
         mapa.set(tel, {
           telefone: tel,
           nome_contato: msg.nome_contato || assoc?.nome || null,
@@ -223,6 +249,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
           ultima_direcao: msg.direcao,
           ultima_cobranca: isCobranca ? msg.created_at : null,
           unread_count: isUnreadMsg ? 1 : 0,
+          transbordo,
         });
       } else {
         const c = mapa.get(tel)!;
@@ -238,7 +265,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     return Array.from(mapa.values()).sort(
       (a, b) => new Date(b.ultima_mensagem).getTime() - new Date(a.ultima_mensagem).getTime()
     );
-  }, [mensagens, associados, escopo, telefonesMonitoramento, leiturasMap]);
+  }, [mensagens, associados, escopo, telefonesMonitoramento, leiturasMap, transbordoMap]);
 
   const handleSelectConversa = (conversa: ConversaAgrupada) => {
     setTelefoneSelecionado(conversa.telefone);

@@ -280,7 +280,18 @@ const buildWhatsappSystemPrompt = (prazoLinkEvento: number) => `Você é o Assis
 - Para localização, peça o endereço digitado OU use a tool reverse_geocode se receber coordenadas
 
 ## Capacidades
-1. Consultar faturas pendentes e enviar link — quando o associado perguntar sobre boleto, fatura, pagamento em aberto, dívida ou mensalidade, use get_boletos_pendentes. Se não houver faturas em aberto, informe que está em dia. Se houver, mostre resumo com os dados de pagamento (PIX, linha digitável). Se o associado quiser o link da fatura, use enviar_link_fatura com o id e o campo fonte retornados.
+1. Consultar faturas pendentes e enviar link — quando o associado perguntar sobre boleto, fatura, pagamento em aberto, dívida, mensalidade OU pedir "2ª via" / "segunda via" do boleto, use OBRIGATORIAMENTE o fluxo de 2ª via via SGA (ver "FLUXO 2ª VIA DE BOLETO" abaixo). NÃO use get_boletos_pendentes para esse caso — get_boletos_pendentes só serve para consulta interna rápida e NÃO traz dados do SGA.
+
+## FLUXO 2ª VIA DE BOLETO (OBRIGATÓRIO sempre que o associado pedir boleto/2ª via)
+1. Pergunte: "Para consultar seu boleto, me informa o seu CPF, por favor?" — não avance sem o CPF.
+2. Com o CPF, chame consultar_associado_sga_por_cpf(cpf). Se não encontrar, peça para conferir o CPF.
+3. Se a resposta retornar 1 veículo: confirme com o associado a placa ("Encontrei o veículo placa XXX. Confirma que é desse veículo?"). Se >1 veículo: liste as placas e peça a placa correta.
+4. Com a placa confirmada, chame consultar_boletos_sga_por_placa(cpf, placa).
+5. Se "recomendacao" = "enviar_boleto": envie ao associado, em UMA mensagem, a **linha digitável**, o **link do boleto** e o **PIX copia-e-cola** (quando vierem preenchidos). Se vier pix_qrcode_base64, mencione que o QR Code também está disponível pelo link.
+6. Se "recomendacao" = "transbordo": NÃO envie boleto. Diga "Esse boleto está vencido há mais de 5 dias. Vou te transferir para um atendente humano agora — em instantes alguém continua o atendimento por aqui." e em seguida chame transbordo_atendimento_humano(motivo, categoria='boleto_vencido').
+7. NUNCA invente linha digitável, link ou PIX. Use APENAS o que veio das tools. Se algum campo estiver vazio, informe o que tem e ofereça transbordo se o associado precisar mais ajuda.
+
+
 2. Histórico de pagamentos
 3. Status de sinistros
 4. Abrir sinistro (coleta dados para aprovação)
@@ -694,6 +705,54 @@ const tools = [
         motivo: { type: "string", description: "Motivo da troca" },
       },
       required: ["novo_nome", "novo_cpf", "novo_email", "novo_telefone"],
+    },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "consultar_associado_sga_por_cpf",
+    description: "Consulta a base SGA (Hinova) pelo CPF do associado e retorna os veículos vinculados. Use SOMENTE no fluxo de '2ª via de boleto' depois que o associado informar o CPF. Não use para confirmar identidade fora desse fluxo.",
+    parameters: {
+      type: "object",
+      properties: {
+        cpf: { type: "string", description: "CPF do associado (apenas dígitos ou com máscara — a função normaliza)" },
+      },
+      required: ["cpf"],
+    },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "consultar_boletos_sga_por_placa",
+    description: "Lista boletos no SGA (Hinova) para uma placa específica do associado e devolve linha digitável, link, PIX copia-e-cola e QR Code quando disponíveis. Já calcula 'dias_vencido' e a recomendação: 'enviar_boleto' (não vencido ou ≤5 dias) ou 'transbordo' (≥6 dias). Use APENAS após consultar_associado_sga_por_cpf e confirmar a placa.",
+    parameters: {
+      type: "object",
+      properties: {
+        cpf: { type: "string", description: "CPF do associado já validado no passo anterior" },
+        placa: { type: "string", description: "Placa do veículo do qual o cliente quer o boleto" },
+      },
+      required: ["cpf", "placa"],
+    },
+  },
+},
+{
+  type: "function",
+  function: {
+    name: "transbordo_atendimento_humano",
+    description: "Faz o TRANSBORDO do atendimento para um humano do time de Relacionamento. Use SOMENTE quando a regra do fluxo de boleto exigir (ex.: boleto vencido há 6 dias ou mais) ou em outro impasse que exija intervenção humana. Pausa a IA por 24h para esse telefone e destaca o contato na fila do Relacionamento.",
+    parameters: {
+      type: "object",
+      properties: {
+        motivo: { type: "string", description: "Motivo legível para o operador (ex.: 'Boleto vencido há 9 dias — placa ABC1D23')" },
+        categoria: {
+          type: "string",
+          enum: ["boleto_vencido", "outro"],
+          description: "Categoria do transbordo. 'boleto_vencido' é o caso canônico do fluxo de 2ª via.",
+        },
+      },
+      required: ["motivo"],
     },
   },
 },
@@ -1673,6 +1732,154 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         sucesso: true,
         message: "Solicitação de troca de titularidade registrada! A diretoria irá analisar. Será agendada uma vistoria do veículo.",
       });
+    }
+
+    case "consultar_associado_sga_por_cpf": {
+      const cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      if (cpfLimpo.length !== 11) {
+        return JSON.stringify({ erro: "CPF inválido. Peça ao associado os 11 dígitos do CPF." });
+      }
+      try {
+        const { data, error } = await supabase.functions.invoke("sga-buscar-associado-completo", {
+          body: { cpf: cpfLimpo },
+        });
+        if (error) {
+          console.error("[whatsapp-webhook] sga-buscar-associado-completo erro:", error);
+          return JSON.stringify({ erro: "Não consegui consultar o SGA agora. Tente novamente em alguns instantes." });
+        }
+        if (!data?.encontrado) {
+          return JSON.stringify({
+            encontrado: false,
+            mensagem: "CPF não encontrado no SGA. Confirme o CPF com o associado e tente de novo.",
+          });
+        }
+        const veiculos = (data.veiculos ?? []).map((v: any) => ({
+          placa: v.placa,
+          marca: v.marca,
+          modelo: v.modelo,
+          ano: v.ano,
+          saldo_devedor: v.saldo_devedor,
+          qtd_boletos_abertos: (v.boletos_abertos ?? []).length,
+        }));
+        return JSON.stringify({
+          encontrado: true,
+          cpf: cpfLimpo,
+          nome: data.associado?.nome ?? null,
+          quantidade_veiculos: veiculos.length,
+          veiculos,
+          instrucao:
+            veiculos.length === 1
+              ? `Confirme com o associado que o boleto é do veículo placa ${veiculos[0].placa} antes de chamar consultar_boletos_sga_por_placa.`
+              : "Peça ao associado para informar a PLACA do veículo do qual ele quer o boleto.",
+        });
+      } catch (e: any) {
+        console.error("[whatsapp-webhook] consultar_associado_sga_por_cpf falha:", e);
+        return JSON.stringify({ erro: "Falha inesperada ao consultar SGA." });
+      }
+    }
+
+    case "consultar_boletos_sga_por_placa": {
+      const cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      const placaLimpa = String(args?.placa ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      if (cpfLimpo.length !== 11 || placaLimpa.length < 7) {
+        return JSON.stringify({ erro: "CPF ou placa inválidos." });
+      }
+      try {
+        const { data, error } = await supabase.functions.invoke("sga-buscar-associado-completo", {
+          body: { cpf: cpfLimpo },
+        });
+        if (error || !data?.encontrado) {
+          return JSON.stringify({ erro: "Não consegui consultar o SGA agora. Tente novamente em alguns instantes." });
+        }
+        const veiculo = (data.veiculos ?? []).find(
+          (v: any) => String(v.placa ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase() === placaLimpa,
+        );
+        if (!veiculo) {
+          return JSON.stringify({
+            encontrado: false,
+            mensagem: `Não encontrei a placa ${placaLimpa} vinculada a esse CPF no SGA.`,
+          });
+        }
+        const abertos = (veiculo.boletos_abertos ?? []).slice();
+        if (abertos.length === 0) {
+          return JSON.stringify({
+            encontrado: true,
+            placa: veiculo.placa,
+            tem_boleto_aberto: false,
+            mensagem: "Nenhum boleto em aberto para essa placa no SGA. Informe que está em dia.",
+          });
+        }
+        // Mais antigo em aberto (vencimento mais antigo) é o relevante p/ decidir
+        abertos.sort((a: any, b: any) =>
+          String(a.data_vencimento ?? "").localeCompare(String(b.data_vencimento ?? "")),
+        );
+        const alvo = abertos[0];
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const venc = alvo.data_vencimento ? new Date(alvo.data_vencimento) : null;
+        if (venc) venc.setHours(0, 0, 0, 0);
+        const diasVencido = venc ? Math.max(0, Math.round((hoje.getTime() - venc.getTime()) / 86_400_000)) : 0;
+        const recomendacao = diasVencido >= 6 ? "transbordo" : "enviar_boleto";
+        return JSON.stringify({
+          encontrado: true,
+          placa: veiculo.placa,
+          tem_boleto_aberto: true,
+          boleto: {
+            valor: alvo.valor,
+            data_vencimento: alvo.data_vencimento,
+            dias_vencido: diasVencido,
+            linha_digitavel: alvo.linha_digitavel,
+            link_boleto: alvo.link_boleto,
+            pix_copia_cola: alvo.pix_copia_cola,
+            pix_qrcode_base64: alvo.pix_qrcode_base64,
+          },
+          recomendacao,
+          instrucao:
+            recomendacao === "transbordo"
+              ? `Boleto vencido há ${diasVencido} dias (>= 6). Diga ao associado que vai transferir para um humano e chame transbordo_atendimento_humano com categoria='boleto_vencido'.`
+              : "Envie ao associado a linha digitável, o link do boleto e o PIX copia-e-cola. Se houver pix_qrcode_base64, mencione que o QR Code também está disponível.",
+        });
+      } catch (e: any) {
+        console.error("[whatsapp-webhook] consultar_boletos_sga_por_placa falha:", e);
+        return JSON.stringify({ erro: "Falha inesperada ao consultar boletos no SGA." });
+      }
+    }
+
+    case "transbordo_atendimento_humano": {
+      const telLimpo = (telefone ?? "").replace(/\D/g, "");
+      if (!telLimpo) {
+        return JSON.stringify({ erro: "Telefone do contato indisponível para transbordo." });
+      }
+      try {
+        const pausadaAte = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const motivoCategoria = args?.categoria === "boleto_vencido" ? "transbordo_boleto" : "transbordo_humano";
+        const { error } = await supabase
+          .from("whatsapp_ia_pausas")
+          .upsert(
+            {
+              telefone: telLimpo,
+              pausada_ate: pausadaAte,
+              motivo: motivoCategoria,
+              atendente_id: null,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "telefone" },
+          );
+        if (error) {
+          console.error("[whatsapp-webhook] transbordo upsert erro:", error);
+          return JSON.stringify({ erro: "Não consegui registrar o transbordo. Avise o associado para aguardar." });
+        }
+        return JSON.stringify({
+          sucesso: true,
+          motivo_registrado: motivoCategoria,
+          ate: pausadaAte,
+          instrucao:
+            "Envie agora UMA mensagem amigável avisando que está transferindo para um atendente humano. NÃO envie boleto neste caso.",
+        });
+      } catch (e: any) {
+        console.error("[whatsapp-webhook] transbordo falha:", e);
+        return JSON.stringify({ erro: "Falha inesperada no transbordo." });
+      }
     }
 
     default:

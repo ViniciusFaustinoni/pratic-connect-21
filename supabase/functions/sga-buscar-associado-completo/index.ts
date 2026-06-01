@@ -53,6 +53,8 @@ interface BoletoAberto {
   linha_digitavel: string | null;
   link_boleto: string | null;
   situacao_label: string;
+  pix_copia_cola: string | null;
+  pix_qrcode_base64: string | null;
 }
 
 interface VeiculoSGA {
@@ -259,6 +261,8 @@ serve(async (req) => {
           linha_digitavel: b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null,
           link_boleto: b?.link_boleto ?? b?.url_boleto ?? null,
           situacao_label: b?.situacao ? String(b.situacao) : status,
+          pix_copia_cola: b?.pix?.copia_cola ?? b?.pix?.copia_e_cola ?? null,
+          pix_qrcode_base64: b?.pix?.qrcode ?? null,
         });
       }
 

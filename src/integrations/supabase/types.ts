@@ -33285,6 +33285,33 @@ export type Database = {
           },
         ]
       }
+      whatsapp_ia_pausas: {
+        Row: {
+          atendente_id: string | null
+          created_at: string
+          motivo: string
+          pausada_ate: string
+          telefone: string
+          updated_at: string
+        }
+        Insert: {
+          atendente_id?: string | null
+          created_at?: string
+          motivo: string
+          pausada_ate: string
+          telefone: string
+          updated_at?: string
+        }
+        Update: {
+          atendente_id?: string | null
+          created_at?: string
+          motivo?: string
+          pausada_ate?: string
+          telefone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       whatsapp_instancias: {
         Row: {
           api_url: string
