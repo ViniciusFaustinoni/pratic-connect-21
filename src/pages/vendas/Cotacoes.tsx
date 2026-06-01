@@ -1413,6 +1413,7 @@ export default function Cotacoes() {
               veiculoAntigoId: substituicaoCtx.veiculoAntigoId,
               veiculoAntigoPlaca: substituicaoCtx.veiculoAntigoPlaca,
               veiculoAntigoModelo: substituicaoCtx.veiculoAntigoModelo,
+              veiculoNovoPlaca: substituicaoCtx.veiculoNovoPlaca || undefined,
             } : null}
             cotacaoBase={substituicaoCtx ? {
               valor_fipe: 0,
@@ -1422,7 +1423,7 @@ export default function Cotacoes() {
               veiculo_marca: null,
               veiculo_modelo: null,
               veiculo_ano: null,
-              veiculo_placa: null,
+              veiculo_placa: substituicaoCtx.veiculoNovoPlaca || null,
               codigo_fipe: null,
               categoria: null,
               regiao: null,
