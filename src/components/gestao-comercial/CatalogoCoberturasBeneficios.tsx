@@ -682,31 +682,6 @@ export function CatalogoCoberturasBeneficios() {
     [benefits]
   );
 
-  const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio', attrFilter: 'todos' | 'atribuidos' | 'nao_atribuidos', attrMap: Record<string, string>) => {
-    let filtered = items;
-    // Attribution filter
-    if (attrFilter === 'atribuidos') {
-      filtered = filtered.filter(item => !!attrMap[item.id]);
-    } else if (attrFilter === 'nao_atribuidos') {
-      filtered = filtered.filter(item => !attrMap[item.id]);
-    }
-    if (search.trim()) {
-      const term = search.toLowerCase();
-      filtered = filtered.filter(item => {
-        const nome = (type === 'cobertura' ? item.nome : item.name) || '';
-        const desc = (type === 'cobertura' ? item.descricao : item.description) || '';
-        return nome.toLowerCase().includes(term) || desc.toLowerCase().includes(term);
-      });
-    }
-    if (sort !== 'default') {
-      const getName = (item: any) => (type === 'cobertura' ? item.nome : item.name) || '';
-      filtered = [...filtered].sort((a, b) => {
-        const cmp = getName(a).localeCompare(getName(b), 'pt-BR');
-        return sort === 'az' ? cmp : -cmp;
-      });
-    }
-    return filtered;
-  };
 
   const handleDelete = (justificativa: string) => {
     if (!deleteDialog.item || !deleteDialog.type) return;
