@@ -553,6 +553,48 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
             >
               <Mic className="h-4 w-4" />
             </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 h-9 w-9"
+                  disabled={enviando}
+                  title="Inserir emoji"
+                >
+                  <Smile className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="p-0 w-auto border-none bg-transparent shadow-none">
+                <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Carregando…</div>}>
+                  <EmojiPicker
+                    theme={'dark' as any}
+                    width={320}
+                    height={400}
+                    searchPlaceholder="Buscar emoji"
+                    previewConfig={{ showPreview: false }}
+                    onEmojiClick={(emojiData) => {
+                      const ta = textareaRef.current;
+                      const emoji = emojiData.emoji;
+                      if (!ta) {
+                        setTexto((t) => t + emoji);
+                        return;
+                      }
+                      const start = ta.selectionStart ?? texto.length;
+                      const end = ta.selectionEnd ?? texto.length;
+                      const novo = texto.slice(0, start) + emoji + texto.slice(end);
+                      setTexto(novo);
+                      requestAnimationFrame(() => {
+                        ta.focus();
+                        const pos = start + emoji.length;
+                        ta.setSelectionRange(pos, pos);
+                      });
+                    }}
+                  />
+                </Suspense>
+              </PopoverContent>
+            </Popover>
             <Textarea
               ref={textareaRef}
               value={texto}
