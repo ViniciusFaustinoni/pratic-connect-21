@@ -1,29 +1,43 @@
 ## Objetivo
-Fazer o modal “Placa já pertence a outro associado” aparecer só uma vez por placa após o usuário clicar em **Ignorar e Prosseguir**, mantendo a lógica atual de validação e auditoria.
+Fazer o fluxo de 2ª via no WhatsApp reconhecer boletos já gerados para a placa `QOO5C17` sem quebrar os casos que hoje já funcionam.
 
-## Causa raiz encontrada
-Hoje o clique em **Ignorar e Prosseguir** faz duas coisas em sequência:
-1. grava o bypass da placa no estado (`setBypassPlacaOutroAssoc`)
-2. relança `buscarPorPlaca()` via `setTimeout(..., 100)`
-
-O problema é que essa nova execução pode acontecer antes de a função passar a enxergar o estado atualizado do bypass. Resultado: a checagem roda de novo com valor antigo e reabre o mesmo modal repetidas vezes.
+## Diagnóstico confirmado
+- A resposta "não encontrei boleto" já nasce no backend, antes da fala da IA.
+- O gate final está em `supabase/functions/whatsapp-webhook/index.ts`, quando `consultar_boletos_sga_por_placa` recebe `veiculo.boletos_abertos` vazio.
+- Hoje, tanto `sga-buscar-associado-completo` quanto `sga-listar-boletos-associado` estão retornando `boletos_abertos: []` para o CPF/placa do caso informado.
+- O problema, portanto, está na camada canônica de consulta/normalização dos boletos do SGA, não na memória de identidade do WhatsApp.
 
 ## Plano
-1. Ajustar o reprocessamento pós-bypass para não depender de estado assíncrono/stale no mesmo ciclo.
-2. Garantir que a placa ignorada seja consumida imediatamente na próxima busca, sem reexibir o modal local para a mesma placa naquela interação.
-3. Preservar o restante do fluxo atual:
-   - continuar registrando a decisão “Ignorar e Prosseguir”
-   - continuar permitindo Troca de Titularidade
-   - não mexer na lógica de validação de placa duplicada, SGA, FIPE ou criação da cotação
-4. Validar o comportamento com o cenário da imagem:
-   - placa vinculada a outro associado
-   - clicar em Ignorar e Prosseguir
-   - seguir a busca/registro sem reabrir o mesmo modal em cascata
+1. **Corrigir a classificação canônica de boleto aberto no SGA**
+   - Ajustar a lógica compartilhada que decide se um boleto do Hinova é "aberto" ou "pago".
+   - Cobrir explicitamente estados de boleto já gerado/emitido/registrado/aguardando pagamento para que não sejam descartados como se o veículo estivesse em dia.
+   - Endurecer a regra para não excluir boleto válido apenas por um campo auxiliar ambíguo vindo do SGA.
+
+2. **Aplicar a correção nas duas edges canônicas de cobrança**
+   - `supabase/functions/sga-buscar-associado-completo/index.ts`
+   - `supabase/functions/sga-listar-boletos-associado/index.ts`
+   - Garantir que ambas usem o mesmo critério final, sem divergência entre fluxo de WhatsApp e consultas internas.
+
+3. **Adicionar observabilidade mínima para casos invisíveis**
+   - Registrar, no log das edges, o motivo resumido de descarte dos boletos retornados pelo SGA (ex.: pago, cancelado, valor zero, sem correspondência de placa).
+   - Isso evita novo falso "em dia" sem rastreabilidade quando o SGA vier com payload inconsistente.
+
+4. **Manter o comportamento do WhatsApp igual no restante**
+   - Sem mudar o gate de CPF já corrigido.
+   - Sem alterar o fluxo de confirmação de placa.
+   - Apenas fazer o webhook receber um payload correto quando existir boleto gerado.
+
+5. **Validar com os cenários certos**
+   - Caso real: CPF `14194896742` / placa `QOO5C17` deve passar a retornar boleto em vez de "em dia".
+   - Telefone compartilhado: continuar usando o CPF confirmado no `agente_ia_contatos`.
+   - Cliente sem boleto: continuar recebendo a resposta de que não há boleto aberto.
+   - Cliente com boleto vencido há 6+ dias: continuar indo para transbordo humano.
 
 ## Detalhes técnicos
-- Arquivo principal: `src/components/cotacoes/CotacaoFormDialog.tsx`
-- Ponto crítico: callback do `onIgnorarEProsseguir` do `PlacaOutroAssociadoModal` e a função `buscarPorPlaca()`
-- Direção da correção: usar um mecanismo síncrono/imutável para o bypass imediato da execução seguinte (em vez de depender do timing do `setState` + `setTimeout`)
-
-## Resultado esperado
-Após ignorar o aviso uma vez, o fluxo segue normalmente e o mesmo modal não volta a aparecer em loop para aquela mesma placa durante a ação em andamento.
+- Arquivos principais:
+  - `supabase/functions/_shared/hinova-client.ts`
+  - `supabase/functions/sga-buscar-associado-completo/index.ts`
+  - `supabase/functions/sga-listar-boletos-associado/index.ts`
+  - `supabase/functions/whatsapp-webhook/index.ts` (só se precisar alinhar consumo/logs)
+- Não prevejo migração de banco para essa correção.
+- Depois da implementação, vou validar chamando as edges diretamente com o CPF/placa do caso real antes de considerar fechado.

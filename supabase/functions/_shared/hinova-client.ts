@@ -688,9 +688,13 @@ export async function listarBoletosVeiculo(
   s: HinovaSession,
   codigoAssociado: number | string,
   codigoVeiculo: number | string,
-  opts?: { anosTras?: number; diasJanela?: number; linkBoleto?: boolean; paralelismoJanelas?: number },
+  opts?: { anosTras?: number; diasFuturo?: number; diasJanela?: number; linkBoleto?: boolean; paralelismoJanelas?: number },
 ): Promise<any[]> {
   const anosTras = Math.max(0.1, opts?.anosTras ?? 3);
+  // Lookahead obrigatório para o fluxo de 2ª via: o boleto que o cliente quer
+  // pagar costuma ter vencimento FUTURO (mensalidade do mês). Default 90d cobre
+  // os 3 próximos vencimentos mensais.
+  const diasFuturo = Math.max(0, opts?.diasFuturo ?? 90);
   const diasJanela = Math.min(90, Math.max(7, opts?.diasJanela ?? 90));
   const linkBoleto = opts?.linkBoleto ?? true;
   const paralelismo = Math.min(8, Math.max(1, opts?.paralelismoJanelas ?? 4));
@@ -698,10 +702,12 @@ export async function listarBoletosVeiculo(
   const hoje = new Date();
   const inicioGeral = new Date(hoje);
   inicioGeral.setDate(inicioGeral.getDate() - Math.floor(anosTras * 365));
+  const fimGeral = new Date(hoje);
+  fimGeral.setDate(fimGeral.getDate() + diasFuturo);
 
   // Pré-calcula TODAS as janelas (sem await) para podermos paralelizar
   const janelas: Array<{ ini: Date; fim: Date }> = [];
-  let cursorFim = new Date(hoje);
+  let cursorFim = new Date(fimGeral);
   while (cursorFim >= inicioGeral) {
     const cursorIni = new Date(cursorFim);
     cursorIni.setDate(cursorIni.getDate() - (diasJanela - 1));

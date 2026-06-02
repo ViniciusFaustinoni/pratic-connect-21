@@ -300,23 +300,64 @@ serve(async (req) => {
       const raw: any[] = (resBoletos[i] as any[]) || [];
       const abertos: BoletoAberto[] = [];
       let saldo = 0;
+      const descartes: Record<string, number> = {};
+      const bump = (k: string) => { descartes[k] = (descartes[k] ?? 0) + 1; };
       for (const b of raw) {
-        const status = mapStatusBoleto(b?.situacao);
-        if (b?.data_pagamento) continue;
-        if (!STATUS_ABERTO.has(status)) continue;
-        const valor = toNumber(b?.valor ?? b?.valor_documento ?? b?.valor_titulo);
-        if (valor <= 0) continue;
+        // Hinova retorna `situacao_boleto`/`valor_boleto`; campos antigos mantidos como alias.
+        const situacaoRaw = b?.situacao_boleto ?? b?.situacao ?? '';
+        const status = mapStatusBoleto(situacaoRaw);
+        const situacaoUpper = String(situacaoRaw).trim().toUpperCase();
+        const dataPagto = b?.data_pagamento;
+        const dataPagtoValida = typeof dataPagto === 'string'
+          ? dataPagto.trim().length > 0
+          : !!dataPagto;
+        const sinalBaixaTextual = situacaoUpper.includes('BAIX') ||
+          situacaoUpper.includes('PAGO') ||
+          situacaoUpper.includes('LIQUIDA') ||
+          situacaoUpper.includes('CANCEL');
+        if (dataPagtoValida && (status === 'pago' || status === 'cancelado' || sinalBaixaTextual)) {
+          bump(`pago_baixado:${situacaoUpper || 'sem_situacao'}`);
+          continue;
+        }
+        if (!STATUS_ABERTO.has(status)) {
+          bump(`status_fora:${status}:${situacaoUpper || 'sem_situacao'}`);
+          continue;
+        }
+        const valor = toNumber(b?.valor_boleto ?? b?.valor ?? b?.valor_documento ?? b?.valor_titulo);
+        if (valor <= 0) {
+          bump('valor_zero');
+          continue;
+        }
+        const isSentinela = (s: any) =>
+          typeof s === 'string' && /n[aã]o foi poss[ií]vel disponibilizar/i.test(s);
+        const linhaDig = b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null;
+        const linkBol = b?.link_boleto ?? b?.url_boleto ?? null;
         saldo += valor;
         abertos.push({
           nosso_numero: b?.nosso_numero ? String(b.nosso_numero) : null,
           valor,
           data_vencimento: parseDataHinova(b?.data_vencimento ?? b?.vencimento),
           data_emissao: parseDataHinova(b?.data_emissao ?? b?.emissao),
-          linha_digitavel: b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null,
-          link_boleto: b?.link_boleto ?? b?.url_boleto ?? null,
-          situacao_label: b?.situacao ? String(b.situacao) : status,
+          linha_digitavel: isSentinela(linhaDig) ? null : linhaDig,
+          link_boleto: isSentinela(linkBol) ? null : linkBol,
+          situacao_label: situacaoRaw ? String(situacaoRaw) : status,
         });
       }
+      console.log('[sga-listar-boletos-associado] boletos_filtrados', {
+        codigo_associado: codigoAssociado,
+        codigo_veiculo: v.codigo_veiculo,
+        placa: v.placa,
+        raw_count: raw.length,
+        abertos_count: abertos.length,
+        descartes,
+        amostra_raw: raw.slice(0, 3).map((b: any) => ({
+          nosso_numero: b?.nosso_numero ?? null,
+          situacao: b?.situacao ?? null,
+          data_vencimento: b?.data_vencimento ?? null,
+          data_pagamento: b?.data_pagamento ?? null,
+          valor: b?.valor ?? b?.valor_documento ?? b?.valor_titulo ?? null,
+        })),
+      });
       return {
         codigo_veiculo: v.codigo_veiculo,
         placa: v.placa,
