@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, User, Bot, Loader2, MessageSquare, AlertCircle, CheckCheck } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { format } from 'date-fns';
