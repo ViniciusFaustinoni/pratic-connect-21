@@ -486,7 +486,73 @@ function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMa
   );
 }
 
+// ── Pagination Footer ──
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+
+function PaginationFooter({ total, page, pageSize, onPageChange, onPageSizeChange }: {
+  total: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  if (total === 0) return null;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const from = (safePage - 1) * pageSize + 1;
+  const to = Math.min(safePage * pageSize, total);
+
+  return (
+    <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t text-sm">
+      <div className="text-muted-foreground">
+        Mostrando <span className="text-foreground font-medium">{from}–{to}</span> de{' '}
+        <span className="text-foreground font-medium">{total}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs">Por página</span>
+          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+            <SelectTrigger className="h-8 w-[80px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map(opt => (
+                <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(1)} disabled={safePage <= 1} title="Primeira página">
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(safePage - 1)} disabled={safePage <= 1} title="Anterior">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="px-2 text-xs text-muted-foreground tabular-nums">
+            Página <span className="text-foreground font-medium">{safePage}</span> de{' '}
+            <span className="text-foreground font-medium">{totalPages}</span>
+          </span>
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(safePage + 1)} disabled={safePage >= totalPages} title="Próxima">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(totalPages)} disabled={safePage >= totalPages} title="Última página">
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ──
+
+
 
 export function CatalogoCoberturasBeneficios() {
   const { data: coberturas = [], isLoading: loadingCob } = useCoberturas();
