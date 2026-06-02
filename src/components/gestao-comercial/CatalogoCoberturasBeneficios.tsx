@@ -741,7 +741,7 @@ export function CatalogoCoberturasBeneficios() {
             <Button size="sm" onClick={() => setCobSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Cobertura</Button>
           </div>
           <ItemList
-            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura', cobAttrFilter, cobAttrMap)}
+            items={pagedCoberturas}
             type="cobertura"
             attrMap={cobAttrMap}
             highlightId={highlightCobId}
@@ -749,6 +749,13 @@ export function CatalogoCoberturasBeneficios() {
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
             onDuplicate={(id) => duplicateCob.mutate(id)}
+          />
+          <PaginationFooter
+            total={filteredCoberturas.length}
+            page={cobPage}
+            pageSize={cobPageSize}
+            onPageChange={setCobPage}
+            onPageSizeChange={setCobPageSize}
           />
         </TabsContent>
 
