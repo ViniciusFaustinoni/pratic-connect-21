@@ -4221,7 +4221,7 @@ serve(async (req) => {
             assistantMessage,
             ...toolResults,
           ],
-          whatsappPrompt + "\n\n" + context
+          whatsappPrompt + "\n\n" + context + identidadeCtx
         );
         assistantMessage = aiResponse.choices?.[0]?.message;
       }
