@@ -1800,8 +1800,27 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "consultar_boletos_sga_por_placa": {
-      const cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      let cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
       const placaLimpa = String(args?.placa ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      // Fallback idêntico ao consultar_associado_sga_por_cpf: identidade já
+      // confirmada para o telefone manda no CPF (telefone compartilhado).
+      if (cpfLimpo.length !== 11 && telefone) {
+        try {
+          const telNorm = telefone.replace(/\D/g, "");
+          const { data: contatoIa } = await supabase
+            .from("agente_ia_contatos")
+            .select("cpf")
+            .eq("telefone", telNorm)
+            .maybeSingle();
+          const cpfStored = String(contatoIa?.cpf ?? "").replace(/\D/g, "");
+          if (cpfStored.length === 11) {
+            cpfLimpo = cpfStored;
+            console.log(`[whatsapp-webhook] consultar_boletos_sga_por_placa: usando CPF confirmado do contato (tel=${telNorm})`);
+          }
+        } catch (lookupErr: any) {
+          console.warn(`[whatsapp-webhook] Falha fallback CPF agente_ia_contatos (boletos):`, lookupErr?.message || lookupErr);
+        }
+      }
       if (cpfLimpo.length !== 11 || placaLimpa.length < 7) {
         return JSON.stringify({ erro: "CPF ou placa inválidos." });
       }
