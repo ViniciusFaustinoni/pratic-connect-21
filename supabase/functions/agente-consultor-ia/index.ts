@@ -935,7 +935,41 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
             },
           },
         },
+        {
+          type: "function",
+          function: {
+            name: "solicitar_atendente_humano",
+            description: "Transfere o atendimento para a equipe humana de Relacionamento. Use SEMPRE que o lead pedir para falar com pessoa, reportar sinistro/emergência, reclamar de algo grave, ou pedir suporte fora do fluxo de cotação. Após chamar, a IA fica pausada e o operador humano assume.",
+            parameters: {
+              type: "object",
+              properties: {
+                motivo: {
+                  type: "string",
+                  enum: [
+                    "pediu_humano",
+                    "sinistro_emergencia",
+                    "reclamacao",
+                    "duvida_complexa",
+                    "outros",
+                  ],
+                  description: "Categoria do transbordo.",
+                },
+                resumo: {
+                  type: "string",
+                  description: "Uma frase descrevendo o que o lead quer.",
+                },
+                prioridade: {
+                  type: "string",
+                  enum: ["normal", "alta"],
+                  description: "Use 'alta' para sinistros, emergências ou reclamações graves.",
+                },
+              },
+              required: ["motivo", "resumo"],
+            },
+          },
+        },
       ];
+
     }
 
     // Anexa contexto de cobrança recente (se houver) ao final do system prompt
