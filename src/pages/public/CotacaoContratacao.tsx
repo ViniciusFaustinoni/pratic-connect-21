@@ -373,7 +373,11 @@ export default function CotacaoContratacao() {
     if (
       !isTrocaTitularidade &&
       cotacao?.status_contratacao === 'pagamento_ok' &&
-      !cotacao?.tipo_vistoria &&
+      // Inclui: (a) limbo clássico (sem tipo_vistoria escolhido) E
+      //         (b) autovistoria REABERTA (tipo_vistoria='autovistoria' mas vistoria_concluida_em zerado).
+      // Em ambos os casos, sem agendamento materializado, força etapa Autovistoria/Vistoria (4)
+      // em vez de empurrar pra etapa 5 (Agendar Instalação).
+      (!cotacao?.tipo_vistoria || cotacao?.tipo_vistoria === 'autovistoria') &&
       !cotacao?.vistoria_concluida_em &&
       !hasInstalacaoAgendada &&
       !hasAgendamentoBase &&
