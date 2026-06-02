@@ -847,6 +847,15 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
       systemPrompt += cobrancaContextoTxt;
     }
 
+    // Contexto do gate de CPF — só injeta na MESMA mensagem em que o CPF foi capturado
+    if (cpfSgaContexto) {
+      const ctx = cpfSgaContexto.encontrado
+        ? `O cliente acabou de informar o CPF ${cpfSgaContexto.cpfMascarado}. Identificamos no SGA como associado(a): *${cpfSgaContexto.nome}*${cpfSgaContexto.status ? ` (situação: ${cpfSgaContexto.status})` : ""}. Confirme o nome com ele(a) na resposta e siga o atendimento.`
+        : `O cliente acabou de informar o CPF ${cpfSgaContexto.cpfMascarado}, mas NÃO encontramos cadastro no SGA. Informe isso de forma cordial e siga como lead em cotação.`;
+      systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
+    }
+
+
     // ---- 8. CHAMAR LOVABLE AI COM TOOL CALLING ----
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
