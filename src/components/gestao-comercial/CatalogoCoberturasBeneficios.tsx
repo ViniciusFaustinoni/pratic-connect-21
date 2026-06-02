@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, Loader2, Filter, Copy, Search, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Filter, Copy, Search, ArrowDownAZ, ArrowUpAZ, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useDuplicateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
@@ -486,7 +486,73 @@ function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMa
   );
 }
 
+// ── Pagination Footer ──
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+
+function PaginationFooter({ total, page, pageSize, onPageChange, onPageSizeChange }: {
+  total: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  if (total === 0) return null;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const from = (safePage - 1) * pageSize + 1;
+  const to = Math.min(safePage * pageSize, total);
+
+  return (
+    <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t text-sm">
+      <div className="text-muted-foreground">
+        Mostrando <span className="text-foreground font-medium">{from}–{to}</span> de{' '}
+        <span className="text-foreground font-medium">{total}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs">Por página</span>
+          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+            <SelectTrigger className="h-8 w-[80px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map(opt => (
+                <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(1)} disabled={safePage <= 1} title="Primeira página">
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(safePage - 1)} disabled={safePage <= 1} title="Anterior">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="px-2 text-xs text-muted-foreground tabular-nums">
+            Página <span className="text-foreground font-medium">{safePage}</span> de{' '}
+            <span className="text-foreground font-medium">{totalPages}</span>
+          </span>
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(safePage + 1)} disabled={safePage >= totalPages} title="Próxima">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8"
+            onClick={() => onPageChange(totalPages)} disabled={safePage >= totalPages} title="Última página">
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ──
+
+
 
 export function CatalogoCoberturasBeneficios() {
   const { data: coberturas = [], isLoading: loadingCob } = useCoberturas();
@@ -537,28 +603,17 @@ export function CatalogoCoberturasBeneficios() {
   const [benAttrFilter, setBenAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
   const [highlightCobId, setHighlightCobId] = useState<string | null>(null);
   const [highlightBenId, setHighlightBenId] = useState<string | null>(null);
+  const [cobPage, setCobPage] = useState(1);
+  const [benPage, setBenPage] = useState(1);
+  const [cobPageSize, setCobPageSize] = useState(50);
+  const [benPageSize, setBenPageSize] = useState(50);
 
-  const triggerHighlight = (kind: 'cob' | 'ben', id: string) => {
-    if (kind === 'cob') setHighlightCobId(id);
-    else setHighlightBenId(id);
-    window.setTimeout(() => {
-      if (kind === 'cob') setHighlightCobId(prev => (prev === id ? null : prev));
-      else setHighlightBenId(prev => (prev === id ? null : prev));
-    }, 3000);
-  };
-
-  const cobNames = useMemo(
-    () => coberturas.map((c: any) => ({ id: c.id, nome: c.nome })),
-    [coberturas]
-  );
-  const benNames = useMemo(
-    () => benefits.map((b: any) => ({ id: b.id, nome: b.name })),
-    [benefits]
-  );
+  // Reset to page 1 when filters/search/sort/pageSize change
+  useEffect(() => { setCobPage(1); }, [cobSearch, cobSort, cobAttrFilter, cobPageSize]);
+  useEffect(() => { setBenPage(1); }, [benSearch, benSort, benAttrFilter, benPageSize]);
 
   const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio', attrFilter: 'todos' | 'atribuidos' | 'nao_atribuidos', attrMap: Record<string, string>) => {
     let filtered = items;
-    // Attribution filter
     if (attrFilter === 'atribuidos') {
       filtered = filtered.filter(item => !!attrMap[item.id]);
     } else if (attrFilter === 'nao_atribuidos') {
@@ -581,6 +636,52 @@ export function CatalogoCoberturasBeneficios() {
     }
     return filtered;
   };
+
+  const filteredCoberturas = useMemo(
+    () => filterAndSort(coberturas, cobSearch, cobSort, 'cobertura', cobAttrFilter, cobAttrMap),
+    [coberturas, cobSearch, cobSort, cobAttrFilter, cobAttrMap]
+  );
+  const filteredBenefits = useMemo(
+    () => filterAndSort(benefits, benSearch, benSort, 'beneficio', benAttrFilter, benAttrMap),
+    [benefits, benSearch, benSort, benAttrFilter, benAttrMap]
+  );
+
+  const pagedCoberturas = useMemo(
+    () => filteredCoberturas.slice((cobPage - 1) * cobPageSize, cobPage * cobPageSize),
+    [filteredCoberturas, cobPage, cobPageSize]
+  );
+  const pagedBenefits = useMemo(
+    () => filteredBenefits.slice((benPage - 1) * benPageSize, benPage * benPageSize),
+    [filteredBenefits, benPage, benPageSize]
+  );
+
+  const triggerHighlight = (kind: 'cob' | 'ben', id: string) => {
+    if (kind === 'cob') setHighlightCobId(id);
+    else setHighlightBenId(id);
+    // Jump to the page where the new item ended up so the highlight is visible
+    if (kind === 'cob') {
+      const idx = filteredCoberturas.findIndex((c: any) => c.id === id);
+      if (idx >= 0) setCobPage(Math.floor(idx / cobPageSize) + 1);
+    } else {
+      const idx = filteredBenefits.findIndex((b: any) => b.id === id);
+      if (idx >= 0) setBenPage(Math.floor(idx / benPageSize) + 1);
+    }
+    window.setTimeout(() => {
+      if (kind === 'cob') setHighlightCobId(prev => (prev === id ? null : prev));
+      else setHighlightBenId(prev => (prev === id ? null : prev));
+    }, 3000);
+  };
+
+
+  const cobNames = useMemo(
+    () => coberturas.map((c: any) => ({ id: c.id, nome: c.nome })),
+    [coberturas]
+  );
+  const benNames = useMemo(
+    () => benefits.map((b: any) => ({ id: b.id, nome: b.name })),
+    [benefits]
+  );
+
 
   const handleDelete = (justificativa: string) => {
     if (!deleteDialog.item || !deleteDialog.type) return;
@@ -640,7 +741,7 @@ export function CatalogoCoberturasBeneficios() {
             <Button size="sm" onClick={() => setCobSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Cobertura</Button>
           </div>
           <ItemList
-            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura', cobAttrFilter, cobAttrMap)}
+            items={pagedCoberturas}
             type="cobertura"
             attrMap={cobAttrMap}
             highlightId={highlightCobId}
@@ -648,6 +749,13 @@ export function CatalogoCoberturasBeneficios() {
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
             onDuplicate={(id) => duplicateCob.mutate(id)}
+          />
+          <PaginationFooter
+            total={filteredCoberturas.length}
+            page={cobPage}
+            pageSize={cobPageSize}
+            onPageChange={setCobPage}
+            onPageSizeChange={setCobPageSize}
           />
         </TabsContent>
 
@@ -680,7 +788,7 @@ export function CatalogoCoberturasBeneficios() {
             <Button size="sm" onClick={() => setBenSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Novo Benefício</Button>
           </div>
           <ItemList
-            items={filterAndSort(benefits, benSearch, benSort, 'beneficio', benAttrFilter, benAttrMap)}
+            items={pagedBenefits}
             type="beneficio"
             attrMap={benAttrMap}
             highlightId={highlightBenId}
@@ -688,6 +796,13 @@ export function CatalogoCoberturasBeneficios() {
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
             onDuplicate={(id) => duplicateBen.mutate(id)}
+          />
+          <PaginationFooter
+            total={filteredBenefits.length}
+            page={benPage}
+            pageSize={benPageSize}
+            onPageChange={setBenPage}
+            onPageSizeChange={setBenPageSize}
           />
         </TabsContent>
 
