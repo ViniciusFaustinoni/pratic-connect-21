@@ -377,6 +377,13 @@ export function DocumentosPendentesPublico({
         throw updateError;
       }
 
+      // Reabrir autovistoria se a peça reenviada for foto de autovistoria
+      // (chassi, motor, painel, lateral, pneu, etc). CNH/CRLV/comprovante
+      // NÃO entram aqui e NÃO reabrem a autovistoria.
+      if (isPecaAutovistoria(doc.tipo_documento)) {
+        await reabrirAutovistoriaPorAssociado(associadoId);
+      }
+
       // Marcar como enviado + guardar resultado do OCR para badge
       const equivalente = isOcrTipoCompativel(doc.tipo_documento, ocrTipoDetectado)
         && ocrTipoDetectado !== doc.tipo_documento;
