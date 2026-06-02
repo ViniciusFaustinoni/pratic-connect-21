@@ -1,0 +1,1 @@
+UPDATE veiculos SET combustivel='gasolina' WHERE id='eafcc3ac-723a-4081-8408-8273023c5266' AND combustivel IS NULL;
