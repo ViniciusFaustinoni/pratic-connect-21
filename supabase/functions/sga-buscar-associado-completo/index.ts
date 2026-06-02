@@ -243,14 +243,39 @@ serve(async (req) => {
       const raw: any[] = (resBoletos[i] as any[]) || [];
       const abertos: BoletoAberto[] = [];
       let saldo = 0;
+      const descartes: Record<string, number> = {};
+      const bump = (k: string) => { descartes[k] = (descartes[k] ?? 0) + 1; };
 
       for (const b of raw) {
         const status = mapStatusBoleto(b?.situacao);
-        const pago = !!b?.data_pagamento;
-        if (pago) continue;
-        if (!STATUS_ABERTO.has(status)) continue;
+        const situacaoUpper = String(b?.situacao ?? '').trim().toUpperCase();
+        // "Pago" só vale quando há SINAL DE BAIXA real: data_pagamento preenchida
+        // E status mapeado=='pago'/'cancelado' OU a situação textual da Hinova
+        // explicita pago/baixa/liquida/cancel.
+        // Antes, qualquer `data_pagamento` truthy descartava o boleto, derrubando
+        // boletos recém-gerados quando a Hinova devolve `data_pagamento=""` ou
+        // uma data espúria sem baixa real (caso QOO5C17 02/06).
+        const dataPagto = b?.data_pagamento;
+        const dataPagtoValida = typeof dataPagto === 'string'
+          ? dataPagto.trim().length > 0
+          : !!dataPagto;
+        const sinalBaixaTextual = situacaoUpper.includes('BAIX') ||
+          situacaoUpper.includes('PAGO') ||
+          situacaoUpper.includes('LIQUIDA') ||
+          situacaoUpper.includes('CANCEL');
+        if (dataPagtoValida && (status === 'pago' || status === 'cancelado' || sinalBaixaTextual)) {
+          bump(`pago_baixado:${situacaoUpper || 'sem_situacao'}`);
+          continue;
+        }
+        if (!STATUS_ABERTO.has(status)) {
+          bump(`status_fora:${status}:${situacaoUpper || 'sem_situacao'}`);
+          continue;
+        }
         const valor = toNumber(b?.valor ?? b?.valor_documento ?? b?.valor_titulo);
-        if (valor <= 0) continue;
+        if (valor <= 0) {
+          bump('valor_zero');
+          continue;
+        }
 
         saldo += valor;
         abertos.push({
@@ -265,6 +290,22 @@ serve(async (req) => {
           pix_qrcode_base64: b?.pix?.qrcode ?? null,
         });
       }
+
+      console.log('[sga-buscar-associado-completo] boletos_filtrados', {
+        codigo_associado: codigoAssociado,
+        codigo_veiculo: v.codigo_veiculo,
+        placa: v.placa,
+        raw_count: raw.length,
+        abertos_count: abertos.length,
+        descartes,
+        amostra_raw: raw.slice(0, 3).map((b: any) => ({
+          nosso_numero: b?.nosso_numero ?? null,
+          situacao: b?.situacao ?? null,
+          data_vencimento: b?.data_vencimento ?? null,
+          data_pagamento: b?.data_pagamento ?? null,
+          valor: b?.valor ?? b?.valor_documento ?? b?.valor_titulo ?? null,
+        })),
+      });
 
       // Tenta enriquecer placa/marca/modelo a partir do payload do veículo (quando viemos de placa)
       const meta = (v as any).meta || {};
