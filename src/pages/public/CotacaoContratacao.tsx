@@ -336,6 +336,7 @@ export default function CotacaoContratacao() {
 
     if (
       cotacao?.tipo_vistoria === 'autovistoria' &&
+      cotacao?.vistoria_concluida_em && // gate: só salta pra etapa 5 se autovistoria de fato concluída
       ['aguardando_aprovacao_monitoramento', 'vistoria_concluida', 'pagamento_ok', 'autovistoria_ok', 'cadastro_aprovado', 'monitoramento_aprovado'].includes(
         cotacao.status_contratacao || ''
       )
