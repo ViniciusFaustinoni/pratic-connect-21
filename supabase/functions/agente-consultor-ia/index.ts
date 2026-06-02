@@ -2233,3 +2233,108 @@ async function executarSolicitarAtendenteHumano(
   };
 }
 
+// ============================================================
+// TOOL: consultar_boletos_associado
+// Chama a edge sga-listar-boletos-associado com o CPF do contato e
+// devolve um JSON enxuto (até 5 boletos, abertos primeiro).
+// ============================================================
+async function executarConsultarBoletosAssociado(
+  _supabase: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { cpf: string | null }
+) {
+  const cpf = (args?.cpf || "").replace(/\D/g, "");
+  if (cpf.length !== 11) {
+    return {
+      success: false,
+      error: "CPF do contato indisponível — peça o CPF antes.",
+      encontrados: 0,
+      boletos: [],
+    };
+  }
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${supabaseUrl}/functions/v1/sga-listar-boletos-associado`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      body: JSON.stringify({ cpf }),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (e: any) {
+    console.error("[tool:consultar_boletos] fetch falhou:", e?.message);
+    return { success: false, erro_transitorio: true, motivo: "rede", encontrados: 0, boletos: [] };
+  }
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    console.error(`[tool:consultar_boletos] HTTP ${resp.status}: ${t.substring(0, 200)}`);
+    return { success: false, erro_transitorio: true, motivo: `http_${resp.status}`, encontrados: 0, boletos: [] };
+  }
+
+  const data: any = await resp.json().catch(() => ({}));
+
+  if (data?.erro_transitorio) {
+    return {
+      success: false,
+      erro_transitorio: true,
+      motivo: data?.motivo || "sga_indisponivel",
+      encontrados: 0,
+      boletos: [],
+    };
+  }
+
+  const todos: any[] = Array.isArray(data?.boletos) ? data.boletos : [];
+
+  const fmtData = (d: any) => {
+    if (!d) return null;
+    try {
+      const dt = new Date(String(d));
+      if (isNaN(dt.getTime())) return String(d);
+      return dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    } catch { return String(d); }
+  };
+  const fmtValor = (v: any) => {
+    const n = Number(v);
+    if (!isFinite(n)) return String(v ?? "");
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const normalizados = todos.map((b: any) => {
+    const venc = b.dataVencimento || b.data_vencimento || b.vencimento || null;
+    const valor = b.valor ?? b.valor_total ?? b.valorBoleto ?? null;
+    const situacao = String(b.situacao || b.status || b.statusBoleto || "").toLowerCase();
+    const aberto = !situacao || ["em aberto", "aberto", "vencido", "pendente", "a vencer"].some(s => situacao.includes(s));
+    return {
+      vencimento: fmtData(venc),
+      _vencISO: venc,
+      valor: fmtValor(valor),
+      status: situacao || "em aberto",
+      aberto,
+      placa: b.placa || b.veiculo_placa || null,
+      linha_digitavel: b.linhaDigitavel || b.linha_digitavel || b.codigoBarras || null,
+    };
+  });
+
+  normalizados.sort((a: any, b: any) => {
+    if (a.aberto !== b.aberto) return a.aberto ? -1 : 1;
+    const da = a._vencISO ? new Date(a._vencISO).getTime() : 0;
+    const db = b._vencISO ? new Date(b._vencISO).getTime() : 0;
+    return db - da;
+  });
+
+  const top = normalizados.slice(0, 5).map(({ _vencISO, aberto, ...rest }) => rest);
+
+  return {
+    success: true,
+    encontrados: normalizados.length,
+    boletos: top,
+  };
+}
+
+
