@@ -18,6 +18,9 @@ serve(async (req) => {
   console.log('[Cron SGA Retry] Iniciando processamento da fila de reenvio...');
 
   try {
+    // Reabrir SÓ itens travados em `processando` há mais de 10min (lock estale).
+    // Frente 3: removida a reabertura de `falha_permanente` por substring textual —
+    // item terminal sai por ação humana, não por heurística do cron.
     const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     await supabase
       .from('sga_sync_queue')
@@ -29,25 +32,17 @@ serve(async (req) => {
       .eq('status', 'processando')
       .lt('ultima_tentativa_em', staleThreshold);
 
-    await supabase
-      .from('sga_sync_queue')
-      .update({
-        status: 'pendente',
-        proximo_reenvio_em: new Date().toISOString(),
-        erro_ultimo: 'Reaberto automaticamente: falha recuperável SGA',
-      })
-      .eq('status', 'falha_permanente')
-      .or('erro_ultimo.ilike.%Placa duplicada%,erro_ultimo.ilike.%HTML%,erro_ultimo.ilike.%502%,erro_ultimo.ilike.%rate%,erro_ultimo.ilike.%token%,erro_ultimo.ilike.%autorizado%');
-
     // Buscar registros pendentes prontos para reenvio.
     // EXCLUI etapas que exigem ação manual ('troca_titularidade:codigo_associado_nao_encontrado')
     // — essas só saem da fila via edge `troca-resolver-pendencia-manual`.
+    // Frente 3: MAX_TENTATIVAS caiu para 6; o filtro `tentativas < 6` respeita o
+    // mesmo budget aplicado em sga-hinova-sync.
     const { data: pendentes, error: fetchError } = await supabase
       .from('sga_sync_queue')
       .select('*')
       .eq('status', 'pendente')
       .lte('proximo_reenvio_em', new Date().toISOString())
-      .lt('tentativas', 10)
+      .lt('tentativas', 6)
       .neq('etapa_parou', 'troca_titularidade:codigo_associado_nao_encontrado')
       .order('proximo_reenvio_em', { ascending: true })
       .limit(10); // Processar no máximo 10 por vez
@@ -75,29 +70,10 @@ serve(async (req) => {
     for (const item of pendentes) {
       processados++;
 
-      // Detectar loops: se o mesmo erro se repete 3+ vezes consecutivas, marcar como falha permanente
-      if (item.tentativas >= 3 && item.erro_ultimo) {
-        const erroLower = (item.erro_ultimo || '').toLowerCase();
-        const isLoopPattern = 
-          (erroLower.includes('cpf') && (erroLower.includes('duplicado') || erroLower.includes('recuperar'))) ||
-          erroLower.includes('loop infinito') ||
-          erroLower.includes('não aceitável') ||
-          erroLower.includes('not acceptable');
+      // Frente 3 — removida a detecção de loop por substring textual.
+      // Item terminal sai por MAX_TENTATIVAS atingido (sga-hinova-sync) ou ação humana.
 
-        if (isLoopPattern && item.tentativas >= 5) {
-          console.log(`[Cron SGA Retry] ⛔ Loop detectado para veiculo=${item.veiculo_id}: "${item.erro_ultimo}" (${item.tentativas} tentativas). Marcando como falha permanente.`);
-          await supabase
-            .from('sga_sync_queue')
-            .update({
-              status: 'falha_permanente',
-              ultima_tentativa_em: new Date().toISOString(),
-              erro_ultimo: `Loop permanente detectado após ${item.tentativas} tentativas: ${item.erro_ultimo}`,
-            })
-            .eq('id', item.id);
-          falha++;
-          continue;
-        }
-      }
+
 
       console.log(`[Cron SGA Retry] Processando ${processados}/${pendentes.length}: veiculo=${item.veiculo_id}, etapa=${item.etapa_parou}, tentativa=${item.tentativas + 1}`);
 
@@ -197,21 +173,29 @@ serve(async (req) => {
         }
       } catch (err) {
         console.error(`[Cron SGA Retry] Erro ao processar item ${item.id}:`, err);
-        
+
+        // Frente 3 — backoff exponencial (mesma fórmula de sga-hinova-sync) +
+        // MAX_TENTATIVAS=6. Sem heurística textual: se atingir o budget, vira
+        // falha_permanente sem reabertura automática.
         const tentativas = item.tentativas + 1;
-        const proximoReenvio = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-        
+        const MAX = 6;
+        const BASE_MS = 5 * 60 * 1000;
+        const MAX_MS = 4 * 60 * 60 * 1000;
+        const exp = Math.min(BASE_MS * Math.pow(2, Math.max(0, tentativas - 1)), MAX_MS);
+        const jitter = 0.8 + Math.random() * 0.4;
+        const proximoReenvio = new Date(Date.now() + Math.round(exp * jitter)).toISOString();
+
         await supabase
           .from('sga_sync_queue')
           .update({
-            status: tentativas >= 10 ? 'falha_permanente' : 'pendente',
+            status: tentativas >= MAX ? 'falha_permanente' : 'pendente',
             tentativas,
             ultima_tentativa_em: new Date().toISOString(),
             proximo_reenvio_em: proximoReenvio,
             erro_ultimo: err instanceof Error ? err.message : 'Erro desconhecido',
           })
           .eq('id', item.id);
-        
+
         falha++;
       }
     }

@@ -72,8 +72,17 @@ interface SyncRequest {
 }
 
 const STALE_LOCK_MS = 5 * 60 * 1000;
-const QUEUE_BACKOFF_MS = 10 * 60 * 1000;
-const MAX_TENTATIVAS = 10;
+// Frente 3 — backoff exponencial com jitter (substitui o fixo de 10 min).
+const BASE_BACKOFF_MS = 5 * 60 * 1000;         // 5 min
+const MAX_BACKOFF_MS = 4 * 60 * 60 * 1000;     // 4 h
+const MAX_TENTATIVAS = 6;                       // antes 10 — cobre ~9h com o exp backoff
+
+function calcularProximoReenvio(tentativasNova: number): string {
+  // tentativasNova é o valor JÁ incrementado (1 = primeira retry).
+  const exp = Math.min(BASE_BACKOFF_MS * Math.pow(2, Math.max(0, tentativasNova - 1)), MAX_BACKOFF_MS);
+  const jitter = 0.8 + Math.random() * 0.4; // ±20%
+  return new Date(Date.now() + Math.round(exp * jitter)).toISOString();
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -104,6 +113,66 @@ serve(async (req) => {
     }
   }
 
+  // Frente 3 — alerta para coordenador quando item vai pra falha_permanente.
+  // Dedupe: não duplica alerta ativo do mesmo (veiculo, etapa) nas últimas 24h.
+  async function emitirAlertaCoordenador(
+    veiculo_id: string,
+    etapa: string,
+    motivo: string,
+  ) {
+    try {
+      const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      // Busca veiculo (placa) + associado p/ corpo da notificação e dedup.
+      const { data: vRow } = await supabase
+        .from('veiculos')
+        .select('placa, associado_id, associados(nome_completo)')
+        .eq('id', veiculo_id)
+        .maybeSingle();
+      const placa = (vRow?.placa || '').toUpperCase();
+      const nome = (vRow as any)?.associados?.nome_completo || '';
+
+      // Dedupe por link contendo a placa + título canônico nas últimas 24h.
+      const tituloCanonico = 'SGA Hinova: sincronização falhou em definitivo';
+      const { data: jaExiste } = await supabase
+        .from('notificacoes_sistema')
+        .select('id')
+        .eq('destino', 'role')
+        .eq('destino_role', 'coordenador_monitoramento')
+        .eq('titulo', tituloCanonico)
+        .eq('ativo', true)
+        .gte('created_at', desde)
+        .ilike('mensagem', `%${etapa}%${placa}%`)
+        .limit(1)
+        .maybeSingle();
+      if (jaExiste?.id) return;
+
+      const link = placa
+        ? `/configuracoes/integracoes/sga-hinova?placa=${encodeURIComponent(placa)}`
+        : `/configuracoes/integracoes/sga-hinova`;
+      const mensagem = `Veículo ${placa || veiculo_id}${nome ? ` (${nome})` : ''} — etapa "${etapa}". Motivo: ${motivo.slice(0, 400)}`;
+
+      await supabase.from('notificacoes_sistema').insert({
+        titulo: tituloCanonico,
+        mensagem,
+        tipo: 'alerta',
+        destino: 'role',
+        destino_role: 'coordenador_monitoramento',
+        link,
+        ativo: true,
+      });
+    } catch (e) {
+      console.error('[emitirAlertaCoordenador]', e);
+    }
+  }
+
+  /**
+   * Frente 3 — registra UMA tentativa real de falha (erro Hinova / exception / 200 com
+   * sucesso=false). Incrementa `tentativas`, agenda próximo reenvio com backoff exponencial,
+   * e quando atinge MAX_TENTATIVAS marca `falha_permanente` + dispara alerta ao coordenador.
+   *
+   * NÃO use para defer neutro (vistoria aguardando, codigo_associado_nao_encontrado da troca,
+   * pendente_sga do Advanced Especial) — esses não devem gastar budget de tentativas.
+   */
   async function upsertQueue(
     veiculo_id: string,
     associado_id: string,
@@ -120,9 +189,10 @@ serve(async (req) => {
         .eq('associado_id', associado_id)
         .maybeSingle();
       const tentativas = (existing?.tentativas || 0) + 1;
-      const proximo = new Date(Date.now() + QUEUE_BACKOFF_MS).toISOString();
+      const atingiuLimite = tentativas >= MAX_TENTATIVAS;
+      const proximo = calcularProximoReenvio(tentativas);
       const base = {
-        status: tentativas >= MAX_TENTATIVAS ? 'falha_permanente' : 'pendente',
+        status: atingiuLimite ? 'falha_permanente' : 'pendente',
         tentativas,
         ultima_tentativa_em: new Date().toISOString(),
         proximo_reenvio_em: proximo,
@@ -138,6 +208,9 @@ serve(async (req) => {
           veiculo_id, associado_id, origem: 'automatico',
           ...base,
         });
+      }
+      if (atingiuLimite) {
+        await emitirAlertaCoordenador(veiculo_id, etapa, erro);
       }
     } catch (e) {
       console.error('[upsertQueue]', e);
@@ -1725,6 +1798,9 @@ serve(async (req) => {
 
       let fotosEnviadas = 0;
       let fotosComErro = 0;
+      // Frente 3 — preserva a mensagem real do Hinova para subir em erro_ultimo
+      // em vez do agregado "Erro ao enviar N fotos".
+      let ultimoErroFotos: string | null = null;
       if (fotos.length > 0 && codigoVeiculoHinova) {
         // Mantém metas alinhadas 1:1 aos lotes para registrar exatamente o que foi
         // aceito pela Hinova em sga_fotos_enviadas (dedupe nos próximos syncs).
@@ -1739,9 +1815,9 @@ serve(async (req) => {
             const payloadLog = r.ok
               ? { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }
               : { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote };
+            const erroBatch = r.ok ? null : (r.mensagem || r.errors.join('; ') || (typeof r.raw === 'string' ? r.raw : JSON.stringify(r.raw)?.slice(0, 500)));
             await logSync(_vid, _aid, 'enviar_fotos', r.ok ? 'success' : 'error',
-              payloadLog, r.raw,
-              r.ok ? null : (r.mensagem || r.errors.join('; ')));
+              payloadLog, r.raw, erroBatch);
             if (r.ok) {
               fotosEnviadas += lote.length;
               // Persiste cada foto enviada para bloquear reenvio em syncs futuros.
@@ -1764,17 +1840,23 @@ serve(async (req) => {
               }
             } else {
               fotosComErro += lote.length;
+              if (erroBatch) ultimoErroFotos = erroBatch;
             }
           } catch (e: any) {
+            const msg = String(e?.message || e);
             await logSync(_vid, _aid, 'enviar_fotos', 'error',
-              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote }, null, String(e?.message || e));
+              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote }, null, msg);
             fotosComErro += lote.length;
+            ultimoErroFotos = msg;
           }
         }
       }
 
       if (fotosComErro > 0 && fotosEnviadas === 0) {
-        await upsertQueue(_vid, _aid, 'fotos', `Erro ao enviar ${fotosComErro} fotos`,
+        const motivoFotos = ultimoErroFotos
+          ? `Hinova rejeitou ${fotosComErro} foto(s): ${ultimoErroFotos}`.slice(0, 1000)
+          : `Erro ao enviar ${fotosComErro} fotos`;
+        await upsertQueue(_vid, _aid, 'fotos', motivoFotos,
           codigoAssociadoHinova, codigoVeiculoHinova);
       } else {
         await markQueueDone(_vid, _aid);
