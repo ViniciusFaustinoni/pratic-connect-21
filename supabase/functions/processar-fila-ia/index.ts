@@ -121,9 +121,10 @@ Deno.serve(async (req) => {
             .update({
               status: "concluido",
               processed_at: new Date().toISOString(),
-              tentativas: item.tentativas + 1,
+              // tentativas já foi incrementada no RPC de claim
             })
             .eq("id", item.id);
+
           processados++;
           console.log(`[processar-fila-ia] ✓ Processado: ${item.id} (tel: ${telLimpo})`);
         } else {
