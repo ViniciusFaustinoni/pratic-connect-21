@@ -615,11 +615,20 @@ export function CatalogoCoberturasBeneficios() {
   const triggerHighlight = (kind: 'cob' | 'ben', id: string) => {
     if (kind === 'cob') setHighlightCobId(id);
     else setHighlightBenId(id);
+    // Jump to the page where the new item ended up so the highlight is visible
+    if (kind === 'cob') {
+      const idx = filteredCoberturas.findIndex((c: any) => c.id === id);
+      if (idx >= 0) setCobPage(Math.floor(idx / cobPageSize) + 1);
+    } else {
+      const idx = filteredBenefits.findIndex((b: any) => b.id === id);
+      if (idx >= 0) setBenPage(Math.floor(idx / benPageSize) + 1);
+    }
     window.setTimeout(() => {
       if (kind === 'cob') setHighlightCobId(prev => (prev === id ? null : prev));
       else setHighlightBenId(prev => (prev === id ? null : prev));
     }, 3000);
   };
+
 
   const cobNames = useMemo(
     () => coberturas.map((c: any) => ({ id: c.id, nome: c.nome })),
