@@ -289,10 +289,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
 
   // Bypass: placas para as quais o usuário já clicou "Ignorar e Prosseguir"
-  // (registrado em cotacao_avisos_sga). Cada Set guarda placas normalizadas.
-  const [bypassPlacaSGA, setBypassPlacaSGA] = useState<Set<string>>(new Set());
-  const [bypassPlacaOutroAssoc, setBypassPlacaOutroAssoc] = useState<Set<string>>(new Set());
-  const [bypassPlacaDuplicada, setBypassPlacaDuplicada] = useState<Set<string>>(new Set());
+  // (registrado em cotacao_avisos_sga). Usamos refs (síncronos) para garantir
+  // que o reprocessamento imediato após o clique enxergue o bypass — evita
+  // o modal reabrir em loop por leitura de estado stale.
+  const bypassPlacaSGARef = useRef<Set<string>>(new Set());
+  const bypassPlacaOutroAssocRef = useRef<Set<string>>(new Set());
+  const bypassPlacaDuplicadaRef = useRef<Set<string>>(new Set());
   const placaNorm = (p: string) => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 
   // Estados para seleção FIPE manual
