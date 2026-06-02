@@ -1,139 +1,85 @@
-## Objetivo
+## Diagnóstico do caso Rafael (KRH3I99)
 
-Padronizar o primeiro contato da IA no WhatsApp: ela **só** responde a mensagem fixa abaixo até o usuário enviar um CPF válido, e só depois disso passa a conversar/vender/atender:
+Olhei o histórico dele em `whatsapp_mensagens` (telefone 5521979225815) e o código de `agente-consultor-ia` + `whatsapp-webhook` + `processar-fila-ia`. Dois problemas reais:
 
-> "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF. 😁"
+### 1) Transbordo não existe — a IA está mentindo
+O prompt do branch `isAssociado` (linha 556–589 de `agente-consultor-ia/index.ts`) só manda a IA "redirecionar para o número da Central". Não há **nenhuma tool** para abrir transbordo, criar chamado ou pausar a IA.
 
-Quando o CPF chegar, o sistema consulta o SGA (Hinova) via `sga-buscar-associado-completo` e usa o resultado para rotear:
-- **CPF encontrado** → roteia para o prompt de associado já com os dados ("Encontrei seu cadastro, …").
-- **CPF não encontrado no SGA** → roteia para o prompt de lead (vendas), informando ao usuário que não localizou cadastro e seguindo o fluxo de cotação.
+Resultado: nas mensagens de 29/05, 01/06 e 02/06, o Rafael pediu retorno 5+ vezes e a Maya respondeu coisas como *"Já fiz a solicitação para o setor responsável"*, *"Vou reforçar agora mesmo a sua solicitação com a nossa equipe de Relacionamento"*, *"Já deixei um novo alerta aqui para o time de Relacionamento"* — **sem chamar absolutamente nada**. É alucinação pura: nenhuma notificação, fila ou pausa foi criada.
 
-## Onde o gate vive
+A única forma hoje de o atendimento humano assumir é o operador clicar manualmente no chat (pausa de 10 min via `whatsapp_ia_pausas`).
 
-Tudo no edge `agente-consultor-ia` (já é o cérebro da IA). Nada muda no `whatsapp-webhook` nem no `processar-fila-ia`. O `ChatPanel`/UI não é tocado.
+### 2) Duplicidade — cada resposta sai 2x com ~200 ms
+Confirmado nos registros:
+- 11:20:35.709 e 11:20:35.931 — *"Bom dia, Rafael!"* duplicado
+- 11:20:41.451 e 11:20:41.643 — *"Oi, Rafael! Poxa…"* duplicado
+- 11:21:48.899 e 11:21:49.110 — duplicado
+- 11:22:37.723 e 11:22:37.929 — duplicado
 
-## Diagnóstico
+`agente-consultor-ia` chama `enviarWhatsApp` 1x por parte. `processar-fila-ia` roda a cada minuto e seleciona `status IN ('pendente','erro')` **sem lock e sem CAS** — duas execuções concorrentes pegam o mesmo item antes do `UPDATE status='processando'`. Provavelmente é o cron + chamada do webhook real entrando em paralelo, gerando duas invocações do agente para a mesma mensagem.
 
-- `agente_ia_contatos` hoje guarda: `telefone, nome, status, ultima_interacao, dados_cotacao, resetado_em`. **Não tem coluna `cpf`** — precisa criar.
-- `agente-consultor-ia/index.ts` decide o caminho em 3 ramos: diretor (por telefone+role), associado (por telefone na tabela `associados`), lead (default).
-- `sga-buscar-associado-completo` já existe e aceita `{ cpf }` retornando associado + veículos + boletos. Reusar.
-- `detectar-associado-por-cpf` já tem a validação canônica de CPF (`validateCpf` com dígitos verificadores) — reusar a função.
+---
 
-## Decisões de escopo
+## Plano
 
-1. **Quem é exigido a passar CPF**: lead novo OU contato detectado como "associado por telefone" mas sem CPF no `agente_ia_contatos`. O gate só é pulado quando o telefone bate com um **diretor** (uso interno, não faz sentido pedir CPF).
-2. **Validação**: regex de 11 dígitos (aceita com pontuação) + dígitos verificadores (mesma função do `detectar-associado-por-cpf`). CPF inválido → tratada como "não enviou CPF" + resposta curta "Esse CPF não parece válido. Pode conferir e me enviar de novo? 😉".
-3. **Reenvio da mensagem fixa**: enquanto o usuário não mandar CPF válido, cada mensagem recebida dispara a mensagem padrão **uma única vez por janela de 10 min** (evita poluir o chat quando o cliente digita várias coisas seguidas). Janela controlada por timestamp em `agente_ia_contatos.cpf_solicitado_em`.
-4. **Confirmação ao identificar**: ao salvar o CPF, a IA confirma o achado na mesma resposta:
-   - SGA achou: "Encontrei seu cadastro, *{NOME}*! Como posso te ajudar hoje?" + segue prompt de associado.
-   - SGA não achou: "Não localizei cadastro com esse CPF. Vamos seguir com uma cotação?" + segue prompt de lead.
-5. **Pausa/transbordo**: gate respeita `whatsapp_ia_pausas` (já tratado a montante em `processar-fila-ia`) e `contato.status='atendimento_humano'` (já tratado no edge).
+### Parte A — Botão de Transbordo de verdade (substitui as falsas promessas)
 
-## Mudanças
+**A1. Nova tool `abrir_transbordo_relacionamento` no `agente-consultor-ia`**
+- Disponível nos branches `isAssociado` **e** `lead` (não para diretor).
+- Parâmetros: `motivo` (enum: `aguardando_retorno`, `reclamacao`, `pediu_humano`, `sinistro_emergencia`, `assunto_fora_escopo`, `outros`), `resumo` (string curta) e `prioridade` (`normal` | `alta`).
+- Efeito:
+  1. `INSERT` em `whatsapp_ia_pausas` com `motivo='transbordo_relacionamento'` e `pausada_ate = now() + 24h` (operador encerra com o botão *Concluir atendimento* que já existe — sem mexer no fluxo de 10 min de intervenção humana).
+  2. `INSERT` em `notificacoes_sistema` com `destino_role='relacionamento'` (e `coordenador_monitoramento` como fallback) — segue o padrão das memórias `analises-relacionamento-ingestao` e `handoff-notificacoes-sistema-sem-realtime`.
+  3. `INSERT` em `agente_ia_transbordos` (nova tabela) com `{ telefone, contato_id, associado_id?, motivo, resumo, prioridade, status='aberto', aberto_em }` — fonte da verdade para a fila do Relacionamento e auditoria.
+  4. Resposta única e fixa ao cliente: *"Já chamei a equipe de Relacionamento aqui, {nome}. Eles vão te responder por este mesmo WhatsApp assim que pegarem o seu atendimento. Pode aguardar. 🙏"* — **a IA não escreve mais nada depois disso na mesma rodada**.
 
-### 1. Migration: campos no `agente_ia_contatos`
+**A2. Reescrita do prompt do associado (branch `isAssociado`)**
+- Trocar o atual *"sempre redirecione para o telefone"* por uma matriz curta de gatilhos que **obrigam** a tool:
+  - cliente diz *"sem retorno"*, *"ninguém me ligou"*, *"quero falar com humano/atendente/pessoa"*, *"emergência/sinistro"*, ou repete a mesma queixa duas vezes → chamar `abrir_transbordo_relacionamento`.
+  - dúvidas operacionais simples (horário, número da central, o que é Praticcar) → responder direto, sem transbordo.
+- Regras absolutas adicionais: **proibido prometer "vou solicitar", "vou reforçar", "já avisei o time", "fiz a solicitação"** sem ter chamado a tool. Inclui exemplos negativos.
+- Após chamar a tool, ignorar qualquer follow-up do cliente até o operador encerrar a pausa (a checagem de `whatsapp_ia_pausas` já existe em `processar-fila-ia` e em `agente-consultor-ia`).
 
-```sql
-ALTER TABLE public.agente_ia_contatos
-  ADD COLUMN IF NOT EXISTS cpf text,
-  ADD COLUMN IF NOT EXISTS cpf_capturado_em timestamptz,
-  ADD COLUMN IF NOT EXISTS cpf_solicitado_em timestamptz,
-  ADD COLUMN IF NOT EXISTS sga_associado_encontrado boolean;
+**A3. Mesmo gatilho no branch lead**
+- Mesma tool, mesma regra para `quero falar com pessoa`, `sinistro`, `reclamação grave`. Hoje existe só um regex frouxo (linhas 1082–1117) que muda `status='atendimento_humano'` — vamos unificar tudo nessa tool nova e descontinuar o caminho regex.
 
-CREATE INDEX IF NOT EXISTS idx_agente_ia_contatos_cpf
-  ON public.agente_ia_contatos(cpf) WHERE cpf IS NOT NULL;
+**A4. UI da fila de transbordo (mínimo viável)**
+- Em `/eventos/chat-ia`, adicionar chip *"Transbordo Relacionamento (N)"* no topo da lista de conversas (lendo `agente_ia_transbordos` aberto).
+- Badge no card da conversa indicando motivo + tempo aberto.
+- O botão **"Concluir atendimento"** já existente no `ChatPanel` passa a também marcar `agente_ia_transbordos.status='concluido'` (além de remover a pausa).
+
+### Parte B — Eliminar a duplicidade
+
+**B1. Travar a fila com claim atômico no `processar-fila-ia`**
+- Trocar `SELECT ... status IN ('pendente','erro')` + `UPDATE status='processando'` por um `UPDATE ... RETURNING *` com `WHERE status IN ('pendente','erro') AND tentativas < 3` em CTE/`FOR UPDATE SKIP LOCKED` (via RPC). Só processa o item se conseguir o claim — duas instâncias concorrentes não pegam o mesmo registro.
+
+**B2. Idempotência por mensagem no `agente-consultor-ia`**
+- Adicionar uma janela curta de dedupe: antes de chamar o modelo, verificar se já existe `whatsapp_mensagens` saída para o mesmo `telefone` cujo `referencia_id` aponte para a mesma mensagem de entrada nos últimos 30 s. Se sim, abortar com `{success:true, ignored:"duplicate_inflight"}`. Defesa em profundidade caso B1 falhe.
+
+**B3. Bloquear reentrada no `whatsapp-webhook`**
+- O dedup atual (linha 3184, por `message_id`) só vale para o caminho "real" do Meta. Quando a fila reinjeta com `id: queue_${item.id}` (`processar-fila-ia` linha 101), ele escapa do dedup de propósito. Adicionar dedupe complementar por `(telefone + hash(mensagem) + janela 10s)` antes de delegar ao agente — assim a combinação webhook real + reinjeção da fila para a mesma mensagem original deixa de gerar duas respostas.
+
+### Parte C — Higiene e observabilidade
+- Migração: nova tabela `agente_ia_transbordos` (com GRANTs e RLS — `select/update` para roles internas, `insert` só via service role) + índice em `(status, aberto_em)`.
+- Adicionar `console.log` estruturado `[transbordo]` para auditoria.
+- Atualizar a memória `mem://logic/integrations/maya-contexto-template-meta` (ou criar nova `mem://logic/operations/transbordo-relacionamento-canonico`) registrando: "Maya nunca promete ação humana sem chamar `abrir_transbordo_relacionamento`; tabela canônica = `agente_ia_transbordos`; pausa = `whatsapp_ia_pausas motivo='transbordo_relacionamento'`."
+
+---
+
+## Detalhe técnico — arquivos afetados
+
+```text
+supabase/migrations/<ts>_agente_ia_transbordos.sql        (novo)
+supabase/migrations/<ts>_claim_fila_ia_rpc.sql            (novo — RPC com SKIP LOCKED)
+supabase/functions/agente-consultor-ia/index.ts           (tool nova + prompts + dedupe)
+supabase/functions/processar-fila-ia/index.ts             (usa RPC de claim)
+supabase/functions/whatsapp-webhook/index.ts              (dedupe por hash p/ reentrada)
+src/components/eventos/chat-ia/ConversasList.tsx          (chip transbordo)
+src/components/eventos/chat-ia/ChatPanel.tsx              (encerra transbordo no Concluir)
+src/hooks/eventos/useTransbordoRelacionamento.ts          (novo)
 ```
 
-Sem mudança em RLS/GRANTs — a tabela já existe e o edge usa service role.
-
-### 2. `supabase/functions/agente-consultor-ia/index.ts`
-
-Após o bloco 1B (resolver nome) e **antes** do "VERIFICAR ATENDIMENTO HUMANO" decisão de prompt, inserir bloco **"GATE DE CPF"**:
-
-Pseudocódigo:
-```ts
-// ---- 1C. GATE DE CPF (skip diretores) ----
-const isDiretorPorTelefone = /* lookup direto profiles+user_roles, mantém código atual */;
-
-if (!isDiretorPorTelefone && !contato.cpf) {
-  const cpfExtraido = extrairCpf(texto);            // regex /(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/
-  
-  if (cpfExtraido && validateCpf(cpfExtraido)) {
-    // Salva CPF + consulta SGA
-    const cpfLimpo = cpfExtraido.replace(/\D/g, '');
-    const sga = await invokeEdge('sga-buscar-associado-completo', { cpf: cpfLimpo });
-    
-    await supabase.from('agente_ia_contatos').update({
-      cpf: cpfLimpo,
-      cpf_capturado_em: new Date().toISOString(),
-      sga_associado_encontrado: !!sga?.encontrado,
-      nome: sga?.associado?.nome || contato.nome,
-    }).eq('id', contato.id);
-    
-    contato.cpf = cpfLimpo;
-    contato.sga = sga;                              // injetado abaixo no prompt
-    // Cai no fluxo normal logo abaixo, que agora terá contexto de associado/lead
-  } else if (cpfExtraido) {
-    // Veio algo que parece CPF mas inválido
-    await enviarWhatsApp(telefone, 'Esse CPF não parece válido. Pode conferir e me enviar de novo? 😉');
-    return 200;
-  } else {
-    // Não veio CPF — reenvia padrão (debounce 10 min)
-    const ultimaSolicitacao = contato.cpf_solicitado_em ? new Date(contato.cpf_solicitado_em) : null;
-    const podeReenviar = !ultimaSolicitacao || (Date.now() - ultimaSolicitacao.getTime()) > 10 * 60_000;
-    if (podeReenviar) {
-      await enviarWhatsApp(telefone,
-        'Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF. 😁'
-      );
-      await supabase.from('agente_ia_contatos').update({
-        cpf_solicitado_em: new Date().toISOString(),
-      }).eq('id', contato.id);
-    }
-    return 200;
-  }
-}
-```
-
-Reaproveitar:
-- `validateCpf` — copiar a função do `detectar-associado-por-cpf` para um helper local (ou importar via `_shared`).
-- `enviarWhatsApp` — fetch para `whatsapp-send-text` (já usado em outras partes do edge).
-- `sga-buscar-associado-completo` — chamado via `supabase.functions.invoke()`.
-
-### 3. Ajuste no prompt (mesmo arquivo)
-
-Quando o contato **já tem CPF** + SGA encontrado, usar o ramo `isAssociado` que já existe (passar `associadoNome` da resposta SGA). Quando SGA não encontrou, segue ramo lead — mas o `systemPrompt` recebe um trecho extra no topo:
-
-```
-## CONTEXTO DE IDENTIFICAÇÃO
-O cliente acabou de informar o CPF {mascarado}. ${sga.encontrado
-  ? `Identificamos como associado: ${nome} (status ${status}).`
-  : `Não encontramos cadastro com esse CPF — trate como lead em cotação.`}
-NÃO peça o CPF de novo. NÃO repita a saudação de identificação.
-```
-
-### 4. Reset
-
-O reset existente (`agente_ia_contatos.resetado_em`) NÃO limpa o CPF — operador que resetar a conversa não quer pedir CPF de novo do mesmo telefone (a menos que limpe manualmente). Se quiser limpar, faz UPDATE explícito de `cpf=NULL` (fora deste plano — pode virar follow-up de UI).
-
-## Comportamento resultante
-
-| Situação | Antes | Depois |
-|---|---|---|
-| Lead novo manda "oi" | IA inicia fluxo de venda do nada | Manda mensagem padrão pedindo CPF; só responde dúvidas depois do CPF |
-| Lead manda CPF válido na 1ª msg | IA inicia venda sem identificar | Salva CPF, consulta SGA, confirma resultado e segue |
-| CPF válido bate com associado SGA | Não conhece | Vira atendimento de associado (encaminha p/ central) |
-| CPF inválido | — | Pede pra revisar |
-| Diretor manda mensagem | Vai pro prompt de diretor | Igual (pulado pelo gate) |
-| Contato já passou CPF antes | Volta a iniciar fluxo | Não pede de novo; segue conversa |
-| Sem CPF, manda 5 mensagens seguidas | IA respondia (e iniciava venda) | Manda padrão 1x; ignora as outras dentro de 10 min |
-
-## Fora de escopo
-
-- UI para resetar/editar CPF manualmente (pode entrar depois no drawer do contato).
-- Templates Meta — a mensagem padrão sai por `whatsapp-send-text` (texto livre dentro da janela 24h, que sempre existe quando o cliente está mandando msg).
-- Persistir snapshot completo do SGA em outra tabela — usamos a chamada on-demand no momento do match e re-chamamos se necessário em mensagens subsequentes (já barato).
-
-## Arquivos tocados
-
-- `supabase/migrations/<timestamp>_agente_ia_contatos_cpf.sql` (4 colunas + 1 índice)
-- `supabase/functions/agente-consultor-ia/index.ts` (bloco GATE DE CPF + injeção de contexto SGA no prompt)
+## Fora de escopo deste plano
+- Roteamento por skill (sinistro vs cobrança vs cancelamento) — fica como evolução.
+- Métricas/SLA de tempo de resposta do Relacionamento.
+- Reativação automática da IA depois de N minutos sem operador responder — só botão manual por enquanto.

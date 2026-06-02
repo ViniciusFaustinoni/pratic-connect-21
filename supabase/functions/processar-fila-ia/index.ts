@@ -15,14 +15,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    // Buscar itens pendentes ou com erro (max 3 tentativas)
+    // Claim atômico (FOR UPDATE SKIP LOCKED) — impede que duas instâncias do cron
+    // peguem o mesmo item ao mesmo tempo e gerem resposta duplicada da Maya IA.
     const { data: itens, error: fetchError } = await supabase
-      .from("whatsapp_fila_ia")
-      .select("*")
-      .in("status", ["pendente", "erro"])
-      .lt("tentativas", 3)
-      .order("created_at", { ascending: true })
-      .limit(10);
+      .rpc("claim_proximos_itens_fila_ia", { p_limit: 10 });
 
     if (fetchError) throw fetchError;
 
@@ -33,7 +29,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[processar-fila-ia] ${itens.length} item(ns) na fila`);
+    console.log(`[processar-fila-ia] ${itens.length} item(ns) reservado(s) via claim atômico`);
+
 
     let processados = 0;
     let erros = 0;
@@ -78,11 +75,8 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Marcar como processando
-      await supabase
-        .from("whatsapp_fila_ia")
-        .update({ status: "processando" })
-        .eq("id", item.id);
+      // (item já foi marcado como 'processando' + tentativas++ pelo RPC claim_proximos_itens_fila_ia)
+
 
       try {
         const telLimpo = item.telefone.replace(/\D/g, "");
@@ -127,9 +121,10 @@ Deno.serve(async (req) => {
             .update({
               status: "concluido",
               processed_at: new Date().toISOString(),
-              tentativas: item.tentativas + 1,
+              // tentativas já foi incrementada no RPC de claim
             })
             .eq("id", item.id);
+
           processados++;
           console.log(`[processar-fila-ia] ✓ Processado: ${item.id} (tel: ${telLimpo})`);
         } else {
@@ -137,7 +132,8 @@ Deno.serve(async (req) => {
           throw new Error(`HTTP ${res.status}: ${errorText.substring(0, 200)}`);
         }
       } catch (err: any) {
-        const novaTentativa = item.tentativas + 1;
+        // tentativas já foi incrementada no claim; aqui só refletimos o resultado final
+        const novaTentativa = item.tentativas + 1; // valor pós-claim
         const novoStatus = novaTentativa >= 3 ? "falha_definitiva" : "erro";
 
         await supabase
@@ -145,10 +141,10 @@ Deno.serve(async (req) => {
           .update({
             status: novoStatus,
             erro: err.message?.substring(0, 500) || "Erro desconhecido",
-            tentativas: novaTentativa,
             processed_at: novoStatus === "falha_definitiva" ? new Date().toISOString() : null,
           })
           .eq("id", item.id);
+
 
         erros++;
         console.error(`[processar-fila-ia] ✗ Erro item ${item.id} (tentativa ${novaTentativa}):`, err.message);

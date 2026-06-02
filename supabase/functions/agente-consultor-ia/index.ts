@@ -34,6 +34,48 @@ Deno.serve(async (req) => {
     const telLimpo = telefone.replace(/\D/g, "");
     console.log(`[agente-consultor-ia] Mensagem de ${telLimpo}: ${texto?.substring(0, 80)}`);
 
+    // ---- 0. LOCK ANTI-DUPLICIDADE ----
+    // Impede que duas invocações concorrentes (webhook real + processar-fila-ia,
+    // ou dois ciclos de cron) processem a MESMA mensagem e gerem 2 respostas.
+    // Janela de 30s — se a mesma mensagem chegar em janelas separadas, ambas passam.
+    try {
+      const textoNorm = String(texto || "").trim().toLowerCase().slice(0, 500);
+      const bucket = Math.floor(Date.now() / 30_000);
+      const hashInput = `${textoNorm}|${bucket}`;
+      // SHA-256 nativo do Deno
+      const encoder = new TextEncoder();
+      const hashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(hashInput));
+      const mensagemHash = Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      const { error: lockErr } = await supabase
+        .from("agente_ia_locks")
+        .insert({
+          telefone: telLimpo,
+          mensagem_hash: mensagemHash,
+          origem: "agente-consultor-ia",
+        });
+
+      if (lockErr) {
+        // 23505 = duplicate primary key → outra invocação já está processando
+        const isDuplicate = String(lockErr.code || "") === "23505"
+          || String(lockErr.message || "").toLowerCase().includes("duplicate");
+        if (isDuplicate) {
+          console.log(`[agente-consultor-ia] LOCK COLIDIU — ignorando duplicata (tel=${telLimpo}, hash=${mensagemHash.slice(0, 12)}…)`);
+          return new Response(
+            JSON.stringify({ success: true, ignored: "duplicate_inflight" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        // Erro real (RLS, conexão) — não bloqueia o fluxo, só loga
+        console.warn(`[agente-consultor-ia] Lock falhou (seguindo sem dedupe):`, lockErr.message);
+      }
+    } catch (e: any) {
+      console.warn(`[agente-consultor-ia] Lock catch (seguindo):`, e?.message);
+    }
+
+
     // ---- 1. BUSCAR/CRIAR CONTATO ----
     let contato: any = null;
     const { data: contatoExistente } = await supabase
@@ -561,32 +603,84 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
 Você está conversando com *${associadoNome}*, que já é associado(a) da PRATICCAR (status: ${associadoStatus}).
 
 ## SUA FUNÇÃO
-Você deve reconhecer que esta pessoa já é associada e direcioná-la para o atendimento correto.
+Resolver dúvidas operacionais simples sozinho(a) e transbordar para a equipe humana sempre que o pedido envolver retorno, decisão, reclamação ou prazo.
 
 ## REGRAS ABSOLUTAS
-- NUNCA tente vender planos ou fazer cotação para associados
-- NUNCA ofereça produtos ou promoções
-- NUNCA execute ferramentas de cotação
-- Seja cordial e prestativo
+- NUNCA tente vender planos ou fazer cotação para associados.
+- NUNCA ofereça produtos ou promoções.
+- NUNCA execute ferramentas de cotação.
+- **PROIBIDO escrever frases como** "vou solicitar à equipe", "vou reforçar com o Relacionamento", "já abri um chamado", "já avisei o time", "vou pedir prioridade", "fiz a solicitação", "vou pedir para te ligarem". Se você não chamou a tool *solicitar_atendente_humano* nesta mesma rodada, ESSAS FRASES SÃO MENTIRA — não use.
+- Seja cordial, curto e direto.
 
-## O QUE FAZER
-1. Cumprimente pelo nome
-2. Informe que para atendimento, suporte, sinistros, dúvidas sobre cobranças ou qualquer assunto relacionado à associação, deve entrar em contato pelo número de atendimento principal
-3. O número de atendimento é: *${numeroAtendimento}*
-4. Pode responder dúvidas gerais simples sobre a PRATICCAR (horário de funcionamento, etc.)
+## QUANDO CHAMAR A TOOL solicitar_atendente_humano (OBRIGATÓRIO)
+Chame SEMPRE que o associado:
+- Pedir retorno, ligação, posicionamento ou disser "ainda sem retorno", "ninguém me ligou", "preciso de um retorno", "quero falar com alguém".
+- Pedir explicitamente para falar com pessoa, atendente, humano, consultor, gerente.
+- Reclamar de status "em análise", demora, fatura travada, plano que não ativa, boleto errado.
+- Mencionar sinistro, acidente, batida, colisão, roubo, furto, incêndio, emergência → motivo='sinistro_emergencia', prioridade='alta'.
+- Repetir a mesma queixa numa segunda mensagem (não importa se você já respondeu antes).
+- Qualquer pedido que exija decisão humana, alteração de cadastro, cancelamento, segunda via, negociação.
+
+Ao chamar a tool, escreva no parâmetro \`resumo\` (1 frase) o que o associado quer.
+
+## O QUE VOCÊ PODE RESPONDER SOZINHO
+Apenas perguntas genéricas que NÃO exigem ação:
+- Horário de funcionamento da central.
+- Número de telefone da central: *${numeroAtendimento}*.
+- Explicar em alto nível o que é a PRATICCAR.
+
+Se a pergunta passar disso, chame *solicitar_atendente_humano*.
 
 ## SAUDAÇÃO INICIAL
-Se for a primeira mensagem: "Olá, ${associadoNome}! 👋 Sou o ${nomeAgente} da PRATICCAR. Vi que você já é nosso(a) associado(a)! Para atendimento, suporte ou qualquer dúvida sobre sua proteção, entre em contato pelo nosso número de atendimento: *${numeroAtendimento}*. Nossa equipe terá prazer em ajudá-lo(a)! 😊"
+Se for a primeira mensagem do dia e o associado não trouxer pedido específico:
+"Olá, ${associadoNome}! 👋 Sou ${nomeAgente} da PRATICCAR. Como posso te ajudar hoje?"
 
 ## FORMATAÇÃO
-- Use formatação WhatsApp: *negrito*, _itálico_
-- NUNCA use Markdown: **duplo**, ## títulos
-- Respostas curtas e diretas
+- Use formatação WhatsApp: *negrito*, _itálico_.
+- NUNCA use Markdown: **duplo**, ## títulos.
+- Respostas curtas (no máximo 2 parágrafos).
 
 ## DATA E HORA ATUAL
 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
 
-      tools = []; // Nenhuma ferramenta para associados
+      tools = [
+        {
+          type: "function",
+          function: {
+            name: "solicitar_atendente_humano",
+            description: "Transfere o atendimento para a equipe humana de Relacionamento. Use SEMPRE que o associado pedir retorno, reclamar de demora, reportar sinistro/emergência, pedir para falar com pessoa, ou repetir a mesma queixa. Após chamar, a IA fica pausada e o operador humano assume.",
+            parameters: {
+              type: "object",
+              properties: {
+                motivo: {
+                  type: "string",
+                  enum: [
+                    "aguardando_retorno",
+                    "reclamacao",
+                    "pediu_humano",
+                    "sinistro_emergencia",
+                    "duvida_complexa",
+                    "outros",
+                  ],
+                  description: "Categoria do transbordo.",
+                },
+                resumo: {
+                  type: "string",
+                  description: "Uma frase descrevendo o que o associado quer (ex: 'pede retorno sobre análise do Prisma KRH3I99').",
+                },
+                prioridade: {
+                  type: "string",
+                  enum: ["normal", "alta"],
+                  description: "Use 'alta' para sinistros, emergências ou clientes em reclamação aguda.",
+                },
+              },
+              required: ["motivo", "resumo"],
+            },
+          },
+        },
+      ];
+
+
 
     } else {
       // === PROMPT PARA LEADS (vendas) ===
@@ -705,13 +799,15 @@ Se o contato fizer perguntas políticas, irrelevantes ou fora do tema de proteç
 - Redirecione educadamente: "Sou especializado em proteção veicular! Posso te ajudar a encontrar o melhor plano para o seu veículo. 😊"
 
 ## SINISTRO / EMERGÊNCIA
-Se o contato relatar sinistro, acidente ou emergência:
-- Responda: "Entendo a urgência! Vou transferir você para nossa equipe especializada que poderá te ajudar imediatamente. Aguarde um momento. 🙏"
-- NÃO tente resolver sinistros
+Se o contato relatar sinistro, acidente, batida, colisão, roubo, furto, incêndio ou qualquer emergência:
+- CHAME *solicitar_atendente_humano* com motivo='sinistro_emergencia' e prioridade='alta'.
+- NÃO tente resolver sinistros, não dê instruções.
 
 ## SOLICITAR ATENDENTE HUMANO
-Se o contato pedir para falar com uma pessoa/atendente:
-- Responda: "Claro! Vou transferir para um dos nossos consultores. Aguarde um momento, ele entrará em contato em breve! 😊"
+Se o contato pedir para falar com pessoa/atendente/humano/consultor, reclamar de demora, repetir queixa, ou se a dúvida fugir do escopo de cotação:
+- CHAME *solicitar_atendente_humano* com motivo apropriado (pediu_humano, reclamacao, duvida_complexa).
+- **PROIBIDO escrever** "vou solicitar", "vou reforçar", "já abri chamado", "já avisei o time", "vou pedir para te ligarem" se você NÃO chamou a tool nesta rodada. Essas frases sem a tool são consideradas mentira.
+
 
 ## DATA E HORA ATUAL
 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -839,7 +935,41 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
             },
           },
         },
+        {
+          type: "function",
+          function: {
+            name: "solicitar_atendente_humano",
+            description: "Transfere o atendimento para a equipe humana de Relacionamento. Use SEMPRE que o lead pedir para falar com pessoa, reportar sinistro/emergência, reclamar de algo grave, ou pedir suporte fora do fluxo de cotação. Após chamar, a IA fica pausada e o operador humano assume.",
+            parameters: {
+              type: "object",
+              properties: {
+                motivo: {
+                  type: "string",
+                  enum: [
+                    "pediu_humano",
+                    "sinistro_emergencia",
+                    "reclamacao",
+                    "duvida_complexa",
+                    "outros",
+                  ],
+                  description: "Categoria do transbordo.",
+                },
+                resumo: {
+                  type: "string",
+                  description: "Uma frase descrevendo o que o lead quer.",
+                },
+                prioridade: {
+                  type: "string",
+                  enum: ["normal", "alta"],
+                  description: "Use 'alta' para sinistros, emergências ou reclamações graves.",
+                },
+              },
+              required: ["motivo", "resumo"],
+            },
+          },
+        },
       ];
+
     }
 
     // Anexa contexto de cobrança recente (se houver) ao final do system prompt
@@ -1041,9 +1171,22 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
               }
             } else if (fnName === "gerar_relatorio") {
               toolResult = await executarGerarRelatorio(supabase, args);
+            } else if (fnName === "solicitar_atendente_humano") {
+              toolResult = await executarSolicitarAtendenteHumano(
+                supabase,
+                telLimpo,
+                {
+                  motivo: args?.motivo || "outros",
+                  resumo: String(args?.resumo || "").slice(0, 500),
+                  prioridade: args?.prioridade === "alta" ? "alta" : "normal",
+                  contato_nome: contato?.nome || associadoNome || null,
+                  associado_id: null,
+                }
+              );
             } else {
               toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
             }
+
           } catch (err: any) {
             console.error(`[agente-consultor-ia] Tool error ${fnName}:`, err);
             toolResult = { error: err.message || "Erro ao executar ferramenta" };
@@ -1075,69 +1218,11 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
 
     console.log(`[agente-consultor-ia] Resposta final (${resposta.length} chars) para ${telLimpo} (diretor=${isDiretor})`);
 
-    // ---- 9. DETECTAR INTENÇÕES ESPECIAIS (apenas leads) ----
-    if (!isDiretor) {
-      const textoLower = (texto || "").toLowerCase();
+    // ---- 9. (REMOVIDO) Os regex legados de pedidoHumano/pedidoSinistro foram substituídos
+    //              pela tool solicitar_atendente_humano (chamada pelo próprio modelo). Veja
+    //              executarSolicitarAtendenteHumano() e o prompt do branch isAssociado/lead.
 
-      const pedidoHumano = textoLower.match(/falar com (uma |um )?(pessoa|atendente|humano|gente|algu[eé]m)/i) ||
-        textoLower.match(/quero (um |uma )?(atendente|pessoa|humano)/i) ||
-        textoLower.match(/atendimento humano/i);
 
-      if (pedidoHumano) {
-        await supabase
-          .from("agente_ia_contatos")
-          .update({ status: "atendimento_humano" })
-          .eq("id", contato.id);
-
-        try {
-          const { data: diretores } = await supabase
-            .from("user_roles")
-            .select("user_id")
-            .in("role", ["diretor", "vendedor", "supervisor_vendas"]);
-
-          for (const dest of diretores || []) {
-            await supabase.from("notificacoes").insert({
-              user_id: dest.user_id,
-              titulo: "👤 Lead solicitou atendimento humano",
-              mensagem: `Telefone: ${telLimpo} | Nome: ${contato?.nome || "Não informado"} | Última mensagem: "${texto?.substring(0, 100)}"`,
-              tipo: "alerta",
-              categoria: "vendas",
-              lida: false,
-            });
-          }
-        } catch (notifErr) {
-          console.error("[agente-consultor-ia] Erro notificação:", notifErr);
-        }
-      }
-
-      const pedidoSinistro = textoLower.match(/sinistro|acidente|batid[oa]|colisão|roubaram|furtaram|incêndio|pegou fogo/i);
-      if (pedidoSinistro) {
-        await supabase
-          .from("agente_ia_contatos")
-          .update({ status: "atendimento_humano" })
-          .eq("id", contato.id);
-
-        try {
-          const { data: analistas } = await supabase
-            .from("user_roles")
-            .select("user_id")
-            .in("role", ["diretor", "analista_sinistros"]);
-
-          for (const dest of analistas || []) {
-            await supabase.from("notificacoes").insert({
-              user_id: dest.user_id,
-              titulo: "🚨 Lead reportou sinistro/emergência",
-              mensagem: `Telefone: ${telLimpo} | Mensagem: "${texto?.substring(0, 150)}"`,
-              tipo: "alerta",
-              categoria: "sinistros",
-              lida: false,
-            });
-          }
-        } catch (notifErr) {
-          console.error("[agente-consultor-ia] Erro notificação sinistro:", notifErr);
-        }
-      }
-    }
 
     // ---- 10. DIVIDIR E ENVIAR RESPOSTA ----
     const partes = dividirMensagem(resposta, 1000);
@@ -2008,3 +2093,106 @@ function dividirMensagem(texto: string, maxLength: number): string[] {
   if (restante) partes.push(restante);
   return partes;
 }
+
+// ============================================================================
+// TOOL: solicitar_atendente_humano
+// Pausa a IA por 12 h (motivo='transbordo_humano'), grava resumo na pausa,
+// abre notificações para o time de Relacionamento e devolve uma resposta fixa
+// ao cliente. O operador encerra pelo botão "Concluir atendimento" do chat.
+// ============================================================================
+async function executarSolicitarAtendenteHumano(
+  supabase: any,
+  telefone: string,
+  payload: {
+    motivo: string;
+    resumo: string;
+    prioridade: "normal" | "alta";
+    contato_nome: string | null;
+    associado_id: string | null;
+  }
+) {
+  const telLimpo = (telefone || "").replace(/\D/g, "");
+  const motivoTransbordo = "transbordo_humano"; // canônico — UI já reconhece
+  const pausadaAte = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+  const agora = new Date().toISOString();
+
+  const resumoFinal = [
+    payload.resumo || "Atendente humano solicitado pela Maya IA.",
+    `(categoria: ${payload.motivo}, prioridade: ${payload.prioridade})`,
+  ].join(" ");
+
+  const { error: pausaErr } = await supabase
+    .from("whatsapp_ia_pausas")
+    .upsert(
+      {
+        telefone: telLimpo,
+        pausada_ate: pausadaAte,
+        motivo: motivoTransbordo,
+        resumo: resumoFinal,
+        atendente_id: null,
+        updated_at: agora,
+      },
+      { onConflict: "telefone" }
+    );
+
+  if (pausaErr) {
+    console.error("[transbordo] Falha ao registrar pausa:", pausaErr);
+    return { success: false, error: "Não consegui transferir agora." };
+  }
+
+  // Notifica destinos do Relacionamento (proxy: coordenador_monitoramento + diretor)
+  try {
+    const { data: dest } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .in("role", ["coordenador_monitoramento", "diretor"]);
+
+    const titulo = payload.prioridade === "alta"
+      ? "🚨 Transbordo URGENTE — IA pediu atendente humano"
+      : "👤 Transbordo — IA pediu atendente humano";
+
+    const mensagem = [
+      `Tel: ${telLimpo}`,
+      payload.contato_nome ? `Nome: ${payload.contato_nome}` : null,
+      `Motivo: ${payload.motivo}`,
+      `Resumo: ${payload.resumo}`,
+    ].filter(Boolean).join(" | ");
+
+    for (const d of dest || []) {
+      await supabase.from("notificacoes").insert({
+        user_id: d.user_id,
+        titulo,
+        mensagem,
+        tipo: "alerta",
+        categoria: "relacionamento",
+        lida: false,
+      });
+    }
+
+    await supabase.from("notificacoes_sistema").insert({
+      titulo,
+      mensagem,
+      tipo: "transbordo_ia",
+      destino: "role",
+      destino_role: "coordenador_monitoramento",
+      link: `/eventos/chat-ia?telefone=${encodeURIComponent(telLimpo)}`,
+      ativo: true,
+    });
+  } catch (notifErr) {
+    console.error("[transbordo] Falha ao notificar Relacionamento (não-bloqueante):", notifErr);
+  }
+
+  console.log(`[transbordo] ✓ Aberto p/ ${telLimpo} motivo=${payload.motivo} prioridade=${payload.prioridade}`);
+
+  const primeiroNome = payload.contato_nome ? String(payload.contato_nome).split(/\s+/)[0] : "";
+  return {
+    success: true,
+    instrucao:
+      "TRANSBORDO ABERTO. Sua próxima e ÚNICA mensagem deve ser EXATAMENTE: \"Já chamei a equipe de Relacionamento aqui" +
+      (primeiroNome ? `, ${primeiroNome}` : "") +
+      ". Eles vão te responder por este mesmo WhatsApp assim que pegarem o seu atendimento. Pode aguardar. 🙏\". NÃO escreva mais nada além disso. NÃO peça nenhum dado a mais. NÃO prometa nada além do que está nessa frase.",
+    pausada_ate: pausadaAte,
+    motivo: motivoTransbordo,
+  };
+}
+
