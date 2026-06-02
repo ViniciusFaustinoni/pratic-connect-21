@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, Loader2, Filter, Copy, Search, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Filter, Copy, Search, ArrowDownAZ, ArrowUpAZ, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useDuplicateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
