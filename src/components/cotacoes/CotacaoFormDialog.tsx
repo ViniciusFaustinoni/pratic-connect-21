@@ -818,8 +818,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     ? (fipeMenorInfo?.faixaInferior?.max ?? fipeMenorInfo?.valorReduzido ?? valorFipe)
     : valorFipe;
 
-  // Hook de planos calculados dinamicamente do banco
-  const { planos: planosCalculados, planosNegados, isLoading: planosLoading, tipoResolver } = usePlanosCotacao({
+  // Params estabilizados — sem isso, o `useMemo` interno de usePlanosCotacao
+  // recebe um objeto novo a cada render e nunca bate cache (recalcula a cada
+  // tecla). Memoizar aqui restaura o memo existente; NÃO altera lógica.
+  // Lista de deps espelha 1:1 os 10 campos lidos abaixo.
+  const planosParams = useMemo(() => ({
     valorFipe: valorFipeParaPlanos,
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
@@ -830,7 +833,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
     marca: marcaResolvida || undefined,
     modelo: modeloResolvido || undefined,
-  });
+  }), [
+    valorFipeParaPlanos,
+    valorAdicional,
+    regiaoSelecionada,
+    combustivelSelecionado,
+    veiculoEncontrado?.vehicleData?.combustivel,
+    tipoPlacaSelecionado,
+    anoNumerico,
+    tipoVeiculoDetectado,
+    usoVeiculo,
+    marcaResolvida,
+    modeloResolvido,
+  ]);
+
+  // Hook de planos calculados dinamicamente do banco
+  const { planos: planosCalculados, planosNegados, isLoading: planosLoading, tipoResolver } = usePlanosCotacao(planosParams);
   // Tipo congelado para persistir (snapshot canônico via elegibilidade de linhas)
   const [tipoVeiculoManualOverride, setTipoVeiculoManualOverride] = useState<'carro' | 'moto' | null>(null);
   const [showBloqueioTipoVeiculo, setShowBloqueioTipoVeiculo] = useState(false);
