@@ -33537,6 +33537,7 @@ export type Database = {
           access_token: string | null
           ativo: boolean | null
           created_at: string | null
+          display_phone_number: string | null
           id: string
           last_webhook_at: string | null
           last_webhook_error: string | null
@@ -33554,6 +33555,7 @@ export type Database = {
           access_token?: string | null
           ativo?: boolean | null
           created_at?: string | null
+          display_phone_number?: string | null
           id?: string
           last_webhook_at?: string | null
           last_webhook_error?: string | null
@@ -33571,6 +33573,7 @@ export type Database = {
           access_token?: string | null
           ativo?: boolean | null
           created_at?: string | null
+          display_phone_number?: string | null
           id?: string
           last_webhook_at?: string | null
           last_webhook_error?: string | null

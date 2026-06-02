@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, User, Bot, Loader2, MessageSquare, AlertCircle, CheckCheck } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { format } from 'date-fns';
@@ -10,6 +10,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
+import { useMetaConfig, useTestarMetaConexao } from '@/hooks/useWhatsAppMeta';
+
+function formatPhoneBR(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const d = raw.replace(/\D/g, '');
+  // Esperado: 55 21 98579 1044 (13) ou 55 21 8579 1044 (12)
+  if (d.length === 13) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+  if (d.length === 12) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+  return raw;
+}
 
 export interface ConversaAgrupada {
   telefone: string;
@@ -65,6 +75,19 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'nao_lidos'>('todas');
 
+  // Número da IA (Meta Oficial) — exibido como badge ao lado do título
+  const { data: metaConfig } = useMetaConfig();
+  const testarMeta = useTestarMetaConexao();
+  const backfillTried = useRef(false);
+  useEffect(() => {
+    if (backfillTried.current) return;
+    if (metaConfig?.phone_number_id && !metaConfig?.display_phone_number) {
+      backfillTried.current = true;
+      // Backfill silencioso: popula display_phone_number sem toast de erro
+      testarMeta.mutate(metaConfig.phone_number_id, { onError: () => {} });
+    }
+  }, [metaConfig?.phone_number_id, metaConfig?.display_phone_number, testarMeta]);
+
   const totalNaoLidos = useMemo(
     () => conversas.reduce((acc, c) => acc + (c.unread_count > 0 ? 1 : 0), 0),
     [conversas]
@@ -105,6 +128,15 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
           Conversas IA
           {conversas.length > 0 && (
             <Badge variant="secondary" className="text-[10px]">{conversas.length}</Badge>
+          )}
+          {metaConfig?.display_phone_number && (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-mono"
+              title="Número WhatsApp da IA"
+            >
+              {formatPhoneBR(metaConfig.display_phone_number)}
+            </Badge>
           )}
           {totalNaoLidos > 0 && (
             <Badge className="text-[10px] bg-emerald-600 hover:bg-emerald-600">
