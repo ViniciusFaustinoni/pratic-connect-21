@@ -75,11 +75,8 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Marcar como processando
-      await supabase
-        .from("whatsapp_fila_ia")
-        .update({ status: "processando" })
-        .eq("id", item.id);
+      // (item já foi marcado como 'processando' + tentativas++ pelo RPC claim_proximos_itens_fila_ia)
+
 
       try {
         const telLimpo = item.telefone.replace(/\D/g, "");
