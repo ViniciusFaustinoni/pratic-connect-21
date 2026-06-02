@@ -1237,6 +1237,9 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
           if (fnName === "obter_opcoes_vencimento" && toolResult?.success) {
             toolContent = `⚠️ DATAS OFICIAIS DE VENCIMENTO - USE APENAS ESTAS, NÃO INVENTE:\n${toolContent}`;
           }
+          if (fnName === "consultar_boletos_associado") {
+            toolContent = `⚠️ BOLETOS OFICIAIS DO SGA - USE APENAS ESTES VALORES/DATAS/LINHAS, NÃO INVENTE. Se encontrados=0 e sem erro, diga que está em dia. Se erro_transitorio=true, chame solicitar_atendente_humano.\n${toolContent}`;
+          }
 
           currentMessages.push({
             role: "tool",
