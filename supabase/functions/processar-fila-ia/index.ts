@@ -132,7 +132,8 @@ Deno.serve(async (req) => {
           throw new Error(`HTTP ${res.status}: ${errorText.substring(0, 200)}`);
         }
       } catch (err: any) {
-        const novaTentativa = item.tentativas + 1;
+        // tentativas já foi incrementada no claim; aqui só refletimos o resultado final
+        const novaTentativa = item.tentativas + 1; // valor pós-claim
         const novoStatus = novaTentativa >= 3 ? "falha_definitiva" : "erro";
 
         await supabase
@@ -140,10 +141,10 @@ Deno.serve(async (req) => {
           .update({
             status: novoStatus,
             erro: err.message?.substring(0, 500) || "Erro desconhecido",
-            tentativas: novaTentativa,
             processed_at: novoStatus === "falha_definitiva" ? new Date().toISOString() : null,
           })
           .eq("id", item.id);
+
 
         erros++;
         console.error(`[processar-fila-ia] ✗ Erro item ${item.id} (tentativa ${novaTentativa}):`, err.message);
