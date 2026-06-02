@@ -1171,9 +1171,22 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
               }
             } else if (fnName === "gerar_relatorio") {
               toolResult = await executarGerarRelatorio(supabase, args);
+            } else if (fnName === "solicitar_atendente_humano") {
+              toolResult = await executarSolicitarAtendenteHumano(
+                supabase,
+                telLimpo,
+                {
+                  motivo: args?.motivo || "outros",
+                  resumo: String(args?.resumo || "").slice(0, 500),
+                  prioridade: args?.prioridade === "alta" ? "alta" : "normal",
+                  contato_nome: contato?.nome || associadoNome || null,
+                  associado_id: null,
+                }
+              );
             } else {
               toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
             }
+
           } catch (err: any) {
             console.error(`[agente-consultor-ia] Tool error ${fnName}:`, err);
             toolResult = { error: err.message || "Erro ao executar ferramenta" };
