@@ -209,9 +209,13 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
               const isCobranca = !!conversa.ultima_cobranca;
               const isUnread = conversa.unread_count > 0;
               const isTransbordo = !!conversa.transbordo;
-              const transbordoLabel = conversa.transbordo?.motivo === 'transbordo_boleto'
-                ? 'Transbordo · Boleto'
+              const transbordoMotivo = conversa.transbordo?.motivo;
+              const transbordoLabel =
+                transbordoMotivo === 'transbordo_boleto' ? 'Transbordo · Boleto'
+                : transbordoMotivo === 'transbordo_humano' ? 'Transbordo · Atendente'
+                : transbordoMotivo === 'intervencao_humana' ? 'Intervenção humana'
                 : 'Transbordo';
+
               const tempoCobranca = isCobranca
                 ? formatDistanceToNowStrict(new Date(conversa.ultima_cobranca!), { locale: ptBR, addSuffix: false })
                 : null;
