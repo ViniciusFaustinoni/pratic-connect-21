@@ -11,7 +11,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
 import { useMetaConfig, useTestarMetaConexao } from '@/hooks/useWhatsAppMeta';
-import { useEffect, useRef } from 'react';
+import { useMetaConfig, useTestarMetaConexao } from '@/hooks/useWhatsAppMeta';
 
 function formatPhoneBR(raw: string | null | undefined): string {
   if (!raw) return '';
