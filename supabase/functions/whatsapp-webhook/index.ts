@@ -3597,13 +3597,73 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, ignored: "IA desabilitada" }), { headers: corsHeaders });
     }
 
-    // Buscar associado pelo telefone (qualquer status)
-    const { data: associado } = await supabase
+    // Buscar CPF previamente confirmado para este telefone (estado canônico do agente).
+    // Usado como critério de desempate quando o mesmo número está em mais de um
+    // associado ativo — o telefone sozinho não identifica, o CPF identifica.
+    const telefoneNormBase = telefone.replace(/\D/g, "");
+    let cpfConfirmadoParaTelefone: string | null = null;
+    try {
+      const { data: contatoIaState } = await supabase
+        .from("agente_ia_contatos")
+        .select("cpf")
+        .eq("telefone", telefoneNormBase)
+        .maybeSingle();
+      const cpfRaw = (contatoIaState?.cpf || "").replace(/\D/g, "");
+      cpfConfirmadoParaTelefone = cpfRaw.length === 11 ? cpfRaw : null;
+    } catch (lookupErr: any) {
+      console.warn(`[whatsapp-webhook] Falha lookup agente_ia_contatos para desempate:`, lookupErr?.message || lookupErr);
+    }
+
+    // Buscar associado(s) pelo telefone (qualquer status). Carregamos múltiplos
+    // candidatos pra detectar o caso "telefone compartilhado" e desempatar por CPF.
+    const { data: candidatosAssociados } = await supabase
       .from("associados")
-      .select("id, nome, status, origem_cadastro")
+      .select("id, nome, status, origem_cadastro, cpf")
       .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
       .order("created_at", { ascending: false })
-      .maybeSingle();
+      .limit(10);
+
+    let associado:
+      | { id: string; nome: string; status: string; origem_cadastro: string | null }
+      | null = null;
+
+    const candidatos = candidatosAssociados || [];
+    if (candidatos.length === 1) {
+      associado = candidatos[0] as any;
+    } else if (candidatos.length > 1) {
+      // Telefone compartilhado por mais de um associado — desempata por CPF
+      // já confirmado e registrado para o contato (não escolher ao acaso, não
+      // cair como desconhecido).
+      if (cpfConfirmadoParaTelefone) {
+        const match = candidatos.find(
+          (c: any) => (c.cpf || "").replace(/\D/g, "") === cpfConfirmadoParaTelefone,
+        );
+        if (match) {
+          associado = match as any;
+          console.log(
+            `[whatsapp-webhook] Telefone compartilhado (${candidatos.length} associados) — desempate por CPF confirmado: associado=${match.id}`,
+          );
+        } else {
+          // CPF confirmado não bate com nenhum dos candidatos por telefone:
+          // mantém o mais recente ativo, mas registra alerta — provavelmente
+          // o associado correto não tem este número cadastrado.
+          const ativo = candidatos.find((c: any) => c.status === "ativo");
+          associado = (ativo || candidatos[0]) as any;
+          console.warn(
+            `[whatsapp-webhook] Telefone compartilhado e CPF confirmado (${cpfConfirmadoParaTelefone}) não corresponde a nenhum candidato. Fallback associado=${associado?.id}`,
+          );
+        }
+      } else {
+        // Sem CPF confirmado e múltiplos candidatos: preservar comportamento
+        // anterior (mais recente ativo) e registrar — agente-consultor-ia
+        // pedirá o CPF na próxima rodada.
+        const ativo = candidatos.find((c: any) => c.status === "ativo");
+        associado = (ativo || candidatos[0]) as any;
+        console.warn(
+          `[whatsapp-webhook] Telefone compartilhado (${candidatos.length}) sem CPF confirmado — selecionado fallback associado=${associado?.id}`,
+        );
+      }
+    }
 
     // ========================================
     // ASSOCIADO ENCONTRADO MAS NÃO ATIVO
