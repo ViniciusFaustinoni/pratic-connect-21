@@ -129,6 +129,15 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
           {conversas.length > 0 && (
             <Badge variant="secondary" className="text-[10px]">{conversas.length}</Badge>
           )}
+          {metaConfig?.display_phone_number && (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-mono"
+              title="Número WhatsApp da IA"
+            >
+              {formatPhoneBR(metaConfig.display_phone_number)}
+            </Badge>
+          )}
           {totalNaoLidos > 0 && (
             <Badge className="text-[10px] bg-emerald-600 hover:bg-emerald-600">
               {totalNaoLidos} não lida{totalNaoLidos > 1 ? 's' : ''}
