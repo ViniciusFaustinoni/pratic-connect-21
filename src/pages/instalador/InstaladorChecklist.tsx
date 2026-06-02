@@ -215,23 +215,38 @@ export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, on
   const videoUrl = (vistoriaCompleta as any)?.video_360_url as string | undefined;
   const vistoriaId = vistoriaCompleta?.id;
 
-  // Detectar tipo de veículo (moto ou automóvel) usando tipo_veiculo, modelo e marca
-  const tipoVeiculo: TipoVeiculo = useMemo(() => {
-    const veiculoData = servico?.veiculos as { tipo_veiculo?: string; modelo?: string; marca?: string } | undefined;
-    const resultado = detectarTipoVeiculo(veiculoData?.tipo_veiculo, veiculoData?.modelo, veiculoData?.marca);
-    console.log('[InstaladorChecklist] Deteccao tipo veiculo:', { modelo: veiculoData?.modelo, marca: veiculoData?.marca, resultado });
-    return resultado;
-  }, [servico?.veiculos?.modelo, servico?.veiculos?.marca]);
+  // Detectar tipo de veículo via RPC canônica `fn_detectar_tipo_veiculo`
+  // (mesma fonte do cotador / contrato-gerar). Fallback síncrono dentro do
+  // hook cobre o primeiro render. Ver mem://logic/operations/vehicle-type-detection-source.
+  const veiculoData = servico?.veiculos as
+    | { tipo_veiculo?: string; modelo?: string; marca?: string; valor_fipe?: number; combustivel?: string }
+    | undefined;
+  const { tipoVeiculo: tipoCanonico, isLoading: tipoLoading } = useDetectarTipoVeiculo(
+    veiculoData?.marca,
+    veiculoData?.modelo,
+    veiculoData?.tipo_veiculo,
+  );
+  const tipoVeiculo: TipoVeiculo = tipoCanonico === 'moto' ? 'moto' : 'automovel';
+  useEffect(() => {
+    if (!veiculoData) return;
+    console.log('[InstaladorChecklist] tipoVeiculo final:', {
+      marca: veiculoData.marca,
+      modelo: veiculoData.modelo,
+      tipo_veiculo_api: veiculoData.tipo_veiculo,
+      resultado: tipoVeiculo,
+      fonte: tipoLoading ? 'fallback-sincrono' : 'rpc',
+    });
+  }, [tipoVeiculo, tipoLoading, veiculoData?.marca, veiculoData?.modelo, veiculoData?.tipo_veiculo]);
 
   // Verificar valor FIPE do veículo e se precisa de rastreador
-  const valorFipeVeiculo = useMemo(() => {
-    const veiculoData = servico?.veiculos as { valor_fipe?: number } | undefined;
-    return veiculoData?.valor_fipe || null;
-  }, [servico?.veiculos]);
+  const valorFipeVeiculo = useMemo(() => veiculoData?.valor_fipe || null, [veiculoData?.valor_fipe]);
 
   const veiculoPrecisaRastreador = useMemo(() => {
+    // Diesel: sempre exige (mesmo sub-FIPE)
+    if ((veiculoData?.combustivel || '').toLowerCase() === 'diesel') return true;
     return precisaRastreador(valorFipeVeiculo, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto);
-  }, [valorFipeVeiculo, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto]);
+  }, [valorFipeVeiculo, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto, veiculoData?.combustivel]);
+
 
   // Configuração dinâmica baseada no tipo de veículo (e se precisa rastreador)
   const criadoEm = (vistoriaCompleta as any)?.created_at ?? (servico as any)?.created_at;
