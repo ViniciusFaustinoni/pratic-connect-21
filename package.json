@@ -65,6 +65,7 @@
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^1.1.7",
     "embla-carousel-react": "^8.6.0",
+    "emoji-picker-react": "^4.19.1",
     "fabric": "^6.6.6",
     "framer-motion": "^12.26.2",
     "heic2any": "^0.0.4",
