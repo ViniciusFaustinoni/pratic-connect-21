@@ -173,21 +173,29 @@ serve(async (req) => {
         }
       } catch (err) {
         console.error(`[Cron SGA Retry] Erro ao processar item ${item.id}:`, err);
-        
+
+        // Frente 3 — backoff exponencial (mesma fórmula de sga-hinova-sync) +
+        // MAX_TENTATIVAS=6. Sem heurística textual: se atingir o budget, vira
+        // falha_permanente sem reabertura automática.
         const tentativas = item.tentativas + 1;
-        const proximoReenvio = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-        
+        const MAX = 6;
+        const BASE_MS = 5 * 60 * 1000;
+        const MAX_MS = 4 * 60 * 60 * 1000;
+        const exp = Math.min(BASE_MS * Math.pow(2, Math.max(0, tentativas - 1)), MAX_MS);
+        const jitter = 0.8 + Math.random() * 0.4;
+        const proximoReenvio = new Date(Date.now() + Math.round(exp * jitter)).toISOString();
+
         await supabase
           .from('sga_sync_queue')
           .update({
-            status: tentativas >= 10 ? 'falha_permanente' : 'pendente',
+            status: tentativas >= MAX ? 'falha_permanente' : 'pendente',
             tentativas,
             ultima_tentativa_em: new Date().toISOString(),
             proximo_reenvio_em: proximoReenvio,
             erro_ultimo: err instanceof Error ? err.message : 'Erro desconhecido',
           })
           .eq('id', item.id);
-        
+
         falha++;
       }
     }
