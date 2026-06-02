@@ -1547,7 +1547,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     });
   }, [planosCalculados, form]);
 
-  const handleTogglePlano = (plano: PlanoCotacao) => {
+  const handleTogglePlano = useCallback((plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
       const jaExiste = prev.some(p => p.id === plano.id);
       if (jaExiste) {
@@ -1582,7 +1582,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
       return novos;
     });
-  };
+  }, [form]);
 
 
   const formatCurrency = (value: number) => {
