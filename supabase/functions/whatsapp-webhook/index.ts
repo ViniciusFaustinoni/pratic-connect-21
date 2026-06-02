@@ -4174,7 +4174,7 @@ serve(async (req) => {
     try {
       const prazoLinkEvento = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
       const whatsappPrompt = buildWhatsappSystemPrompt(prazoLinkEvento);
-      let aiResponse = await callAI(messages, whatsappPrompt + "\n\n" + context);
+      let aiResponse = await callAI(messages, whatsappPrompt + "\n\n" + context + identidadeCtx);
       let assistantMessage = aiResponse.choices?.[0]?.message;
       let iterations = 0;
       const maxIterations = 4;
