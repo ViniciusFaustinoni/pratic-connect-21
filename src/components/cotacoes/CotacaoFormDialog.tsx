@@ -1392,7 +1392,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
 
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cotacaoBase, open, form, restaurarVeiculoPorPlaca]);
+
 
   // Efeito para preencher o formulário com dados da cotação para edição
   useEffect(() => {
