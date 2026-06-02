@@ -941,31 +941,43 @@ export type Database = {
       }
       agente_ia_contatos: {
         Row: {
+          cpf: string | null
+          cpf_capturado_em: string | null
+          cpf_solicitado_em: string | null
           created_at: string | null
           dados_cotacao: Json | null
           id: string
           nome: string | null
           resetado_em: string | null
+          sga_associado_encontrado: boolean | null
           status: string | null
           telefone: string
           ultima_interacao: string | null
         }
         Insert: {
+          cpf?: string | null
+          cpf_capturado_em?: string | null
+          cpf_solicitado_em?: string | null
           created_at?: string | null
           dados_cotacao?: Json | null
           id?: string
           nome?: string | null
           resetado_em?: string | null
+          sga_associado_encontrado?: boolean | null
           status?: string | null
           telefone: string
           ultima_interacao?: string | null
         }
         Update: {
+          cpf?: string | null
+          cpf_capturado_em?: string | null
+          cpf_solicitado_em?: string | null
           created_at?: string | null
           dados_cotacao?: Json | null
           id?: string
           nome?: string | null
           resetado_em?: string | null
+          sga_associado_encontrado?: boolean | null
           status?: string | null
           telefone?: string
           ultima_interacao?: string | null
