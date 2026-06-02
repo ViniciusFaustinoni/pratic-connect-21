@@ -1383,9 +1383,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             mesReferencia: null
           } : null
         });
-      } else if (cotacaoBase.veiculo_placa) {
+      } else if (cotacaoBase.veiculo_placa && !veiculoEncontrado && !buscandoPlaca) {
+        // Guard: não refazer a busca por placa se o usuário já clicou na lupa
+        // (ou está clicando). Sem isso, qualquer re-render do pai que mudar a
+        // referência de `cotacaoBase` derruba o `veiculoEncontrado` e os planos
+        // calculados — bug observado na Substituição.
         restaurarVeiculoPorPlaca(cotacaoBase.veiculo_placa);
       }
+
     }
   }, [cotacaoBase, open, form, restaurarVeiculoPorPlaca]);
 
