@@ -29,7 +29,22 @@ export function useWhatsAppHistorico(telefone: string | null | undefined, limit 
         throw error;
       }
 
-      return data as WhatsAppMensagem[];
+      // Dedupe por message_id: cada saída da Maya é gravada 2x na tabela
+      // (1 linha provedor=meta_oficial + 1 linha provedor=evolution) com o MESMO
+      // message_id Meta — o WhatsApp recebe a mensagem 1x só, mas o histórico
+      // duplicava no painel. Mantém a primeira ocorrência por message_id; linhas
+      // sem message_id (raras, ex.: registros antigos) passam sem dedup.
+      const seen = new Set<string>();
+      const deduped = (data ?? []).filter((m: any) => {
+        const mid = m?.message_id;
+        if (!mid) return true;
+        if (seen.has(mid)) return false;
+        seen.add(mid);
+        return true;
+      });
+
+      return deduped as WhatsAppMensagem[];
+
     },
     enabled: !!telefone,
     staleTime: 30000, // 30 segundos
