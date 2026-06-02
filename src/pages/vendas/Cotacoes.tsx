@@ -835,6 +835,77 @@ export default function Cotacoes() {
 
   // Spinner inline (dentro da tabela) — não desmonta header/filtros/input
 
+  // Memos para props do CotacaoFormDialog: evitam que objetos literais recriados a cada
+  // render disparem efeitos internos do dialog (caso da Substituição em que os planos
+  // apareciam e sumiam ao clicar na lupa — o efeito de pré-preenchimento de `cotacaoBase`
+  // re-rodava em cada render do pai e refazia a busca da placa, derrubando o estado).
+  const origemSubstituicaoProp = useMemo(
+    () => substituicaoCtx ? {
+      solicitacaoId: substituicaoCtx.solicitacaoId,
+      associadoId: substituicaoCtx.associadoId,
+      veiculoAntigoId: substituicaoCtx.veiculoAntigoId,
+      veiculoAntigoPlaca: substituicaoCtx.veiculoAntigoPlaca,
+      veiculoAntigoModelo: substituicaoCtx.veiculoAntigoModelo,
+      veiculoNovoPlaca: substituicaoCtx.veiculoNovoPlaca || undefined,
+    } : null,
+    [
+      substituicaoCtx?.solicitacaoId,
+      substituicaoCtx?.associadoId,
+      substituicaoCtx?.veiculoAntigoId,
+      substituicaoCtx?.veiculoAntigoPlaca,
+      substituicaoCtx?.veiculoAntigoModelo,
+      substituicaoCtx?.veiculoNovoPlaca,
+    ]
+  );
+
+  const cotacaoBaseProp = useMemo(() => {
+    if (substituicaoCtx) {
+      return {
+        valor_fipe: 0,
+        valor_adicional: 0,
+        valor_adesao: null,
+        validade_dias: 30,
+        veiculo_marca: null,
+        veiculo_modelo: null,
+        veiculo_ano: null,
+        veiculo_placa: substituicaoCtx.veiculoNovoPlaca || null,
+        codigo_fipe: null,
+        categoria: null,
+        regiao: null,
+        nome_solicitante: substituicaoCtx.nome || null,
+        telefone1_solicitante: substituicaoCtx.telefone || null,
+        email_solicitante: substituicaoCtx.email || null,
+        lead_id: null,
+        plano_id: null,
+        dados_extras: null,
+      };
+    }
+    if (cotacaoParaDuplicar) {
+      return {
+        valor_fipe: cotacaoParaDuplicar.valor_fipe,
+        valor_adicional: cotacaoParaDuplicar.valor_adicional,
+        valor_adesao: cotacaoParaDuplicar.valor_adesao,
+        validade_dias: cotacaoParaDuplicar.validade_dias,
+        veiculo_marca: cotacaoParaDuplicar.veiculo_marca,
+        veiculo_modelo: cotacaoParaDuplicar.veiculo_modelo,
+        veiculo_ano: cotacaoParaDuplicar.veiculo_ano,
+        veiculo_placa: cotacaoParaDuplicar.veiculo_placa,
+        codigo_fipe: cotacaoParaDuplicar.codigo_fipe,
+        categoria: cotacaoParaDuplicar.categoria,
+        regiao: cotacaoParaDuplicar.regiao,
+        nome_solicitante: cotacaoParaDuplicar.nome_solicitante || cotacaoParaDuplicar.leads?.nome || null,
+        telefone1_solicitante: cotacaoParaDuplicar.telefone1_solicitante || cotacaoParaDuplicar.leads?.telefone || null,
+        email_solicitante: cotacaoParaDuplicar.email_solicitante || cotacaoParaDuplicar.leads?.email || null,
+        lead_id: cotacaoParaDuplicar.lead_id,
+        plano_id: cotacaoParaDuplicar.plano_id,
+        dados_extras: cotacaoParaDuplicar.dados_extras as any,
+      };
+    }
+    return null;
+  }, [substituicaoCtx, cotacaoParaDuplicar]);
+
+
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1407,51 +1478,9 @@ export default function Cotacoes() {
             }}
             leadId={leadIdFromUrl || undefined}
             ignorarPlacaDuplicadaIds={ignorarPlacaIds}
-            origemSubstituicao={substituicaoCtx ? {
-              solicitacaoId: substituicaoCtx.solicitacaoId,
-              associadoId: substituicaoCtx.associadoId,
-              veiculoAntigoId: substituicaoCtx.veiculoAntigoId,
-              veiculoAntigoPlaca: substituicaoCtx.veiculoAntigoPlaca,
-              veiculoAntigoModelo: substituicaoCtx.veiculoAntigoModelo,
-              veiculoNovoPlaca: substituicaoCtx.veiculoNovoPlaca || undefined,
-            } : null}
-            cotacaoBase={substituicaoCtx ? {
-              valor_fipe: 0,
-              valor_adicional: 0,
-              valor_adesao: null,
-              validade_dias: 30,
-              veiculo_marca: null,
-              veiculo_modelo: null,
-              veiculo_ano: null,
-              veiculo_placa: substituicaoCtx.veiculoNovoPlaca || null,
-              codigo_fipe: null,
-              categoria: null,
-              regiao: null,
-              nome_solicitante: substituicaoCtx.nome || null,
-              telefone1_solicitante: substituicaoCtx.telefone || null,
-              email_solicitante: substituicaoCtx.email || null,
-              lead_id: null,
-              plano_id: null,
-              dados_extras: null,
-            } : cotacaoParaDuplicar ? {
-              valor_fipe: cotacaoParaDuplicar.valor_fipe,
-              valor_adicional: cotacaoParaDuplicar.valor_adicional,
-              valor_adesao: cotacaoParaDuplicar.valor_adesao,
-              validade_dias: cotacaoParaDuplicar.validade_dias,
-              veiculo_marca: cotacaoParaDuplicar.veiculo_marca,
-              veiculo_modelo: cotacaoParaDuplicar.veiculo_modelo,
-              veiculo_ano: cotacaoParaDuplicar.veiculo_ano,
-              veiculo_placa: cotacaoParaDuplicar.veiculo_placa,
-              codigo_fipe: cotacaoParaDuplicar.codigo_fipe,
-              categoria: cotacaoParaDuplicar.categoria,
-              regiao: cotacaoParaDuplicar.regiao,
-              nome_solicitante: cotacaoParaDuplicar.nome_solicitante || cotacaoParaDuplicar.leads?.nome || null,
-              telefone1_solicitante: cotacaoParaDuplicar.telefone1_solicitante || cotacaoParaDuplicar.leads?.telefone || null,
-              email_solicitante: cotacaoParaDuplicar.email_solicitante || cotacaoParaDuplicar.leads?.email || null,
-              lead_id: cotacaoParaDuplicar.lead_id,
-              plano_id: cotacaoParaDuplicar.plano_id,
-              dados_extras: cotacaoParaDuplicar.dados_extras as any,
-            } : null}
+            origemSubstituicao={origemSubstituicaoProp}
+            cotacaoBase={cotacaoBaseProp}
+
 
             cotacaoParaEditar={cotacaoParaContinuar ? {
               id: cotacaoParaContinuar.id,

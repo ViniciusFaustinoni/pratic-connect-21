@@ -1383,11 +1383,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             mesReferencia: null
           } : null
         });
-      } else if (cotacaoBase.veiculo_placa) {
+      } else if (cotacaoBase.veiculo_placa && !veiculoEncontrado && !buscandoPlaca) {
+        // Guard: não refazer a busca por placa se o usuário já clicou na lupa
+        // (ou está clicando). Sem isso, qualquer re-render do pai que mudar a
+        // referência de `cotacaoBase` derruba o `veiculoEncontrado` e os planos
+        // calculados — bug observado na Substituição.
         restaurarVeiculoPorPlaca(cotacaoBase.veiculo_placa);
       }
+
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cotacaoBase, open, form, restaurarVeiculoPorPlaca]);
+
 
   // Efeito para preencher o formulário com dados da cotação para edição
   useEffect(() => {
