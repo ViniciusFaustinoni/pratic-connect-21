@@ -298,7 +298,14 @@ serve(async (req) => {
         raw_count: raw.length,
         abertos_count: abertos.length,
         descartes,
-        amostra_raw: raw.slice(0, 2).map((b: any) => ({ chaves: Object.keys(b || {}), boleto: b })),
+        amostra_raw: raw.slice(0, 3).map((b: any) => ({
+          nosso_numero: b?.nosso_numero ?? null,
+          situacao: b?.situacao ?? b?.situacao_boleto ?? null,
+          tipo_boleto: b?.tipo_boleto ?? null,
+          data_vencimento: b?.data_vencimento ?? null,
+          data_pagamento: b?.data_pagamento ?? null,
+          valor: b?.valor ?? b?.valor_boleto ?? b?.valor_documento ?? b?.valor_titulo ?? null,
+        })),
       });
 
       // Tenta enriquecer placa/marca/modelo a partir do payload do veículo (quando viemos de placa)
