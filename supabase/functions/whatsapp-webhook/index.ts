@@ -3666,6 +3666,86 @@ serve(async (req) => {
     }
 
     // ========================================
+    // GATE CANÔNICO: SEMPRE EXIGIR CPF NA 1ª INTERAÇÃO
+    // ========================================
+    // Mesmo quando o telefone bate com 1+ associados, nunca identificar
+    // pelo número sozinho — número é compartilhado e gera "Encontrei
+    // você, X" trocando o titular (caso MARCOS x LUIZ 02/06). A IA SEMPRE
+    // pede CPF primeiro e só prossegue após o CPF confirmar quem é.
+    if (associado && !cpfConfirmadoParaTelefone && tipoPrincipal === 'texto') {
+      const cpfTentativa = mensagemTexto.replace(/\D/g, '');
+
+      // (a) Cliente respondeu o CPF → casar contra os candidatos do telefone
+      if (cpfTentativa.length === 11) {
+        const candidatoPorCpf = candidatos.find(
+          (c: any) => (c.cpf || '').replace(/\D/g, '') === cpfTentativa,
+        );
+
+        if (candidatoPorCpf) {
+          // Match: persiste vínculo e segue identificando esse associado
+          associado = candidatoPorCpf as any;
+          const incomingNormUp = telefone.replace(/\D/g, '');
+          try {
+            const { data: contatoExistenteUp } = await supabase
+              .from('agente_ia_contatos')
+              .select('id')
+              .eq('telefone', incomingNormUp)
+              .maybeSingle();
+
+            const payload = {
+              cpf: cpfTentativa,
+              cpf_capturado_em: new Date().toISOString(),
+              sga_associado_encontrado: true,
+              nome: associado.nome,
+              status: 'em_conversa',
+              ultima_interacao: new Date().toISOString(),
+            };
+
+            if (contatoExistenteUp?.id) {
+              await supabase.from('agente_ia_contatos').update(payload).eq('id', contatoExistenteUp.id);
+            } else {
+              await supabase.from('agente_ia_contatos').insert({ telefone: incomingNormUp, ...payload });
+            }
+            console.log(`[whatsapp-webhook] CPF confirmado por gate canônico: tel=${incomingNormUp} associado=${associado.id}`);
+          } catch (persistErr: any) {
+            console.error('[whatsapp-webhook] Falha persistir CPF (gate canônico):', persistErr?.message || persistErr);
+          }
+
+          const primeiroNome = (associado.nome || 'Cliente').split(' ')[0];
+          await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, 'entrada', messageId, tipoPrincipal, mediaArmazenada || undefined, mediaMimetype || undefined, mediaFilename || undefined, associado.id, 'associado', associado.nome);
+          await sendWhatsAppMessage(
+            apiUrl,
+            instancia.instance_name,
+            telefone,
+            `Encontrei você, *${primeiroNome}*! 🎉\n\nComo posso te ajudar hoje? 😊`,
+          );
+          return new Response(JSON.stringify({ ok: true, cpf_confirmed: true, associado_id: associado.id }), { headers: corsHeaders });
+        }
+
+        // CPF não bate com nenhum candidato deste telefone
+        await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, 'entrada', messageId);
+        await sendWhatsAppMessage(
+          apiUrl,
+          instancia.instance_name,
+          telefone,
+          'Não consegui localizar esse CPF nos cadastros vinculados a este número. 😕\n\nPor favor, confira e me envie novamente apenas os *11 dígitos* do seu CPF.',
+        );
+        return new Response(JSON.stringify({ ok: true, cpf_mismatch: true }), { headers: corsHeaders });
+      }
+
+      // (b) Qualquer outra mensagem antes do CPF → pedir CPF
+      await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, 'entrada', messageId);
+      await sendWhatsAppMessage(
+        apiUrl,
+        instancia.instance_name,
+        telefone,
+        'Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF. 😁',
+      );
+      return new Response(JSON.stringify({ ok: true, awaiting_cpf: true }), { headers: corsHeaders });
+    }
+
+
+    // ========================================
     // ASSOCIADO ENCONTRADO MAS NÃO ATIVO
     // ========================================
     if (associado && associado.status !== "ativo") {
