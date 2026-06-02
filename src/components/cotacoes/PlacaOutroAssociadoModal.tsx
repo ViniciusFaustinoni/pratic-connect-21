@@ -91,18 +91,23 @@ export function PlacaOutroAssociadoModal({
           </p>
         </div>
 
-        <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2 px-6 py-4 border-t border-border/60 bg-muted/20">
-          <AlertDialogCancel className="mt-0 sm:mr-auto">Cancelar</AlertDialogCancel>
+        <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end gap-2 px-6 py-4 border-t border-border/60 bg-muted/20">
+          <AlertDialogCancel className="mt-0 sm:mr-auto w-full sm:w-auto">Cancelar</AlertDialogCancel>
           {onIgnorarEProsseguir && (
-            <Button variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setShowBypass(true)}>
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setShowBypass(true)}
+            >
               Ignorar e prosseguir
             </Button>
           )}
-          <AlertDialogAction onClick={irParaTroca} className="gap-2">
+          <AlertDialogAction onClick={irParaTroca} className="w-full sm:w-auto gap-2 whitespace-nowrap">
             <ArrowRightLeft className="h-4 w-4" />
             Iniciar Troca de Titularidade
           </AlertDialogAction>
         </AlertDialogFooter>
+
       </AlertDialogContent>
 
       {onIgnorarEProsseguir && (
