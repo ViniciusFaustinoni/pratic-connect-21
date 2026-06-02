@@ -124,6 +124,151 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ---- 2B. GATE DE CPF (skip diretores) ----
+    // A IA não conversa/vende nada até o usuário informar um CPF válido.
+    // Após captura, consulta SGA e injeta o contexto no prompt via cpfSgaContexto.
+    let cpfSgaContexto: { encontrado: boolean; nome?: string; status?: string; cpfMascarado: string } | null = null;
+    let sgaAssociadoOverride: { nome: string; status: string } | null = null;
+
+    // Pré-detecta diretor por telefone (mesma lógica do bloco 4, antecipada aqui)
+    let diretorPreDetectado = false;
+    {
+      const telVariantesPre = [telLimpo];
+      if (telLimpo.startsWith("55") && telLimpo.length >= 12) telVariantesPre.push(telLimpo.substring(2));
+      if (!telLimpo.startsWith("55")) telVariantesPre.push("55" + telLimpo);
+      const orFilterPre = telVariantesPre.flatMap(t => [`telefone.eq.${t}`, `whatsapp.eq.${t}`]).join(",");
+      const { data: profilePre } = await supabase
+        .from("profiles")
+        .select("user_id")
+        .or(orFilterPre)
+        .limit(1)
+        .maybeSingle();
+      if (profilePre?.user_id) {
+        const { data: roleRow } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", profilePre.user_id)
+          .eq("role", "diretor")
+          .maybeSingle();
+        diretorPreDetectado = !!roleRow;
+      }
+    }
+
+    if (!diretorPreDetectado && !contato.cpf) {
+      const validateCpf = (raw: string): boolean => {
+        const c = raw.replace(/\D/g, "");
+        if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+        let sum = 0;
+        for (let i = 0; i < 9; i++) sum += parseInt(c[i]) * (10 - i);
+        let d1 = (sum * 10) % 11;
+        if (d1 === 10) d1 = 0;
+        if (d1 !== parseInt(c[9])) return false;
+        sum = 0;
+        for (let i = 0; i < 10; i++) sum += parseInt(c[i]) * (11 - i);
+        let d2 = (sum * 10) % 11;
+        if (d2 === 10) d2 = 0;
+        return d2 === parseInt(c[10]);
+      };
+
+      const enviarTexto = async (msg: string) => {
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ telefone: telLimpo, mensagem: msg, allow_text: true }),
+          });
+        } catch (e) {
+          console.error(`[agente-consultor-ia] Falha ao enviar mensagem de gate CPF:`, (e as any)?.message);
+        }
+      };
+
+      // Extrai possível CPF da mensagem (aceita pontuação)
+      const textoEntrada = (texto || "").toString();
+      const apenasDigitos = textoEntrada.replace(/\D/g, "");
+      const matchFormatado = textoEntrada.match(/(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/);
+      let cpfCandidato: string | null = null;
+      if (matchFormatado) cpfCandidato = matchFormatado[1];
+      else if (apenasDigitos.length === 11) cpfCandidato = apenasDigitos;
+      else if (apenasDigitos.length > 11 && apenasDigitos.length <= 14) {
+        cpfCandidato = apenasDigitos.slice(-11);
+      }
+
+      if (cpfCandidato && validateCpf(cpfCandidato)) {
+        const cpfLimpo = cpfCandidato.replace(/\D/g, "");
+        const cpfMascarado = `${cpfLimpo.slice(0, 3)}.***.***-${cpfLimpo.slice(9)}`;
+
+        // Consulta SGA (não-bloqueante: se falhar, segue como "não encontrado")
+        let sgaResp: any = null;
+        try {
+          const r = await fetch(`${supabaseUrl}/functions/v1/sga-buscar-associado-completo`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ cpf: cpfLimpo }),
+            signal: AbortSignal.timeout(20000),
+          });
+          if (r.ok) sgaResp = await r.json();
+          else console.warn(`[agente-consultor-ia] SGA lookup HTTP ${r.status}`);
+        } catch (e) {
+          console.warn(`[agente-consultor-ia] SGA lookup falhou:`, (e as any)?.message);
+        }
+
+        const encontrado = !!sgaResp?.encontrado && !!sgaResp?.associado;
+        const nomeSga = sgaResp?.associado?.nome || null;
+        const statusSga = sgaResp?.associado?.situacao || sgaResp?.associado?.status || "";
+
+        await supabase
+          .from("agente_ia_contatos")
+          .update({
+            cpf: cpfLimpo,
+            cpf_capturado_em: new Date().toISOString(),
+            sga_associado_encontrado: encontrado,
+            ...(nomeSga ? { nome: nomeSga } : {}),
+          })
+          .eq("id", contato.id);
+
+        contato.cpf = cpfLimpo;
+        if (nomeSga) contato.nome = nomeSga;
+
+        cpfSgaContexto = {
+          encontrado,
+          nome: nomeSga || undefined,
+          status: statusSga || undefined,
+          cpfMascarado,
+        };
+        if (encontrado && nomeSga) {
+          sgaAssociadoOverride = { nome: nomeSga, status: String(statusSga || "") };
+        }
+        console.log(`[agente-consultor-ia] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
+        // Segue o fluxo normal abaixo; prompts vão receber o contexto.
+      } else if (cpfCandidato) {
+        await enviarTexto("Esse CPF não parece válido. Pode conferir e me enviar de novo? 😉");
+        return new Response(
+          JSON.stringify({ success: true, gate: "cpf_invalido" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else {
+        // Nenhum CPF — manda saudação padrão com debounce de 10 min
+        const ultimaSolicitacao = contato.cpf_solicitado_em ? new Date(contato.cpf_solicitado_em) : null;
+        const podeReenviar = !ultimaSolicitacao || (Date.now() - ultimaSolicitacao.getTime()) > 10 * 60_000;
+        if (podeReenviar) {
+          await enviarTexto(
+            "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF. 😁"
+          );
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ cpf_solicitado_em: new Date().toISOString() })
+            .eq("id", contato.id);
+        } else {
+          console.log(`[agente-consultor-ia] Gate CPF: debounce ativo (10min) — não reenviei saudação`);
+        }
+        return new Response(
+          JSON.stringify({ success: true, gate: "aguardando_cpf" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+
     // ---- 3. CARREGAR CONFIGURAÇÕES ----
     const { data: configRows } = await supabase
       .from("agente_ia_config")
@@ -257,7 +402,17 @@ Deno.serve(async (req) => {
         }
         console.log(`[agente-consultor-ia] Número de atendimento: ${numeroAtendimento}`);
       }
+
+      // Override: se SGA bateu o CPF (telefone pode estar fora do cadastro),
+      // ainda assim trata como associado.
+      if (!isAssociado && sgaAssociadoOverride) {
+        isAssociado = true;
+        associadoNome = sgaAssociadoOverride.nome;
+        associadoStatus = sgaAssociadoOverride.status;
+        console.log(`[agente-consultor-ia] Associado via SGA (CPF): ${associadoNome}`);
+      }
     }
+
 
     // ---- 5. HORÁRIO COMERCIAL DESATIVADO - Agente funciona 24h ----
 
@@ -691,6 +846,15 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
     if (cobrancaContextoTxt) {
       systemPrompt += cobrancaContextoTxt;
     }
+
+    // Contexto do gate de CPF — só injeta na MESMA mensagem em que o CPF foi capturado
+    if (cpfSgaContexto) {
+      const ctx = cpfSgaContexto.encontrado
+        ? `O cliente acabou de informar o CPF ${cpfSgaContexto.cpfMascarado}. Identificamos no SGA como associado(a): *${cpfSgaContexto.nome}*${cpfSgaContexto.status ? ` (situação: ${cpfSgaContexto.status})` : ""}. Confirme o nome com ele(a) na resposta e siga o atendimento.`
+        : `O cliente acabou de informar o CPF ${cpfSgaContexto.cpfMascarado}, mas NÃO encontramos cadastro no SGA. Informe isso de forma cordial e siga como lead em cotação.`;
+      systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
+    }
+
 
     // ---- 8. CHAMAR LOVABLE AI COM TOOL CALLING ----
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
