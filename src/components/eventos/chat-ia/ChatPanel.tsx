@@ -307,7 +307,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
             IA pausada até {format(new Date(pausa.pausada_ate), 'HH:mm')}
           </Badge>
         )}
-        {isTransbordo && (
+        {iaPausada && pausa && (
           <Button
             size="sm"
             variant="default"
@@ -316,9 +316,9 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
               if (!telefone) return;
               try {
                 await concluirTransbordo.mutateAsync(telefone);
-                toast.success('Atendimento concluído. IA liberada e contexto zerado.');
+                toast.success('Atendimento concluído. IA reativada.');
               } catch (e: any) {
-                toast.error(e?.message ?? 'Falha ao concluir transbordo');
+                toast.error(e?.message ?? 'Falha ao concluir atendimento');
               }
             }}
           >
