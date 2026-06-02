@@ -3454,7 +3454,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onOpenChange={setShowSGAModal}
         placa={placa}
         onIgnorarEProsseguir={() => {
-          setBypassPlacaSGA((s) => new Set(s).add(placaNorm(placa)));
+          bypassPlacaSGARef.current.add(placaNorm(placa));
           setShowSGAModal(false);
           setTimeout(() => buscarPorPlaca(), 100);
         }}
@@ -3467,7 +3467,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         placa={placa}
         info={placaOutroAssocInfo}
         onIgnorarEProsseguir={() => {
-          setBypassPlacaOutroAssoc((s) => new Set(s).add(placaNorm(placa)));
+          bypassPlacaOutroAssocRef.current.add(placaNorm(placa));
           setShowPlacaOutroAssocModal(false);
           setTimeout(() => buscarPorPlaca(), 100);
         }}
