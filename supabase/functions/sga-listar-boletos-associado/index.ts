@@ -303,12 +303,10 @@ serve(async (req) => {
       const descartes: Record<string, number> = {};
       const bump = (k: string) => { descartes[k] = (descartes[k] ?? 0) + 1; };
       for (const b of raw) {
-        const status = mapStatusBoleto(b?.situacao);
-        const situacaoUpper = String(b?.situacao ?? '').trim().toUpperCase();
-        // "Pago" só vale com SINAL DE BAIXA real (data_pagamento preenchida +
-        // status mapeado pago/cancelado OU situação textual baix/pago/liquida/cancel).
-        // Antes, qualquer `data_pagamento` truthy descartava o boleto, derrubando
-        // boletos recém-gerados com `data_pagamento=""` ou data espúria (caso QOO5C17).
+        // Hinova retorna `situacao_boleto`/`valor_boleto`; campos antigos mantidos como alias.
+        const situacaoRaw = b?.situacao_boleto ?? b?.situacao ?? '';
+        const status = mapStatusBoleto(situacaoRaw);
+        const situacaoUpper = String(situacaoRaw).trim().toUpperCase();
         const dataPagto = b?.data_pagamento;
         const dataPagtoValida = typeof dataPagto === 'string'
           ? dataPagto.trim().length > 0
@@ -325,20 +323,24 @@ serve(async (req) => {
           bump(`status_fora:${status}:${situacaoUpper || 'sem_situacao'}`);
           continue;
         }
-        const valor = toNumber(b?.valor ?? b?.valor_documento ?? b?.valor_titulo);
+        const valor = toNumber(b?.valor_boleto ?? b?.valor ?? b?.valor_documento ?? b?.valor_titulo);
         if (valor <= 0) {
           bump('valor_zero');
           continue;
         }
+        const isSentinela = (s: any) =>
+          typeof s === 'string' && /n[aã]o foi poss[ií]vel disponibilizar/i.test(s);
+        const linhaDig = b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null;
+        const linkBol = b?.link_boleto ?? b?.url_boleto ?? null;
         saldo += valor;
         abertos.push({
           nosso_numero: b?.nosso_numero ? String(b.nosso_numero) : null,
           valor,
           data_vencimento: parseDataHinova(b?.data_vencimento ?? b?.vencimento),
           data_emissao: parseDataHinova(b?.data_emissao ?? b?.emissao),
-          linha_digitavel: b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null,
-          link_boleto: b?.link_boleto ?? b?.url_boleto ?? null,
-          situacao_label: b?.situacao ? String(b.situacao) : status,
+          linha_digitavel: isSentinela(linhaDig) ? null : linhaDig,
+          link_boleto: isSentinela(linkBol) ? null : linkBol,
+          situacao_label: situacaoRaw ? String(situacaoRaw) : status,
         });
       }
       console.log('[sga-listar-boletos-associado] boletos_filtrados', {
