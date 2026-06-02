@@ -1213,6 +1213,13 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
                   associado_id: null,
                 }
               );
+            } else if (fnName === "consultar_boletos_associado") {
+              toolResult = await executarConsultarBoletosAssociado(
+                supabase,
+                supabaseUrl,
+                serviceKey,
+                { cpf: contato?.cpf || null }
+              );
             } else {
               toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
             }
