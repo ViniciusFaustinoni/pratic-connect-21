@@ -15,14 +15,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    // Buscar itens pendentes ou com erro (max 3 tentativas)
+    // Claim atômico (FOR UPDATE SKIP LOCKED) — impede que duas instâncias do cron
+    // peguem o mesmo item ao mesmo tempo e gerem resposta duplicada da Maya IA.
     const { data: itens, error: fetchError } = await supabase
-      .from("whatsapp_fila_ia")
-      .select("*")
-      .in("status", ["pendente", "erro"])
-      .lt("tentativas", 3)
-      .order("created_at", { ascending: true })
-      .limit(10);
+      .rpc("claim_proximos_itens_fila_ia", { p_limit: 10 });
 
     if (fetchError) throw fetchError;
 
@@ -33,7 +29,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[processar-fila-ia] ${itens.length} item(ns) na fila`);
+    console.log(`[processar-fila-ia] ${itens.length} item(ns) reservado(s) via claim atômico`);
+
 
     let processados = 0;
     let erros = 0;
