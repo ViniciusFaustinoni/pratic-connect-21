@@ -1735,7 +1735,28 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "consultar_associado_sga_por_cpf": {
-      const cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      let cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      // Fallback: identidade já confirmada para este telefone → recuperar CPF
+      // do registro canônico (agente_ia_contatos). Garante que, em telefone
+      // compartilhado, o CPF usado é o do associado que confirmou — nunca
+      // resolvido pelo número (que não distingue dois titulares).
+      if (cpfLimpo.length !== 11 && telefone) {
+        try {
+          const telNorm = telefone.replace(/\D/g, "");
+          const { data: contatoIa } = await supabase
+            .from("agente_ia_contatos")
+            .select("cpf")
+            .eq("telefone", telNorm)
+            .maybeSingle();
+          const cpfStored = String(contatoIa?.cpf ?? "").replace(/\D/g, "");
+          if (cpfStored.length === 11) {
+            cpfLimpo = cpfStored;
+            console.log(`[whatsapp-webhook] consultar_associado_sga_por_cpf: usando CPF confirmado do contato (tel=${telNorm})`);
+          }
+        } catch (lookupErr: any) {
+          console.warn(`[whatsapp-webhook] Falha fallback CPF agente_ia_contatos:`, lookupErr?.message || lookupErr);
+        }
+      }
       if (cpfLimpo.length !== 11) {
         return JSON.stringify({ erro: "CPF inválido. Peça ao associado os 11 dígitos do CPF." });
       }
