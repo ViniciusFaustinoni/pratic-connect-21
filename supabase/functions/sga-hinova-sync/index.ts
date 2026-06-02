@@ -1798,6 +1798,9 @@ serve(async (req) => {
 
       let fotosEnviadas = 0;
       let fotosComErro = 0;
+      // Frente 3 — preserva a mensagem real do Hinova para subir em erro_ultimo
+      // em vez do agregado "Erro ao enviar N fotos".
+      let ultimoErroFotos: string | null = null;
       if (fotos.length > 0 && codigoVeiculoHinova) {
         // Mantém metas alinhadas 1:1 aos lotes para registrar exatamente o que foi
         // aceito pela Hinova em sga_fotos_enviadas (dedupe nos próximos syncs).
@@ -1812,9 +1815,9 @@ serve(async (req) => {
             const payloadLog = r.ok
               ? { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }
               : { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote };
+            const erroBatch = r.ok ? null : (r.mensagem || r.errors.join('; ') || (typeof r.raw === 'string' ? r.raw : JSON.stringify(r.raw)?.slice(0, 500)));
             await logSync(_vid, _aid, 'enviar_fotos', r.ok ? 'success' : 'error',
-              payloadLog, r.raw,
-              r.ok ? null : (r.mensagem || r.errors.join('; ')));
+              payloadLog, r.raw, erroBatch);
             if (r.ok) {
               fotosEnviadas += lote.length;
               // Persiste cada foto enviada para bloquear reenvio em syncs futuros.
@@ -1837,17 +1840,23 @@ serve(async (req) => {
               }
             } else {
               fotosComErro += lote.length;
+              if (erroBatch) ultimoErroFotos = erroBatch;
             }
           } catch (e: any) {
+            const msg = String(e?.message || e);
             await logSync(_vid, _aid, 'enviar_fotos', 'error',
-              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote }, null, String(e?.message || e));
+              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote }, null, msg);
             fotosComErro += lote.length;
+            ultimoErroFotos = msg;
           }
         }
       }
 
       if (fotosComErro > 0 && fotosEnviadas === 0) {
-        await upsertQueue(_vid, _aid, 'fotos', `Erro ao enviar ${fotosComErro} fotos`,
+        const motivoFotos = ultimoErroFotos
+          ? `Hinova rejeitou ${fotosComErro} foto(s): ${ultimoErroFotos}`.slice(0, 1000)
+          : `Erro ao enviar ${fotosComErro} fotos`;
+        await upsertQueue(_vid, _aid, 'fotos', motivoFotos,
           codigoAssociadoHinova, codigoVeiculoHinova);
       } else {
         await markQueueDone(_vid, _aid);
