@@ -247,14 +247,12 @@ serve(async (req) => {
       const bump = (k: string) => { descartes[k] = (descartes[k] ?? 0) + 1; };
 
       for (const b of raw) {
-        const status = mapStatusBoleto(b?.situacao);
-        const situacaoUpper = String(b?.situacao ?? '').trim().toUpperCase();
-        // "Pago" só vale quando há SINAL DE BAIXA real: data_pagamento preenchida
-        // E status mapeado=='pago'/'cancelado' OU a situação textual da Hinova
-        // explicita pago/baixa/liquida/cancel.
-        // Antes, qualquer `data_pagamento` truthy descartava o boleto, derrubando
-        // boletos recém-gerados quando a Hinova devolve `data_pagamento=""` ou
-        // uma data espúria sem baixa real (caso QOO5C17 02/06).
+        // Hinova retorna `situacao_boleto`/`valor_boleto`; campos antigos mantidos como alias defensivo.
+        const situacaoRaw = b?.situacao_boleto ?? b?.situacao ?? '';
+        const status = mapStatusBoleto(situacaoRaw);
+        const situacaoUpper = String(situacaoRaw).trim().toUpperCase();
+        // "Pago" só vale com SINAL DE BAIXA real (data_pagamento preenchida +
+        // status pago/cancelado OU situação textual baix/pago/liquida/cancel).
         const dataPagto = b?.data_pagamento;
         const dataPagtoValida = typeof dataPagto === 'string'
           ? dataPagto.trim().length > 0
@@ -271,11 +269,19 @@ serve(async (req) => {
           bump(`status_fora:${status}:${situacaoUpper || 'sem_situacao'}`);
           continue;
         }
-        const valor = toNumber(b?.valor ?? b?.valor_documento ?? b?.valor_titulo);
+        const valor = toNumber(b?.valor_boleto ?? b?.valor ?? b?.valor_documento ?? b?.valor_titulo);
         if (valor <= 0) {
           bump('valor_zero');
           continue;
         }
+
+        // Hinova devolve sentinela ("Não foi possível disponibilizar...") em vez
+        // de linha digitável/link quando o boleto está BAIXADO. Para boletos
+        // realmente em aberto vem o valor real — defensivo limpamos sentinela.
+        const isSentinela = (s: any) =>
+          typeof s === 'string' && /n[aã]o foi poss[ií]vel disponibilizar/i.test(s);
+        const linhaDig = b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null;
+        const linkBol = b?.link_boleto ?? b?.url_boleto ?? null;
 
         saldo += valor;
         abertos.push({
@@ -283,9 +289,9 @@ serve(async (req) => {
           valor,
           data_vencimento: parseDataHinova(b?.data_vencimento ?? b?.vencimento),
           data_emissao: parseDataHinova(b?.data_emissao ?? b?.emissao),
-          linha_digitavel: b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null,
-          link_boleto: b?.link_boleto ?? b?.url_boleto ?? null,
-          situacao_label: b?.situacao ? String(b.situacao) : status,
+          linha_digitavel: isSentinela(linhaDig) ? null : linhaDig,
+          link_boleto: isSentinela(linkBol) ? null : linkBol,
+          situacao_label: situacaoRaw ? String(situacaoRaw) : status,
           pix_copia_cola: b?.pix?.copia_cola ?? b?.pix?.copia_e_cola ?? null,
           pix_qrcode_base64: b?.pix?.qrcode ?? null,
         });
