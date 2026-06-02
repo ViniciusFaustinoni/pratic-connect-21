@@ -160,6 +160,65 @@ serve(async (req) => {
         link,
         ativo: true,
       });
+
+      // Fan-out p/ sino existente (tabela `notificacoes` por user_id) — sem isso,
+      // o INSERT em notificacoes_sistema acima não aparece em nenhuma superfície.
+      // Destino: coordenador_monitoramento + analista_monitoramento (quem trata no dia a dia).
+      try {
+        // Resolve queue row p/ referencia_id canônico + dedupe estável.
+        const { data: queueRow } = await supabase
+          .from('sga_sync_queue')
+          .select('id')
+          .eq('veiculo_id', veiculo_id)
+          .maybeSingle();
+        const referenciaId = queueRow?.id || veiculo_id;
+
+        // Dedupe: se já existe notificacao deste item nas últimas 24h, não refaz fan-out.
+        const { data: jaNotificado } = await supabase
+          .from('notificacoes')
+          .select('id')
+          .eq('tipo', 'sga_falha_permanente')
+          .eq('referencia_id', referenciaId)
+          .gte('created_at', desde)
+          .limit(1)
+          .maybeSingle();
+        if (jaNotificado?.id) {
+          console.log('[alerta-fanout] skip — já notificado em 24h', { referenciaId });
+          return;
+        }
+
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('role', ['coordenador_monitoramento', 'analista_monitoramento']);
+        const userIds = Array.from(new Set((roles || []).map((r: any) => r.user_id).filter(Boolean)));
+        if (userIds.length === 0) {
+          console.warn('[alerta-fanout] nenhum usuário com role alvo');
+          return;
+        }
+
+        const mensagemCurta = `${placa || veiculo_id}${nome ? ` (${nome})` : ''} — etapa "${etapa}". Ação manual no painel SGA.`;
+        const rows = userIds.map((uid) => ({
+          user_id: uid,
+          titulo: 'SGA: falha permanente',
+          mensagem: mensagemCurta,
+          tipo: 'sga_falha_permanente',
+          categoria: 'tarefa',
+          prioridade: 'alta',
+          link,
+          referencia_tipo: 'sga_sync_queue',
+          referencia_id: referenciaId,
+          canal_sistema: true,
+        }));
+        const { error: errFanout } = await supabase.from('notificacoes').insert(rows);
+        if (errFanout) {
+          console.error('[alerta-fanout] insert failed', errFanout);
+        } else {
+          console.log('[alerta-fanout] N=', rows.length, { referenciaId });
+        }
+      } catch (eFan) {
+        console.error('[alerta-fanout]', eFan);
+      }
     } catch (e) {
       console.error('[emitirAlertaCoordenador]', e);
     }
