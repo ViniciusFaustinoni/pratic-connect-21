@@ -75,6 +75,19 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'nao_lidos'>('todas');
 
+  // Número da IA (Meta Oficial) — exibido como badge ao lado do título
+  const { data: metaConfig } = useMetaConfig();
+  const testarMeta = useTestarMetaConexao();
+  const backfillTried = useRef(false);
+  useEffect(() => {
+    if (backfillTried.current) return;
+    if (metaConfig?.phone_number_id && !metaConfig?.display_phone_number) {
+      backfillTried.current = true;
+      // Backfill silencioso: popula display_phone_number sem toast de erro
+      testarMeta.mutate(metaConfig.phone_number_id, { onError: () => {} });
+    }
+  }, [metaConfig?.phone_number_id, metaConfig?.display_phone_number, testarMeta]);
+
   const totalNaoLidos = useMemo(
     () => conversas.reduce((acc, c) => acc + (c.unread_count > 0 ? 1 : 0), 0),
     [conversas]
