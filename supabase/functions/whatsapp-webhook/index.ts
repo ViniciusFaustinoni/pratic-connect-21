@@ -712,13 +712,13 @@ const tools = [
   type: "function",
   function: {
     name: "consultar_associado_sga_por_cpf",
-    description: "Consulta a base SGA (Hinova) pelo CPF do associado e retorna os veículos vinculados. Use SOMENTE no fluxo de '2ª via de boleto' depois que o associado informar o CPF. Não use para confirmar identidade fora desse fluxo.",
+    description: "Consulta a base SGA (Hinova) pelo CPF do associado e retorna os veículos vinculados. Use SOMENTE no fluxo de '2ª via de boleto'. Se a identidade do contato já estiver confirmada (CPF registrado para este telefone), pode chamar SEM o parâmetro cpf — a função recupera o CPF confirmado automaticamente. Só passe o cpf quando o associado tiver acabado de informá-lo na conversa.",
     parameters: {
       type: "object",
       properties: {
-        cpf: { type: "string", description: "CPF do associado (apenas dígitos ou com máscara — a função normaliza)" },
+        cpf: { type: "string", description: "CPF do associado (apenas dígitos ou com máscara — a função normaliza). OPCIONAL quando a identidade já está confirmada para este contato." },
       },
-      required: ["cpf"],
+      required: [],
     },
   },
 },
@@ -726,14 +726,14 @@ const tools = [
   type: "function",
   function: {
     name: "consultar_boletos_sga_por_placa",
-    description: "Lista boletos no SGA (Hinova) para uma placa específica do associado e devolve linha digitável, link, PIX copia-e-cola e QR Code quando disponíveis. Já calcula 'dias_vencido' e a recomendação: 'enviar_boleto' (não vencido ou ≤5 dias) ou 'transbordo' (≥6 dias). Use APENAS após consultar_associado_sga_por_cpf e confirmar a placa.",
+    description: "Lista boletos no SGA (Hinova) para uma placa específica do associado e devolve linha digitável, link, PIX copia-e-cola e QR Code quando disponíveis. Já calcula 'dias_vencido' e a recomendação: 'enviar_boleto' (não vencido ou ≤5 dias) ou 'transbordo' (≥6 dias). O parâmetro cpf é OPCIONAL quando a identidade já está confirmada para este contato — a função recupera o CPF confirmado automaticamente.",
     parameters: {
       type: "object",
       properties: {
-        cpf: { type: "string", description: "CPF do associado já validado no passo anterior" },
+        cpf: { type: "string", description: "CPF do associado. OPCIONAL quando a identidade já está confirmada para este contato." },
         placa: { type: "string", description: "Placa do veículo do qual o cliente quer o boleto" },
       },
-      required: ["cpf", "placa"],
+      required: ["placa"],
     },
   },
 },
