@@ -34,6 +34,48 @@ Deno.serve(async (req) => {
     const telLimpo = telefone.replace(/\D/g, "");
     console.log(`[agente-consultor-ia] Mensagem de ${telLimpo}: ${texto?.substring(0, 80)}`);
 
+    // ---- 0. LOCK ANTI-DUPLICIDADE ----
+    // Impede que duas invocações concorrentes (webhook real + processar-fila-ia,
+    // ou dois ciclos de cron) processem a MESMA mensagem e gerem 2 respostas.
+    // Janela de 30s — se a mesma mensagem chegar em janelas separadas, ambas passam.
+    try {
+      const textoNorm = String(texto || "").trim().toLowerCase().slice(0, 500);
+      const bucket = Math.floor(Date.now() / 30_000);
+      const hashInput = `${textoNorm}|${bucket}`;
+      // SHA-256 nativo do Deno
+      const encoder = new TextEncoder();
+      const hashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(hashInput));
+      const mensagemHash = Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      const { error: lockErr } = await supabase
+        .from("agente_ia_locks")
+        .insert({
+          telefone: telLimpo,
+          mensagem_hash: mensagemHash,
+          origem: "agente-consultor-ia",
+        });
+
+      if (lockErr) {
+        // 23505 = duplicate primary key → outra invocação já está processando
+        const isDuplicate = String(lockErr.code || "") === "23505"
+          || String(lockErr.message || "").toLowerCase().includes("duplicate");
+        if (isDuplicate) {
+          console.log(`[agente-consultor-ia] LOCK COLIDIU — ignorando duplicata (tel=${telLimpo}, hash=${mensagemHash.slice(0, 12)}…)`);
+          return new Response(
+            JSON.stringify({ success: true, ignored: "duplicate_inflight" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        // Erro real (RLS, conexão) — não bloqueia o fluxo, só loga
+        console.warn(`[agente-consultor-ia] Lock falhou (seguindo sem dedupe):`, lockErr.message);
+      }
+    } catch (e: any) {
+      console.warn(`[agente-consultor-ia] Lock catch (seguindo):`, e?.message);
+    }
+
+
     // ---- 1. BUSCAR/CRIAR CONTATO ----
     let contato: any = null;
     const { data: contatoExistente } = await supabase
