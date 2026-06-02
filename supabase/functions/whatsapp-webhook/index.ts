@@ -3802,6 +3802,49 @@ serve(async (req) => {
             }
 
             const primeiroNome = associadoPorCpf.nome.split(' ')[0];
+
+            // Persistir vínculo telefone↔CPF/associado no estado canônico do agente.
+            // O `agente-consultor-ia` consulta `agente_ia_contatos.cpf` no gate de CPF;
+            // sem isso, a próxima mensagem do cliente cai de novo no pedido de CPF
+            // (debounce de 10min) e a conversa "trava" sem resposta.
+            try {
+              const incomingNormUp = telefone.replace(/\D/g, "");
+              const { data: contatoExistenteUp } = await supabase
+                .from("agente_ia_contatos")
+                .select("id")
+                .eq("telefone", incomingNormUp)
+                .maybeSingle();
+
+              if (contatoExistenteUp?.id) {
+                await supabase
+                  .from("agente_ia_contatos")
+                  .update({
+                    cpf: cpfLimpo,
+                    cpf_capturado_em: new Date().toISOString(),
+                    sga_associado_encontrado: true,
+                    nome: associadoPorCpf.nome,
+                    status: "em_conversa",
+                    ultima_interacao: new Date().toISOString(),
+                  })
+                  .eq("id", contatoExistenteUp.id);
+              } else {
+                await supabase
+                  .from("agente_ia_contatos")
+                  .insert({
+                    telefone: incomingNormUp,
+                    cpf: cpfLimpo,
+                    cpf_capturado_em: new Date().toISOString(),
+                    sga_associado_encontrado: true,
+                    nome: associadoPorCpf.nome,
+                    status: "em_conversa",
+                    ultima_interacao: new Date().toISOString(),
+                  });
+              }
+              console.log(`[whatsapp-webhook] Vínculo telefone↔CPF persistido em agente_ia_contatos (tel=${incomingNormUp}, associado=${associadoPorCpf.id})`);
+            } catch (persistErr: any) {
+              console.error(`[whatsapp-webhook] Falha ao persistir vínculo CPF em agente_ia_contatos:`, persistErr?.message || persistErr);
+            }
+
             await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
               `Encontrei você, *${primeiroNome}*! 🎉\n\nComo posso te ajudar hoje? 😊`
             );
