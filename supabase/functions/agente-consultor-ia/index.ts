@@ -1218,69 +1218,11 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
 
     console.log(`[agente-consultor-ia] Resposta final (${resposta.length} chars) para ${telLimpo} (diretor=${isDiretor})`);
 
-    // ---- 9. DETECTAR INTENÇÕES ESPECIAIS (apenas leads) ----
-    if (!isDiretor) {
-      const textoLower = (texto || "").toLowerCase();
+    // ---- 9. (REMOVIDO) Os regex legados de pedidoHumano/pedidoSinistro foram substituídos
+    //              pela tool solicitar_atendente_humano (chamada pelo próprio modelo). Veja
+    //              executarSolicitarAtendenteHumano() e o prompt do branch isAssociado/lead.
 
-      const pedidoHumano = textoLower.match(/falar com (uma |um )?(pessoa|atendente|humano|gente|algu[eé]m)/i) ||
-        textoLower.match(/quero (um |uma )?(atendente|pessoa|humano)/i) ||
-        textoLower.match(/atendimento humano/i);
 
-      if (pedidoHumano) {
-        await supabase
-          .from("agente_ia_contatos")
-          .update({ status: "atendimento_humano" })
-          .eq("id", contato.id);
-
-        try {
-          const { data: diretores } = await supabase
-            .from("user_roles")
-            .select("user_id")
-            .in("role", ["diretor", "vendedor", "supervisor_vendas"]);
-
-          for (const dest of diretores || []) {
-            await supabase.from("notificacoes").insert({
-              user_id: dest.user_id,
-              titulo: "👤 Lead solicitou atendimento humano",
-              mensagem: `Telefone: ${telLimpo} | Nome: ${contato?.nome || "Não informado"} | Última mensagem: "${texto?.substring(0, 100)}"`,
-              tipo: "alerta",
-              categoria: "vendas",
-              lida: false,
-            });
-          }
-        } catch (notifErr) {
-          console.error("[agente-consultor-ia] Erro notificação:", notifErr);
-        }
-      }
-
-      const pedidoSinistro = textoLower.match(/sinistro|acidente|batid[oa]|colisão|roubaram|furtaram|incêndio|pegou fogo/i);
-      if (pedidoSinistro) {
-        await supabase
-          .from("agente_ia_contatos")
-          .update({ status: "atendimento_humano" })
-          .eq("id", contato.id);
-
-        try {
-          const { data: analistas } = await supabase
-            .from("user_roles")
-            .select("user_id")
-            .in("role", ["diretor", "analista_sinistros"]);
-
-          for (const dest of analistas || []) {
-            await supabase.from("notificacoes").insert({
-              user_id: dest.user_id,
-              titulo: "🚨 Lead reportou sinistro/emergência",
-              mensagem: `Telefone: ${telLimpo} | Mensagem: "${texto?.substring(0, 150)}"`,
-              tipo: "alerta",
-              categoria: "sinistros",
-              lida: false,
-            });
-          }
-        } catch (notifErr) {
-          console.error("[agente-consultor-ia] Erro notificação sinistro:", notifErr);
-        }
-      }
-    }
 
     // ---- 10. DIVIDIR E ENVIAR RESPOSTA ----
     const partes = dividirMensagem(resposta, 1000);
