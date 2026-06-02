@@ -788,7 +788,7 @@ export function CatalogoCoberturasBeneficios() {
             <Button size="sm" onClick={() => setBenSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Novo Benefício</Button>
           </div>
           <ItemList
-            items={filterAndSort(benefits, benSearch, benSort, 'beneficio', benAttrFilter, benAttrMap)}
+            items={pagedBenefits}
             type="beneficio"
             attrMap={benAttrMap}
             highlightId={highlightBenId}
@@ -796,6 +796,13 @@ export function CatalogoCoberturasBeneficios() {
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
             onDuplicate={(id) => duplicateBen.mutate(id)}
+          />
+          <PaginationFooter
+            total={filteredBenefits.length}
+            page={benPage}
+            pageSize={benPageSize}
+            onPageChange={setBenPage}
+            onPageSizeChange={setBenPageSize}
           />
         </TabsContent>
 
