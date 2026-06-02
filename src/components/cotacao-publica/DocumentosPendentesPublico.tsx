@@ -281,6 +281,11 @@ export function DocumentosPendentesPublico({
           .eq('id', doc.id);
         if (updErr) throw updErr;
 
+        // Reabrir autovistoria — promessa da tela ("voltará para análise"):
+        // peça de autovistoria reenviada → zera vistoria_concluida_em para
+        // o roteador devolver o cliente à etapa de autovistoria/análise.
+        await reabrirAutovistoriaPorAssociado(associadoId);
+
         setUploadStates(prev => ({
           ...prev,
           [doc.id]: { ...prev[doc.id], uploading: false, enviado: true },
