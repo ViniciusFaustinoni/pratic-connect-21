@@ -18,6 +18,9 @@ serve(async (req) => {
   console.log('[Cron SGA Retry] Iniciando processamento da fila de reenvio...');
 
   try {
+    // Reabrir SÓ itens travados em `processando` há mais de 10min (lock estale).
+    // Frente 3: removida a reabertura de `falha_permanente` por substring textual —
+    // item terminal sai por ação humana, não por heurística do cron.
     const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     await supabase
       .from('sga_sync_queue')
@@ -29,25 +32,17 @@ serve(async (req) => {
       .eq('status', 'processando')
       .lt('ultima_tentativa_em', staleThreshold);
 
-    await supabase
-      .from('sga_sync_queue')
-      .update({
-        status: 'pendente',
-        proximo_reenvio_em: new Date().toISOString(),
-        erro_ultimo: 'Reaberto automaticamente: falha recuperável SGA',
-      })
-      .eq('status', 'falha_permanente')
-      .or('erro_ultimo.ilike.%Placa duplicada%,erro_ultimo.ilike.%HTML%,erro_ultimo.ilike.%502%,erro_ultimo.ilike.%rate%,erro_ultimo.ilike.%token%,erro_ultimo.ilike.%autorizado%');
-
     // Buscar registros pendentes prontos para reenvio.
     // EXCLUI etapas que exigem ação manual ('troca_titularidade:codigo_associado_nao_encontrado')
     // — essas só saem da fila via edge `troca-resolver-pendencia-manual`.
+    // Frente 3: MAX_TENTATIVAS caiu para 6; o filtro `tentativas < 6` respeita o
+    // mesmo budget aplicado em sga-hinova-sync.
     const { data: pendentes, error: fetchError } = await supabase
       .from('sga_sync_queue')
       .select('*')
       .eq('status', 'pendente')
       .lte('proximo_reenvio_em', new Date().toISOString())
-      .lt('tentativas', 10)
+      .lt('tentativas', 6)
       .neq('etapa_parou', 'troca_titularidade:codigo_associado_nao_encontrado')
       .order('proximo_reenvio_em', { ascending: true })
       .limit(10); // Processar no máximo 10 por vez
