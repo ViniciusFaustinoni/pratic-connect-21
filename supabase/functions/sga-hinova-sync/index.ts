@@ -113,6 +113,66 @@ serve(async (req) => {
     }
   }
 
+  // Frente 3 — alerta para coordenador quando item vai pra falha_permanente.
+  // Dedupe: não duplica alerta ativo do mesmo (veiculo, etapa) nas últimas 24h.
+  async function emitirAlertaCoordenador(
+    veiculo_id: string,
+    etapa: string,
+    motivo: string,
+  ) {
+    try {
+      const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      // Busca veiculo (placa) + associado p/ corpo da notificação e dedup.
+      const { data: vRow } = await supabase
+        .from('veiculos')
+        .select('placa, associado_id, associados(nome_completo)')
+        .eq('id', veiculo_id)
+        .maybeSingle();
+      const placa = (vRow?.placa || '').toUpperCase();
+      const nome = (vRow as any)?.associados?.nome_completo || '';
+
+      // Dedupe por link contendo a placa + título canônico nas últimas 24h.
+      const tituloCanonico = 'SGA Hinova: sincronização falhou em definitivo';
+      const { data: jaExiste } = await supabase
+        .from('notificacoes_sistema')
+        .select('id')
+        .eq('destino', 'role')
+        .eq('destino_role', 'coordenador_monitoramento')
+        .eq('titulo', tituloCanonico)
+        .eq('ativo', true)
+        .gte('created_at', desde)
+        .ilike('mensagem', `%${etapa}%${placa}%`)
+        .limit(1)
+        .maybeSingle();
+      if (jaExiste?.id) return;
+
+      const link = placa
+        ? `/configuracoes/integracoes/sga-hinova?placa=${encodeURIComponent(placa)}`
+        : `/configuracoes/integracoes/sga-hinova`;
+      const mensagem = `Veículo ${placa || veiculo_id}${nome ? ` (${nome})` : ''} — etapa "${etapa}". Motivo: ${motivo.slice(0, 400)}`;
+
+      await supabase.from('notificacoes_sistema').insert({
+        titulo: tituloCanonico,
+        mensagem,
+        tipo: 'alerta',
+        destino: 'role',
+        destino_role: 'coordenador_monitoramento',
+        link,
+        ativo: true,
+      });
+    } catch (e) {
+      console.error('[emitirAlertaCoordenador]', e);
+    }
+  }
+
+  /**
+   * Frente 3 — registra UMA tentativa real de falha (erro Hinova / exception / 200 com
+   * sucesso=false). Incrementa `tentativas`, agenda próximo reenvio com backoff exponencial,
+   * e quando atinge MAX_TENTATIVAS marca `falha_permanente` + dispara alerta ao coordenador.
+   *
+   * NÃO use para defer neutro (vistoria aguardando, codigo_associado_nao_encontrado da troca,
+   * pendente_sga do Advanced Especial) — esses não devem gastar budget de tentativas.
+   */
   async function upsertQueue(
     veiculo_id: string,
     associado_id: string,
@@ -129,9 +189,10 @@ serve(async (req) => {
         .eq('associado_id', associado_id)
         .maybeSingle();
       const tentativas = (existing?.tentativas || 0) + 1;
-      const proximo = new Date(Date.now() + QUEUE_BACKOFF_MS).toISOString();
+      const atingiuLimite = tentativas >= MAX_TENTATIVAS;
+      const proximo = calcularProximoReenvio(tentativas);
       const base = {
-        status: tentativas >= MAX_TENTATIVAS ? 'falha_permanente' : 'pendente',
+        status: atingiuLimite ? 'falha_permanente' : 'pendente',
         tentativas,
         ultima_tentativa_em: new Date().toISOString(),
         proximo_reenvio_em: proximo,
@@ -147,6 +208,9 @@ serve(async (req) => {
           veiculo_id, associado_id, origem: 'automatico',
           ...base,
         });
+      }
+      if (atingiuLimite) {
+        await emitirAlertaCoordenador(veiculo_id, etapa, erro);
       }
     } catch (e) {
       console.error('[upsertQueue]', e);
