@@ -491,7 +491,8 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
             className="absolute bottom-2 right-4 rounded-full shadow-lg h-8 w-8"
             onClick={() => {
               setAutoScroll(true);
-              if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+              setAutoScroll(true);
+              scrollToBottom('smooth');
             }}
           >
             <ArrowDown className="h-4 w-4" />
