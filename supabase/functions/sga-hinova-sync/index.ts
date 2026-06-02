@@ -72,8 +72,17 @@ interface SyncRequest {
 }
 
 const STALE_LOCK_MS = 5 * 60 * 1000;
-const QUEUE_BACKOFF_MS = 10 * 60 * 1000;
-const MAX_TENTATIVAS = 10;
+// Frente 3 — backoff exponencial com jitter (substitui o fixo de 10 min).
+const BASE_BACKOFF_MS = 5 * 60 * 1000;         // 5 min
+const MAX_BACKOFF_MS = 4 * 60 * 60 * 1000;     // 4 h
+const MAX_TENTATIVAS = 6;                       // antes 10 — cobre ~9h com o exp backoff
+
+function calcularProximoReenvio(tentativasNova: number): string {
+  // tentativasNova é o valor JÁ incrementado (1 = primeira retry).
+  const exp = Math.min(BASE_BACKOFF_MS * Math.pow(2, Math.max(0, tentativasNova - 1)), MAX_BACKOFF_MS);
+  const jitter = 0.8 + Math.random() * 0.4; // ±20%
+  return new Date(Date.now() + Math.round(exp * jitter)).toISOString();
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
