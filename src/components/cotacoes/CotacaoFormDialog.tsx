@@ -1340,6 +1340,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [lead, form]);
 
   // Efeito para preencher o formulário com dados da cotação base (duplicação)
+  // Guard por ref: pre-fill roda 1x por (open + cotacaoBase.id). Sem isso,
+  // qualquer re-render do pai que troque a referência do prop re-executa o
+  // corpo inteiro e derruba veiculoEncontrado/placa (bug doc. nas linhas 1407–1411).
+  // Reseta ao fechar o modal e ao trocar de cotação (id diferente).
+  const cotacaoBasePrefilledIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      cotacaoBasePrefilledIdRef.current = null;
+      return;
+    }
+    if (cotacaoBase && cotacaoBasePrefilledIdRef.current === cotacaoBase.id) {
+      return;
+    }
+    if (cotacaoBase) {
+      cotacaoBasePrefilledIdRef.current = cotacaoBase.id;
+    }
+  }, [open, cotacaoBase]);
   useEffect(() => {
     if (cotacaoBase && open) {
       // Preencher dados do formulário
