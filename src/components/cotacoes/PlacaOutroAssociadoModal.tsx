@@ -47,7 +47,7 @@ export function PlacaOutroAssociadoModal({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-lg p-0 overflow-hidden gap-0">
+      <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl p-0 overflow-hidden gap-0">
         <AlertDialogHeader className="space-y-0 p-6 pb-4 border-b border-border/60">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
