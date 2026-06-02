@@ -402,7 +402,17 @@ Deno.serve(async (req) => {
         }
         console.log(`[agente-consultor-ia] Número de atendimento: ${numeroAtendimento}`);
       }
+
+      // Override: se SGA bateu o CPF (telefone pode estar fora do cadastro),
+      // ainda assim trata como associado.
+      if (!isAssociado && sgaAssociadoOverride) {
+        isAssociado = true;
+        associadoNome = sgaAssociadoOverride.nome;
+        associadoStatus = sgaAssociadoOverride.status;
+        console.log(`[agente-consultor-ia] Associado via SGA (CPF): ${associadoNome}`);
+      }
     }
+
 
     // ---- 5. HORÁRIO COMERCIAL DESATIVADO - Agente funciona 24h ----
 
