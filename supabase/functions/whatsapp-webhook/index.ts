@@ -4153,6 +4153,13 @@ serve(async (req) => {
 
     // Buscar contexto e histórico
     const context = await getAssociadoContext(supabase, associado.id);
+    // Bloco autoritativo de identidade: quando o CPF já foi confirmado para este
+    // telefone (gate canônico), instrui a IA a NÃO re-pedir CPF no fluxo de boleto.
+    // Importante em telefone compartilhado: este é o CPF do associado que de fato
+    // confirmou a identidade — não o resolvido pelo número.
+    const identidadeCtx = cpfConfirmadoParaTelefone
+      ? `\n\n## IDENTIDADE JÁ CONFIRMADA\nCPF confirmado para este contato: ${cpfConfirmadoParaTelefone} (associado: ${associado.nome}).\nNO FLUXO DE 2ª VIA DE BOLETO: use este CPF direto — NÃO peça o CPF de novo. Chame as tools sem o parâmetro cpf (a tool recupera automaticamente).`
+      : "";
     const history = await getConversationHistory(supabase, associado.id, telefone);
 
     // Preparar mensagens para IA
