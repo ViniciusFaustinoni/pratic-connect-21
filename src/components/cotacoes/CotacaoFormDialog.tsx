@@ -1300,44 +1300,56 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [open, origemTroca, placa, veiculoEncontrado, buscandoPlaca]);
 
   // Pre-fill from lead
+  // Guard por id: pre-fill roda 1x por (open + lead.id). Lead tem id canônico
+  // (mesmo padrão do #9 / cotacaoParaEditar), então não precisa fingerprint.
+  // Reset no !open garante re-execução ao reabrir o mesmo lead.
+  // Troca lead A → B sem fechar: id muda → ref não bate → pre-fill re-roda com B.
+  const leadPrefilledIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (lead) {
-      form.setValue('lead_id', lead.id);
-      // Preencher dados do associado do lead
-      setNomeAssociado(lead.nome || '');
-      setTelefoneAssociado(lead.telefone || '');
-      setEmailAssociado(lead.email || '');
-      
-      if (lead.veiculo_fipe) {
-        form.setValue('valor_fipe', lead.veiculo_fipe);
-      }
-      if (lead.veiculo_placa) {
-        setPlaca(lead.veiculo_placa);
-      }
-      if (lead.veiculo_marca && lead.veiculo_modelo) {
-        setVeiculoEncontrado({
-          success: true,
-          vehicleData: {
-            marca: lead.veiculo_marca,
-            modelo: lead.veiculo_modelo,
-            marca_modelo: `${lead.veiculo_marca} ${lead.veiculo_modelo}`,
-            ano: lead.veiculo_ano ? String(lead.veiculo_ano) : '',
-            placa: lead.veiculo_placa || '',
-            cor: '',
-            chassi: '',
-            municipio: '',
-            uf: '',
-            combustivel: ''
-          },
-          fipeData: lead.veiculo_fipe ? {
-            valor: lead.veiculo_fipe,
-            codigo: null,
-            mesReferencia: null
-          } : null
-        });
-      }
+    if (!open) {
+      leadPrefilledIdRef.current = null;
+      return;
     }
-  }, [lead, form]);
+    if (!lead) return;
+    if (leadPrefilledIdRef.current === lead.id) return;
+    leadPrefilledIdRef.current = lead.id;
+
+    form.setValue('lead_id', lead.id);
+    // Preencher dados do associado do lead
+    setNomeAssociado(lead.nome || '');
+    setTelefoneAssociado(lead.telefone || '');
+    setEmailAssociado(lead.email || '');
+
+    if (lead.veiculo_fipe) {
+      form.setValue('valor_fipe', lead.veiculo_fipe);
+    }
+    if (lead.veiculo_placa) {
+      setPlaca(lead.veiculo_placa);
+    }
+    if (lead.veiculo_marca && lead.veiculo_modelo) {
+      setVeiculoEncontrado({
+        success: true,
+        vehicleData: {
+          marca: lead.veiculo_marca,
+          modelo: lead.veiculo_modelo,
+          marca_modelo: `${lead.veiculo_marca} ${lead.veiculo_modelo}`,
+          ano: lead.veiculo_ano ? String(lead.veiculo_ano) : '',
+          placa: lead.veiculo_placa || '',
+          cor: '',
+          chassi: '',
+          municipio: '',
+          uf: '',
+          combustivel: ''
+        },
+        fipeData: lead.veiculo_fipe ? {
+          valor: lead.veiculo_fipe,
+          codigo: null,
+          mesReferencia: null
+        } : null
+      });
+    }
+  }, [lead, open, form]);
+
 
   // Efeito para preencher o formulário com dados da cotação base (duplicação)
   // Guard por fingerprint: pre-fill roda 1x por (open + conteúdo de cotacaoBase).
