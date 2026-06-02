@@ -1344,19 +1344,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // qualquer re-render do pai que troque a referência do prop re-executa o
   // corpo inteiro e derruba veiculoEncontrado/placa (bug doc. nas linhas 1407–1411).
   // Reseta ao fechar o modal e ao trocar de cotação (id diferente).
-  const cotacaoBasePrefilledIdRef = useRef<string | null>(null);
+  // CotacaoBaseParaFormulario não tem id (é payload de duplicação). Usamos um
+  // fingerprint dos campos-chave: mesmo conteúdo → mesma "cotação base" lógica.
+  // Trocar de cotação no parent muda o fingerprint e re-dispara o pre-fill.
+  const cotacaoBasePrefilledFpRef = useRef<string | null>(null);
+  const cotacaoBaseFp = cotacaoBase
+    ? `${cotacaoBase.veiculo_placa ?? ''}|${cotacaoBase.plano_id ?? ''}|${cotacaoBase.lead_id ?? ''}|${cotacaoBase.valor_fipe ?? ''}|${cotacaoBase.nome_solicitante ?? ''}|${cotacaoBase.codigo_fipe ?? ''}`
+    : null;
   useEffect(() => {
     if (!open) {
-      cotacaoBasePrefilledIdRef.current = null;
+      cotacaoBasePrefilledFpRef.current = null;
       return;
     }
-    if (cotacaoBase && cotacaoBasePrefilledIdRef.current === cotacaoBase.id) {
-      return;
+    if (cotacaoBaseFp && cotacaoBasePrefilledFpRef.current !== cotacaoBaseFp) {
+      cotacaoBasePrefilledFpRef.current = cotacaoBaseFp;
     }
-    if (cotacaoBase) {
-      cotacaoBasePrefilledIdRef.current = cotacaoBase.id;
-    }
-  }, [open, cotacaoBase]);
+  }, [open, cotacaoBaseFp]);
   useEffect(() => {
     if (cotacaoBase && open) {
       // Preencher dados do formulário
