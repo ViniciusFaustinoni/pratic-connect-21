@@ -1,51 +1,64 @@
-## Problema
+## 1) Correção pontual — destravar o instalador agora
 
-A Maya IA não respondeu à mensagem "Preciso do meu boleto" do Marcos Dativo. A causa raiz é que o branch de associado em `agente-consultor-ia/index.ts` **só tem uma tool** (`solicitar_atendente_humano`) — não existe ferramenta para consultar boletos no SGA. Como o prompt do associado proíbe inventar dados e ainda manda escalar quando o pedido for operacional, o modelo silenciou (ou tentou prometer ação humana, o que também é proibido).
+**Caso:** chassi `9C2JK3400VR006840` (HONDA ELITE 125, moto, FIPE R$ 15.779), instalação `5b5bece7-6c6e-4a79-bd75-0d59ffd75647`, rastreador `357789644844604` (NT20, Softruck), estoque.
 
-Já existe a edge `sga-listar-boletos-associado` que enumera boletos por CPF (com veículos do SGA + locais + histórico). Falta apenas plugá-la como tool da IA.
+**Migration (data fix idempotente, sem schema):**
 
-## O que vai mudar
+```sql
+-- 1.1 Vincular rastreador ao veículo + status 'instalado'
+UPDATE public.rastreadores
+   SET veiculo_id = 'eafcc3ac-723a-4081-8408-8273023c5266',
+       status     = 'instalado',
+       updated_at = now()
+ WHERE id = '23f08cf5-54d9-4eba-b7d9-33299a518e49'
+   AND (veiculo_id IS NULL OR veiculo_id = 'eafcc3ac-723a-4081-8408-8273023c5266');
 
-### 1) Nova tool no agente — `consultar_boletos_associado`
-- Adicionar em `supabase/functions/agente-consultor-ia/index.ts` (branch `isAssociado`).
-- Parâmetros: nenhum obrigatório do modelo — internamente o handler usa `cpf` do contato (já capturado pelo CPF gate) ou `codigo_hinova` do associado vinculado.
-- Handler invoca `sga-listar-boletos-associado` via `supabase.functions.invoke` com o CPF do contato.
-- Retorna para o modelo um JSON enxuto: `{ encontrados: N, boletos: [{vencimento, valor, status, placa, linha_digitavel, link_pdf?}], erro_transitorio?: bool, motivo? }`.
-- Limite: até 5 boletos mais relevantes (abertos primeiro, depois vencidos recentes).
+-- 1.2 Apontar rastreador na instalação atual
+UPDATE public.instalacoes
+   SET rastreador_id = '23f08cf5-54d9-4eba-b7d9-33299a518e49',
+       updated_at    = now()
+ WHERE id = '5b5bece7-6c6e-4a79-bd75-0d59ffd75647'
+   AND rastreador_id IS NULL;
 
-### 2) Prompt do associado — instruir uso da nova tool
-- Adicionar bloco "QUANDO CHAMAR `consultar_boletos_associado`":
-  - Sempre que o associado pedir boleto, 2ª via, valor a pagar, linha digitável, código de barras, vencimento, "quanto devo", "minha fatura".
-- Atualizar a regra de transbordo: **remover "segunda via" e "boleto errado"** da lista que força transbordo automático. Substituir por:
-  - Chamar `consultar_boletos_associado` primeiro.
-  - Se retornar `erro_transitorio=true`, **aí sim** chamar `solicitar_atendente_humano` (motivo `duvida_complexa`, resumo "SGA fora — cliente pediu boleto").
-  - Se boleto retornar com status divergente do que o cliente alega ("paguei", "valor errado"), chamar `solicitar_atendente_humano`.
-- Reforçar: nunca inventar valores/datas — só repassar o que a tool devolver.
-
-### 3) Formatação da resposta ao cliente
-Instruir o modelo a responder em formato WhatsApp (negrito `*texto*`), 1 boleto por bloco:
+-- 1.3 Movimentação de estoque (auditoria)
+INSERT INTO public.estoque_movimentacoes
+       (tipo, quantidade, status_anterior, status_novo, rastreador_id, observacoes)
+SELECT 'alteracao_status', 1, 'estoque', 'instalado',
+       '23f08cf5-54d9-4eba-b7d9-33299a518e49',
+       'Vínculo manual — HONDA ELITE 125 chassi 9C2JK3400VR006840 (saneamento)'
+ WHERE NOT EXISTS (
+   SELECT 1 FROM public.estoque_movimentacoes
+    WHERE rastreador_id = '23f08cf5-54d9-4eba-b7d9-33299a518e49'
+      AND status_novo = 'instalado'
+      AND created_at > now() - interval '1 hour'
+ );
 ```
-*Boleto Mar/26* — R$ 89,90
-Vencimento: 10/03/2026 (em aberto)
-Placa: KRH3I99
-Linha digitável: 34191.79001 01043...
-```
-Sem markdown `**` nem `##`.
 
-## Fora do escopo
+**Pós-fix:** instalador atualiza o link, vê IMEI já preenchido (ou digita o mesmo `357789644844604`), marca decisão "Aprovado" e clica **Concluir Instalação** — o guard `trg_guard_instalacao_concluida_exige_rastreador` passa, fluxo segue normal para Aprovação de Associados.
 
-- Não alterar a edge `sga-listar-boletos-associado`.
-- Não mexer no fluxo de transbordo já existente.
-- Não trocar a tool de envio de PDF / não anexar boleto na conversa (apenas texto + linha digitável; envio de PDF fica para iteração seguinte se o usuário pedir).
-- Não tocar no branch de leads.
+---
 
-## Arquivos
+## 2) Correção de raiz — UI
 
-- `supabase/functions/agente-consultor-ia/index.ts` (única alteração — nova tool + prompt + handler do tool call).
+**Arquivo único:** `src/pages/instalador/InstaladorChecklist.tsx`
 
-## Critérios de aceite
+**Diagnóstico:** o componente usa `detectarTipoVeiculo(veiculoData?.tipo_veiculo, modelo, marca)` (síncrono, deprecated). A coluna `veiculos.tipo_veiculo` não existe, então só sobra heurística por marca/modelo. HONDA não está em `MOTO_BRANDS` (ambígua) e o keyword `elite` está na lista — então tecnicamente detectaria moto. Mas há um caminho onde escapa (snapshot ausente + variação de modelo). A fonte canônica é a RPC `fn_detectar_tipo_veiculo` exposta pelo hook `useDetectarTipoVeiculo` — mesma que o cotador usa.
 
-- "Preciso do meu boleto" → IA chama `consultar_boletos_associado` → responde com lista real do SGA em formato WhatsApp.
-- SGA fora do ar → IA chama `solicitar_atendente_humano` com motivo correto (não fica calada).
-- Sem boletos abertos → IA responde "Você está em dia, *Marcos*! Nenhum boleto em aberto no momento." sem inventar dados.
-- Nenhuma promessa do tipo "vou pedir para te enviarem" sem chamar tool.
+**Mudança:**
+
+1. Substituir o `useMemo` da linha 218 por `useDetectarTipoVeiculo({ marca, modelo, tipo_veiculo, snapshot })` (assíncrono, com fallback síncrono para o primeiro render).
+2. Enquanto `isLoading=true`, esconder o card "Rastreador dispensado" e o card "Local de Instalação" (sem flicker que confunda o instalador).
+3. Log `[InstaladorChecklist] tipoVeiculo final: <moto|automovel> (fonte: rpc|fallback)` para auditoria.
+
+Nada muda na edge `concluir-instalacao-prestador` nem no guard DB — o fix de UI elimina o falso "dispensado" para motos FIPE ≥ R$ 9k, e o guard continua sendo a rede de segurança.
+
+### Arquivos tocados
+
+- `supabase/migrations/<timestamp>_vincular_rastreador_NT20_elite125.sql` (item 1)
+- `src/pages/instalador/InstaladorChecklist.tsx` (item 2)
+
+### Fora de escopo
+
+- Backfill histórico de outras instalações onde isso possa ter acontecido (não pedido).
+- Mexer em edges, contrato ou Monitoramento.
+- Alterar `precisaRastreador` / `useConfigRastreador` (regras de FIPE estão corretas).
