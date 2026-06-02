@@ -289,10 +289,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
 
   // Bypass: placas para as quais o usuário já clicou "Ignorar e Prosseguir"
-  // (registrado em cotacao_avisos_sga). Cada Set guarda placas normalizadas.
-  const [bypassPlacaSGA, setBypassPlacaSGA] = useState<Set<string>>(new Set());
-  const [bypassPlacaOutroAssoc, setBypassPlacaOutroAssoc] = useState<Set<string>>(new Set());
-  const [bypassPlacaDuplicada, setBypassPlacaDuplicada] = useState<Set<string>>(new Set());
+  // (registrado em cotacao_avisos_sga). Usamos refs (síncronos) para garantir
+  // que o reprocessamento imediato após o clique enxergue o bypass — evita
+  // o modal reabrir em loop por leitura de estado stale.
+  const bypassPlacaSGARef = useRef<Set<string>>(new Set());
+  const bypassPlacaOutroAssocRef = useRef<Set<string>>(new Set());
+  const bypassPlacaDuplicadaRef = useRef<Set<string>>(new Set());
   const placaNorm = (p: string) => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 
   // Estados para seleção FIPE manual
@@ -1150,7 +1152,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
         if (placaDuplicada) {
           if (placaDuplicada.vendedorUserId !== user?.id) {
-            if (!bypassPlacaDuplicada.has(placaKey)) {
+            if (!bypassPlacaDuplicadaRef.current.has(placaKey)) {
               setPlacaDuplicadaInfo(placaDuplicada);
               setShowPlacaDuplicadaModal(true);
               setBuscandoPlaca(false);
@@ -1164,7 +1166,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Verificar se veículo existe no SGA (Hinova)
         try {
           const sgaResult = await verificarVeiculoSGA.mutateAsync(placa);
-          if (sgaResult.existe && !bypassPlacaSGA.has(placaKey)) {
+          if (sgaResult.existe && !bypassPlacaSGARef.current.has(placaKey)) {
             setShowSGAModal(true);
             setBuscandoPlaca(false);
             return;
@@ -1176,7 +1178,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Verificar se a placa já está vinculada a OUTRO associado na base local
         try {
           const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa });
-          if (localResult?.conflito && !bypassPlacaOutroAssoc.has(placaKey)) {
+          if (localResult?.conflito && !bypassPlacaOutroAssocRef.current.has(placaKey)) {
             setPlacaOutroAssocInfo(localResult);
             setShowPlacaOutroAssocModal(true);
             setBuscandoPlaca(false);
@@ -3452,7 +3454,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onOpenChange={setShowSGAModal}
         placa={placa}
         onIgnorarEProsseguir={() => {
-          setBypassPlacaSGA((s) => new Set(s).add(placaNorm(placa)));
+          bypassPlacaSGARef.current.add(placaNorm(placa));
           setShowSGAModal(false);
           setTimeout(() => buscarPorPlaca(), 100);
         }}
@@ -3465,7 +3467,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         placa={placa}
         info={placaOutroAssocInfo}
         onIgnorarEProsseguir={() => {
-          setBypassPlacaOutroAssoc((s) => new Set(s).add(placaNorm(placa)));
+          bypassPlacaOutroAssocRef.current.add(placaNorm(placa));
           setShowPlacaOutroAssocModal(false);
           setTimeout(() => buscarPorPlaca(), 100);
         }}

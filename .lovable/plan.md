@@ -1,39 +1,29 @@
 ## Objetivo
+Fazer o modal “Placa já pertence a outro associado” aparecer só uma vez por placa após o usuário clicar em **Ignorar e Prosseguir**, mantendo a lógica atual de validação e auditoria.
 
-Paginar a renderização das abas **Coberturas** e **Benefícios** em Diretoria › Gestão Comercial › Coberturas e Benefícios para não jogar 3.092 + 1.906 itens no DOM. Busca, ordenação e filtro de atribuição continuam varrendo o catálogo inteiro.
+## Causa raiz encontrada
+Hoje o clique em **Ignorar e Prosseguir** faz duas coisas em sequência:
+1. grava o bypass da placa no estado (`setBypassPlacaOutroAssoc`)
+2. relança `buscarPorPlaca()` via `setTimeout(..., 100)`
 
-## Por que funciona naturalmente
+O problema é que essa nova execução pode acontecer antes de a função passar a enxergar o estado atualizado do bypass. Resultado: a checagem roda de novo com valor antigo e reabre o mesmo modal repetidas vezes.
 
-`useCoberturas` e `useBenefits` (em `src/hooks/usePlans.ts`) já fazem paginação no PostgREST e devolvem o catálogo completo em memória. O `filterAndSort` do `CatalogoCoberturasBeneficios.tsx` já roda sobre todo o array. Só falta paginar o **display**.
+## Plano
+1. Ajustar o reprocessamento pós-bypass para não depender de estado assíncrono/stale no mesmo ciclo.
+2. Garantir que a placa ignorada seja consumida imediatamente na próxima busca, sem reexibir o modal local para a mesma placa naquela interação.
+3. Preservar o restante do fluxo atual:
+   - continuar registrando a decisão “Ignorar e Prosseguir”
+   - continuar permitindo Troca de Titularidade
+   - não mexer na lógica de validação de placa duplicada, SGA, FIPE ou criação da cotação
+4. Validar o comportamento com o cenário da imagem:
+   - placa vinculada a outro associado
+   - clicar em Ignorar e Prosseguir
+   - seguir a busca/registro sem reabrir o mesmo modal em cascata
 
-## Mudanças
+## Detalhes técnicos
+- Arquivo principal: `src/components/cotacoes/CotacaoFormDialog.tsx`
+- Ponto crítico: callback do `onIgnorarEProsseguir` do `PlacaOutroAssociadoModal` e a função `buscarPorPlaca()`
+- Direção da correção: usar um mecanismo síncrono/imutável para o bypass imediato da execução seguinte (em vez de depender do timing do `setState` + `setTimeout`)
 
-Arquivo único: `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`
-
-1. Estado novo, por aba:
-   - `cobPage` / `benPage` (default 1)
-   - `cobPageSize` / `benPageSize` (default 50, com seletor 25 / 50 / 100 / 200)
-
-2. Pipeline por aba (mantém ordem atual):
-   ```
-   coberturas → filterAndSort(busca, sort, attrFilter) → array filtrado
-                                                     ├─ count para o rodapé
-                                                     └─ .slice((page-1)*size, page*size) → ItemList
-   ```
-
-3. Resetar `page` para 1 sempre que `search`, `sort`, `attrFilter` ou `pageSize` mudarem (`useEffect` com essas deps).
-
-4. Rodapé de paginação abaixo do `ItemList` em cada aba:
-   - "Mostrando X–Y de N" (N = total após filtros)
-   - Seletor de page size
-   - Botões: « primeira, ‹ anterior, "Página X de Y", próxima ›, última »
-   - Esconde rodapé quando N ≤ pageSize
-
-5. Quando `highlightCobId` / `highlightBenId` for ativado por criação, calcular a página onde o item caiu (índice no array filtrado ÷ pageSize) e pular pra ela, pra manter o highlight visível.
-
-## Fora do escopo
-
-- Não mudar `useCoberturas` / `useBenefits` (já paginam o fetch).
-- Não mexer na aba "Atribuição".
-- Não mexer no componente legado `BeneficiosCoberturas.tsx`.
-- Sem URL params (paginação só client-state).
+## Resultado esperado
+Após ignorar o aviso uma vez, o fluxo segue normalmente e o mesmo modal não volta a aparecer em loop para aquela mesma placa durante a ação em andamento.
