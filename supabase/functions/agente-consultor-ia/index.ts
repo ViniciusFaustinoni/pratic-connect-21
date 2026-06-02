@@ -2093,3 +2093,106 @@ function dividirMensagem(texto: string, maxLength: number): string[] {
   if (restante) partes.push(restante);
   return partes;
 }
+
+// ============================================================================
+// TOOL: solicitar_atendente_humano
+// Pausa a IA por 12 h (motivo='transbordo_humano'), grava resumo na pausa,
+// abre notificações para o time de Relacionamento e devolve uma resposta fixa
+// ao cliente. O operador encerra pelo botão "Concluir atendimento" do chat.
+// ============================================================================
+async function executarSolicitarAtendenteHumano(
+  supabase: any,
+  telefone: string,
+  payload: {
+    motivo: string;
+    resumo: string;
+    prioridade: "normal" | "alta";
+    contato_nome: string | null;
+    associado_id: string | null;
+  }
+) {
+  const telLimpo = (telefone || "").replace(/\D/g, "");
+  const motivoTransbordo = "transbordo_humano"; // canônico — UI já reconhece
+  const pausadaAte = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+  const agora = new Date().toISOString();
+
+  const resumoFinal = [
+    payload.resumo || "Atendente humano solicitado pela Maya IA.",
+    `(categoria: ${payload.motivo}, prioridade: ${payload.prioridade})`,
+  ].join(" ");
+
+  const { error: pausaErr } = await supabase
+    .from("whatsapp_ia_pausas")
+    .upsert(
+      {
+        telefone: telLimpo,
+        pausada_ate: pausadaAte,
+        motivo: motivoTransbordo,
+        resumo: resumoFinal,
+        atendente_id: null,
+        updated_at: agora,
+      },
+      { onConflict: "telefone" }
+    );
+
+  if (pausaErr) {
+    console.error("[transbordo] Falha ao registrar pausa:", pausaErr);
+    return { success: false, error: "Não consegui transferir agora." };
+  }
+
+  // Notifica destinos do Relacionamento (proxy: coordenador_monitoramento + diretor)
+  try {
+    const { data: dest } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .in("role", ["coordenador_monitoramento", "diretor"]);
+
+    const titulo = payload.prioridade === "alta"
+      ? "🚨 Transbordo URGENTE — IA pediu atendente humano"
+      : "👤 Transbordo — IA pediu atendente humano";
+
+    const mensagem = [
+      `Tel: ${telLimpo}`,
+      payload.contato_nome ? `Nome: ${payload.contato_nome}` : null,
+      `Motivo: ${payload.motivo}`,
+      `Resumo: ${payload.resumo}`,
+    ].filter(Boolean).join(" | ");
+
+    for (const d of dest || []) {
+      await supabase.from("notificacoes").insert({
+        user_id: d.user_id,
+        titulo,
+        mensagem,
+        tipo: "alerta",
+        categoria: "relacionamento",
+        lida: false,
+      });
+    }
+
+    await supabase.from("notificacoes_sistema").insert({
+      titulo,
+      mensagem,
+      tipo: "transbordo_ia",
+      destino: "role",
+      destino_role: "coordenador_monitoramento",
+      link: `/eventos/chat-ia?telefone=${encodeURIComponent(telLimpo)}`,
+      ativo: true,
+    });
+  } catch (notifErr) {
+    console.error("[transbordo] Falha ao notificar Relacionamento (não-bloqueante):", notifErr);
+  }
+
+  console.log(`[transbordo] ✓ Aberto p/ ${telLimpo} motivo=${payload.motivo} prioridade=${payload.prioridade}`);
+
+  const primeiroNome = payload.contato_nome ? String(payload.contato_nome).split(/\s+/)[0] : "";
+  return {
+    success: true,
+    instrucao:
+      "TRANSBORDO ABERTO. Sua próxima e ÚNICA mensagem deve ser EXATAMENTE: \"Já chamei a equipe de Relacionamento aqui" +
+      (primeiroNome ? `, ${primeiroNome}` : "") +
+      ". Eles vão te responder por este mesmo WhatsApp assim que pegarem o seu atendimento. Pode aguardar. 🙏\". NÃO escreva mais nada além disso. NÃO peça nenhum dado a mais. NÃO prometa nada além do que está nessa frase.",
+    pausada_ate: pausadaAte,
+    motivo: motivoTransbordo,
+  };
+}
+
