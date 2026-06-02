@@ -71,6 +71,7 @@ serve(async (req) => {
       .update({
         testado: true,
         testado_em: new Date().toISOString(),
+        display_phone_number: result.display_phone_number ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("phone_number_id", phone_number_id);
