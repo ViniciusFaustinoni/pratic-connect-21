@@ -10,6 +10,17 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { UserAvatar } from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
+import { useMetaConfig, useTestarMetaConexao } from '@/hooks/useWhatsAppMeta';
+import { useEffect, useRef } from 'react';
+
+function formatPhoneBR(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const d = raw.replace(/\D/g, '');
+  // Esperado: 55 21 98579 1044 (13) ou 55 21 8579 1044 (12)
+  if (d.length === 13) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+  if (d.length === 12) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+  return raw;
+}
 
 export interface ConversaAgrupada {
   telefone: string;
