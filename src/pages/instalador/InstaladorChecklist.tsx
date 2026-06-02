@@ -1666,8 +1666,9 @@ export default function InstaladorChecklist({ servicoIdProp, vistoriaInterna, on
               </Card>
             )}
 
-            {/* Alerta de dispensa de rastreador */}
-            {!veiculoPrecisaRastreador && decisaoInstalador !== 'negado' && (
+            {/* Alerta de dispensa de rastreador — só após RPC canônica confirmar o tipo,
+                para não dispensar moto por engano. */}
+            {!tipoLoading && !veiculoPrecisaRastreador && decisaoInstalador !== 'negado' && (
               <Alert className="border-blue-500/50 bg-blue-500/10">
                 <Router className="h-4 w-4 text-blue-400" />
                 <AlertDescription className="text-blue-200">
