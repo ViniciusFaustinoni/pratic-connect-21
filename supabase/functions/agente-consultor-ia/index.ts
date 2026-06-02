@@ -609,22 +609,41 @@ Resolver dúvidas operacionais simples sozinho(a) e transbordar para a equipe hu
 - NUNCA tente vender planos ou fazer cotação para associados.
 - NUNCA ofereça produtos ou promoções.
 - NUNCA execute ferramentas de cotação.
+- NUNCA invente valores, datas, placas, linhas digitáveis ou códigos de barras. Esses dados só podem vir da tool *consultar_boletos_associado*.
 - **PROIBIDO escrever frases como** "vou solicitar à equipe", "vou reforçar com o Relacionamento", "já abri um chamado", "já avisei o time", "vou pedir prioridade", "fiz a solicitação", "vou pedir para te ligarem". Se você não chamou a tool *solicitar_atendente_humano* nesta mesma rodada, ESSAS FRASES SÃO MENTIRA — não use.
 - Seja cordial, curto e direto.
+
+## QUANDO CHAMAR A TOOL consultar_boletos_associado (OBRIGATÓRIO)
+Chame SEMPRE que o associado pedir:
+- "boleto", "meu boleto", "segunda via", "2ª via", "2via", "linha digitável", "código de barras", "PIX da fatura".
+- "quanto eu devo", "qual o valor", "minha fatura", "minha mensalidade", "vencimento".
+- Qualquer pergunta sobre status de pagamento (em aberto, vencido, em dia).
+
+A tool não precisa de parâmetros — o sistema usa o CPF do contato.
+
+Após a tool responder:
+- Se \`encontrados > 0\`, formate cada boleto (linha em branco entre eles):
+  *Boleto* — R$ {valor}
+  Vencimento: {dd/mm/aaaa} ({status})
+  Placa: {placa}
+  Linha digitável: \`{linha_digitavel}\`
+- Se \`encontrados = 0\` e sem erro: "Você está em dia, *${associadoNome}*! Não encontrei boletos em aberto. 👍"
+- Se \`erro_transitorio: true\`: chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='SGA fora — cliente pediu boleto').
+- Se o cliente disser que pagou um boleto que aparece em aberto, ou questionar valor/data: chame *solicitar_atendente_humano* (motivo='reclamacao').
 
 ## QUANDO CHAMAR A TOOL solicitar_atendente_humano (OBRIGATÓRIO)
 Chame SEMPRE que o associado:
 - Pedir retorno, ligação, posicionamento ou disser "ainda sem retorno", "ninguém me ligou", "preciso de um retorno", "quero falar com alguém".
 - Pedir explicitamente para falar com pessoa, atendente, humano, consultor, gerente.
-- Reclamar de status "em análise", demora, fatura travada, plano que não ativa, boleto errado.
+- Reclamar de status "em análise", demora, fatura travada, plano que não ativa.
 - Mencionar sinistro, acidente, batida, colisão, roubo, furto, incêndio, emergência → motivo='sinistro_emergencia', prioridade='alta'.
 - Repetir a mesma queixa numa segunda mensagem (não importa se você já respondeu antes).
-- Qualquer pedido que exija decisão humana, alteração de cadastro, cancelamento, segunda via, negociação.
+- Qualquer pedido que exija decisão humana, alteração de cadastro, cancelamento, negociação.
 
 Ao chamar a tool, escreva no parâmetro \`resumo\` (1 frase) o que o associado quer.
 
 ## O QUE VOCÊ PODE RESPONDER SOZINHO
-Apenas perguntas genéricas que NÃO exigem ação:
+- Boletos/2ª via — depois de chamar *consultar_boletos_associado*.
 - Horário de funcionamento da central.
 - Número de telefone da central: *${numeroAtendimento}*.
 - Explicar em alto nível o que é a PRATICCAR.
@@ -638,12 +657,23 @@ Se for a primeira mensagem do dia e o associado não trouxer pedido específico:
 ## FORMATAÇÃO
 - Use formatação WhatsApp: *negrito*, _itálico_.
 - NUNCA use Markdown: **duplo**, ## títulos.
-- Respostas curtas (no máximo 2 parágrafos).
+- Respostas curtas (no máximo 2 parágrafos, exceto listagem de boletos).
 
 ## DATA E HORA ATUAL
 ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
 
       tools = [
+        {
+          type: "function",
+          function: {
+            name: "consultar_boletos_associado",
+            description: "Consulta no SGA (Hinova) os boletos do associado pelo CPF do contato. Use SEMPRE que o associado pedir boleto, 2ª via, linha digitável, valor a pagar, vencimento, ou status de pagamento. Retorna até 5 boletos (abertos primeiro). Nunca invente dados — use APENAS o que esta tool devolver.",
+            parameters: {
+              type: "object",
+              properties: {},
+            },
+          },
+        },
         {
           type: "function",
           function: {
@@ -1183,6 +1213,13 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
                   associado_id: null,
                 }
               );
+            } else if (fnName === "consultar_boletos_associado") {
+              toolResult = await executarConsultarBoletosAssociado(
+                supabase,
+                supabaseUrl,
+                serviceKey,
+                { cpf: contato?.cpf || null }
+              );
             } else {
               toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
             }
@@ -1199,6 +1236,9 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
           }
           if (fnName === "obter_opcoes_vencimento" && toolResult?.success) {
             toolContent = `⚠️ DATAS OFICIAIS DE VENCIMENTO - USE APENAS ESTAS, NÃO INVENTE:\n${toolContent}`;
+          }
+          if (fnName === "consultar_boletos_associado") {
+            toolContent = `⚠️ BOLETOS OFICIAIS DO SGA - USE APENAS ESTES VALORES/DATAS/LINHAS, NÃO INVENTE. Se encontrados=0 e sem erro, diga que está em dia. Se erro_transitorio=true, chame solicitar_atendente_humano.\n${toolContent}`;
           }
 
           currentMessages.push({
@@ -2195,4 +2235,109 @@ async function executarSolicitarAtendenteHumano(
     motivo: motivoTransbordo,
   };
 }
+
+// ============================================================
+// TOOL: consultar_boletos_associado
+// Chama a edge sga-listar-boletos-associado com o CPF do contato e
+// devolve um JSON enxuto (até 5 boletos, abertos primeiro).
+// ============================================================
+async function executarConsultarBoletosAssociado(
+  _supabase: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { cpf: string | null }
+) {
+  const cpf = (args?.cpf || "").replace(/\D/g, "");
+  if (cpf.length !== 11) {
+    return {
+      success: false,
+      error: "CPF do contato indisponível — peça o CPF antes.",
+      encontrados: 0,
+      boletos: [],
+    };
+  }
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${supabaseUrl}/functions/v1/sga-listar-boletos-associado`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      body: JSON.stringify({ cpf }),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (e: any) {
+    console.error("[tool:consultar_boletos] fetch falhou:", e?.message);
+    return { success: false, erro_transitorio: true, motivo: "rede", encontrados: 0, boletos: [] };
+  }
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    console.error(`[tool:consultar_boletos] HTTP ${resp.status}: ${t.substring(0, 200)}`);
+    return { success: false, erro_transitorio: true, motivo: `http_${resp.status}`, encontrados: 0, boletos: [] };
+  }
+
+  const data: any = await resp.json().catch(() => ({}));
+
+  if (data?.erro_transitorio) {
+    return {
+      success: false,
+      erro_transitorio: true,
+      motivo: data?.motivo || "sga_indisponivel",
+      encontrados: 0,
+      boletos: [],
+    };
+  }
+
+  const todos: any[] = Array.isArray(data?.boletos) ? data.boletos : [];
+
+  const fmtData = (d: any) => {
+    if (!d) return null;
+    try {
+      const dt = new Date(String(d));
+      if (isNaN(dt.getTime())) return String(d);
+      return dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    } catch { return String(d); }
+  };
+  const fmtValor = (v: any) => {
+    const n = Number(v);
+    if (!isFinite(n)) return String(v ?? "");
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const normalizados = todos.map((b: any) => {
+    const venc = b.dataVencimento || b.data_vencimento || b.vencimento || null;
+    const valor = b.valor ?? b.valor_total ?? b.valorBoleto ?? null;
+    const situacao = String(b.situacao || b.status || b.statusBoleto || "").toLowerCase();
+    const aberto = !situacao || ["em aberto", "aberto", "vencido", "pendente", "a vencer"].some(s => situacao.includes(s));
+    return {
+      vencimento: fmtData(venc),
+      _vencISO: venc,
+      valor: fmtValor(valor),
+      status: situacao || "em aberto",
+      aberto,
+      placa: b.placa || b.veiculo_placa || null,
+      linha_digitavel: b.linhaDigitavel || b.linha_digitavel || b.codigoBarras || null,
+    };
+  });
+
+  normalizados.sort((a: any, b: any) => {
+    if (a.aberto !== b.aberto) return a.aberto ? -1 : 1;
+    const da = a._vencISO ? new Date(a._vencISO).getTime() : 0;
+    const db = b._vencISO ? new Date(b._vencISO).getTime() : 0;
+    return db - da;
+  });
+
+  const top = normalizados.slice(0, 5).map(({ _vencISO, aberto, ...rest }) => rest);
+
+  return {
+    success: true,
+    encontrados: normalizados.length,
+    boletos: top,
+  };
+}
+
 
