@@ -603,6 +603,14 @@ export function CatalogoCoberturasBeneficios() {
   const [benAttrFilter, setBenAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
   const [highlightCobId, setHighlightCobId] = useState<string | null>(null);
   const [highlightBenId, setHighlightBenId] = useState<string | null>(null);
+  const [cobPage, setCobPage] = useState(1);
+  const [benPage, setBenPage] = useState(1);
+  const [cobPageSize, setCobPageSize] = useState(50);
+  const [benPageSize, setBenPageSize] = useState(50);
+
+  // Reset to page 1 when filters/search/sort/pageSize change
+  useEffect(() => { setCobPage(1); }, [cobSearch, cobSort, cobAttrFilter, cobPageSize]);
+  useEffect(() => { setBenPage(1); }, [benSearch, benSort, benAttrFilter, benPageSize]);
 
   const triggerHighlight = (kind: 'cob' | 'ben', id: string) => {
     if (kind === 'cob') setHighlightCobId(id);
