@@ -56,7 +56,6 @@ import {
   agruparFotosPorCategoriaCompleta, 
   getFotosByTipoVeiculo,
   getTotalFotosObrigatorias,
-  detectarTipoVeiculo,
   agruparFotosFiltradas,
   type TipoVeiculo
 } from '@/data/vistoriaConfigCompleta';
