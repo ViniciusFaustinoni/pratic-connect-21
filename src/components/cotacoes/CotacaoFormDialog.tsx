@@ -1340,81 +1340,95 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [lead, form]);
 
   // Efeito para preencher o formulário com dados da cotação base (duplicação)
+  // Guard por fingerprint: pre-fill roda 1x por (open + conteúdo de cotacaoBase).
+  // Sem isso, qualquer re-render do pai que troque a REFERÊNCIA do prop com o
+  // mesmo conteúdo re-executa o corpo inteiro e derruba veiculoEncontrado/placa
+  // (bug doc. no else-if abaixo). Trocar de cotação muda o fingerprint e
+  // re-dispara normalmente. Fechar o modal reseta a ref.
+  // CotacaoBaseParaFormulario não tem id — por isso o fingerprint.
+  const cotacaoBasePrefilledFpRef = useRef<string | null>(null);
+  const cotacaoBaseFp = cotacaoBase
+    ? `${cotacaoBase.veiculo_placa ?? ''}|${cotacaoBase.plano_id ?? ''}|${cotacaoBase.lead_id ?? ''}|${cotacaoBase.valor_fipe ?? ''}|${cotacaoBase.nome_solicitante ?? ''}|${cotacaoBase.codigo_fipe ?? ''}`
+    : null;
   useEffect(() => {
-    if (cotacaoBase && open) {
-      // Preencher dados do formulário
-      if (cotacaoBase.valor_fipe) {
-        form.setValue('valor_fipe', cotacaoBase.valor_fipe);
-      }
-      if (cotacaoBase.valor_adicional) {
-        form.setValue('valor_adicional', cotacaoBase.valor_adicional);
-      }
-      if (cotacaoBase.valor_adesao !== null && cotacaoBase.valor_adesao !== undefined) {
-        form.setValue('valor_adesao', cotacaoBase.valor_adesao);
-      }
-      if (cotacaoBase.validade_dias) {
-        form.setValue('validade_dias', cotacaoBase.validade_dias);
-      }
-      if (cotacaoBase.lead_id) {
-        form.setValue('lead_id', cotacaoBase.lead_id);
-      }
-      if (cotacaoBase.plano_id) {
-        form.setValue('plano_id', cotacaoBase.plano_id);
-      }
-      
-      // Preencher dados do solicitante
-      setNomeAssociado(cotacaoBase.nome_solicitante || '');
-      setTelefoneAssociado(cotacaoBase.telefone1_solicitante || '');
-      setEmailAssociado(cotacaoBase.email_solicitante || '');
-      
-      // Preencher placa
-      if (cotacaoBase.veiculo_placa) {
-        setPlaca(cotacaoBase.veiculo_placa);
-      }
-      
-      // Preencher categoria → tipo de placa
-      if (cotacaoBase.categoria) {
-        setTipoPlacaSelecionado(cotacaoBase.categoria);
-      }
-      
-      // Preencher região
-      if (cotacaoBase.regiao) {
-        setRegiaoSelecionada(cotacaoBase.regiao);
-      }
-      
-      // Preencher dados do veículo encontrado
-      if (cotacaoBase.veiculo_marca && cotacaoBase.veiculo_modelo) {
-        setVeiculoEncontrado({
-          success: true,
-          vehicleData: {
-            marca: cotacaoBase.veiculo_marca,
-            modelo: cotacaoBase.veiculo_modelo,
-            marca_modelo: `${cotacaoBase.veiculo_marca} ${cotacaoBase.veiculo_modelo}`,
-            ano: cotacaoBase.veiculo_ano ? String(cotacaoBase.veiculo_ano) : '',
-            placa: cotacaoBase.veiculo_placa || '',
-            cor: '',
-            chassi: '',
-            municipio: '',
-            uf: '',
-            combustivel: ''
-          },
-          fipeData: cotacaoBase.valor_fipe ? {
-            valor: cotacaoBase.valor_fipe,
-            codigo: cotacaoBase.codigo_fipe,
-            mesReferencia: null
-          } : null
-        });
-      } else if (cotacaoBase.veiculo_placa && !veiculoEncontrado && !buscandoPlaca) {
-        // Guard: não refazer a busca por placa se o usuário já clicou na lupa
-        // (ou está clicando). Sem isso, qualquer re-render do pai que mudar a
-        // referência de `cotacaoBase` derruba o `veiculoEncontrado` e os planos
-        // calculados — bug observado na Substituição.
-        restaurarVeiculoPorPlaca(cotacaoBase.veiculo_placa);
-      }
+    if (!open) {
+      cotacaoBasePrefilledFpRef.current = null;
+      return;
+    }
+    if (!cotacaoBase || !cotacaoBaseFp) return;
+    if (cotacaoBasePrefilledFpRef.current === cotacaoBaseFp) return;
+    cotacaoBasePrefilledFpRef.current = cotacaoBaseFp;
 
+    // Preencher dados do formulário
+    if (cotacaoBase.valor_fipe) {
+      form.setValue('valor_fipe', cotacaoBase.valor_fipe);
+    }
+    if (cotacaoBase.valor_adicional) {
+      form.setValue('valor_adicional', cotacaoBase.valor_adicional);
+    }
+    if (cotacaoBase.valor_adesao !== null && cotacaoBase.valor_adesao !== undefined) {
+      form.setValue('valor_adesao', cotacaoBase.valor_adesao);
+    }
+    if (cotacaoBase.validade_dias) {
+      form.setValue('validade_dias', cotacaoBase.validade_dias);
+    }
+    if (cotacaoBase.lead_id) {
+      form.setValue('lead_id', cotacaoBase.lead_id);
+    }
+    if (cotacaoBase.plano_id) {
+      form.setValue('plano_id', cotacaoBase.plano_id);
+    }
+
+    // Preencher dados do solicitante
+    setNomeAssociado(cotacaoBase.nome_solicitante || '');
+    setTelefoneAssociado(cotacaoBase.telefone1_solicitante || '');
+    setEmailAssociado(cotacaoBase.email_solicitante || '');
+
+    // Preencher placa
+    if (cotacaoBase.veiculo_placa) {
+      setPlaca(cotacaoBase.veiculo_placa);
+    }
+
+    // Preencher categoria → tipo de placa
+    if (cotacaoBase.categoria) {
+      setTipoPlacaSelecionado(cotacaoBase.categoria);
+    }
+
+    // Preencher região
+    if (cotacaoBase.regiao) {
+      setRegiaoSelecionada(cotacaoBase.regiao);
+    }
+
+    // Preencher dados do veículo encontrado
+    if (cotacaoBase.veiculo_marca && cotacaoBase.veiculo_modelo) {
+      setVeiculoEncontrado({
+        success: true,
+        vehicleData: {
+          marca: cotacaoBase.veiculo_marca,
+          modelo: cotacaoBase.veiculo_modelo,
+          marca_modelo: `${cotacaoBase.veiculo_marca} ${cotacaoBase.veiculo_modelo}`,
+          ano: cotacaoBase.veiculo_ano ? String(cotacaoBase.veiculo_ano) : '',
+          placa: cotacaoBase.veiculo_placa || '',
+          cor: '',
+          chassi: '',
+          municipio: '',
+          uf: '',
+          combustivel: ''
+        },
+        fipeData: cotacaoBase.valor_fipe ? {
+          valor: cotacaoBase.valor_fipe,
+          codigo: cotacaoBase.codigo_fipe,
+          mesReferencia: null
+        } : null
+      });
+    } else if (cotacaoBase.veiculo_placa && !veiculoEncontrado && !buscandoPlaca) {
+      // Guard original mantido: o fingerprint já evita re-execução à toa, mas
+      // se a lupa estiver em uso ou o veículo já foi resolvido, não refaz.
+      restaurarVeiculoPorPlaca(cotacaoBase.veiculo_placa);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cotacaoBase, open, form, restaurarVeiculoPorPlaca]);
+  }, [open, cotacaoBaseFp, form, restaurarVeiculoPorPlaca]);
+
 
 
   // Efeito para preencher o formulário com dados da cotação para edição
