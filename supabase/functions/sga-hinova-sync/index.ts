@@ -1678,8 +1678,12 @@ serve(async (req) => {
           const loteMeta = lotesMeta[i] || [];
           try {
             const r = await cadastrarFotosVeiculoHinova(supabase, codigoVeiculoHinova, lote);
+            // Em erro, grava o payload COMPLETO (com cada item) para bisect manual.
+            const payloadLog = r.ok
+              ? { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }
+              : { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote };
             await logSync(_vid, _aid, 'enviar_fotos', r.ok ? 'success' : 'error',
-              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }, r.raw,
+              payloadLog, r.raw,
               r.ok ? null : (r.mensagem || r.errors.join('; ')));
             if (r.ok) {
               fotosEnviadas += lote.length;
@@ -1706,7 +1710,7 @@ serve(async (req) => {
             }
           } catch (e: any) {
             await logSync(_vid, _aid, 'enviar_fotos', 'error',
-              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }, null, String(e?.message || e));
+              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length, foto: lote }, null, String(e?.message || e));
             fotosComErro += lote.length;
           }
         }
