@@ -1431,9 +1431,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
 
 
-  // Efeito para preencher o formulário com dados da cotação para edição
+  // Efeito para preencher o formulário com dados da cotação para edição.
+  // Guard por id: pre-fill roda 1x por (open + cotacaoParaEditar.id). Sem isso,
+  // re-renders do pai que troquem a referência do prop com o MESMO id re-executavam
+  // o corpo e derrubavam estado (mesma classe do bug do #8). Reseta no !open;
+  // trocar A→B sem fechar muda o id e re-dispara.
+  const cotacaoEditarPrefilledIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (cotacaoParaEditar && open) {
+    if (!open) {
+      cotacaoEditarPrefilledIdRef.current = null;
+      return;
+    }
+    if (!cotacaoParaEditar) return;
+    if (cotacaoEditarPrefilledIdRef.current === cotacaoParaEditar.id) return;
+    cotacaoEditarPrefilledIdRef.current = cotacaoParaEditar.id;
+    {
+
       // Preencher dados do formulário
       if (cotacaoParaEditar.valor_fipe) {
         form.setValue('valor_fipe', cotacaoParaEditar.valor_fipe);
