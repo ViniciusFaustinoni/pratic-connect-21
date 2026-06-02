@@ -68,6 +68,7 @@ import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, emailSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
+import { PlanoCard } from './PlanoCard';
 
 import { useRegistrarCienciaFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
 import { useCriarSolicitacaoFipeLimite, useAprovacaoFipeLimitePorCotacao } from '@/hooks/useAprovacoesFipeLimite';
@@ -1547,7 +1548,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     });
   }, [planosCalculados, form]);
 
-  const handleTogglePlano = (plano: PlanoCotacao) => {
+  const handleTogglePlano = useCallback((plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
       const jaExiste = prev.some(p => p.id === plano.id);
       if (jaExiste) {
@@ -1582,7 +1583,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
       return novos;
     });
-  };
+  }, [form]);
 
 
   const formatCurrency = (value: number) => {
@@ -2984,101 +2985,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     const indexSelecionado = planosSelecionados.findIndex(p => p.id === plano.id);
                     const isSelecionado = indexSelecionado >= 0;
                     const ordemSelecao = indexSelecionado + 1;
-                    
+
                     return (
-                      <Card 
+                      <PlanoCard
                         key={plano.id}
-                        className={cn(
-                          "cursor-pointer transition-all hover:shadow-md relative",
-                          isSelecionado 
-                            ? "ring-2 ring-primary border-primary bg-primary/5" 
-                            : "hover:border-primary/50",
-                          plano.destaque && !isSelecionado && "border-amber-500/50"
-                        )}
-                        onClick={() => handleTogglePlano(plano)}
-                      >
-                        {/* Badge de ordem no canto */}
-                        {isSelecionado && (
-                          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center z-10">
-                            {ordemSelecao}º
-                          </div>
-                        )}
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-2 gap-1">
-                            <h4 className="font-semibold text-sm">{plano.nome}</h4>
-                            {isSelecionado ? (
-                              <CheckCircle2 className="h-4 w-4 text-primary" />
-                            ) : plano.destaque ? (
-                              <Badge variant="secondary" className="text-xs bg-amber-500/10 text-amber-600">
-                                Recomendado
-                              </Badge>
-                            ) : null}
-                          </div>
-                        <p className="text-xl font-bold text-primary mb-3">
-                          {formatCurrency(plano.valorMensal + valorAdicional)}
-                          <span className="text-xs font-normal text-muted-foreground">/mês</span>
-                        </p>
-                        <ul className="text-xs space-y-1 text-muted-foreground">
-                          {(() => {
-                            const coberturasVisiveis = plano.coberturas.filter(
-                              c => !(plano.coberturasRemovidas || []).some(
-                                cr => cr.toLowerCase().includes(c.toLowerCase())
-                              )
-                            );
-                            return (
-                              <>
-                                {coberturasVisiveis.slice(0, 4).map((cobertura, idx) => (
-                                  <li key={idx} className="flex items-start gap-1">
-                                    <Check className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
-                                    <span>{cobertura}</span>
-                                  </li>
-                                ))}
-                                <div className={`overflow-hidden transition-all duration-200 ${expandedPlanos[plano.id] ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                                  {coberturasVisiveis.slice(4).map((cobertura, idx) => (
-                                    <li key={idx + 4} className="flex items-start gap-1 mt-1">
-                                      <Check className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
-                                      <span>{cobertura}</span>
-                                    </li>
-                                  ))}
-                                </div>
-                              </>
-                            );
-                          })()}
-                          {plano.coberturas.length > 4 && (
-                            <li className="pt-1">
-                              <button
-                                type="button"
-                                onClick={(e) => toggleExpandPlano(plano.id, e)}
-                                className="flex items-center gap-1 text-primary hover:underline text-xs font-medium"
-                              >
-                                {expandedPlanos[plano.id] ? (
-                                  <>
-                                    <ChevronUp className="h-3 w-3" />
-                                    Ver menos
-                                  </>
-                                ) : (
-                                  <>
-                                    <ChevronDown className="h-3 w-3" />
-                                    Ver mais {plano.coberturas.length - 4}
-                                  </>
-                                )}
-                              </button>
-                            </li>
-                          )}
-                        </ul>
-                        <Separator className="my-3" />
-                        <div className="text-xs flex items-center gap-1">
-                          <span className="text-muted-foreground">Filiação: </span>
-                          <span className="font-medium text-primary">{formatCurrency(valorAdesao || 0)}</span>
-                        </div>
-                        {plano.alertaDesagio && (
-                          <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            {plano.alertaDesagio}
-                          </p>
-                        )}
-                        </CardContent>
-                      </Card>
+                        plano={plano}
+                        isSelecionado={isSelecionado}
+                        ordemSelecao={ordemSelecao}
+                        valorAdicional={valorAdicional}
+                        valorAdesao={valorAdesao || 0}
+                        isExpanded={!!expandedPlanos[plano.id]}
+                        onToggle={handleTogglePlano}
+                        onToggleExpand={toggleExpandPlano}
+                      />
                     );
                   })}
                   </div>
