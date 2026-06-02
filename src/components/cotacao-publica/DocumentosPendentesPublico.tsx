@@ -90,6 +90,56 @@ function isOcrTipoCompativel(tipoEsperado: string, tipoDetectado: string | null 
   return false;
 }
 
+/**
+ * Peça de autovistoria? (vídeo 360° ou foto da vistoria do veículo)
+ * Discriminador canônico para reabrir a autovistoria após reenvio pela tela
+ * de Documentos Solicitados. CNH/CRLV/comprovante NÃO entram aqui.
+ */
+function isPecaAutovistoria(tipo: string): boolean {
+  return isTipoVideo(tipo) || isTipoFoto(tipo);
+}
+
+/**
+ * Reabre a autovistoria do associado: zera cotacoes.vistoria_concluida_em
+ * para que o roteador do link público devolva o cliente para a etapa de
+ * autovistoria/análise (e o Cadastro reavalie a mídia nova).
+ * Não-bloqueante: falha apenas é logada — o reenvio em si não é abortado.
+ * Idempotente: re-executar com vistoria_concluida_em já NULL é no-op.
+ */
+async function reabrirAutovistoriaPorAssociado(associadoId: string): Promise<void> {
+  try {
+    const { data: vist, error: vErr } = await publicSupabase
+      .from('vistorias')
+      .select('id, cotacao_id')
+      .eq('associado_id', associadoId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (vErr) {
+      console.warn('[reabrirAutovistoria] erro busca vistoria:', vErr);
+      return;
+    }
+    if (!vist?.cotacao_id) {
+      console.warn('[reabrirAutovistoria] vistoria sem cotacao_id', { associadoId });
+      return;
+    }
+    const { error: uErr } = await publicSupabase
+      .from('cotacoes')
+      .update({ vistoria_concluida_em: null, updated_at: new Date().toISOString() } as any)
+      .eq('id', vist.cotacao_id);
+    if (uErr) {
+      console.warn('[reabrirAutovistoria] erro update cotacao:', uErr);
+    } else {
+      console.info('[reabrirAutovistoria] autovistoria reaberta', {
+        cotacao_id: vist.cotacao_id,
+        vistoria_id: vist.id,
+      });
+    }
+  } catch (e) {
+    console.warn('[reabrirAutovistoria] exceção:', e);
+  }
+}
+
 export function DocumentosPendentesPublico({ 
   associadoId, 
   docsPendentes,
