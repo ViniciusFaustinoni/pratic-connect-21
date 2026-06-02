@@ -1590,16 +1590,26 @@ serve(async (req) => {
       }
 
       // Fotos da vistoria do veículo (chassi, motor, frente, traseira, laterais, painel etc.)
-      // Inclui 'em_analise' porque o monitoramento aprova a INSTALAÇÃO (que dispara este sync)
-      // ANTES de a vistoria mudar para 'aprovada' — sem isso, fotos seriam sempre descartadas.
-      // Estados explicitamente proibidos: 'reprovada' / 'cancelada'.
-      const { data: vistoriasVeic } = await supabase.from('vistorias')
+      // Frente 2 (02/06/2026): só envia fotos quando vistoria está em estado TERMINAL
+      // (concluida / aprovada). 'em_analise' foi removido — com o trigger
+      // trg_sync_vistoria_on_servico_decisao (Frente 1), a aprovação do Monitoramento
+      // espelha em vistorias.status='aprovada' na MESMA transação, então não há janela
+      // legítima em que o sync precise aceitar 'em_analise'. Se vistoria ainda estiver
+      // em estado não-terminal, o item é re-enfileirado abaixo (defer) sem consumir
+      // tentativa, para evitar enviar fotos antes do marco "monitoramento aprovado".
+      const { data: vistoriasVeicElegiveis } = await supabase.from('vistorias')
         .select('id')
         .eq('veiculo_id', _vid)
-        .in('status', ['concluida', 'aprovada', 'em_analise']);
+        .in('status', ['concluida', 'aprovada']);
 
-      if (vistoriasVeic && vistoriasVeic.length > 0) {
-        const vistoriaIds = vistoriasVeic.map((v: any) => v.id);
+      // Vistorias em estado intermediário (defer condicional)
+      const { data: vistoriasVeicPendentes } = await supabase.from('vistorias')
+        .select('id, status')
+        .eq('veiculo_id', _vid)
+        .in('status', ['agendada', 'em_analise', 'em_rota', 'em_andamento']);
+
+      if (vistoriasVeicElegiveis && vistoriasVeicElegiveis.length > 0) {
+        const vistoriaIds = vistoriasVeicElegiveis.map((v: any) => v.id);
         const { data: vistoriaFotos } = await supabase.from('vistoria_fotos')
           .select('id, tipo, arquivo_url, vistoria_id')
           .in('vistoria_id', vistoriaIds);
@@ -1616,6 +1626,53 @@ serve(async (req) => {
           });
         }
       }
+
+      // Frente 2 — TRAVA no marco "monitoramento aprovado":
+      // Se NÃO há vistoria elegível mas EXISTE vistoria pendente, NÃO envia fotos
+      // agora. Re-enfileira o item como 'pendente' com motivo 'aguardando_vistoria_aprovada',
+      // sem incrementar `tentativas` (não é erro — é defer intencional). Cron retoma
+      // assim que Frente 1 promover a vistoria a 'aprovada'.
+      const temVistoriaElegivel = (vistoriasVeicElegiveis?.length ?? 0) > 0;
+      const temVistoriaPendente = (vistoriasVeicPendentes?.length ?? 0) > 0;
+      if (!temVistoriaElegivel && temVistoriaPendente) {
+        const proximo = new Date(Date.now() + 5 * 60_000).toISOString(); // 5 min
+        try {
+          const { data: existingDefer } = await supabase
+            .from('sga_sync_queue')
+            .select('id')
+            .eq('veiculo_id', _vid)
+            .eq('associado_id', _aid)
+            .maybeSingle();
+          const baseDefer = {
+            status: 'pendente',
+            ultima_tentativa_em: new Date().toISOString(),
+            proximo_reenvio_em: proximo,
+            erro_ultimo: 'aguardando_vistoria_aprovada',
+            etapa_parou: 'aguardando_vistoria_aprovada',
+            ...(codigoAssociadoHinova && { codigo_associado_hinova: codigoAssociadoHinova }),
+            ...(codigoVeiculoHinova && { codigo_veiculo_hinova: codigoVeiculoHinova }),
+          };
+          if (existingDefer) {
+            await supabase.from('sga_sync_queue').update(baseDefer).eq('id', existingDefer.id);
+          } else {
+            await supabase.from('sga_sync_queue').insert({
+              veiculo_id: _vid, associado_id: _aid, origem: 'automatico', ...baseDefer,
+            });
+          }
+        } catch (e) {
+          console.error('[defer aguardando_vistoria_aprovada]', e);
+        }
+        await logSync(_vid, _aid, 'defer_aguardando_vistoria_aprovada', 'info', {
+          vistorias_pendentes: vistoriasVeicPendentes?.map((v: any) => ({ id: v.id, status: v.status })) || [],
+          proximo_reenvio_em: proximo,
+        }, {
+          codigo_associado_hinova: codigoAssociadoHinova,
+          codigo_veiculo_hinova: codigoVeiculoHinova,
+        });
+        console.log(`[sga-hinova-sync] defer veiculo=${_vid} motivo=aguardando_vistoria_aprovada`);
+        return; // sai do doSync — associado/veiculo já foram sincronizados; fotos esperam
+      }
+
 
       // ---- DEDUPE: filtra documentos já enviados ao SGA neste veículo ----
       // Sem este filtro, cada execução do sync re-enviava todas as fotos, gerando
