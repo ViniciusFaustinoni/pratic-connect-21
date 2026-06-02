@@ -64,10 +64,26 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensagens]);
 
-  // Reseta pendentes ao trocar de contato
-  useEffect(() => { setPendingMessages([]); }, [telefone]);
+  // Reseta pendentes + força auto-scroll ao trocar de contato
+  useEffect(() => {
+    setPendingMessages([]);
+    setAutoScroll(true);
+  }, [telefone]);
 
-  // Realtime subscription
+  // Resolve o viewport interno do Radix ScrollArea (quem realmente rola).
+  const getViewport = (): HTMLElement | null => {
+    const root = scrollRef.current;
+    if (!root) return null;
+    return root.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
+    const vp = getViewport();
+    if (!vp) return;
+    vp.scrollTo({ top: vp.scrollHeight, behavior });
+  };
+
+  // Realtime subscription (INSERT + UPDATE de status)
   useEffect(() => {
     if (!telefone) return;
     const telefoneLimpo = telefone.replace(/\D/g, '');
@@ -76,7 +92,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
     const channel = supabase
       .channel(`chat-ia-${telefoneComDDI}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'whatsapp_mensagens',
         filter: `telefone=eq.${telefoneComDDI}`,
@@ -88,16 +104,36 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
     return () => { supabase.removeChannel(channel); };
   }, [telefone, refetch]);
 
-  // Auto scroll
+  // Detecta se o usuário está "colado no fim" para respeitar a intenção dele.
   useEffect(() => {
-    if (autoScroll && scrollRef.current && mensagens?.length) {
-      setTimeout(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      }, 50);
-    }
-  }, [mensagens, autoScroll]);
+    const vp = getViewport();
+    if (!vp) return;
+    const onScroll = () => {
+      const distFromBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight;
+      setAutoScroll(distFromBottom < 80);
+    };
+    vp.addEventListener('scroll', onScroll, { passive: true });
+    return () => vp.removeEventListener('scroll', onScroll);
+  }, [telefone, isLoading]);
+
+  // Rolagem inicial no fim: dispara assim que a primeira leva chega (e em troca de contato).
+  useEffect(() => {
+    if (isLoading) return;
+    if (!mensagens?.length) return;
+    // dois ticks: 1º p/ o React pintar, 2º p/ imagens/áudios medirem altura
+    requestAnimationFrame(() => {
+      scrollToBottom('auto');
+      setTimeout(() => scrollToBottom('auto'), 80);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telefone, isLoading]);
+
+  // Auto scroll a cada nova mensagem (respeitando a intenção do usuário)
+  useEffect(() => {
+    if (!autoScroll) return;
+    if (!mensagens?.length && !pendingMessages.length) return;
+    requestAnimationFrame(() => scrollToBottom('smooth'));
+  }, [mensagens, pendingMessages, autoScroll]);
 
   const handleEnviar = async () => {
     if (!telefone || (!texto.trim() && !audioFile)) return;
