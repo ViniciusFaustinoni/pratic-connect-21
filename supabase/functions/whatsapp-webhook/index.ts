@@ -283,10 +283,10 @@ const buildWhatsappSystemPrompt = (prazoLinkEvento: number) => `Você é o Assis
 1. Consultar faturas pendentes e enviar link — quando o associado perguntar sobre boleto, fatura, pagamento em aberto, dívida, mensalidade OU pedir "2ª via" / "segunda via" do boleto, use OBRIGATORIAMENTE o fluxo de 2ª via via SGA (ver "FLUXO 2ª VIA DE BOLETO" abaixo). NÃO use get_boletos_pendentes para esse caso — get_boletos_pendentes só serve para consulta interna rápida e NÃO traz dados do SGA.
 
 ## FLUXO 2ª VIA DE BOLETO (OBRIGATÓRIO sempre que o associado pedir boleto/2ª via)
-1. Pergunte: "Para consultar seu boleto, me informa o seu CPF, por favor?" — não avance sem o CPF.
-2. Com o CPF, chame consultar_associado_sga_por_cpf(cpf). Se não encontrar, peça para conferir o CPF.
+1. **IDENTIDADE JÁ CONFIRMADA?** Se o contexto trouxer "IDENTIDADE JÁ CONFIRMADA" com um CPF, NÃO peça o CPF de novo — use esse CPF direto e pule para o passo 2. Só pergunte "Para consultar seu boleto, me informa o seu CPF, por favor?" quando NÃO houver CPF confirmado no contexto.
+2. Chame consultar_associado_sga_por_cpf — pode chamar sem o parâmetro cpf quando a identidade já estiver confirmada (a tool recupera o CPF registrado para este contato). Se não encontrar, peça para conferir o CPF.
 3. Se a resposta retornar 1 veículo: confirme com o associado a placa ("Encontrei o veículo placa XXX. Confirma que é desse veículo?"). Se >1 veículo: liste as placas e peça a placa correta.
-4. Com a placa confirmada, chame consultar_boletos_sga_por_placa(cpf, placa).
+4. Com a placa confirmada, chame consultar_boletos_sga_por_placa(placa) — o cpf é opcional quando a identidade já estiver confirmada.
 5. Se "recomendacao" = "enviar_boleto": envie ao associado, em UMA mensagem, a **linha digitável**, o **link do boleto** e o **PIX copia-e-cola** (quando vierem preenchidos). Se vier pix_qrcode_base64, mencione que o QR Code também está disponível pelo link.
 6. Se "recomendacao" = "transbordo": NÃO envie boleto. Diga "Esse boleto está vencido há mais de 5 dias. Vou te transferir para um atendente humano agora — em instantes alguém continua o atendimento por aqui." e em seguida chame transbordo_atendimento_humano(motivo, categoria='boleto_vencido').
 7. NUNCA invente linha digitável, link ou PIX. Use APENAS o que veio das tools. Se algum campo estiver vazio, informe o que tem e ofereça transbordo se o associado precisar mais ajuda.
@@ -712,13 +712,13 @@ const tools = [
   type: "function",
   function: {
     name: "consultar_associado_sga_por_cpf",
-    description: "Consulta a base SGA (Hinova) pelo CPF do associado e retorna os veículos vinculados. Use SOMENTE no fluxo de '2ª via de boleto' depois que o associado informar o CPF. Não use para confirmar identidade fora desse fluxo.",
+    description: "Consulta a base SGA (Hinova) pelo CPF do associado e retorna os veículos vinculados. Use SOMENTE no fluxo de '2ª via de boleto'. Se a identidade do contato já estiver confirmada (CPF registrado para este telefone), pode chamar SEM o parâmetro cpf — a função recupera o CPF confirmado automaticamente. Só passe o cpf quando o associado tiver acabado de informá-lo na conversa.",
     parameters: {
       type: "object",
       properties: {
-        cpf: { type: "string", description: "CPF do associado (apenas dígitos ou com máscara — a função normaliza)" },
+        cpf: { type: "string", description: "CPF do associado (apenas dígitos ou com máscara — a função normaliza). OPCIONAL quando a identidade já está confirmada para este contato." },
       },
-      required: ["cpf"],
+      required: [],
     },
   },
 },
@@ -726,14 +726,14 @@ const tools = [
   type: "function",
   function: {
     name: "consultar_boletos_sga_por_placa",
-    description: "Lista boletos no SGA (Hinova) para uma placa específica do associado e devolve linha digitável, link, PIX copia-e-cola e QR Code quando disponíveis. Já calcula 'dias_vencido' e a recomendação: 'enviar_boleto' (não vencido ou ≤5 dias) ou 'transbordo' (≥6 dias). Use APENAS após consultar_associado_sga_por_cpf e confirmar a placa.",
+    description: "Lista boletos no SGA (Hinova) para uma placa específica do associado e devolve linha digitável, link, PIX copia-e-cola e QR Code quando disponíveis. Já calcula 'dias_vencido' e a recomendação: 'enviar_boleto' (não vencido ou ≤5 dias) ou 'transbordo' (≥6 dias). O parâmetro cpf é OPCIONAL quando a identidade já está confirmada para este contato — a função recupera o CPF confirmado automaticamente.",
     parameters: {
       type: "object",
       properties: {
-        cpf: { type: "string", description: "CPF do associado já validado no passo anterior" },
+        cpf: { type: "string", description: "CPF do associado. OPCIONAL quando a identidade já está confirmada para este contato." },
         placa: { type: "string", description: "Placa do veículo do qual o cliente quer o boleto" },
       },
-      required: ["cpf", "placa"],
+      required: ["placa"],
     },
   },
 },
@@ -1735,7 +1735,28 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "consultar_associado_sga_por_cpf": {
-      const cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      let cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      // Fallback: identidade já confirmada para este telefone → recuperar CPF
+      // do registro canônico (agente_ia_contatos). Garante que, em telefone
+      // compartilhado, o CPF usado é o do associado que confirmou — nunca
+      // resolvido pelo número (que não distingue dois titulares).
+      if (cpfLimpo.length !== 11 && telefone) {
+        try {
+          const telNorm = telefone.replace(/\D/g, "");
+          const { data: contatoIa } = await supabase
+            .from("agente_ia_contatos")
+            .select("cpf")
+            .eq("telefone", telNorm)
+            .maybeSingle();
+          const cpfStored = String(contatoIa?.cpf ?? "").replace(/\D/g, "");
+          if (cpfStored.length === 11) {
+            cpfLimpo = cpfStored;
+            console.log(`[whatsapp-webhook] consultar_associado_sga_por_cpf: usando CPF confirmado do contato (tel=${telNorm})`);
+          }
+        } catch (lookupErr: any) {
+          console.warn(`[whatsapp-webhook] Falha fallback CPF agente_ia_contatos:`, lookupErr?.message || lookupErr);
+        }
+      }
       if (cpfLimpo.length !== 11) {
         return JSON.stringify({ erro: "CPF inválido. Peça ao associado os 11 dígitos do CPF." });
       }
@@ -1779,8 +1800,27 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
     }
 
     case "consultar_boletos_sga_por_placa": {
-      const cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
+      let cpfLimpo = String(args?.cpf ?? "").replace(/\D/g, "");
       const placaLimpa = String(args?.placa ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+      // Fallback idêntico ao consultar_associado_sga_por_cpf: identidade já
+      // confirmada para o telefone manda no CPF (telefone compartilhado).
+      if (cpfLimpo.length !== 11 && telefone) {
+        try {
+          const telNorm = telefone.replace(/\D/g, "");
+          const { data: contatoIa } = await supabase
+            .from("agente_ia_contatos")
+            .select("cpf")
+            .eq("telefone", telNorm)
+            .maybeSingle();
+          const cpfStored = String(contatoIa?.cpf ?? "").replace(/\D/g, "");
+          if (cpfStored.length === 11) {
+            cpfLimpo = cpfStored;
+            console.log(`[whatsapp-webhook] consultar_boletos_sga_por_placa: usando CPF confirmado do contato (tel=${telNorm})`);
+          }
+        } catch (lookupErr: any) {
+          console.warn(`[whatsapp-webhook] Falha fallback CPF agente_ia_contatos (boletos):`, lookupErr?.message || lookupErr);
+        }
+      }
       if (cpfLimpo.length !== 11 || placaLimpa.length < 7) {
         return JSON.stringify({ erro: "CPF ou placa inválidos." });
       }
@@ -4113,6 +4153,13 @@ serve(async (req) => {
 
     // Buscar contexto e histórico
     const context = await getAssociadoContext(supabase, associado.id);
+    // Bloco autoritativo de identidade: quando o CPF já foi confirmado para este
+    // telefone (gate canônico), instrui a IA a NÃO re-pedir CPF no fluxo de boleto.
+    // Importante em telefone compartilhado: este é o CPF do associado que de fato
+    // confirmou a identidade — não o resolvido pelo número.
+    const identidadeCtx = cpfConfirmadoParaTelefone
+      ? `\n\n## IDENTIDADE JÁ CONFIRMADA\nCPF confirmado para este contato: ${cpfConfirmadoParaTelefone} (associado: ${associado.nome}).\nNO FLUXO DE 2ª VIA DE BOLETO: use este CPF direto — NÃO peça o CPF de novo. Chame as tools sem o parâmetro cpf (a tool recupera automaticamente).`
+      : "";
     const history = await getConversationHistory(supabase, associado.id, telefone);
 
     // Preparar mensagens para IA
@@ -4127,7 +4174,7 @@ serve(async (req) => {
     try {
       const prazoLinkEvento = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
       const whatsappPrompt = buildWhatsappSystemPrompt(prazoLinkEvento);
-      let aiResponse = await callAI(messages, whatsappPrompt + "\n\n" + context);
+      let aiResponse = await callAI(messages, whatsappPrompt + "\n\n" + context + identidadeCtx);
       let assistantMessage = aiResponse.choices?.[0]?.message;
       let iterations = 0;
       const maxIterations = 4;
@@ -4174,7 +4221,7 @@ serve(async (req) => {
             assistantMessage,
             ...toolResults,
           ],
-          whatsappPrompt + "\n\n" + context
+          whatsappPrompt + "\n\n" + context + identidadeCtx
         );
         assistantMessage = aiResponse.choices?.[0]?.message;
       }
