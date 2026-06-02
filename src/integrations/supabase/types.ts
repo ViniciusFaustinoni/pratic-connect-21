@@ -984,6 +984,27 @@ export type Database = {
         }
         Relationships: []
       }
+      agente_ia_locks: {
+        Row: {
+          aberto_em: string
+          mensagem_hash: string
+          origem: string | null
+          telefone: string
+        }
+        Insert: {
+          aberto_em?: string
+          mensagem_hash: string
+          origem?: string | null
+          telefone: string
+        }
+        Update: {
+          aberto_em?: string
+          mensagem_hash?: string
+          origem?: string | null
+          telefone?: string
+        }
+        Relationships: []
+      }
       ai_model_config: {
         Row: {
           created_at: string
@@ -33304,6 +33325,7 @@ export type Database = {
           created_at: string
           motivo: string
           pausada_ate: string
+          resumo: string | null
           telefone: string
           updated_at: string
         }
@@ -33313,6 +33335,7 @@ export type Database = {
           created_at?: string
           motivo: string
           pausada_ate: string
+          resumo?: string | null
           telefone: string
           updated_at?: string
         }
@@ -33322,6 +33345,7 @@ export type Database = {
           created_at?: string
           motivo?: string
           pausada_ate?: string
+          resumo?: string | null
           telefone?: string
           updated_at?: string
         }
@@ -35175,6 +35199,30 @@ export type Database = {
       }
       can_manage_users: { Args: { _user_id: string }; Returns: boolean }
       can_view_all_cotacoes: { Args: { _user_id: string }; Returns: boolean }
+      claim_proximos_itens_fila_ia: {
+        Args: { p_limit?: number }
+        Returns: {
+          created_at: string | null
+          erro: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          mensagem_id: string | null
+          message_id: string | null
+          processed_at: string | null
+          status: string | null
+          telefone: string
+          tentativas: number | null
+          texto: string | null
+          tipo_msg: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "whatsapp_fila_ia"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       concluir_instalacao_prestador: {
         Args: { p_instalacao_id: string; p_observacao: string }
         Returns: Json
