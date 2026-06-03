@@ -253,7 +253,7 @@ const menuConfig: {
         { title: 'Transbordo', url: '/relacionamento/transbordos', icon: ArrowRightLeft },
         { title: 'Análises', url: '/relacionamento/analises', icon: ClipboardCheck },
         { title: 'E-mails', url: '/relacionamento/emails', icon: Mail, permission: 'canManageEmailsSuspensao' },
-        { title: 'Config. IA', url: '/relacionamento/maya-ia', icon: Bot },
+        { title: 'Config. IA', url: '/relacionamento/config-ia', icon: Bot },
 
         { title: 'Cobranças', url: '/financeiro/cobrancas/emissao?sub=csv', icon: Receipt },
       ],
