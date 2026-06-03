@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   FileText, Camera, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft,
   AlertCircle, Eye, MapPin, XCircle, Lock
@@ -139,8 +139,23 @@ export function PropostaApprovalStepper({
   gatesAtivos = [],
   contratoId,
 }: PropostaApprovalStepperProps) {
-  const [currentStep, setCurrentStep] = useState(1);
+  // Sub-etapa 1 do Cadastro (aprovação dos documentos) é gate para sub-etapa 2.
+  // Ver mem://logic/operations/cadastro-duas-subetapas
+  const subEtapa1Liberada = !!documentosAprovadosEm;
+  // Quando a sub-etapa 1 já está fechada (cadastros antigos / reabertos sem
+  // refresh), iniciar direto na sub-etapa 2 — caso contrário o analista
+  // ficava preso no banner "Sub-etapa 1 concluída" sem ver o botão verde
+  // "Aprovar Proposta".
+  const [currentStep, setCurrentStep] = useState(subEtapa1Liberada ? 2 : 1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
+  // Auto-avança quando a sub-etapa 1 fecha durante a sessão (ex.: analista
+  // clicou em "Aprovar Documentos" agora). Só promove de 1 → 2, nunca
+  // regride a navegação manual do usuário.
+  useEffect(() => {
+    if (subEtapa1Liberada) {
+      setCurrentStep((prev) => (prev === 1 ? 2 : prev));
+    }
+  }, [subEtapa1Liberada]);
   const cancelarDocsMutation = useCancelarDocumentosSolicitados();
 
   const gatesSub1 = gatesParaBotao(gatesAtivos, 1);
@@ -170,9 +185,8 @@ export function PropostaApprovalStepper({
     });
   };
 
-  // Sub-etapa 1 do Cadastro (aprovação dos documentos) é gate para sub-etapa 2.
-  // Ver mem://logic/operations/cadastro-duas-subetapas
-  const subEtapa1Liberada = !!documentosAprovadosEm;
+
+
 
   // Quando o cadastro NÃO avalia fotos (plano sem R&F ou vistoria agendada
   // ainda não realizada), o stepper fica com 2 etapas: Documentos + Liberação.
