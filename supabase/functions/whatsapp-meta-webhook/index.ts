@@ -38,6 +38,78 @@ async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone:
 }
 
 /**
+ * Baixa um áudio recebido via Meta WhatsApp e envia para a edge `transcrever-audio`.
+ * Retorna a transcrição em texto ou null em caso de falha (com motivo logado).
+ */
+async function transcreverAudioMeta(
+  supabase: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  mediaId: string,
+): Promise<string | null> {
+  try {
+    const { data: metaConfig } = await supabase
+      .from("whatsapp_meta_config")
+      .select("access_token")
+      .eq("ativo", true)
+      .maybeSingle();
+
+    const accessToken = metaConfig?.access_token || Deno.env.get("META_WHATSAPP_ACCESS_TOKEN");
+    if (!accessToken) {
+      console.error("[meta-webhook][audio] access_token Meta não configurado");
+      return null;
+    }
+
+    const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) {
+      console.error(`[meta-webhook][audio] falha metadata: ${metaRes.status} ${await metaRes.text()}`);
+      return null;
+    }
+    const metaJson = await metaRes.json();
+    const mediaUrl = metaJson.url;
+    const mimetype = metaJson.mime_type || "audio/ogg";
+    if (!mediaUrl) {
+      console.error("[meta-webhook][audio] metadata sem url");
+      return null;
+    }
+
+    const binRes = await fetch(mediaUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!binRes.ok) {
+      console.error(`[meta-webhook][audio] falha download: ${binRes.status}`);
+      return null;
+    }
+    const arrayBuffer = await binRes.arrayBuffer();
+    const blob = new Blob([arrayBuffer], { type: mimetype });
+
+    const formData = new FormData();
+    formData.append("audio", blob, "audio.ogg");
+
+    const tRes = await fetch(`${supabaseUrl}/functions/v1/transcrever-audio`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serviceKey}` },
+      body: formData,
+    });
+    if (!tRes.ok) {
+      console.error(`[meta-webhook][audio] falha transcrever-audio: ${tRes.status} ${await tRes.text()}`);
+      return null;
+    }
+    const tJson = await tRes.json();
+    const texto = tJson.text?.trim() || null;
+    console.log(`[meta-webhook][audio] transcrição (${texto?.length || 0} chars): "${texto?.substring(0, 80)}"`);
+    return texto;
+  } catch (e) {
+    console.error("[meta-webhook][audio] erro transcrição:", e);
+    return null;
+  }
+}
+
+
+
+/**
  * Inferir intenção da resposta de confirmação via regex (fallback)
  */
 function inferirIntencaoConfirmacao(texto: string): string {
