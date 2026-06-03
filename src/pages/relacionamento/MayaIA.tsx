@@ -462,9 +462,9 @@ export default function MayaIA() {
           <Bot className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-xl font-bold">Maya IA</h1>
+          <h1 className="text-xl font-bold">Config. IA</h1>
           <p className="text-sm text-muted-foreground">
-            Configure como a Maya se comporta e o que ela sabe. Mudanças entram em vigor em até 60 segundos.
+            Configure como o Assistente IA Praticcar se comporta e o que ele sabe. Mudanças entram em vigor em até 60 segundos.
           </p>
         </div>
       </div>
