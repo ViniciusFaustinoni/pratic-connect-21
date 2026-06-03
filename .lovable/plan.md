@@ -1,67 +1,52 @@
-## Diagnóstico — onde DIOGO travou
+## Diagnóstico
 
-Cotação `COT-20260602-090235466-549` — Ford Fiesta KPH1G98, FIPE R$ 29.782 → **sub-FIPE** (dispensa rastreador, autovistoria completa obrigatória).
+Investiguei o fluxo `whatsapp-webhook` → `agente-consultor-ia` e a tabela `maya_ia_faq`. A pronta resposta de Assistência 24h existe, está `ativo=true` e tem `audiencias=[associado, lead]` — então a estrutura está correta. O problema tem **duas camadas independentes**, e a IA pode estar travando antes mesmo de chegar na FAQ.
 
-Estado atual:
-- `contratos.cadastro_aprovado=true`, `aprovado_em=2026-06-03 18:26`, `documentos_aprovados_em=16:24`
-- `contratos.status='assinado'` / `veiculos.status='instalacao_pendente'` / `associados.status='aguardando_aprovacao_monitoramento'`
-- `vistorias` existe (`pendente`, modalidade `autovistoria`, vídeo OK)
-- **`servicos` existe** (`73dff5c7`, `tipo=vistoria_entrada`, `modalidade=autovistoria`, `status=em_analise`, vinculado à vistoria)
-- Sem `instalacoes` (correto p/ sub-FIPE)
+### Camada 1 — Por que ela "não respondeu nada" (silêncio total)
 
-**Por que sumiu da fila do Monitoramento?**
-A regra canônica sub-FIPE (memória `vistoria-sem-rastreador-flow`) diz: ao aprovar o Cadastro, o serviço `em_analise` deve ser **promovido para `concluida`** e a R/F liberada. Isso é o que a fila "Aprovação de Associados" usa para listar o caso. No DIOGO o `aprovar-proposta` rodou (cadastro_aprovado=true) mas **o serviço continuou em `em_analise`** — então:
+Em `agente-consultor-ia/index.ts` (linhas 220-227) existe este gate:
 
-- Fila do Cadastro não mostra mais (cadastro_aprovado=true)
-- Fila do Monitoramento não mostra (serviço ainda `em_analise`, não `concluida`)
-- Resultado: **limbo silencioso**
-
-Causa-raiz provável: o backfill manual do `vistorias.video_360_url` que aplicamos mais cedo destravou o guard `caminho_publico_incompleto` no `aprovar-proposta`, mas a edge tem um caminho de promoção do serviço (`em_analise` → `concluida`) que só roda quando ela mesma materializa a vistoria — para vistoria pré-existente o passo é pulado. Já existia esse buraco antes; só ficou visível agora.
-
-## Plano
-
-### 1. Saneamento DIOGO (imediato)
-Migration única:
-- `UPDATE servicos SET status='concluida', concluido_em=now() WHERE id='73dff5c7-72f0-4456-93cc-2e322de560a8'`
-- `UPDATE vistorias SET status='aprovada' WHERE id='4ecc4e63-...'` (parear com o serviço)
-- `UPDATE veiculos SET cobertura_roubo_furto=true WHERE id='0c63d99f-...'` (sub-FIPE: Cadastro libera R/F)
-- Log em `logs_auditoria` com motivo "saneamento limbo COT-…-549"
-
-Após isso ele aparece na **Aprovação de Associados** do Monitoramento normalmente.
-
-### 2. Hardening do `aprovar-proposta` (sub-FIPE)
-No fim do fluxo de aprovação, quando o caso é sub-FIPE (dispensa rastreador), garantir promoção idempotente:
-
-```ts
-// pseudo
-UPDATE servicos
-   SET status='concluida', concluido_em=now()
- WHERE contrato_id = :contrato
-   AND tipo IN ('vistoria_entrada','instalacao')
-   AND modalidade = 'autovistoria'
-   AND status = 'em_analise';
-UPDATE veiculos SET cobertura_roubo_furto=true WHERE id=:veiculo;
+```
+if (contato?.status === "atendimento_humano") {
+  return { ignored: "atendimento_humano" }   // sem mandar nada
+}
 ```
 
-Roda sempre, não só quando materializa a vistoria — fecha o buraco que travou o DIOGO.
+Se o número do operador tiver passado em algum momento por um transbordo (tool `solicitar_atendente_humano`, "Atender" no ChatPanel, ou pausa em `whatsapp_ia_pausas`), o `agente_ia_contatos.status` virou `atendimento_humano` e/ou existe pausa ativa por 12 h. A partir desse ponto **toda mensagem que chega é ignorada em silêncio** — a IA nem chega a montar prompt nem a olhar para a FAQ. Isso bate exatamente com "a IA não respondeu nada".
 
-### 3. Varredura histórica
-Listar (não corrigir em massa) outros casos com mesmo padrão para revisão manual:
+O `whatsapp-webhook` por sua vez só usa `whatsapp_ia_pausas.contexto_cortado_em` para cortar histórico — ele não bloqueia, mas também não avisa ao operador que a IA está pausada. Resultado: o operador acha que a IA quebrou, quando na verdade a conversa ficou "presa" no humano.
 
-```sql
-contratos.cadastro_aprovado=true
-AND associados.status='aguardando_aprovacao_monitoramento'
-AND EXISTS servico em_analise modalidade=autovistoria do contrato
-```
+### Camada 2 — Por que, mesmo desbloqueada, a IA pode "não olhar" para a pronta resposta
 
-Resultado vira lista para o operador decidir caso a caso (sem update cego — pode haver casos legítimos pendentes).
+A FAQ é carregada (`loadMayaEditorialConfig`, linhas 25-66) e injetada como bloco de texto no system prompt (linhas 1103-1105). Não há retrieval nem matching por `palavras_chave` — a seleção é 100% responsabilidade do Gemini. Pontos que enfraquecem isso hoje:
 
-### 4. Memória
-Atualizar `mem://logic/operations/vistoria-sem-rastreador-flow` registrando que a promoção `em_analise → concluida` agora é incondicional no `aprovar-proposta` para sub-FIPE, não só quando a edge materializa a vistoria.
+1. A pronta resposta atual tem `palavras_chave: []` vazio. O modelo só dispõe do texto da pergunta ("Sempre que os associados perguntarem...") + da resposta. Sem âncoras explícitas como `reboque`, `guincho`, `pane`, ele pode passar batido quando o cliente fala direto "preciso de reboque".
+2. A `REGRA DE ORDEM` que manda "procurar primeiro na FAQ" só existe no prompt do **associado** (linha 694). No prompt do **lead** (que cobre número desconhecido / pré-CPF) e no prompt do **diretor** essa regra não existe — se o operador testou logado como diretor, a FAQ é filtrada por `audiencias.includes("diretor")` (vazia) e o prompt do diretor só fala de relatórios, então pedir reboque devolve silêncio ou desvio.
+3. As 15 FAQs ativas viram um único bloco corrido por ordem — sem destaque, sem prioridade por categoria/intent. Quanto mais FAQ entrar, mais difícil o modelo casar a certa.
 
-## Detalhes técnicos
+### Como confirmar qual camada disparou neste caso
 
-- Arquivos: `supabase/functions/aprovar-proposta/index.ts` (passo 2) + nova migration (passo 1) + script SELECT no chat para passo 3
-- Sem mudança de UI
-- Sem alterar `fn_materializar_autovistoria_cotacao` (já está OK; o problema é no consumidor)
-- Idempotente em todas as etapas
+Antes de mexer em código eu rodaria duas consultas rápidas no telefone do operador (precisamos do número que ele testou):
+- `SELECT status FROM agente_ia_contatos WHERE telefone = '<tel>'` → se vier `atendimento_humano`, é Camada 1.
+- `SELECT motivo, pausada_ate, encerrada_em FROM whatsapp_ia_pausas WHERE telefone = '<tel>' ORDER BY criada_em DESC LIMIT 1` → se houver pausa ativa, é Camada 1.
+
+Sem o número, o palpite mais provável é Camada 1 (sintoma "nada" é específico desse caminho).
+
+## Plano de correção
+
+### 1. Tirar o silêncio invisível (Camada 1)
+- Em `agente-consultor-ia` (linha 220), em vez de só retornar `ignored`, **avisar o operador interno** uma única vez por janela: gerar uma `notificacoes_sistema` para Relacionamento informando "Maya recebeu mensagem em conversa pausada (telefone X)" — sem responder ao cliente, mas dando visibilidade.
+- Adicionar a verificação de `whatsapp_ia_pausas` ativa também no `agente-consultor-ia` (hoje só existe lá em cima como corte de histórico em `whatsapp-webhook`), padronizando "pausa = silêncio justificado e logado".
+- Adicionar saneamento da conversa do operador (zerar `status` e fechar pausa) via o botão "Concluir atendimento" do ChatPanel já existente — verificar se está limpando ambos (`agente_ia_contatos.status` e `whatsapp_ia_pausas.encerrada_em`). Se não estiver, ajustar.
+
+### 2. Fazer a Maya realmente olhar para a pronta resposta (Camada 2)
+- **Retrieval por palavra-chave antes de injetar a FAQ**: em `loadMayaEditorialConfig`, dado o texto da mensagem atual, marcar como "FAQ EM DESTAQUE" os itens cujo `palavras_chave` (ou tokens da `pergunta`/`resposta`) casam com a mensagem. O LLM continua vendo todas as FAQs, mas com um bloco `## FAQ EM DESTAQUE PARA ESTA MENSAGEM` no topo.
+- **Auto-extrair palavras-chave** quando o operador salvar a FAQ vazia: na UI de `/relacionamento/maya-ia`, se `palavras_chave=[]`, gerar sugestão automática (tokenizar pergunta+resposta, remover stopwords) e mostrar como chips editáveis. Reduz o erro humano que aconteceu nesta pronta resposta de Assistência.
+- **Estender a `REGRA DE ORDEM` para o branch de lead** (e mencionar FAQ no branch de diretor para casos operacionais). Hoje só associado tem essa instrução — é a razão de "se não fizer saudação a IA não entende o contexto" quando ainda não há CPF / quando é diretor testando.
+
+### 3. Telemetria mínima
+- Logar no `agente-consultor-ia` qual FAQ id casou (se alguma) e qual foi citada na resposta. Hoje não há registro — fica impossível auditar "a IA viu a pronta resposta?".
+
+## Próximo passo
+
+Preciso do telefone que o operador usou para confirmar se foi Camada 1 (silêncio por transbordo/pausa) ou Camada 2 (pronta resposta não casou). Pode me passar o número ou o nome do operador? Com isso eu trago o diagnóstico definitivo antes de mudar código.
