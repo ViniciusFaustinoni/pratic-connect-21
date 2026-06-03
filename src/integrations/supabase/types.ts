@@ -948,14 +948,19 @@ export type Database = {
           created_at: string | null
           dados_cotacao: Json | null
           id: string
+          liberacao_enviada_em: string | null
           nome: string | null
+          nome_confirmado_em: string | null
           resetado_em: string | null
           sga_associado_encontrado: boolean | null
+          sga_associado_id: string | null
+          sga_associado_status: string | null
           status: string | null
           telefone: string
           ultima_interacao: string | null
           ultima_msg_continuidade_em: string | null
           ultima_msg_fora_horario_em: string | null
+          ultima_saudacao_em: string | null
         }
         Insert: {
           cpf?: string | null
@@ -965,14 +970,19 @@ export type Database = {
           created_at?: string | null
           dados_cotacao?: Json | null
           id?: string
+          liberacao_enviada_em?: string | null
           nome?: string | null
+          nome_confirmado_em?: string | null
           resetado_em?: string | null
           sga_associado_encontrado?: boolean | null
+          sga_associado_id?: string | null
+          sga_associado_status?: string | null
           status?: string | null
           telefone: string
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
           ultima_msg_fora_horario_em?: string | null
+          ultima_saudacao_em?: string | null
         }
         Update: {
           cpf?: string | null
@@ -982,14 +992,19 @@ export type Database = {
           created_at?: string | null
           dados_cotacao?: Json | null
           id?: string
+          liberacao_enviada_em?: string | null
           nome?: string | null
+          nome_confirmado_em?: string | null
           resetado_em?: string | null
           sga_associado_encontrado?: boolean | null
+          sga_associado_id?: string | null
+          sga_associado_status?: string | null
           status?: string | null
           telefone?: string
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
           ultima_msg_fora_horario_em?: string | null
+          ultima_saudacao_em?: string | null
         }
         Relationships: []
       }
