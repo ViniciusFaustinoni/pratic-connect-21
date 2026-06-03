@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult, useServicosTravados, EscopoAtribuicaoPrestador } from '@/hooks/useAtribuicaoManual';
 import { useVistoriadoresPrestadores } from '@/hooks/useVistoriadoresPrestadores';
+import { useContextoSubFipeServico } from '@/hooks/useContextoSubFipeServico';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -368,6 +369,8 @@ export default function AtribuicaoManualTab() {
   const [busca, setBusca] = useState('');
   const [dragging, setDragging] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ servico: any; vistoriadorId: string } | null>(null);
+  const [requerRastreadorConfirm, setRequerRastreadorConfirm] = useState<boolean | null>(null);
+  const { data: ctxSubFipeConfirm } = useContextoSubFipeServico(confirmDialog?.servico?.id ?? null);
 
   // Devolver / reatribuir state
   const [acaoDialog, setAcaoDialog] = useState<{
@@ -463,17 +466,49 @@ export default function AtribuicaoManualTab() {
       const vistoriadorId = overId.replace('vist-', '');
       const servico = active.data.current;
       setConfirmDialog({ servico, vistoriadorId });
+      setRequerRastreadorConfirm(null);
     }
   };
 
-  const handleConfirm = () => {
+  const precisaDecisaoRastreadorConfirm = !!ctxSubFipeConfirm?.precisaDecisaoRastreador;
+
+  const handleConfirm = async () => {
     if (!confirmDialog) return;
+    if (precisaDecisaoRastreadorConfirm && requerRastreadorConfirm === null) return;
+
+    // Persiste a decisão antes de chamar a mutation (servicos.requer_rastreador_sub_fipe)
+    if (precisaDecisaoRastreadorConfirm && typeof requerRastreadorConfirm === 'boolean') {
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase
+          .from('servicos')
+          .update({
+            requer_rastreador_sub_fipe: requerRastreadorConfirm,
+            requer_rastreador_decidido_em: new Date().toISOString(),
+            requer_rastreador_decidido_por: user?.id ?? null,
+          })
+          .eq('id', confirmDialog.servico.id);
+
+        if (requerRastreadorConfirm === true && ctxSubFipeConfirm?.veiculoId) {
+          await supabase
+            .from('instalacoes')
+            .update({ dispensa_rastreador: false })
+            .eq('veiculo_id', ctxSubFipeConfirm.veiculoId)
+            .in('status', ['agendada', 'em_rota', 'em_andamento', 'em_analise']);
+        }
+      } catch (e) {
+        console.error('[AtribuicaoManual] falha ao persistir decisão de rastreador sub-FIPE', e);
+      }
+    }
+
     atribuirMutation.mutate({
       servicoId: confirmDialog.servico.id,
       profissionalId: confirmDialog.vistoriadorId,
       isBase: !!confirmDialog.servico.isBase,
     });
     setConfirmDialog(null);
+    setRequerRastreadorConfirm(null);
   };
 
   const handleConfirmPrestador = async () => {
@@ -710,9 +745,61 @@ export default function AtribuicaoManualTab() {
               {' '}para <strong>{vistoriadorConfirm?.nome || 'Vistoriador'}</strong>?
             </DialogDescription>
           </DialogHeader>
+
+          {precisaDecisaoRastreadorConfirm && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Este veículo vai necessitar de rastreador?
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Cliente escolheu{' '}
+                <strong>
+                  {ctxSubFipeConfirm?.viaSubFipe === 'rf_celular'
+                    ? 'Vistoria R&F pelo celular'
+                    : 'Vistoria presencial sem fotos prévias'}
+                </strong>
+                . É obrigatório decidir agora.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRequerRastreadorConfirm(false)}
+                  className={cn(
+                    'rounded-md border p-2 text-xs text-left bg-background',
+                    requerRastreadorConfirm === false
+                      ? 'border-primary bg-primary/5'
+                      : 'hover:border-muted-foreground/40'
+                  )}
+                >
+                  <div className="font-medium">Não</div>
+                  <div className="text-muted-foreground">Vistoria pura — sem rastreador.</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRequerRastreadorConfirm(true)}
+                  className={cn(
+                    'rounded-md border p-2 text-xs text-left bg-background',
+                    requerRastreadorConfirm === true
+                      ? 'border-primary bg-primary/5'
+                      : 'hover:border-muted-foreground/40'
+                  )}
+                >
+                  <div className="font-medium">Sim</div>
+                  <div className="text-muted-foreground">Adiciona instalação/vínculo de rastreador.</div>
+                </button>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancelar</Button>
-            <Button onClick={handleConfirm} disabled={atribuirMutation.isPending}>
+            <Button
+              onClick={handleConfirm}
+              disabled={
+                atribuirMutation.isPending ||
+                (precisaDecisaoRastreadorConfirm && requerRastreadorConfirm === null)
+              }
+            >
               {atribuirMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               Confirmar
             </Button>

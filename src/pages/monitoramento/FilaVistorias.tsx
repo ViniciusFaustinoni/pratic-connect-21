@@ -525,7 +525,11 @@ export default function FilaVistorias() {
   const queryClient = useQueryClient();
 
   // Handler para salvar atribuição
-  const handleSaveAtribuicao = async (vistoriadorId: string, executorTipo?: 'regulador' | 'tecnico_interno' | 'prestador_externo') => {
+  const handleSaveAtribuicao = async (
+    vistoriadorId: string,
+    executorTipo?: 'regulador' | 'tecnico_interno' | 'prestador_externo',
+    requerRastreador?: boolean | null,
+  ) => {
     if (!vistoriaParaAtribuir) return;
 
     try {
@@ -550,16 +554,36 @@ export default function FilaVistorias() {
           .eq('id', vistoriaParaAtribuir.id);
         if (error) throw error;
       } else if (isServico) {
+        const updatePayload: any = {
+          profissional_id: vistoriadorId,
+          status: 'agendada',
+          updated_at: new Date().toISOString(),
+        };
+        if (typeof requerRastreador === 'boolean') {
+          updatePayload.requer_rastreador_sub_fipe = requerRastreador;
+          updatePayload.requer_rastreador_decidido_em = new Date().toISOString();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id) updatePayload.requer_rastreador_decidido_por = user.id;
+        }
         const { error } = await supabase
           .from('servicos')
-          .update({
-            profissional_id: vistoriadorId,
-            status: 'agendada',
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq('id', vistoriaParaAtribuir.id);
 
         if (error) throw error;
+
+        // Se "Sim": refletir em instalações existentes do veículo (libera o gate de IMEI).
+        if (requerRastreador === true) {
+          const servicoRow = servicosRaw?.find(s => s.id === vistoriaParaAtribuir.id) as any;
+          const veiculoId = servicoRow?.veiculo_id;
+          if (veiculoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ dispensa_rastreador: false })
+              .eq('veiculo_id', veiculoId)
+              .in('status', ['agendada', 'em_rota', 'em_andamento', 'em_analise']);
+          }
+        }
       } else {
         const { error } = await supabase
           .from('vistorias')
@@ -579,6 +603,7 @@ export default function FilaVistorias() {
       queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-evento'] });
+      queryClient.invalidateQueries({ queryKey: ['contexto-sub-fipe-servico'] });
 
       toast.success('Atribuição registrada com sucesso!');
       setAtribuirModalOpen(false);

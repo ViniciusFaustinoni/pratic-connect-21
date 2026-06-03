@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   User, Car, MapPin, Clock, Star, AlertTriangle,
-  XCircle, Loader2, Check
+  XCircle, Loader2, Check, Radio,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription,
@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useContextoSubFipeServico } from '@/hooks/useContextoSubFipeServico';
 
 // ============================================
 // TIPOS
@@ -62,7 +63,7 @@ export interface AtribuirVistoriadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vistoria: VistoriaParaAtribuir | null;
-  onSave: (vistoriadorId: string, executorTipo?: ExecutorTipo) => void;
+  onSave: (vistoriadorId: string, executorTipo?: ExecutorTipo, requerRastreador?: boolean | null) => void;
 }
 
 // ============================================
@@ -105,6 +106,10 @@ export function AtribuirVistoriadorModal({
   const [mostrarApenasDisponiveis, setMostrarApenasDisponiveis] = useState(true);
   const [mostrarOutrasRegioes, setMostrarOutrasRegioes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requerRastreador, setRequerRastreador] = useState<boolean | null>(null);
+
+  // Contexto sub-FIPE (decide se mostra a pergunta de rastreador)
+  const { data: ctxSubFipe } = useContextoSubFipeServico(vistoria?.id ?? null);
 
   // Reset ao abrir o modal
   useEffect(() => {
@@ -113,8 +118,9 @@ export function AtribuirVistoriadorModal({
       setExecutorTipo(vistoria?.isVistoriaEvento ? 'regulador' : 'tecnico_interno');
       setMostrarApenasDisponiveis(true);
       setMostrarOutrasRegioes(false);
+      setRequerRastreador(ctxSubFipe?.requerRastreadorAtual ?? null);
     }
-  }, [open, vistoria?.isVistoriaEvento]);
+  }, [open, vistoria?.isVistoriaEvento, ctxSubFipe?.requerRastreadorAtual]);
 
   // Buscar vistoriadores conforme o tipo de executor selecionado
   const { data: vistoriadores = [], isLoading } = useQuery({
@@ -233,12 +239,21 @@ export function AtribuirVistoriadorModal({
   }, [vistoriadores, mostrarApenasDisponiveis, mostrarOutrasRegioes, vistoria?.regiao]);
 
   // Handler de submissão
+  const precisaDecisaoRastreador = !!ctxSubFipe?.precisaDecisaoRastreador;
+  const podeConfirmar =
+    !!selectedVistoriadorId && (!precisaDecisaoRastreador || requerRastreador !== null);
+
   const handleConfirmar = async () => {
     if (!selectedVistoriadorId) return;
+    if (precisaDecisaoRastreador && requerRastreador === null) return;
 
     setIsSubmitting(true);
     try {
-      await onSave(selectedVistoriadorId, vistoria?.isVistoriaEvento ? executorTipo : undefined);
+      await onSave(
+        selectedVistoriadorId,
+        vistoria?.isVistoriaEvento ? executorTipo : undefined,
+        precisaDecisaoRastreador ? requerRastreador : null,
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -297,6 +312,62 @@ export function AtribuirVistoriadorModal({
               </div>
             </CardContent>
           </Card>
+
+          {/* Pergunta obrigatória para Vias 2 e 3 sub-FIPE */}
+          {precisaDecisaoRastreador && (
+            <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <Radio className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400" />
+                  <div className="flex-1">
+                    <Label className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      Este veículo vai necessitar de rastreador?
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Cliente optou por{' '}
+                      <strong>
+                        {ctxSubFipe?.viaSubFipe === 'rf_celular'
+                          ? 'Vistoria de Roubo & Furto pelo celular'
+                          : 'Vistoria presencial sem fotos prévias'}
+                      </strong>
+                      . Decida agora se a visita do técnico inclui instalação/vínculo de rastreador.
+                    </p>
+                  </div>
+                </div>
+                <RadioGroup
+                  value={requerRastreador === null ? '' : requerRastreador ? 'sim' : 'nao'}
+                  onValueChange={(v) => setRequerRastreador(v === 'sim')}
+                  className="grid grid-cols-2 gap-2"
+                >
+                  <label
+                    className={cn(
+                      'flex items-start gap-2 rounded-md border p-2 cursor-pointer text-xs bg-background',
+                      requerRastreador === false ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/40'
+                    )}
+                  >
+                    <RadioGroupItem value="nao" id="rast-nao" className="mt-0.5" />
+                    <div>
+                      <div className="font-medium">Não</div>
+                      <div className="text-muted-foreground">Vistoria pura — sem rastreador.</div>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      'flex items-start gap-2 rounded-md border p-2 cursor-pointer text-xs bg-background',
+                      requerRastreador === true ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/40'
+                    )}
+                  >
+                    <RadioGroupItem value="sim" id="rast-sim" className="mt-0.5" />
+                    <div>
+                      <div className="font-medium">Sim</div>
+                      <div className="text-muted-foreground">Adiciona instalação/vínculo do rastreador.</div>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          )}
+
 
           {/* Seletor de tipo de executor — só para vistoria de evento */}
           {vistoria.isVistoriaEvento && (
@@ -471,7 +542,7 @@ export function AtribuirVistoriadorModal({
           </Button>
           <Button
             onClick={handleConfirmar}
-            disabled={!selectedVistoriadorId || isSubmitting}
+            disabled={!podeConfirmar || isSubmitting}
           >
             {isSubmitting ? (
               <>

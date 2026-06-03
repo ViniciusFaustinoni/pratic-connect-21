@@ -975,10 +975,29 @@ async function processarVeiculoAprovado(
       }
     }
   } else if (!veiculoPrecisaRastreador) {
-    // SUB-FIPE: Cadastro APENAS aprova documentos e promove o servico
-    // vistoria_entrada (em_analise → concluida) para a fila do Monitoramento.
-    // REGRA CANÔNICA: Cadastro NÃO avalia as fotos (31/15) nem libera R/F —
-    // Monitoramento decide. mem://logic/operations/cadastro-escopo-canonico
+    // SUB-FIPE: comportamento depende da via escolhida no link público
+    // (cotacoes.dados_extras.via_vistoria_sub_fipe):
+    //   - completa_celular: comportamento atual (Monitoramento decide R/F).
+    //   - rf_celular: Cadastro libera Roubo & Furto agora; presencial pendente.
+    //   - sem_fotos: nenhuma cobertura até concluir presencial.
+    let viaSubFipe: 'completa_celular' | 'rf_celular' | 'sem_fotos' | null = null;
+    if (contrato.cotacao_id) {
+      try {
+        const { data: cotExtras } = await supabase
+          .from('cotacoes')
+          .select('dados_extras')
+          .eq('id', contrato.cotacao_id)
+          .maybeSingle();
+        const via = (cotExtras as any)?.dados_extras?.via_vistoria_sub_fipe;
+        if (via === 'completa_celular' || via === 'rf_celular' || via === 'sem_fotos') {
+          viaSubFipe = via;
+        }
+      } catch (e) {
+        console.warn('[aprovar-proposta] sub-FIPE: falha lendo via_vistoria_sub_fipe', e);
+      }
+    }
+    console.log(`[aprovar-proposta] sub-FIPE via=${viaSubFipe ?? 'indefinida'} veic=${veiculoId}`);
+
     try {
       const { data: vistAuto } = await supabase
         .from('vistorias')
@@ -1005,11 +1024,24 @@ async function processarVeiculoAprovado(
           else console.log(`[aprovar-proposta] Sub-FIPE: servico vistoria_entrada promovido a concluida (cotação ${contrato.cotacao_id}).`);
         }
 
-        // REGRA CANÔNICA: Sub-FIPE — Cadastro NÃO libera R/F.
-        // A análise das fotos (31 carros / 15 motos + vídeo) é responsabilidade
-        // do Monitoramento, que decide R/F e aprovação final.
-        // Memória: mem://logic/operations/cadastro-escopo-canonico
-
+        // Via 2 (rf_celular) — Cadastro libera R&F agora se o plano tem.
+        if (viaSubFipe === 'rf_celular' && planoTemRouboFurto) {
+          await supabase
+            .from('veiculos')
+            .update({ cobertura_roubo_furto: true })
+            .eq('id', veiculoId);
+          await supabase.from('associados_historico').insert({
+            associado_id: associadoId,
+            contrato_id: contrato_id,
+            tipo: 'status_alterado',
+            descricao: `Sub-FIPE Via 2 (R&F pelo celular): Cobertura Roubo/Furto liberada pelo Cadastro (veículo ${veiculo.placa}). Vistoria presencial pendente.`,
+            usuario_id: aprovado_por || null,
+          });
+          console.log(`[aprovar-proposta] sub-FIPE Via 2: R&F liberado para veículo ${veiculo.placa}.`);
+        } else if (viaSubFipe === 'sem_fotos') {
+          // Via 3 — explicitamente NÃO libera nada até presencial.
+          console.log(`[aprovar-proposta] sub-FIPE Via 3 (sem fotos): cobertura permanece suspensa até presencial.`);
+        }
 
         // Atualizar status_contratacao da cotação
         if (contrato.cotacao_id) {
@@ -1022,6 +1054,7 @@ async function processarVeiculoAprovado(
     } catch (e) {
       console.warn('[aprovar-proposta] Erro promoção sub-FIPE pós-autovistoria:', e);
     }
+
 
     // CAMADA 2: gating idêntico ao caminho acima — só notifica se veículo realmente ATIVO.
     try {
