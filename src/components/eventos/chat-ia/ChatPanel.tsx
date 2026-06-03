@@ -122,13 +122,16 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   useEffect(() => {
     if (isLoading) return;
     if (!mensagens?.length) return;
-    // dois ticks: 1º p/ o React pintar, 2º p/ imagens/áudios medirem altura
+    // múltiplos ticks para esperar markdown/imagens/áudios medirem altura
     requestAnimationFrame(() => {
       scrollToBottom('auto');
       setTimeout(() => scrollToBottom('auto'), 80);
+      setTimeout(() => scrollToBottom('auto'), 250);
+      setTimeout(() => scrollToBottom('auto'), 600);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [telefone, isLoading]);
+  }, [telefone, isLoading, mensagens?.length]);
+
 
   // Auto scroll a cada nova mensagem (respeitando a intenção do usuário)
   useEffect(() => {
