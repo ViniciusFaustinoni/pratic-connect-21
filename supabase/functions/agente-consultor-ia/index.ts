@@ -1355,6 +1355,23 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
       systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
     }
 
+    // ---- 7.4 INJEÇÃO UNIVERSAL DE COMPORTAMENTO (UI Configurações › Agente Consultor IA)
+    // Aplica `apresentacao_inicial` + `instrucoes_comportamento` em TODOS os branches
+    // (Diretor / Associado / Lead). O branch de Lead já cita `${apresentacao}` e
+    // `${instrucoes}` inline no template, mas este bloco garante que Diretor e Associado
+    // — antes ignorados — também respeitem as edições da UI sem deploy.
+    if (instrucoes.trim() || apresentacao.trim()) {
+      const blocosCfg: string[] = [];
+      if (instrucoes.trim()) {
+        blocosCfg.push(`### INSTRUÇÕES DE COMPORTAMENTO\n${instrucoes.trim()}`);
+      }
+      if (apresentacao.trim()) {
+        blocosCfg.push(`### APRESENTAÇÃO INICIAL (use como base na primeira mensagem)\n"${apresentacao.trim()}"`);
+      }
+      systemPrompt += `\n\n## CONFIGURAÇÃO DO AGENTE (Configurações › Agente Consultor IA)\n${blocosCfg.join("\n\n")}`;
+    }
+
+
 
     // ---- 7.5 OVERRIDE EDITORIAL (Relacionamento) — tabelas maya_ia_comportamento + maya_ia_faq
     // Permite editar persona/regras/tom/saudação e base de conhecimento sem deploy.
