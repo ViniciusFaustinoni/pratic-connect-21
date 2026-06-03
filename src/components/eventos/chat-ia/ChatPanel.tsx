@@ -462,8 +462,9 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                         ) : msg.tipo === 'image' && msg.media_url ? (
                           <img src={msg.media_url} alt="Imagem" className="max-w-[250px] rounded" />
                         ) : !isEntrada && msg.mensagem ? (
-                          <div className="prose prose-sm max-w-none dark:prose-invert text-sm">
+                          <div className="prose prose-sm max-w-none dark:prose-invert text-sm break-words [overflow-wrap:anywhere] [&_p]:break-words [&_a]:break-all">
                             <ReactMarkdown>{msg.mensagem}</ReactMarkdown>
+
                           </div>
                         ) : (
                           <p className="text-sm whitespace-pre-wrap break-words">{msg.mensagem}</p>
