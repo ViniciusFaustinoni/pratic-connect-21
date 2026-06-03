@@ -17,21 +17,80 @@ type MayaEditorialCfg = {
   regras_absolutas?: string;
   tom_voz?: string;
   saudacao_inicial?: string;
-  faqText?: string;
+  faqText?: string;        // bloco completo (todas as FAQs da audiência)
+  faqDestaqueText?: string; // bloco com FAQs que casaram com a mensagem atual
+  faqMatchedIds?: string[]; // ids destacados (telemetria)
 };
-const MAYA_CFG_CACHE = new Map<string, { at: number; data: MayaEditorialCfg | null }>();
+type MayaRawCfg = { comp: any; faqs: any[] };
+const MAYA_RAW_CACHE = new Map<string, { at: number; data: MayaRawCfg }>();
 const MAYA_CFG_TTL_MS = 60_000;
 
-async function loadMayaEditorialConfig(supabase: any, audiencia: string): Promise<MayaEditorialCfg | null> {
-  const hit = MAYA_CFG_CACHE.get(audiencia);
-  if (hit && Date.now() - hit.at < MAYA_CFG_TTL_MS) return hit.data;
+const PT_STOPWORDS = new Set([
+  "a","o","as","os","de","da","do","das","dos","e","ou","um","uma","uns","umas","para","por","pra","pro","com","sem",
+  "que","se","na","no","nas","nos","em","ao","aos","à","às","mais","menos","muito","muita","pouco","pouca","ja","já",
+  "ser","ter","estar","sao","são","foi","era","sera","será","ter","estou","estamos","estao","estão","vai","vou","vamos",
+  "voce","você","vcs","voces","vocês","eu","tu","ele","ela","nos","nós","eles","elas","meu","minha","seu","sua","teu","tua",
+  "isso","isto","aquilo","esse","essa","este","esta","aquele","aquela","aqui","ali","la","lá","quando","onde","como","porque",
+  "qual","quais","quem","entao","então","ainda","tambem","também","todos","todas","cada","outro","outra","outros","outras",
+  "bom","boa","oi","ola","olá","obrigado","obrigada","obg","sim","nao","não","tem","ter","ja","já","preciso","quero","queria",
+]);
 
-  const [{ data: comp }, { data: faqs }] = await Promise.all([
-    supabase.from("maya_ia_comportamento").select("*").eq("audiencia", audiencia).maybeSingle(),
-    supabase.from("maya_ia_faq").select("categoria,pergunta,resposta,palavras_chave,audiencias,ordem").eq("ativo", true).order("ordem", { ascending: true }),
-  ]);
+function normalizarParaMatch(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const faqsFiltrados = (faqs || []).filter((f: any) => Array.isArray(f.audiencias) && f.audiencias.includes(audiencia));
+function tokenizarParaMatch(s: string): Set<string> {
+  const norm = normalizarParaMatch(s);
+  const tokens = new Set<string>();
+  for (const t of norm.split(" ")) {
+    if (t.length >= 3 && !PT_STOPWORDS.has(t)) tokens.add(t);
+  }
+  return tokens;
+}
+
+function pontuarFaq(mensagemTokens: Set<string>, mensagemNorm: string, faq: any): number {
+  let score = 0;
+  // 1) Match exato de palavras-chave configuradas (peso alto)
+  const palavrasChave: string[] = Array.isArray(faq.palavras_chave) ? faq.palavras_chave : [];
+  for (const kw of palavrasChave) {
+    const kwNorm = normalizarParaMatch(String(kw));
+    if (!kwNorm) continue;
+    if (mensagemNorm.includes(kwNorm)) score += 5;
+  }
+  // 2) Overlap de tokens com pergunta/resposta (peso menor)
+  const faqTokens = tokenizarParaMatch(`${faq.pergunta || ""} ${faq.resposta || ""}`);
+  for (const t of mensagemTokens) {
+    if (faqTokens.has(t)) score += 1;
+  }
+  return score;
+}
+
+async function loadMayaEditorialConfig(
+  supabase: any,
+  audiencia: string,
+  mensagemAtual?: string,
+): Promise<MayaEditorialCfg | null> {
+  const hit = MAYA_RAW_CACHE.get(audiencia);
+  let raw: MayaRawCfg;
+  if (hit && Date.now() - hit.at < MAYA_CFG_TTL_MS) {
+    raw = hit.data;
+  } else {
+    const [{ data: comp }, { data: faqs }] = await Promise.all([
+      supabase.from("maya_ia_comportamento").select("*").eq("audiencia", audiencia).maybeSingle(),
+      supabase.from("maya_ia_faq").select("id,categoria,pergunta,resposta,palavras_chave,audiencias,ordem").eq("ativo", true).order("ordem", { ascending: true }),
+    ]);
+    raw = { comp: comp || null, faqs: (faqs || []) };
+    MAYA_RAW_CACHE.set(audiencia, { at: Date.now(), data: raw });
+  }
+
+  const faqsFiltrados = (raw.faqs || []).filter((f: any) => Array.isArray(f.audiencias) && f.audiencias.includes(audiencia));
+
+  // Bloco completo (mesmo formato anterior)
   let faqText = "";
   if (faqsFiltrados.length > 0) {
     const porCategoria = new Map<string, any[]>();
@@ -51,18 +110,87 @@ async function loadMayaEditorialConfig(supabase: any, audiencia: string): Promis
     faqText = partes.join("\n");
   }
 
-  const data: MayaEditorialCfg | null = comp || faqText
+  // Retrieval: FAQs em destaque para a mensagem atual
+  let faqDestaqueText = "";
+  let faqMatchedIds: string[] = [];
+  if (mensagemAtual && faqsFiltrados.length > 0) {
+    const msgNorm = normalizarParaMatch(mensagemAtual);
+    const msgTokens = tokenizarParaMatch(mensagemAtual);
+    if (msgNorm.length > 0 && (msgTokens.size > 0 || msgNorm.length >= 3)) {
+      const pontuadas = faqsFiltrados
+        .map((f: any) => ({ f, score: pontuarFaq(msgTokens, msgNorm, f) }))
+        .filter((x: any) => x.score >= 3) // limiar mínimo p/ evitar ruído
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, 3);
+      if (pontuadas.length > 0) {
+        faqMatchedIds = pontuadas.map((x: any) => x.f.id).filter(Boolean);
+        const partes: string[] = [];
+        for (const { f } of pontuadas) {
+          partes.push(`- *${f.pergunta}*\n  ${f.resposta}`);
+        }
+        faqDestaqueText = partes.join("\n");
+      }
+    }
+  }
+
+  const data: MayaEditorialCfg | null = (raw.comp || faqText)
     ? {
-        nome_agente: comp?.nome_agente || undefined,
-        persona: comp?.persona || undefined,
-        regras_absolutas: comp?.regras_absolutas || undefined,
-        tom_voz: comp?.tom_voz || undefined,
-        saudacao_inicial: comp?.saudacao_inicial || undefined,
+        nome_agente: raw.comp?.nome_agente || undefined,
+        persona: raw.comp?.persona || undefined,
+        regras_absolutas: raw.comp?.regras_absolutas || undefined,
+        tom_voz: raw.comp?.tom_voz || undefined,
+        saudacao_inicial: raw.comp?.saudacao_inicial || undefined,
         faqText: faqText || undefined,
+        faqDestaqueText: faqDestaqueText || undefined,
+        faqMatchedIds: faqMatchedIds.length ? faqMatchedIds : undefined,
       }
     : null;
-  MAYA_CFG_CACHE.set(audiencia, { at: Date.now(), data });
   return data;
+}
+
+// Helper compartilhado: gera notificação interna quando a Maya recebe mensagem
+// estando pausada/em atendimento humano. Dedup por janela de 1h em criado_por=null.
+async function notificarRelacionamentoMensagemPausada(
+  supabase: any,
+  telefone: string,
+  nomeContato: string | null,
+  motivo: "atendimento_humano" | "pausa_ativa",
+  textoMensagem?: string,
+) {
+  try {
+    const dedupeKey = `maya_pausada:${motivo}:${telefone}`;
+    const desde = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: existente } = await supabase
+      .from("notificacoes_sistema")
+      .select("id")
+      .eq("destino", "role")
+      .eq("destino_role", "relacionamento")
+      .eq("tipo", "maya_mensagem_pausada")
+      .eq("link", dedupeKey)
+      .gte("created_at", desde)
+      .limit(1)
+      .maybeSingle();
+    if (existente) return;
+
+    const titulo = motivo === "atendimento_humano"
+      ? "Maya recebeu mensagem em conversa pausada"
+      : "Maya recebeu mensagem em conversa pausada (transbordo ativo)";
+    const trecho = (textoMensagem || "").trim().slice(0, 140);
+    const corpo = `Contato ${nomeContato || telefone} mandou nova mensagem, mas a Maya está em pausa. Abra o chat e responda ou conclua o atendimento.${trecho ? `\n\n"${trecho}"` : ""}`;
+
+    await supabase.from("notificacoes_sistema").insert({
+      titulo,
+      mensagem: corpo,
+      tipo: "maya_mensagem_pausada",
+      destino: "role",
+      destino_role: "relacionamento",
+      link: dedupeKey,
+      ativo: true,
+      expira_em: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+    });
+  } catch (e) {
+    console.warn("[agente-consultor-ia] Falha ao notificar Relacionamento sobre mensagem pausada:", (e as any)?.message);
+  }
 }
 
 /**
