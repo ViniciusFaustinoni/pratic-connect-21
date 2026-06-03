@@ -368,6 +368,8 @@ export default function AtribuicaoManualTab() {
   const [busca, setBusca] = useState('');
   const [dragging, setDragging] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ servico: any; vistoriadorId: string } | null>(null);
+  const [requerRastreadorConfirm, setRequerRastreadorConfirm] = useState<boolean | null>(null);
+  const { data: ctxSubFipeConfirm } = useContextoSubFipeServico(confirmDialog?.servico?.id ?? null);
 
   // Devolver / reatribuir state
   const [acaoDialog, setAcaoDialog] = useState<{
