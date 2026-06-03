@@ -396,15 +396,16 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                         </Badge>
                       </div>
                     )}
-                    <div className={cn('flex', isEntrada ? 'justify-start' : 'justify-end')}>
+                    <div className={cn('flex min-w-0', isEntrada ? 'justify-start' : 'justify-end')}>
                       <div
                         className={cn(
-                          'max-w-[75%] p-3 rounded-lg shadow-sm',
+                          'max-w-[75%] min-w-0 p-3 rounded-lg shadow-sm break-words [overflow-wrap:anywhere]',
                           isEntrada
                             ? 'bg-muted rounded-tl-none'
                             : 'bg-green-100 dark:bg-green-900/30 rounded-tr-none'
                         )}
                       >
+
                         <div className="flex items-center gap-1.5 mb-1">
                           {isEntrada ? (
                             <>
