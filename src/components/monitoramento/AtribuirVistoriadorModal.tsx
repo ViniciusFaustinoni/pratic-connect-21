@@ -106,6 +106,10 @@ export function AtribuirVistoriadorModal({
   const [mostrarApenasDisponiveis, setMostrarApenasDisponiveis] = useState(true);
   const [mostrarOutrasRegioes, setMostrarOutrasRegioes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requerRastreador, setRequerRastreador] = useState<boolean | null>(null);
+
+  // Contexto sub-FIPE (decide se mostra a pergunta de rastreador)
+  const { data: ctxSubFipe } = useContextoSubFipeServico(vistoria?.id ?? null);
 
   // Reset ao abrir o modal
   useEffect(() => {
@@ -114,8 +118,9 @@ export function AtribuirVistoriadorModal({
       setExecutorTipo(vistoria?.isVistoriaEvento ? 'regulador' : 'tecnico_interno');
       setMostrarApenasDisponiveis(true);
       setMostrarOutrasRegioes(false);
+      setRequerRastreador(ctxSubFipe?.requerRastreadorAtual ?? null);
     }
-  }, [open, vistoria?.isVistoriaEvento]);
+  }, [open, vistoria?.isVistoriaEvento, ctxSubFipe?.requerRastreadorAtual]);
 
   // Buscar vistoriadores conforme o tipo de executor selecionado
   const { data: vistoriadores = [], isLoading } = useQuery({
