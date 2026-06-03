@@ -1,59 +1,47 @@
-# Skill: SGA Hinova API v2
+## Skill: `rede-veiculos-api`
 
-Já baixei e parseei o `api_data.json` oficial (`https://api.hinova.com.br/api/sga/v2/doc/api_data.json`, 399 KB). São **136 endpoints** em **15 grupos**:
+Mesmo padrão da `sga-hinova-api`: SKILL.md + `assets/collection.json` (raw Postman) + `references/` por grupo funcional.
 
-- Autenticacao (1), Associado (20), Beneficiario (11), Beneficio (5), Boleto (12), Veiculo (30), Vistoria (5), Produto (10), Cota (2), Regional (2), Cooperativa (3), Fornecedor (2), Evento (6), Atendimento (5), MGF (12), Voluntario (10).
+### Coleta de dados
+Já baixei o JSON oficial da coleção Postman via `https://documenter.gw.postman.com/api/collections/15619634/TzRLmr9r` (48 KB, 22 endpoints, todos POST `application/x-www-form-urlencoded` com payload `json=...`). Cobre os 22 endpoints listados:
 
-## O que vou criar
+vincularClienteVeiculo, desvincularClienteVeiculo, atualizarDadosCliente, preCadastroCliente, atualizarDadosVeiculo, preCadastroVeiculo, permitirAcessoSistema, removerAcessoSistema, obterUltimaPosicaoValida, informarVeiculoAdimplente, informarVeiculoInadimplente, ativarVeiculo, inativarVeiculo, ativarCliente, inativarCliente, obterStatusCliente, obterStatusVeiculo, obterDadosCliente, obterDadosVeiculo, obterLinkCompartilhamento, acionamentoRouboFurto, redefinirSenhaCliente.
 
+### Estrutura de arquivos
 ```
-.agents/skills/sga-hinova-api/
+.agents/skills/rede-veiculos-api/
 ├── SKILL.md
 ├── assets/
-│   └── api_data.json           # cópia bruta do apidoc (lookup completo)
+│   └── collection.json         (coleção Postman bruta)
 └── references/
-    ├── _index.md               # tabela completa de 136 endpoints (método, URL, título)
-    ├── autenticacao.md
-    ├── associado.md
-    ├── beneficiario.md
-    ├── beneficio.md
-    ├── boleto.md
-    ├── cooperativa.md
-    ├── cota.md
-    ├── evento.md
-    ├── fornecedor.md
-    ├── mgf.md
-    ├── produto.md
-    ├── regional.md
-    ├── veiculo.md
-    ├── vistoria.md
-    ├── voluntario.md
-    └── atendimento.md
+    ├── _index.md               (tabela de 22 endpoints)
+    ├── vinculo.md              (vincular/desvincularClienteVeiculo)
+    ├── cliente.md              (atualizar/preCadastro/ativar/inativar/obterStatus/obterDados/permitirAcesso/removerAcesso/redefinirSenha)
+    ├── veiculo.md              (atualizar/preCadastro/ativar/inativar/informar(In)adimplente/obterStatus/obterDados)
+    └── operacional.md          (obterUltimaPosicaoValida/obterLinkCompartilhamento/acionamentoRouboFurto)
 ```
 
-Cada arquivo de grupo terá, por endpoint: método + URL, descrição, todos os parâmetros (nome, tipo, obrigatório, descrição) e os exemplos oficiais de requisição e resposta extraídos do apidoc — sem perda. HTML descartado, formatação convertida pra Markdown.
+Cada arquivo de referência traz, por endpoint: método, URL, descrição, headers, body completo + body mínimo obrigatório, cURL de exemplo e response 200 oficiais.
 
-## SKILL.md (conteúdo)
+### SKILL.md — conteúdo canônico
+- Base URL sandbox: `https://integracao.redeveiculos.com/api/v2/sandbox/`
+- Base URL produção: `https://integracao.redeveiculos.com/api/v2/prod/`
+- Auth: `Authorization: Bearer <token>` (token fixo por integrador, secret `REDE_VEICULOS_API_TOKEN`)
+- Content-Type: `application/x-www-form-urlencoded` com payload `json=<json-stringificado>` (formato peculiar — não é JSON puro no body)
+- Resposta padrão: `{ "error": "false"|"true", "message": "..." }` (strings, não booleanos!)
+- Convenções do projeto: usar sempre `redeVeiculosClient` em `supabase/functions/_shared/rede-veiculos-client.ts` (se não existir, criar); sync canônica via `rede-veiculos-backfill-veiculos`, `rede-veiculos-atualizar-equipamento`; fluxo de instalação/troca/substituição segue memórias `tri-fonte`, `rede-atualizar-local-instalacao` e `softtruck-desvinculo-bidirecional`.
+- Pitfalls upstream: 
+  - `error` vem como string `"false"`/`"true"` — comparar com string
+  - Body é form-urlencoded com a chave `json` (não `Content-Type: application/json`)
+  - CPF/CNPJ já cadastrado: dados do cliente são IGNORADOS no vincular, precisa chamar `atualizarDadosCliente` separadamente
+  - Tipos de veículo permitidos enumerados (CARRO, ONIBUS, MOTO, CAMINHAO, JETSKI, BARCO, BICICLETA, TRATOR, RETRO, PET, PESSOAL)
+  - Permissões/equipamento têm defaults sensíveis ("Modifique com cautela")
+  - 0KM: campo `ZeroKM: "S"` (string, não boolean)
+  - Identificação: maioria dos endpoints aceita CHASSI e/ou PLACA e/ou IMEI + CPF/CNPJ do cliente
+  - `localInstalacao` é editável pós-vínculo via `atualizarDadosVeiculo` (caso Anderson/RJH0C29 da memória)
 
-- **Quando dispara**: integrações ou debug com a API Hinova SGA v2 (associados, veículos, boletos, eventos, vistorias, etc.).
-- **Base URL canônica**: `https://api.hinova.com.br/api/sga/v2` (override via `HINOVA_API_URL`).
-- **Autenticação**: `POST /usuario/autenticar` → `token_usuario`; enviar em `Authorization: Bearer <token>` nas demais.
-- **Aviso crítico (já confirmado no nosso `_shared/hinova-client.ts`)**: a Hinova é **stateful** — cada novo `/usuario/autenticar` invalida tokens anteriores. Reusar sessão via `getHinovaSession()` em vez de autenticar a cada chamada. Em 401/403 fora da janela horária, reautenticar **apenas uma vez**.
-- **Convenções do projeto**: nunca chamar a Hinova direto do front; sempre via edge `sga-*` ou helpers em `supabase/functions/_shared/hinova-client.ts`. Fila canônica de sync = `sga_sync_queue` (memória já existente).
-- **Pegadinhas do upstream que já mordemos** (link pras memórias):
-  - Boletos vêm com `valor_boleto`/`situacao_boleto` (não `valor`/`situacao`); `/listar/boleto-associado-veiculo` precisa de `diasFuturo`.
-  - "INADIMPLENTE" vem em `/buscar/situacao-financeira-veiculo/` — boletos sozinhos não bastam.
-  - Troca de titularidade = `POST /alterar/veiculo`, nunca inativar+recriar (não libera índice de placas).
-  - Pós-cadastro, forçar PENDENTE (3) via `/associado/alterar-situacao-para/3/...` e `/veiculo/alterar-situacao-para/3/...`.
-  - RENAVAM opcional em 0KM; CPF duplicado pode coexistir com `buscar/cpf` 404/406.
-- **Como navegar a skill**: índice de 136 endpoints em `references/_index.md`; detalhes por grupo em `references/<grupo>.md`; JSON bruto em `assets/api_data.json` para casos não cobertos.
+### Geração
+Script Python único que lê `assets/collection.json` e gera os `references/*.md` agrupados por grupo funcional, com helpers `fmt_body()` e `fmt_examples()`. Sem dependências extras.
 
-## Geração
-
-Script Python local (não comitado) lê `assets/api_data.json` e gera todos os `references/*.md`. Sem dependências externas — `html.unescape` + regex pra tirar `<p>/<b>/</br>`.
-
-## Hand-off
-
-Após popular os arquivos, chamo `skills--apply_draft` com `.agents/skills/sga-hinova-api` pra ativar.
-
-Pode aprovar?
+### Após criação
+Chamar `skills--apply_draft` em `.agents/skills/rede-veiculos-api`.
