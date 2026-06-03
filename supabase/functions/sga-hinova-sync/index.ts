@@ -1734,17 +1734,40 @@ serve(async (req) => {
         .eq('veiculo_id', _vid)
         .in('status', ['concluida', 'aprovada']);
 
+      // Defesa: vistoria pode ter sido marcada 'cancelada' quando a presencial
+      // do técnico substituiu a autovistoria — mas as fotos físicas continuam
+      // legítimas e devem subir ao SGA se existe instalação concluída no veículo.
+      // Sem isso, veículos com 30+ fotos reais ficavam com 0 fotos no Hinova
+      // (caso LQD7A71 e LTY4F25 em 03/06/2026).
+      const { data: instalacoesConcluidasVeic } = await supabase.from('instalacoes')
+        .select('id')
+        .eq('veiculo_id', _vid)
+        .eq('status', 'concluida')
+        .limit(1);
+      let vistoriasCanceladasResgatadas: { id: string }[] = [];
+      if ((instalacoesConcluidasVeic?.length ?? 0) > 0) {
+        const { data: canceladas } = await supabase.from('vistorias')
+          .select('id')
+          .eq('veiculo_id', _vid)
+          .eq('status', 'cancelada');
+        vistoriasCanceladasResgatadas = (canceladas || []) as any[];
+      }
+
       // Vistorias em estado intermediário (defer condicional)
       const { data: vistoriasVeicPendentes } = await supabase.from('vistorias')
         .select('id, status')
         .eq('veiculo_id', _vid)
         .in('status', ['agendada', 'em_analise', 'em_rota', 'em_andamento']);
 
-      if (vistoriasVeicElegiveis && vistoriasVeicElegiveis.length > 0) {
-        const vistoriaIds = vistoriasVeicElegiveis.map((v: any) => v.id);
+
+      const vistoriaIdsParaFotos = [
+        ...((vistoriasVeicElegiveis || []) as any[]).map((v: any) => v.id),
+        ...vistoriasCanceladasResgatadas.map((v) => v.id),
+      ];
+      if (vistoriaIdsParaFotos.length > 0) {
         const { data: vistoriaFotos } = await supabase.from('vistoria_fotos')
           .select('id, tipo, arquivo_url, vistoria_id')
-          .in('vistoria_id', vistoriaIds);
+          .in('vistoria_id', vistoriaIdsParaFotos);
 
         for (const vf of (vistoriaFotos || []) as any[]) {
           if (!vf.arquivo_url) continue;
@@ -1757,14 +1780,20 @@ serve(async (req) => {
             origem_id: vf.id,
           });
         }
+        if (vistoriasCanceladasResgatadas.length > 0) {
+          await logSync(_vid, _aid, 'vistorias_canceladas_resgatadas', 'info',
+            { ids: vistoriasCanceladasResgatadas.map((v) => v.id), motivo: 'instalacao_concluida_no_veiculo' },
+            null);
+        }
       }
+
 
       // Frente 2 — TRAVA no marco "monitoramento aprovado":
       // Se NÃO há vistoria elegível mas EXISTE vistoria pendente, NÃO envia fotos
       // agora. Re-enfileira o item como 'pendente' com motivo 'aguardando_vistoria_aprovada',
       // sem incrementar `tentativas` (não é erro — é defer intencional). Cron retoma
       // assim que Frente 1 promover a vistoria a 'aprovada'.
-      const temVistoriaElegivel = (vistoriasVeicElegiveis?.length ?? 0) > 0;
+      const temVistoriaElegivel = (vistoriasVeicElegiveis?.length ?? 0) > 0 || vistoriasCanceladasResgatadas.length > 0;
       const temVistoriaPendente = (vistoriasVeicPendentes?.length ?? 0) > 0;
       if (!temVistoriaElegivel && temVistoriaPendente) {
         const proximo = new Date(Date.now() + 5 * 60_000).toISOString(); // 5 min
