@@ -1,44 +1,40 @@
-## Diagnóstico
+# Por que a IA não respondeu
 
-A tela `/cadastro/propostas-pendentes` (lista) NÃO conhece as duas sub-etapas canônicas do Cadastro. Quem mostra "Sub-etapa 1 → Sub-etapa 2" é só o **PropostaApprovalStepper**, que vive dentro da tela de análise individual (`PropostaAnalise`). Por isso o card da lista parece "desatualizado".
+A Maya **não está quebrada** — ela seguiu a regra. Quando a Julia (Thais) escreveu "Gostaria de solicitar um reboque", o prompt do agente força:
 
-**Confirmado em produção agora:**
-- 9 contratos hoje estão em `documentos_aprovados_em IS NOT NULL` + `cadastro_aprovado = false` (sub-etapa 1 OK, sub-etapa 2 pendente).
-- 7 contratos com nada aprovado (sub-etapa 1 pendente).
-- Todos os 9 aparecem na lista com o mesmo badge genérico ("Aguardando" / "Aguard. Vistoria"), sem diferenciar.
+```
+Mencionar sinistro, acidente, batida, colisão, roubo, furto, incêndio,
+emergência → motivo='sinistro_emergencia', prioridade='alta'
+```
 
-**Causa raiz:** `getStatusBadge()` em `src/pages/cadastro/PropostasPendentes.tsx` (linhas 165–222) só olha `status`, `tem_documento_pendente`, `cadastro_aprovado`, `vistoria` e `instalacao`. Nunca lê `documentos_aprovados_em`, mesmo o hook `usePropostasPendentes` já trazendo esse campo (linhas 219, 347–348, 847). Resultado: a única tela que mostra sub-etapa é a de análise individual; a lista, os KPIs e os filtros ficam cegos para esse estado intermediário.
+Maya classificou como `sinistro_emergencia`, chamou `solicitar_atendente_humano` e a tabela `whatsapp_ia_pausas` ficou ativa até **00:13 BRT** (badge laranja no topo do chat). Por isso o "Quero solicitar um reboque" das 12:38 não recebeu resposta — a IA está pausada esperando humano.
 
-## Correção
+A pronta resposta de Assistência 24h que você criou existe no `maya_ia_faq` (categoria *Assistência*, audiências `associado` + `lead`) e até é injetada no system prompt como BASE DE CONHECIMENTO — mas a regra de transbordo é **mais alta na hierarquia** e é executada antes da Maya considerar a FAQ.
 
-Tornar a sub-etapa visível na lista, sem mexer em backend/regra de negócio.
+# Correção
 
-### 1. Novo badge "Docs OK — Liberar p/ Monitoramento"
-Em `PropostasPendentes.tsx` › `getStatusBadge`:
-- Receber também `documentos_aprovados_em` (já existe no objeto `proposta`).
-- Antes dos blocos atuais de "Aguard. Vistoria" / "Pendente Vistoria Inicial", inserir:
-  - Se `status='assinado'` + `documentos_aprovados_em IS NOT NULL` + `cadastro_aprovado=false` → badge novo (ex.: emerald) `Docs OK · Liberar Monitoramento`.
-- Quando `documentos_aprovados_em IS NULL` + sub-etapa 2 ainda não cabível → manter "Aguardando" atual, mas com label `Aguard. Documentos (sub-etapa 1)` para deixar explícito.
+Tornar a FAQ de Assistência **precedente** ao transbordo para palavras-chave de assistência veicular (reboque, guincho, pane, socorro mútuo, chaveiro). Para sinistro real (roubo, furto, colisão, batida, acidente, incêndio) o transbordo continua imediato — esses casos exigem atendente humano de fato.
 
-### 2. Predicado + KPI
-- Adicionar predicado `isSubEtapa1Ok(p)` ao lado de `isAguardandoDoc/isPendenteVistoriaInicial`.
-- Incluir o novo grupo nos contadores/abas que listam os pendentes do Cadastro (mesma régua dos chips existentes), para o analista filtrar "só os que faltam liberar Monitoramento".
+## Edit único em `supabase/functions/agente-consultor-ia/index.ts`
 
-### 3. Sinal visual no próprio card (linha 2)
-Pequeno chip auxiliar (ao lado do badge de status) quando `documentos_aprovados_em` setado:
-`Sub-etapa 1 ✓ · falta sub-etapa 2`. Mantém compatibilidade com o badge principal e dá leitura instantânea no scroll.
+Na seção `## QUANDO CHAMAR A TOOL solicitar_atendente_humano (OBRIGATÓRIO)` (~linha 699):
 
-### 4. Tooltip do badge novo
-Texto curto: "Documentos já aprovados. Clique para abrir e finalizar a sub-etapa 2 (vistoria + liberação para Monitoramento)."
+1. Trocar a regra de gatilho de assistência por:
+   - **Reboque / guincho / pane / socorro mútuo / chaveiro / bateria**: NÃO transborde. Responda com os canais da FAQ de Assistência 24h (telefone 0800 + WhatsApp) e ofereça transbordo apenas se o cliente insistir em falar com pessoa.
+   - **Sinistro real** (roubo, furto, colisão, batida, acidente, incêndio): mantém transbordo imediato com `motivo='sinistro_emergencia'`, `prioridade='alta'`, mas a resposta de cortesia ANTES da tool deve incluir os canais da FAQ (cliente em emergência precisa do número na hora).
+
+2. Reforçar logo abaixo: "Quando a BASE DE CONHECIMENTO (FAQ) tiver um item que casa com o pedido, USE a resposta da FAQ direto; só transborde se o cliente pedir humano explicitamente ou se a categoria for sinistro real."
+
+## Despausa do caso atual (Julia / 5521985791044)
+
+A pausa vai até 04/06 03:13 UTC. Posso (a) deletar a linha de `whatsapp_ia_pausas` para Maya voltar a responder agora, ou (b) deixar como está (Relacionamento conclui pelo botão "Concluir atendimento"). Sua escolha.
 
 ## Fora de escopo
-- Não alterar `PropostaApprovalStepper`, edges (`aprovar-documentos-cadastro`, `aprovar-proposta`), triggers DB nem o hook (`usePropostasPendentes` já entrega o campo).
-- Não mexer no fluxo de Troca (isenta da sub-etapa 1) — predicado novo já filtra por `documentos_aprovados_em IS NOT NULL`, então Trocas não disparam o badge indevidamente.
 
-## Arquivos
-- `src/pages/cadastro/PropostasPendentes.tsx` (badge + predicado + chip + assinatura de `getStatusBadge`).
+- Não mexer na tool `solicitar_atendente_humano` em si nem no dedupe `agente_ia_locks`.
+- Não mexer na FAQ — ela já está correta.
+- Não mexer no badge "IA pausada" nem no card de Concluir atendimento.
 
-## Validação
-- Abrir a lista logada como admin: os 9 contratos identificados devem passar a exibir o novo badge "Docs OK · Liberar Monitoramento".
-- Os 7 contratos sem documentos aprovados devem mostrar "Aguard. Documentos (sub-etapa 1)".
-- Os 33 com `cadastro_aprovado=true` continuam com badges atuais ("Pendente Vistoria Inicial" / "Aguard. Instalação" etc).
+# Atualização de memória
+
+Atualizar `mem://logic/operations/transbordo-relacionamento-canonico` com a exceção: assistência veicular operacional (reboque/guincho/pane) é resolvida pela FAQ, não por transbordo.
