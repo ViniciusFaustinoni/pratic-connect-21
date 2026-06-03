@@ -1734,11 +1734,31 @@ serve(async (req) => {
         .eq('veiculo_id', _vid)
         .in('status', ['concluida', 'aprovada']);
 
+      // Defesa: vistoria pode ter sido marcada 'cancelada' quando a presencial
+      // do técnico substituiu a autovistoria — mas as fotos físicas continuam
+      // legítimas e devem subir ao SGA se existe instalação concluída no veículo.
+      // Sem isso, veículos com 30+ fotos reais ficavam com 0 fotos no Hinova
+      // (caso LQD7A71 e LTY4F25 em 03/06/2026).
+      const { data: instalacoesConcluidasVeic } = await supabase.from('instalacoes')
+        .select('id')
+        .eq('veiculo_id', _vid)
+        .eq('status', 'concluida')
+        .limit(1);
+      let vistoriasCanceladasResgatadas: { id: string }[] = [];
+      if ((instalacoesConcluidasVeic?.length ?? 0) > 0) {
+        const { data: canceladas } = await supabase.from('vistorias')
+          .select('id')
+          .eq('veiculo_id', _vid)
+          .eq('status', 'cancelada');
+        vistoriasCanceladasResgatadas = (canceladas || []) as any[];
+      }
+
       // Vistorias em estado intermediário (defer condicional)
       const { data: vistoriasVeicPendentes } = await supabase.from('vistorias')
         .select('id, status')
         .eq('veiculo_id', _vid)
         .in('status', ['agendada', 'em_analise', 'em_rota', 'em_andamento']);
+
 
       if (vistoriasVeicElegiveis && vistoriasVeicElegiveis.length > 0) {
         const vistoriaIds = vistoriasVeicElegiveis.map((v: any) => v.id);
