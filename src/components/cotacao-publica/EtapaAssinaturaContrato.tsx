@@ -690,11 +690,23 @@ export function EtapaAssinaturaContrato({
               <Mail className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-1">Email necessário para assinatura</h3>
+              <h3 className="text-lg font-semibold mb-1">
+                {erro ? 'Corrija seu e-mail para reenviar o contrato' : 'Email necessário para assinatura'}
+              </h3>
               <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                Para enviar o contrato digital, precisamos do seu email.
+                {erro
+                  ? 'O Autentique recusou o e-mail informado. Atualize abaixo e seguiremos com a assinatura.'
+                  : 'Para enviar o contrato digital, precisamos do seu email.'}
               </p>
             </div>
+            {erro && (
+              <Alert variant="destructive" className="max-w-sm mx-auto text-left">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Motivo</AlertTitle>
+                <AlertDescription className="text-xs break-words">{erro}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="max-w-sm mx-auto space-y-3">
               <Input
                 type="email"
