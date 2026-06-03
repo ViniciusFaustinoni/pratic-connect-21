@@ -1,47 +1,48 @@
-## Auditoria — Relacionamento › Chat
+## Por que não foi feito
 
-Análise estática já feita. Plano abaixo descreve o que vou validar em runtime (queries read-only + logs do edge) antes de mexer em código. Sem alterações nesta etapa.
+A rodada anterior implementou o tratamento de erro estruturado apenas no **painel interno** (toast + modal global `CorrigirEmailDialog`). O **link público** é outra árvore de componentes (usa `publicSupabase` e não tem o `CorrigirEmailProvider` montado), e o catch da etapa de assinatura (`EtapaAssinaturaContrato.tsx:366-372` e `EtapaAssinaturaSubstituicao.tsx`) joga fora o `code`/`motivo` que vem do edge e mostra "Erro ao enviar para assinatura digital". Resultado: o associado vê erro genérico, sem reason e sem caminho de saída.
 
-### Estado atual por item
+O backend já está pronto — `_shared/erroEstruturado.ts` devolve `code: EMAIL_INVALIDO` + `motivo` + `valor_atual`, e tanto `autentique-create` quanto `contrato-gerar` já lançam isso. Falta só consumir no link público.
 
-**#1 — Número da IA no chat**
-- `ConversasList.tsx` L132-140 mostra badge com `metaConfig.display_phone_number` no header "Conversas IA".
-- Tem backfill silencioso via `useTestarMetaConexao` se o campo estiver vazio.
-- **A validar:** se `whatsapp_meta_config.display_phone_number` está populado em produção (se vazio, badge não aparece).
+## O que vou fazer
 
-**#2 — Botão "Concluir atendimento" durante interação humana**
-- `ChatPanel.tsx` L348-365 — renderiza só quando `iaPausada && pausa` (qualquer pausa: transbordo humano, transbordo boleto, intervenção manual).
-- Chama `useConcluirTransbordo` que reativa a IA.
-- **A validar:** se aparece nos 3 motivos (`transbordo_humano`, `transbordo_boleto`, `intervencao_humana`).
+### 1. Parser standalone de erro estruturado (link público)
+Criar `src/components/cotacao-publica/lib/parseErroAutentique.ts` (novo). Função pura que recebe o `error`/`data` devolvido por `publicSupabase.functions.invoke` e extrai `{ code, motivo, valor_atual }` a partir de `error.context?.response` (FunctionsHttpError), `data.error`, ou fallback `error.message`. Sem dependência do `CorrigirEmailProvider`.
 
-**#3 — Entendimento de contexto da IA**
-- `whatsapp-webhook/index.ts` L273 — system prompt instrui a IA a usar conteúdo+variáveis do template Meta para entender o assunto (instalação, vistoria, boleto, etc.) antes de responder.
-- **A validar:** olhar 5–10 conversas recentes na `whatsapp_mensagens` p/ ver se respostas batem com o template enviado (ex.: cobrança, agendamento).
+### 2. Tratamento de `EMAIL_INVALIDO` em `EtapaAssinaturaContrato.tsx`
 
-**#4 — Mensagem padrão de boas-vindas**
-- Achei UMA mensagem de boas-vindas (L4139) — mas é **fallback de erro** quando o `agente-consultor-ia` falha. Não é boas-vindas canônica de primeiro contato.
-- **A validar:** confirmar se existe (ou não) uma boas-vindas explícita no primeiro contato com associado conhecido — se o user esperava uma e não existe, fica como gap a implementar.
+No catch de `verificarOuGerarContrato` (linhas 366-372):
+- Parsear o erro com o helper acima.
+- Se `code === 'EMAIL_INVALIDO'`:
+  - `setEmailLocal(valor_atual || clienteEmail)` (pré-preenche o input que já existe na UI `coletar_email`)
+  - `setErro(motivo)` (frase real do edge: "E-mail inválido…")
+  - `setEtapaInterna('coletar_email')` (reutiliza a tela já renderizada em linha 660)
+  - Reset `initRef.current = false` para re-disparar `verificarOuGerarContrato()` após o salvar
+- Se outro `code` (ex.: `CREDITOS_INSUFICIENTES`, `DOCUMENTO_INVALIDO`): mostrar `motivo` legível na tela `erro` em vez do texto genérico atual.
+- Tela `coletar_email` ganha um alerta vermelho discreto acima do input quando `erro` está presente, com a frase do `motivo`.
 
-**#5 — Busca de boletos (2ª via SGA)**
-- Fluxo canônico no system prompt L283-292: pede CPF → `buscar_associado_sga_por_cpf` → confirma placa → `consultar_boletos_sga_por_placa` → envia linha digitável + link + PIX, OU faz transbordo se vencido ≥6 dias.
-- Tools registradas L729-770.
-- **A validar:** invocar `consultar_boletos_sga_por_placa` direto via curl com placa de teste e verificar resposta; checar logs recentes do edge.
+### 3. Salvamento + retry
+O handler que já existe na tela `coletar_email` (atualiza `cotacoes.email_solicitante`, `contratos.cliente_email`, `associados.email`) é reaproveitado integralmente. Após salvar com sucesso: `setErro(null)`, `setEtapaInterna('verificando')`, `initRef.current = false`, dispara `verificarOuGerarContrato()` de novo.
 
-**#6 — Transbordo quando não for boleto**
-- Tool `transbordo_atendimento_humano` (L757-770) tem enum `categoria=['boleto_vencido','outro']`. O caminho "outro" existe.
-- Memória canônica diz que IA NUNCA promete ação humana sem chamar `solicitar_atendente_humano` na mesma rodada.
-- **A validar:** ver últimos transbordos em `whatsapp_ia_pausas` filtrando `motivo='transbordo_humano'` p/ confirmar que está sendo disparado em casos não-boleto.
+### 4. Mesma lógica em `EtapaAssinaturaSubstituicao.tsx`
+A assinatura do termo de substituição usa o mesmo edge `autentique-create`. Replicar os 3 passos acima para não deixar gap. (Não inclui termo de cancelamento — esse é fluxo separado.)
 
-### Plano de validação (read-only, sem alterar nada)
+### 5. Fora de escopo (não muda)
+- Painel interno (`toastErroEdge` + `CorrigirEmailDialog`) — já está OK.
+- Edges (`autentique-create`, `contrato-gerar`) — já devolvem erro estruturado correto.
+- `EtapaAssinaturaCancelamento` (termo de cancelamento) — fluxo paralelo, não é o que o usuário descreveu.
+- Nenhuma mudança em DB/policies/RLS.
 
-1. **Query `whatsapp_meta_config`** → checar `display_phone_number` (item #1).
-2. **Query `whatsapp_ia_pausas`** últimos 7 dias agrupado por motivo → confirmar que `transbordo_humano` (item #6) e `transbordo_boleto` (item #5) estão acontecendo, e que botão concluir (item #2) tem casos vivos.
-3. **Curl `consultar_boletos_sga_por_placa`** com placa real de teste → confirma item #5 ponta a ponta.
-4. **Logs edge `whatsapp-webhook`** últimas 24h filtrando por chamadas de tool → ver se IA usa contexto (item #3) e dispara as tools certas.
-5. **Inspeção `whatsapp_mensagens`** das últimas 3-5 conversas que tiveram transbordo → confirmar se IA explicou antes de transferir (item #6) e se reconheceu o template (item #3).
+## Validação
 
-### Entrega
+1. Gerar cotação com e-mail propositalmente inválido → abrir link público → tela de assinatura agora mostra "E-mail inválido: foo@bar" + input pré-preenchido + botão Salvar → ao salvar, contrato segue para Autentique sem operador interno.
+2. Simular `CREDITOS_INSUFICIENTES` no edge → link público mostra a frase real em vez de "Erro ao enviar para assinatura digital".
+3. Substituição: mesmo teste no `EtapaAssinaturaSubstituicao`.
+4. Painel interno: comportamento atual (modal global) inalterado.
 
-Ao final da auditoria, devolvo um relatório curto por item: ✅ funcional, ⚠️ funcional com ressalva (ex.: campo vazio que precisa de backfill), ou ❌ quebrado (com causa raiz). Só depois dessa confirmação proponho correções específicas — uma por vez, conforme o padrão das levas anteriores.
+## Arquivos a alterar
+- `src/components/cotacao-publica/lib/parseErroAutentique.ts` (novo, ~30 linhas)
+- `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx` (catch + tela `coletar_email` + tela `erro`)
+- `src/components/cotacao-publica/EtapaAssinaturaSubstituicao.tsx` (mesmo padrão)
 
-**Nada de código será alterado nesta fase.** Confirma que posso rodar as queries/curl/logs?
+Sem migrations, sem novos edges, sem mexer no painel interno.
