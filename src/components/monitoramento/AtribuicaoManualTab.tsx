@@ -745,9 +745,61 @@ export default function AtribuicaoManualTab() {
               {' '}para <strong>{vistoriadorConfirm?.nome || 'Vistoriador'}</strong>?
             </DialogDescription>
           </DialogHeader>
+
+          {precisaDecisaoRastreadorConfirm && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Este veículo vai necessitar de rastreador?
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Cliente escolheu{' '}
+                <strong>
+                  {ctxSubFipeConfirm?.viaSubFipe === 'rf_celular'
+                    ? 'Vistoria R&F pelo celular'
+                    : 'Vistoria presencial sem fotos prévias'}
+                </strong>
+                . É obrigatório decidir agora.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRequerRastreadorConfirm(false)}
+                  className={cn(
+                    'rounded-md border p-2 text-xs text-left bg-background',
+                    requerRastreadorConfirm === false
+                      ? 'border-primary bg-primary/5'
+                      : 'hover:border-muted-foreground/40'
+                  )}
+                >
+                  <div className="font-medium">Não</div>
+                  <div className="text-muted-foreground">Vistoria pura — sem rastreador.</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRequerRastreadorConfirm(true)}
+                  className={cn(
+                    'rounded-md border p-2 text-xs text-left bg-background',
+                    requerRastreadorConfirm === true
+                      ? 'border-primary bg-primary/5'
+                      : 'hover:border-muted-foreground/40'
+                  )}
+                >
+                  <div className="font-medium">Sim</div>
+                  <div className="text-muted-foreground">Adiciona instalação/vínculo de rastreador.</div>
+                </button>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancelar</Button>
-            <Button onClick={handleConfirm} disabled={atribuirMutation.isPending}>
+            <Button
+              onClick={handleConfirm}
+              disabled={
+                atribuirMutation.isPending ||
+                (precisaDecisaoRastreadorConfirm && requerRastreadorConfirm === null)
+              }
+            >
               {atribuirMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               Confirmar
             </Button>
