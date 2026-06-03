@@ -685,17 +685,26 @@ Deno.serve(async (req) => {
     const msgForaHorario = config.mensagem_fora_horario || "";
     const responderFora = config.responder_fora_horario === "true";
 
-    // ---- 3.5 GATE FORA DE HORÁRIO COMERCIAL ----
-    // Aplica configuração da UI (Configurações › Agente Consultor IA › Comportamento).
-    // Janela canônica: Seg–Sex 08:00–18:00 BRT. Fora disso, se `responder_fora_horario=false`,
-    // a IA envia a `mensagem_fora_horario` cadastrada e encerra (com debounce de 30 min para
-    // não floodar). Se `responder_fora_horario=true`, segue o fluxo normal.
+    // ---- 3.5 GATE FORA DE HORÁRIO COMERCIAL (apenas LEAD/vendas) ----
+    // Maya/Relacionamento atende 24/7 (associado já identificado em cache, ou diretor).
+    // Vinicius/Lead respeita janela Seg–Sex 08–18 BRT com debounce 30min.
+    //
+    // Heurística pré-audiência (a detecção formal está adiante no bloco 4B):
+    //   - Diretor: já detectado em `diretorPreDetectado` (linha do gate de identificação).
+    //   - Associado: contato com `cpf` E `sga_associado_encontrado === true` em cache.
+    //   - Associado por telefone: detectado adiante; nesses raros casos sem cache,
+    //     o gate ainda pode disparar uma vez — próxima mensagem terá cache.
+    const associadoEmCache = !!contato.cpf && (contato as any).sga_associado_encontrado === true;
+    const aplicaGateForaHorario = !diretorPreDetectado && !associadoEmCache;
+
+    let gateForaHorarioDisparou = false;
     try {
       const agoraBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
       const dow = agoraBRT.getDay(); // 0=dom, 6=sáb
       const hour = agoraBRT.getHours();
       const foraHorario = dow === 0 || dow === 6 || hour < 8 || hour >= 18;
-      if (foraHorario && !responderFora && msgForaHorario.trim()) {
+      if (aplicaGateForaHorario && foraHorario && !responderFora && msgForaHorario.trim()) {
+        gateForaHorarioDisparou = true;
         const ultimaFora = (contato as any).ultima_msg_fora_horario_em
           ? new Date((contato as any).ultima_msg_fora_horario_em)
           : null;
@@ -708,7 +717,7 @@ Deno.serve(async (req) => {
             .from("agente_ia_contatos")
             .update({ ultima_msg_fora_horario_em: new Date().toISOString() })
             .eq("id", contato.id);
-          console.log(`[agente-consultor-ia] [fora_horario] mensagem enviada para ${telLimpo}`);
+          console.log(`[agente-consultor-ia] [fora_horario] mensagem enviada para LEAD ${telLimpo}`);
         } else {
           console.log(`[agente-consultor-ia] [fora_horario] em debounce (30min) — silêncio intencional`);
         }
@@ -721,7 +730,7 @@ Deno.serve(async (req) => {
       console.warn(`[agente-consultor-ia] [fora_horario] falha no gate, seguindo fluxo normal:`, (e as any)?.message);
     }
 
-    // Observabilidade: estado da config aplicada nesta requisição
+    // Observabilidade: estado da config + audiência inferida nesta requisição
     console.log(`[maya_config] ${JSON.stringify({
       agente_ativo: config.agente_ativo !== "false",
       nome_agente: nomeAgente,
@@ -729,7 +738,12 @@ Deno.serve(async (req) => {
       has_apresentacao: !!apresentacao,
       responder_fora_horario: responderFora,
       has_msg_fora_horario: !!msgForaHorario,
+      diretor_pre_detectado: diretorPreDetectado,
+      associado_em_cache: associadoEmCache,
+      aplicou_gate_fora_horario: aplicaGateForaHorario,
+      gate_fora_horario_disparou: gateForaHorarioDisparou,
     })}`);
+
 
     // ---- 4. DETECTAR DIRETOR ----
     let isDiretor = false;
