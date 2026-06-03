@@ -1009,6 +1009,20 @@ async function processarVeiculoAprovado(
         .maybeSingle();
 
       if (vistAuto?.id) {
+        // PRÉ-REQUISITO do guard trg_guard_servico_autovistoria_concluida:
+        // a vistoria precisa estar `aprovada` ANTES do servico virar `concluida`.
+        // Sem isso o UPDATE abaixo dispara o guard e o caso fica em limbo
+        // (cadastro_aprovado=true porém servico em_analise → some das filas).
+        if (vistAuto.status !== 'aprovada') {
+          const { error: errVistAprov } = await supabase
+            .from('vistorias')
+            .update({ status: 'aprovada', analisado_em: agora, concluida_em: agora })
+            .eq('id', vistAuto.id)
+            .in('status', ['pendente', 'em_analise']);
+          if (errVistAprov) console.warn('[aprovar-proposta] sub-FIPE aprovar vistoria falhou:', errVistAprov);
+          else console.log(`[aprovar-proposta] Sub-FIPE: vistoria ${vistAuto.id} aprovada antes de promover servico.`);
+        }
+
         // Promover servico vistoria_entrada da cotação (em_analise → concluida)
         if (contrato.cotacao_id) {
           const { error: errPromote } = await supabase
@@ -1023,6 +1037,7 @@ async function processarVeiculoAprovado(
           if (errPromote) console.warn('[aprovar-proposta] sub-FIPE promote servico falhou:', errPromote);
           else console.log(`[aprovar-proposta] Sub-FIPE: servico vistoria_entrada promovido a concluida (cotação ${contrato.cotacao_id}).`);
         }
+
 
         // Via 2 (rf_celular) — Cadastro libera R&F agora se o plano tem.
         if (viaSubFipe === 'rf_celular' && planoTemRouboFurto) {
