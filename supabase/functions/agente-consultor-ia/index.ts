@@ -1602,7 +1602,15 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
 
 
     // ---- 10. DIVIDIR E ENVIAR RESPOSTA ----
-    const partes = dividirMensagem(resposta, 1000);
+    // Validador de saída: garante começo, meio e fim — Maya nunca manda string vazia/só whitespace
+    const respostaFinal = (resposta || "").toString().trim() ||
+      ("Recebi sua mensagem! 🙂 Pode reformular pra eu te ajudar? " +
+       "Se preferir falar com um *atendente humano*, é só responder *atendente*.");
+    if (respostaFinal !== resposta) {
+      console.warn(`[agente-consultor-ia] validador_saida: resposta substituída por fallback (vazia) tel=${telLimpo}`);
+    }
+
+    const partes = dividirMensagem(respostaFinal, 1000);
 
     for (let i = 0; i < partes.length; i++) {
       await enviarWhatsApp(supabaseUrl, serviceKey, telefone, partes[i]);
