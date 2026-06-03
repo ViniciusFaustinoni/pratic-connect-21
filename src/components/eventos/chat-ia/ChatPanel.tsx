@@ -367,9 +367,10 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
 
 
       {/* Messages */}
-      <div className="flex-1 overflow-hidden relative">
-        <ScrollArea className="h-full" ref={scrollRef}>
-          <div className="space-y-2 p-4">
+      <div className="flex-1 min-w-0 overflow-hidden relative">
+        <ScrollArea className="h-full w-full" ref={scrollRef}>
+          <div className="space-y-2 p-4 min-w-0 max-w-full">
+
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
