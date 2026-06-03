@@ -502,26 +502,79 @@ Deno.serve(async (req) => {
         }
         console.log(`[agente-consultor-ia] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
         // Segue o fluxo normal abaixo; prompts vão receber o contexto.
-      } else if (cpfCandidato) {
-        await enviarTexto("Esse CPF não parece válido. Pode conferir e me enviar de novo? 😉");
-        return new Response(
-          JSON.stringify({ success: true, gate: "cpf_invalido" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
       } else {
-        // Nenhum CPF — manda saudação padrão com debounce de 10 min
+        // === GARANTIA-DE-RESPOSTA (Maya nunca deixa vácuo) ===
+        // Caso A: cliente mandou número que parece CPF mas não validou (ex.: 10/12 dígitos, dígitos verificadores errados)
+        // Caso B: cliente mandou só dígitos curtos (6–10) — também trata como tentativa de CPF
+        // Caso C: cliente mandou texto livre sem nenhum dígito relevante
+        const pareceTentativaDeCpf =
+          !!cpfCandidato ||
+          (apenasDigitos.length >= 6 && apenasDigitos.length <= 14);
+
+        const tentativasAtuais = Number((contato as any).cpf_tentativas_invalidas || 0);
+
+        if (pareceTentativaDeCpf) {
+          const novasTentativas = tentativasAtuais + 1;
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ cpf_tentativas_invalidas: novasTentativas })
+            .eq("id", contato.id);
+
+          if (novasTentativas >= 3) {
+            // Escalada: oferta explícita de transbordo humano
+            await enviarTexto(
+              "Notei que estamos tendo dificuldade com o CPF 🤔\n\n" +
+              "Se preferir, posso transferir agora para um atendente humano — é só responder *atendente*.\n" +
+              "Ou, se quiser tentar mais uma vez: me envie o CPF *só com números* (11 dígitos)."
+            );
+          } else {
+            await enviarTexto(
+              "Recebi os números, mas não formam um CPF válido (precisa ter *11 dígitos*). " +
+              "Pode conferir e me enviar de novo? 😉\n\n" +
+              "_Se preferir falar com um atendente humano, é só responder *atendente*._"
+            );
+          }
+          return new Response(
+            JSON.stringify({ success: true, gate: "cpf_invalido", tentativas: novasTentativas }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Caso C — texto livre sem indício de CPF: NUNCA fica em silêncio
         const ultimaSolicitacao = contato.cpf_solicitado_em ? new Date(contato.cpf_solicitado_em) : null;
-        const podeReenviar = !ultimaSolicitacao || (Date.now() - ultimaSolicitacao.getTime()) > 10 * 60_000;
-        if (podeReenviar) {
+        const podeReenviarSaudacao =
+          !ultimaSolicitacao || (Date.now() - ultimaSolicitacao.getTime()) > 10 * 60_000;
+
+        if (podeReenviarSaudacao) {
           await enviarTexto(
-            "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF. 😁"
+            "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF (só números, 11 dígitos). 😁"
           );
           await supabase
             .from("agente_ia_contatos")
             .update({ cpf_solicitado_em: new Date().toISOString() })
             .eq("id", contato.id);
         } else {
-          console.log(`[agente-consultor-ia] Gate CPF: debounce ativo (10min) — não reenviei saudação`);
+          // Saudação debounced — mas NÃO ficamos em silêncio: mandamos mensagem de continuidade
+          // (com debounce próprio de 2 min para não floodar caso o cliente mande várias mensagens seguidas)
+          const ultimaContinuidade = (contato as any).ultima_msg_continuidade_em
+            ? new Date((contato as any).ultima_msg_continuidade_em)
+            : null;
+          const podeReenviarContinuidade =
+            !ultimaContinuidade || (Date.now() - ultimaContinuidade.getTime()) > 2 * 60_000;
+
+          if (podeReenviarContinuidade) {
+            await enviarTexto(
+              "Entendi! 🙂 Para eu seguir e te ajudar, primeiro preciso do seu *CPF* (só números, 11 dígitos) — assim localizo seu cadastro.\n\n" +
+              "_Se preferir falar com um atendente humano, é só responder *atendente*._"
+            );
+            await supabase
+              .from("agente_ia_contatos")
+              .update({ ultima_msg_continuidade_em: new Date().toISOString() })
+              .eq("id", contato.id);
+            console.log(`[agente-consultor-ia] Gate CPF: enviei mensagem de continuidade (debounce saudação ativo)`);
+          } else {
+            console.log(`[agente-consultor-ia] Gate CPF: continuidade também em debounce (2min) — cliente em flood`);
+          }
         }
         return new Response(
           JSON.stringify({ success: true, gate: "aguardando_cpf" }),
