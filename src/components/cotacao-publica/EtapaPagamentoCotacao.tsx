@@ -296,7 +296,7 @@ export function EtapaPagamentoCotacao({
     // Primeiro, verificar se a cotação já tem contrato
     const { data: cotacao } = await publicSupabase
       .from('cotacoes')
-      .select('contrato_gerado_id, vendedor_id')
+      .select('contrato_gerado_id, vendedor_id, status_contratacao, valor_adesao')
       .eq('id', cotacaoId)
       .single();
 
@@ -309,11 +309,28 @@ export function EtapaPagamentoCotacao({
         .maybeSingle();
 
       if (contrato?.adesao_paga) {
+        // AUTO-CURE: contrato marcado como pago, mas cotação travou em
+        // 'contrato_assinado' (handoff antigo client-side com catch silencioso,
+        // ou edge falhou no meio). Reexecuta confirmar-adesao-zerada (idempotente)
+        // para promover status_contratacao -> 'pagamento_ok' e destravar o stepper.
+        const adesaoZero = Number(cotacao.valor_adesao ?? 0) <= 0;
+        if (cotacao.status_contratacao === 'contrato_assinado' && adesaoZero) {
+          console.warn('[EtapaPagamento] AUTO-CURE: contrato pago mas cotação em contrato_assinado — reexecutando confirmar-adesao-zerada');
+          const { data: configMsgCure } = await publicSupabase
+            .from('configuracoes')
+            .select('valor')
+            .eq('chave', 'comissao_ext_msg_adesao_zero')
+            .maybeSingle();
+          const msgCure = configMsgCure?.valor || 'Parabéns! Sua adesão foi isenta. Bem-vindo à Praticcar!';
+          await confirmarAdesaoIsenta('adesao_zerada', cotacao.contrato_gerado_id, msgCure);
+          return;
+        }
         console.log('[EtapaPagamento] Contrato já está pago!');
         setContratoId(cotacao.contrato_gerado_id);
         setEtapaInterna('pago');
         return;
       }
+
 
       // ===== AGÊNCIA RECEBE EM MÃOS: server-authoritative via edge =====
       const vendedorId = (contrato as any)?.vendedor_id || cotacao?.vendedor_id;
