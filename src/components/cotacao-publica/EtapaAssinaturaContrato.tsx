@@ -10,6 +10,9 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Separator } from '@/components/ui/separator';
 import { useAutentiqueBiometricStatus } from '@/hooks/useAutentiqueBiometricStatus';
+import { parseEdgeError } from '@/lib/ui/toastErroEdge';
+
+
 
 
 interface EtapaAssinaturaContratoProps {
