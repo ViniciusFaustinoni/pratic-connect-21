@@ -1,132 +1,47 @@
-## Princípio canônico (novo)
+## Diagnóstico
 
-**Maya NUNCA deixa vácuo.** Toda mensagem do cliente recebe uma resposta com **começo, meio e fim** — mesmo quando:
+Auditei `supabase/functions/agente-consultor-ia/index.ts` + `_shared/ai-client.ts` cruzando com as telas `Configurações › Agente Consultor IA` e `Relacionamento › Maya IA`. Hoje **parte das configurações é silenciosamente ignorada**:
 
-- O cliente manda dado inválido (CPF errado, telefone errado, foto ilegível, áudio ruim, localização vazia)
-- O cliente manda só "oi" / "?" / emoji / sticker / nada inteligível
-- O cliente manda fora do contexto do que a Maya pediu
-- O cliente repete a mesma coisa várias vezes
-- A IA não conseguiu interpretar a intenção
-- Uma tool falhou (timeout, erro técnico, sem resultado)
-- O cliente está em pausa de transbordo humano
-- O debounce de alguma frase específica está ativo
+| Configuração (UI) | Tabela | Hoje | Problema |
+|---|---|---|---|
+| Kill switch global | `agente_ia_config.agente_ativo` | ✅ aplicado | — |
+| `nome_agente` | `agente_ia_config` | ✅ em todos os branches | — |
+| `apresentacao_inicial` + `instrucoes_comportamento` | `agente_ia_config` | ⚠️ aplicado **só no branch LEAD** (l.1020-1033) | Branches Diretor (l.811) e Associado (l.878) **ignoram** a aba "Comportamento" |
+| `mensagem_fora_horario` + `responder_fora_horario` | `agente_ia_config` | ❌ lido mas **nunca usado** (l.616-617) | Mensagem fora de horário não dispara |
+| Maya — `persona / regras_absolutas / tom_voz / saudacao_inicial` | `maya_ia_comportamento` | ✅ override em todas as audiências (l.1313-1339) | — |
+| Maya — FAQ (destaque + base) | `maya_ia_faq` | ✅ | — |
+| Modelo global (`provider/model`) | `ai_model_config` | ⚠️ respeitado quando provider≠Lovable; **ignorado quando provider=Lovable** porque `aiGatewayFetch` prioriza `parsed.model` (l.464) e o agente sempre passa `google/gemini-3-flash-preview` hardcoded (l.1379) | Trocar o modelo na UI dentro do Lovable Gateway **não tem efeito** na Maya |
 
-Debounce existe para evitar **repetir a mesma frase** literal, NÃO para silenciar a conversa. Se uma frase está debounced, a Maya manda **outra coisa** (reformulação, próximo passo, oferta de ajuda).
+## Correções
 
-## Estrutura "começo, meio, fim" obrigatória em toda resposta
+### 1. Aplicar Comportamento (apresentação + instruções) em TODOS os branches
+Em `supabase/functions/agente-consultor-ia/index.ts`:
+- Branch **Diretor** (l.811-855): anexar bloco `## INSTRUÇÕES DE COMPORTAMENTO (Config)\n${instrucoes}` quando `instrucoes` não vazio, e usar `apresentacao` como override da saudação inicial quando preenchida.
+- Branch **Associado** (l.878-960): mesmo tratamento.
+- Manter precedência: override editorial Maya (l.1327) continua **acima** dessas regras (já é “PREVALECE SOBRE QUALQUER REGRA ACIMA”).
 
-- **Começo**: reconhece o que o cliente acabou de mandar ("Recebi seu CPF", "Entendi que você quer um guincho", "Vi sua foto")
-- **Meio**: explica o resultado / próximo passo / por que não dá pra prosseguir
-- **Fim**: pergunta clara OU oferta de transbordo ("Pode me mandar X?" / "Prefere falar com um atendente humano?")
+### 2. Aplicar `mensagem_fora_horario` / `responder_fora_horario`
+Logo após o kill switch (l.611), checar janela comercial (timezone America/Sao_Paulo, seg–sex 08–18 — manter o critério que já existe em outros pontos, ou expor `horario_inicio/horario_fim` se as colunas existirem). Se fora do horário:
+- Se `responder_fora_horario === 'false'` e `mensagem_fora_horario` não vazio → `enviarTexto(mensagem_fora_horario)` (com debounce de 30 min em `agente_ia_contatos.ultima_msg_fora_horario_em`) e `return`.
+- Se `responder_fora_horario === 'true'` → segue fluxo normal.
+- Migration: adicionar coluna `ultima_msg_fora_horario_em timestamptz` em `agente_ia_contatos`.
 
-Sem essas 3 partes, a mensagem da Maya é rejeitada por um validador antes de sair.
+### 3. Respeitar o modelo global escolhido na UI
+Em `supabase/functions/_shared/ai-client.ts`, função `aiGatewayFetch` (l.460-467): remover o atalho que permite ao caller sobrepor o modelo quando provider global é Lovable. Passar a usar **sempre** `cfg.model`, ignorando `parsed.model`. Isto faz com que o seletor de modelo na tela Configurações tenha efeito real na Maya/Vinicius (e em todas as edges que já usam `aiGatewayFetch`).
 
-## Pontos de vácuo identificados hoje (a corrigir)
+Como rede de segurança, manter um override explícito via opção (não pelo body) — quem realmente precisar fixar o modelo passa `override.model` em `callAI` (uso interno raro, ex.: tarefas com formato JSON estrito que exigem modelo específico).
 
-Levantamento rápido por leitura do `agente-consultor-ia`, `processar-fila-ia`, `whatsapp-webhook` e tools (precisa ser confirmado no momento da implementação):
+### 4. Observabilidade
+- Log estruturado no início do handler: `[maya_config] {model, provider, agente_ativo, has_instrucoes, has_apresentacao, fora_horario}` — facilita validar em produção que a configuração da UI chegou na requisição.
 
-1. **Gate de CPF** (`agente-consultor-ia/index.ts` ~447–530)
-   - Texto sem CPF + debounce saudação ativo → silêncio
-   - Número de 8–10 ou 12–14 dígitos → tratado como "sem CPF" → silêncio
-   - CPF inválido repetido → mesma frase loop sem escalada
-2. **Pós-greeting** sem resposta do cliente em X tempo → nada
-3. **Tool falhou** (ex.: SGA timeout, OCR falhou, busca de boleto vazia) → fallback genérico ausente em vários branches
-4. **Pausa por transbordo humano** → já manda `notificacoes_sistema`, mas **cliente** não recebe sinal de "alguém vai te chamar em breve"
-5. **Mensagem não-textual sem handler** (sticker, contato, doc não esperado) → nenhum reconhecimento
-6. **LLM devolve resposta vazia / só whitespace / só tool_call sem texto** → mensagem do usuário fica sem reply
-7. **Erro 5xx da LLM** → catch silencioso em alguns branches do `processar-fila-ia`
+## Não muda
+- Lógica de gate de CPF, fallback de vácuo, transbordo humano, FAQ destaque, dedupe `agente_ia_locks`, `processar-fila-ia`.
+- ChatPanel (frontend) — o atendente humano continua enviando texto livre via `whatsapp-send-text` sem passar pela IA. Configurações da Maya só afetam o turno da IA.
 
-## Mudanças
-
-### A. Middleware "garantia-de-resposta" no `agente-consultor-ia`
-
-Wrapper em torno do handler principal:
-
-```ts
-async function handleComGarantia(req, ctx) {
-  try {
-    const resp = await handleOriginal(req, ctx);
-    if (!respostaFoiEnviada(ctx)) {
-      await enviarFallbackContinuidade(ctx, 'sem_resposta_handler');
-    }
-    return resp;
-  } catch (err) {
-    await enviarFallbackContinuidade(ctx, 'erro_interno', err);
-    throw err;
-  }
-}
-```
-
-`enviarFallbackContinuidade` monta começo+meio+fim baseado no contexto:
-- Sabe a última coisa que a Maya pediu (ex.: CPF, foto, localização) → repete o pedido reformulado
-- Sabe a última coisa que o cliente mandou → reconhece
-- Sempre termina oferecendo transbordo: *"Se preferir falar com um humano agora, é só responder 'atendente'."*
-
-Debounce próprio (2 min) por **tipo de fallback**, não por frase exata, para não floodar mas garantir 1 sinal a cada interação.
-
-### B. Validador de saída
-
-Antes de chamar `whatsapp-send-text`, passar a resposta por `validarRespostaMaya(texto)`:
-
-- Rejeita string vazia / só whitespace / só emoji
-- Rejeita se for **idêntica** à última mensagem enviada nesta conversa (debounce literal)
-- Se reprovar, substitui pela `enviarFallbackContinuidade` apropriada
-
-### C. Gate de CPF — casos faltantes
-
-No bloco do CPF (citado acima):
-- Numérico 6–14 dígitos que não passa `validateCpf` → "Recebi os números, mas não formam um CPF válido (precisa ter 11). Pode conferir? 😉"
-- Texto livre + debounce saudação ativo → continuidade ("Entendi! Pra eu seguir, preciso do CPF — só números.")
-- 3 tentativas inválidas → oferta de transbordo humano (já existe a tool)
-
-Coluna nova em `agente_ia_contatos`: `cpf_tentativas_invalidas int default 0` (reseta ao capturar CPF válido).
-
-### D. Branches de tool failure
-
-Auditar handlers de tool no `agente-consultor-ia` (cada `case 'nome_tool'` no dispatcher) e garantir que **todo `catch` chama enviarFallbackContinuidade** em vez de só `console.error`. Lista atual de tools (precisa confirmar na implementação):
-
-- `consultar_boletos`, `buscar_associado_cpf`, `solicitar_atendente_humano`, `verificar_status_servico`, `enviar_link_pagamento`, etc.
-
-Resposta padrão de tool falha:
-> *"Tive um probleminha técnico aqui pra buscar essa informação 😅. Posso tentar de novo em alguns segundos, ou se preferir já te transfiro pra um atendente humano — é só responder 'atendente'."*
-
-### E. Mensagens não-textuais sem handler
-
-No `whatsapp-webhook`, quando o tipo (sticker, contato, áudio sem transcrição válida) cair em branch sem ação:
-- Enviar: *"Recebi sua mensagem, mas não consegui ler [tipo]. Pode escrever em texto o que precisa? Se preferir falar com um humano, é só responder 'atendente'."*
-
-### F. Cliente em pausa de transbordo humano
-
-Hoje a pausa é silenciosa do lado cliente (só notifica Relacionamento). Adicionar **1 mensagem de confirmação** no momento que a pausa entra:
-> *"Já avisei nosso time aqui 💬 Em instantes alguém da equipe vem falar com você por aqui mesmo. Aguarda só um momentinho 🙏"*
-
-Dedup 12h (uma vez por janela de pausa). Já existe a notificação interna; só falta a confirmação ao cliente.
-
-### G. Telemetria
-
-Tabela nova `maya_vacuo_log` (ou campo em `chat_mensagens_ia`):
-- `motivo` (handler_sem_resposta, tool_failure, validador_rejeitou, mensagem_nao_textual, etc.)
-- `telefone`, `created_at`, `payload_in`, `payload_out_fallback`
-
-Permite painel de auditoria pra ver se ainda existe vácuo depois das mudanças.
-
-## Detalhes técnicos
-
-**Arquivos afetados:**
-- `supabase/functions/agente-consultor-ia/index.ts` — wrapper + gate CPF + tool catches
-- `supabase/functions/whatsapp-webhook/index.ts` — handler de tipos não suportados
-- `supabase/functions/processar-fila-ia/index.ts` — catch raiz com fallback
-- `supabase/functions/whatsapp-send-text/index.ts` — chamar `validarRespostaMaya` no entry point (ou criar `enviar-mensagem-maya` que encapsula)
-- Nova lib compartilhada: `supabase/functions/_shared/maya-garantia-resposta.ts`
-
-**Migrations:**
-- `agente_ia_contatos.cpf_tentativas_invalidas int default 0`
-- `agente_ia_contatos.ultima_msg_continuidade_em timestamptz`
-- `maya_vacuo_log` (tabela + GRANT + RLS)
-
-**Memória canônica a adicionar:**
-> Maya NUNCA deixa vácuo. Toda mensagem recebe resposta com começo+meio+fim. Debounce só impede repetir a mesma frase, nunca silencia a conversa. Wrapper `handleComGarantia` + validador de saída + log em `maya_vacuo_log`. Ver `mem://logic/operations/maya-nunca-deixa-vacuo`.
+## Arquivos
+- `supabase/functions/agente-consultor-ia/index.ts` (branches Diretor/Associado + bloco fora_horario + log)
+- `supabase/functions/_shared/ai-client.ts` (remover atalho de modelo em `aiGatewayFetch`)
+- 1 migration: `ultima_msg_fora_horario_em` em `agente_ia_contatos`
 
 ## Resultado esperado
-
-Em qualquer cenário — CPF errado, foto borrada, sticker, tool quebrada, LLM vazia, pausa humana — o cliente recebe **uma mensagem coerente** em menos de 30s reconhecendo o que mandou, explicando o estado, e ou pedindo o próximo passo ou oferecendo transbordo. Zero silêncio.
+Trocar modelo, editar apresentação/instruções, ativar mensagem fora de horário, editar persona/FAQ da Maya na UI → todas refletidas na próxima mensagem que a IA responder, sem deploy.
