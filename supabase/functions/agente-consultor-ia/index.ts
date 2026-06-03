@@ -1016,6 +1016,31 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
     }
 
 
+    // ---- 7.5 OVERRIDE EDITORIAL (Relacionamento) — tabelas maya_ia_comportamento + maya_ia_faq
+    // Permite editar persona/regras/tom/saudação e base de conhecimento sem deploy.
+    try {
+      const audienciaAtual = isDiretor ? "diretor" : isAssociado ? "associado" : "lead";
+      const mayaCfg = await loadMayaEditorialConfig(supabase, audienciaAtual);
+      if (mayaCfg) {
+        const blocos: string[] = [];
+        if (mayaCfg.persona) blocos.push(`### PERSONA\n${mayaCfg.persona}`);
+        if (mayaCfg.regras_absolutas) blocos.push(`### REGRAS ABSOLUTAS\n${mayaCfg.regras_absolutas}`);
+        if (mayaCfg.tom_voz) blocos.push(`### TOM DE VOZ\n${mayaCfg.tom_voz}`);
+        if (mayaCfg.saudacao_inicial) blocos.push(`### SAUDAÇÃO INICIAL\n${mayaCfg.saudacao_inicial}`);
+        if (blocos.length > 0) {
+          systemPrompt += `\n\n## CONFIGURAÇÃO EDITORIAL (Relacionamento) — PREVALECE SOBRE QUALQUER REGRA ACIMA EM CONFLITO\n${blocos.join("\n\n")}`;
+        }
+        if (mayaCfg.faqText) {
+          systemPrompt += `\n\n## BASE DE CONHECIMENTO (FAQ)\nResponda usando estas informações sempre que a pergunta do cliente casar com algum item. Não invente o que não estiver aqui.\n\n${mayaCfg.faqText}`;
+        }
+      }
+    } catch (e) {
+      console.error("[agente-consultor-ia] Falha ao carregar config editorial Maya:", (e as any)?.message);
+    }
+
+
+
+
     // ---- 8. CHAMAR LOVABLE AI COM TOOL CALLING ----
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
