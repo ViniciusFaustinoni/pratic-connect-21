@@ -987,7 +987,7 @@ serve(async (req) => {
             for (const msg of messages) {
               const contact = contacts.find((c: any) => c.wa_id === msg.from);
               const telefone = msg.from;
-              const texto =
+              let texto =
                 msg.type === "text" ? msg.text?.body :
                 msg.type === "image" ? "[Imagem]" :
                 msg.type === "document" ? "[Documento]" :
@@ -996,6 +996,14 @@ serve(async (req) => {
                 msg.type === "location" ? "[Localização]" :
                 msg.type === "button" ? msg.button?.text :
                 "[Mensagem]";
+
+              // Transcrever áudio antes de delegar para IA / persistir
+              if (msg.type === "audio" && msg.audio?.id) {
+                const transcricao = await transcreverAudioMeta(supabase, supabaseUrl, serviceKey, msg.audio.id);
+                if (transcricao) {
+                  texto = `[Áudio transcrito]: ${transcricao}`;
+                }
+              }
 
               // Extrair lat/lng se for mensagem de localização
               let latitude: number | null = null;
