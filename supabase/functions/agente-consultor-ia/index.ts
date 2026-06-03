@@ -1248,9 +1248,11 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
 
     // ---- 7.5 OVERRIDE EDITORIAL (Relacionamento) — tabelas maya_ia_comportamento + maya_ia_faq
     // Permite editar persona/regras/tom/saudação e base de conhecimento sem deploy.
+    // Agora com retrieval por palavras-chave: a FAQ que mais casa com a mensagem
+    // atual entra em um bloco "EM DESTAQUE" no topo, antes do bloco completo.
     try {
       const audienciaAtual = isDiretor ? "diretor" : isAssociado ? "associado" : "lead";
-      const mayaCfg = await loadMayaEditorialConfig(supabase, audienciaAtual);
+      const mayaCfg = await loadMayaEditorialConfig(supabase, audienciaAtual, texto || "");
       if (mayaCfg) {
         const blocos: string[] = [];
         if (mayaCfg.persona) blocos.push(`### PERSONA\n${mayaCfg.persona}`);
@@ -1260,6 +1262,10 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
         if (blocos.length > 0) {
           systemPrompt += `\n\n## CONFIGURAÇÃO EDITORIAL (Relacionamento) — PREVALECE SOBRE QUALQUER REGRA ACIMA EM CONFLITO\n${blocos.join("\n\n")}`;
         }
+        if (mayaCfg.faqDestaqueText) {
+          systemPrompt += `\n\n## FAQ EM DESTAQUE PARA ESTA MENSAGEM (LEIA PRIMEIRO)\nA mensagem do cliente casou com a(s) entrada(s) abaixo da base de conhecimento. Use o conteúdo delas como resposta — não invente, não desvie, não transborde se a FAQ já cobre o pedido.\n\n${mayaCfg.faqDestaqueText}`;
+          console.log(`[agente-consultor-ia] FAQ em destaque (${mayaCfg.faqMatchedIds?.length || 0}): ${(mayaCfg.faqMatchedIds || []).join(",")}`);
+        }
         if (mayaCfg.faqText) {
           systemPrompt += `\n\n## BASE DE CONHECIMENTO (FAQ)\nResponda usando estas informações sempre que a pergunta do cliente casar com algum item. Não invente o que não estiver aqui.\n\n${mayaCfg.faqText}`;
         }
@@ -1267,6 +1273,7 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
     } catch (e) {
       console.error("[agente-consultor-ia] Falha ao carregar config editorial Maya:", (e as any)?.message);
     }
+
 
 
 
