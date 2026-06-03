@@ -209,8 +209,12 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // Variáveis de escopo do handler — visíveis no catch raiz para fallback de garantia-de-resposta
+  let telefoneAtual: string | null = null;
+
   try {
     const { telefone, texto, tipo_msg, latitude, longitude, nome_contato } = await req.json();
+    telefoneAtual = telefone;
 
     if (!telefone) {
       return new Response(
