@@ -118,6 +118,18 @@ function isPendenteVistoriaInicial(p: PropostaPendente) {
 function isAguardandoDoc(p: PropostaPendente) {
   return p.status === 'assinado' && p.tem_documento_pendente === true;
 }
+/**
+ * Sub-etapa 1 do Cadastro concluída, sub-etapa 2 (vistoria + liberação p/ Monitoramento) ainda pendente.
+ * Ver mem://logic/operations/cadastro-duas-subetapas
+ */
+function isSubEtapa1Ok(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    !!p.documentos_aprovados_em &&
+    p.cadastro_aprovado !== true &&
+    p.tem_documento_pendente !== true
+  );
+}
 function isAgendado(p: PropostaPendente) {
   return p.status === 'assinado' && p.tipo_etapa_analise === 'agendamento_confirmado';
 }
