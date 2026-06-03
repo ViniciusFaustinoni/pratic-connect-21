@@ -484,6 +484,7 @@ Deno.serve(async (req) => {
             cpf: cpfLimpo,
             cpf_capturado_em: new Date().toISOString(),
             sga_associado_encontrado: encontrado,
+            cpf_tentativas_invalidas: 0,
             ...(nomeSga ? { nome: nomeSga } : {}),
           })
           .eq("id", contato.id);
