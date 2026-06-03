@@ -258,8 +258,17 @@ function FaqEditDialog({
 
   const handleSave = () => {
     if (!draft.pergunta?.trim() || !draft.resposta?.trim()) return;
-    onSave(draft);
+    // Auto-extrai palavras-chave quando o operador deixar vazio. A IA depende
+    // delas para casar mensagens do cliente com esta resposta — sem âncoras,
+    // a entrada pode passar batida.
+    let final = draft;
+    if (!draft.palavras_chave || draft.palavras_chave.length === 0) {
+      const sugeridas = sugerirPalavrasChave(draft.pergunta, draft.resposta);
+      if (sugeridas.length > 0) final = { ...draft, palavras_chave: sugeridas };
+    }
+    onSave(final);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
