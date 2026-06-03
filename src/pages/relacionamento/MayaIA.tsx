@@ -26,6 +26,31 @@ const AUDIENCIAS: { id: MayaAudiencia; label: string; descricao: string }[] = [
 
 const CATEGORIAS_PADRAO = ['geral', 'planos', 'cobertura', 'cobranca', 'sinistro', 'instalacao', 'cancelamento'];
 
+const PT_STOPWORDS_UI = new Set([
+  'a','o','as','os','de','da','do','das','dos','e','ou','um','uma','para','por','pra','pro','com','sem','que','se','na','no','nas','nos','em','ao','aos','mais','menos','muito','sao','são','foi','era','sera','será','ter','estou','estamos','estao','estão','vai','vou','vamos','voce','você','vcs','voces','vocês','eu','tu','ele','ela','nos','nós','eles','elas','meu','minha','seu','sua','teu','tua','isso','isto','aquilo','esse','essa','este','esta','aquele','aquela','aqui','ali','la','lá','quando','onde','como','porque','qual','quais','quem','entao','então','ainda','tambem','também','todos','todas','cada','outro','outra','outros','outras','bom','boa','sim','nao','não','tem','ter','ja','já','preciso','quero','queria','sempre','assunto','qualquer','sobre','como','para','pelos','pelas','pelos','desde','entre','contra','perante','perto','sob','sobre','até','ate','apos','após','antes','depois','durante','passar','direto','direitos','diretos','canais','canal','atendimento'
+]);
+
+function sugerirPalavrasChave(pergunta?: string, resposta?: string): string[] {
+  const raw = `${pergunta || ''} ${resposta || ''}`;
+  const norm = raw
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const freq = new Map<string, number>();
+  for (const t of norm.split(' ')) {
+    if (t.length < 4) continue;
+    if (PT_STOPWORDS_UI.has(t)) continue;
+    freq.set(t, (freq.get(t) || 0) + 1);
+  }
+  return Array.from(freq.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([t]) => t);
+}
+
+
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint: string }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -233,8 +258,17 @@ function FaqEditDialog({
 
   const handleSave = () => {
     if (!draft.pergunta?.trim() || !draft.resposta?.trim()) return;
-    onSave(draft);
+    // Auto-extrai palavras-chave quando o operador deixar vazio. A IA depende
+    // delas para casar mensagens do cliente com esta resposta — sem âncoras,
+    // a entrada pode passar batida.
+    let final = draft;
+    if (!draft.palavras_chave || draft.palavras_chave.length === 0) {
+      const sugeridas = sugerirPalavrasChave(draft.pergunta, draft.resposta);
+      if (sugeridas.length > 0) final = { ...draft, palavras_chave: sugeridas };
+    }
+    onSave(final);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
