@@ -955,6 +955,7 @@ export type Database = {
           telefone: string
           ultima_interacao: string | null
           ultima_msg_continuidade_em: string | null
+          ultima_msg_fora_horario_em: string | null
         }
         Insert: {
           cpf?: string | null
@@ -971,6 +972,7 @@ export type Database = {
           telefone: string
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
+          ultima_msg_fora_horario_em?: string | null
         }
         Update: {
           cpf?: string | null
@@ -987,6 +989,7 @@ export type Database = {
           telefone?: string
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
+          ultima_msg_fora_horario_em?: string | null
         }
         Relationships: []
       }
