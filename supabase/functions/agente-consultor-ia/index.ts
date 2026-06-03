@@ -1404,7 +1404,11 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
       const message = choice?.message;
 
       if (!message) {
-        resposta = "Desculpe, não consegui processar sua mensagem. Tente novamente.";
+        // Maya nunca deixa vácuo — fallback canônico (começo, meio, fim)
+        resposta = "Tive um probleminha técnico aqui agora 😅\n\n" +
+          "Pode me mandar sua mensagem de novo em alguns segundos? " +
+          "Se preferir, posso te transferir para um *atendente humano* — é só responder *atendente*.";
+        console.warn(`[agente-consultor-ia] fallback_vacuo: motivo=llm_sem_message tel=${telLimpo}`);
         break;
       }
 
