@@ -1645,6 +1645,45 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
     );
   } catch (error: any) {
     console.error("[agente-consultor-ia] ERRO:", error);
+    // Maya nunca deixa vácuo: mesmo em erro inesperado, manda uma mensagem ao cliente
+    // (com debounce próprio de 2 min por telefone para não floodar caso o erro se repita)
+    try {
+      if (telefoneAtual) {
+        const telLimpoCatch = telefoneAtual.replace(/\D/g, "");
+        const { data: ct } = await supabase
+          .from("agente_ia_contatos")
+          .select("id, ultima_msg_continuidade_em")
+          .eq("telefone", telLimpoCatch)
+          .maybeSingle();
+        const ultima = ct?.ultima_msg_continuidade_em ? new Date(ct.ultima_msg_continuidade_em) : null;
+        const podeMandar = !ultima || (Date.now() - ultima.getTime()) > 2 * 60_000;
+        if (podeMandar) {
+          await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({
+              telefone: telefoneAtual,
+              mensagem:
+                "Tive um probleminha técnico aqui agora 😅\n\n" +
+                "Pode me mandar sua mensagem de novo em alguns segundos? " +
+                "Se preferir, posso te transferir para um *atendente humano* — é só responder *atendente*.",
+              allow_text: true,
+            }),
+          });
+          if (ct?.id) {
+            await supabase
+              .from("agente_ia_contatos")
+              .update({ ultima_msg_continuidade_em: new Date().toISOString() })
+              .eq("id", ct.id);
+          }
+          console.warn(`[agente-consultor-ia] fallback_vacuo_catch_raiz: enviado tel=${telLimpoCatch}`);
+        } else {
+          console.warn(`[agente-consultor-ia] fallback_vacuo_catch_raiz: debounce ativo tel=${telLimpoCatch}`);
+        }
+      }
+    } catch (fallbackErr) {
+      console.error("[agente-consultor-ia] falha ao enviar fallback de catch raiz:", (fallbackErr as any)?.message);
+    }
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
