@@ -345,14 +345,46 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- 2. VERIFICAR ATENDIMENTO HUMANO ----
+    // ---- 2. VERIFICAR ATENDIMENTO HUMANO / PAUSA ATIVA ----
+    // Em vez de silenciar invisivelmente, sinalizamos ao Relacionamento
+    // (notificação interna dedupada) que a Maya recebeu mensagem enquanto
+    // a conversa estava sob humano. O cliente continua sem auto-resposta,
+    // mas o operador passa a saber que precisa olhar o chat.
     if (contato?.status === "atendimento_humano") {
-      console.log(`[agente-consultor-ia] Contato em atendimento humano, ignorando: ${telLimpo}`);
+      console.log(`[agente-consultor-ia] Contato em atendimento humano, ignorando (com notificação interna): ${telLimpo}`);
+      await notificarRelacionamentoMensagemPausada(supabase, telLimpo, contato?.nome || null, "atendimento_humano", texto);
       return new Response(
-        JSON.stringify({ success: true, ignored: "atendimento_humano" }),
+        JSON.stringify({ success: true, ignored: "atendimento_humano", notificou_relacionamento: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Pausa ativa em whatsapp_ia_pausas (transbordo humano por 12h, etc.)
+    try {
+      const telVariantesPausa = [telLimpo];
+      if (telLimpo.startsWith("55") && telLimpo.length >= 12) telVariantesPausa.push(telLimpo.substring(2));
+      if (!telLimpo.startsWith("55") && telLimpo.length >= 10) telVariantesPausa.push("55" + telLimpo);
+      const { data: pausaAtiva } = await supabase
+        .from("whatsapp_ia_pausas")
+        .select("id, motivo, pausada_ate, encerrada_em")
+        .in("telefone", telVariantesPausa)
+        .is("encerrada_em", null)
+        .gt("pausada_ate", new Date().toISOString())
+        .order("pausada_ate", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (pausaAtiva?.id) {
+        console.log(`[agente-consultor-ia] Pausa ativa (motivo=${pausaAtiva.motivo}, até=${pausaAtiva.pausada_ate}) — ignorando com notificação: ${telLimpo}`);
+        await notificarRelacionamentoMensagemPausada(supabase, telLimpo, contato?.nome || null, "pausa_ativa", texto);
+        return new Response(
+          JSON.stringify({ success: true, ignored: "pausa_ativa", motivo_pausa: pausaAtiva.motivo, notificou_relacionamento: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } catch (e) {
+      console.warn("[agente-consultor-ia] Falha ao checar pausa ativa (seguindo):", (e as any)?.message);
+    }
+
 
     // ---- 2B. GATE DE CPF (skip diretores) ----
     // A IA não conversa/vende nada até o usuário informar um CPF válido.
