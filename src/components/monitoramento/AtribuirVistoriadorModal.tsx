@@ -313,6 +313,62 @@ export function AtribuirVistoriadorModal({
             </CardContent>
           </Card>
 
+          {/* Pergunta obrigatória para Vias 2 e 3 sub-FIPE */}
+          {precisaDecisaoRastreador && (
+            <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <Radio className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400" />
+                  <div className="flex-1">
+                    <Label className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      Este veículo vai necessitar de rastreador?
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Cliente optou por{' '}
+                      <strong>
+                        {ctxSubFipe?.viaSubFipe === 'rf_celular'
+                          ? 'Vistoria de Roubo & Furto pelo celular'
+                          : 'Vistoria presencial sem fotos prévias'}
+                      </strong>
+                      . Decida agora se a visita do técnico inclui instalação/vínculo de rastreador.
+                    </p>
+                  </div>
+                </div>
+                <RadioGroup
+                  value={requerRastreador === null ? '' : requerRastreador ? 'sim' : 'nao'}
+                  onValueChange={(v) => setRequerRastreador(v === 'sim')}
+                  className="grid grid-cols-2 gap-2"
+                >
+                  <label
+                    className={cn(
+                      'flex items-start gap-2 rounded-md border p-2 cursor-pointer text-xs bg-background',
+                      requerRastreador === false ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/40'
+                    )}
+                  >
+                    <RadioGroupItem value="nao" id="rast-nao" className="mt-0.5" />
+                    <div>
+                      <div className="font-medium">Não</div>
+                      <div className="text-muted-foreground">Vistoria pura — sem rastreador.</div>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      'flex items-start gap-2 rounded-md border p-2 cursor-pointer text-xs bg-background',
+                      requerRastreador === true ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/40'
+                    )}
+                  >
+                    <RadioGroupItem value="sim" id="rast-sim" className="mt-0.5" />
+                    <div>
+                      <div className="font-medium">Sim</div>
+                      <div className="text-muted-foreground">Adiciona instalação/vínculo do rastreador.</div>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          )}
+
+
           {/* Seletor de tipo de executor — só para vistoria de evento */}
           {vistoria.isVistoriaEvento && (
             <div className="space-y-2">
