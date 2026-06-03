@@ -952,6 +952,21 @@ Deno.serve(async (req) => {
     let dadosCotacao = contato?.dados_cotacao || null;
 
     // ---- 7. MONTAR SYSTEM PROMPT + TOOLS (condicional) ----
+    // Observabilidade canônica: log do branch antes de montar o prompt
+    const branchPrompt = isDiretor ? "diretor" : isAssociado ? "associado" : "lead";
+    const origemAssociado = isAssociado
+      ? (associadoEmCache ? "cache" : (sgaAssociadoOverride ? "sga_override" : "telefone"))
+      : "none";
+    console.log(`[prompt_branch] ${JSON.stringify({
+      branch: branchPrompt,
+      origem_associado: origemAssociado,
+      associado_nome: associadoNome || null,
+      associado_status: associadoStatus || null,
+      contato_cpf: contato?.cpf || null,
+      contato_sga_associado_encontrado: (contato as any)?.sga_associado_encontrado || false,
+      contato_nome: contato?.nome || null,
+    })}`);
+
     let systemPrompt: string;
     let tools: any[];
 
