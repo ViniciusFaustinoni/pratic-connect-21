@@ -10,6 +10,9 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Separator } from '@/components/ui/separator';
 import { useAutentiqueBiometricStatus } from '@/hooks/useAutentiqueBiometricStatus';
+import { parseEdgeError } from '@/lib/ui/toastErroEdge';
+
+
 
 
 interface EtapaAssinaturaContratoProps {
@@ -181,7 +184,30 @@ export function EtapaAssinaturaContrato({
     }
   }, []); // só na montagem
 
+  // ═══ Helper: erro estruturado do edge (EMAIL_INVALIDO → coletar_email; resto → tela de erro) ═══
+  const tratarErroEdge = useCallback(async (rawErr: any, fallbackMsg: string) => {
+    const parsed = await parseEdgeError(rawErr);
+    const motivo = parsed.message || fallbackMsg;
+    console.error('[EtapaAssinatura] Erro estruturado:', parsed.code, motivo);
+
+    if (parsed.code === 'EMAIL_INVALIDO') {
+      const valorAtual =
+        (parsed.raw && typeof parsed.raw === 'object' && (parsed.raw as any).valor_atual) || '';
+      setEmailLocal(String(valorAtual || emailEfetivo || clienteEmail || ''));
+      setErro(motivo);
+      processingRef.current = false;
+      sendingRef.current = false;
+      initRef.current = false;
+      setEtapaInterna('coletar_email');
+      return;
+    }
+
+    setErro(motivo);
+    setEtapaInterna('erro');
+  }, [emailEfetivo, clienteEmail]);
+
   // ═══ 1. Verificar/gerar contrato ═══
+
   const verificarOuGerarContrato = useCallback(async () => {
     if (processingRef.current) {
       console.log('[EtapaAssinatura] Já processando, ignorando chamada duplicada');
@@ -270,25 +296,9 @@ export function EtapaAssinaturaContrato({
           body: { cotacao_id: cotacaoId },
         });
 
-        if (error) {
-          // Tentar extrair mensagem de erro do corpo da resposta (FunctionsHttpError)
-          let mensagemDetalhada = error.message || 'Erro ao gerar contrato';
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const ctx = (error as any)?.context;
-            if (ctx && typeof ctx.json === 'function') {
-              const body = await ctx.json();
-              if (body?.error) mensagemDetalhada = body.error;
-              if (body?.code === 'PLACA_DE_OUTRO_ASSOCIADO') {
-                mensagemDetalhada = body.error || 'Esta placa já pertence a outro associado. Cancele esta cotação e abra uma Troca de Titularidade.';
-              }
-            }
-          } catch (parseErr) {
-            console.warn('[EtapaAssinatura] Falha ao ler corpo de erro:', parseErr);
-          }
-          throw new Error(mensagemDetalhada);
-        }
+        if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Erro ao gerar contrato');
+
 
         cId = data.contrato.id;
         setContratoId(data.contrato.id);
@@ -305,13 +315,12 @@ export function EtapaAssinaturaContrato({
       processingRef.current = false;
       return cId;
     } catch (error: any) {
-      console.error('[EtapaAssinatura] Erro:', error);
-      setErro(error.message || 'Erro ao processar contrato');
-      setEtapaInterna('erro');
+      await tratarErroEdge(error, 'Erro ao processar contrato');
       processingRef.current = false;
       return null;
     }
-  }, [cotacaoId, tokenPublico, onContratoAssinado]);
+  }, [cotacaoId, tokenPublico, onContratoAssinado, tratarErroEdge]);
+
 
   // ═══ 2. Enviar para Autentique ═══
   const enviarParaAutentique = async (cId: string) => {
@@ -364,12 +373,11 @@ export function EtapaAssinaturaContrato({
         setEtapaInterna('aguardando_assinatura');
       }
     } catch (error: any) {
-      console.error('[EtapaAssinatura] Erro no Autentique:', error);
-      setErro(error.message || 'Erro ao enviar para assinatura digital');
-      setEtapaInterna('erro');
+      await tratarErroEdge(error, 'Erro ao enviar para assinatura digital');
     } finally {
       sendingRef.current = false;
     }
+
   };
 
   // ═══ 3. Inicializar (uma única vez) ═══
@@ -586,15 +594,26 @@ export function EtapaAssinaturaContrato({
         .update({ email_solicitante: emailLocal })
         .eq('id', cotacaoId)
         .eq('token_publico', tokenPublico);
+      // Quando já existe contrato (caso EMAIL_INVALIDO no autentique-create após geração),
+      // propaga o novo e-mail para o contrato para o reprocessamento usar o valor correto.
+      if (contratoId) {
+        await publicSupabase
+          .from('contratos')
+          .update({ cliente_email: emailLocal })
+          .eq('id', contratoId);
+      }
       setEmailEfetivo(emailLocal);
+      setErro(null);
       initRef.current = false;
       processingRef.current = false;
+      sendingRef.current = false;
       setEtapaInterna('verificando');
     } catch (e: any) {
       toast.error('Erro ao salvar email');
     } finally {
       setSalvandoEmail(false);
     }
+
   };
 
   // ═══════════════════════════════════════════════
@@ -671,11 +690,23 @@ export function EtapaAssinaturaContrato({
               <Mail className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-1">Email necessário para assinatura</h3>
+              <h3 className="text-lg font-semibold mb-1">
+                {erro ? 'Corrija seu e-mail para reenviar o contrato' : 'Email necessário para assinatura'}
+              </h3>
               <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                Para enviar o contrato digital, precisamos do seu email.
+                {erro
+                  ? 'O Autentique recusou o e-mail informado. Atualize abaixo e seguiremos com a assinatura.'
+                  : 'Para enviar o contrato digital, precisamos do seu email.'}
               </p>
             </div>
+            {erro && (
+              <Alert variant="destructive" className="max-w-sm mx-auto text-left">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Motivo</AlertTitle>
+                <AlertDescription className="text-xs break-words">{erro}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="max-w-sm mx-auto space-y-3">
               <Input
                 type="email"
