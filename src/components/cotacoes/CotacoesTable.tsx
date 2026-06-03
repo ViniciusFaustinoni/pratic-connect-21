@@ -287,7 +287,7 @@ export function CotacoesTable({
                   </TableCell>
                   
                   {/* Veículo */}
-                  <TableCell className="hidden md:table-cell py-3">
+                  <TableCell className="hidden md:table-cell py-3 max-w-0">
                     <div className="min-w-0">
                       <p className="text-sm truncate leading-tight">
                         {cotacao.veiculo_marca} {cotacao.veiculo_modelo}
