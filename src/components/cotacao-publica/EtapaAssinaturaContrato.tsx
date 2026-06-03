@@ -315,13 +315,12 @@ export function EtapaAssinaturaContrato({
       processingRef.current = false;
       return cId;
     } catch (error: any) {
-      console.error('[EtapaAssinatura] Erro:', error);
-      setErro(error.message || 'Erro ao processar contrato');
-      setEtapaInterna('erro');
+      await tratarErroEdge(error, 'Erro ao processar contrato');
       processingRef.current = false;
       return null;
     }
-  }, [cotacaoId, tokenPublico, onContratoAssinado]);
+  }, [cotacaoId, tokenPublico, onContratoAssinado, tratarErroEdge]);
+
 
   // ═══ 2. Enviar para Autentique ═══
   const enviarParaAutentique = async (cId: string) => {
