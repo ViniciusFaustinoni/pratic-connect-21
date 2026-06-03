@@ -542,7 +542,7 @@ export function AtribuirVistoriadorModal({
           </Button>
           <Button
             onClick={handleConfirmar}
-            disabled={!selectedVistoriadorId || isSubmitting}
+            disabled={!podeConfirmar || isSubmitting}
           >
             {isSubmitting ? (
               <>
