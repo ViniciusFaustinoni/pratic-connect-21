@@ -239,12 +239,21 @@ export function AtribuirVistoriadorModal({
   }, [vistoriadores, mostrarApenasDisponiveis, mostrarOutrasRegioes, vistoria?.regiao]);
 
   // Handler de submissão
+  const precisaDecisaoRastreador = !!ctxSubFipe?.precisaDecisaoRastreador;
+  const podeConfirmar =
+    !!selectedVistoriadorId && (!precisaDecisaoRastreador || requerRastreador !== null);
+
   const handleConfirmar = async () => {
     if (!selectedVistoriadorId) return;
+    if (precisaDecisaoRastreador && requerRastreador === null) return;
 
     setIsSubmitting(true);
     try {
-      await onSave(selectedVistoriadorId, vistoria?.isVistoriaEvento ? executorTipo : undefined);
+      await onSave(
+        selectedVistoriadorId,
+        vistoria?.isVistoriaEvento ? executorTipo : undefined,
+        precisaDecisaoRastreador ? requerRastreador : null,
+      );
     } finally {
       setIsSubmitting(false);
     }
