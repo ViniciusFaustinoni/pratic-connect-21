@@ -944,6 +944,7 @@ export type Database = {
           cpf: string | null
           cpf_capturado_em: string | null
           cpf_solicitado_em: string | null
+          cpf_tentativas_invalidas: number
           created_at: string | null
           dados_cotacao: Json | null
           id: string
@@ -953,11 +954,13 @@ export type Database = {
           status: string | null
           telefone: string
           ultima_interacao: string | null
+          ultima_msg_continuidade_em: string | null
         }
         Insert: {
           cpf?: string | null
           cpf_capturado_em?: string | null
           cpf_solicitado_em?: string | null
+          cpf_tentativas_invalidas?: number
           created_at?: string | null
           dados_cotacao?: Json | null
           id?: string
@@ -967,11 +970,13 @@ export type Database = {
           status?: string | null
           telefone: string
           ultima_interacao?: string | null
+          ultima_msg_continuidade_em?: string | null
         }
         Update: {
           cpf?: string | null
           cpf_capturado_em?: string | null
           cpf_solicitado_em?: string | null
+          cpf_tentativas_invalidas?: number
           created_at?: string | null
           dados_cotacao?: Json | null
           id?: string
@@ -981,6 +986,7 @@ export type Database = {
           status?: string | null
           telefone?: string
           ultima_interacao?: string | null
+          ultima_msg_continuidade_em?: string | null
         }
         Relationships: []
       }
