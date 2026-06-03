@@ -62,7 +62,7 @@ function ComportamentoTab() {
     if (!current) return;
     save.mutate({
       audiencia,
-      nome_agente: current.nome_agente || 'Maya',
+      nome_agente: current.nome_agente || 'Assistente IA Praticcar',
       persona: current.persona || '',
       regras_absolutas: current.regras_absolutas || '',
       tom_voz: current.tom_voz || '',
@@ -103,13 +103,13 @@ function ComportamentoTab() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1.5">
-                <FieldLabel hint="Como a Maya se apresenta. Aparece em saudações e quando o cliente pergunta com quem está falando. Ex: 'Maya', 'Sofia', 'Atendimento PRATIC'.">
+                <FieldLabel hint="Como o Assistente IA Praticcar se apresenta. Aparece em saudações e quando o cliente pergunta com quem está falando. Ex: 'Assistente IA Praticcar', 'Atendimento PRATIC'.">
                   Nome do agente
                 </FieldLabel>
                 <Input
                   value={current?.nome_agente ?? ''}
                   onChange={(e) => handleChange('nome_agente', e.target.value)}
-                  placeholder="Maya"
+                  placeholder="Assistente IA Praticcar"
                 />
               </div>
             </CardContent>
@@ -118,10 +118,10 @@ function ComportamentoTab() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Persona</CardTitle>
-              <CardDescription>Quem a Maya é nesta audiência e qual é o papel dela.</CardDescription>
+              <CardDescription>Quem o Assistente IA Praticcar é nesta audiência e qual é o papel dele.</CardDescription>
             </CardHeader>
             <CardContent>
-              <FieldLabel hint="Descreve em 2-4 linhas quem a Maya é e qual a missão dela com este perfil. A IA usa isso para calibrar o que pode e não pode fazer. Ex: 'Você é assistente virtual da PRATICCAR para associados ativos. Sua missão é resolver dúvidas operacionais simples e escalar para humanos quando envolver decisão ou prazo.'">
+              <FieldLabel hint="Descreve em 2-4 linhas quem o Assistente IA Praticcar é e qual a missão dele com este perfil. A IA usa isso para calibrar o que pode e não pode fazer. Ex: 'Você é o assistente virtual da PRATICCAR para associados ativos. Sua missão é resolver dúvidas operacionais simples e escalar para humanos quando envolver decisão ou prazo.'">
                 Descrição da persona
               </FieldLabel>
               <Textarea
@@ -156,7 +156,7 @@ function ComportamentoTab() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Tom de voz</CardTitle>
-              <CardDescription>Como a Maya escreve.</CardDescription>
+              <CardDescription>Como o Assistente IA Praticcar escreve.</CardDescription>
             </CardHeader>
             <CardContent>
               <FieldLabel hint="Formalidade, uso de emojis, formatação WhatsApp (*negrito*, _itálico_), tamanho de resposta. Ex: 'Atendimento humano, claro e direto. *negrito* e _itálico_ do WhatsApp. Emojis com moderação.'">
@@ -177,7 +177,7 @@ function ComportamentoTab() {
               <CardDescription>Primeira mensagem quando ninguém se conhece ainda.</CardDescription>
             </CardHeader>
             <CardContent>
-              <FieldLabel hint="O que a Maya envia na primeira interação. Use {{nome}} se quiser personalizar. Mantenha curto — 1 a 2 linhas.">
+              <FieldLabel hint="O que o Assistente IA Praticcar envia na primeira interação. Use {{nome}} se quiser personalizar. Mantenha curto — 1 a 2 linhas.">
                 Texto da saudação
               </FieldLabel>
               <Textarea
@@ -245,7 +245,7 @@ function FaqEditDialog({
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <FieldLabel hint="Agrupa o conhecimento por tema. A Maya usa para organizar a base. Pode digitar uma nova categoria livremente.">
+              <FieldLabel hint="Agrupa o conhecimento por tema. O Assistente IA Praticcar usa para organizar a base. Pode digitar uma nova categoria livremente.">
                 Categoria
               </FieldLabel>
               <Input list="cat-suggestions" value={draft.categoria ?? ''} onChange={(e) => upd('categoria', e.target.value)} />
@@ -269,14 +269,14 @@ function FaqEditDialog({
           </div>
 
           <div className="space-y-1.5">
-            <FieldLabel hint="A resposta que a Maya deve dar. Escreva como se fosse ela respondendo (em primeira pessoa). Pode incluir formatação WhatsApp: *negrito*, _itálico_.">
+            <FieldLabel hint="A resposta que o Assistente IA Praticcar deve dar. Escreva como se fosse ele respondendo (em primeira pessoa). Pode incluir formatação WhatsApp: *negrito*, _itálico_.">
               Resposta
             </FieldLabel>
             <Textarea rows={6} value={draft.resposta ?? ''} onChange={(e) => upd('resposta', e.target.value)} className="resize-y" />
           </div>
 
           <div className="space-y-1.5">
-            <FieldLabel hint="Termos que ajudam a Maya a identificar quando este conhecimento é relevante. Separe pressionando Enter.">
+            <FieldLabel hint="Termos que ajudam o Assistente IA Praticcar a identificar quando este conhecimento é relevante. Separe pressionando Enter.">
               Palavras-chave
             </FieldLabel>
             <div className="flex flex-wrap gap-1.5 mb-1.5">
@@ -317,7 +317,7 @@ function FaqEditDialog({
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t">
-            <FieldLabel hint="Desativado some do contexto da Maya, mas continua salvo. Use para arquivar sem perder o histórico.">
+            <FieldLabel hint="Desativado some do contexto do Assistente IA Praticcar, mas continua salvo. Use para arquivar sem perder o histórico.">
               Ativo
             </FieldLabel>
             <Switch checked={draft.ativo ?? true} onCheckedChange={(c) => upd('ativo', c)} />
@@ -439,7 +439,7 @@ function ConhecimentoTab() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir este conhecimento?</AlertDialogTitle>
             <AlertDialogDescription>
-              A Maya deixará de usar essa informação imediatamente. Esta ação não pode ser desfeita.
+              O Assistente IA Praticcar deixará de usar essa informação imediatamente. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
