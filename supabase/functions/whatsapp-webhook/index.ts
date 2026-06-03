@@ -3656,12 +3656,14 @@ serve(async (req) => {
     // associado ativo — o telefone sozinho não identifica, o CPF identifica.
     const telefoneNormBase = telefone.replace(/\D/g, "");
     let cpfConfirmadoParaTelefone: string | null = null;
+    let contatoIaCache: { cpf: string | null; nome: string | null; sga_associado_encontrado: boolean | null } | null = null;
     try {
       const { data: contatoIaState } = await supabase
         .from("agente_ia_contatos")
-        .select("cpf")
+        .select("cpf, nome, sga_associado_encontrado")
         .eq("telefone", telefoneNormBase)
         .maybeSingle();
+      contatoIaCache = (contatoIaState as any) || null;
       const cpfRaw = (contatoIaState?.cpf || "").replace(/\D/g, "");
       cpfConfirmadoParaTelefone = cpfRaw.length === 11 ? cpfRaw : null;
     } catch (lookupErr: any) {
@@ -3716,6 +3718,34 @@ serve(async (req) => {
         console.warn(
           `[whatsapp-webhook] Telefone compartilhado (${candidatos.length}) sem CPF confirmado — selecionado fallback associado=${associado?.id}`,
         );
+      }
+    }
+
+    // ========================================
+    // FALLBACK CANÔNICO: ASSOCIADO POR CPF CACHEADO (telefone divergente)
+    // ========================================
+    // Quando o telefone do WhatsApp não bate com nenhum associado, mas o
+    // `agente_ia_contatos` já tem `cpf` validado + `sga_associado_encontrado=true`
+    // de rodada anterior, resolver associado pelo CPF. Sem isso, esse telefone
+    // cai como "lead" e dispara o pitch de venda do Vinicius mesmo o usuário
+    // sendo associado conhecido (caso THAIS / 5521985791044 03/06).
+    if (!associado && cpfConfirmadoParaTelefone && contatoIaCache?.sga_associado_encontrado === true) {
+      try {
+        const { data: assocPorCpf } = await supabase
+          .from("associados")
+          .select("id, nome, status, origem_cadastro")
+          .eq("cpf", cpfConfirmadoParaTelefone)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (assocPorCpf) {
+          associado = assocPorCpf as any;
+          console.log(
+            `[whatsapp-webhook] Associado por CPF cacheado (telefone divergente): ${assocPorCpf.nome} (status: ${assocPorCpf.status}) — WhatsApp=${telefoneNormBase}`,
+          );
+        }
+      } catch (e: any) {
+        console.warn(`[whatsapp-webhook] Falha lookup associado por CPF cacheado:`, e?.message || e);
       }
     }
 
