@@ -209,8 +209,12 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // Variáveis de escopo do handler — visíveis no catch raiz para fallback de garantia-de-resposta
+  let telefoneAtual: string | null = null;
+
   try {
     const { telefone, texto, tipo_msg, latitude, longitude, nome_contato } = await req.json();
+    telefoneAtual = telefone;
 
     if (!telefone) {
       return new Response(
@@ -484,6 +488,7 @@ Deno.serve(async (req) => {
             cpf: cpfLimpo,
             cpf_capturado_em: new Date().toISOString(),
             sga_associado_encontrado: encontrado,
+            cpf_tentativas_invalidas: 0,
             ...(nomeSga ? { nome: nomeSga } : {}),
           })
           .eq("id", contato.id);
@@ -502,26 +507,79 @@ Deno.serve(async (req) => {
         }
         console.log(`[agente-consultor-ia] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
         // Segue o fluxo normal abaixo; prompts vão receber o contexto.
-      } else if (cpfCandidato) {
-        await enviarTexto("Esse CPF não parece válido. Pode conferir e me enviar de novo? 😉");
-        return new Response(
-          JSON.stringify({ success: true, gate: "cpf_invalido" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
       } else {
-        // Nenhum CPF — manda saudação padrão com debounce de 10 min
+        // === GARANTIA-DE-RESPOSTA (Maya nunca deixa vácuo) ===
+        // Caso A: cliente mandou número que parece CPF mas não validou (ex.: 10/12 dígitos, dígitos verificadores errados)
+        // Caso B: cliente mandou só dígitos curtos (6–10) — também trata como tentativa de CPF
+        // Caso C: cliente mandou texto livre sem nenhum dígito relevante
+        const pareceTentativaDeCpf =
+          !!cpfCandidato ||
+          (apenasDigitos.length >= 6 && apenasDigitos.length <= 14);
+
+        const tentativasAtuais = Number((contato as any).cpf_tentativas_invalidas || 0);
+
+        if (pareceTentativaDeCpf) {
+          const novasTentativas = tentativasAtuais + 1;
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ cpf_tentativas_invalidas: novasTentativas })
+            .eq("id", contato.id);
+
+          if (novasTentativas >= 3) {
+            // Escalada: oferta explícita de transbordo humano
+            await enviarTexto(
+              "Notei que estamos tendo dificuldade com o CPF 🤔\n\n" +
+              "Se preferir, posso transferir agora para um atendente humano — é só responder *atendente*.\n" +
+              "Ou, se quiser tentar mais uma vez: me envie o CPF *só com números* (11 dígitos)."
+            );
+          } else {
+            await enviarTexto(
+              "Recebi os números, mas não formam um CPF válido (precisa ter *11 dígitos*). " +
+              "Pode conferir e me enviar de novo? 😉\n\n" +
+              "_Se preferir falar com um atendente humano, é só responder *atendente*._"
+            );
+          }
+          return new Response(
+            JSON.stringify({ success: true, gate: "cpf_invalido", tentativas: novasTentativas }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Caso C — texto livre sem indício de CPF: NUNCA fica em silêncio
         const ultimaSolicitacao = contato.cpf_solicitado_em ? new Date(contato.cpf_solicitado_em) : null;
-        const podeReenviar = !ultimaSolicitacao || (Date.now() - ultimaSolicitacao.getTime()) > 10 * 60_000;
-        if (podeReenviar) {
+        const podeReenviarSaudacao =
+          !ultimaSolicitacao || (Date.now() - ultimaSolicitacao.getTime()) > 10 * 60_000;
+
+        if (podeReenviarSaudacao) {
           await enviarTexto(
-            "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF. 😁"
+            "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF (só números, 11 dígitos). 😁"
           );
           await supabase
             .from("agente_ia_contatos")
             .update({ cpf_solicitado_em: new Date().toISOString() })
             .eq("id", contato.id);
         } else {
-          console.log(`[agente-consultor-ia] Gate CPF: debounce ativo (10min) — não reenviei saudação`);
+          // Saudação debounced — mas NÃO ficamos em silêncio: mandamos mensagem de continuidade
+          // (com debounce próprio de 2 min para não floodar caso o cliente mande várias mensagens seguidas)
+          const ultimaContinuidade = (contato as any).ultima_msg_continuidade_em
+            ? new Date((contato as any).ultima_msg_continuidade_em)
+            : null;
+          const podeReenviarContinuidade =
+            !ultimaContinuidade || (Date.now() - ultimaContinuidade.getTime()) > 2 * 60_000;
+
+          if (podeReenviarContinuidade) {
+            await enviarTexto(
+              "Entendi! 🙂 Para eu seguir e te ajudar, primeiro preciso do seu *CPF* (só números, 11 dígitos) — assim localizo seu cadastro.\n\n" +
+              "_Se preferir falar com um atendente humano, é só responder *atendente*._"
+            );
+            await supabase
+              .from("agente_ia_contatos")
+              .update({ ultima_msg_continuidade_em: new Date().toISOString() })
+              .eq("id", contato.id);
+            console.log(`[agente-consultor-ia] Gate CPF: enviei mensagem de continuidade (debounce saudação ativo)`);
+          } else {
+            console.log(`[agente-consultor-ia] Gate CPF: continuidade também em debounce (2min) — cliente em flood`);
+          }
         }
         return new Response(
           JSON.stringify({ success: true, gate: "aguardando_cpf" }),
@@ -1350,7 +1408,11 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
       const message = choice?.message;
 
       if (!message) {
-        resposta = "Desculpe, não consegui processar sua mensagem. Tente novamente.";
+        // Maya nunca deixa vácuo — fallback canônico (começo, meio, fim)
+        resposta = "Tive um probleminha técnico aqui agora 😅\n\n" +
+          "Pode me mandar sua mensagem de novo em alguns segundos? " +
+          "Se preferir, posso te transferir para um *atendente humano* — é só responder *atendente*.";
+        console.warn(`[agente-consultor-ia] fallback_vacuo: motivo=llm_sem_message tel=${telLimpo}`);
         break;
       }
 
@@ -1520,7 +1582,14 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
       }
 
       // Se não tem tool calls, temos a resposta final
-      resposta = message.content || "Desculpe, não consegui processar sua mensagem.";
+      const contentRaw = (message.content || "").toString().trim();
+      if (!contentRaw) {
+        resposta = "Recebi sua mensagem! 🙂 Pode reformular pra eu te entender melhor? " +
+          "Se preferir, posso te transferir para um *atendente humano* — é só responder *atendente*.";
+        console.warn(`[agente-consultor-ia] fallback_vacuo: motivo=llm_content_vazio tel=${telLimpo}`);
+      } else {
+        resposta = contentRaw;
+      }
       break;
     }
 
@@ -1533,7 +1602,15 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
 
 
     // ---- 10. DIVIDIR E ENVIAR RESPOSTA ----
-    const partes = dividirMensagem(resposta, 1000);
+    // Validador de saída: garante começo, meio e fim — Maya nunca manda string vazia/só whitespace
+    const respostaFinal = (resposta || "").toString().trim() ||
+      ("Recebi sua mensagem! 🙂 Pode reformular pra eu te ajudar? " +
+       "Se preferir falar com um *atendente humano*, é só responder *atendente*.");
+    if (respostaFinal !== resposta) {
+      console.warn(`[agente-consultor-ia] validador_saida: resposta substituída por fallback (vazia) tel=${telLimpo}`);
+    }
+
+    const partes = dividirMensagem(respostaFinal, 1000);
 
     for (let i = 0; i < partes.length; i++) {
       await enviarWhatsApp(supabaseUrl, serviceKey, telefone, partes[i]);
@@ -1568,6 +1645,45 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
     );
   } catch (error: any) {
     console.error("[agente-consultor-ia] ERRO:", error);
+    // Maya nunca deixa vácuo: mesmo em erro inesperado, manda uma mensagem ao cliente
+    // (com debounce próprio de 2 min por telefone para não floodar caso o erro se repita)
+    try {
+      if (telefoneAtual) {
+        const telLimpoCatch = telefoneAtual.replace(/\D/g, "");
+        const { data: ct } = await supabase
+          .from("agente_ia_contatos")
+          .select("id, ultima_msg_continuidade_em")
+          .eq("telefone", telLimpoCatch)
+          .maybeSingle();
+        const ultima = ct?.ultima_msg_continuidade_em ? new Date(ct.ultima_msg_continuidade_em) : null;
+        const podeMandar = !ultima || (Date.now() - ultima.getTime()) > 2 * 60_000;
+        if (podeMandar) {
+          await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({
+              telefone: telefoneAtual,
+              mensagem:
+                "Tive um probleminha técnico aqui agora 😅\n\n" +
+                "Pode me mandar sua mensagem de novo em alguns segundos? " +
+                "Se preferir, posso te transferir para um *atendente humano* — é só responder *atendente*.",
+              allow_text: true,
+            }),
+          });
+          if (ct?.id) {
+            await supabase
+              .from("agente_ia_contatos")
+              .update({ ultima_msg_continuidade_em: new Date().toISOString() })
+              .eq("id", ct.id);
+          }
+          console.warn(`[agente-consultor-ia] fallback_vacuo_catch_raiz: enviado tel=${telLimpoCatch}`);
+        } else {
+          console.warn(`[agente-consultor-ia] fallback_vacuo_catch_raiz: debounce ativo tel=${telLimpoCatch}`);
+        }
+      }
+    } catch (fallbackErr) {
+      console.error("[agente-consultor-ia] falha ao enviar fallback de catch raiz:", (fallbackErr as any)?.message);
+    }
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
