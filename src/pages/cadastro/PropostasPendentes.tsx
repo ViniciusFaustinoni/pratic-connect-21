@@ -118,6 +118,18 @@ function isPendenteVistoriaInicial(p: PropostaPendente) {
 function isAguardandoDoc(p: PropostaPendente) {
   return p.status === 'assinado' && p.tem_documento_pendente === true;
 }
+/**
+ * Sub-etapa 1 do Cadastro concluída, sub-etapa 2 (vistoria + liberação p/ Monitoramento) ainda pendente.
+ * Ver mem://logic/operations/cadastro-duas-subetapas
+ */
+function isSubEtapa1Ok(p: PropostaPendente) {
+  return (
+    p.status === 'assinado' &&
+    !!p.documentos_aprovados_em &&
+    p.cadastro_aprovado !== true &&
+    p.tem_documento_pendente !== true
+  );
+}
 function isAgendado(p: PropostaPendente) {
   return p.status === 'assinado' && p.tipo_etapa_analise === 'agendamento_confirmado';
 }
@@ -168,11 +180,28 @@ function getStatusBadge(
   temDocPendente?: boolean,
   instalacaoInfo?: any,
   tipoEtapa?: string | null,
-  proposta?: { plano_tem_roubo_furto?: boolean; vistoria?: { status?: string } | null; cadastro_aprovado?: boolean; tipo_vistoria?: string | null } | null,
+  proposta?: { plano_tem_roubo_furto?: boolean; vistoria?: { status?: string } | null; cadastro_aprovado?: boolean; tipo_vistoria?: string | null; documentos_aprovados_em?: string | null } | null,
 ) {
   // Aguard. Doc só quando realmente há documento pendente do cliente
   if (temDocPendente && status === 'assinado') {
-    return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30 text-[10px] px-1.5">Aguard. Doc</Badge>;
+    return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30 text-[10px] px-1.5">Aguard. Documentos (sub-etapa 1)</Badge>;
+  }
+
+  // Sub-etapa 1 do Cadastro aprovada, mas sub-etapa 2 (vistoria + liberação Monitoramento) ainda pendente.
+  // Ver mem://logic/operations/cadastro-duas-subetapas
+  if (
+    status === 'assinado' &&
+    proposta?.documentos_aprovados_em &&
+    !proposta?.cadastro_aprovado
+  ) {
+    return (
+      <Badge
+        title="Documentos já aprovados. Abra a proposta para finalizar a sub-etapa 2 (vistoria + liberação para Monitoramento)."
+        className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 text-[10px] px-1.5"
+      >
+        Docs OK · Liberar Monitoramento
+      </Badge>
+    );
   }
 
   // Cadastro já aprovou + cenário SEM autovistoria + instalação ainda não concluída
@@ -209,6 +238,7 @@ function getStatusBadge(
   ) {
     return <Badge className="bg-blue-500/15 text-blue-500 border-blue-500/30 text-[10px] px-1.5">Aguard. Instalação</Badge>;
   }
+
 
   const configs: Record<string, { label: string; className: string }> = {
     assinado: { label: 'Aguardando', className: 'bg-warning/15 text-warning border-warning/30' },
@@ -915,6 +945,15 @@ export default function PropostasPendentes() {
                     </Badge>
                   )}
                   {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise, proposta)}
+                  {proposta.documentos_aprovados_em && !proposta.cadastro_aprovado && (
+                    <Badge
+                      variant="outline"
+                      title="Sub-etapa 1 (documentos) já aprovada. Falta a sub-etapa 2 (vistoria + liberação para Monitoramento)."
+                      className="text-[9px] px-1.5 py-0 h-5 border-emerald-500/40 text-emerald-600"
+                    >
+                      Sub-etapa 1 ✓
+                    </Badge>
+                  )}
                   {(proposta.plano?.nome || proposta.plano_nome) && (
                     <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-5 max-w-[60%] truncate">
                       {proposta.plano?.nome || proposta.plano_nome}

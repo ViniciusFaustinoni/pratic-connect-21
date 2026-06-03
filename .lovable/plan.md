@@ -1,73 +1,44 @@
-## Objetivo
+## Diagnóstico
 
-Permitir que o time de Relacionamento edite — sem código — o **conhecimento (FAQ)** e o **comportamento (persona/regras/saudação)** da Maya IA, hoje hardcoded em `supabase/functions/agente-consultor-ia/index.ts`.
+A tela `/cadastro/propostas-pendentes` (lista) NÃO conhece as duas sub-etapas canônicas do Cadastro. Quem mostra "Sub-etapa 1 → Sub-etapa 2" é só o **PropostaApprovalStepper**, que vive dentro da tela de análise individual (`PropostaAnalise`). Por isso o card da lista parece "desatualizado".
 
-## Onde a Maya vive hoje
+**Confirmado em produção agora:**
+- 9 contratos hoje estão em `documentos_aprovados_em IS NOT NULL` + `cadastro_aprovado = false` (sub-etapa 1 OK, sub-etapa 2 pendente).
+- 7 contratos com nada aprovado (sub-etapa 1 pendente).
+- Todos os 9 aparecem na lista com o mesmo badge genérico ("Aguardando" / "Aguard. Vistoria"), sem diferenciar.
 
-- `agente-consultor-ia/index.ts` monta 3 variantes de `systemPrompt` (diretor, associado, lead/visitante).
-- Sidebar do Relacionamento atual (`AppSidebar.tsx`): Transbordo, Análises, E-mails.
+**Causa raiz:** `getStatusBadge()` em `src/pages/cadastro/PropostasPendentes.tsx` (linhas 165–222) só olha `status`, `tem_documento_pendente`, `cadastro_aprovado`, `vistoria` e `instalacao`. Nunca lê `documentos_aprovados_em`, mesmo o hook `usePropostasPendentes` já trazendo esse campo (linhas 219, 347–348, 847). Resultado: a única tela que mostra sub-etapa é a de análise individual; a lista, os KPIs e os filtros ficam cegos para esse estado intermediário.
 
-## Entrega
+## Correção
 
-### 1. Persistência (Supabase)
+Tornar a sub-etapa visível na lista, sem mexer em backend/regra de negócio.
 
-Duas tabelas novas, RLS por role (Relacionamento + Diretoria):
+### 1. Novo badge "Docs OK — Liberar p/ Monitoramento"
+Em `PropostasPendentes.tsx` › `getStatusBadge`:
+- Receber também `documentos_aprovados_em` (já existe no objeto `proposta`).
+- Antes dos blocos atuais de "Aguard. Vistoria" / "Pendente Vistoria Inicial", inserir:
+  - Se `status='assinado'` + `documentos_aprovados_em IS NOT NULL` + `cadastro_aprovado=false` → badge novo (ex.: emerald) `Docs OK · Liberar Monitoramento`.
+- Quando `documentos_aprovados_em IS NULL` + sub-etapa 2 ainda não cabível → manter "Aguardando" atual, mas com label `Aguard. Documentos (sub-etapa 1)` para deixar explícito.
 
-**`maya_ia_comportamento`** (1 linha por audiência — `associado`, `lead`, `diretor`)
-- `audiencia` (enum, PK), `nome_agente`, `persona` (texto longo), `regras_absolutas` (texto), `tom_voz` (texto), `saudacao_inicial` (texto), `atualizado_em`, `atualizado_por`.
+### 2. Predicado + KPI
+- Adicionar predicado `isSubEtapa1Ok(p)` ao lado de `isAguardandoDoc/isPendenteVistoriaInicial`.
+- Incluir o novo grupo nos contadores/abas que listam os pendentes do Cadastro (mesma régua dos chips existentes), para o analista filtrar "só os que faltam liberar Monitoramento".
 
-**`maya_ia_faq`** (base de conhecimento)
-- `id`, `categoria` (ex: planos, cobertura, cobrança, sinistro, geral), `pergunta`, `resposta`, `palavras_chave` (text[]), `audiencias` (text[] — quais variantes recebem), `ativo`, `ordem`, `atualizado_em`, `atualizado_por`.
+### 3. Sinal visual no próprio card (linha 2)
+Pequeno chip auxiliar (ao lado do badge de status) quando `documentos_aprovados_em` setado:
+`Sub-etapa 1 ✓ · falta sub-etapa 2`. Mantém compatibilidade com o badge principal e dá leitura instantânea no scroll.
 
-Seed inicial = extração do conteúdo hardcoded de hoje (persona/regras de cada audiência + FAQs implícitas no prompt).
-
-### 2. Edge `agente-consultor-ia`
-
-- Carregar `maya_ia_comportamento` da audiência atual e substituir os blocos hardcoded por: `Você é {nome_agente}. {persona}\n\n## REGRAS\n{regras}\n\n## TOM\n{tom_voz}\n\n## SAUDAÇÃO\n{saudacao}`.
-- Injetar `maya_ia_faq` filtrada pela audiência como bloco `## BASE DE CONHECIMENTO` no fim do system prompt (somente itens `ativo=true`, ordenado).
-- Cache de 60s em memória para evitar 1 query por mensagem; fallback para o texto hoje hardcoded se a tabela vier vazia (segurança).
-
-### 3. UI: novo item na sidebar do Relacionamento
-
-`AppSidebar.tsx` → adicionar no grupo Relacionamento:
-- **"Maya IA"** → rota `/relacionamento/maya-ia` (ícone `Bot`).
-
-Página com 2 abas (shadcn Tabs):
-
-**Aba "Comportamento"**
-- Seletor de audiência (Associado / Lead / Diretor) — pills no topo.
-- Campos editáveis em cards (Textarea grande + Input):
-  - Nome do agente (input curto)
-  - Persona (textarea — quem ela é, papel)
-  - Regras absolutas (textarea — o que nunca fazer)
-  - Tom de voz (textarea)
-  - Saudação inicial (textarea)
-- Cada campo tem um `<FieldHint>` (tooltip já existente em `src/components/admin/planos/FieldHint.tsx`) com explicação prática + exemplo de impacto na resposta.
-- Botão "Salvar alterações" no rodapé sticky; toast de confirmação; mostra "última edição por X em Y".
-- Botão "Restaurar padrão" (volta ao seed) por audiência.
-
-**Aba "Conhecimento (FAQ)"**
-- Filtro por categoria (chips) + busca por texto.
-- Lista em cards expansíveis (Accordion): cada item mostra pergunta + resposta truncada; expandir abre edição inline (pergunta, resposta rich textarea, categoria select, audiências multi-select via Checkbox, palavras-chave como tag input, toggle ativo).
-- Drag handle para reordenar (`ordem`) — opcional v1, pode ser só Input numérico.
-- Botão "+ Novo conhecimento" abre Dialog com mesmo formulário em branco.
-- Tooltips em cada campo (palavras-chave: "Termos que ajudam a Maya a recuperar este item — separe por vírgula"; audiências: "Quais perfis recebem este conhecimento no prompt"; etc.).
-- Ações por card: Editar, Duplicar, Desativar/Ativar, Excluir (com confirmação).
-
-### 4. Permissão
-
-- Visível para `relacionamento`, `gerente_relacionamento`, `diretor`, `desenvolvedor`.
-- `usePermissions` ganha flag `canManageMayaIA` derivada dessas roles.
-
-## Detalhes técnicos
-
-- Hooks novos: `useMayaComportamento(audiencia)`, `useMayaFaq()` — React Query com `invalidate` no save.
-- Validação client: persona/regras não vazias; pergunta+resposta obrigatórias no FAQ.
-- Sem realtime (não é necessário); edge invalida cache local a cada 60s.
-- Migration: tabelas + GRANT (`authenticated` + `service_role`) + RLS via `has_role` para Relacionamento/Diretoria; seed.
+### 4. Tooltip do badge novo
+Texto curto: "Documentos já aprovados. Clique para abrir e finalizar a sub-etapa 2 (vistoria + liberação para Monitoramento)."
 
 ## Fora de escopo
+- Não alterar `PropostaApprovalStepper`, edges (`aprovar-documentos-cadastro`, `aprovar-proposta`), triggers DB nem o hook (`usePropostasPendentes` já entrega o campo).
+- Não mexer no fluxo de Troca (isenta da sub-etapa 1) — predicado novo já filtra por `documentos_aprovados_em IS NOT NULL`, então Trocas não disparam o badge indevidamente.
 
-- Versionamento/histórico de edições (fica para v2; por ora guardamos só `atualizado_por`+`atualizado_em`).
-- Editor de tools/funções da Maya (continua no código).
-- Configuração da Maya em outros canais (Vinicius/agente-consultor-ia para vendas continua usando os mesmos blocos via audiência `lead`).
+## Arquivos
+- `src/pages/cadastro/PropostasPendentes.tsx` (badge + predicado + chip + assinatura de `getStatusBadge`).
+
+## Validação
+- Abrir a lista logada como admin: os 9 contratos identificados devem passar a exibir o novo badge "Docs OK · Liberar Monitoramento".
+- Os 7 contratos sem documentos aprovados devem mostrar "Aguard. Documentos (sub-etapa 1)".
+- Os 33 com `cadastro_aprovado=true` continuam com badges atuais ("Pendente Vistoria Inicial" / "Aguard. Instalação" etc).
