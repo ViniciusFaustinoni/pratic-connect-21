@@ -373,12 +373,11 @@ export function EtapaAssinaturaContrato({
         setEtapaInterna('aguardando_assinatura');
       }
     } catch (error: any) {
-      console.error('[EtapaAssinatura] Erro no Autentique:', error);
-      setErro(error.message || 'Erro ao enviar para assinatura digital');
-      setEtapaInterna('erro');
+      await tratarErroEdge(error, 'Erro ao enviar para assinatura digital');
     } finally {
       sendingRef.current = false;
     }
+
   };
 
   // ═══ 3. Inicializar (uma única vez) ═══
