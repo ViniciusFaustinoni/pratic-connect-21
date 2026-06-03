@@ -17903,6 +17903,81 @@ export type Database = {
           },
         ]
       }
+      maya_ia_comportamento: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          audiencia: string
+          nome_agente: string
+          persona: string
+          regras_absolutas: string
+          saudacao_inicial: string
+          tom_voz: string
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          audiencia: string
+          nome_agente?: string
+          persona?: string
+          regras_absolutas?: string
+          saudacao_inicial?: string
+          tom_voz?: string
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          audiencia?: string
+          nome_agente?: string
+          persona?: string
+          regras_absolutas?: string
+          saudacao_inicial?: string
+          tom_voz?: string
+        }
+        Relationships: []
+      }
+      maya_ia_faq: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          audiencias: string[]
+          categoria: string
+          criado_em: string
+          id: string
+          ordem: number
+          palavras_chave: string[]
+          pergunta: string
+          resposta: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          audiencias?: string[]
+          categoria?: string
+          criado_em?: string
+          id?: string
+          ordem?: number
+          palavras_chave?: string[]
+          pergunta: string
+          resposta: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          audiencias?: string[]
+          categoria?: string
+          criado_em?: string
+          id?: string
+          ordem?: number
+          palavras_chave?: string[]
+          pergunta?: string
+          resposta?: string
+        }
+        Relationships: []
+      }
       metas_vendas: {
         Row: {
           ano: number
