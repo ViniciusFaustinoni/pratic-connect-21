@@ -466,17 +466,49 @@ export default function AtribuicaoManualTab() {
       const vistoriadorId = overId.replace('vist-', '');
       const servico = active.data.current;
       setConfirmDialog({ servico, vistoriadorId });
+      setRequerRastreadorConfirm(null);
     }
   };
 
-  const handleConfirm = () => {
+  const precisaDecisaoRastreadorConfirm = !!ctxSubFipeConfirm?.precisaDecisaoRastreador;
+
+  const handleConfirm = async () => {
     if (!confirmDialog) return;
+    if (precisaDecisaoRastreadorConfirm && requerRastreadorConfirm === null) return;
+
+    // Persiste a decisão antes de chamar a mutation (servicos.requer_rastreador_sub_fipe)
+    if (precisaDecisaoRastreadorConfirm && typeof requerRastreadorConfirm === 'boolean') {
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase
+          .from('servicos')
+          .update({
+            requer_rastreador_sub_fipe: requerRastreadorConfirm,
+            requer_rastreador_decidido_em: new Date().toISOString(),
+            requer_rastreador_decidido_por: user?.id ?? null,
+          })
+          .eq('id', confirmDialog.servico.id);
+
+        if (requerRastreadorConfirm === true && ctxSubFipeConfirm?.veiculoId) {
+          await supabase
+            .from('instalacoes')
+            .update({ dispensa_rastreador: false })
+            .eq('veiculo_id', ctxSubFipeConfirm.veiculoId)
+            .in('status', ['agendada', 'em_rota', 'em_andamento', 'em_analise']);
+        }
+      } catch (e) {
+        console.error('[AtribuicaoManual] falha ao persistir decisão de rastreador sub-FIPE', e);
+      }
+    }
+
     atribuirMutation.mutate({
       servicoId: confirmDialog.servico.id,
       profissionalId: confirmDialog.vistoriadorId,
       isBase: !!confirmDialog.servico.isBase,
     });
     setConfirmDialog(null);
+    setRequerRastreadorConfirm(null);
   };
 
   const handleConfirmPrestador = async () => {
