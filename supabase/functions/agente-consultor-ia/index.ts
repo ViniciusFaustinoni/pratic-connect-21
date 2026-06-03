@@ -794,11 +794,23 @@ Deno.serve(async (req) => {
     let numeroAtendimento = "";
 
     if (!isDiretor) {
-      // Buscar na tabela associados pelo telefone/whatsapp
+      // CACHE: se o contato já tem CPF validado e o SGA achou associado em sessão
+      // anterior, trata como associado SEM depender de bater telefone (cobre casos
+      // em que o WhatsApp diverge do telefone cadastrado em `associados`).
+      if (contato.cpf && (contato as any).sga_associado_encontrado === true && contato.nome) {
+        isAssociado = true;
+        associadoNome = contato.nome;
+        associadoStatus = (contato as any).sga_associado_status || "ativo";
+        console.log(`[agente-consultor-ia] Associado por CPF cacheado: ${associadoNome} (status: ${associadoStatus})`);
+      }
+
+      // Buscar na tabela associados pelo telefone/whatsapp (fallback / fonte canônica quando casa)
       const orFilterAssociado = telVariantes.flatMap(t => [
         `telefone.ilike.%${t}%`,
         `whatsapp.ilike.%${t}%`,
       ]).join(",");
+
+
 
       const { data: associadoMatch } = await supabase
         .from("associados")
