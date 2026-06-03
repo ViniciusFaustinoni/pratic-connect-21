@@ -122,13 +122,16 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   useEffect(() => {
     if (isLoading) return;
     if (!mensagens?.length) return;
-    // dois ticks: 1º p/ o React pintar, 2º p/ imagens/áudios medirem altura
+    // múltiplos ticks para esperar markdown/imagens/áudios medirem altura
     requestAnimationFrame(() => {
       scrollToBottom('auto');
       setTimeout(() => scrollToBottom('auto'), 80);
+      setTimeout(() => scrollToBottom('auto'), 250);
+      setTimeout(() => scrollToBottom('auto'), 600);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [telefone, isLoading]);
+  }, [telefone, isLoading, mensagens?.length]);
+
 
   // Auto scroll a cada nova mensagem (respeitando a intenção do usuário)
   useEffect(() => {
@@ -367,9 +370,10 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
 
 
       {/* Messages */}
-      <div className="flex-1 overflow-hidden relative">
-        <ScrollArea className="h-full" ref={scrollRef}>
-          <div className="space-y-2 p-4">
+      <div className="flex-1 min-w-0 overflow-hidden relative">
+        <ScrollArea className="h-full w-full" ref={scrollRef}>
+          <div className="space-y-2 p-4 min-w-0 max-w-full">
+
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -395,15 +399,16 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                         </Badge>
                       </div>
                     )}
-                    <div className={cn('flex', isEntrada ? 'justify-start' : 'justify-end')}>
+                    <div className={cn('flex min-w-0', isEntrada ? 'justify-start' : 'justify-end')}>
                       <div
                         className={cn(
-                          'max-w-[75%] p-3 rounded-lg shadow-sm',
+                          'max-w-[75%] min-w-0 p-3 rounded-lg shadow-sm break-words [overflow-wrap:anywhere]',
                           isEntrada
                             ? 'bg-muted rounded-tl-none'
                             : 'bg-green-100 dark:bg-green-900/30 rounded-tr-none'
                         )}
                       >
+
                         <div className="flex items-center gap-1.5 mb-1">
                           {isEntrada ? (
                             <>
@@ -460,8 +465,9 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                         ) : msg.tipo === 'image' && msg.media_url ? (
                           <img src={msg.media_url} alt="Imagem" className="max-w-[250px] rounded" />
                         ) : !isEntrada && msg.mensagem ? (
-                          <div className="prose prose-sm max-w-none dark:prose-invert text-sm">
+                          <div className="prose prose-sm max-w-none dark:prose-invert text-sm break-words [overflow-wrap:anywhere] [&_p]:break-words [&_a]:break-all">
                             <ReactMarkdown>{msg.mensagem}</ReactMarkdown>
+
                           </div>
                         ) : (
                           <p className="text-sm whitespace-pre-wrap break-words">{msg.mensagem}</p>
