@@ -216,6 +216,8 @@ const AnalisesRelacionamento = lazy(() => import("./pages/relacionamento/Analise
 const TransbordosRelacionamento = lazy(() => import("./pages/relacionamento/TransbordosRelacionamento"));
 
 const EmailsRelacionamento = lazy(() => import("./pages/relacionamento/emails/EmailsRelacionamento"));
+const MayaIA = lazy(() => import("./pages/relacionamento/MayaIA"));
+
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
 const AprovacoesUnificadas = lazy(() => import("./pages/monitoramento/AprovacoesUnificadas"));
