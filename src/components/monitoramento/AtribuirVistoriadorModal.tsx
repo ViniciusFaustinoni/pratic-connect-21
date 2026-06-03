@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   User, Car, MapPin, Clock, Star, AlertTriangle,
-  XCircle, Loader2, Check
+  XCircle, Loader2, Check, Radio,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription,
@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useContextoSubFipeServico } from '@/hooks/useContextoSubFipeServico';
 
 // ============================================
 // TIPOS
