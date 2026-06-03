@@ -25976,6 +25976,9 @@ export type Database = {
           reagendamento_followup_count: number | null
           reagendamento_token: string | null
           reagendamento_ultimo_followup_em: string | null
+          requer_rastreador_decidido_em: string | null
+          requer_rastreador_decidido_por: string | null
+          requer_rastreador_sub_fipe: boolean | null
           ressalvas: string | null
           ressalvas_instalador: string | null
           resultado_manutencao: string | null
@@ -26104,6 +26107,9 @@ export type Database = {
           reagendamento_followup_count?: number | null
           reagendamento_token?: string | null
           reagendamento_ultimo_followup_em?: string | null
+          requer_rastreador_decidido_em?: string | null
+          requer_rastreador_decidido_por?: string | null
+          requer_rastreador_sub_fipe?: boolean | null
           ressalvas?: string | null
           ressalvas_instalador?: string | null
           resultado_manutencao?: string | null
@@ -26232,6 +26238,9 @@ export type Database = {
           reagendamento_followup_count?: number | null
           reagendamento_token?: string | null
           reagendamento_ultimo_followup_em?: string | null
+          requer_rastreador_decidido_em?: string | null
+          requer_rastreador_decidido_por?: string | null
+          requer_rastreador_sub_fipe?: boolean | null
           ressalvas?: string | null
           ressalvas_instalador?: string | null
           resultado_manutencao?: string | null
