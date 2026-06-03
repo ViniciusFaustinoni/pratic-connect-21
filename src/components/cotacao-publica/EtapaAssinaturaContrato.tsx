@@ -594,15 +594,26 @@ export function EtapaAssinaturaContrato({
         .update({ email_solicitante: emailLocal })
         .eq('id', cotacaoId)
         .eq('token_publico', tokenPublico);
+      // Quando já existe contrato (caso EMAIL_INVALIDO no autentique-create após geração),
+      // propaga o novo e-mail para o contrato para o reprocessamento usar o valor correto.
+      if (contratoId) {
+        await publicSupabase
+          .from('contratos')
+          .update({ cliente_email: emailLocal })
+          .eq('id', contratoId);
+      }
       setEmailEfetivo(emailLocal);
+      setErro(null);
       initRef.current = false;
       processingRef.current = false;
+      sendingRef.current = false;
       setEtapaInterna('verificando');
     } catch (e: any) {
       toast.error('Erro ao salvar email');
     } finally {
       setSalvandoEmail(false);
     }
+
   };
 
   // ═══════════════════════════════════════════════
