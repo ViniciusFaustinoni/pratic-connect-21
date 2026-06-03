@@ -1,119 +1,124 @@
-# Por que Maya não respondeu o "Gostaria de solicitar um reboque"
+# Diagnóstico confirmado
 
-## Diagnóstico (caso THAIS / 5521992593830 — 03/06 13:23 BRT)
+Reproduzi o caso como **admin** no preview, abri a proposta do DIOGO e cliquei em **Aprovar documentação (Monitoramento finaliza)**.
 
-Cronologia real no banco + logs:
+O resultado real foi:
+- a UI abre normalmente o modal de confirmação
+- ao confirmar, a edge **`aprovar-proposta`** responde **409**
+- erro retornado: **`caminho_publico_incompleto`**
+- verificações do backend: **`instalacao_concluida,instalacao_ativa,agendamento_base,vistoria_incompleta`**
 
-```
-16:23:49  Cliente: "Gostaria de solicitar um reboque"
-16:23:58  Maya:    "informe o seu CPF"              ← via Meta ✓
-16:24:16  Cliente: "15230046732"
-16:24:22  Maya:    "Encontrei você, THAIS!"         ← via Meta ✓
-16:24:48  Cliente: "Gostaria de solicitar um reboque"   ← repetiu
-16:24:58  [transbordo] aberto, motivo='sinistro_emergencia', prioridade='alta'
-16:25:04  agente-consultor-ia: "Resposta final (150 chars)"
-16:25:06  whatsapp-send-text: ERRO "WhatsApp não está conectado"
-          ❌ NENHUMA mensagem foi para o WhatsApp da cliente
-```
+Ou seja: **o sistema está contraditório**. A tela diz que o caso já está pronto para seguir, mas o backend diz que o caminho público ainda não foi concluído.
 
-Tem **dois bugs encadeados**, ambos de Maya, mais um item cosmético do painel.
+## Prova técnica coletada
 
----
+### No browser
+- botão exibido: **Aprovar documentação (Monitoramento finaliza)"
+- toast após confirmar:
+  - "Não é possível aprovar: o cliente ainda não concluiu o caminho público... [caminho_publico_incompleto]"
 
-## Bug 1 — força Evolution para a própria resposta (Evolution está caído)
+### Na edge `aprovar-proposta`
+- log capturado:
+  - `BLOQUEIO caminho_publico_incompleto`
+  - `motivos: instalacao_concluida, instalacao_ativa, agendamento_base, vistoria_incompleta`
 
-`supabase/functions/agente-consultor-ia/index.ts` linha 2188 envia toda
-resposta da Maya com `force_provider: "evolution"`.
+### Nos dados do caso
+- existe **1 serviço** do tipo `vistoria_entrada`
+- `modalidade = autovistoria`
+- `origem = autovistoria_publica`
+- `profissional_id = null`
+- `video_360_url` no **serviço** está preenchido
+- existem **32 mídias** em `cotacoes_vistoria_fotos`
+- existe **1 vídeo** em `cotacoes_vistoria_fotos` (`tipo = video_360`)
+- existe **1 vistoria materializada** para o contrato
+- nessa `vistorias`, o campo **`video_360_url` está `null`**
 
-Estado real das instâncias hoje:
+## Conclusão
 
-| instância    | provedor | status         | principal |
-|--------------|----------|----------------|-----------|
-| sga-pratic   | evolution| `disconnected` | sim       |
-| meta-whatsapp| meta     | `open`         | não       |
+O DIOGO **cumpriu o ciclo canônico do caso dele**, mas houve **dessincronia de materialização/sync**:
+- a mídia existe
+- o serviço enxerga o vídeo
+- a vistoria materializada não recebeu o `video_360_url`
+- o guard do backend valida a `vistorias` materializada + `vistoria_fotos`
+- por isso ele classifica como **`vistoria_incompleta`**
 
-Todos os disparos sistêmicos (template "Encontrei você", cobranças,
-serviço atribuído) vão via Meta e chegam. Só as respostas da Maya morrem,
-porque o force_provider ignora o provedor ativo e tenta uma Evolution que
-está down — log explícito `WhatsApp não está conectado`.
+# Resposta objetiva às suas 3 dúvidas
 
-Isso é a causa direta de "Maya não respondeu nada após o reboque": ela
-respondeu, mas o envio caiu silenciosamente.
+## 1) “O sistema errou?”
+**Sim.**
+A UI permite uma ação que o backend necessariamente vai bloquear para esse contrato.
 
-**Correção:** remover `force_provider: "evolution"` em `enviarWhatsApp`
-(linha 2188). Sem o force, o `whatsapp-send-text` usa o provedor ativo
-(hoje Meta) — mesmo caminho que já funciona para todo o resto.
+## 2) “Tem a ver com as mudanças dos últimos dias?”
+**Sim, parcialmente.**
+Não parece que as mudanças recentes criaram a falta do vídeo em si, mas elas **expuseram e agravaram** o problema:
+- o guard canônico da edge ficou mais rígido/correto
+- a UI do stepper continua liberando o botão com base em um estado mais permissivo
+- resultado: ficou um **descasamento entre frontend e backend**
 
-## Bug 2 — Maya transbordou em vez de responder pela FAQ
+Em resumo:
+- **bug de dados/sync**: `vistorias.video_360_url = null`
+- **bug de UX/regra de tela**: a tela mostra “Monitoramento finaliza” e deixa clicar, mesmo com o guard backend ainda reprovando
 
-A regra canônica (memória `transbordo-relacionamento-canonico` + prompt
-linhas 703-705) é clara:
+## 3) “Entrou pela regra antiga e precisa de saneamento?”
+**Não parece ser caso de regra antiga do veículo/fluxo legado.**
+O caso é atual, materializado como `autovistoria_publica`, com mídia nova e serviço novo.
 
-> Reboque, guincho, pane, chaveiro, bateria, pneu → resolve pela FAQ de
-> Assistência 24h (canais 0800 + WhatsApp). NÃO chamar
-> solicitar_atendente_humano.
+O que ele **precisa** é de **saneamento de dados desse padrão quebrado**, não por ser fluxo antigo, e sim por ter caído no gap de sincronização:
+- `servicos.video_360_url` preenchido
+- `cotacoes_vistoria_fotos` com vídeo
+- `vistorias.video_360_url` nulo
 
-Mesmo assim a Maya classificou "Gostaria de solicitar um reboque" como
-`motivo='sinistro_emergencia'` e abriu transbordo. Duas causas prováveis,
-ambas no prompt:
+# Plano de implementação
 
-1. A linha 699 já manda enviar FAQ + transbordar para "sinistro real"
-   (acidente/roubo/furto/colisão/incêndio). O modelo está estendendo essa
-   regra a reboque porque a palavra fica próxima de "emergência".
-2. A regra anti-transbordo da 704 está descritiva, sem exemplo do
-   classificador. Falta um veto explícito do tipo "reboque NUNCA é
-   motivo='sinistro_emergencia'".
+## 1. Corrigir o caso do DIOGO imediatamente
+- preencher a `vistorias.video_360_url` a partir da mídia já existente
+- revalidar a aprovação em ambiente real
+- confirmar que o contrato sai do bloqueio sem bypass manual
 
-**Correção do prompt em `agente-consultor-ia/index.ts` (linhas 694-706):**
+## 2. Saneamento histórico do mesmo padrão
+- localizar todos os casos com esta assinatura:
+  - `vistorias.modalidade = 'autovistoria'`
+  - `vistorias.video_360_url is null`
+  - existe vídeo em `cotacoes_vistoria_fotos` e/ou `servicos.video_360_url`
+- gerar backfill seguro e idempotente
+- deixar relatório dos contratos afetados
 
-- Reforçar no bloco "QUANDO NÃO TRANSBORDAR" (704): listar reboque/guincho/
-  pane/chaveiro/bateria/pneu como **assistência operacional pura** e
-  proibir `motivo='sinistro_emergencia'` para esses casos.
-- Adicionar regra de ordem: primeiro buscar resposta na FAQ; só
-  transbordar se a FAQ não cobrir.
-- Deixar explícito que `sinistro_emergencia` é exclusivo de acidente,
-  colisão, batida, roubo, furto e incêndio — nada mais.
+## 3. Blindar a materialização/sync da autovistoria
+- ajustar o ponto canônico que materializa a vistoria para sempre carregar o vídeo 360
+- garantir cobertura para os dois caminhos observados:
+  - vídeo vindo de `cotacoes_vistoria_fotos`
+  - vídeo já presente em `servicos.video_360_url`
+- manter idempotência
 
-## Bug 3 (cosmético) — painel mostra mensagens antigas no topo
+## 4. Alinhar a UI com o mesmo gate do backend
+- impedir que o stepper mostre **“Aprovar documentação (Monitoramento finaliza)”** quando a edge ainda reprovaria por `caminho_publico_incompleto`
+- mostrar o motivo correto para o analista antes do clique
+- evitar o falso positivo visual de “caso pronto” quando ainda há dessincronia técnica
 
-O ChatPanel está correto: `useWhatsAppHistorico` retorna as mensagens
-desse telefone (a entrada "Gostaria de solicitar um reboque" das 13:24
-está no banco e seria renderizada). O que o usuário vê na captura é o
-**topo** da timeline com 3 mensagens muito parecidas de 15/04 (welcome
-de lead "Sou o Vinicius, consultor virtual…"), porque o auto-scroll dispara
-antes do conteúdo terminar de medir altura quando há muitas mensagens
-antigas no histórico. Não é dados faltando — é ordem de render.
+## 5. Corrigir a rotulagem enganosa do fluxo
+- revisar os textos que hoje sugerem **“vistoria agendada/presencial”** para um caso que, na prática, foi **autovistoria pública concluída**
+- alinhar o resumo do cadastro e o link público ao estado canônico
 
-**Correção opcional (só se quiser fechar nessa mesma rodada):** no
-ChatPanel `useEffect` de rolagem inicial (linhas 121-131), trocar o
-`setTimeout(80)` por um `ResizeObserver` no viewport que reescaneia até
-`scrollHeight` parar de crescer, então rola para o fim. Sem isso, o
-painel ainda funciona — basta o operador rolar uma vez para baixo.
+# Detalhes técnicos
 
-Se quiser, deixo a parte 3 para depois e foco em 1 e 2 — que são o
-"Maya silenciosa" de verdade.
+## Arquivos diretamente envolvidos
+- `supabase/functions/aprovar-proposta/index.ts`
+- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`
+- possivelmente o ponto de materialização/sync da autovistoria e o helper de etapa pública
 
----
+## Evidência do descompasso atual
+- frontend libera a ação no stepper
+- backend exige uma das condições:
+  - autovistoria enxuta concluída
+  - vistoria presencial materializada
+  - agendamento ativo
+  - instalação ativa/concluída
+- neste contrato, o backend cai em `vistoria_incompleta` porque a vistoria materializada ficou sem o vídeo
 
-## Limpeza do caso atual
+## Resultado esperado após a correção
+- o caso DIOGO passa sem erro
+- casos históricos iguais deixam de travar
+- a tela não promete aprovação quando o backend ainda bloquearia
+- o resumo do fluxo passa a refletir o estado real do caso
 
-A pausa `transbordo_humano` da THAIS expira às 13:29 BRT (curta porque
-o resumo já foi marcado como `encerrado_humano`). Após o fix 1+2, a
-próxima mensagem dela já recebe FAQ de Assistência 24h normalmente.
-Nenhum ajuste manual no banco é necessário.
-
-## Validação pós-deploy
-
-1. Deploy `agente-consultor-ia` (com fix 1 + 2).
-2. Esperar a pausa da THAIS expirar (≤5 min).
-3. Pelo WhatsApp dela, repetir "Gostaria de solicitar um reboque".
-4. Confirmar nos logs: `whatsapp-send-text … via Meta` + linha em
-   `whatsapp_mensagens` com a resposta de FAQ (telefones de Assistência
-   24h), SEM novo transbordo.
-
-## Memória
-
-Atualizar `mem://logic/operations/transbordo-relacionamento-canonico`
-adicionando: "Toda resposta da Maya sai pelo provedor ativo
-(`whatsapp-send-text` sem `force_provider`). Hardcode de provedor na
-edge da IA quebra atendimento quando o provedor preferido cai."
+Se você aprovar, eu implemento a correção completa começando pelo caso do DIOGO e pelo saneamento do padrão quebrado.
