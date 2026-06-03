@@ -616,6 +616,52 @@ Deno.serve(async (req) => {
     const msgForaHorario = config.mensagem_fora_horario || "";
     const responderFora = config.responder_fora_horario === "true";
 
+    // ---- 3.5 GATE FORA DE HORÁRIO COMERCIAL ----
+    // Aplica configuração da UI (Configurações › Agente Consultor IA › Comportamento).
+    // Janela canônica: Seg–Sex 08:00–18:00 BRT. Fora disso, se `responder_fora_horario=false`,
+    // a IA envia a `mensagem_fora_horario` cadastrada e encerra (com debounce de 30 min para
+    // não floodar). Se `responder_fora_horario=true`, segue o fluxo normal.
+    try {
+      const agoraBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const dow = agoraBRT.getDay(); // 0=dom, 6=sáb
+      const hour = agoraBRT.getHours();
+      const foraHorario = dow === 0 || dow === 6 || hour < 8 || hour >= 18;
+      if (foraHorario && !responderFora && msgForaHorario.trim()) {
+        const ultimaFora = (contato as any).ultima_msg_fora_horario_em
+          ? new Date((contato as any).ultima_msg_fora_horario_em)
+          : null;
+        const podeReenviar = !ultimaFora || (Date.now() - ultimaFora.getTime()) > 30 * 60_000;
+        if (podeReenviar) {
+          await supabase.functions.invoke("whatsapp-send-text", {
+            body: { telefone: telLimpo, mensagem: msgForaHorario, allow_text: true },
+          });
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ ultima_msg_fora_horario_em: new Date().toISOString() })
+            .eq("id", contato.id);
+          console.log(`[agente-consultor-ia] [fora_horario] mensagem enviada para ${telLimpo}`);
+        } else {
+          console.log(`[agente-consultor-ia] [fora_horario] em debounce (30min) — silêncio intencional`);
+        }
+        return new Response(
+          JSON.stringify({ success: true, gate: "fora_horario" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } catch (e) {
+      console.warn(`[agente-consultor-ia] [fora_horario] falha no gate, seguindo fluxo normal:`, (e as any)?.message);
+    }
+
+    // Observabilidade: estado da config aplicada nesta requisição
+    console.log(`[maya_config] ${JSON.stringify({
+      agente_ativo: config.agente_ativo !== "false",
+      nome_agente: nomeAgente,
+      has_instrucoes: !!instrucoes,
+      has_apresentacao: !!apresentacao,
+      responder_fora_horario: responderFora,
+      has_msg_fora_horario: !!msgForaHorario,
+    })}`);
+
     // ---- 4. DETECTAR DIRETOR ----
     let isDiretor = false;
     let diretorNome = "";
