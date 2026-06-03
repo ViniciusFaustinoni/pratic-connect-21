@@ -229,7 +229,9 @@ export function useCriarVistoriaAgendada() {
           contrato_id: contratoId,
           data_agendada: dataAgendada,
           horario_agendado: null,
-          periodo,
+          // `vistorias` não possui coluna `periodo` — período é gravado
+          // em `instalacoes`/`servicos` que materializam essa vistoria.
+
           modalidade: 'presencial',
           status: 'pendente',
           tipo: 'instalacao' as any,
