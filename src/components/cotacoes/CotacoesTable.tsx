@@ -309,7 +309,8 @@ export function CotacoesTable({
                   </TableCell>
                   
                   {/* Consultor */}
-                  <TableCell className="hidden lg:table-cell py-3">
+                  <TableCell className="hidden lg:table-cell py-3 max-w-0">
+
                     {cotacao.vendedor?.nome && (
                       <div className="flex items-center gap-1.5 min-w-0" title={cotacao.vendedor.nome}>
                         <UserAvatar name={cotacao.vendedor.nome} size="sm" className="h-5 w-5 text-[9px] shrink-0" />
