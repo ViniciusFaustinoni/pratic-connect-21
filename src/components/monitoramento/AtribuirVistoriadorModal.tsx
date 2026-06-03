@@ -63,7 +63,7 @@ export interface AtribuirVistoriadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vistoria: VistoriaParaAtribuir | null;
-  onSave: (vistoriadorId: string, executorTipo?: ExecutorTipo) => void;
+  onSave: (vistoriadorId: string, executorTipo?: ExecutorTipo, requerRastreador?: boolean | null) => void;
 }
 
 // ============================================
