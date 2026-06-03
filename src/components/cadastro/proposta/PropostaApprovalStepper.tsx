@@ -185,9 +185,8 @@ export function PropostaApprovalStepper({
     });
   };
 
-  // Sub-etapa 1 do Cadastro (aprovação dos documentos) é gate para sub-etapa 2.
-  // Ver mem://logic/operations/cadastro-duas-subetapas
-  const subEtapa1Liberada = !!documentosAprovadosEm;
+
+
 
   // Quando o cadastro NÃO avalia fotos (plano sem R&F ou vistoria agendada
   // ainda não realizada), o stepper fica com 2 etapas: Documentos + Liberação.
