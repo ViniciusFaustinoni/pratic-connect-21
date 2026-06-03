@@ -1578,7 +1578,14 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
       }
 
       // Se não tem tool calls, temos a resposta final
-      resposta = message.content || "Desculpe, não consegui processar sua mensagem.";
+      const contentRaw = (message.content || "").toString().trim();
+      if (!contentRaw) {
+        resposta = "Recebi sua mensagem! 🙂 Pode reformular pra eu te entender melhor? " +
+          "Se preferir, posso te transferir para um *atendente humano* — é só responder *atendente*.";
+        console.warn(`[agente-consultor-ia] fallback_vacuo: motivo=llm_content_vazio tel=${telLimpo}`);
+      } else {
+        resposta = contentRaw;
+      }
       break;
     }
 
