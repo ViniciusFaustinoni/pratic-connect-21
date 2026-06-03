@@ -143,13 +143,13 @@ export function CotacoesTable({
                   />
                 </TableHead>
               )}
-              <TableHead className="w-[230px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
+              <TableHead className="w-[180px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
               <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Cliente</TableHead>
               <TableHead className="hidden md:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Veículo</TableHead>
               <TableHead className="hidden lg:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">FIPE</TableHead>
               <TableHead className="hidden lg:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Consultor</TableHead>
               <TableHead className="hidden sm:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Data</TableHead>
-              <TableHead className="w-[110px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Ações</TableHead>
+              <TableHead className="w-[92px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -260,7 +260,7 @@ export function CotacoesTable({
                   </TableCell>
 
                   {/* Cliente */}
-                  <TableCell className="py-3">
+                  <TableCell className="py-3 max-w-0">
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white bg-gradient-to-br",
@@ -287,7 +287,7 @@ export function CotacoesTable({
                   </TableCell>
                   
                   {/* Veículo */}
-                  <TableCell className="hidden md:table-cell py-3">
+                  <TableCell className="hidden md:table-cell py-3 max-w-0">
                     <div className="min-w-0">
                       <p className="text-sm truncate leading-tight">
                         {cotacao.veiculo_marca} {cotacao.veiculo_modelo}
@@ -309,7 +309,8 @@ export function CotacoesTable({
                   </TableCell>
                   
                   {/* Consultor */}
-                  <TableCell className="hidden lg:table-cell py-3">
+                  <TableCell className="hidden lg:table-cell py-3 max-w-0">
+
                     {cotacao.vendedor?.nome && (
                       <div className="flex items-center gap-1.5 min-w-0" title={cotacao.vendedor.nome}>
                         <UserAvatar name={cotacao.vendedor.nome} size="sm" className="h-5 w-5 text-[9px] shrink-0" />
