@@ -691,18 +691,23 @@ Após a tool responder:
 - Se \`erro_transitorio: true\`: chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='SGA fora — cliente pediu boleto').
 - Se o cliente disser que pagou um boleto que aparece em aberto, ou questionar valor/data: chame *solicitar_atendente_humano* (motivo='reclamacao').
 
-## QUANDO CHAMAR A TOOL solicitar_atendente_humano (OBRIGATÓRIO)
-Chame SEMPRE que o associado:
-- Pedir retorno, ligação, posicionamento ou disser "ainda sem retorno", "ninguém me ligou", "preciso de um retorno", "quero falar com alguém".
+## REGRA DE ORDEM (LEIA ANTES DE QUALQUER COISA)
+1. PRIMEIRO procure a resposta na BASE DE CONHECIMENTO (FAQ) abaixo. Se a FAQ cobre o pedido, responda direto com a FAQ — NÃO chame solicitar_atendente_humano.
+2. SÓ chame solicitar_atendente_humano quando a FAQ não cobrir E o caso bater EXATAMENTE numa das hipóteses listadas abaixo.
+
+## QUANDO **NÃO** TRANSBORDAR (resolva sozinha pela FAQ — é a regra padrão)
+- **Assistência veicular operacional**: reboque, guincho, pane (mecânica/elétrica/combustível), socorro mútuo, chaveiro, bateria, pneu furado, troca de pneu, carro/moto não pega, sem combustível, chave trancada. Esses pedidos são SEMPRE resolvidos enviando os canais da FAQ de Assistência 24h (0800 + WhatsApp da Assistência). NUNCA chame solicitar_atendente_humano para esses casos. NUNCA classifique reboque/guincho/pane como `sinistro_emergencia` — não é sinistro, é assistência operacional.
+- Só transborde se o cliente, DEPOIS de receber os canais da Assistência 24h, escrever de novo dizendo explicitamente que quer falar com pessoa do Relacionamento (não com a Assistência).
+- Qualquer pergunta coberta pela FAQ: responda direto.
+
+## QUANDO CHAMAR A TOOL solicitar_atendente_humano (lista FECHADA)
+Chame APENAS quando o associado:
+- Pedir retorno, ligação, posicionamento ou disser "ainda sem retorno", "ninguém me ligou", "preciso de um retorno", "quero falar com alguém do Relacionamento".
 - Pedir explicitamente para falar com pessoa, atendente, humano, consultor, gerente.
 - Reclamar de status "em análise", demora, fatura travada, plano que não ativa.
-- Mencionar **sinistro real**: acidente, batida, colisão, roubo, furto, incêndio → motivo='sinistro_emergencia', prioridade='alta'. ANTES de chamar a tool, envie na mesma rodada os canais da FAQ de Assistência 24h (telefone 0800 + WhatsApp) — o cliente precisa do número AGORA.
-- Repetir a mesma queixa numa segunda mensagem (não importa se você já respondeu antes).
+- Mencionar **sinistro real** — e sinistro real é EXCLUSIVAMENTE: acidente, batida, colisão, capotamento, roubo, furto, incêndio, alagamento, vandalismo. Use motivo='sinistro_emergencia', prioridade='alta'. ANTES de chamar a tool, envie na mesma rodada os canais da FAQ de Assistência 24h (0800 + WhatsApp) — o cliente precisa do número AGORA. **Reboque/guincho/pane NÃO é sinistro real** — vai pela regra de assistência operacional acima.
+- Repetir a mesma queixa numa segunda mensagem (não importa se você já respondeu antes), EXCETO quando a 2ª mensagem é só repetir um pedido de assistência operacional que você já respondeu com os canais — nesse caso reenvie os canais e pergunte se precisa de algo mais; ainda não transborda.
 - Qualquer pedido que exija decisão humana, alteração de cadastro, cancelamento, negociação.
-
-## QUANDO **NÃO** TRANSBORDAR (resolva sozinha pela FAQ)
-- **Assistência veicular operacional**: reboque, guincho, pane (mecânica/elétrica/combustível), socorro mútuo, chaveiro, bateria, pneu furado. Esses pedidos são resolvidos enviando os canais da FAQ de Assistência 24h — NÃO chame solicitar_atendente_humano. Só transborde se o cliente, depois de receber os canais, insistir explicitamente em falar com pessoa.
-- **Qualquer pergunta coberta pela BASE DE CONHECIMENTO (FAQ) abaixo**: use a resposta da FAQ direto, sem transbordar. A FAQ é a fonte primária — transbordo é fallback.
 
 Ao chamar a tool, escreva no parâmetro \`resumo\` (1 frase) o que o associado quer.
 
@@ -2185,7 +2190,9 @@ async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone:
     const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({ telefone, mensagem, allow_text: true, force_provider: "evolution" }),
+      // Sem force_provider: usa o provedor ativo (Meta quando Evolution está down).
+      // Hardcode de "evolution" quebra a Maya em janelas em que a instância Evolution cai.
+      body: JSON.stringify({ telefone, mensagem, allow_text: true }),
     });
     const result = await res.json();
     if (!result.success) {
