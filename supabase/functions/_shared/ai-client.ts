@@ -459,11 +459,11 @@ export async function aiGatewayFetch(init: {
     stream,
     override: {
       provider: effectiveProvider,
-      // Se config global é Lovable, respeita o modelo pedido pela função;
-      // caso contrário usa o modelo configurado globalmente.
-      model: (effectiveProvider === "lovable" && cfg.provider === "lovable" && parsed.model)
-        ? parsed.model
-        : cfg.model,
+      // SEMPRE respeita o modelo configurado em `ai_model_config` (UI:
+      // Configurações › Agente Consultor IA). O `parsed.model` do caller
+      // é ignorado de propósito — sem isso, a troca de modelo na tela
+      // não tem efeito em edges legadas com modelo hardcoded.
+      model: cfg.model,
     },
   };
 
