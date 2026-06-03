@@ -1793,7 +1793,7 @@ serve(async (req) => {
       // agora. Re-enfileira o item como 'pendente' com motivo 'aguardando_vistoria_aprovada',
       // sem incrementar `tentativas` (não é erro — é defer intencional). Cron retoma
       // assim que Frente 1 promover a vistoria a 'aprovada'.
-      const temVistoriaElegivel = (vistoriasVeicElegiveis?.length ?? 0) > 0;
+      const temVistoriaElegivel = (vistoriasVeicElegiveis?.length ?? 0) > 0 || vistoriasCanceladasResgatadas.length > 0;
       const temVistoriaPendente = (vistoriasVeicPendentes?.length ?? 0) > 0;
       if (!temVistoriaElegivel && temVistoriaPendente) {
         const proximo = new Date(Date.now() + 5 * 60_000).toISOString(); // 5 min
