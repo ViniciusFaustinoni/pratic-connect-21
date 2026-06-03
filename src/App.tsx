@@ -216,6 +216,8 @@ const AnalisesRelacionamento = lazy(() => import("./pages/relacionamento/Analise
 const TransbordosRelacionamento = lazy(() => import("./pages/relacionamento/TransbordosRelacionamento"));
 
 const EmailsRelacionamento = lazy(() => import("./pages/relacionamento/emails/EmailsRelacionamento"));
+const MayaIA = lazy(() => import("./pages/relacionamento/MayaIA"));
+
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
 const AprovacoesUnificadas = lazy(() => import("./pages/monitoramento/AprovacoesUnificadas"));
@@ -634,6 +636,8 @@ const App = () => (
               <Route path="/relacionamento/analises" element={<AnalisesRelacionamento />} />
               <Route path="/relacionamento/transbordos" element={<TransbordosRelacionamento />} />
               <Route path="/relacionamento/emails" element={<EmailsRelacionamento />} />
+              <Route path="/relacionamento/maya-ia" element={<MayaIA />} />
+
               <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               
               {/* Contabilidade */}

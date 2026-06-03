@@ -1,47 +1,73 @@
-## Skill: `rede-veiculos-api`
+## Objetivo
 
-Mesmo padrão da `sga-hinova-api`: SKILL.md + `assets/collection.json` (raw Postman) + `references/` por grupo funcional.
+Permitir que o time de Relacionamento edite — sem código — o **conhecimento (FAQ)** e o **comportamento (persona/regras/saudação)** da Maya IA, hoje hardcoded em `supabase/functions/agente-consultor-ia/index.ts`.
 
-### Coleta de dados
-Já baixei o JSON oficial da coleção Postman via `https://documenter.gw.postman.com/api/collections/15619634/TzRLmr9r` (48 KB, 22 endpoints, todos POST `application/x-www-form-urlencoded` com payload `json=...`). Cobre os 22 endpoints listados:
+## Onde a Maya vive hoje
 
-vincularClienteVeiculo, desvincularClienteVeiculo, atualizarDadosCliente, preCadastroCliente, atualizarDadosVeiculo, preCadastroVeiculo, permitirAcessoSistema, removerAcessoSistema, obterUltimaPosicaoValida, informarVeiculoAdimplente, informarVeiculoInadimplente, ativarVeiculo, inativarVeiculo, ativarCliente, inativarCliente, obterStatusCliente, obterStatusVeiculo, obterDadosCliente, obterDadosVeiculo, obterLinkCompartilhamento, acionamentoRouboFurto, redefinirSenhaCliente.
+- `agente-consultor-ia/index.ts` monta 3 variantes de `systemPrompt` (diretor, associado, lead/visitante).
+- Sidebar do Relacionamento atual (`AppSidebar.tsx`): Transbordo, Análises, E-mails.
 
-### Estrutura de arquivos
-```
-.agents/skills/rede-veiculos-api/
-├── SKILL.md
-├── assets/
-│   └── collection.json         (coleção Postman bruta)
-└── references/
-    ├── _index.md               (tabela de 22 endpoints)
-    ├── vinculo.md              (vincular/desvincularClienteVeiculo)
-    ├── cliente.md              (atualizar/preCadastro/ativar/inativar/obterStatus/obterDados/permitirAcesso/removerAcesso/redefinirSenha)
-    ├── veiculo.md              (atualizar/preCadastro/ativar/inativar/informar(In)adimplente/obterStatus/obterDados)
-    └── operacional.md          (obterUltimaPosicaoValida/obterLinkCompartilhamento/acionamentoRouboFurto)
-```
+## Entrega
 
-Cada arquivo de referência traz, por endpoint: método, URL, descrição, headers, body completo + body mínimo obrigatório, cURL de exemplo e response 200 oficiais.
+### 1. Persistência (Supabase)
 
-### SKILL.md — conteúdo canônico
-- Base URL sandbox: `https://integracao.redeveiculos.com/api/v2/sandbox/`
-- Base URL produção: `https://integracao.redeveiculos.com/api/v2/prod/`
-- Auth: `Authorization: Bearer <token>` (token fixo por integrador, secret `REDE_VEICULOS_API_TOKEN`)
-- Content-Type: `application/x-www-form-urlencoded` com payload `json=<json-stringificado>` (formato peculiar — não é JSON puro no body)
-- Resposta padrão: `{ "error": "false"|"true", "message": "..." }` (strings, não booleanos!)
-- Convenções do projeto: usar sempre `redeVeiculosClient` em `supabase/functions/_shared/rede-veiculos-client.ts` (se não existir, criar); sync canônica via `rede-veiculos-backfill-veiculos`, `rede-veiculos-atualizar-equipamento`; fluxo de instalação/troca/substituição segue memórias `tri-fonte`, `rede-atualizar-local-instalacao` e `softtruck-desvinculo-bidirecional`.
-- Pitfalls upstream: 
-  - `error` vem como string `"false"`/`"true"` — comparar com string
-  - Body é form-urlencoded com a chave `json` (não `Content-Type: application/json`)
-  - CPF/CNPJ já cadastrado: dados do cliente são IGNORADOS no vincular, precisa chamar `atualizarDadosCliente` separadamente
-  - Tipos de veículo permitidos enumerados (CARRO, ONIBUS, MOTO, CAMINHAO, JETSKI, BARCO, BICICLETA, TRATOR, RETRO, PET, PESSOAL)
-  - Permissões/equipamento têm defaults sensíveis ("Modifique com cautela")
-  - 0KM: campo `ZeroKM: "S"` (string, não boolean)
-  - Identificação: maioria dos endpoints aceita CHASSI e/ou PLACA e/ou IMEI + CPF/CNPJ do cliente
-  - `localInstalacao` é editável pós-vínculo via `atualizarDadosVeiculo` (caso Anderson/RJH0C29 da memória)
+Duas tabelas novas, RLS por role (Relacionamento + Diretoria):
 
-### Geração
-Script Python único que lê `assets/collection.json` e gera os `references/*.md` agrupados por grupo funcional, com helpers `fmt_body()` e `fmt_examples()`. Sem dependências extras.
+**`maya_ia_comportamento`** (1 linha por audiência — `associado`, `lead`, `diretor`)
+- `audiencia` (enum, PK), `nome_agente`, `persona` (texto longo), `regras_absolutas` (texto), `tom_voz` (texto), `saudacao_inicial` (texto), `atualizado_em`, `atualizado_por`.
 
-### Após criação
-Chamar `skills--apply_draft` em `.agents/skills/rede-veiculos-api`.
+**`maya_ia_faq`** (base de conhecimento)
+- `id`, `categoria` (ex: planos, cobertura, cobrança, sinistro, geral), `pergunta`, `resposta`, `palavras_chave` (text[]), `audiencias` (text[] — quais variantes recebem), `ativo`, `ordem`, `atualizado_em`, `atualizado_por`.
+
+Seed inicial = extração do conteúdo hardcoded de hoje (persona/regras de cada audiência + FAQs implícitas no prompt).
+
+### 2. Edge `agente-consultor-ia`
+
+- Carregar `maya_ia_comportamento` da audiência atual e substituir os blocos hardcoded por: `Você é {nome_agente}. {persona}\n\n## REGRAS\n{regras}\n\n## TOM\n{tom_voz}\n\n## SAUDAÇÃO\n{saudacao}`.
+- Injetar `maya_ia_faq` filtrada pela audiência como bloco `## BASE DE CONHECIMENTO` no fim do system prompt (somente itens `ativo=true`, ordenado).
+- Cache de 60s em memória para evitar 1 query por mensagem; fallback para o texto hoje hardcoded se a tabela vier vazia (segurança).
+
+### 3. UI: novo item na sidebar do Relacionamento
+
+`AppSidebar.tsx` → adicionar no grupo Relacionamento:
+- **"Maya IA"** → rota `/relacionamento/maya-ia` (ícone `Bot`).
+
+Página com 2 abas (shadcn Tabs):
+
+**Aba "Comportamento"**
+- Seletor de audiência (Associado / Lead / Diretor) — pills no topo.
+- Campos editáveis em cards (Textarea grande + Input):
+  - Nome do agente (input curto)
+  - Persona (textarea — quem ela é, papel)
+  - Regras absolutas (textarea — o que nunca fazer)
+  - Tom de voz (textarea)
+  - Saudação inicial (textarea)
+- Cada campo tem um `<FieldHint>` (tooltip já existente em `src/components/admin/planos/FieldHint.tsx`) com explicação prática + exemplo de impacto na resposta.
+- Botão "Salvar alterações" no rodapé sticky; toast de confirmação; mostra "última edição por X em Y".
+- Botão "Restaurar padrão" (volta ao seed) por audiência.
+
+**Aba "Conhecimento (FAQ)"**
+- Filtro por categoria (chips) + busca por texto.
+- Lista em cards expansíveis (Accordion): cada item mostra pergunta + resposta truncada; expandir abre edição inline (pergunta, resposta rich textarea, categoria select, audiências multi-select via Checkbox, palavras-chave como tag input, toggle ativo).
+- Drag handle para reordenar (`ordem`) — opcional v1, pode ser só Input numérico.
+- Botão "+ Novo conhecimento" abre Dialog com mesmo formulário em branco.
+- Tooltips em cada campo (palavras-chave: "Termos que ajudam a Maya a recuperar este item — separe por vírgula"; audiências: "Quais perfis recebem este conhecimento no prompt"; etc.).
+- Ações por card: Editar, Duplicar, Desativar/Ativar, Excluir (com confirmação).
+
+### 4. Permissão
+
+- Visível para `relacionamento`, `gerente_relacionamento`, `diretor`, `desenvolvedor`.
+- `usePermissions` ganha flag `canManageMayaIA` derivada dessas roles.
+
+## Detalhes técnicos
+
+- Hooks novos: `useMayaComportamento(audiencia)`, `useMayaFaq()` — React Query com `invalidate` no save.
+- Validação client: persona/regras não vazias; pergunta+resposta obrigatórias no FAQ.
+- Sem realtime (não é necessário); edge invalida cache local a cada 60s.
+- Migration: tabelas + GRANT (`authenticated` + `service_role`) + RLS via `has_role` para Relacionamento/Diretoria; seed.
+
+## Fora de escopo
+
+- Versionamento/histórico de edições (fica para v2; por ora guardamos só `atualizado_por`+`atualizado_em`).
+- Editor de tools/funções da Maya (continua no código).
+- Configuração da Maya em outros canais (Vinicius/agente-consultor-ia para vendas continua usando os mesmos blocos via audiência `lead`).

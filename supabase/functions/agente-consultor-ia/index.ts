@@ -7,11 +7,71 @@ const corsHeaders = {
 };
 
 /**
+ * Cache de configuração editorial da Maya (60s) — evita 1 query/mensagem.
+ * Tabelas: maya_ia_comportamento (por audiência), maya_ia_faq (base de conhecimento).
+ * Editável pelo time de Relacionamento em /relacionamento/maya-ia.
+ */
+type MayaEditorialCfg = {
+  nome_agente?: string;
+  persona?: string;
+  regras_absolutas?: string;
+  tom_voz?: string;
+  saudacao_inicial?: string;
+  faqText?: string;
+};
+const MAYA_CFG_CACHE = new Map<string, { at: number; data: MayaEditorialCfg | null }>();
+const MAYA_CFG_TTL_MS = 60_000;
+
+async function loadMayaEditorialConfig(supabase: any, audiencia: string): Promise<MayaEditorialCfg | null> {
+  const hit = MAYA_CFG_CACHE.get(audiencia);
+  if (hit && Date.now() - hit.at < MAYA_CFG_TTL_MS) return hit.data;
+
+  const [{ data: comp }, { data: faqs }] = await Promise.all([
+    supabase.from("maya_ia_comportamento").select("*").eq("audiencia", audiencia).maybeSingle(),
+    supabase.from("maya_ia_faq").select("categoria,pergunta,resposta,palavras_chave,audiencias,ordem").eq("ativo", true).order("ordem", { ascending: true }),
+  ]);
+
+  const faqsFiltrados = (faqs || []).filter((f: any) => Array.isArray(f.audiencias) && f.audiencias.includes(audiencia));
+  let faqText = "";
+  if (faqsFiltrados.length > 0) {
+    const porCategoria = new Map<string, any[]>();
+    for (const f of faqsFiltrados) {
+      const k = f.categoria || "geral";
+      if (!porCategoria.has(k)) porCategoria.set(k, []);
+      porCategoria.get(k)!.push(f);
+    }
+    const partes: string[] = [];
+    for (const [cat, items] of porCategoria) {
+      partes.push(`### ${cat.toUpperCase()}`);
+      for (const it of items) {
+        const kw = Array.isArray(it.palavras_chave) && it.palavras_chave.length ? ` _(palavras-chave: ${it.palavras_chave.join(", ")})_` : "";
+        partes.push(`- *${it.pergunta}*${kw}\n  ${it.resposta}`);
+      }
+    }
+    faqText = partes.join("\n");
+  }
+
+  const data: MayaEditorialCfg | null = comp || faqText
+    ? {
+        nome_agente: comp?.nome_agente || undefined,
+        persona: comp?.persona || undefined,
+        regras_absolutas: comp?.regras_absolutas || undefined,
+        tom_voz: comp?.tom_voz || undefined,
+        saudacao_inicial: comp?.saudacao_inicial || undefined,
+        faqText: faqText || undefined,
+      }
+    : null;
+  MAYA_CFG_CACHE.set(audiencia, { at: Date.now(), data });
+  return data;
+}
+
+/**
  * Edge function: Agente Consultor IA (Vinicius)
  * Fluxo reformulado com tool calling:
  * - Para leads: fluxo de cotação (placa → dados → calcular → registrar)
  * - Para diretores: relatórios do sistema (KPIs, cotações, leads, sinistros)
  */
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -1014,6 +1074,31 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
         : `O cliente acabou de informar o CPF ${cpfSgaContexto.cpfMascarado}, mas NÃO encontramos cadastro no SGA. Informe isso de forma cordial e siga como lead em cotação.`;
       systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
     }
+
+
+    // ---- 7.5 OVERRIDE EDITORIAL (Relacionamento) — tabelas maya_ia_comportamento + maya_ia_faq
+    // Permite editar persona/regras/tom/saudação e base de conhecimento sem deploy.
+    try {
+      const audienciaAtual = isDiretor ? "diretor" : isAssociado ? "associado" : "lead";
+      const mayaCfg = await loadMayaEditorialConfig(supabase, audienciaAtual);
+      if (mayaCfg) {
+        const blocos: string[] = [];
+        if (mayaCfg.persona) blocos.push(`### PERSONA\n${mayaCfg.persona}`);
+        if (mayaCfg.regras_absolutas) blocos.push(`### REGRAS ABSOLUTAS\n${mayaCfg.regras_absolutas}`);
+        if (mayaCfg.tom_voz) blocos.push(`### TOM DE VOZ\n${mayaCfg.tom_voz}`);
+        if (mayaCfg.saudacao_inicial) blocos.push(`### SAUDAÇÃO INICIAL\n${mayaCfg.saudacao_inicial}`);
+        if (blocos.length > 0) {
+          systemPrompt += `\n\n## CONFIGURAÇÃO EDITORIAL (Relacionamento) — PREVALECE SOBRE QUALQUER REGRA ACIMA EM CONFLITO\n${blocos.join("\n\n")}`;
+        }
+        if (mayaCfg.faqText) {
+          systemPrompt += `\n\n## BASE DE CONHECIMENTO (FAQ)\nResponda usando estas informações sempre que a pergunta do cliente casar com algum item. Não invente o que não estiver aqui.\n\n${mayaCfg.faqText}`;
+        }
+      }
+    } catch (e) {
+      console.error("[agente-consultor-ia] Falha ao carregar config editorial Maya:", (e as any)?.message);
+    }
+
+
 
 
     // ---- 8. CHAMAR LOVABLE AI COM TOOL CALLING ----
