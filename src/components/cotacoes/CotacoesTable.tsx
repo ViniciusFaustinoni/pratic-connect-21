@@ -260,7 +260,7 @@ export function CotacoesTable({
                   </TableCell>
 
                   {/* Cliente */}
-                  <TableCell className="py-3">
+                  <TableCell className="py-3 max-w-0">
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white bg-gradient-to-br",
