@@ -390,9 +390,12 @@ Deno.serve(async (req) => {
     }
 
 
-    // ---- 2B. GATE DE CPF (skip diretores) ----
-    // A IA não conversa/vende nada até o usuário informar um CPF válido.
-    // Após captura, consulta SGA e injeta o contexto no prompt via cpfSgaContexto.
+    // ---- 2B. GATE DE SAUDAÇÃO + IDENTIFICAÇÃO (skip diretores) ----
+    // Regras canônicas (Relacionamento › Chat):
+    //   - Saudação obrigatória bloqueante: primeira msg do dia BRT OU >2h sem interagir → mensagem padrão pedindo nome completo OU CPF.
+    //   - Validações canônicas únicas: CPF (11 dígitos + DV) OU Nome Completo (≥2 palavras, ≥10 chars, sem dígitos).
+    //   - Liberação após captura: "Certo, obrigada pelo retorno! Em que podemos te ajudar hoje?"
+    //   - "Maya nunca deixa vácuo": qualquer texto livre dentro do gate gera resposta (saudação OU continuidade debounced).
     let cpfSgaContexto: { encontrado: boolean; nome?: string; status?: string; cpfMascarado: string } | null = null;
     let sgaAssociadoOverride: { nome: string; status: string } | null = null;
 
@@ -420,7 +423,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!diretorPreDetectado && !contato.cpf) {
+    // "Identificado" = já temos CPF (com lookup SGA registrado) OU nome confirmado.
+    const jaIdentificado = !!contato.cpf || !!(contato as any).nome_confirmado_em;
+
+    if (!diretorPreDetectado && !jaIdentificado) {
       const validateCpf = (raw: string): boolean => {
         const c = raw.replace(/\D/g, "");
         if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
@@ -436,6 +442,16 @@ Deno.serve(async (req) => {
         return d2 === parseInt(c[10]);
       };
 
+      // Nome completo canônico: ≥2 palavras alfabéticas (com acentos), cada uma ≥2 chars,
+      // total ≥10 chars, sem dígitos. Rejeita "ok", "Sim", "João" (1 palavra), "123 abc".
+      const validateNomeCompleto = (raw: string): boolean => {
+        const t = (raw || "").trim();
+        if (t.length < 10 || t.length > 120) return false;
+        if (/\d/.test(t)) return false;
+        const nomeRegex = /^[A-Za-zÀ-ÿ'`´^~]{2,}(?:\s+[A-Za-zÀ-ÿ'`´^~]{2,})+$/;
+        return nomeRegex.test(t);
+      };
+
       const enviarTexto = async (msg: string) => {
         try {
           await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
@@ -444,7 +460,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ telefone: telLimpo, mensagem: msg, allow_text: true }),
           });
         } catch (e) {
-          console.error(`[agente-consultor-ia] Falha ao enviar mensagem de gate CPF:`, (e as any)?.message);
+          console.error(`[agente-consultor-ia] Falha ao enviar mensagem de gate identificação:`, (e as any)?.message);
         }
       };
 
@@ -459,6 +475,7 @@ Deno.serve(async (req) => {
         cpfCandidato = apenasDigitos.slice(-11);
       }
 
+      // === CAMINHO 1: CPF VÁLIDO ===
       if (cpfCandidato && validateCpf(cpfCandidato)) {
         const cpfLimpo = cpfCandidato.replace(/\D/g, "");
         const cpfMascarado = `${cpfLimpo.slice(0, 3)}.***.***-${cpfLimpo.slice(9)}`;
@@ -488,8 +505,10 @@ Deno.serve(async (req) => {
             cpf: cpfLimpo,
             cpf_capturado_em: new Date().toISOString(),
             sga_associado_encontrado: encontrado,
+            sga_associado_status: encontrado ? String(statusSga || "ativo") : null,
             cpf_tentativas_invalidas: 0,
-            ...(nomeSga ? { nome: nomeSga } : {}),
+            liberacao_enviada_em: new Date().toISOString(),
+            ...(nomeSga ? { nome: nomeSga, nome_confirmado_em: new Date().toISOString() } : {}),
           })
           .eq("id", contato.id);
 
@@ -505,88 +524,138 @@ Deno.serve(async (req) => {
         if (encontrado && nomeSga) {
           sgaAssociadoOverride = { nome: nomeSga, status: String(statusSga || "") };
         }
-        console.log(`[agente-consultor-ia] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
-        // Segue o fluxo normal abaixo; prompts vão receber o contexto.
-      } else {
-        // === GARANTIA-DE-RESPOSTA (Maya nunca deixa vácuo) ===
-        // Caso A: cliente mandou número que parece CPF mas não validou (ex.: 10/12 dígitos, dígitos verificadores errados)
-        // Caso B: cliente mandou só dígitos curtos (6–10) — também trata como tentativa de CPF
-        // Caso C: cliente mandou texto livre sem nenhum dígito relevante
-        const pareceTentativaDeCpf =
-          !!cpfCandidato ||
-          (apenasDigitos.length >= 6 && apenasDigitos.length <= 14);
+        console.log(`[agente-consultor-ia] [gate_identificacao] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
 
-        const tentativasAtuais = Number((contato as any).cpf_tentativas_invalidas || 0);
-
-        if (pareceTentativaDeCpf) {
-          const novasTentativas = tentativasAtuais + 1;
-          await supabase
-            .from("agente_ia_contatos")
-            .update({ cpf_tentativas_invalidas: novasTentativas })
-            .eq("id", contato.id);
-
-          if (novasTentativas >= 3) {
-            // Escalada: oferta explícita de transbordo humano
-            await enviarTexto(
-              "Notei que estamos tendo dificuldade com o CPF 🤔\n\n" +
-              "Se preferir, posso transferir agora para um atendente humano — é só responder *atendente*.\n" +
-              "Ou, se quiser tentar mais uma vez: me envie o CPF *só com números* (11 dígitos)."
-            );
-          } else {
-            await enviarTexto(
-              "Recebi os números, mas não formam um CPF válido (precisa ter *11 dígitos*). " +
-              "Pode conferir e me enviar de novo? 😉\n\n" +
-              "_Se preferir falar com um atendente humano, é só responder *atendente*._"
-            );
-          }
-          return new Response(
-            JSON.stringify({ success: true, gate: "cpf_invalido", tentativas: novasTentativas }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        // Caso C — texto livre sem indício de CPF: NUNCA fica em silêncio
-        const ultimaSolicitacao = contato.cpf_solicitado_em ? new Date(contato.cpf_solicitado_em) : null;
-        const podeReenviarSaudacao =
-          !ultimaSolicitacao || (Date.now() - ultimaSolicitacao.getTime()) > 10 * 60_000;
-
-        if (podeReenviarSaudacao) {
-          await enviarTexto(
-            "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF (só números, 11 dígitos). 😁"
-          );
-          await supabase
-            .from("agente_ia_contatos")
-            .update({ cpf_solicitado_em: new Date().toISOString() })
-            .eq("id", contato.id);
-        } else {
-          // Saudação debounced — mas NÃO ficamos em silêncio: mandamos mensagem de continuidade
-          // (com debounce próprio de 2 min para não floodar caso o cliente mande várias mensagens seguidas)
-          const ultimaContinuidade = (contato as any).ultima_msg_continuidade_em
-            ? new Date((contato as any).ultima_msg_continuidade_em)
-            : null;
-          const podeReenviarContinuidade =
-            !ultimaContinuidade || (Date.now() - ultimaContinuidade.getTime()) > 2 * 60_000;
-
-          if (podeReenviarContinuidade) {
-            await enviarTexto(
-              "Entendi! 🙂 Para eu seguir e te ajudar, primeiro preciso do seu *CPF* (só números, 11 dígitos) — assim localizo seu cadastro.\n\n" +
-              "_Se preferir falar com um atendente humano, é só responder *atendente*._"
-            );
-            await supabase
-              .from("agente_ia_contatos")
-              .update({ ultima_msg_continuidade_em: new Date().toISOString() })
-              .eq("id", contato.id);
-            console.log(`[agente-consultor-ia] Gate CPF: enviei mensagem de continuidade (debounce saudação ativo)`);
-          } else {
-            console.log(`[agente-consultor-ia] Gate CPF: continuidade também em debounce (2min) — cliente em flood`);
-          }
-        }
+        // Liberação canônica + return: próxima mensagem do cliente segue o fluxo normal
+        await enviarTexto("Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊");
         return new Response(
-          JSON.stringify({ success: true, gate: "aguardando_cpf" }),
+          JSON.stringify({ success: true, gate: "identificado_cpf", sga_encontrado: encontrado }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      // === CAMINHO 2: NOME COMPLETO VÁLIDO ===
+      if (validateNomeCompleto(textoEntrada)) {
+        const nomeFmt = textoEntrada.trim().replace(/\s+/g, " ");
+        await supabase
+          .from("agente_ia_contatos")
+          .update({
+            nome: nomeFmt,
+            nome_confirmado_em: new Date().toISOString(),
+            cpf_tentativas_invalidas: 0,
+            liberacao_enviada_em: new Date().toISOString(),
+          })
+          .eq("id", contato.id);
+        contato.nome = nomeFmt;
+        (contato as any).nome_confirmado_em = new Date().toISOString();
+        console.log(`[agente-consultor-ia] [gate_identificacao] Nome completo capturado: ${nomeFmt}`);
+
+        await enviarTexto("Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊");
+        return new Response(
+          JSON.stringify({ success: true, gate: "identificado_nome" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // === CAMINHO 3: NÃO IDENTIFICADO ===
+      // 3A — Tentativa de CPF inválida (números soltos 6–14 dígitos OU formato CPF que não bate DV)
+      const pareceTentativaDeCpf =
+        !!cpfCandidato ||
+        (apenasDigitos.length >= 6 && apenasDigitos.length <= 14);
+
+      if (pareceTentativaDeCpf) {
+        const tentativasAtuais = Number((contato as any).cpf_tentativas_invalidas || 0);
+        const novasTentativas = tentativasAtuais + 1;
+        await supabase
+          .from("agente_ia_contatos")
+          .update({ cpf_tentativas_invalidas: novasTentativas })
+          .eq("id", contato.id);
+
+        if (novasTentativas >= 3) {
+          await enviarTexto(
+            "Notei que estamos tendo dificuldade com o CPF 🤔\n\n" +
+            "Se preferir, posso transferir agora para um atendente humano — é só responder *atendente*.\n" +
+            "Ou, se quiser tentar mais uma vez: me envie o *CPF* só com números (11 dígitos) — ou o seu *nome completo*."
+          );
+        } else {
+          await enviarTexto(
+            "Recebi os números, mas não formam um CPF válido (precisa ter *11 dígitos*). " +
+            "Pode conferir e me enviar de novo? 😉\n\n" +
+            "_Se preferir, pode me passar seu *nome completo* — funciona do mesmo jeito.\n" +
+            "Ou responda *atendente* para falar com uma pessoa._"
+          );
+        }
+        return new Response(
+          JSON.stringify({ success: true, gate: "identificacao_invalida", tentativas: novasTentativas }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 3B — Texto livre: saudação canônica OU continuidade debounced
+      //
+      // precisaSaudar = primeira interação OU >2h desde a última OU dia BRT diferente.
+      const agoraBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const diaBrtAgora = `${agoraBRT.getFullYear()}-${agoraBRT.getMonth()}-${agoraBRT.getDate()}`;
+      const ultimaInter = contato.ultima_interacao ? new Date(contato.ultima_interacao) : null;
+      const ultimaInterBRT = ultimaInter
+        ? new Date(ultimaInter.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+        : null;
+      const diaBrtUltima = ultimaInterBRT
+        ? `${ultimaInterBRT.getFullYear()}-${ultimaInterBRT.getMonth()}-${ultimaInterBRT.getDate()}`
+        : null;
+      const horasDesdeUltima = ultimaInter ? (Date.now() - ultimaInter.getTime()) / 3_600_000 : Infinity;
+
+      const ultimaSaudacao = (contato as any).ultima_saudacao_em
+        ? new Date((contato as any).ultima_saudacao_em)
+        : null;
+      const horasDesdeSaudacao = ultimaSaudacao ? (Date.now() - ultimaSaudacao.getTime()) / 3_600_000 : Infinity;
+
+      const precisaSaudar =
+        !ultimaSaudacao ||
+        horasDesdeSaudacao > 2 ||
+        horasDesdeUltima > 2 ||
+        diaBrtAgora !== diaBrtUltima;
+
+      if (precisaSaudar) {
+        await enviarTexto(
+          "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁"
+        );
+        await supabase
+          .from("agente_ia_contatos")
+          .update({
+            ultima_saudacao_em: new Date().toISOString(),
+            cpf_solicitado_em: new Date().toISOString(),
+          })
+          .eq("id", contato.id);
+        console.log(`[agente-consultor-ia] [gate_identificacao] saudação canônica enviada`);
+      } else {
+        // Continuidade debounced 2min: não fica em silêncio
+        const ultimaContinuidade = (contato as any).ultima_msg_continuidade_em
+          ? new Date((contato as any).ultima_msg_continuidade_em)
+          : null;
+        const podeReenviarContinuidade =
+          !ultimaContinuidade || (Date.now() - ultimaContinuidade.getTime()) > 2 * 60_000;
+
+        if (podeReenviarContinuidade) {
+          await enviarTexto(
+            "Entendi! 🙂 Para eu seguir e te ajudar, preciso primeiro do seu *nome completo* ou *CPF* (11 dígitos) — assim localizo seu cadastro.\n\n" +
+            "_Se preferir falar com um atendente humano, é só responder *atendente*._"
+          );
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ ultima_msg_continuidade_em: new Date().toISOString() })
+            .eq("id", contato.id);
+          console.log(`[agente-consultor-ia] [gate_identificacao] continuidade enviada (saudação em debounce)`);
+        } else {
+          console.log(`[agente-consultor-ia] [gate_identificacao] continuidade também em debounce — flood do cliente`);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: true, gate: "aguardando_identificacao" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
 
 
     // ---- 3. CARREGAR CONFIGURAÇÕES ----
