@@ -1760,11 +1760,14 @@ serve(async (req) => {
         .in('status', ['agendada', 'em_analise', 'em_rota', 'em_andamento']);
 
 
-      if (vistoriasVeicElegiveis && vistoriasVeicElegiveis.length > 0) {
-        const vistoriaIds = vistoriasVeicElegiveis.map((v: any) => v.id);
+      const vistoriaIdsParaFotos = [
+        ...((vistoriasVeicElegiveis || []) as any[]).map((v: any) => v.id),
+        ...vistoriasCanceladasResgatadas.map((v) => v.id),
+      ];
+      if (vistoriaIdsParaFotos.length > 0) {
         const { data: vistoriaFotos } = await supabase.from('vistoria_fotos')
           .select('id, tipo, arquivo_url, vistoria_id')
-          .in('vistoria_id', vistoriaIds);
+          .in('vistoria_id', vistoriaIdsParaFotos);
 
         for (const vf of (vistoriaFotos || []) as any[]) {
           if (!vf.arquivo_url) continue;
@@ -1777,7 +1780,13 @@ serve(async (req) => {
             origem_id: vf.id,
           });
         }
+        if (vistoriasCanceladasResgatadas.length > 0) {
+          await logSync(_vid, _aid, 'vistorias_canceladas_resgatadas', 'info',
+            { ids: vistoriasCanceladasResgatadas.map((v) => v.id), motivo: 'instalacao_concluida_no_veiculo' },
+            null);
+        }
       }
+
 
       // Frente 2 — TRAVA no marco "monitoramento aprovado":
       // Se NÃO há vistoria elegível mas EXISTE vistoria pendente, NÃO envia fotos
