@@ -184,7 +184,30 @@ export function EtapaAssinaturaContrato({
     }
   }, []); // só na montagem
 
+  // ═══ Helper: erro estruturado do edge (EMAIL_INVALIDO → coletar_email; resto → tela de erro) ═══
+  const tratarErroEdge = useCallback(async (rawErr: any, fallbackMsg: string) => {
+    const parsed = await parseEdgeError(rawErr);
+    const motivo = parsed.message || fallbackMsg;
+    console.error('[EtapaAssinatura] Erro estruturado:', parsed.code, motivo);
+
+    if (parsed.code === 'EMAIL_INVALIDO') {
+      const valorAtual =
+        (parsed.raw && typeof parsed.raw === 'object' && (parsed.raw as any).valor_atual) || '';
+      setEmailLocal(String(valorAtual || emailEfetivo || clienteEmail || ''));
+      setErro(motivo);
+      processingRef.current = false;
+      sendingRef.current = false;
+      initRef.current = false;
+      setEtapaInterna('coletar_email');
+      return;
+    }
+
+    setErro(motivo);
+    setEtapaInterna('erro');
+  }, [emailEfetivo, clienteEmail]);
+
   // ═══ 1. Verificar/gerar contrato ═══
+
   const verificarOuGerarContrato = useCallback(async () => {
     if (processingRef.current) {
       console.log('[EtapaAssinatura] Já processando, ignorando chamada duplicada');
