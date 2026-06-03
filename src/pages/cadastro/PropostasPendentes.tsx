@@ -945,6 +945,15 @@ export default function PropostasPendentes() {
                     </Badge>
                   )}
                   {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise, proposta)}
+                  {proposta.documentos_aprovados_em && !proposta.cadastro_aprovado && (
+                    <Badge
+                      variant="outline"
+                      title="Sub-etapa 1 (documentos) já aprovada. Falta a sub-etapa 2 (vistoria + liberação para Monitoramento)."
+                      className="text-[9px] px-1.5 py-0 h-5 border-emerald-500/40 text-emerald-600"
+                    >
+                      Sub-etapa 1 ✓
+                    </Badge>
+                  )}
                   {(proposta.plano?.nome || proposta.plano_nome) && (
                     <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-5 max-w-[60%] truncate">
                       {proposta.plano?.nome || proposta.plano_nome}
