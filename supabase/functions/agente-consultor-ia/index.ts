@@ -819,13 +819,20 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
-      if (associadoMatch) {
+      // Só sobrescreve dados de associado se NÃO veio do cache (cache é fonte mais confiável,
+      // já validada via CPF no SGA).
+      if (associadoMatch && !isAssociado) {
         isAssociado = true;
         associadoNome = associadoMatch.nome || "";
         associadoStatus = associadoMatch.status || "";
-        console.log(`[agente-consultor-ia] Associado detectado: ${associadoNome} (status: ${associadoStatus})`);
+        console.log(`[agente-consultor-ia] Associado detectado por telefone: ${associadoNome} (status: ${associadoStatus})`);
+      } else if (associadoMatch && isAssociado) {
+        console.log(`[agente-consultor-ia] Associado por telefone ${associadoMatch.nome} — preservando dados de cache: ${associadoNome}`);
+      }
 
-        // Buscar número de atendimento via Meta API (número do suporte)
+      // Lookup do número de atendimento (Meta API): roda SEMPRE que isAssociado,
+      // independente da origem (cache ou telefone).
+      if (isAssociado) {
         try {
           const { data: metaCfg } = await supabase
             .from("whatsapp_meta_config")
@@ -863,6 +870,7 @@ Deno.serve(async (req) => {
         }
         console.log(`[agente-consultor-ia] Número de atendimento: ${numeroAtendimento}`);
       }
+
 
       // Override: se SGA bateu o CPF (telefone pode estar fora do cadastro),
       // ainda assim trata como associado.
