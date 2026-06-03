@@ -143,13 +143,13 @@ export function CotacoesTable({
                   />
                 </TableHead>
               )}
-              <TableHead className="w-[230px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
+              <TableHead className="w-[180px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
               <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Cliente</TableHead>
               <TableHead className="hidden md:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Veículo</TableHead>
               <TableHead className="hidden lg:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">FIPE</TableHead>
               <TableHead className="hidden lg:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Consultor</TableHead>
               <TableHead className="hidden sm:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Data</TableHead>
-              <TableHead className="w-[110px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Ações</TableHead>
+              <TableHead className="w-[92px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
