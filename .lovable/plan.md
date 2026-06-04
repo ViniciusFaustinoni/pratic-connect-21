@@ -1,74 +1,70 @@
-## O que aconteceu no caso do THIAGO (+55 21 96890-7520)
+## Diagnóstico — por que a IA errou nesta conversa
 
-Trilha real das mensagens:
+Investiguei `agente_ia_contatos` e o histórico de `whatsapp_mensagens` do telefone **5521992593830**:
 
-```
-10:00  → template confirmacao_manha_v1 (Pratic) — "Responda SIM para confirmar ou REAGENDAR"
-11:02  ← "Reagendamento" (cliente)
-11:02  ← "Reagendamento" (cliente, 9s depois)
-11:02  → IA respondeu: "informe o seu CPF" 😵 (gate de identificação)
-11:15  → operador disparou manualmente template `reagendamento_servico` com link
-```
+- O contato tem identidade **cacheada do dia anterior**: `nome='THAIS GURUCEAGA DOS SANTOS'`, `cpf='15230046732'`, capturado em **2026-06-03 16:24 BRT**.
+- Hoje (04/06 06:52 BRT) o usuário escreve "Oi". É o **Vinicius**, mas o telefone está cacheado como Thais.
+- O agente: (1) pulou o gate de saudação/identificação porque o contato é "identificado", (2) cumprimentou como **"Oi, Thais!"**, (3) ao pedir reboque, puxou o **veículo da Thais (FIAT ARGO KYA9B12)** via SGA pelo CPF cacheado.
 
-Diagnóstico:
+**Causas raiz (3 falhas de design da habilidade `relacionamento` / "Atendimento Pratic"):**
 
-1. Existia `confirmacoes_agendamento` pendente (status `enviada`, servico `ab10299d…`) para o telefone `21968907520`. O handler de confirmação no `whatsapp-webhook` (Evolution) DEVERIA ter capturado a palavra "Reagendamento" e disparado o fluxo de reagendamento — não disparou (provavelmente normalização de telefone OU a mensagem caiu numa branch anterior que decidiu rotear pra IA).
-2. Mesmo se o handler tivesse falhado, a IA recebeu a mensagem **sem nenhum contexto** de que havia uma confirmação pendente para aquele número. Sem esse contexto, ela aplicou o gate canônico de saudação+identificação (CPF/nome) e ignorou completamente a intenção "reagendar".
-3. A habilidade `relacionamento` ativa só tem 2 ferramentas (`consultar_boletos_associado`, `solicitar_atendente_humano`) — ela não tem como enviar link de reagendamento mesmo que entendesse a intenção.
+1. **Identidade é eternamente "sticky" por telefone.** Uma vez cacheado CPF/nome, a IA nunca mais reconfirma — telefones compartilhados, trocas de dono e capturas erradas viram erro permanente.
+2. **Citação proativa de veículo.** A IA usa SGA pelo CPF cacheado e cita marca/modelo/placa sem o cliente ter dito "é esse carro". Isso multiplica o erro de identidade.
+3. **Sem reset por divergência.** Não há gatilho que detecte "não sou X" / "meu nome é Y" / "não é esse carro" para zerar `cpf` + `nome` no contato e reentrar no gate canônico.
 
-## Como corrigir (em ordem de prioridade)
+A configuração fixada em `/relacionamento/config-ia` (saudação "Olá! Tudo bem? … *nome completo* ou *CPF*. 😁", `regras_absolutas` exigindo não-vácuo + escalar em dúvida) está correta — o problema é que **o gate é pulado** quando há cache, então a saudação nunca aparece para usuários "identificados".
 
-### 1. Injetar CONTEXTO DE AGENDAMENTO PENDENTE no agente-consultor-ia
+---
 
-Espelhar o padrão já existente de `cobrancaContextoTxt` (linhas 881-907 de `agente-consultor-ia/index.ts`). Antes de montar o system prompt:
+## Plano
 
-- Consultar `confirmacoes_agendamento` das últimas 48h pelo telefone, status `in ('enviada','reagendando','aguardando_confirmacao_vespera','aguardando_confirmacao_manha','aguardando_confirmacao_encaixe')`.
-- Para cada uma, carregar o `servico` vinculado (data, período, endereço, tipo, `reagendamento_token`) e o nome do associado.
-- Injetar bloco no system prompt:
+### 1. Reconfirmação leve por sessão (anti-telefone-compartilhado)
 
-  ```
-  ## CONTEXTO DE AGENDAMENTO PENDENTE
-  Foi enviado a este contato em <dataEnvio> um pedido de confirmação para:
-  - Serviço: <tipo> (id <servico_id>)
-  - Quando: <data> <período>
-  - Endereço: <logradouro>, <bairro>, <cidade>
-  - Cliente: <nome>
-  Use isto como verdade. Se o cliente pedir para reagendar / não puder / outro dia, chame a tool enviar_link_reagendamento.
-  Se confirmar (SIM), chame confirmar_agendamento. Não invente datas nem endereços.
-  ```
+Em `supabase/functions/agente-consultor-ia/index.ts`, no roteador / gate de identificação:
 
-### 2. Bypass do gate de CPF quando houver agendamento pendente
+- Considerar identidade "fresca" apenas se `cpf_capturado_em` é do **mesmo dia BRT** OU houve interação nas últimas **2h**.
+- Fora dessa janela, mesmo com cache, enviar **pré-saudação de confirmação**: "Olá! Tudo bem? Antes de continuar, me confirma: estou falando com *Vinicius* ([nome cacheado])? Se preferir, me envia seu *CPF*. 😁" — e travar o resto até a resposta.
+- Resposta afirmativa ("sim", "sou eu", "isso") → atualiza `ultima_interacao` e `nome_confirmado_em`, libera fluxo. Negativa ou nome/CPF diferente → executar reset (passo 3).
 
-No bloco de identificação canônica (gate saudação+CPF), pular o pedido de CPF quando `contextoAgendamentoPendente` existir — o telefone já está identificado pelo `servico/associado_id` vinculado. Atualizar `agente_ia_contatos` com nome do associado do servico.
+Coluna nova: `agente_ia_contatos.ultima_reconfirmacao_em timestamptz` (debounce de 2h para não reperguntar dentro da mesma sessão).
 
-### 3. Adicionar ferramentas na habilidade `relacionamento`
+### 2. Proibição de citação proativa de identidade/veículo
 
-Acrescentar duas tools (e habilitá-las em `ia_habilidades.ferramentas_habilitadas` via migration):
+Adicionar bloco **REGRAS DE IDENTIDADE** ao system prompt da habilidade `relacionamento` (injetado em código, não na coluna `regras_absolutas`, para garantir presença):
 
-- `enviar_link_reagendamento(servico_id: string)` → invoca a edge existente `enviar-link-reagendamento`. Resposta da IA fica: "Tudo bem, *Thiago*! Te enviei o link para escolher uma nova data. 📅" — o link em si vai via template Meta `reagendamento_servico` que essa edge já dispara.
-- `confirmar_agendamento(servico_id: string)` → marca `confirmacoes_agendamento.status='confirmada'` + `servicos.confirmacao_whatsapp='confirmada'` + push pro profissional (mesma lógica que o Meta webhook já tem em `processarRespostaConfirmacaoMeta`).
+- Nunca cumprimentar pelo primeiro nome na primeira mensagem do dia — usar "Olá!" neutro até reconfirmação.
+- Nunca mencionar marca/modelo/placa do veículo proativamente. Sempre **perguntar** "Qual veículo?" e só depois consultar SGA com a placa/descrição que o cliente confirmou.
+- Tool de lookup de veículo (`buscar_veiculos_associado`) só pode ser chamada após o cliente ter (a) confirmado identidade nesta sessão **e** (b) mencionado o veículo, OU quando há apenas 1 veículo ativo no associado e o cliente confirma a identidade.
 
-Regras absolutas da habilidade ganham linha:
-> Quando houver CONTEXTO DE AGENDAMENTO PENDENTE e o cliente disser qualquer variante de "reagendar/outro dia/não posso", chame `enviar_link_reagendamento` antes de qualquer outra resposta. Nunca prometa que "alguém entrará em contato" — envie o link direto.
+### 3. Reset automático de identidade em divergência
 
-### 4. Defesa em profundidade no webhook (Evolution)
+No pré-processamento da mensagem do cliente (antes do LLM):
 
-Em `whatsapp-webhook/index.ts` linhas 3631-3644, adicionar log claro quando há confirmação pendente mas `tipoPrincipal !== 'texto'` OU quando `telefonesBusca` não casa, e quando o handler local de reagendar for invocado e detectar intent `REAGENDAR`, substituir o "em breve entrará em contato" (linha 2528) por invocação direta de `enviar-link-reagendamento` (mesma edge), para não depender mais da IA pra esse caso.
+- Detectar padrões `^(não\s+sou|meu\s+nome\s+(é|e)|aqui\s+(é|e|quem\s+fala\s+é))\s+([A-Za-zÀ-ÿ ]{3,})` e CPFs (11 dígitos válidos) diferentes do cacheado.
+- Se divergência → `UPDATE agente_ia_contatos SET cpf=NULL, nome=NULL, cpf_capturado_em=NULL, sga_associado_id=NULL, sga_associado_status=NULL, sga_associado_encontrado=false, nome_confirmado_em=NULL WHERE telefone=...` + log `[reset_identidade]` + responder com saudação canônica do gate.
 
-## Arquivos afetados
+Mesmo gatilho quando o cliente diz "não tenho esse carro", "esse carro não é meu", "veículo errado" → resetar identidade (não só veículo, porque a divergência de veículo implica divergência de pessoa quando o lookup veio do CPF cacheado).
 
-- `supabase/functions/agente-consultor-ia/index.ts` — injetar contexto, bypass de CPF, registrar 2 tools novas e seu handler.
-- `supabase/functions/whatsapp-webhook/index.ts` — log + chamada direta da edge `enviar-link-reagendamento` no branch REAGENDAR (linha ~2525-2606).
-- `supabase/migrations/<nova>.sql` — `UPDATE ia_habilidades SET ferramentas_habilitadas = ferramentas_habilitadas || array['enviar_link_reagendamento','confirmar_agendamento']::text[], regras_absolutas = regras_absolutas || E'\nQuando houver agendamento pendente…' WHERE slug='relacionamento'`.
+### 4. Correção imediata deste contato
 
-## Resultado esperado no mesmo caso
+Migration de saneamento pontual: zerar identidade cacheada de **5521992593830** para forçar o gate na próxima mensagem.
 
-```
-10:00 → template confirmacao_manha_v1
-11:02 ← "Reagendamento"
-11:02 → IA (contexto pendente injetado) chama enviar_link_reagendamento
-11:02 → template reagendamento_servico com link app.praticcar.org/reagendar/<token>
-       + "Tudo bem, Thiago! Te enviei o link pra escolher nova data."
-```
+### 5. Observabilidade
 
-Sem CPF gate, sem operador manual, sem 1h13min de gap.
+- Log `[reconfirmacao_identidade] telefone=... cache=Thais resposta=...` quando pré-saudação for enviada.
+- Log `[reset_identidade] telefone=... motivo=(negacao_nome|cpf_divergente|veiculo_negado)` quando reset disparar.
+- Métrica futura (não nesta entrega): contar quantos contatos passam pela reconfirmação por dia — sinal de cache obsoleto em escala.
+
+---
+
+## Detalhes técnicos
+
+**Arquivos:**
+- `supabase/functions/agente-consultor-ia/index.ts` — gate de identificação, pré-processamento de reset, injeção de regras de identidade.
+- `supabase/functions/agente-consultor-ia/lib/roteador.ts` — leitura da janela de frescor da identidade.
+- Migration: adicionar coluna `ultima_reconfirmacao_em` em `agente_ia_contatos` + UPDATE de saneamento do telefone do caso.
+- Memória `mem://logic/operations/maya-saudacao-e-identificacao-canonica` — atualizar com a regra de reconfirmação por sessão e proibição de citação proativa de veículo.
+
+**Não-objetivos:** não mexer no painel `/relacionamento/config-ia`; não criar nova habilidade; não alterar tools existentes além do gate de `buscar_veiculos_associado`.
+
+Aprovação para implementar?

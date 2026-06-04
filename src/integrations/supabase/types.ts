@@ -962,6 +962,7 @@ export type Database = {
           ultima_interacao: string | null
           ultima_msg_continuidade_em: string | null
           ultima_msg_fora_horario_em: string | null
+          ultima_reconfirmacao_em: string | null
           ultima_saudacao_em: string | null
         }
         Insert: {
@@ -986,6 +987,7 @@ export type Database = {
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
           ultima_msg_fora_horario_em?: string | null
+          ultima_reconfirmacao_em?: string | null
           ultima_saudacao_em?: string | null
         }
         Update: {
@@ -1010,6 +1012,7 @@ export type Database = {
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
           ultima_msg_fora_horario_em?: string | null
+          ultima_reconfirmacao_em?: string | null
           ultima_saudacao_em?: string | null
         }
         Relationships: []
