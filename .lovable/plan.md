@@ -1,174 +1,108 @@
-## Objetivo
+# Diagnóstico: etapas puladas em cotações sub-FIPE
 
-Transformar o agente único parametrizado por audiência em **N habilidades independentes**, cada uma uma caixa fechada (regras, conhecimento, exemplos, tom, ferramentas, liga/desliga). Hoje começamos com duas: `vendas` (Vinicius) e `relacionamento` (Maya). O modelo precisa permitir adicionar uma 3ª/4ª no futuro sem refazer estrutura.
-
-Princípio canônico: **roteamento por habilidade, não por audiência**. Quem é o cliente (lead/associado/diretor) vira só um *filtro de elegibilidade* dentro de cada habilidade — não a chave de seleção do prompt.
+Investigação confirmada por código (file:line) **e** dados reais do banco (últimos 14 dias). Sem suposições — todos os pontos abaixo têm rastro concreto.
 
 ---
 
-## 1. Modelo de dados (nova base)
+## Resumo executivo
 
-### Tabela `ia_habilidades` (nova, canônica)
-A "caixa" de cada habilidade.
+Existem **5 pontos de ruptura** que, combinados, deixam cotações sub-FIPE avançarem sem ter cumprido o caminho canônico. Todos os casos reais que encontrei envolvem `cenario_adesao = isenta_rota` (adesão zerada), o que explica a correlação que você sentiu entre "sub-FIPE" e "cenário de adesão" — a isenção dispara automação extra que descobre os buracos do gate.
 
-- `slug` (PK textual: `vendas`, `relacionamento`)
-- `nome_exibicao`, `descricao`
-- `ativa` (bool) — **o liga/desliga independente**
-- `nome_agente` (Vinicius, Maya, …)
-- `persona`, `regras_absolutas`, `tom_voz`, `saudacao_inicial`
-- `audiencias_elegiveis` (text[]: quem essa habilidade aceita atender — `['lead']` para vendas, `['associado','diretor']` para relacionamento)
-- `ferramentas_habilitadas` (text[]: nomes das tools que essa habilidade pode chamar)
-- `prioridade_roteamento` (int) — desempate quando 2 habilidades aceitam a mesma audiência
-- `horario_atendimento` (jsonb: dias/horários, ou null=24/7)
-- `mensagem_fora_horario`
+**Evidências no banco (últimas 2 semanas, autovistoria + isenta_rota):**
 
-### Tabela `ia_habilidade_conhecimento` (nova, substitui FAQ compartilhada)
-FAQ/conhecimento **por habilidade**, não por audiência.
+| Cotação | n_fotos | Vídeo | Status atingido | Esperado canônico |
+|---|---|---|---|---|
+| `0e685fc0` | **3** | sim | **ativo** | bloqueado em autovistoria (faltam ~28 fotos) |
+| `b8704b27` | **0** | **não** | aguardando_aprovacao_cadastro | bloqueado no link público |
+| `534dd759` | **1** | sim | aguardando_aprovacao_cadastro | bloqueado em autovistoria |
+| `d3126a85` | 3 | sim | pagamento_ok + vistoria_concluida_em setado | bloqueado em autovistoria |
+| `c735c5e6` | 3 | sim | pagamento_ok + vistoria_concluida_em setado | bloqueado em autovistoria |
 
-- `habilidade_slug` (FK → `ia_habilidades.slug`)
-- `categoria`, `pergunta`, `resposta`, `palavras_chave`, `ordem`, `ativo`
-- ❌ Sem coluna `audiencias` (a audiência já é dada pela habilidade)
-
-### Tabela `ia_habilidade_exemplos` (nova)
-Exemplos de resposta canônicos por habilidade (few-shot dedicado).
-
-- `habilidade_slug`, `titulo`, `entrada_usuario`, `resposta_ideal`, `notas`, `ordem`
-
-### `ai_model_config` (mantém global)
-Provedor + modelo continua global — não faz sentido cada habilidade ter modelo diferente hoje.
-
-### Migração dos dados atuais
-- `maya_ia_comportamento` (audiência=`lead`) → `ia_habilidades` slug=`vendas`
-- `maya_ia_comportamento` (audiência=`associado`/`diretor`) → `ia_habilidades` slug=`relacionamento` (com `audiencias_elegiveis=['associado','diretor']`)
-- `maya_ia_faq` → `ia_habilidade_conhecimento`, com regra: FAQ marcada só `['lead']` vai pra `vendas`; só `['associado']`/`['diretor']` vai pra `relacionamento`; marcada pra **ambos** é **duplicada** e o operador decide depois quais ficam (relatório de duplicatas)
-- `agente_ia_config` (global) → **descontinuado**; conteúdo migrado pra `persona`/`regras_absolutas` da habilidade correta (decisão manual via relatório, sem mover cego)
-
-### Tabelas mantidas
-`agente_ia_contatos`, `agente_ia_locks`, `whatsapp_ia_pausas`, `whatsapp_fila_ia`, `ai_model_config`, `whatsapp_instancias` (toggle global continua existindo como master switch).
-
-### Tabelas a depreciar (não dropar agora — manter por 1 release)
-`maya_ia_comportamento`, `maya_ia_faq`, `agente_ia_config`. Marcar como deprecated em comentário SQL e na UI; remover em release seguinte após validação.
+Ou seja: o sistema **está aprovando vistorias com 0, 1 ou 3 fotos** em veículos que exigem 31 (carro) / 15 (moto) + vídeo.
 
 ---
 
-## 2. Roteamento (entrada da mensagem)
+## Os 5 conflitos confirmados
 
-Novo arquivo `supabase/functions/agente-consultor-ia/lib/roteador.ts`:
+### Conflito A — Gate de completude sub-FIPE bypassável por idempotência
+**`supabase/functions/finalizar-autovistoria-cotacao/index.ts:188`**
 
-```text
-mensagem entra
-  ↓
-resolver audiência do contato (lead | associado | diretor)
-  ↓
-SELECT * FROM ia_habilidades
-  WHERE ativa = true
-    AND audiencia ∈ audiencias_elegiveis
-  ORDER BY prioridade_roteamento
-  ↓
-0 habilidades ativas elegíveis → fallback canônico ("nosso atendimento por IA está pausado, em instantes um humano te responde") + abre transbordo
-1 habilidade → usa ela
-2+ → primeira por prioridade (futuro: classificador de intenção)
-```
+O gate `checarCompletudeAutovistoriaSubFipe` só roda quando `!vistoriaExistente`. Em qualquer segunda chamada da edge (idempotência), o gate é pulado — explica os casos com 1 ou 3 fotos materializadas.
 
-**Consequência direta:**
-- Desligar `vendas` → leads recebem mensagem de pausa + transbordo (não cai no Maya, não cai em prompt vazio).
-- Desligar `relacionamento` → associados recebem pausa + transbordo.
-- Desligar os dois → equivale ao toggle global atual (mas agora granular).
+### Conflito B — `gateCaminhoPublicoCompleto` aceita autovistoria enxuta em sub-FIPE
+**`supabase/functions/aprovar-proposta/index.ts:412-417`**
 
----
+O gate aceita `≥2 fotos + vídeo 360°` como suficiente para **qualquer** veículo. Sub-FIPE deveria exigir o roteiro completo (31/15). É o caminho pelo qual `0e685fc0` (3 fotos) virou `ativo`.
 
-## 3. Edge function `agente-consultor-ia` refatorada
+### Conflito C — Branch sub-FIPE em `aprovar-proposta` não bloqueia ausência de vistoria materializada
+**`supabase/functions/aprovar-proposta/index.ts:977-1068`**
 
-Hoje: ~2910 linhas com `if (isAssociado) {…} else {…}` enroscado.
+Se `vistAuto` vier `null`, o branch sub-FIPE silencia (sem `else`/guard). `cadastro_aprovado` pode virar `true` sem vistoria — exatamente o que aconteceu com `b8704b27` (0 fotos, sem vídeo, chegou ao Cadastro).
 
-Reorg em módulos (mesma pasta, sem subpastas extras na raiz):
-- `index.ts` — entrada HTTP, dedup (`agente_ia_locks`), invoca roteador, chama executor
-- `lib/roteador.ts` — resolve habilidade ativa
-- `lib/executor.ts` — monta prompt a partir da habilidade selecionada (persona + regras + tom + saudação + conhecimento + exemplos + ferramentas habilitadas), injeta `ai_model_config`, chama LLM
-- `lib/gates.ts` — gates canônicos universais (saudação+identificação, fora-horário, vácuo, validador de saída, fallback de transbordo)
-- `lib/tools/` — uma tool por arquivo (`consultar_boletos.ts`, `consultar_placa.ts`, `calcular_cotacao.ts`, `solicitar_atendente_humano.ts`, etc.); executor só passa adiante as listadas em `ferramentas_habilitadas`
+### Conflito D — `cenario_adesao isenta_*` automatiza pagamento e dispara `criar-instalacao-pos-pagamento` antes da autovistoria estar completa
+**`src/components/cotacao-publica/EtapaPagamentoCotacao.tsx:357-372`** + **`supabase/functions/criar-instalacao-pos-pagamento/index.ts:445-458`**
 
-Critério de aceite estrutural: nenhum `if (isAssociado)` sobrevive. Toda diferença vira dado em `ia_habilidades`.
+Quando `valor_adesao=0`, o frontend chama `confirmar-adesao-zerada` automaticamente → seta `status_contratacao='pagamento_ok'`. Para sub-FIPE + autovistoria sem data agendada, `criar-instalacao-pos-pagamento` **silencia sem criar instalação** (correto pela memória `sub-fipe-sem-instalacao`), mas deixa a cotação num estado em que `etapaDoStatus` confunde o próximo passo. É por isso que o problema "acende" no cenário de adesão zerada.
+
+### Conflito E — `getEtapaVenda` desconhece sub-FIPE
+**`src/lib/cotacaoEtapa.ts:214-219`**
+
+Sem branch para sub-FIPE: após `autovistoria_ok` com `adesao_paga=true`, retorna `aguardando_vistoria` → mapeia para `aguardando_agendamento_instalacao`. Mas sub-FIPE **nunca** tem instalação — o operador vê um label semanticamente errado, o que mascara o problema.
 
 ---
 
-## 4. UI de configuração
+## Pontos verificados que **não** são bug
 
-Nova área: **Configurações → Inteligência Artificial → Habilidades** (substitui as telas atuais espalhadas).
-
-Lista de habilidades como cards, cada card com:
-- Toggle **Ativa/Inativa** (o liga/desliga independente — pedido principal)
-- Badges: audiências elegíveis, ferramentas, horário
-- Atalho pra editar persona/regras/tom/saudação
-- Aba "Conhecimento" (FAQ daquela habilidade)
-- Aba "Exemplos" (few-shot)
-- Aba "Ferramentas" (checkboxes do catálogo de tools)
-- Aba "Horário de atendimento"
-- Botão "+ Nova habilidade" (descoberto, não bloqueante)
-
-A página atual `IntegracaoWhatsApp.tsx` aba "IA & Respostas" passa a linkar pra essa nova tela. `AIModelConfigCard` continua global em **IA → Configuração** (modelo).
-
-Toggle global `whatsapp_instancias.ia_habilitada` é mantido como **master switch** (desliga tudo de uma vez) e fica visível com aviso claro de que individual está nas habilidades.
+- Trigger `fn_materializar_autovistoria_cotacao` materializa vistoria com `status='pendente'` (correto — não bypassa nenhum gate por si só).
+- `deveAguardarInstalacao` (linha 1514 do `aprovar-proposta`) está logicamente correto por sorte do operador booleano — não mexer.
+- `criar-instalacao-pos-pagamento` está certo em **não** criar instalação para sub-FIPE (regra canônica).
 
 ---
 
-## 5. Migração de conteúdo — fluxo seguro
+## Opções de correção — preciso da sua decisão por conflito
 
-Não migrar cego. Roteiro:
+Não vou implementar nada antes de você escolher. Para cada conflito, listo as opções com trade-offs.
 
-1. Rodar migration que **cria** as novas tabelas (sem dropar nada).
-2. Script de migração popular `ia_habilidades` com 2 linhas (`vendas`, `relacionamento`) usando os textos atuais de `maya_ia_comportamento`.
-3. Script popular `ia_habilidade_conhecimento` a partir de `maya_ia_faq` com a regra de mapeamento acima; FAQ marcada pra múltiplas audiências cruzadas é **duplicada com tag `revisar=true`**.
-4. Gerar relatório (CSV em `/mnt/documents/`) com:
-   - FAQs duplicadas (operador decide quais ficam em cada caixa)
-   - Itens de `agente_ia_config` que precisam virar persona/regra (decisão manual)
-5. Sistema continua lendo das **tabelas antigas** até o flag `IA_HABILIDADES_V2=true` ser ligado. Cutover controlado.
-6. Após 1 release estável, dropar tabelas antigas em migration separada.
+### Conflito A — fechar o bypass de idempotência
 
----
+- **A1 (mínimo invasivo, recomendado):** Mover o `checarCompletudeAutovistoriaSubFipe` para **antes** do branch de idempotência, e bloquear se a vistoria existente ainda estiver `status='pendente'` e incompleta.
+- **A2:** Devolver na resposta idempotente a contagem de fotos faltantes, e deixar o front travar avanço. (Mais frágil — depende do cliente.)
+- **A3 (estrutural):** Nova coluna `vistorias.autovistoria_completa boolean` setada só quando o gate passa. Todos os consumidores passam a ler essa flag. (Mais robusto, mais migração.)
 
-## 6. Observabilidade
+### Conflito B — `gateCaminhoPublicoCompleto` separar sub-FIPE de ≥FIPE
 
-- Log estruturado por requisição: `[habilidade_selecionada] slug=vendas motivo=audiencia_unica` ou `slug=null motivo=nenhuma_ativa`
-- Coluna `agente_ia_contatos.ultima_habilidade_atendeu` (texto) — auditoria de qual caixa respondeu
-- Métrica simples na tela: contagem de mensagens por habilidade nos últimos 7 dias
+- **B1 (recomendado):** Dentro do gate, detectar sub-FIPE via `fn_veiculo_precisa_rastreador` e exigir `checarCompletudeAutovistoriaSubFipe` (mesma função do `_shared`).
+- **B2:** Apenas contar fotos contra um mínimo configurável (30 carro / 14 moto) sem reusar a função canônica. (Risco de divergir.)
+- **B3:** Dois gates separados (`gateSubFipe` + `gateAcimaFipe`). Mais explícito, mais código.
 
----
+### Conflito C — guard de ausência de vistoria no branch sub-FIPE de `aprovar-proposta`
 
-## 7. Memórias atualizadas
+- **C1 (recomendado):** `else` explícito que retorna **409 `sem_autovistoria_sub_fipe`** e reverte `cadastro_aprovado` se a vistoria não existir. Padrão já usado em outros edges.
+- **C2:** Mover a checagem de existência da vistoria para dentro do `gateCaminhoPublicoCompleto`, antes de qualquer mutação. (Mais cedo no fluxo, evita rollback.)
 
-- Nova: `mem://logic/ia/habilidades-canonicas` — modelo de habilidades independentes, regra de roteamento, liga/desliga por habilidade
-- Atualizar: `mem://logic/operations/maya-saudacao-e-identificacao-canonica`, `mem://logic/operations/transbordo-relacionamento-canonico`, `mem://logic/operations/maya-nunca-deixa-vacuo`, `mem://logic/operations/maya-config-aplicada-em-todas-audiencias` — todas passam a referenciar `ia_habilidades` em vez de `maya_ia_*`
-- Depreciar (com nota): qualquer memória que ainda mande editar `agente_ia_config` global ou `maya_ia_comportamento` por audiência
+### Conflito D — adesão zerada não pode avançar status enquanto autovistoria sub-FIPE está incompleta
 
----
+- **D1 (recomendado):** Em `confirmar-adesao-zerada`, antes de setar `status_contratacao='pagamento_ok'`, verificar se a autovistoria está completa (mesma função canônica). Se incompleta, manter `status_contratacao` no estado anterior e devolver `code: 'autovistoria_pendente'`.
+- **D2:** Em `EtapaPagamentoCotacao.tsx`, só disparar `confirmarAdesaoIsenta` quando a etapa de autovistoria já tiver sido concluída pela máquina de estados pública. (Frontend-only, mas não cobre chamadas diretas à edge.)
+- **D3:** Combinar D1 + D2 (defesa em camadas — padrão que você adota em outros pontos do sistema).
 
-## 8. Fora de escopo desta entrega
+### Conflito E — `getEtapaVenda` reconhecer sub-FIPE
 
-- Classificador de intenção (decidir entre 2 habilidades pelo conteúdo da mensagem) — fica pra quando existir 3ª habilidade
-- Versionamento/A-B de prompts por habilidade
-- Tradução das tabelas legadas para inglês
-- Mudanças em `whatsapp-webhook` além de propagar o `nome_contato` (já no plano anterior)
+- **E1 (recomendado):** Adicionar parâmetro `isSubFipe` e retornar `aguardando_aprovacao_cadastro` após `autovistoria_ok` em sub-FIPE (em vez de `aguardando_vistoria`). Toca só apresentação no Kanban.
+- **E2:** Usar `status_contratacao='aguardando_aprovacao_cadastro'` como sinal canônico no lugar de `autovistoria_ok` para sub-FIPE. Mais limpo, mas mexe na máquina de estados em vários pontos.
 
 ---
 
-## 9. Critérios de aceite
+## Saneamento histórico (separado da correção)
 
-1. Desligar `vendas` na UI → próximo lead recebe mensagem de pausa + transbordo; nenhum associado é afetado
-2. Desligar `relacionamento` na UI → próximo associado recebe pausa + transbordo; nenhum lead é afetado
-3. FAQ criada em `relacionamento` **não aparece** no prompt de `vendas` (sem vazamento)
-4. Tool `consultar_boletos_associado` não fica disponível pra `vendas` (catálogo isolado)
-5. Logs mostram `[habilidade_selecionada]` em 100% das execuções
-6. Nenhum `if (isAssociado)` no código novo de prompt/roteamento
+Independente das opções escolhidas, temos **pelo menos 5 cotações** com vistorias incompletas que avançaram. Sugiro um item adicional:
+
+- **S1:** Script de auditoria listando todas as cotações com `tipo_vistoria='autovistoria'` + `cenario_adesao` zerado + `n_fotos < mínimo` + `status_contratacao` ≥ `pagamento_ok` para você decidir caso a caso (cancelar, reabrir, ou aprovar manualmente).
 
 ---
 
-## Arquivos tocados (resumo)
+## O que eu preciso de você
 
-**Migrations** — criar `ia_habilidades`, `ia_habilidade_conhecimento`, `ia_habilidade_exemplos` + grants + RLS + script de seed/migração de dados.
+Para cada conflito (A, B, C, D, E), me diga qual opção implementar (ou se quer combinar). E me diga se faço o **S1** (saneamento de auditoria) junto.
 
-**Edge functions** — refatorar `supabase/functions/agente-consultor-ia/index.ts` em módulos (`lib/roteador.ts`, `lib/executor.ts`, `lib/gates.ts`, `lib/tools/*`); ajustar `whatsapp-webhook` só pra propagar `nome_contato`.
-
-**Frontend** — nova página `src/pages/configuracoes/IAHabilidades.tsx` + componentes `src/components/integracoes/ia-habilidades/*` (card, editor de persona, editor de FAQ, editor de exemplos, seletor de ferramentas, editor de horário); hook `src/hooks/useIAHabilidades.ts` substitui `useMayaIA.ts` (mantém o antigo até cutover).
-
-**Memórias** — atualizar as 4 memórias listadas + criar `mem://logic/ia/habilidades-canonicas`.
+Recomendação minha, se quiser ir no mais seguro: **A1 + B1 + C1 + D3 + E1 + S1**. Pode responder só com "vai na recomendação" que eu sigo.
