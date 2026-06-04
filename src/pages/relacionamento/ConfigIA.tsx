@@ -175,12 +175,12 @@ function EditorHabilidade({ habilidade }: { habilidade: IAHabilidade }) {
 // ─────────────────────────── Configuração avançada ───────────────────────────
 
 function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
-  const [open, setOpen] = useState(false);
   const [form, setForm] = useState<IAHabilidade>(habilidade);
   useEffect(() => { setForm(habilidade); }, [habilidade.slug, habilidade.atualizado_em]);
 
   const upsert = useUpsertIAHabilidade();
   const handleSave = () => upsert.mutate(form);
+
 
   return (
     <div className="space-y-6">
