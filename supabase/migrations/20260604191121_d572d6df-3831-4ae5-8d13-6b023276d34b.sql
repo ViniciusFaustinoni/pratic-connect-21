@@ -1,0 +1,5 @@
+DELETE FROM whatsapp_mensagens WHERE telefone IN ('5521982244909','21982244909');
+DELETE FROM whatsapp_fila_ia WHERE telefone IN ('5521982244909','21982244909');
+DELETE FROM agente_ia_contatos WHERE telefone IN ('5521982244909','21982244909');
+DELETE FROM agente_ia_locks WHERE telefone IN ('5521982244909','21982244909');
+DELETE FROM whatsapp_ia_pausas WHERE telefone IN ('5521982244909','21982244909');
