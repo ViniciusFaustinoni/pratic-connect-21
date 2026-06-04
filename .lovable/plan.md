@@ -1,83 +1,81 @@
-## Objetivo
+# Diagnóstico
 
-Deixar **uma única IA** ativa no sistema — a IA de FAQ/Atendimento — sem nome próprio ("Atendimento Pratic"), atendendo **todas as audiências** (lead, associado, diretor). Vinicius/Vendas fica desligado mas preservado em código para reativação futura. Toda a configuração passa a viver em **/relacionamento/config-ia**.
+Investigação no banco + edge `agente-consultor-ia` + componente `ChatPanel` revelou **duas causas independentes**, sem suposição:
 
----
+## Bug 1 — Chat não atualiza em tempo real
+- `ChatPanel.tsx` (linha 94-104) assina canal Realtime `chat-ia-${telefoneComDDI}` filtrando `whatsapp_mensagens`.
+- **Mas `whatsapp_mensagens` NÃO está na publicação `supabase_realtime`** (consulta a `pg_publication_tables` retornou vazio para `%whatsapp%`).
+- Resultado: nenhum INSERT/UPDATE dispara o canal → o painel só atualiza quando o `refetchInterval: 60_000` do `useWhatsAppHistorico` roda.
 
-## 1. Banco — desligar Vendas e neutralizar Relacionamento
+## Bug 2 — IA se apresenta como "Vinicius" mesmo com `vendas` desativada
+- O roteador canônico (`lib/roteador.ts`) **escolhe corretamente** a habilidade "Atendimento Pratic" para a audiência `lead` — verificado nos logs (`[habilidade_selecionada]`).
+- **Mas o `systemPrompt` ignora isso**: `agente-consultor-ia/index.ts` (linhas 989-1280) tem três branches hardcoded por audiência. O branch `lead` (linha 1205) ainda monta literalmente:
+  ```
+  Você é ${nomeAgente}, consultor virtual de vendas da PRATICCAR…
+  "${apresentacao}"  ← apresentação vem do legado agente_ia_config
+  ```
+  …com todo o fluxo de cotação (consultar_placa, calcular_cotacao, registrar_cotacao etc.). É isso que produz o "Olá! Sou o Vinicius, consultor virtual…" do print.
+- O `nomeAgente` e `apresentacao` vêm de `agente_ia_config` legado, não da habilidade roteada.
 
-Migration de UPDATE em `ia_habilidades`:
-
-- `slug='vendas'` → `ativa=false` (NÃO deletar; preserva persona/conhecimento p/ futuro)
-- `slug='relacionamento'`:
-  - `nome_exibicao` = "Atendimento Pratic"
-  - `nome_agente` = "Atendimento Pratic"
-  - `audiencias_elegiveis` = `['lead','associado','diretor']` (passa a cobrir lead também)
-  - `persona`/`saudacao_inicial`/`regras_absolutas` → varredura e substituição de "Maya" por "Atendimento Pratic" (ou remover menção ao nome quando ficar redundante)
-  - `horario_atendimento` = null (24/7, igual hoje p/ associado/diretor) — leads também sem gate de horário, como pedido ("agir como IA de suporte")
-
-Sem mexer em `maya_ia_*` / `agente_ia_config` (já marcadas deprecated).
-
-## 2. Roteador (`supabase/functions/agente-consultor-ia/lib/roteador.ts`)
-
-Já é audiência→habilidade ativa. Com `relacionamento` cobrindo as 3 audiências e `vendas` desativada, lead cai automaticamente em "relacionamento". **Sem alteração de código** — só validar com log `[habilidade_selecionada=relacionamento]` para mensagens de lead.
-
-## 3. Gate fora-horário Vinicius
-
-Hoje há gate "Seg–Sex 08–18 BRT aplica APENAS a LEAD/Vinicius" no agente. Como Vinicius está off e Atendimento Pratic atende lead 24/7, esse gate deve ser **neutralizado** (remover branch específica de lead/vinicius no `agente-consultor-ia/index.ts`). Memória core será atualizada.
-
-## 4. Rota e UI — `/relacionamento/config-ia`
-
-Reescrever `src/pages/relacionamento/MayaIA.tsx` → renomear arquivo para `ConfigIA.tsx` (e atualizar import em `App.tsx`). A nova página é **um editor único** para a habilidade `relacionamento`, reaproveitando os hooks `useIAHabilidades`/`useIAConhecimento`/`useIAExemplos` (novos, canônicos).
-
-Estrutura:
-
-- Header "Configuração da IA de Atendimento" + toggle global (liga/desliga habilidade)
-- Tabs: **Identidade & Regras** | **Conhecimento (FAQ)** | **Exemplos** | **Ferramentas**
-- Sem qualquer string "Maya" / "Vinicius" / "Vendas" na tela
-- Sem seletor de audiência (a habilidade já cobre todas)
-
-Layout aproveita o que já existe em `src/pages/configuracoes/IAHabilidades.tsx` (formulário + listas), simplificado para 1 habilidade fixa (slug='relacionamento').
-
-## 5. Remover atalho em Configurações › Integrações › IA
-
-Em `src/pages/configuracoes/IntegracaoIA.tsx`, **remover** o `<Card>` "Habilidades da IA" que linkava para `/configuracoes/integracoes/ia/habilidades`. Manter apenas AIModelConfigCard + OcrEngineConfigCard + Alert.
-
-A rota `/configuracoes/integracoes/ia/habilidades` e o arquivo `src/pages/configuracoes/IAHabilidades.tsx` ficam **removidos do App.tsx** (rota deletada) — config IA vive só no Relacionamento.
-
-## 6. Limpeza de menções "Maya" na UI
-
-Varredura de strings visíveis ao usuário:
-
-- `src/components/eventos/chat-ia/ContatoDetalheDrawer.tsx` → texto "IA pausada" sem mencionar Maya (já está OK; só validar)
-- Qualquer label/título visível que diga "Maya" em telas de chat/eventos → "Atendimento Pratic" ou "IA"
-- Mensagens de pausa/encerramento mantidas (não citam Maya)
-
-Logs internos (`[maya_config]`, `[maya_mensagem_pausada]`, tipos de notificação) **não mudam** nesta fase — são chaves técnicas, troca posterior se quiser.
-
-## 7. Memórias
-
-- Atualizar core (memória de habilidades) refletindo: 1 habilidade ativa (`relacionamento` = "Atendimento Pratic", cobre lead+associado+diretor 24/7); Vendas desativada; gate fora-horário removido; UI canônica em `/relacionamento/config-ia`
-- Marcar `mem://logic/operations/maya-saudacao-e-identificacao-canonica` como vigente com nome novo
-- Atualizar `mem://logic/ia/habilidades-canonicas` com nova UI canônica
+## Bug 2b — "Oi, Thais!" para um número do Vinicius
+- `agente_ia_contatos` para `5521992593830` tem `nome='THAIS GURUCEAGA DOS SANTOS'`, `sga_associado_encontrado=true`, `cpf=15230046732` — cache antigo de quem usou o número antes.
+- O agente trata o usuário pelo nome cacheado sem revalidar identidade.
+- **Aqui há um conflito lógico que exige decisão sua** — opções na seção abaixo.
 
 ---
 
-## Arquivos tocados (resumo técnico)
+# Correções
 
-```text
-migration       UPDATE ia_habilidades (vendas ativa=false; relacionamento renomeado + audiências)
-edited          supabase/functions/agente-consultor-ia/index.ts  (remover gate fora-horário lead/Vinicius)
-renamed         src/pages/relacionamento/MayaIA.tsx → ConfigIA.tsx (reescrito com hooks ia_habilidades)
-edited          src/App.tsx  (import novo nome, remove rota /configuracoes/integracoes/ia/habilidades)
-edited          src/pages/configuracoes/IntegracaoIA.tsx  (remove card Habilidades)
-deleted         src/pages/configuracoes/IAHabilidades.tsx
-varredura       strings "Maya" visíveis ao usuário → "Atendimento Pratic"
-memórias        index.md (core) + habilidades-canonicas + saudacao-canonica
+## Parte A — Realtime do chat (sem ambiguidade)
+Migração:
+```sql
+ALTER TABLE public.whatsapp_mensagens REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_mensagens;
+-- Idem para whatsapp_ia_pausas (transbordos em tempo real)
+ALTER TABLE public.whatsapp_ia_pausas REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_ia_pausas;
 ```
 
-## O que NÃO faço
+## Parte B — Prompt dirigido pela habilidade ativa
+- Em `supabase/functions/agente-consultor-ia/index.ts`:
+  - Quando `roteamento.habilidade` for resolvida, usar **dela** como fonte do prompt para TODAS as audiências:
+    - `nome_agente`, `persona`, `regras_absolutas`, `tom_voz`, `saudacao_inicial`.
+  - **Remover** o branch hardcoded de "consultor virtual de vendas" do `lead` (linhas 1188-1356 do bloco lead). Lead, associado e diretor passam a usar um único builder que injeta a configuração da habilidade + FAQ + tools de suporte (`solicitar_atendente_humano`).
+  - Manter o branch `diretor` apenas para o contexto extra de relatórios (ferramentas administrativas), mas **substituir o `nomeAgente` por `habilidade.nome_agente`** ("Atendimento Pratic").
+  - Tools de vendas (`consultar_placa`, `calcular_cotacao`, `registrar_cotacao`, `salvar_dados_cliente`, `obter_opcoes_vencimento`) **deixam de ser anexadas** — coerente com a decisão anterior de desligar a IA de vendas.
+- Limpar referências visíveis "Vinicius" restantes em comentários/log labels do `whatsapp-webhook` e nos toasts do `AgenteConsultorIA.tsx` (renomear para "Atendimento Pratic").
 
-- Não apago tabelas `maya_ia_*` nem `ia_habilidades` row de vendas (preservadas para reativação)
-- Não mudo chaves técnicas internas (`maya_config`, `whatsapp_ia_pausas.motivo`, tipos de notificação)
-- Não toco no fluxo de cotação/sub-FIPE (assunto não relacionado)
+## Parte C — Identificação por cache antigo (CONFLITO — preciso da sua decisão)
+
+Hoje a IA confia em `agente_ia_contatos.nome` mesmo quando o número trocou de dono. Três caminhos possíveis (não posso escolher sem você):
+
+**Opção 1 — Lead nunca é tratado pelo nome cacheado**
+A IA só usa o nome do contato quando audiência é `associado` ou `diretor` (vínculo confirmado pelo telefone do SGA). Para `lead`, ignora `contato.nome` e usa saudação genérica até o usuário informar nome/CPF na conversa atual.
+- Prós: simples, resolve o caso Vinicius/Thais imediatamente.
+- Contras: lead que volta dias depois precisa se apresentar de novo.
+
+**Opção 2 — Reidentificação obrigatória após X horas de silêncio**
+Aplicar o gate canônico de saudação+identificação (memória `maya-saudacao-e-identificacao-canonica`) também para `lead`. Se passou >2h da última interação OU é primeira msg do dia, a IA pede confirmação de nome/CPF antes de tratar pelo nome. Se o usuário responder com nome diferente do cacheado, atualiza `agente_ia_contatos`.
+- Prós: alinha o lead ao mesmo padrão de associado/diretor, sem perder histórico.
+- Contras: adiciona uma troca extra de mensagens em todo retorno de lead após 2h.
+
+**Opção 3 — Confiar sempre no `pushName` da última mensagem WhatsApp**
+Usar o nome de perfil do WhatsApp da mensagem atual como fonte da verdade, sobrescrevendo `agente_ia_contatos.nome` se divergir.
+- Prós: zero atrito, segue a realidade do aparelho.
+- Contras: muita gente tem `pushName` ruim ("João da Silva ❤️", "iPhone do Carlos") — pode degradar o tratamento profissional.
+
+---
+
+# Detalhes técnicos (resumo)
+
+| Arquivo | Mudança |
+|---|---|
+| nova migração SQL | `ALTER PUBLICATION supabase_realtime ADD TABLE …` para `whatsapp_mensagens` + `whatsapp_ia_pausas`, com `REPLICA IDENTITY FULL` |
+| `supabase/functions/agente-consultor-ia/index.ts` | Builder único de prompt a partir de `roteamento.habilidade`; remoção do branch "lead = pitch Vinicius"; remoção das tools de vendas |
+| `src/pages/configuracoes/AgenteConsultorIA.tsx` | Toasts/labels "Vinicius" → "Atendimento Pratic" |
+| `supabase/functions/whatsapp-webhook/index.ts` | Comentários/logs neutros |
+| Memórias | atualizar `mem://logic/ia/habilidades-canonicas` registrando que o systemPrompt agora é dirigido pela habilidade roteada |
+
+# Pergunta antes de implementar
+
+**Qual opção para o cache de nome (Bug 2b)?** Opção 1, 2 ou 3 — sem isso só corrijo realtime + persona, e o caso "Thais" pode voltar em outro número herdado.
