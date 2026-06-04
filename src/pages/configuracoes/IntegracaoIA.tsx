@@ -72,10 +72,11 @@ export default function IntegracaoIA() {
           <Alert>
             <Sparkles className="h-4 w-4" />
             <AlertDescription>
-              O modelo aqui se aplica <strong>globalmente</strong> a todas as habilidades de IA, OCR de documentos,
-              análise de risco e demais automações. Cada habilidade configura sua persona, conhecimento e
-              ferramentas separadamente.
+              O modelo aqui se aplica <strong>globalmente</strong> a OCR de documentos, análise de risco,
+              IA de atendimento (WhatsApp) e demais automações. A configuração da IA de atendimento
+              (persona, FAQ, exemplos) vive em <em>Relacionamento › Config IA</em>.
             </AlertDescription>
+
           </Alert>
         </TabsContent>
 
