@@ -233,7 +233,7 @@ export function WhatsAppTestChat() {
         <FlaskConical className="h-4 w-4 text-green-600" />
         <AlertDescription className="text-sm">
           <strong>Modo Teste Real</strong> — Envia mensagens reais via Evolution API para o número da Meta.
-          O fluxo completo é executado: Mensagem WhatsApp → Webhook Meta → IA (Maya) → Resposta.
+          O fluxo completo é executado: Mensagem WhatsApp → Webhook Meta → IA → Resposta.
         </AlertDescription>
       </Alert>
 

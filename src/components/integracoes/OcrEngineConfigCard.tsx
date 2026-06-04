@@ -60,7 +60,7 @@ export function OcrEngineConfigCard() {
         </div>
         <CardDescription>
           Vale <strong>somente para leitura de documentos</strong> (CNH, CRLV, RG, comprovante etc.).
-          Não afeta chat, Maya, análise de risco ou WhatsApp.
+          Não afeta chat, IA de atendimento, análise de risco ou WhatsApp.
           <br />Documentos críticos (<strong>CNH e CRLV</strong>) passam por <strong>dupla leitura automática</strong> com motor secundário.
         </CardDescription>
       </CardHeader>
