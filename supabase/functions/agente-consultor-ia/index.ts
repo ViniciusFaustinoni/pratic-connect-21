@@ -1674,9 +1674,23 @@ REGRAS OBRIGATÓRIAS deste contexto:
                 serviceKey,
                 { cpf: contato?.cpf || null }
               );
+            } else if (fnName === "enviar_link_reagendamento") {
+              toolResult = await executarEnviarLinkReagendamento(
+                supabaseUrl,
+                serviceKey,
+                { servico_id: String(args?.servico_id || contextoAgendamentoPendente?.servico_id || "") }
+              );
+            } else if (fnName === "confirmar_agendamento") {
+              toolResult = await executarConfirmarAgendamento(
+                supabase,
+                supabaseUrl,
+                serviceKey,
+                { servico_id: String(args?.servico_id || contextoAgendamentoPendente?.servico_id || ""), telefone: telLimpo }
+              );
             } else {
               toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
             }
+
 
           } catch (err: any) {
             console.error(`[agente-consultor-ia] Tool error ${fnName}:`, err);
