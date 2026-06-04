@@ -101,17 +101,17 @@ export function useToggleIAHabilidade() {
 }
 
 // ─── Conhecimento ─────────────────────────────────────────────
-export function useIAConhecimento(habilidadeSlug?: string) {
+export function useIAConhecimento(habilidadeSlug?: string, tipo?: IATipoItem) {
   return useQuery({
-    queryKey: ['ia-conhecimento', habilidadeSlug],
+    queryKey: ['ia-conhecimento', habilidadeSlug, tipo ?? 'all'],
     enabled: !!habilidadeSlug,
     queryFn: async (): Promise<IAConhecimento[]> => {
-      const { data, error } = await (supabase as any)
+      let q = (supabase as any)
         .from('ia_habilidade_conhecimento')
         .select('*')
-        .eq('habilidade_slug', habilidadeSlug)
-        .order('categoria')
-        .order('ordem');
+        .eq('habilidade_slug', habilidadeSlug);
+      if (tipo) q = q.eq('tipo', tipo);
+      const { data, error } = await q.order('categoria').order('ordem');
       if (error) throw error;
       return (data || []) as IAConhecimento[];
     },
