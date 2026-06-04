@@ -17,11 +17,15 @@ export function useWhatsAppHistorico(telefone: string | null | undefined, limit 
       const telefoneComDDI = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`;
 
       // Buscar mensagens locais do banco
+      // IMPORTANTE: ordenar DESC + limit retorna as N mensagens MAIS RECENTES.
+      // Ordenar ASC + limit retornava as N mais antigas, escondendo tudo que viesse
+      // depois — sintoma: mensagens novas (especialmente entradas do cliente) sumiam
+      // do painel assim que o histórico do telefone passava de N rows.
       const { data, error } = await supabase
         .from('whatsapp_mensagens')
         .select('*')
         .or(`telefone.eq.${telefoneComDDI},telefone.eq.${telefoneLimpo}`)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) {
@@ -29,13 +33,16 @@ export function useWhatsAppHistorico(telefone: string | null | undefined, limit 
         throw error;
       }
 
+      // Reordena em ordem cronológica ascendente para a renderização do chat.
+      const cronologico = (data ?? []).slice().reverse();
+
       // Dedupe por message_id: cada saída da Maya é gravada 2x na tabela
       // (1 linha provedor=meta_oficial + 1 linha provedor=evolution) com o MESMO
       // message_id Meta — o WhatsApp recebe a mensagem 1x só, mas o histórico
       // duplicava no painel. Mantém a primeira ocorrência por message_id; linhas
       // sem message_id (raras, ex.: registros antigos) passam sem dedup.
       const seen = new Set<string>();
-      const deduped = (data ?? []).filter((m: any) => {
+      const deduped = cronologico.filter((m: any) => {
         const mid = m?.message_id;
         if (!mid) return true;
         if (seen.has(mid)) return false;
