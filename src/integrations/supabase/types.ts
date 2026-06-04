@@ -15631,6 +15631,7 @@ export type Database = {
           pergunta: string
           resposta: string
           revisar: boolean
+          tipo: string
         }
         Insert: {
           ativo?: boolean
@@ -15645,6 +15646,7 @@ export type Database = {
           pergunta: string
           resposta: string
           revisar?: boolean
+          tipo?: string
         }
         Update: {
           ativo?: boolean
@@ -15659,6 +15661,7 @@ export type Database = {
           pergunta?: string
           resposta?: string
           revisar?: boolean
+          tipo?: string
         }
         Relationships: [
           {
