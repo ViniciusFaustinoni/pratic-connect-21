@@ -267,6 +267,7 @@ async function loadHabilidadeContent(
 
   return {
     faqText: faqText || undefined,
+    regrasText: regrasText || undefined,
     faqDestaqueText: faqDestaqueText || undefined,
     faqMatchedIds: faqMatchedIds.length ? faqMatchedIds : undefined,
     exemplosText: exemplosText || undefined,
