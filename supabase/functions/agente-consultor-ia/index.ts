@@ -31,6 +31,7 @@ type HabilidadeContentRaw = { faqs: any[]; exemplos: any[] };
 const HABILIDADE_CONTENT_CACHE = new Map<string, { at: number; data: HabilidadeContentRaw }>();
 type HabilidadeContentCfg = {
   faqText?: string;
+  regrasText?: string;
   faqDestaqueText?: string;
   faqMatchedIds?: string[];
   exemplosText?: string;
@@ -176,7 +177,7 @@ async function loadHabilidadeContent(
     const [{ data: faqs }, { data: exemplos }] = await Promise.all([
       supabase
         .from("ia_habilidade_conhecimento")
-        .select("id,categoria,pergunta,resposta,palavras_chave,ordem")
+        .select("id,categoria,pergunta,resposta,palavras_chave,ordem,tipo")
         .eq("habilidade_slug", habilidadeSlug)
         .eq("ativo", true)
         .order("categoria", { ascending: true })
@@ -192,11 +193,25 @@ async function loadHabilidadeContent(
     HABILIDADE_CONTENT_CACHE.set(habilidadeSlug, { at: Date.now(), data: raw });
   }
 
-  // Bloco completo (FAQ por categoria)
+  // Partição por tipo: 'regra' → bloco de REGRAS; resto (incluindo NULL) → CONHECIMENTO/FAQ
+  const regras = raw.faqs.filter((f: any) => f.tipo === "regra");
+  const conhecimento = raw.faqs.filter((f: any) => f.tipo !== "regra");
+
+  // Bloco de REGRAS (achatado — regra é regra, sem categoria)
+  let regrasText = "";
+  if (regras.length > 0) {
+    const partes: string[] = [];
+    for (const it of regras) {
+      partes.push(`- *${it.pergunta}*\n  ${it.resposta}`);
+    }
+    regrasText = partes.join("\n");
+  }
+
+  // Bloco completo de CONHECIMENTO/FAQ (por categoria)
   let faqText = "";
-  if (raw.faqs.length > 0) {
+  if (conhecimento.length > 0) {
     const porCategoria = new Map<string, any[]>();
-    for (const f of raw.faqs) {
+    for (const f of conhecimento) {
       const k = f.categoria || "geral";
       if (!porCategoria.has(k)) porCategoria.set(k, []);
       porCategoria.get(k)!.push(f);
@@ -217,11 +232,11 @@ async function loadHabilidadeContent(
   // Retrieval para destaque (mesma lógica do loader antigo)
   let faqDestaqueText = "";
   let faqMatchedIds: string[] = [];
-  if (mensagemAtual && raw.faqs.length > 0) {
+  if (mensagemAtual && conhecimento.length > 0) {
     const msgNorm = normalizarParaMatch(mensagemAtual);
     const msgTokens = tokenizarParaMatch(mensagemAtual);
     if (msgNorm.length > 0 && (msgTokens.size > 0 || msgNorm.length >= 3)) {
-      const pontuadas = raw.faqs
+      const pontuadas = conhecimento
         .map((f: any) => ({ f, score: pontuarFaq(msgTokens, msgNorm, f) }))
         .filter((x: any) => x.score >= 3)
         .sort((a: any, b: any) => b.score - a.score)
@@ -252,6 +267,7 @@ async function loadHabilidadeContent(
 
   return {
     faqText: faqText || undefined,
+    regrasText: regrasText || undefined,
     faqDestaqueText: faqDestaqueText || undefined,
     faqMatchedIds: faqMatchedIds.length ? faqMatchedIds : undefined,
     exemplosText: exemplosText || undefined,
@@ -1802,6 +1818,10 @@ REGRAS OBRIGATÓRIAS deste contexto:
     if (habilidadeSlugAtiva) {
       try {
         const habCfg = await loadHabilidadeContent(supabase, habilidadeSlugAtiva, texto || "");
+        if (habCfg.regrasText) {
+          systemPrompt += `\n\n## REGRAS DE COMPORTAMENTO DESTA HABILIDADE\nAs entradas abaixo são regras obrigatórias e têm prioridade absoluta sobre a base de conhecimento. Nunca ignore, nunca contradiga, nunca relaxe — mesmo que o cliente insista. Em caso de conflito entre uma regra e uma resposta da FAQ, a regra prevalece.\n\n${habCfg.regrasText}`;
+          console.log(`[agente-consultor-ia] Regras injetadas [hab=${habilidadeSlugAtiva}]`);
+        }
         if (habCfg.faqDestaqueText) {
           systemPrompt += `\n\n## FAQ EM DESTAQUE PARA ESTA MENSAGEM (LEIA PRIMEIRO)\nA mensagem do cliente casou com a(s) entrada(s) abaixo da base de conhecimento desta habilidade. Use o conteúdo delas como resposta — não invente, não desvie, não transborde se a FAQ já cobre o pedido.\n\n${habCfg.faqDestaqueText}`;
           console.log(`[agente-consultor-ia] FAQ em destaque (${habCfg.faqMatchedIds?.length || 0}) [hab=${habilidadeSlugAtiva}]: ${(habCfg.faqMatchedIds || []).join(",")}`);
