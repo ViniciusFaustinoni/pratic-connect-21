@@ -3,6 +3,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { translateDbError } from "../_shared/db-error-translator.ts";
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import {
+  checarCompletudeAutovistoriaSubFipe,
+  type TipoVeiculoSubFipe,
+} from '../_shared/fotosVistoriaSubFipe.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
