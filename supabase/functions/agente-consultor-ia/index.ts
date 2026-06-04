@@ -1709,6 +1709,14 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
       systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
     }
 
+    // Supressão de saudação cerimoniosa: conversa em andamento hoje, dentro da janela canônica.
+    if (suprimirSaudacaoCerimonia) {
+      const primeiroNome = (contato.nome || "").trim().split(/\s+/)[0] || "";
+      systemPrompt += `\n\n## CONVERSA EM ANDAMENTO — NÃO RESSAUDE\nO cliente já está em conversa ativa hoje (dentro da janela de ${habCfg.gate_saudacao_horas}h). Ele apenas mandou um cumprimento curto ("oi", "bom dia", etc.). NÃO repita a saudação de identificação ("Olá! Tudo bem? Para iniciarmos..."), NÃO use cerimônia de abertura de turno ("Como posso ajudá-lo hoje?", "Em que podemos te ajudar hoje?"). Responda curto e cordial usando o primeiro nome${primeiroNome ? ` (ex: "Oi, ${primeiroNome}! Como posso ajudar?")` : ""}. Se houver assunto/pedido na mesma mensagem, vá direto ao assunto sem rodeios.`;
+    }
+
+
+
     // Contexto de AGENDAMENTO PENDENTE — espelha cobranca/CPF, com tools p/ agir
     if (contextoAgendamentoPendente) {
       const c = contextoAgendamentoPendente;
