@@ -22,6 +22,8 @@ export interface IAHabilidade {
   atualizado_em: string;
 }
 
+export type IATipoItem = 'conhecimento' | 'regra';
+
 export interface IAConhecimento {
   id: string;
   habilidade_slug: string;
@@ -32,6 +34,7 @@ export interface IAConhecimento {
   ordem: number;
   ativo: boolean;
   revisar: boolean;
+  tipo: IATipoItem;
   atualizado_em: string;
 }
 
