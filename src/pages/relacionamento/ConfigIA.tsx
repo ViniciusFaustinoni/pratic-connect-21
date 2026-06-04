@@ -211,8 +211,12 @@ function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
           <Textarea rows={3} value={form.persona} onChange={e => setForm({ ...form, persona: e.target.value })} />
         </div>
         <div>
-          <Label>Regras absolutas</Label>
-          <Textarea rows={4} value={form.regras_absolutas} onChange={e => setForm({ ...form, regras_absolutas: e.target.value })} />
+          <Label>Regras absolutas <span className="text-xs font-normal text-muted-foreground">(backup — somente leitura)</span></Label>
+          <Textarea rows={4} value={form.regras_absolutas} readOnly className="bg-muted/40" />
+          <p className="text-xs text-muted-foreground mt-1">
+            Conteúdo preservado como backup. As regras editáveis vivem agora na aba <strong>Regras</strong>.
+            O mecanismo de transbordo aqui descrito é estrutural e continua intocado.
+          </p>
         </div>
         <div>
           <Label>Tom de voz</Label>
