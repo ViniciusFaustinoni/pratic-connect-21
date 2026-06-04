@@ -583,16 +583,22 @@ Deno.serve(async (req) => {
     // Fallback robusto: se a linha vier incompleta, mantém os valores canônicos in-code.
     const FALLBACK_SAUDACAO_INICIAL = "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁";
     const FALLBACK_MSG_POS_IDENT = "Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊";
+    const FALLBACK_MSG_CPF_ENCONTRADO = "Encontrei você, {nome}! Em que posso te ajudar hoje? 😊";
+    const FALLBACK_MSG_CPF_NAO_ENCONTRADO_RETRY = "Não encontrei esse CPF na nossa base. Pode digitar novamente, por favor? 😉";
+    const FALLBACK_MSG_CPF_NAO_ENCONTRADO_TRANSBORDO = "Não consegui localizar seu cadastro. Vou te passar para um de nossos atendentes, tudo bem?";
     const habCfg = {
       saudacao_inicial: FALLBACK_SAUDACAO_INICIAL,
       mensagem_pos_identificacao: FALLBACK_MSG_POS_IDENT,
+      mensagem_cpf_encontrado: FALLBACK_MSG_CPF_ENCONTRADO,
+      mensagem_cpf_nao_encontrado_retry: FALLBACK_MSG_CPF_NAO_ENCONTRADO_RETRY,
+      mensagem_cpf_nao_encontrado_transbordo: FALLBACK_MSG_CPF_NAO_ENCONTRADO_TRANSBORDO,
       gate_saudacao_horas: 2,
       gate_saudacao_aplicar_identificados: true,
     };
     try {
       const { data: habRow } = await supabase
         .from("ia_habilidades")
-        .select("saudacao_inicial, mensagem_pos_identificacao, gate_saudacao_horas, gate_saudacao_aplicar_identificados")
+        .select("saudacao_inicial, mensagem_pos_identificacao, mensagem_cpf_encontrado, mensagem_cpf_nao_encontrado_retry, mensagem_cpf_nao_encontrado_transbordo, gate_saudacao_horas, gate_saudacao_aplicar_identificados")
         .eq("slug", "relacionamento")
         .maybeSingle();
       if (habRow) {
@@ -601,6 +607,15 @@ Deno.serve(async (req) => {
         }
         if ((habRow as any).mensagem_pos_identificacao && String((habRow as any).mensagem_pos_identificacao).trim()) {
           habCfg.mensagem_pos_identificacao = String((habRow as any).mensagem_pos_identificacao).trim();
+        }
+        if ((habRow as any).mensagem_cpf_encontrado && String((habRow as any).mensagem_cpf_encontrado).trim()) {
+          habCfg.mensagem_cpf_encontrado = String((habRow as any).mensagem_cpf_encontrado).trim();
+        }
+        if ((habRow as any).mensagem_cpf_nao_encontrado_retry && String((habRow as any).mensagem_cpf_nao_encontrado_retry).trim()) {
+          habCfg.mensagem_cpf_nao_encontrado_retry = String((habRow as any).mensagem_cpf_nao_encontrado_retry).trim();
+        }
+        if ((habRow as any).mensagem_cpf_nao_encontrado_transbordo && String((habRow as any).mensagem_cpf_nao_encontrado_transbordo).trim()) {
+          habCfg.mensagem_cpf_nao_encontrado_transbordo = String((habRow as any).mensagem_cpf_nao_encontrado_transbordo).trim();
         }
         const horas = Number((habRow as any).gate_saudacao_horas);
         if (Number.isFinite(horas) && horas > 0) habCfg.gate_saudacao_horas = horas;
@@ -850,37 +865,96 @@ Deno.serve(async (req) => {
         const nomeSga = sgaResp?.associado?.nome || null;
         const statusSga = sgaResp?.associado?.situacao || sgaResp?.associado?.status || "";
 
-        await supabase
-          .from("agente_ia_contatos")
-          .update({
-            cpf: cpfLimpo,
-            cpf_capturado_em: new Date().toISOString(),
-            sga_associado_encontrado: encontrado,
-            sga_associado_status: encontrado ? String(statusSga || "ativo") : null,
-            cpf_tentativas_invalidas: 0,
-            liberacao_enviada_em: new Date().toISOString(),
-            ...(nomeSga ? { nome: nomeSga, nome_confirmado_em: new Date().toISOString() } : {}),
-          })
-          .eq("id", contato.id);
-
-        contato.cpf = cpfLimpo;
-        if (nomeSga) contato.nome = nomeSga;
-
         cpfSgaContexto = {
           encontrado,
           nome: nomeSga || undefined,
           status: statusSga || undefined,
           cpfMascarado,
         };
-        if (encontrado && nomeSga) {
-          sgaAssociadoOverride = { nome: nomeSga, status: String(statusSga || "") };
-        }
         console.log(`[agente-consultor-ia] [gate_identificacao] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
 
-        // Liberação canônica + return: próxima mensagem do cliente segue o fluxo normal
-        await enviarTexto(habCfg.mensagem_pos_identificacao);
+        // ─── SUBCASO 1A: CPF ENCONTRADO NO SGA → confirma com nome + libera ───
+        if (encontrado) {
+          await supabase
+            .from("agente_ia_contatos")
+            .update({
+              cpf: cpfLimpo,
+              cpf_capturado_em: new Date().toISOString(),
+              sga_associado_encontrado: true,
+              sga_associado_status: String(statusSga || "ativo"),
+              cpf_tentativas_invalidas: 0,
+              cpf_nao_encontrado_tentativas: 0,
+              liberacao_enviada_em: new Date().toISOString(),
+              ...(nomeSga ? { nome: nomeSga, nome_confirmado_em: new Date().toISOString() } : {}),
+            })
+            .eq("id", contato.id);
+
+          contato.cpf = cpfLimpo;
+          if (nomeSga) contato.nome = nomeSga;
+          if (nomeSga) sgaAssociadoOverride = { nome: nomeSga, status: String(statusSga || "") };
+
+          // Renderiza mensagem da config substituindo {nome} pelo nome do SGA (full name).
+          // Fallback: primeiro nome do cadastro local ou string sem o placeholder.
+          const nomeParaRender = (nomeSga || contato.nome || "").toString().trim();
+          const tmpl = habCfg.mensagem_cpf_encontrado || FALLBACK_MSG_CPF_ENCONTRADO;
+          const msgFinal = nomeParaRender
+            ? tmpl.replace(/\{nome\}/gi, nomeParaRender)
+            : tmpl.replace(/,?\s*\{nome\}/gi, "").replace(/\s+/g, " ").trim();
+
+          await enviarTexto(msgFinal);
+          return new Response(
+            JSON.stringify({ success: true, gate: "identificado_cpf", sga_encontrado: true }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // ─── SUBCASO 1B: CPF NÃO ENCONTRADO NO SGA → retry / transbordo ───
+        // NÃO grava nome_confirmado_em nem liberacao_enviada_em — gate continua fechado.
+        const tentativasAtuais = Number((contato as any).cpf_nao_encontrado_tentativas || 0);
+        const novasTentativas = tentativasAtuais + 1;
+
+        await supabase
+          .from("agente_ia_contatos")
+          .update({
+            cpf: cpfLimpo,
+            cpf_capturado_em: new Date().toISOString(),
+            sga_associado_encontrado: false,
+            sga_associado_status: null,
+            cpf_nao_encontrado_tentativas: novasTentativas,
+          })
+          .eq("id", contato.id);
+        contato.cpf = cpfLimpo;
+        (contato as any).cpf_nao_encontrado_tentativas = novasTentativas;
+
+        if (novasTentativas >= 2) {
+          // Transbordo: envia texto da config + aciona o mesmo mecanismo da tool solicitar_atendente_humano.
+          await enviarTexto(habCfg.mensagem_cpf_nao_encontrado_transbordo || FALLBACK_MSG_CPF_NAO_ENCONTRADO_TRANSBORDO);
+          try {
+            await executarSolicitarAtendenteHumano(supabase, telLimpo, {
+              motivo: "outros",
+              resumo: `CPF informado (${cpfMascarado}) não encontrado no SGA após ${novasTentativas} tentativas.`,
+              prioridade: "normal",
+              contato_nome: contato?.nome || null,
+              associado_id: null,
+            });
+          } catch (e) {
+            console.error(`[agente-consultor-ia] [gate_identificacao] falha ao acionar transbordo:`, (e as any)?.message);
+          }
+          // Reseta contador para evitar transbordo em loop caso o cliente volte e o atendente devolva.
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ cpf_nao_encontrado_tentativas: 0 })
+            .eq("id", contato.id);
+          return new Response(
+            JSON.stringify({ success: true, gate: "cpf_nao_encontrado_transbordo", tentativas: novasTentativas }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // 1ª tentativa: pede para digitar novamente.
+        await enviarTexto(habCfg.mensagem_cpf_nao_encontrado_retry || FALLBACK_MSG_CPF_NAO_ENCONTRADO_RETRY);
         return new Response(
-          JSON.stringify({ success: true, gate: "identificado_cpf", sga_encontrado: encontrado }),
+          JSON.stringify({ success: true, gate: "cpf_nao_encontrado_retry", tentativas: novasTentativas }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }

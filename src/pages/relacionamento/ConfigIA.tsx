@@ -227,6 +227,40 @@ function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
           <Textarea rows={2} value={form.saudacao_inicial} onChange={e => setForm({ ...form, saudacao_inicial: e.target.value })} />
         </div>
         <div>
+          <Label>Confirmação após CPF encontrado no SGA</Label>
+          <Textarea
+            rows={2}
+            value={(form as any).mensagem_cpf_encontrado ?? ''}
+            onChange={e => setForm({ ...(form as any), mensagem_cpf_encontrado: e.target.value } as any)}
+            placeholder="Encontrei você, {nome}! Em que posso te ajudar hoje? 😊"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Usada quando o CPF informado é localizado no SGA. O placeholder <code>{'{nome}'}</code> é
+            substituído automaticamente pelo nome completo retornado pelo SGA.
+          </p>
+        </div>
+        <div>
+          <Label>CPF não encontrado — 1ª tentativa (pede para digitar de novo)</Label>
+          <Textarea
+            rows={2}
+            value={(form as any).mensagem_cpf_nao_encontrado_retry ?? ''}
+            onChange={e => setForm({ ...(form as any), mensagem_cpf_nao_encontrado_retry: e.target.value } as any)}
+            placeholder="Não encontrei esse CPF na nossa base. Pode digitar novamente, por favor? 😉"
+          />
+        </div>
+        <div>
+          <Label>CPF não encontrado — 2ª tentativa (transbordo para atendente humano)</Label>
+          <Textarea
+            rows={2}
+            value={(form as any).mensagem_cpf_nao_encontrado_transbordo ?? ''}
+            onChange={e => setForm({ ...(form as any), mensagem_cpf_nao_encontrado_transbordo: e.target.value } as any)}
+            placeholder="Não consegui localizar seu cadastro. Vou te passar para um de nossos atendentes, tudo bem?"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Após enviar esta mensagem, a IA aciona o transbordo padrão para o time de Relacionamento.
+          </p>
+        </div>
+        <div>
           <Label>Tempo sem interação antes de saudar novamente (horas)</Label>
           <Input
             type="number"
