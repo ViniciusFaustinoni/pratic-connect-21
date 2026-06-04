@@ -989,9 +989,47 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ---- 2C. SUPRESSÃO DE SAUDAÇÃO CERIMONIOSA (associado já identificado dentro da janela) ----
+    // Quando o associado já-identificado manda uma saudação pura ("oi", "bom dia", "boa tarde", etc.)
+    // dentro da janela canônica (mesmo dia BRT E ≤gate_saudacao_horas desde a última interação),
+    // injeta instrução no system prompt para a LLM responder curto e cordial, sem repetir saudação
+    // de cerimônia nem a saudação de identificação. Regra de tempo lida da config (habCfg).
+    let suprimirSaudacaoCerimonia = false;
+    if (
+      !diretorPreDetectado &&
+      !contextoAgendamentoPendente &&
+      jaIdentificado &&
+      habCfg.gate_saudacao_aplicar_identificados
+    ) {
+      const textoIdLow = (texto || "").toString().toLowerCase().trim();
+      const ehSaudacaoPura =
+        /^(oi|olá|ola|hi|hello|bom\s*dia|boa\s*tarde|boa\s*noite|e\s*a[íi]|opa|tudo\s*bem|tudo\s*bom|td\s*bem|blz|beleza)[\s!?.,😀-🙏❤-➿]*$/i
+          .test(textoIdLow);
+      if (ehSaudacaoPura) {
+        const ultimaInterId = contato.ultima_interacao ? new Date(contato.ultima_interacao) : null;
+        const horasDesdeUltimaId = ultimaInterId
+          ? (Date.now() - ultimaInterId.getTime()) / 3_600_000
+          : Infinity;
+        const agoraBRTId = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const diaBrtAgoraId = `${agoraBRTId.getFullYear()}-${agoraBRTId.getMonth()}-${agoraBRTId.getDate()}`;
+        const ultimaBRTId = ultimaInterId
+          ? new Date(ultimaInterId.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+          : null;
+        const diaBrtUltimaId = ultimaBRTId
+          ? `${ultimaBRTId.getFullYear()}-${ultimaBRTId.getMonth()}-${ultimaBRTId.getDate()}`
+          : null;
+        const dentroJanela =
+          horasDesdeUltimaId <= habCfg.gate_saudacao_horas && diaBrtAgoraId === diaBrtUltimaId;
+        if (dentroJanela) {
+          suprimirSaudacaoCerimonia = true;
+          console.log(`[agente-consultor-ia] [gate_identificacao] supressao_saudacao_cerimonia ATIVA (janela ${habCfg.gate_saudacao_horas}h, identificado)`);
+        }
+      }
+    }
 
 
     // ---- 3. CARREGAR CONFIGURAÇÕES ----
+
     const { data: configRows } = await supabase
       .from("agente_ia_config")
       .select("chave, valor");
