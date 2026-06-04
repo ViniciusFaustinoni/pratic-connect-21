@@ -2115,6 +2115,9 @@ REGRAS OBRIGATÓRIAS deste contexto:
           if (fnName === "consultar_boletos_associado") {
             toolContent = `⚠️ BOLETOS OFICIAIS DO SGA - USE APENAS ESTES VALORES/DATAS/LINHAS, NÃO INVENTE. Se encontrados=0 e sem erro, diga que está em dia. Se erro_transitorio=true, chame solicitar_atendente_humano.\n${toolContent}`;
           }
+          if (fnName === "consultar_situacao_veiculo") {
+            toolContent = `⚠️ SITUAÇÃO OFICIAL DO SGA — USE APENAS ESTE STATUS, NUNCA INVENTE. Se titular_confere=false (placa_de_outro_titular OU sem_cpf_identificado), você NÃO PODE confirmar nem negar nada sobre a placa — responda APENAS "Deixa eu confirmar isso com o time pra você." e chame solicitar_atendente_humano. Se erro=indisponivel, chame solicitar_atendente_humano. Se match OK, reporte a situação cadastral textualmente (ex: "seu veículo consta como *ATIVO*"). NUNCA descreva o que o plano cobre ou não cobre.\n${toolContent}`;
+          }
 
           currentMessages.push({
             role: "tool",
