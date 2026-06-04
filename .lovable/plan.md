@@ -1,108 +1,83 @@
-# Diagnóstico: etapas puladas em cotações sub-FIPE
+## Objetivo
 
-Investigação confirmada por código (file:line) **e** dados reais do banco (últimos 14 dias). Sem suposições — todos os pontos abaixo têm rastro concreto.
-
----
-
-## Resumo executivo
-
-Existem **5 pontos de ruptura** que, combinados, deixam cotações sub-FIPE avançarem sem ter cumprido o caminho canônico. Todos os casos reais que encontrei envolvem `cenario_adesao = isenta_rota` (adesão zerada), o que explica a correlação que você sentiu entre "sub-FIPE" e "cenário de adesão" — a isenção dispara automação extra que descobre os buracos do gate.
-
-**Evidências no banco (últimas 2 semanas, autovistoria + isenta_rota):**
-
-| Cotação | n_fotos | Vídeo | Status atingido | Esperado canônico |
-|---|---|---|---|---|
-| `0e685fc0` | **3** | sim | **ativo** | bloqueado em autovistoria (faltam ~28 fotos) |
-| `b8704b27` | **0** | **não** | aguardando_aprovacao_cadastro | bloqueado no link público |
-| `534dd759` | **1** | sim | aguardando_aprovacao_cadastro | bloqueado em autovistoria |
-| `d3126a85` | 3 | sim | pagamento_ok + vistoria_concluida_em setado | bloqueado em autovistoria |
-| `c735c5e6` | 3 | sim | pagamento_ok + vistoria_concluida_em setado | bloqueado em autovistoria |
-
-Ou seja: o sistema **está aprovando vistorias com 0, 1 ou 3 fotos** em veículos que exigem 31 (carro) / 15 (moto) + vídeo.
+Deixar **uma única IA** ativa no sistema — a IA de FAQ/Atendimento — sem nome próprio ("Atendimento Pratic"), atendendo **todas as audiências** (lead, associado, diretor). Vinicius/Vendas fica desligado mas preservado em código para reativação futura. Toda a configuração passa a viver em **/relacionamento/config-ia**.
 
 ---
 
-## Os 5 conflitos confirmados
+## 1. Banco — desligar Vendas e neutralizar Relacionamento
 
-### Conflito A — Gate de completude sub-FIPE bypassável por idempotência
-**`supabase/functions/finalizar-autovistoria-cotacao/index.ts:188`**
+Migration de UPDATE em `ia_habilidades`:
 
-O gate `checarCompletudeAutovistoriaSubFipe` só roda quando `!vistoriaExistente`. Em qualquer segunda chamada da edge (idempotência), o gate é pulado — explica os casos com 1 ou 3 fotos materializadas.
+- `slug='vendas'` → `ativa=false` (NÃO deletar; preserva persona/conhecimento p/ futuro)
+- `slug='relacionamento'`:
+  - `nome_exibicao` = "Atendimento Pratic"
+  - `nome_agente` = "Atendimento Pratic"
+  - `audiencias_elegiveis` = `['lead','associado','diretor']` (passa a cobrir lead também)
+  - `persona`/`saudacao_inicial`/`regras_absolutas` → varredura e substituição de "Maya" por "Atendimento Pratic" (ou remover menção ao nome quando ficar redundante)
+  - `horario_atendimento` = null (24/7, igual hoje p/ associado/diretor) — leads também sem gate de horário, como pedido ("agir como IA de suporte")
 
-### Conflito B — `gateCaminhoPublicoCompleto` aceita autovistoria enxuta em sub-FIPE
-**`supabase/functions/aprovar-proposta/index.ts:412-417`**
+Sem mexer em `maya_ia_*` / `agente_ia_config` (já marcadas deprecated).
 
-O gate aceita `≥2 fotos + vídeo 360°` como suficiente para **qualquer** veículo. Sub-FIPE deveria exigir o roteiro completo (31/15). É o caminho pelo qual `0e685fc0` (3 fotos) virou `ativo`.
+## 2. Roteador (`supabase/functions/agente-consultor-ia/lib/roteador.ts`)
 
-### Conflito C — Branch sub-FIPE em `aprovar-proposta` não bloqueia ausência de vistoria materializada
-**`supabase/functions/aprovar-proposta/index.ts:977-1068`**
+Já é audiência→habilidade ativa. Com `relacionamento` cobrindo as 3 audiências e `vendas` desativada, lead cai automaticamente em "relacionamento". **Sem alteração de código** — só validar com log `[habilidade_selecionada=relacionamento]` para mensagens de lead.
 
-Se `vistAuto` vier `null`, o branch sub-FIPE silencia (sem `else`/guard). `cadastro_aprovado` pode virar `true` sem vistoria — exatamente o que aconteceu com `b8704b27` (0 fotos, sem vídeo, chegou ao Cadastro).
+## 3. Gate fora-horário Vinicius
 
-### Conflito D — `cenario_adesao isenta_*` automatiza pagamento e dispara `criar-instalacao-pos-pagamento` antes da autovistoria estar completa
-**`src/components/cotacao-publica/EtapaPagamentoCotacao.tsx:357-372`** + **`supabase/functions/criar-instalacao-pos-pagamento/index.ts:445-458`**
+Hoje há gate "Seg–Sex 08–18 BRT aplica APENAS a LEAD/Vinicius" no agente. Como Vinicius está off e Atendimento Pratic atende lead 24/7, esse gate deve ser **neutralizado** (remover branch específica de lead/vinicius no `agente-consultor-ia/index.ts`). Memória core será atualizada.
 
-Quando `valor_adesao=0`, o frontend chama `confirmar-adesao-zerada` automaticamente → seta `status_contratacao='pagamento_ok'`. Para sub-FIPE + autovistoria sem data agendada, `criar-instalacao-pos-pagamento` **silencia sem criar instalação** (correto pela memória `sub-fipe-sem-instalacao`), mas deixa a cotação num estado em que `etapaDoStatus` confunde o próximo passo. É por isso que o problema "acende" no cenário de adesão zerada.
+## 4. Rota e UI — `/relacionamento/config-ia`
 
-### Conflito E — `getEtapaVenda` desconhece sub-FIPE
-**`src/lib/cotacaoEtapa.ts:214-219`**
+Reescrever `src/pages/relacionamento/MayaIA.tsx` → renomear arquivo para `ConfigIA.tsx` (e atualizar import em `App.tsx`). A nova página é **um editor único** para a habilidade `relacionamento`, reaproveitando os hooks `useIAHabilidades`/`useIAConhecimento`/`useIAExemplos` (novos, canônicos).
 
-Sem branch para sub-FIPE: após `autovistoria_ok` com `adesao_paga=true`, retorna `aguardando_vistoria` → mapeia para `aguardando_agendamento_instalacao`. Mas sub-FIPE **nunca** tem instalação — o operador vê um label semanticamente errado, o que mascara o problema.
+Estrutura:
 
----
+- Header "Configuração da IA de Atendimento" + toggle global (liga/desliga habilidade)
+- Tabs: **Identidade & Regras** | **Conhecimento (FAQ)** | **Exemplos** | **Ferramentas**
+- Sem qualquer string "Maya" / "Vinicius" / "Vendas" na tela
+- Sem seletor de audiência (a habilidade já cobre todas)
 
-## Pontos verificados que **não** são bug
+Layout aproveita o que já existe em `src/pages/configuracoes/IAHabilidades.tsx` (formulário + listas), simplificado para 1 habilidade fixa (slug='relacionamento').
 
-- Trigger `fn_materializar_autovistoria_cotacao` materializa vistoria com `status='pendente'` (correto — não bypassa nenhum gate por si só).
-- `deveAguardarInstalacao` (linha 1514 do `aprovar-proposta`) está logicamente correto por sorte do operador booleano — não mexer.
-- `criar-instalacao-pos-pagamento` está certo em **não** criar instalação para sub-FIPE (regra canônica).
+## 5. Remover atalho em Configurações › Integrações › IA
 
----
+Em `src/pages/configuracoes/IntegracaoIA.tsx`, **remover** o `<Card>` "Habilidades da IA" que linkava para `/configuracoes/integracoes/ia/habilidades`. Manter apenas AIModelConfigCard + OcrEngineConfigCard + Alert.
 
-## Opções de correção — preciso da sua decisão por conflito
+A rota `/configuracoes/integracoes/ia/habilidades` e o arquivo `src/pages/configuracoes/IAHabilidades.tsx` ficam **removidos do App.tsx** (rota deletada) — config IA vive só no Relacionamento.
 
-Não vou implementar nada antes de você escolher. Para cada conflito, listo as opções com trade-offs.
+## 6. Limpeza de menções "Maya" na UI
 
-### Conflito A — fechar o bypass de idempotência
+Varredura de strings visíveis ao usuário:
 
-- **A1 (mínimo invasivo, recomendado):** Mover o `checarCompletudeAutovistoriaSubFipe` para **antes** do branch de idempotência, e bloquear se a vistoria existente ainda estiver `status='pendente'` e incompleta.
-- **A2:** Devolver na resposta idempotente a contagem de fotos faltantes, e deixar o front travar avanço. (Mais frágil — depende do cliente.)
-- **A3 (estrutural):** Nova coluna `vistorias.autovistoria_completa boolean` setada só quando o gate passa. Todos os consumidores passam a ler essa flag. (Mais robusto, mais migração.)
+- `src/components/eventos/chat-ia/ContatoDetalheDrawer.tsx` → texto "IA pausada" sem mencionar Maya (já está OK; só validar)
+- Qualquer label/título visível que diga "Maya" em telas de chat/eventos → "Atendimento Pratic" ou "IA"
+- Mensagens de pausa/encerramento mantidas (não citam Maya)
 
-### Conflito B — `gateCaminhoPublicoCompleto` separar sub-FIPE de ≥FIPE
+Logs internos (`[maya_config]`, `[maya_mensagem_pausada]`, tipos de notificação) **não mudam** nesta fase — são chaves técnicas, troca posterior se quiser.
 
-- **B1 (recomendado):** Dentro do gate, detectar sub-FIPE via `fn_veiculo_precisa_rastreador` e exigir `checarCompletudeAutovistoriaSubFipe` (mesma função do `_shared`).
-- **B2:** Apenas contar fotos contra um mínimo configurável (30 carro / 14 moto) sem reusar a função canônica. (Risco de divergir.)
-- **B3:** Dois gates separados (`gateSubFipe` + `gateAcimaFipe`). Mais explícito, mais código.
+## 7. Memórias
 
-### Conflito C — guard de ausência de vistoria no branch sub-FIPE de `aprovar-proposta`
-
-- **C1 (recomendado):** `else` explícito que retorna **409 `sem_autovistoria_sub_fipe`** e reverte `cadastro_aprovado` se a vistoria não existir. Padrão já usado em outros edges.
-- **C2:** Mover a checagem de existência da vistoria para dentro do `gateCaminhoPublicoCompleto`, antes de qualquer mutação. (Mais cedo no fluxo, evita rollback.)
-
-### Conflito D — adesão zerada não pode avançar status enquanto autovistoria sub-FIPE está incompleta
-
-- **D1 (recomendado):** Em `confirmar-adesao-zerada`, antes de setar `status_contratacao='pagamento_ok'`, verificar se a autovistoria está completa (mesma função canônica). Se incompleta, manter `status_contratacao` no estado anterior e devolver `code: 'autovistoria_pendente'`.
-- **D2:** Em `EtapaPagamentoCotacao.tsx`, só disparar `confirmarAdesaoIsenta` quando a etapa de autovistoria já tiver sido concluída pela máquina de estados pública. (Frontend-only, mas não cobre chamadas diretas à edge.)
-- **D3:** Combinar D1 + D2 (defesa em camadas — padrão que você adota em outros pontos do sistema).
-
-### Conflito E — `getEtapaVenda` reconhecer sub-FIPE
-
-- **E1 (recomendado):** Adicionar parâmetro `isSubFipe` e retornar `aguardando_aprovacao_cadastro` após `autovistoria_ok` em sub-FIPE (em vez de `aguardando_vistoria`). Toca só apresentação no Kanban.
-- **E2:** Usar `status_contratacao='aguardando_aprovacao_cadastro'` como sinal canônico no lugar de `autovistoria_ok` para sub-FIPE. Mais limpo, mas mexe na máquina de estados em vários pontos.
+- Atualizar core (memória de habilidades) refletindo: 1 habilidade ativa (`relacionamento` = "Atendimento Pratic", cobre lead+associado+diretor 24/7); Vendas desativada; gate fora-horário removido; UI canônica em `/relacionamento/config-ia`
+- Marcar `mem://logic/operations/maya-saudacao-e-identificacao-canonica` como vigente com nome novo
+- Atualizar `mem://logic/ia/habilidades-canonicas` com nova UI canônica
 
 ---
 
-## Saneamento histórico (separado da correção)
+## Arquivos tocados (resumo técnico)
 
-Independente das opções escolhidas, temos **pelo menos 5 cotações** com vistorias incompletas que avançaram. Sugiro um item adicional:
+```text
+migration       UPDATE ia_habilidades (vendas ativa=false; relacionamento renomeado + audiências)
+edited          supabase/functions/agente-consultor-ia/index.ts  (remover gate fora-horário lead/Vinicius)
+renamed         src/pages/relacionamento/MayaIA.tsx → ConfigIA.tsx (reescrito com hooks ia_habilidades)
+edited          src/App.tsx  (import novo nome, remove rota /configuracoes/integracoes/ia/habilidades)
+edited          src/pages/configuracoes/IntegracaoIA.tsx  (remove card Habilidades)
+deleted         src/pages/configuracoes/IAHabilidades.tsx
+varredura       strings "Maya" visíveis ao usuário → "Atendimento Pratic"
+memórias        index.md (core) + habilidades-canonicas + saudacao-canonica
+```
 
-- **S1:** Script de auditoria listando todas as cotações com `tipo_vistoria='autovistoria'` + `cenario_adesao` zerado + `n_fotos < mínimo` + `status_contratacao` ≥ `pagamento_ok` para você decidir caso a caso (cancelar, reabrir, ou aprovar manualmente).
+## O que NÃO faço
 
----
-
-## O que eu preciso de você
-
-Para cada conflito (A, B, C, D, E), me diga qual opção implementar (ou se quer combinar). E me diga se faço o **S1** (saneamento de auditoria) junto.
-
-Recomendação minha, se quiser ir no mais seguro: **A1 + B1 + C1 + D3 + E1 + S1**. Pode responder só com "vai na recomendação" que eu sigo.
+- Não apago tabelas `maya_ia_*` nem `ia_habilidades` row de vendas (preservadas para reativação)
+- Não mudo chaves técnicas internas (`maya_config`, `whatsapp_ia_pausas.motivo`, tipos de notificação)
+- Não toco no fluxo de cotação/sub-FIPE (assunto não relacionado)
