@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bot, Power, Sparkles, Save, Plus, Trash2, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import { Bot, Power, Sparkles, Save, Plus, Trash2, AlertTriangle, Clock, Loader2, ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { supabase } from '@/integrations/supabase/client';
 import {
   useIAHabilidades, useToggleIAHabilidade, useUpsertIAHabilidade,
   useIAConhecimento, useUpsertIAConhecimento, useDeleteIAConhecimento,
