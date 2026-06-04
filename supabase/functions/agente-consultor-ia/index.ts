@@ -1229,6 +1229,7 @@ Deno.serve(async (req) => {
     // Se nenhuma habilidade ativa cobrir a audiência atual, responde com
     // mensagem de pausa + abre transbordo. Princípio: nunca deixar vácuo.
     // Ver mem://logic/ia/habilidades-canonicas
+    let habilidadeSlugAtiva: string | null = null;
     try {
       const audienciaCanonica: IAAudiencia = (isDiretor ? "diretor" : isAssociado ? "associado" : "lead");
       const roteamento = await resolverHabilidade(supabase, audienciaCanonica);
