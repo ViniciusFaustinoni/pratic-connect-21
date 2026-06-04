@@ -385,9 +385,42 @@ async function gateCaminhoPublicoCompleto(
     );
   }
 
-  // (1) e (2) Vistoria materializada (presencial ou autovistoria enxuta)
-  // Busca vistorias por contrato_id OU cotacao_id OU veiculo_id (ampla — qualquer
-  // vistoria criada para o caso). Depois avalia cada uma localmente.
+  // (1) e (2) Vistoria materializada (presencial ou autovistoria)
+  // CANÔNICO B1: detecta sub-FIPE via `fn_veiculo_precisa_rastreador` e exige
+  // completude COMPLETA (31 carro / 15 moto + vídeo 360°) — autovistoria enxuta
+  // de 2 fotos + vídeo só é aceita para ≥30k. Sem essa distinção, sub-FIPE com
+  // 3 fotos avançava para `cadastro_aprovado=true` e até `ativo` (casos
+  // confirmados em jun/26: 0e685fc0, b8704b27, 534dd759, d3126a85, c735c5e6).
+  let subFipeRequereCompleta = false;
+  let tipoVeiculoSubFipe: TipoVeiculoSubFipe = 'carro';
+  if (veiculoIdForGate) {
+    try {
+      const { data: precisa } = await supabase
+        .rpc('fn_veiculo_precisa_rastreador', { _veiculo_id: veiculoIdForGate });
+      subFipeRequereCompleta = precisa === false;
+      if (subFipeRequereCompleta) {
+        const { data: vinfo } = await supabase
+          .from('veiculos')
+          .select('marca, modelo, marca_modelo:marcas_modelos(tipo_veiculo)')
+          .eq('id', veiculoIdForGate)
+          .maybeSingle();
+        const tipoCat = ((vinfo as any)?.marca_modelo?.tipo_veiculo || '').toLowerCase();
+        if (tipoCat === 'moto') {
+          tipoVeiculoSubFipe = 'moto';
+        } else {
+          const marca = ((vinfo as any)?.marca || '').toUpperCase();
+          const modelo = ((vinfo as any)?.modelo || '').toUpperCase();
+          if (/MOTO|CG|XRE|FAZER|YBR|TITAN|BIZ|POP|BROS|FAN/.test(marca + ' ' + modelo)) {
+            tipoVeiculoSubFipe = 'moto';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[aprovar-proposta] gate: falha detecção sub-FIPE — usa enxuta como fallback fail-safe:', e);
+      subFipeRequereCompleta = false;
+    }
+  }
+
   const vistoriaFilter: string[] = [];
   vistoriaFilter.push(`contrato_id.eq.${contrato_id}`);
   if (cotacaoIdForGate) vistoriaFilter.push(`cotacao_id.eq.${cotacaoIdForGate}`);
@@ -414,10 +447,29 @@ async function gateCaminhoPublicoCompleto(
           const fotos = fotosPorVist.get(v.id) || [];
           const modalidade = (v.modalidade || '').toLowerCase();
           if (modalidade === 'autovistoria') {
-            // (1) autovistoria enxuta: ≥2 fotos + vídeo 360°
             const temVideo = !!v.video_360_url
               || fotos.some((f) => ['video_360', 'video'].includes((f.tipo || '').toLowerCase()));
-            if (fotos.length >= 2 && temVideo) {
+            if (subFipeRequereCompleta) {
+              // Sub-FIPE: roteiro COMPLETO obrigatório.
+              const tiposEnviados = fotos.map((f) => (f.tipo || '').toLowerCase());
+              if (temVideo) tiposEnviados.push('video_360');
+              const completude = checarCompletudeAutovistoriaSubFipe({
+                tipo: tipoVeiculoSubFipe,
+                fotosEnviadas: tiposEnviados,
+              });
+              if (completude.ok) {
+                return { ok: true, via: 'autovistoria_sub_fipe_completa' };
+              }
+              console.warn('[aprovar-proposta] gate sub-FIPE incompleto:', {
+                vistoria_id: v.id,
+                tipo: tipoVeiculoSubFipe,
+                faltantes: completude.obrigatoriasFaltantes,
+                videoFaltante: completude.videoFaltante,
+                recebidas: completude.recebidas,
+              });
+              // Não retorna ok aqui — segue avaliando outras vistorias/checks.
+            } else if (fotos.length >= 2 && temVideo) {
+              // ≥FIPE: autovistoria enxuta basta (2 fotos + vídeo 360°).
               return { ok: true, via: 'autovistoria_enxuta' };
             }
           } else {
@@ -427,9 +479,13 @@ async function gateCaminhoPublicoCompleto(
             }
           }
         }
-        return { ok: false, via: 'vistoria_incompleta' };
+        return {
+          ok: false,
+          via: subFipeRequereCompleta ? 'autovistoria_sub_fipe_incompleta' : 'vistoria_incompleta',
+        };
       }),
   );
+
 
   const results = await Promise.all(checks);
   const aprovado = results.find((r) => r.ok);
