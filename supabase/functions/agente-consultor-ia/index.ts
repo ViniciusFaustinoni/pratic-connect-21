@@ -1,6 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { aiGatewayFetch } from "../_shared/ai-client.ts";
+import { aiGatewayFetch, callAI } from "../_shared/ai-client.ts";
+
+// Modelo dedicado da habilidade `relacionamento` (Maya). Override por habilidade —
+// não respeita `ai_model_config` global (que vale para OCR / risco / chat etc.).
+// Fallback automático cai em DEFAULT_CONFIG (`google/gemini-3-flash-preview`)
+// dentro de callAI quando este modelo falhar.
+const RELACIONAMENTO_MODEL = "google/gemini-2.5-pro";
 import { resolverHabilidade, dentroDoHorario, type IAAudiencia } from "./lib/roteador.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
