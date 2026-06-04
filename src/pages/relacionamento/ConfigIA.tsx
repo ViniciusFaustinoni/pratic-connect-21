@@ -420,7 +420,7 @@ function ConhecimentoTab({ slug, tipo = 'conhecimento' }: { slug: string; tipo?:
         ))}
         {filtrados.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-6">
-            {busca ? 'Nenhum item bate com a busca.' : 'Nenhum item de FAQ cadastrado.'}
+            {busca ? 'Nenhum resultado para a busca.' : emptyMsg}
           </p>
         )}
       </div>
@@ -428,7 +428,7 @@ function ConhecimentoTab({ slug, tipo = 'conhecimento' }: { slug: string; tipo?:
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover este item do FAQ?</AlertDialogTitle>
+            <AlertDialogTitle>{removeTitle}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDelete?.pergunta}
               <br /><br />
