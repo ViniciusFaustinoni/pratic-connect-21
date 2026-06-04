@@ -1,75 +1,54 @@
+# Trocar modelo da habilidade `relacionamento` para `google/gemini-2.5-pro`
+
 ## Objetivo
+Subir a qualidade conversacional da Maya (habilidade `relacionamento`) trocando o flash atual por um modelo Gemini Pro, sem afetar nenhum outro consumo de IA do sistema (OCR, análise de risco, chat de assistente, etc.) e sem alterar regras/FAQ/tools/transbordo/identificação.
 
-Separar o pós-CPF da habilidade `relacionamento` em três comportamentos distintos, com textos editáveis na config da habilidade e nome do associado preenchido dinamicamente. Busca SGA, roteador, envio, dedup, habilidade `vendas`, tool de situação de veículo e transbordo permanecem intocados.
+## Modelo escolhido
+- **Primário:** `google/gemini-2.5-pro` — top da família Gemini no Lovable AI Gateway, estável (não-preview), bom em conversa natural + raciocínio + janelas grandes (importante porque o systemPrompt da Maya é longo: persona + FAQ + contexto de cobrança/agendamento).
+- **Por que não 3.x preview:** `google/gemini-3-pro-preview` é mais novo, mas preview pode mudar/quebrar sem aviso — risco alto pra atendimento 24/7.
+- **Fallback:** `google/gemini-3-flash-preview` (= `DEFAULT_CONFIG` do `_shared/ai-client.ts`, idêntico ao flash atual). Se o pro falhar, atendimento degrada exatamente para o nível de hoje, nada pior.
 
-## Comportamento final
-
-Após o associado mandar o CPF (CPF válido em DV — gate atual em `agente-consultor-ia/index.ts` linhas 829–886):
-
-- **Caso 1 — CPF encontrado no SGA**: confirma de volta usando o nome+ sobrenome  retornado pelo SGA, libera o atendimento (mantém o `update` em `agente_ia_contatos` que já existe hoje, com `nome_confirmado_em`, `sga_associado_encontrado=true`, `liberacao_enviada_em`). Texto vem da config, com placeholder `{nome}` substituído pelo nome do SGA.
-- **Caso 2 — CPF não encontrado (1ª tentativa)**: NÃO grava `nome_confirmado_em` nem `liberacao_enviada_em`. Pede para digitar de novo (texto da config). Incrementa contador.
-- **Caso 3 — CPF não encontrado (2ª tentativa)**: NÃO libera. Envia mensagem de transbordo (texto da config) e chama o mesmo mecanismo já usado por `solicitar_atendente_humano` (insere pausa em `whatsapp_ia_pausas` com `motivo='transbordo_humano'`, 12h, + notifica Relacionamento — exatamente como a tool faz hoje em `fnName === "solicitar_atendente_humano"`, linha 2060).
-
-Caminho 2 (nome completo digitado, linhas 888–909) e Caminho 3A (números soltos que nem chegam a ser CPF — gate de DV inválido, linhas 911–943) **continuam exatamente como estão**. O contador de "CPF não encontrado no SGA" é separado do contador de "tentativa de CPF inválida" (DV) para não misturar comportamentos.
-
-A frase genérica `mensagem_pos_identificacao` deixa de ser disparada no Caminho 1 (CPF). Ela continua sendo usada no Caminho 2 (nome completo) — esse fluxo não está no escopo da mudança.
+## Por que precisa de override por habilidade
+- `ai_model_config` é **global** (afeta OCR, risco, chat, etc.) — trocar lá viola o escopo "só relacionamento".
+- Hoje `aiGatewayFetch` ignora o `model` passado pelo caller e força o da DB. Isso significa que o `model: "google/gemini-3-flash-preview"` hardcoded na linha 2000 de `agente-consultor-ia/index.ts` é **código morto**: o modelo real vem de `ai_model_config` (`anthropic/claude-sonnet-4-5`) e, como Anthropic está sem crédito (400), cai no fallback Lovable com `google/gemini-3-flash-preview`. A Maya hoje, na prática, está rodando flash.
 
 ## Mudanças
 
-### 1. Schema — `ia_habilidades` (migration)
+### 1. `supabase/functions/agente-consultor-ia/index.ts`
+- Trocar a chamada `aiGatewayFetch({...})` (linhas ~1993–2006) por `callAI({...})` (importado de `_shared/ai-client.ts`) com `override` explícito:
+  - `override: { provider: "lovable", model: "google/gemini-2.5-pro" }`
+  - `fallbackToLovable: true` (default — preserva queda para `DEFAULT_CONFIG` se algo falhar).
+- Reaproveitar o resto do loop (tool calls, validador, etc.) sem alterações funcionais. Apenas adaptar o consumo da resposta (`callAI` devolve `{ ok, status, data }` já no shape OpenAI — alinhar com `aiData = result.data`).
+- Tratamento 429/402 mantido — `callAI` propaga `status`.
+- Remover a linha morta `model: "google/gemini-3-flash-preview"` (substituída pelo override).
+- Adicionar log explícito por turno: `[agente-consultor-ia][modelo] used=<modelo_real_da_resposta>` lendo `aiData.model` do retorno (todo provider devolve esse campo) — serve de evidência por turno.
 
-Três colunas novas, com defaults canônicos para a habilidade `relacionamento` (UPDATE no mesmo migration):
+**Não tocar em mais nada** desse arquivo: roteamento, gates de identificação, prompt, tools, fallbacks de vácuo, transbordo, dedupe, locks — tudo igual.
 
-- `mensagem_cpf_encontrado text` — default `'Encontrei você, {nome}! Em que posso te ajudar hoje? 😊'`
-- `mensagem_cpf_nao_encontrado_retry text` — default `'Não encontrei esse CPF na nossa base. Pode digitar novamente, por favor? 😉'`
-- `mensagem_cpf_nao_encontrado_transbordo text` — default `'Não consegui localizar seu cadastro. Vou te passar para um de nossos atendentes, tudo bem?'`
+### 2. `supabase/functions/_shared/ai-client.ts`
+- **Nenhuma alteração.** O `DEFAULT_CONFIG` (`google/gemini-3-flash-preview`) já é o fallback desejado. Outras edges (OCR, risco, chat) continuam usando o `ai_model_config` global — fora do escopo.
 
-Em `agente_ia_contatos`, uma coluna nova:
+### 3. Banco
+- **Sem migração.** Modelo per-skill fica hardcoded no edge da habilidade (única habilidade que precisa hoje). Se no futuro `vendas` (Vinicius) também quiser modelo próprio, dá pra evoluir para uma coluna `ia_habilidades.modelo_ia` — mas não nesta entrega (você pediu para não inflar escopo).
 
-- `cpf_nao_encontrado_tentativas int default 0` — contador específico do Caso 2/3 (separado de `cpf_tentativas_invalidas`, que cobre DV inválido).
+## Pontos NÃO tocados (confirmação explícita)
+- `ai_model_config` (DB) — permanece `anthropic/claude-sonnet-4-5`.
+- Outras edges que chamam IA (`assistente-chat`, `analise-risco-ia`, `document-ocr`, `whatsapp-template-validar`, etc.) — intocadas.
+- `ia_habilidades` (regras, FAQ, persona, tom, gates) — intocado.
+- Roteador, tools (`consultar_boletos_associado`, `consultar_situacao_veiculo`, `solicitar_atendente_humano`), transbordo, identificação, gate de CPF, validador de saída — intocados.
 
-### 2. UI — `src/pages/relacionamento/ConfigIA.tsx`
+## Validação em produção (obrigatória antes de fechar)
 
-Adicionar 3 `Textarea` na seção de mensagens da habilidade (próximo aos campos `saudacao_inicial` / `mensagem_pos_identificacao` existentes), ligados ao mesmo `form` e ao mesmo `useUpsertIAHabilidade`. Texto de ajuda no campo "CPF encontrado" deixando claro que `{nome}` é substituído pelo nome do SGA.
+1. `deploy_edge_functions(["agente-consultor-ia"])` explícito.
+2. `curl_edge_functions` → invocar o agente com payload real do contato Marcos (CPF 14194896742): mensagem curta tipo "oi" ou "vc tem o boleto?".
+3. `edge_function_logs(agente-consultor-ia, search="[modelo] used=")` — extrair o `aiData.model` do turno real. Tem que ser `gemini-2.5-pro`, **não** `gemini-3-flash-preview` nem `claude-sonnet-4-5`.
+4. Confirmar no mesmo turno que o agente respondeu coerentemente (identificou o associado, retornou boleto / situação) — sanity check de que a troca não quebrou nada.
+5. Reportar no chat:
+   - Modelo ativo confirmado por chamada real: `google/gemini-2.5-pro` (com evidência do log).
+   - Fallback: `google/gemini-3-flash-preview` (via `DEFAULT_CONFIG` do `ai-client.ts`).
+   - Pontos de configuração: 1 (override no `agente-consultor-ia/index.ts`). Linha morta antiga removida. `ai_model_config` global não foi tocado e continua governando o resto do sistema.
 
-### 3. Loader — `agente-consultor-ia/index.ts` (≈ linhas 583–610)
-
-Adicionar os 3 campos ao tipo `habCfg`, ao `select` e ao mapeamento, com fallbacks idênticos aos defaults do migration.
-
-### 4. Edge `agente-consultor-ia` — Caminho 1 (linhas 829–886)
-
-Substituir o bloco final do Caminho 1 (a partir de `await enviarTexto(habCfg.mensagem_pos_identificacao);`):
-
-- Se `encontrado === true`:
-  - Mantém o `update` atual (com `nome_confirmado_em`, `liberacao_enviada_em`, `sga_associado_encontrado=true`, `cpf_tentativas_invalidas=0`, `cpf_nao_encontrado_tentativas=0`).
-  - Renderiza `mensagem_cpf_encontrado` substituindo `{nome}` pelo `nomeSga` (fallback: primeiro nome do cadastro local, ou texto sem placeholder se nada).
-  - Envia, retorna `gate: "identificado_cpf"`.
-- Se `encontrado === false`:
-  - Lê `cpf_nao_encontrado_tentativas` atual; incrementa.
-  - **NÃO** grava `nome_confirmado_em` nem `liberacao_enviada_em` (importante para não liberar o gate). Grava só `cpf` capturado, `sga_associado_encontrado=false`, e o contador novo.
-  - Se contador `>= 2`: envia `mensagem_cpf_nao_encontrado_transbordo` + dispara o mesmo bloco de transbordo da tool `solicitar_atendente_humano` (insert em `whatsapp_ia_pausas` motivo `transbordo_humano` 12h + notificação Relacionamento + atualização de `agente_ia_contatos.status='atendimento_humano'`). Reaproveita o código já existente — extrair em helper interno ou inline a mesma chamada. Reseta contador. Retorna `gate: "cpf_nao_encontrado_transbordo"`.
-  - Senão: envia `mensagem_cpf_nao_encontrado_retry`. Retorna `gate: "cpf_nao_encontrado_retry"`.
-
-Sem reset de `cpf_nao_encontrado_tentativas` no Caminho 2/3A (são contadores independentes); reset acontece só quando CPF é finalmente encontrado (Caso 1 sucesso) ou quando o transbordo dispara.
-
-### 5. Sem mudanças
-
-- `sga-buscar-associado-completo`: intocado.
-- Tool `solicitar_atendente_humano`: intocada (o gate só reusa o mesmo padrão de inserção em `whatsapp_ia_pausas` + notificação).
-- Roteador, dedup, envio, vendas, `consultar_situacao_veiculo`, validador de saída, gate de saudação, Caminho 2 (nome), Caminho 3A (DV inválido), Caminho 3B (texto livre): intocados.
-- `mensagem_pos_identificacao` continua existindo e sendo usada no Caminho 2 (nome completo). Só perde o uso no Caminho 1.
-
-## Rollback
-
-Tudo num único commit. Rollback = `git revert` do commit. A migration adiciona colunas com default — reverter o código volta ao comportamento antigo (que ignora as novas colunas) sem deixar a receptiva muda. As colunas extras podem ficar no banco sem efeito.
-
-## Risco residual
-
-Durante a janela entre deploy do código e deploy do migration, o `select` pode falhar se as colunas ainda não existirem. Mitigação: deploy do migration **antes** do deploy da edge (ou usar try/catch no select por enquanto). Vou ordenar migration → edge no build.
-
-## Checklist de confirmação ao final
-
-- CPF encontrado → confirma com nome completo (texto da config + `{nome}` dinâmico) e libera.
-- CPF não encontrado → 1ª vez pede reenvio; 2ª vez transborda via mecanismo existente.
-- Frase genérica `mensagem_pos_identificacao` não é mais resposta de identificação por CPF.
-- Receptiva no ar durante a mudança.
+## Riscos & mitigação
+- **Gemini 2.5 Pro mais lento que flash** → max_tokens já é 2048, timeout 55s — margem suficiente. Se latência subir demais em produção, plano B é trocar para `google/gemini-2.5-flash` (intermediário). Sem mudança de arquitetura.
+- **Tool calling com Pro pode variar formato** → 2.5-pro suporta tool calling no formato OpenAI igual ao flash, sem ajustes esperados. Validação E2E no passo 3/4 cobre isso.
+- **Custo por turno sobe** → esperado (Pro > Flash). Fora do escopo desta entrega.
