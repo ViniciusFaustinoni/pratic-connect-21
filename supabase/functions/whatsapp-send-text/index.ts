@@ -437,14 +437,14 @@ async function enviarViaMeta(
           
           if (retryResponse.ok) {
             const retryMessageId = retryResult.messages?.[0]?.id;
-            const { error: eRetry } = await supabase.from("whatsapp_mensagens").insert({
+            const { error: eRetry } = await inserirSaidaIdempotente(supabase, {
               telefone: telefoneFormatado,
               tipo: templateName ? "template" : "text",
               mensagem,
               direcao: "saida", status: 'enviada', message_id: retryMessageId,
               template_variaveis: templateName ? { nome: templateName, body: bodyParams, button: buttonParams } : null,
               provedor: "meta_oficial",
-            });
+            }, "meta_retry");
             if (eRetry) console.error("[whatsapp-send-text] insert FAIL (meta retry):", JSON.stringify(eRetry));
             console.log(`[whatsapp-send-text] ✓ Meta (retry #1 button split): ${telefoneFormatado} - ID: ${retryMessageId}`);
             return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial', persisted: !eRetry };
