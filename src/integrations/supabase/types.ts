@@ -943,6 +943,7 @@ export type Database = {
         Row: {
           cpf: string | null
           cpf_capturado_em: string | null
+          cpf_nao_encontrado_tentativas: number
           cpf_solicitado_em: string | null
           cpf_tentativas_invalidas: number
           created_at: string | null
@@ -968,6 +969,7 @@ export type Database = {
         Insert: {
           cpf?: string | null
           cpf_capturado_em?: string | null
+          cpf_nao_encontrado_tentativas?: number
           cpf_solicitado_em?: string | null
           cpf_tentativas_invalidas?: number
           created_at?: string | null
@@ -993,6 +995,7 @@ export type Database = {
         Update: {
           cpf?: string | null
           cpf_capturado_em?: string | null
+          cpf_nao_encontrado_tentativas?: number
           cpf_solicitado_em?: string | null
           cpf_tentativas_invalidas?: number
           created_at?: string | null
@@ -15737,6 +15740,9 @@ export type Database = {
           gate_saudacao_horas: number
           horario_atendimento: Json | null
           instrucoes_comportamento: string | null
+          mensagem_cpf_encontrado: string | null
+          mensagem_cpf_nao_encontrado_retry: string | null
+          mensagem_cpf_nao_encontrado_transbordo: string | null
           mensagem_fora_horario: string | null
           mensagem_pos_identificacao: string | null
           nome_agente: string
@@ -15761,6 +15767,9 @@ export type Database = {
           gate_saudacao_horas?: number
           horario_atendimento?: Json | null
           instrucoes_comportamento?: string | null
+          mensagem_cpf_encontrado?: string | null
+          mensagem_cpf_nao_encontrado_retry?: string | null
+          mensagem_cpf_nao_encontrado_transbordo?: string | null
           mensagem_fora_horario?: string | null
           mensagem_pos_identificacao?: string | null
           nome_agente: string
@@ -15785,6 +15794,9 @@ export type Database = {
           gate_saudacao_horas?: number
           horario_atendimento?: Json | null
           instrucoes_comportamento?: string | null
+          mensagem_cpf_encontrado?: string | null
+          mensagem_cpf_nao_encontrado_retry?: string | null
+          mensagem_cpf_nao_encontrado_transbordo?: string | null
           mensagem_fora_horario?: string | null
           mensagem_pos_identificacao?: string | null
           nome_agente?: string
