@@ -15730,9 +15730,12 @@ export type Database = {
           criado_em: string
           descricao: string | null
           ferramentas_habilitadas: string[]
+          gate_saudacao_aplicar_identificados: boolean
+          gate_saudacao_horas: number
           horario_atendimento: Json | null
           instrucoes_comportamento: string | null
           mensagem_fora_horario: string | null
+          mensagem_pos_identificacao: string | null
           nome_agente: string
           nome_exibicao: string
           persona: string
@@ -15751,9 +15754,12 @@ export type Database = {
           criado_em?: string
           descricao?: string | null
           ferramentas_habilitadas?: string[]
+          gate_saudacao_aplicar_identificados?: boolean
+          gate_saudacao_horas?: number
           horario_atendimento?: Json | null
           instrucoes_comportamento?: string | null
           mensagem_fora_horario?: string | null
+          mensagem_pos_identificacao?: string | null
           nome_agente: string
           nome_exibicao: string
           persona?: string
@@ -15772,9 +15778,12 @@ export type Database = {
           criado_em?: string
           descricao?: string | null
           ferramentas_habilitadas?: string[]
+          gate_saudacao_aplicar_identificados?: boolean
+          gate_saudacao_horas?: number
           horario_atendimento?: Json | null
           instrucoes_comportamento?: string | null
           mensagem_fora_horario?: string | null
+          mensagem_pos_identificacao?: string | null
           nome_agente?: string
           nome_exibicao?: string
           persona?: string

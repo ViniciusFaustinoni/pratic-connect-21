@@ -1,38 +1,59 @@
-# Fechar os 2 pontos pendentes do isolamento
+## Objetivo
 
-A remoção das 7 linhas de `vendas` e a limpeza da resposta `institucional` estão confirmadas. Faltam dois ajustes que não entraram na rodada anterior.
+Tirar do código os textos e o gatilho de tempo da saudação, manter Regra 2 como está, e cadastrar Regra 3. Receptiva no ar durante a mudança.
 
-## 1. Substituir apresentação e instruções da habilidade `relacionamento`
+## 1. Schema — 3 colunas novas em `ia_habilidades` (nullable, retrocompatível)
 
-Estado atual no banco (idêntico ao `vendas` — vazamento confirmado):
+Migração simples:
 
-- `apresentacao_inicial`: "Olá! Sou o Vinicius, consultor virtual da Praticcar Proteção Veicular. Estou aqui para te ajudar a encontrar a melhor proteção para o seu veículo. Posso começar fazendo uma cotação gratuita para você?"
-- `instrucoes_comportamento`: "Seja cordial e profissional. Use linguagem simples e direta. Em caso de dúvidas sobre sinistros, encaminhe para atendimento humano."
+- `mensagem_pos_identificacao text` — texto enviado após capturar CPF ou nome completo.
+- `gate_saudacao_horas numeric default 2` — janela em horas para reapresentar a saudação de identificação / suprimir saudação de cerimônia.
+- `gate_saudacao_aplicar_identificados boolean default true` — liga/desliga a extensão da trava ao associado já identificado.
 
-Substituir por texto canônico de atendimento receptivo ao associado, sem qualquer menção a cotação/venda, alinhado ao que já existe nas demais colunas da habilidade (`nome_agente='Atendimento Pratic'`, persona/regras/saudação) e no comportamento Maya de audiência `associado` da tabela legada `maya_ia_comportamento`:
+Nenhuma coluna é obrigatória; o código lê com fallback aos valores atuais, então a receptiva continua respondendo durante o deploy.
 
-- `apresentacao_inicial` (nova): "Olá! Aqui é o Atendimento Pratic. Sou o canal receptivo da Praticcar para os associados — ajudo com dúvidas sobre o plano, boletos, assistência 24h, agendamentos e direciono o que estiver fora do escopo para o time certo. Em emergências (sinistro, acidente, roubo, furto), aciono nossa equipe humana na mesma hora."
-- `instrucoes_comportamento` (nova): "Atenda associados de forma cordial, objetiva e empática. Nunca ofereça plano, cotação, valor de adesão ou condições comerciais — isso não é receptiva. Sempre que o pedido fugir do escopo de atendimento ao associado (cotação de novo veículo, RH, imprensa, parcerias, comercial), responda com o item correspondente da categoria `direcionamento` do conhecimento; se o item estiver inativo ou sem destino, chame `solicitar_atendente_humano`. Em sinistro/emergência, chame `solicitar_atendente_humano` com motivo='sinistro_emergencia' e prioridade='alta' na mesma rodada. Nunca prometa ação humana ('vou avisar o time', 'vou pedir retorno') sem chamar a tool junto."
+## 2. Conteúdo da habilidade `relacionamento` (UPDATE de dados)
 
-Operação: `UPDATE ia_habilidades SET apresentacao_inicial=..., instrucoes_comportamento=... WHERE slug='relacionamento'`. A linha `vendas` fica intocada (continua sendo backup do Vinicius). Tabelas legadas (`agente_ia_config`, `maya_ia_comportamento`) não são tocadas.
+Em `ia_habilidades WHERE slug='relacionamento'`:
 
-## 2. Corrigir texto da tela `src/pages/relacionamento/ConfigIA.tsx`
+- `saudacao_inicial` ← `Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁`
+- `mensagem_pos_identificacao` ← `Certo, obrigada pelo retorno! Em que podemos te ajudar hoje?`
+- `gate_saudacao_horas` ← `2`
+- `gate_saudacao_aplicar_identificados` ← `true`
 
-Dois trechos ainda mencionam "leads" e "diretoria":
+Em `ia_habilidade_conhecimento` (Regra 3, INSERT):
 
-- Linha 57 (subtítulo do cabeçalho): "Personalidade, conhecimento (FAQ), exemplos de resposta e ferramentas da IA que atende **leads e associados** no WhatsApp." → trocar por "...da IA que atende **associados** no WhatsApp."
-- Linha 77 (texto do Alert principal): "Esta IA atende **leads**, **associados** e **diretoria** 24/7." → trocar por "Esta IA atende **associados** 24/7 (atendimento receptivo)."
+- `categoria='rastreador_acesso'`, `ordem=60`, `ativo=true`
+- `pergunta`: "Como o associado pede login/senha/acesso ao rastreador ou ao app de monitoramento?"
+- `palavras_chave`: `login, senha, acesso, rastreador, monitoramento, app, aplicativo, monitorar, rastrear, rastrear veículo, app de rastreamento, painel de monitoramento`
+- `resposta`: `Para acesso ao rastreador/monitoramento (login, senha ou liberação de aplicativo), a solicitação é feita exclusivamente por e-mail: *rastreador@praticcar.org*. Peça que envie o e-mail informando nome completo, CPF e placa do veículo — a equipe responde por lá.`
 
-O restante do Alert (kill-switch, parágrafo de direcionamento, frase sobre desligar) fica como está.
+Regra 2 (Assistência) fica intocada — já está presente e íntegra.
+
+## 3. Edge `agente-consultor-ia/index.ts` — só ler config e estender trava (sem mexer em roteador/transbordo/envio)
+
+a) Antes do gate de identificação (≈linha 557), carregar a habilidade `relacionamento` uma vez (uma SELECT) e expor `habCfg.saudacao_inicial`, `habCfg.mensagem_pos_identificacao`, `habCfg.gate_saudacao_horas`, `habCfg.gate_saudacao_aplicar_identificados`, todos com fallback aos textos/valores atuais (zero risco de quebrar caso a linha venha incompleta).
+
+b) Substituir as 4 strings hardcoded:
+- Linha 831 (CPF capturado) e 854 (nome capturado) → `habCfg.mensagem_pos_identificacao`.
+- Linha 922 (saudação canônica) → `habCfg.saudacao_inicial`.
+- Continuidade debounced (linha 942) continua hardcoded — não está na regra do usuário.
+
+c) Substituir as constantes `> 2` nas linhas 916–917 por `> habCfg.gate_saudacao_horas`.
+
+d) Bloco NOVO para identificado dentro da janela: quando `jaIdentificado && habCfg.gate_saudacao_aplicar_identificados`, calcular `horasDesdeUltima` e `diaBrtAgora === diaBrtUltima`. Se a mensagem do cliente é saudação pura (regex `^(oi|olá|ola|bom dia|boa tarde|boa noite|e aí|opa|tudo bem|tudo bom)[\s!?.,]*$`) E está dentro da janela (`horasDesdeUltima <= gate_saudacao_horas` E mesmo dia BRT), injetar uma instrução no `systemPrompt` (já existe o bloco de CONTEXTO DE IDENTIFICAÇÃO na linha 1639): "Conversa em andamento hoje — NÃO ressaude de cerimônia, NÃO repita a saudação de identificação. Responda curto e cordial usando o primeiro nome (ex: 'Oi, [PrimeiroNome]! Como posso ajudar?') e, se houver assunto na mensagem, vá direto ao assunto." Fora da janela (primeira mensagem do dia OU >gate_saudacao_horas sem interação), a instrução NÃO é injetada — a LLM volta ao comportamento atual de saudação completa de abertura de turno.
+
+Não é uma resposta canned: o modelo continua gerando o texto. A única lógica nova no código é decidir injetar/não injetar a regra supressora. A regra de tempo em si (`gate_saudacao_horas`) é lida da config.
+
+## Verificações ao final
+
+- `SELECT saudacao_inicial, mensagem_pos_identificacao, gate_saudacao_horas, gate_saudacao_aplicar_identificados FROM ia_habilidades WHERE slug='relacionamento'` → 4 valores conforme item 2.
+- `SELECT 1 FROM ia_habilidade_conhecimento WHERE habilidade_slug='relacionamento' AND categoria='rastreador_acesso' AND ativo=true` → presente.
+- Regra 2: re-confirmar query da categoria `Assistência` — texto inalterado, com os dois números.
+- Caso real: associado identificado mandando "bom dia" às 14h no mesmo dia em que já interagiu às 13h deve receber resposta curta e cordial (sem "Para iniciarmos o seu atendimento..."); mesmo associado mandando "bom dia" na manhã seguinte ou após >2h deve receber saudação normal de abertura.
 
 ## Fora do escopo
 
-- Nada na habilidade `vendas`.
-- Nada no roteador, no transbordo, no kill-switch, nas tabelas legadas, na edge `agente-consultor-ia`.
-- Sem nova migração de schema — só `UPDATE` em `ia_habilidades` (1 linha) e edição de 2 linhas de texto em 1 arquivo.
-
-## Verificação ao final
-
-- `SELECT apresentacao_inicial, instrucoes_comportamento FROM ia_habilidades WHERE slug='relacionamento'` — confirmar que não contém "Vinicius", "consultor", "cotação" nem "venda".
-- Re-leitura de `ConfigIA.tsx` linhas 55–82 — confirmar ausência de "leads" e "diretoria".
-- Reportar diff exato dos textos e contagem final inalterada (12 linhas de conhecimento na `relacionamento`).
+- Nada na habilidade `vendas`, roteador, transbordo, kill-switch, envio, dedup do histórico, FAQ DESTAQUE.
+- Sem tocar na correção de duplicação já implantada.
+- Continuidade debounced de 2 min (linha 938/942) e mensagens de tentativa-inválida de CPF (linhas 877/883) ficam como estão — não estão na regra do usuário.
