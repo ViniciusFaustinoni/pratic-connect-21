@@ -885,7 +885,7 @@ Deno.serve(async (req) => {
         (contato as any).nome_confirmado_em = new Date().toISOString();
         console.log(`[agente-consultor-ia] [gate_identificacao] Nome completo capturado: ${nomeFmt}`);
 
-        await enviarTexto("Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊");
+        await enviarTexto(habCfg.mensagem_pos_identificacao);
         return new Response(
           JSON.stringify({ success: true, gate: "identificado_nome" }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
