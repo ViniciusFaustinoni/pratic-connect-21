@@ -1284,21 +1284,28 @@ Deno.serve(async (req) => {
         }).eq("telefone", telLimpo);
       } catch (_e) { /* não-bloqueante */ }
 
-      // ── FONTE CANÔNICA DA PERSONA ────────────────────────────────────────
-      // A habilidade roteada sobrescreve o legado `agente_ia_config` para
-      // nome do agente, saudação e instruções de comportamento. Isto evita
-      // que o prompt continue dizendo "Sou o Vinicius, consultor de vendas"
-      // quando a habilidade `vendas` está desativada.
-      if (roteamento.habilidade.nome_agente) {
-        nomeAgente = roteamento.habilidade.nome_agente;
+      // ── FONTE CANÔNICA DA PERSONA (habilidade) ───────────────────────────
+      // A habilidade roteada é a ÚNICA fonte de persona/saudação/instruções a
+      // partir de 04/06/26. Legado agente_ia_config / maya_ia_* foi deprecado
+      // (mantido como backup). Editar 'relacionamento' nunca afeta 'vendas'.
+      const hab: any = roteamento.habilidade;
+      if (hab.nome_agente) {
+        nomeAgente = hab.nome_agente;
       }
-      if (roteamento.habilidade.saudacao_inicial) {
-        apresentacao = roteamento.habilidade.saudacao_inicial;
+      // apresentacao_inicial (nova coluna) > saudacao_inicial (legado) > config legacy
+      if (hab.apresentacao_inicial && String(hab.apresentacao_inicial).trim()) {
+        apresentacao = String(hab.apresentacao_inicial).trim();
+      } else if (hab.saudacao_inicial) {
+        apresentacao = hab.saudacao_inicial;
       }
+      // instrucoes_comportamento (nova coluna) entra como bloco-base; persona/tom/regras seguem por cima
       const personaBlocos: string[] = [];
-      if (roteamento.habilidade.persona) personaBlocos.push(roteamento.habilidade.persona);
-      if (roteamento.habilidade.tom_voz) personaBlocos.push(`Tom de voz: ${roteamento.habilidade.tom_voz}`);
-      if (roteamento.habilidade.regras_absolutas) personaBlocos.push(`Regras absolutas:\n${roteamento.habilidade.regras_absolutas}`);
+      if (hab.instrucoes_comportamento && String(hab.instrucoes_comportamento).trim()) {
+        personaBlocos.push(String(hab.instrucoes_comportamento).trim());
+      }
+      if (hab.persona) personaBlocos.push(hab.persona);
+      if (hab.tom_voz) personaBlocos.push(`Tom de voz: ${hab.tom_voz}`);
+      if (hab.regras_absolutas) personaBlocos.push(`Regras absolutas:\n${hab.regras_absolutas}`);
       if (personaBlocos.length) {
         instrucoes = personaBlocos.join("\n\n");
       }
