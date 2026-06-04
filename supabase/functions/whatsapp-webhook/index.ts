@@ -3655,24 +3655,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, ignored: "IA desabilitada" }), { headers: corsHeaders });
     }
 
-    // Buscar CPF previamente confirmado para este telefone (estado canônico do agente).
-    // Usado como critério de desempate quando o mesmo número está em mais de um
-    // associado ativo — o telefone sozinho não identifica, o CPF identifica.
-    const telefoneNormBase = telefone.replace(/\D/g, "");
-    let cpfConfirmadoParaTelefone: string | null = null;
-    let contatoIaCache: { cpf: string | null; nome: string | null; sga_associado_encontrado: boolean | null } | null = null;
-    try {
-      const { data: contatoIaState } = await supabase
-        .from("agente_ia_contatos")
-        .select("cpf, nome, sga_associado_encontrado")
-        .eq("telefone", telefoneNormBase)
-        .maybeSingle();
-      contatoIaCache = (contatoIaState as any) || null;
-      const cpfRaw = (contatoIaState?.cpf || "").replace(/\D/g, "");
-      cpfConfirmadoParaTelefone = cpfRaw.length === 11 ? cpfRaw : null;
-    } catch (lookupErr: any) {
-      console.warn(`[whatsapp-webhook] Falha lookup agente_ia_contatos para desempate:`, lookupErr?.message || lookupErr);
-    }
+
+
 
     // ========================================
     // CAMINHO ÚNICO CANÔNICO (Leva 1)
