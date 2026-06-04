@@ -48,9 +48,9 @@ function KillSwitchAgente() {
     onSuccess: (_, novoValor) => {
       queryClient.invalidateQueries({ queryKey: ['agente-ia-ativo'] });
       if (novoValor) {
-        toast.success('Agente Vinicius ATIVADO — voltará a responder mensagens');
+        toast.success('Atendimento Pratic ATIVADO — voltará a responder mensagens');
       } else {
-        toast.success('Agente Vinicius DESATIVADO — não responderá nenhuma mensagem');
+        toast.success('Atendimento Pratic DESATIVADO — não responderá nenhuma mensagem');
       }
     },
     onError: () => toast.error('Erro ao alterar status do agente'),
