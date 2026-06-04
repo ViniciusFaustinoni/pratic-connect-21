@@ -391,6 +391,58 @@ Deno.serve(async (req) => {
     }
 
 
+    // ---- 2B-PRE. CONTEXTO DE AGENDAMENTO PENDENTE (48h) ----
+    // Se há uma confirmacao_agendamento aberta para este telefone, o contato JÁ está
+    // identificado pelo servico→associado e a IA deve focar em confirmar/reagendar
+    // em vez de pedir CPF. Ver mem://logic/operations/ia-contexto-agendamento-pendente.
+    let contextoAgendamentoPendente: {
+      servico_id: string;
+      reagendamento_token: string | null;
+      data: string | null;
+      periodo: string | null;
+      hora: string | null;
+      endereco: string | null;
+      tipo: string | null;
+      nome_cliente: string | null;
+      enviado_em: string;
+      telefone: string;
+    } | null = null;
+    try {
+      const telVariantesPend = [telLimpo];
+      if (telLimpo.startsWith("55") && telLimpo.length >= 12) telVariantesPend.push(telLimpo.substring(2));
+      if (!telLimpo.startsWith("55") && telLimpo.length >= 10) telVariantesPend.push("55" + telLimpo);
+      const limite48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data: confPend } = await supabase
+        .from("confirmacoes_agendamento")
+        .select("id, servico_id, telefone, created_at, status, servico:servicos(id, tipo, data_agendada, periodo, hora_agendada, logradouro, bairro, cidade, reagendamento_token, associado:associados(nome))")
+        .in("telefone", telVariantesPend)
+        .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha", "aguardando_confirmacao_encaixe"])
+        .gte("created_at", limite48h)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const s: any = (confPend as any)?.servico;
+      if (confPend && s) {
+        const partes = [s.logradouro, s.bairro, s.cidade].filter(Boolean);
+        contextoAgendamentoPendente = {
+          servico_id: s.id,
+          reagendamento_token: s.reagendamento_token || null,
+          data: s.data_agendada || null,
+          periodo: s.periodo || null,
+          hora: s.hora_agendada ? String(s.hora_agendada).slice(0, 5) : null,
+          endereco: partes.length ? partes.join(", ") : null,
+          tipo: s.tipo || null,
+          nome_cliente: s.associado?.nome || null,
+          enviado_em: (confPend as any).created_at,
+          telefone: (confPend as any).telefone,
+        };
+        console.log(`[agente-consultor-ia] [contexto_agendamento] pendente servico=${s.id} tipo=${s.tipo}`);
+      }
+    } catch (e) {
+      console.warn("[agente-consultor-ia] Falha contexto agendamento:", (e as any)?.message);
+    }
+
+
     // ---- 2B. GATE DE SAUDAÇÃO + IDENTIFICAÇÃO (skip diretores) ----
     // Regras canônicas (Relacionamento › Chat):
     //   - Saudação obrigatória bloqueante: primeira msg do dia BRT OU >2h sem interagir → mensagem padrão pedindo nome completo OU CPF.
