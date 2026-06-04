@@ -1631,11 +1631,27 @@ Chame SEMPRE que o associado pedir:
 A tool não precisa de parâmetros — o sistema usa o CPF do contato.
 
 Após a tool responder:
-- Se \`encontrados > 0\`, formate cada boleto (linha em branco entre eles):
-  *Boleto* — R$ {valor}
-  Vencimento: {dd/mm/aaaa} ({status})
-  Placa: {placa}
-  Linha digitável: \`{linha_digitavel}\`
+- Se \`encontrados > 0\`, envie UMA ÚNICA mensagem por boleto, no FORMATO FIXO abaixo (sem resumir, sem omitir nenhum dos cinco campos, sem repetir a mesma mensagem na mesma resposta):
+
+  Encontrei o seu boleto do *{veiculo} ({placa})* com vencimento em *{vencimento}*.
+
+  Aqui estão os dados para pagamento:
+
+  *Linha Digitável:*
+
+  {linha_digitavel}
+
+  *PIX Copia e Cola:*
+
+  {pix_copia_cola}
+
+  *Link para o boleto (PDF e QR Code):*
+
+  {link_boleto}
+
+  Posso te ajudar com algo mais?
+
+  PROIBIDO enviar versão reduzida (ex.: só linha digitável). PROIBIDO escrever "no momento disponibilizamos só X". Se algum dos cinco campos vier vazio na tool, substitua a linha por "—" (um traço) — NUNCA invente. PROIBIDO duplicar a mensagem do boleto na mesma resposta.
 - Se \`encontrados = 0\` e sem erro: "Você está em dia, *${associadoNome}*! Não encontrei boletos em aberto. 👍"
 - Se \`erro_transitorio: true\`: chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='SGA fora — cliente pediu boleto').
 - Se o cliente disser que pagou um boleto que aparece em aberto, ou questionar valor/data: chame *solicitar_atendente_humano* (motivo='reclamacao').
@@ -3403,13 +3419,19 @@ async function executarConsultarBoletosAssociado(
     };
   }
 
-  // A edge `sga-listar-boletos-associado` devolve { veiculos: [{ placa, boletos_abertos: [...] }, ...] }.
-  // `boletos_abertos` JÁ vem filtrado SOMENTE com boletos em aberto (a edge separa pagos/baixados
-  // antes de empurrar para esse array). Aqui apenas achatamos por veículo, anexando a placa.
+  // A edge `sga-listar-boletos-associado` devolve { veiculos: [{ placa, marca, modelo, boletos_abertos: [...] }, ...] }.
+  // `boletos_abertos` JÁ vem filtrado SOMENTE com boletos em aberto.
   const veiculosResp: any[] = Array.isArray(data?.veiculos) ? data.veiculos : [];
   const todos: any[] = veiculosResp.flatMap((v: any) => {
     const abertos: any[] = Array.isArray(v?.boletos_abertos) ? v.boletos_abertos : [];
-    return abertos.map((b: any) => ({ ...b, placa: v?.placa ?? b?.placa ?? null }));
+    const marca = v?.marca ? String(v.marca).trim() : "";
+    const modelo = v?.modelo ? String(v.modelo).trim() : "";
+    const veiculoLabel = [marca, modelo].filter(Boolean).join(" ") || "Veículo";
+    return abertos.map((b: any) => ({
+      ...b,
+      placa: v?.placa ?? b?.placa ?? null,
+      veiculo: veiculoLabel,
+    }));
   });
 
   const fmtData = (d: any) => {
@@ -3437,7 +3459,7 @@ async function executarConsultarBoletosAssociado(
   const normalizados = todos.map((b: any) => {
     const venc = b.dataVencimento || b.data_vencimento || b.vencimento || null;
     const valor = b.valor ?? b.valor_total ?? b.valorBoleto ?? null;
-    const situacao = String(b.situacao || b.status || b.statusBoleto || "").toLowerCase();
+    const situacao = String(b.situacao_label || b.situacao || b.status || b.statusBoleto || "").toLowerCase();
     const aberto = !situacao || ["em aberto", "aberto", "vencido", "pendente", "a vencer"].some(s => situacao.includes(s));
     return {
       vencimento: fmtData(venc),
@@ -3446,9 +3468,46 @@ async function executarConsultarBoletosAssociado(
       status: situacao || "em aberto",
       aberto,
       placa: b.placa || b.veiculo_placa || null,
+      veiculo: b.veiculo || "Veículo",
       linha_digitavel: b.linhaDigitavel || b.linha_digitavel || b.codigoBarras || null,
+      pix_copia_cola: null as string | null,
+      link_boleto: b.link_boleto || b.linkBoleto || b.url_boleto || null,
+      nosso_numero: b.nosso_numero || null,
     };
   });
+
+  // Enriquecimento via tabela local `cobrancas`: PIX copia-e-cola e link do PDF
+  // (o SGA Hinova não retorna PIX, e o link nem sempre vem preenchido).
+  try {
+    const linhas = normalizados.map(n => (n.linha_digitavel ? String(n.linha_digitavel).replace(/\D/g, "") : null)).filter(Boolean) as string[];
+    const nossos = normalizados.map(n => n.nosso_numero).filter(Boolean) as string[];
+    if (linhas.length || nossos.length) {
+      const orParts: string[] = [];
+      if (linhas.length) orParts.push(`linha_digitavel.in.(${linhas.map(l => `"${l}"`).join(",")})`);
+      if (nossos.length) orParts.push(`nosso_numero.in.(${nossos.map(n => `"${n}"`).join(",")})`);
+      const { data: cobs } = await _supabase
+        .from("cobrancas")
+        .select("linha_digitavel, nosso_numero, pix_copia_cola, boleto_url")
+        .or(orParts.join(","))
+        .limit(50);
+      const byLinha = new Map<string, any>();
+      const byNosso = new Map<string, any>();
+      for (const c of (cobs || [])) {
+        if (c.linha_digitavel) byLinha.set(String(c.linha_digitavel).replace(/\D/g, ""), c);
+        if (c.nosso_numero) byNosso.set(String(c.nosso_numero), c);
+      }
+      for (const n of normalizados) {
+        const ld = n.linha_digitavel ? String(n.linha_digitavel).replace(/\D/g, "") : null;
+        const hit = (ld && byLinha.get(ld)) || (n.nosso_numero && byNosso.get(String(n.nosso_numero))) || null;
+        if (hit) {
+          n.pix_copia_cola = hit.pix_copia_cola || null;
+          n.link_boleto = n.link_boleto || hit.boleto_url || null;
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[tool:consultar_boletos] enriquecimento cobrancas falhou:", e?.message);
+  }
 
   normalizados.sort((a: any, b: any) => {
     if (a.aberto !== b.aberto) return a.aberto ? -1 : 1;
@@ -3457,7 +3516,7 @@ async function executarConsultarBoletosAssociado(
     return db - da;
   });
 
-  const top = normalizados.slice(0, 5).map(({ _vencISO, aberto, ...rest }) => rest);
+  const top = normalizados.slice(0, 5).map(({ _vencISO, aberto, nosso_numero, ...rest }) => rest);
 
   return {
     success: true,
