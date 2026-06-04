@@ -183,17 +183,27 @@ Deno.serve(async (req) => {
     const videoUrl = videoFoto?.arquivo_url ?? null;
 
     // 4.b GATE sub-FIPE: bloqueia finalização se o set canônico estiver incompleto.
-    // Só roda na PRIMEIRA finalização (sem vistoria existente). Idempotência preservada:
-    // re-chamada após sucesso passa pelo branch `vistoriaExistente`.
-    if (veiculoSubFipe && !vistoriaExistente) {
+    // CANÔNICO (A1): roda mesmo quando vistoriaExistente está `pendente`/`em_analise`
+    // — fecha bypass de idempotência (cliente que chamou 2x com payload parcial
+    // gravava vistoria com 1-3 fotos e o gate era pulado). Só pula quando a vistoria
+    // já está em estado terminal (`aprovada`, `concluida`, `reprovada`, `cancelada`)
+    // — nesses casos a decisão canônica já foi tomada e re-chamada é genuinamente
+    // idempotente.
+    const vistoriaTerminal = vistoriaExistente
+      && ['aprovada', 'concluida', 'reprovada', 'cancelada'].includes(
+        (vistoriaExistente.status || '').toLowerCase(),
+      );
+    if (veiculoSubFipe && !vistoriaTerminal) {
       const completude = checarCompletudeAutovistoriaSubFipe({
         tipo: tipoVeiculoSubFipe,
         fotosEnviadas: fotosArr.map((f) => f.tipo),
       });
       if (!completude.ok) {
-        console.warn('[finalizar-autovistoria] sub-FIPE incompleta', {
+        console.warn('[finalizar-autovistoria] sub-FIPE incompleta (gate canônico)', {
           cotacaoId,
           tipo: tipoVeiculoSubFipe,
+          vistoriaExistenteId: vistoriaExistente?.id ?? null,
+          vistoriaExistenteStatus: vistoriaExistente?.status ?? null,
           faltantes: completude.obrigatoriasFaltantes,
           videoFaltante: completude.videoFaltante,
           recebidas: completude.recebidas,
