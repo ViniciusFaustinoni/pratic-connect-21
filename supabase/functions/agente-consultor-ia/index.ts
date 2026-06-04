@@ -2154,13 +2154,52 @@ REGRAS OBRIGATÓRIAS deste contexto:
 
 
     // ---- 10. DIVIDIR E ENVIAR RESPOSTA ----
-    // Validador de saída: garante começo, meio e fim — Maya nunca manda string vazia/só whitespace
-    const respostaFinal = (resposta || "").toString().trim() ||
+    // Validador de saída 1: garante começo, meio e fim — Maya nunca manda string vazia/só whitespace
+    let respostaFinal = (resposta || "").toString().trim() ||
       ("Recebi sua mensagem! 🙂 Pode reformular pra eu te ajudar? " +
        "Se preferir falar com um *atendente humano*, é só responder *atendente*.");
     if (respostaFinal !== resposta) {
       console.warn(`[agente-consultor-ia] validador_saida: resposta substituída por fallback (vazia) tel=${telLimpo}`);
     }
+
+    // Validador de saída 2 (defesa em profundidade): afirmação de SITUAÇÃO de veículo
+    // sem ter chamado consultar_situacao_veiculo com sucesso nesta rodada.
+    // Gatilhos são FRASES de afirmação (não palavras soltas), para minimizar falso-positivo
+    // quando a IA está só ecoando o termo do associado ou usando em contexto institucional.
+    if (isAssociado && !toolsCalledOk.has("consultar_situacao_veiculo")) {
+      const txt = respostaFinal.toLowerCase();
+      const padroesAfirmacaoSituacao = [
+        /\best[áa]\s+ativ[oa]\b/,
+        /\bconsta\s+(como\s+)?ativ[oa]\b/,
+        /\best[áa]\s+inadimplent[ea]\b/,
+        /\bconsta\s+(como\s+)?inadimplent[ea]\b/,
+        /\best[áa]\s+em\s+an[áa]lise\b/,
+        /\best[áa]\s+suspens[oa]\b/,
+        /\best[áa]\s+cancelad[oa]\b/,
+        /\bsem\s+cobertura\b/,
+        /\bsua?\s+prote[çc][ãa]o\s+(est[áa]\s+)?(ativa|valendo|em\s+dia)\b/,
+        /\b(voc[êe]\s+)?(pode|est[áa]\s+livre\s+para)\s+usar\s+a\s+assist[êe]ncia\b/,
+        /\bseu\s+ve[íi]culo\s+(est[áa]|consta)\b/,
+      ];
+      const violou = padroesAfirmacaoSituacao.some((re) => re.test(txt));
+      if (violou) {
+        console.warn(`[agente-consultor-ia] validador_saida:situacao_sem_tool tel=${telLimpo} resposta="${respostaFinal.substring(0, 200)}"`);
+        respostaFinal =
+          "Deixa eu confirmar a situação do seu veículo com a equipe — já te respondo. 🙂";
+        try {
+          await executarSolicitarAtendenteHumano(supabase, telLimpo, {
+            motivo: "duvida_complexa",
+            resumo: "validador_saida: IA afirmou situação de veículo sem consultar SGA",
+            prioridade: "normal",
+            contato_nome: contato?.nome || associadoNome || null,
+            associado_id: null,
+          });
+        } catch (e: any) {
+          console.error(`[agente-consultor-ia] validador_saida:situacao_sem_tool — falha transbordo: ${e?.message}`);
+        }
+      }
+    }
+
 
     const partes = dividirMensagem(respostaFinal, 1000);
 
