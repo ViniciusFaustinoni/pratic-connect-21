@@ -11,6 +11,10 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { insertAuditLog } from '../_shared/auditLog.ts';
+import {
+  checarCompletudeAutovistoriaSubFipe,
+  type TipoVeiculoSubFipe,
+} from '../_shared/fotosVistoriaSubFipe.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,6 +84,72 @@ Deno.serve(async (req) => {
     }
 
     console.log('[confirmar-adesao-zerada] início', { cotacao_id, origem });
+
+    // ── D1: Gate sub-FIPE autovistoria completa ────────────────────────────
+    // CANÔNICO: adesão zerada (isenta_*/agencia_em_maos) NÃO pode promover
+    // `status_contratacao='pagamento_ok'` enquanto a autovistoria sub-FIPE
+    // estiver incompleta. Sem esse gate, casos como d3126a85/c735c5e6 (3 fotos)
+    // pulavam direto para o Cadastro com vistoria parcial.
+    try {
+      const { data: contratoGate } = await supabase
+        .from('contratos')
+        .select('id, veiculo_id')
+        .eq('cotacao_id', cotacao_id)
+        .neq('status', 'cancelado')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const veiculoIdGate = (contratoGate as any)?.veiculo_id || null;
+      if (veiculoIdGate) {
+        const { data: precisaRastreador } = await supabase
+          .rpc('fn_veiculo_precisa_rastreador', { _veiculo_id: veiculoIdGate });
+        const isSubFipe = precisaRastreador === false;
+        if (isSubFipe) {
+          const { data: vinfo } = await supabase
+            .from('veiculos')
+            .select('marca, modelo, marca_modelo:marcas_modelos(tipo_veiculo)')
+            .eq('id', veiculoIdGate)
+            .maybeSingle();
+          const tipoCat = ((vinfo as any)?.marca_modelo?.tipo_veiculo || '').toLowerCase();
+          let tipoSub: TipoVeiculoSubFipe = 'carro';
+          if (tipoCat === 'moto') {
+            tipoSub = 'moto';
+          } else {
+            const marcaMod = (((vinfo as any)?.marca || '') + ' ' + ((vinfo as any)?.modelo || '')).toUpperCase();
+            if (/MOTO|CG|XRE|FAZER|YBR|TITAN|BIZ|POP|BROS|FAN/.test(marcaMod)) tipoSub = 'moto';
+          }
+          const { data: fotos } = await supabase
+            .from('cotacoes_vistoria_fotos')
+            .select('tipo')
+            .eq('cotacao_id', cotacao_id);
+          const completude = checarCompletudeAutovistoriaSubFipe({
+            tipo: tipoSub,
+            fotosEnviadas: ((fotos || []) as any[]).map((f) => f.tipo),
+          });
+          if (!completude.ok) {
+            console.warn('[confirmar-adesao-zerada] bloqueado: autovistoria sub-FIPE incompleta', {
+              cotacao_id, tipo: tipoSub,
+              faltantes: completude.obrigatoriasFaltantes,
+              videoFaltante: completude.videoFaltante,
+              recebidas: completude.recebidas,
+            });
+            return jsonResponse({
+              success: false,
+              error: 'autovistoria_pendente',
+              code: 'autovistoria_pendente',
+              mensagem: 'Antes de confirmar a adesão isenta, é necessário concluir a autovistoria completa do veículo (roteiro de fotos + vídeo 360°).',
+              tipoVeiculo: tipoSub,
+              faltantes: completude.obrigatoriasFaltantes,
+              videoFaltante: completude.videoFaltante,
+              esperadasMin: completude.esperadasMin,
+              recebidas: completude.recebidas,
+            }, 409);
+          }
+        }
+      }
+    } catch (gateErr) {
+      console.warn('[confirmar-adesao-zerada] gate sub-FIPE falhou (segue por fail-safe):', gateErr);
+    }
 
     // 1) Execução atômica via RPC
     const { data: rpcRows, error: rpcError } = await supabase.rpc('fn_confirmar_adesao_zerada', {

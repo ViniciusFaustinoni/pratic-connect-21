@@ -161,6 +161,22 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
   const instalacao = cotacao.instalacoes?.[0];
   const tipoVistoria = cotacao.tipo_vistoria;
 
+  // E1: Detecta sub-FIPE pelo veículo da cotação (carro<30k / moto<9k, exceto Diesel).
+  // Quando não dá pra inferir com confiança (sem FIPE ou sem tipo), `null` mantém
+  // comportamento legado — fail-safe semântico (label só muda quando temos certeza).
+  const isSubFipe: boolean | null = (() => {
+    const veic: any = (cotacao as any).contrato?.veiculo ?? (cotacao as any).veiculo ?? null;
+    const fipe = Number(veic?.valor_fipe ?? 0);
+    if (!fipe || fipe <= 0) return null;
+    const combustivel = (veic?.combustivel || '').toString().toLowerCase();
+    if (combustivel.includes('diesel')) return false;
+    const tipoCat = (veic?.marca_modelo?.tipo_veiculo || veic?.tipo_veiculo || '').toString().toLowerCase();
+    const marcaMod = ((veic?.marca || '') + ' ' + (veic?.modelo || '')).toUpperCase();
+    const isMoto = tipoCat === 'moto' || /MOTO|CG|XRE|FAZER|YBR|TITAN|BIZ|POP|BROS|FAN/.test(marcaMod);
+    return isMoto ? fipe < 9000 : fipe < 30000;
+  })();
+
+
   // 1. Cancelamento (prioridade máxima)
   if (
     associadoStatus === 'cancelado' ||
@@ -212,8 +228,11 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
 
     // 7.b Vistoria escolhida e em andamento
     if (tipoVistoria === 'autovistoria') {
-      // autovistoria_ok significa fotos enviadas → cai pra pagamento
       if (statusContratacao === 'autovistoria_ok' || statusContratacao === 'vistoria_ok') {
+        // E1: sub-FIPE NUNCA tem instalação física — autovistoria completa
+        // + adesão paga = aguardando análise do Cadastro (não "aguardando vistoria",
+        // que sugere instalação por agendar).
+        if (isSubFipe && adesaoPaga === true) return 'em_analise';
         return adesaoPaga === false ? 'realizando_pagamento' : 'aguardando_vistoria';
       }
       return 'realizando_autovistoria';
