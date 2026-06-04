@@ -865,37 +865,96 @@ Deno.serve(async (req) => {
         const nomeSga = sgaResp?.associado?.nome || null;
         const statusSga = sgaResp?.associado?.situacao || sgaResp?.associado?.status || "";
 
-        await supabase
-          .from("agente_ia_contatos")
-          .update({
-            cpf: cpfLimpo,
-            cpf_capturado_em: new Date().toISOString(),
-            sga_associado_encontrado: encontrado,
-            sga_associado_status: encontrado ? String(statusSga || "ativo") : null,
-            cpf_tentativas_invalidas: 0,
-            liberacao_enviada_em: new Date().toISOString(),
-            ...(nomeSga ? { nome: nomeSga, nome_confirmado_em: new Date().toISOString() } : {}),
-          })
-          .eq("id", contato.id);
-
-        contato.cpf = cpfLimpo;
-        if (nomeSga) contato.nome = nomeSga;
-
         cpfSgaContexto = {
           encontrado,
           nome: nomeSga || undefined,
           status: statusSga || undefined,
           cpfMascarado,
         };
-        if (encontrado && nomeSga) {
-          sgaAssociadoOverride = { nome: nomeSga, status: String(statusSga || "") };
-        }
         console.log(`[agente-consultor-ia] [gate_identificacao] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
 
-        // Liberação canônica + return: próxima mensagem do cliente segue o fluxo normal
-        await enviarTexto(habCfg.mensagem_pos_identificacao);
+        // ─── SUBCASO 1A: CPF ENCONTRADO NO SGA → confirma com nome + libera ───
+        if (encontrado) {
+          await supabase
+            .from("agente_ia_contatos")
+            .update({
+              cpf: cpfLimpo,
+              cpf_capturado_em: new Date().toISOString(),
+              sga_associado_encontrado: true,
+              sga_associado_status: String(statusSga || "ativo"),
+              cpf_tentativas_invalidas: 0,
+              cpf_nao_encontrado_tentativas: 0,
+              liberacao_enviada_em: new Date().toISOString(),
+              ...(nomeSga ? { nome: nomeSga, nome_confirmado_em: new Date().toISOString() } : {}),
+            })
+            .eq("id", contato.id);
+
+          contato.cpf = cpfLimpo;
+          if (nomeSga) contato.nome = nomeSga;
+          if (nomeSga) sgaAssociadoOverride = { nome: nomeSga, status: String(statusSga || "") };
+
+          // Renderiza mensagem da config substituindo {nome} pelo nome do SGA (full name).
+          // Fallback: primeiro nome do cadastro local ou string sem o placeholder.
+          const nomeParaRender = (nomeSga || contato.nome || "").toString().trim();
+          const tmpl = habCfg.mensagem_cpf_encontrado || FALLBACK_MSG_CPF_ENCONTRADO;
+          const msgFinal = nomeParaRender
+            ? tmpl.replace(/\{nome\}/gi, nomeParaRender)
+            : tmpl.replace(/,?\s*\{nome\}/gi, "").replace(/\s+/g, " ").trim();
+
+          await enviarTexto(msgFinal);
+          return new Response(
+            JSON.stringify({ success: true, gate: "identificado_cpf", sga_encontrado: true }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // ─── SUBCASO 1B: CPF NÃO ENCONTRADO NO SGA → retry / transbordo ───
+        // NÃO grava nome_confirmado_em nem liberacao_enviada_em — gate continua fechado.
+        const tentativasAtuais = Number((contato as any).cpf_nao_encontrado_tentativas || 0);
+        const novasTentativas = tentativasAtuais + 1;
+
+        await supabase
+          .from("agente_ia_contatos")
+          .update({
+            cpf: cpfLimpo,
+            cpf_capturado_em: new Date().toISOString(),
+            sga_associado_encontrado: false,
+            sga_associado_status: null,
+            cpf_nao_encontrado_tentativas: novasTentativas,
+          })
+          .eq("id", contato.id);
+        contato.cpf = cpfLimpo;
+        (contato as any).cpf_nao_encontrado_tentativas = novasTentativas;
+
+        if (novasTentativas >= 2) {
+          // Transbordo: envia texto da config + aciona o mesmo mecanismo da tool solicitar_atendente_humano.
+          await enviarTexto(habCfg.mensagem_cpf_nao_encontrado_transbordo || FALLBACK_MSG_CPF_NAO_ENCONTRADO_TRANSBORDO);
+          try {
+            await executarSolicitarAtendenteHumano(supabase, telLimpo, {
+              motivo: "outros",
+              resumo: `CPF informado (${cpfMascarado}) não encontrado no SGA após ${novasTentativas} tentativas.`,
+              prioridade: "normal",
+              contato_nome: contato?.nome || null,
+              associado_id: null,
+            });
+          } catch (e) {
+            console.error(`[agente-consultor-ia] [gate_identificacao] falha ao acionar transbordo:`, (e as any)?.message);
+          }
+          // Reseta contador para evitar transbordo em loop caso o cliente volte e o atendente devolva.
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ cpf_nao_encontrado_tentativas: 0 })
+            .eq("id", contato.id);
+          return new Response(
+            JSON.stringify({ success: true, gate: "cpf_nao_encontrado_transbordo", tentativas: novasTentativas }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // 1ª tentativa: pede para digitar novamente.
+        await enviarTexto(habCfg.mensagem_cpf_nao_encontrado_retry || FALLBACK_MSG_CPF_NAO_ENCONTRADO_RETRY);
         return new Response(
-          JSON.stringify({ success: true, gate: "identificado_cpf", sga_encontrado: encontrado }),
+          JSON.stringify({ success: true, gate: "cpf_nao_encontrado_retry", tentativas: novasTentativas }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
