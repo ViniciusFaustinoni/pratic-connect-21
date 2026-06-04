@@ -31,6 +31,7 @@ type HabilidadeContentRaw = { faqs: any[]; exemplos: any[] };
 const HABILIDADE_CONTENT_CACHE = new Map<string, { at: number; data: HabilidadeContentRaw }>();
 type HabilidadeContentCfg = {
   faqText?: string;
+  regrasText?: string;
   faqDestaqueText?: string;
   faqMatchedIds?: string[];
   exemplosText?: string;
