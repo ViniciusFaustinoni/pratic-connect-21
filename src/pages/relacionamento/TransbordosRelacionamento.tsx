@@ -62,7 +62,7 @@ export default function TransbordosRelacionamento() {
         <div>
           <h1 className="text-2xl font-semibold">Transbordo</h1>
           <p className="text-sm text-muted-foreground">
-            Atendimentos que a IA Maya transferiu para humano. Clique numa linha para abrir a conversa e concluir o atendimento.
+            Atendimentos que a IA transferiu para humano. Clique numa linha para abrir a conversa e concluir o atendimento.
           </p>
         </div>
       </div>

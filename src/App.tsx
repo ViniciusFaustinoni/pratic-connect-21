@@ -158,7 +158,7 @@ const UsuarioForm = lazy(() => import("./pages/configuracoes/UsuarioForm"));
 const Integracoes = lazy(() => import("./pages/configuracoes/Integracoes"));
 const IntegracaoWhatsApp = lazy(() => import("./pages/configuracoes/IntegracaoWhatsApp"));
 const IntegracaoIA = lazy(() => import("./pages/configuracoes/IntegracaoIA"));
-const IAHabilidades = lazy(() => import("./pages/configuracoes/IAHabilidades"));
+
 const IntegracaoApiKeys = lazy(() => import("./pages/configuracoes/IntegracaoApiKeys"));
 const IntegracaoFontesLeads = lazy(() => import("./pages/configuracoes/IntegracaoFontesLeads"));
 const IntegracaoSGAHinova = lazy(() => import("./pages/configuracoes/IntegracaoSGAHinova"));
@@ -217,7 +217,7 @@ const AnalisesRelacionamento = lazy(() => import("./pages/relacionamento/Analise
 const TransbordosRelacionamento = lazy(() => import("./pages/relacionamento/TransbordosRelacionamento"));
 
 const EmailsRelacionamento = lazy(() => import("./pages/relacionamento/emails/EmailsRelacionamento"));
-const MayaIA = lazy(() => import("./pages/relacionamento/MayaIA"));
+const ConfigIA = lazy(() => import("./pages/relacionamento/ConfigIA"));
 
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
@@ -637,7 +637,7 @@ const App = () => (
               <Route path="/relacionamento/analises" element={<AnalisesRelacionamento />} />
               <Route path="/relacionamento/transbordos" element={<TransbordosRelacionamento />} />
               <Route path="/relacionamento/emails" element={<EmailsRelacionamento />} />
-              <Route path="/relacionamento/config-ia" element={<MayaIA />} />
+              <Route path="/relacionamento/config-ia" element={<ConfigIA />} />
 
               <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               
@@ -785,7 +785,7 @@ const App = () => (
                 <Route path="integracoes" element={<Integracoes />} />
                 <Route path="integracoes/whatsapp" element={<IntegracaoWhatsApp />} />
                 <Route path="integracoes/ia" element={<IntegracaoIA />} />
-                <Route path="integracoes/ia/habilidades" element={<IAHabilidades />} />
+                
                 <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />

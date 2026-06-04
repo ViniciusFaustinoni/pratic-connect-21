@@ -1,13 +1,13 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical, Bot, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AIModelConfigCard } from '@/components/integracoes/AIModelConfigCard';
 import { OcrEngineConfigCard } from '@/components/integracoes/OcrEngineConfigCard';
 import OcrLogsTab from '@/components/diretoria/OcrLogsTab';
 import OcrTestesTab from '@/components/diretoria/OcrTestesTab';
+
 
 export default function IntegracaoIA() {
   const navigate = useNavigate();
@@ -65,33 +65,18 @@ export default function IntegracaoIA() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6">
-          <Card className="cursor-pointer hover:border-primary/50 transition" onClick={() => navigate('/configuracoes/integracoes/ia/habilidades')}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Bot className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">Habilidades da IA</CardTitle>
-                    <CardDescription>Vendas, Relacionamento — cada uma com liga/desliga, regras, conhecimento e ferramentas próprias.</CardDescription>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </CardHeader>
-          </Card>
-
           <AIModelConfigCard />
           <OcrEngineConfigCard />
+
 
           <Alert>
             <Sparkles className="h-4 w-4" />
             <AlertDescription>
-              O modelo aqui se aplica <strong>globalmente</strong> a todas as habilidades de IA, OCR de documentos,
-              análise de risco e demais automações. Cada habilidade configura sua persona, conhecimento e
-              ferramentas separadamente.
+              O modelo aqui se aplica <strong>globalmente</strong> a OCR de documentos, análise de risco,
+              IA de atendimento (WhatsApp) e demais automações. A configuração da IA de atendimento
+              (persona, FAQ, exemplos) vive em <em>Relacionamento › Config IA</em>.
             </AlertDescription>
+
           </Alert>
         </TabsContent>
 

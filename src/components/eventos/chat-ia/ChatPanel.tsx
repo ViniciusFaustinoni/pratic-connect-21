@@ -320,7 +320,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/20">
         <MessageSquare className="h-16 w-16 mb-4 opacity-30" />
-        <p className="text-lg font-medium">Chat IA Maya</p>
+        <p className="text-lg font-medium">Chat IA</p>
         <p className="text-sm mt-1">Selecione uma conversa para visualizar</p>
       </div>
     );
@@ -420,7 +420,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                           ) : (
                             <>
                               <Bot className="h-3 w-3 text-green-600" />
-                              <span className="text-[11px] font-medium text-green-600">Maya IA</span>
+                              <span className="text-[11px] font-medium text-green-600">IA</span>
                             </>
                           )}
                         </div>

@@ -89,7 +89,7 @@ export function AIModelConfigCard() {
         </div>
         <CardDescription>
           Configuração global aplicada a <strong>todas</strong> as funcionalidades de IA:
-          leitura de documentos (OCR), Maya/Vinicius, chat, análise de risco, WhatsApp e demais automações.
+          leitura de documentos (OCR), IA de atendimento (WhatsApp), chat, análise de risco, WhatsApp e demais automações.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
