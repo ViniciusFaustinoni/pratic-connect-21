@@ -359,7 +359,7 @@ function ConhecimentoTab({ slug, tipo = 'conhecimento' }: { slug: string; tipo?:
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={`Buscar em ${itens.length} item${itens.length === 1 ? '' : 's'}…`}
+            placeholder={`Buscar em ${itens.length} ${itens.length === 1 ? labelItem : labelItens}…`}
             value={busca}
             onChange={e => setBusca(e.target.value)}
             className="pl-8"
@@ -374,21 +374,21 @@ function ConhecimentoTab({ slug, tipo = 'conhecimento' }: { slug: string; tipo?:
       {formOpen && (
         <Card>
           <CardContent className="pt-4 space-y-2">
-            <Input placeholder="Categoria (ex: boletos, cancelamento, direcionamento)" value={novo.categoria}
+            <Input placeholder={placeholderCategoria} value={novo.categoria}
               onChange={e => setNovo({ ...novo, categoria: e.target.value })} />
-            <Input placeholder="Pergunta / gatilho" value={novo.pergunta}
+            <Input placeholder={placeholderPergunta} value={novo.pergunta}
               onChange={e => setNovo({ ...novo, pergunta: e.target.value })} />
-            <Textarea rows={3} placeholder="Resposta que a IA deve dar" value={novo.resposta}
+            <Textarea rows={3} placeholder={placeholderResposta} value={novo.resposta}
               onChange={e => setNovo({ ...novo, resposta: e.target.value })} />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setFormOpen(false)}>Cancelar</Button>
               <Button size="sm" disabled={upsert.isPending} onClick={async () => {
                 if (!novo.pergunta || !novo.resposta) return;
-                await upsert.mutateAsync({ habilidade_slug: slug, ...novo });
+                await upsert.mutateAsync({ habilidade_slug: slug, tipo, ...novo });
                 setNovo({ pergunta: '', resposta: '', categoria: 'geral' });
                 setFormOpen(false);
               }}>
-                <Plus className="h-4 w-4 mr-1" /> Adicionar ao FAQ
+                <Plus className="h-4 w-4 mr-1" /> {ctaAdicionar}
               </Button>
             </div>
           </CardContent>
