@@ -1,7 +1,8 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical, Bot, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AIModelConfigCard } from '@/components/integracoes/AIModelConfigCard';
 import { OcrEngineConfigCard } from '@/components/integracoes/OcrEngineConfigCard';
