@@ -1,0 +1,1 @@
+UPDATE public.confirmacoes_agendamento SET status = 'cancelada' WHERE id = 'c657e410-3d2f-4368-800a-e2bed561b955';
