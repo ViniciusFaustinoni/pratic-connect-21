@@ -1,81 +1,74 @@
-# Diagnóstico
+## O que aconteceu no caso do THIAGO (+55 21 96890-7520)
 
-Investigação no banco + edge `agente-consultor-ia` + componente `ChatPanel` revelou **duas causas independentes**, sem suposição:
+Trilha real das mensagens:
 
-## Bug 1 — Chat não atualiza em tempo real
-- `ChatPanel.tsx` (linha 94-104) assina canal Realtime `chat-ia-${telefoneComDDI}` filtrando `whatsapp_mensagens`.
-- **Mas `whatsapp_mensagens` NÃO está na publicação `supabase_realtime`** (consulta a `pg_publication_tables` retornou vazio para `%whatsapp%`).
-- Resultado: nenhum INSERT/UPDATE dispara o canal → o painel só atualiza quando o `refetchInterval: 60_000` do `useWhatsAppHistorico` roda.
-
-## Bug 2 — IA se apresenta como "Vinicius" mesmo com `vendas` desativada
-- O roteador canônico (`lib/roteador.ts`) **escolhe corretamente** a habilidade "Atendimento Pratic" para a audiência `lead` — verificado nos logs (`[habilidade_selecionada]`).
-- **Mas o `systemPrompt` ignora isso**: `agente-consultor-ia/index.ts` (linhas 989-1280) tem três branches hardcoded por audiência. O branch `lead` (linha 1205) ainda monta literalmente:
-  ```
-  Você é ${nomeAgente}, consultor virtual de vendas da PRATICCAR…
-  "${apresentacao}"  ← apresentação vem do legado agente_ia_config
-  ```
-  …com todo o fluxo de cotação (consultar_placa, calcular_cotacao, registrar_cotacao etc.). É isso que produz o "Olá! Sou o Vinicius, consultor virtual…" do print.
-- O `nomeAgente` e `apresentacao` vêm de `agente_ia_config` legado, não da habilidade roteada.
-
-## Bug 2b — "Oi, Thais!" para um número do Vinicius
-- `agente_ia_contatos` para `5521992593830` tem `nome='THAIS GURUCEAGA DOS SANTOS'`, `sga_associado_encontrado=true`, `cpf=15230046732` — cache antigo de quem usou o número antes.
-- O agente trata o usuário pelo nome cacheado sem revalidar identidade.
-- **Aqui há um conflito lógico que exige decisão sua** — opções na seção abaixo.
-
----
-
-# Correções
-
-## Parte A — Realtime do chat (sem ambiguidade)
-Migração:
-```sql
-ALTER TABLE public.whatsapp_mensagens REPLICA IDENTITY FULL;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_mensagens;
--- Idem para whatsapp_ia_pausas (transbordos em tempo real)
-ALTER TABLE public.whatsapp_ia_pausas REPLICA IDENTITY FULL;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.whatsapp_ia_pausas;
+```
+10:00  → template confirmacao_manha_v1 (Pratic) — "Responda SIM para confirmar ou REAGENDAR"
+11:02  ← "Reagendamento" (cliente)
+11:02  ← "Reagendamento" (cliente, 9s depois)
+11:02  → IA respondeu: "informe o seu CPF" 😵 (gate de identificação)
+11:15  → operador disparou manualmente template `reagendamento_servico` com link
 ```
 
-## Parte B — Prompt dirigido pela habilidade ativa
-- Em `supabase/functions/agente-consultor-ia/index.ts`:
-  - Quando `roteamento.habilidade` for resolvida, usar **dela** como fonte do prompt para TODAS as audiências:
-    - `nome_agente`, `persona`, `regras_absolutas`, `tom_voz`, `saudacao_inicial`.
-  - **Remover** o branch hardcoded de "consultor virtual de vendas" do `lead` (linhas 1188-1356 do bloco lead). Lead, associado e diretor passam a usar um único builder que injeta a configuração da habilidade + FAQ + tools de suporte (`solicitar_atendente_humano`).
-  - Manter o branch `diretor` apenas para o contexto extra de relatórios (ferramentas administrativas), mas **substituir o `nomeAgente` por `habilidade.nome_agente`** ("Atendimento Pratic").
-  - Tools de vendas (`consultar_placa`, `calcular_cotacao`, `registrar_cotacao`, `salvar_dados_cliente`, `obter_opcoes_vencimento`) **deixam de ser anexadas** — coerente com a decisão anterior de desligar a IA de vendas.
-- Limpar referências visíveis "Vinicius" restantes em comentários/log labels do `whatsapp-webhook` e nos toasts do `AgenteConsultorIA.tsx` (renomear para "Atendimento Pratic").
+Diagnóstico:
 
-## Parte C — Identificação por cache antigo (CONFLITO — preciso da sua decisão)
+1. Existia `confirmacoes_agendamento` pendente (status `enviada`, servico `ab10299d…`) para o telefone `21968907520`. O handler de confirmação no `whatsapp-webhook` (Evolution) DEVERIA ter capturado a palavra "Reagendamento" e disparado o fluxo de reagendamento — não disparou (provavelmente normalização de telefone OU a mensagem caiu numa branch anterior que decidiu rotear pra IA).
+2. Mesmo se o handler tivesse falhado, a IA recebeu a mensagem **sem nenhum contexto** de que havia uma confirmação pendente para aquele número. Sem esse contexto, ela aplicou o gate canônico de saudação+identificação (CPF/nome) e ignorou completamente a intenção "reagendar".
+3. A habilidade `relacionamento` ativa só tem 2 ferramentas (`consultar_boletos_associado`, `solicitar_atendente_humano`) — ela não tem como enviar link de reagendamento mesmo que entendesse a intenção.
 
-Hoje a IA confia em `agente_ia_contatos.nome` mesmo quando o número trocou de dono. Três caminhos possíveis (não posso escolher sem você):
+## Como corrigir (em ordem de prioridade)
 
-**Opção 1 — Lead nunca é tratado pelo nome cacheado**
-A IA só usa o nome do contato quando audiência é `associado` ou `diretor` (vínculo confirmado pelo telefone do SGA). Para `lead`, ignora `contato.nome` e usa saudação genérica até o usuário informar nome/CPF na conversa atual.
-- Prós: simples, resolve o caso Vinicius/Thais imediatamente.
-- Contras: lead que volta dias depois precisa se apresentar de novo.
+### 1. Injetar CONTEXTO DE AGENDAMENTO PENDENTE no agente-consultor-ia
 
-**Opção 2 — Reidentificação obrigatória após X horas de silêncio**
-Aplicar o gate canônico de saudação+identificação (memória `maya-saudacao-e-identificacao-canonica`) também para `lead`. Se passou >2h da última interação OU é primeira msg do dia, a IA pede confirmação de nome/CPF antes de tratar pelo nome. Se o usuário responder com nome diferente do cacheado, atualiza `agente_ia_contatos`.
-- Prós: alinha o lead ao mesmo padrão de associado/diretor, sem perder histórico.
-- Contras: adiciona uma troca extra de mensagens em todo retorno de lead após 2h.
+Espelhar o padrão já existente de `cobrancaContextoTxt` (linhas 881-907 de `agente-consultor-ia/index.ts`). Antes de montar o system prompt:
 
-**Opção 3 — Confiar sempre no `pushName` da última mensagem WhatsApp**
-Usar o nome de perfil do WhatsApp da mensagem atual como fonte da verdade, sobrescrevendo `agente_ia_contatos.nome` se divergir.
-- Prós: zero atrito, segue a realidade do aparelho.
-- Contras: muita gente tem `pushName` ruim ("João da Silva ❤️", "iPhone do Carlos") — pode degradar o tratamento profissional.
+- Consultar `confirmacoes_agendamento` das últimas 48h pelo telefone, status `in ('enviada','reagendando','aguardando_confirmacao_vespera','aguardando_confirmacao_manha','aguardando_confirmacao_encaixe')`.
+- Para cada uma, carregar o `servico` vinculado (data, período, endereço, tipo, `reagendamento_token`) e o nome do associado.
+- Injetar bloco no system prompt:
 
----
+  ```
+  ## CONTEXTO DE AGENDAMENTO PENDENTE
+  Foi enviado a este contato em <dataEnvio> um pedido de confirmação para:
+  - Serviço: <tipo> (id <servico_id>)
+  - Quando: <data> <período>
+  - Endereço: <logradouro>, <bairro>, <cidade>
+  - Cliente: <nome>
+  Use isto como verdade. Se o cliente pedir para reagendar / não puder / outro dia, chame a tool enviar_link_reagendamento.
+  Se confirmar (SIM), chame confirmar_agendamento. Não invente datas nem endereços.
+  ```
 
-# Detalhes técnicos (resumo)
+### 2. Bypass do gate de CPF quando houver agendamento pendente
 
-| Arquivo | Mudança |
-|---|---|
-| nova migração SQL | `ALTER PUBLICATION supabase_realtime ADD TABLE …` para `whatsapp_mensagens` + `whatsapp_ia_pausas`, com `REPLICA IDENTITY FULL` |
-| `supabase/functions/agente-consultor-ia/index.ts` | Builder único de prompt a partir de `roteamento.habilidade`; remoção do branch "lead = pitch Vinicius"; remoção das tools de vendas |
-| `src/pages/configuracoes/AgenteConsultorIA.tsx` | Toasts/labels "Vinicius" → "Atendimento Pratic" |
-| `supabase/functions/whatsapp-webhook/index.ts` | Comentários/logs neutros |
-| Memórias | atualizar `mem://logic/ia/habilidades-canonicas` registrando que o systemPrompt agora é dirigido pela habilidade roteada |
+No bloco de identificação canônica (gate saudação+CPF), pular o pedido de CPF quando `contextoAgendamentoPendente` existir — o telefone já está identificado pelo `servico/associado_id` vinculado. Atualizar `agente_ia_contatos` com nome do associado do servico.
 
-# Pergunta antes de implementar
+### 3. Adicionar ferramentas na habilidade `relacionamento`
 
-**Qual opção para o cache de nome (Bug 2b)?** Opção 1, 2 ou 3 — sem isso só corrijo realtime + persona, e o caso "Thais" pode voltar em outro número herdado.
+Acrescentar duas tools (e habilitá-las em `ia_habilidades.ferramentas_habilitadas` via migration):
+
+- `enviar_link_reagendamento(servico_id: string)` → invoca a edge existente `enviar-link-reagendamento`. Resposta da IA fica: "Tudo bem, *Thiago*! Te enviei o link para escolher uma nova data. 📅" — o link em si vai via template Meta `reagendamento_servico` que essa edge já dispara.
+- `confirmar_agendamento(servico_id: string)` → marca `confirmacoes_agendamento.status='confirmada'` + `servicos.confirmacao_whatsapp='confirmada'` + push pro profissional (mesma lógica que o Meta webhook já tem em `processarRespostaConfirmacaoMeta`).
+
+Regras absolutas da habilidade ganham linha:
+> Quando houver CONTEXTO DE AGENDAMENTO PENDENTE e o cliente disser qualquer variante de "reagendar/outro dia/não posso", chame `enviar_link_reagendamento` antes de qualquer outra resposta. Nunca prometa que "alguém entrará em contato" — envie o link direto.
+
+### 4. Defesa em profundidade no webhook (Evolution)
+
+Em `whatsapp-webhook/index.ts` linhas 3631-3644, adicionar log claro quando há confirmação pendente mas `tipoPrincipal !== 'texto'` OU quando `telefonesBusca` não casa, e quando o handler local de reagendar for invocado e detectar intent `REAGENDAR`, substituir o "em breve entrará em contato" (linha 2528) por invocação direta de `enviar-link-reagendamento` (mesma edge), para não depender mais da IA pra esse caso.
+
+## Arquivos afetados
+
+- `supabase/functions/agente-consultor-ia/index.ts` — injetar contexto, bypass de CPF, registrar 2 tools novas e seu handler.
+- `supabase/functions/whatsapp-webhook/index.ts` — log + chamada direta da edge `enviar-link-reagendamento` no branch REAGENDAR (linha ~2525-2606).
+- `supabase/migrations/<nova>.sql` — `UPDATE ia_habilidades SET ferramentas_habilitadas = ferramentas_habilitadas || array['enviar_link_reagendamento','confirmar_agendamento']::text[], regras_absolutas = regras_absolutas || E'\nQuando houver agendamento pendente…' WHERE slug='relacionamento'`.
+
+## Resultado esperado no mesmo caso
+
+```
+10:00 → template confirmacao_manha_v1
+11:02 ← "Reagendamento"
+11:02 → IA (contexto pendente injetado) chama enviar_link_reagendamento
+11:02 → template reagendamento_servico com link app.praticcar.org/reagendar/<token>
+       + "Tudo bem, Thiago! Te enviei o link pra escolher nova data."
+```
+
+Sem CPF gate, sem operador manual, sem 1h13min de gap.

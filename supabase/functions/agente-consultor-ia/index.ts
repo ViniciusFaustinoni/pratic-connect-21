@@ -391,6 +391,58 @@ Deno.serve(async (req) => {
     }
 
 
+    // ---- 2B-PRE. CONTEXTO DE AGENDAMENTO PENDENTE (48h) ----
+    // Se há uma confirmacao_agendamento aberta para este telefone, o contato JÁ está
+    // identificado pelo servico→associado e a IA deve focar em confirmar/reagendar
+    // em vez de pedir CPF. Ver mem://logic/operations/ia-contexto-agendamento-pendente.
+    let contextoAgendamentoPendente: {
+      servico_id: string;
+      reagendamento_token: string | null;
+      data: string | null;
+      periodo: string | null;
+      hora: string | null;
+      endereco: string | null;
+      tipo: string | null;
+      nome_cliente: string | null;
+      enviado_em: string;
+      telefone: string;
+    } | null = null;
+    try {
+      const telVariantesPend = [telLimpo];
+      if (telLimpo.startsWith("55") && telLimpo.length >= 12) telVariantesPend.push(telLimpo.substring(2));
+      if (!telLimpo.startsWith("55") && telLimpo.length >= 10) telVariantesPend.push("55" + telLimpo);
+      const limite48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data: confPend } = await supabase
+        .from("confirmacoes_agendamento")
+        .select("id, servico_id, telefone, created_at, status, servico:servicos(id, tipo, data_agendada, periodo, hora_agendada, logradouro, bairro, cidade, reagendamento_token, associado:associados(nome))")
+        .in("telefone", telVariantesPend)
+        .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha", "aguardando_confirmacao_encaixe"])
+        .gte("created_at", limite48h)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const s: any = (confPend as any)?.servico;
+      if (confPend && s) {
+        const partes = [s.logradouro, s.bairro, s.cidade].filter(Boolean);
+        contextoAgendamentoPendente = {
+          servico_id: s.id,
+          reagendamento_token: s.reagendamento_token || null,
+          data: s.data_agendada || null,
+          periodo: s.periodo || null,
+          hora: s.hora_agendada ? String(s.hora_agendada).slice(0, 5) : null,
+          endereco: partes.length ? partes.join(", ") : null,
+          tipo: s.tipo || null,
+          nome_cliente: s.associado?.nome || null,
+          enviado_em: (confPend as any).created_at,
+          telefone: (confPend as any).telefone,
+        };
+        console.log(`[agente-consultor-ia] [contexto_agendamento] pendente servico=${s.id} tipo=${s.tipo}`);
+      }
+    } catch (e) {
+      console.warn("[agente-consultor-ia] Falha contexto agendamento:", (e as any)?.message);
+    }
+
+
     // ---- 2B. GATE DE SAUDAÇÃO + IDENTIFICAÇÃO (skip diretores) ----
     // Regras canônicas (Relacionamento › Chat):
     //   - Saudação obrigatória bloqueante: primeira msg do dia BRT OU >2h sem interagir → mensagem padrão pedindo nome completo OU CPF.
@@ -427,7 +479,7 @@ Deno.serve(async (req) => {
     // "Identificado" = já temos CPF (com lookup SGA registrado) OU nome confirmado.
     const jaIdentificado = !!contato.cpf || !!(contato as any).nome_confirmado_em;
 
-    if (!diretorPreDetectado && !jaIdentificado) {
+    if (!diretorPreDetectado && !jaIdentificado && !contextoAgendamentoPendente) {
       const validateCpf = (raw: string): boolean => {
         const c = raw.replace(/\D/g, "");
         if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
@@ -1306,6 +1358,64 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
       systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
     }
 
+    // Contexto de AGENDAMENTO PENDENTE — espelha cobranca/CPF, com tools p/ agir
+    if (contextoAgendamentoPendente) {
+      const c = contextoAgendamentoPendente;
+      const dataFmt = c.data ? (() => { const [y, m, d] = c.data!.split("-"); return `${d}/${m}/${y}`; })() : "—";
+      const periodoFmt = c.periodo === "manha" ? "manhã" : c.periodo === "tarde" ? "tarde" : (c.hora || c.periodo || "—");
+      const tipoFmt = (c.tipo || "atendimento").replace(/_/g, " ");
+      const nomeFmt = c.nome_cliente ? c.nome_cliente.split(" ")[0] : "o cliente";
+      systemPrompt += `\n\n## CONTEXTO DE AGENDAMENTO PENDENTE (USE COMO VERDADE)
+Foi enviado a este contato em ${new Date(c.enviado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} um pedido de confirmação de ${tipoFmt}:
+- Cliente: *${c.nome_cliente || "—"}*
+- Data: *${dataFmt}* (${periodoFmt})
+- Endereço: ${c.endereco || "—"}
+- servico_id: ${c.servico_id}
+
+REGRAS OBRIGATÓRIAS deste contexto:
+- NÃO peça CPF. O contato já está identificado pelo agendamento.
+- Trate ${nomeFmt} pelo primeiro nome.
+- Se a mensagem expressar reagendar / remarcar / mudar / outro dia / outro horário / não posso / impossível / adiar / hoje não / amanhã não → CHAME *enviar_link_reagendamento* (servico_id="${c.servico_id}") na MESMA rodada e responda algo curto e cordial avisando que enviou o link.
+- Se confirmar (sim / ok / confirmo / pode vir / estarei / tudo certo) → CHAME *confirmar_agendamento* (servico_id="${c.servico_id}") e agradeça a confirmação.
+- Se cancelar → CHAME *solicitar_atendente_humano* (motivo='outros', resumo='cliente quer cancelar agendamento') porque cancelamento exige humano.
+- NUNCA prometa que "alguém vai entrar em contato" — chame a tool e diga o que ela faz.
+- NUNCA invente data, hora ou endereço diferentes do bloco acima.`;
+
+      // Acrescenta tools de agendamento (idempotente: só se ainda não existirem)
+      const haveReagendar = tools.some((t: any) => t?.function?.name === "enviar_link_reagendamento");
+      if (!haveReagendar) {
+        tools.push({
+          type: "function",
+          function: {
+            name: "enviar_link_reagendamento",
+            description: "Envia ao cliente um link (via template WhatsApp Meta 'reagendamento_servico') para escolher uma nova data/horário/endereço do serviço de campo. Use SEMPRE que o cliente pedir para reagendar, remarcar, mudar data, dizer 'não posso hoje', 'outro dia', 'adiar'.",
+            parameters: {
+              type: "object",
+              properties: {
+                servico_id: { type: "string", description: "ID do serviço pendente (use o servico_id do CONTEXTO DE AGENDAMENTO PENDENTE)." },
+              },
+              required: ["servico_id"],
+            },
+          },
+        });
+        tools.push({
+          type: "function",
+          function: {
+            name: "confirmar_agendamento",
+            description: "Confirma o agendamento pendente do cliente. Use SEMPRE que o cliente responder afirmativamente (sim, ok, confirmo, pode vir, estarei, beleza, blz, positivo, tudo certo). Marca o serviço como confirmado e notifica o profissional.",
+            parameters: {
+              type: "object",
+              properties: {
+                servico_id: { type: "string", description: "ID do serviço (use o servico_id do CONTEXTO DE AGENDAMENTO PENDENTE)." },
+              },
+              required: ["servico_id"],
+            },
+          },
+        });
+      }
+    }
+
+
     // ---- 7.4 INJEÇÃO UNIVERSAL DE COMPORTAMENTO (UI Configurações › Agente Consultor IA)
     // Aplica `apresentacao_inicial` + `instrucoes_comportamento` em TODOS os branches
     // (Diretor / Associado / Lead). O branch de Lead já cita `${apresentacao}` e
@@ -1564,9 +1674,23 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
                 serviceKey,
                 { cpf: contato?.cpf || null }
               );
+            } else if (fnName === "enviar_link_reagendamento") {
+              toolResult = await executarEnviarLinkReagendamento(
+                supabaseUrl,
+                serviceKey,
+                { servico_id: String(args?.servico_id || contextoAgendamentoPendente?.servico_id || "") }
+              );
+            } else if (fnName === "confirmar_agendamento") {
+              toolResult = await executarConfirmarAgendamento(
+                supabase,
+                supabaseUrl,
+                serviceKey,
+                { servico_id: String(args?.servico_id || contextoAgendamentoPendente?.servico_id || ""), telefone: telLimpo }
+              );
             } else {
               toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
             }
+
 
           } catch (err: any) {
             console.error(`[agente-consultor-ia] Tool error ${fnName}:`, err);
@@ -2740,4 +2864,104 @@ async function executarConsultarBoletosAssociado(
   };
 }
 
+// ============================================================
+// TOOL: enviar_link_reagendamento
+// Invoca a edge `enviar-link-reagendamento` (template Meta).
+// ============================================================
+async function executarEnviarLinkReagendamento(
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { servico_id: string }
+): Promise<any> {
+  if (!args.servico_id) return { success: false, error: "servico_id obrigatório" };
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/enviar-link-reagendamento`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+      body: JSON.stringify({ servico_id: args.servico_id, origem: "agente_ia" }),
+    });
+    const txt = await res.text();
+    let body: any = null;
+    try { body = txt ? JSON.parse(txt) : null; } catch { body = { raw: txt }; }
+    if (!res.ok) {
+      console.error(`[agente-consultor-ia] enviar_link_reagendamento HTTP ${res.status}:`, txt?.slice(0, 200));
+      return { success: false, error: `Edge respondeu ${res.status}`, body };
+    }
+    console.log(`[agente-consultor-ia] enviar_link_reagendamento OK servico=${args.servico_id}`);
+    return { success: true, message: "Link de reagendamento enviado via WhatsApp.", body };
+  } catch (e: any) {
+    console.error(`[agente-consultor-ia] Erro enviar_link_reagendamento:`, e?.message);
+    return { success: false, error: e?.message || "Erro desconhecido" };
+  }
+}
+
+// ============================================================
+// TOOL: confirmar_agendamento
+// Atualiza confirmacoes_agendamento + servicos e notifica profissional.
+// ============================================================
+async function executarConfirmarAgendamento(
+  supabase: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { servico_id: string; telefone: string }
+): Promise<any> {
+  if (!args.servico_id) return { success: false, error: "servico_id obrigatório" };
+  const agora = new Date().toISOString();
+  try {
+    // Busca a confirmacao pendente
+    const { data: conf } = await supabase
+      .from("confirmacoes_agendamento")
+      .select("id, status")
+      .eq("servico_id", args.servico_id)
+      .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha", "aguardando_confirmacao_encaixe"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (conf?.id) {
+      const { error: e1 } = await supabase
+        .from("confirmacoes_agendamento")
+        .update({ status: "confirmada", resposta_cliente: "[via IA]", resposta_recebida_em: agora })
+        .eq("id", conf.id);
+      if (e1) console.error("[agente-consultor-ia] erro update confirmacao:", e1);
+    }
+
+    const { error: e2 } = await supabase
+      .from("servicos")
+      .update({ confirmacao_whatsapp: "confirmada", confirmado_via_whatsapp_em: agora })
+      .eq("id", args.servico_id);
+    if (e2) console.error("[agente-consultor-ia] erro update servico:", e2);
+
+    // Buscar profissional para push (best-effort)
+    try {
+      const { data: serv } = await supabase
+        .from("servicos")
+        .select("profissional_id, hora_agendada, associado:associados(nome)")
+        .eq("id", args.servico_id)
+        .maybeSingle();
+      if (serv?.profissional_id) {
+        const nomeCliente = serv?.associado?.nome || "Cliente";
+        fetch(`${supabaseUrl}/functions/v1/send-push-profissional`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            profissional_id: serv.profissional_id,
+            notification: {
+              title: "✅ Cliente Confirmou!",
+              body: `${String(nomeCliente).split(" ")[0]} confirmou via IA`,
+              tag: `confirmacao-${args.servico_id}`,
+              data: { servico_id: args.servico_id, action: "confirmacao_whatsapp" },
+            },
+          }),
+        }).catch(() => {});
+      }
+    } catch (_) { /* fire-and-forget */ }
+
+    console.log(`[agente-consultor-ia] confirmar_agendamento OK servico=${args.servico_id}`);
+    return { success: true, message: "Agendamento confirmado." };
+  } catch (e: any) {
+    console.error(`[agente-consultor-ia] Erro confirmar_agendamento:`, e?.message);
+    return { success: false, error: e?.message || "Erro desconhecido" };
+  }
+}
 

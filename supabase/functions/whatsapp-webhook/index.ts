@@ -3642,6 +3642,10 @@ serve(async (req) => {
       console.log(`[whatsapp-webhook] Resposta de confirmação detectada para ${confirmacaoPendente.servico_id}`);
       return await processarRespostaConfirmacao(supabase, confirmacaoPendente, mensagemTexto, instancia);
     }
+    if (confirmacaoPendente && tipoPrincipal !== 'texto') {
+      console.warn(`[whatsapp-webhook] confirmacao_pendente_existe mas tipoPrincipal=${tipoPrincipal} (servico=${confirmacaoPendente.servico_id}); seguindo p/ IA`);
+    }
+
 
     // ========================================
     // FLUXO PADRÃO: ASSOCIADO OU LEAD
