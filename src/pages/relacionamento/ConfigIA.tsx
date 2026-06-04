@@ -74,7 +74,7 @@ export default function ConfigIA() {
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          Esta IA atende <strong>leads</strong>, <strong>associados</strong> e <strong>diretoria</strong> 24/7.
+          Esta IA atende <strong>associados</strong> 24/7 (atendimento receptivo).
           Quando desligada aqui, mensagens entrando no WhatsApp ficam aguardando atendimento humano (com aviso ao cliente).
           Pedidos fora do escopo (cotação de novo veículo, RH, imprensa, etc.) são <strong>direcionados</strong> via itens da
           categoria <code>direcionamento</code> na aba <em>Conhecimento (FAQ)</em> — preencha o destino real antes de ativar cada item.
