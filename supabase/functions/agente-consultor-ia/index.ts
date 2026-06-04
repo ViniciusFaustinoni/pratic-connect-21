@@ -680,9 +680,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const nomeAgente = config.nome_agente || "Atendimento Pratic";
-    const apresentacao = config.apresentacao_inicial || "";
-    const instrucoes = config.instrucoes_comportamento || "";
+    // Defaults vindos do legado `agente_ia_config`. Serão SOBRESCRITOS abaixo
+    // pela habilidade ativa roteada (fonte canônica — `ia_habilidades`).
+    let nomeAgente = config.nome_agente || "Atendimento Pratic";
+    let apresentacao = config.apresentacao_inicial || "";
+    let instrucoes = config.instrucoes_comportamento || "";
 
     // Gate fora-horário legado (Vinicius/Lead) REMOVIDO em 04/06/26.
     // A habilidade `vendas` foi desativada; `relacionamento` (Atendimento Pratic)
@@ -981,6 +983,25 @@ Deno.serve(async (req) => {
           ultima_habilidade_atendeu_em: new Date().toISOString(),
         }).eq("telefone", telLimpo);
       } catch (_e) { /* não-bloqueante */ }
+
+      // ── FONTE CANÔNICA DA PERSONA ────────────────────────────────────────
+      // A habilidade roteada sobrescreve o legado `agente_ia_config` para
+      // nome do agente, saudação e instruções de comportamento. Isto evita
+      // que o prompt continue dizendo "Sou o Vinicius, consultor de vendas"
+      // quando a habilidade `vendas` está desativada.
+      if (roteamento.habilidade.nome_agente) {
+        nomeAgente = roteamento.habilidade.nome_agente;
+      }
+      if (roteamento.habilidade.saudacao_inicial) {
+        apresentacao = roteamento.habilidade.saudacao_inicial;
+      }
+      const personaBlocos: string[] = [];
+      if (roteamento.habilidade.persona) personaBlocos.push(roteamento.habilidade.persona);
+      if (roteamento.habilidade.tom_voz) personaBlocos.push(`Tom de voz: ${roteamento.habilidade.tom_voz}`);
+      if (roteamento.habilidade.regras_absolutas) personaBlocos.push(`Regras absolutas:\n${roteamento.habilidade.regras_absolutas}`);
+      if (personaBlocos.length) {
+        instrucoes = personaBlocos.join("\n\n");
+      }
     } catch (err) {
       console.error("[habilidade_selecionada] erro no gate, seguindo fluxo legado", err);
     }
@@ -1186,269 +1207,60 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
 
 
     } else {
-      // === PROMPT PARA LEADS (vendas) ===
-      // Carregar linhas de produto
-      const { data: linhas } = await supabase
-        .from("product_lines")
-        .select("id, name, slug, description, icon, color, vehicle_type, disponivel_agente, agente_descricao")
-        .eq("disponivel_agente", true)
-        .eq("is_active", true)
-        .order("sort_priority");
+      // === PROMPT PARA LEADS (suporte/FAQ — IA de vendas DESATIVADA) ===
+      // A habilidade `vendas` (Vinicius) foi desligada em 04/06/26. Todo
+      // contato sem vínculo SGA agora é atendido pela mesma persona de
+      // suporte (Atendimento Pratic), com FAQ + transbordo. Sem oferta
+      // de planos, sem coleta de placa, sem cotação automática.
+      const nomeContato = (contato as any)?.nome || "";
+      systemPrompt = `Você é ${nomeAgente}, assistente virtual da PRATICCAR Proteção Veicular.
 
-      const linhasTexto = linhas?.length
-        ? linhas.map((l: any) => {
-            const desc = l.agente_descricao || l.description || "";
-            return `- *${l.name}*: ${desc}`;
-          }).join("\n")
-        : "Nenhuma linha de produto disponível no momento.";
+## CONTEXTO
+Você está conversando com um contato que ainda NÃO está identificado como associado(a) ativo(a) no nosso sistema.${nomeContato ? ` Há um nome no histórico (\"${nomeContato}\"), mas pode estar desatualizado — não trate o contato por esse nome até que ele(a) confirme nesta conversa.` : ""}
 
-      systemPrompt = `Você é ${nomeAgente}, consultor virtual de vendas da PRATICCAR Proteção Veicular.
+## SUA FUNÇÃO
+Responder dúvidas operacionais usando a BASE DE CONHECIMENTO (FAQ) e transbordar para a equipe humana sempre que o caso exigir decisão, retorno, ação fora da FAQ — OU sempre que o contato quiser contratar/cotar um plano.
 
-## REGRA DE ORDEM (LEIA ANTES DE QUALQUER COISA)
-1. Se houver um bloco *FAQ EM DESTAQUE PARA ESTA MENSAGEM* mais abaixo, ele responde a pergunta atual do contato — use o conteúdo dele direto, mesmo que o contato ainda não tenha feito saudação nem informado dados de cotação.
-2. Se a *BASE DE CONHECIMENTO (FAQ)* cobrir o pedido, responda pela FAQ antes de seguir o fluxo de vendas.
-3. Só siga o FLUXO DE COTAÇÃO quando a mensagem for de fato sobre contratar/cotar — não force o fluxo se o contato perguntou outra coisa (ex.: assistência 24h, reboque, dúvida operacional).
+## REGRAS ABSOLUTAS
+- A IA de vendas está DESATIVADA. NUNCA ofereça planos, valores, descontos, promoções, "adesão grátis", cotação ou link de cotação. NUNCA peça placa para cotar.
+- Se o contato pedir cotação, contratação, plano ou orçamento: diga gentilmente que vai transferir para o Relacionamento humano e CHAME *solicitar_atendente_humano* (motivo='pediu_humano', resumo='quer cotar/contratar um plano') na MESMA rodada.
+- NUNCA invente valores, prazos, telefones, links, placas ou dados de contrato.
+- **PROIBIDO escrever frases como** "vou solicitar à equipe", "já avisei o time", "vou pedir para te ligarem", "fiz a solicitação" sem ter chamado *solicitar_atendente_humano* nesta mesma rodada.
+- Seja cordial, curto e direto.
 
-## SUA PERSONALIDADE
-${instrucoes}
+## QUANDO **NÃO** TRANSBORDAR (resolva pela FAQ)
+- **Assistência veicular operacional**: reboque, guincho, pane (mecânica/elétrica/combustível), socorro mútuo, chaveiro, bateria, pneu furado, troca de pneu, carro/moto não pega, sem combustível, chave trancada. Esses pedidos são SEMPRE resolvidos enviando os canais da FAQ de Assistência 24h (0800 + WhatsApp da Assistência). NUNCA chame solicitar_atendente_humano para esses casos.
+- Qualquer pergunta coberta pela FAQ: responda direto.
 
+## QUANDO CHAMAR A TOOL solicitar_atendente_humano (lista FECHADA)
+Chame APENAS quando o contato:
+- Pedir para falar com pessoa, atendente, humano, consultor, gerente, vendedor.
+- Pedir cotação, contratação, plano novo, simulação de preço — motivo='pediu_humano', resumo='quer cotar/contratar'.
+- Mencionar **sinistro real** (acidente, batida, colisão, capotamento, roubo, furto, incêndio, alagamento, vandalismo) — motivo='sinistro_emergencia', prioridade='alta'. ANTES de chamar a tool, envie na mesma rodada os canais da FAQ de Assistência 24h.
+- Reclamar de status, fatura, demora, retorno pendente.
+- Repetir a mesma queixa numa 2ª mensagem.
+- Qualquer pedido que exija decisão humana, alteração de cadastro, cancelamento, negociação.
 
-## APRESENTAÇÃO INICIAL
-Quando for a primeira mensagem do contato, use esta apresentação como base (adapte naturalmente):
-"${apresentacao}"
-IMPORTANTE: Na apresentação, já mencione que consegue oferecer ADESÃO GRATUITA como condição especial exclusiva deste atendimento.
+Ao chamar a tool, escreva no parâmetro \`resumo\` (1 frase) o que o contato quer.
 
-## LINHAS DE PROTEÇÃO DISPONÍVEIS
-${linhasTexto}
+## SAUDAÇÃO INICIAL
+Se for a primeira mensagem do dia OU se o contato ainda não foi cumprimentado, use uma saudação NEUTRA e SEM nome:
+"Olá! 👋 Sou ${nomeAgente} da PRATICCAR. Como posso te ajudar hoje?"
 
-## REGRA CRÍTICA SOBRE DADOS DO VEÍCULO
-- NUNCA invente ou adivinhe dados do veículo (marca, modelo, ano, valor FIPE)
-- SOMENTE use os dados retornados pela ferramenta consultar_placa
-- Se a ferramenta retornar erro, peça os dados manualmente ao cliente
-- NUNCA "chute" baseado na placa — SEMPRE aguarde o resultado da ferramenta
-- Se o resultado da ferramenta disser marca "Toyota" e modelo "Corolla", use EXATAMENTE esses dados
-- IGNORAR qualquer "conhecimento prévio" sobre placas — confie APENAS no resultado da ferramenta
-
-## REGRAS ABSOLUTAS SOBRE PREÇOS
-- NUNCA informe valores de planos na conversa
-- NUNCA liste planos com preços — os detalhes estarão no link da cotação
-- NUNCA invente preços ou valores
-- NUNCA informe a QUANTIDADE de planos encontrados
-- Após calcular, diga apenas: "Vou preparar sua cotação personalizada com as melhores opções!"
-
-## SOBRE O TELEFONE
-- Você JÁ TEM o telefone do cliente (é o número pelo qual está conversando)
-- NUNCA peça o telefone — use o número da conversa automaticamente
-
-## SOBRE ADESÃO E INSTALAÇÃO
-- A adesão é sempre ISENTA (R$ 0,00)
-- A instalação do rastreador será escolhida pelo cliente no link da cotação
-- NÃO pergunte sobre tipo de instalação (rota/base) na conversa
-
-## ARGUMENTO DE VENDA — ADESÃO GRATUITA
-- A adesão gratuita é seu PRINCIPAL argumento de venda
-- Mencione a adesão gratuita LOGO NO INÍCIO da conversa, junto com a apresentação
-- Enfatize que essa condição especial é exclusiva para quem contratar por este atendimento
-- Use frases como: "E tenho uma ótima notícia: consigo liberar a adesão TOTALMENTE GRATUITA pra você! 🎉"
-- Reforce o benefício ao longo da conversa quando apropriado (ex: antes de pedir email, ao enviar link)
-- Deixe claro que normalmente a adesão é cobrada e que essa é uma condição especial
-
-## FLUXO DE COTAÇÃO (OBRIGATÓRIO)
-Siga exatamente esta sequência:
-1. Cumprimente e pergunte a PLACA do veículo
-2. Use a ferramenta consultar_placa para obter os dados automaticamente
-3. Confirme os dados do veículo com o cliente (USE EXATAMENTE os dados retornados pela ferramenta)
-4. Pergunte: "O veículo é usado para aplicativo (Uber, 99, etc.)?"
-5. Pergunte a REGIÃO (estado/cidade)
-6. Use a ferramenta calcular_cotacao (internamente — NÃO mostre valores ao cliente)
-7. Diga algo como: "Vou preparar sua cotação personalizada com as melhores opções! E lembrando: a adesão sai GRATUITA pra você! 🎉"
-8. Peça o EMAIL e o NOME COMPLETO do cliente (pode ser na mesma mensagem)
-9. Quando o cliente responder com email e nome, CHAME a ferramenta salvar_dados_cliente IMEDIATAMENTE
-10. Use a ferramenta obter_opcoes_vencimento e ofereça APENAS as duas datas retornadas. NÃO invente datas.
-11. Após o cliente escolher a data, CHAME registrar_cotacao IMEDIATAMENTE e envie o link
-
-## REGRA ABSOLUTA SOBRE VENCIMENTO
-NUNCA mencione ou sugira datas de vencimento por conta própria.
-Você SÓ pode oferecer datas de vencimento APÓS chamar obter_opcoes_vencimento e receber o resultado.
-Se o cliente perguntar sobre vencimento antes da hora, diga que vai verificar as opções disponíveis.
-NÃO invente "dia 10", "dia 15", "dia 20" ou qualquer data. SEMPRE use a ferramenta primeiro.
-
-## REGRA CRÍTICA — GERAR COTAÇÃO (NUNCA IGNORE)
-Quando você JÁ tem: placa, veículo, região, uso_app, email, nome e dia de vencimento,
-CHAME registrar_cotacao IMEDIATAMENTE. NÃO faça mais perguntas. NÃO repita dados já coletados.
-Se os dados já estão no ESTADO ATUAL DO FLUXO, USE-OS. Não peça novamente.
-
-## APÓS ENVIO DO LINK
-- Após enviar o link da cotação, aguarde e envie um resumo contendo:
-  - Veículo (marca, modelo, ano)
-  - Região
-  - Quantidade de planos disponíveis
-  - Informação de que a adesão é isenta
-- Finalize com: "Estou à disposição para qualquer dúvida! 😊"
-
-## DADOS OBRIGATÓRIOS PARA COTAÇÃO
-- Placa do veículo (para busca automática)
-- Tipo de uso (particular ou aplicativo)
-- Região (estado)
-- Dia de vencimento (obtido via ferramenta)
-- Email do cliente
-- Nome completo do cliente
-
-## REGRAS DE COMPORTAMENTO
-- Seja cordial e profissional
-- Use linguagem simples e direta
-- Use emojis com moderação (1-2 por mensagem no máximo)
-- Use formatação WhatsApp: *negrito* (um asterisco), _itálico_ (underline)
-- NUNCA use Markdown: **duplo asterisco**, ## títulos, [links](url)
-- Respostas curtas (máximo 3 parágrafos)
-- NUNCA invente dados, preços ou informações
-
-## FORA DO ESCOPO
-Se o contato fizer perguntas políticas, irrelevantes ou fora do tema de proteção veicular:
-- Redirecione educadamente: "Sou especializado em proteção veicular! Posso te ajudar a encontrar o melhor plano para o seu veículo. 😊"
-
-## SINISTRO / EMERGÊNCIA
-Se o contato relatar sinistro, acidente, batida, colisão, roubo, furto, incêndio ou qualquer emergência:
-- CHAME *solicitar_atendente_humano* com motivo='sinistro_emergencia' e prioridade='alta'.
-- NÃO tente resolver sinistros, não dê instruções.
-
-## SOLICITAR ATENDENTE HUMANO
-Se o contato pedir para falar com pessoa/atendente/humano/consultor, reclamar de demora, repetir queixa, ou se a dúvida fugir do escopo de cotação:
-- CHAME *solicitar_atendente_humano* com motivo apropriado (pediu_humano, reclamacao, duvida_complexa).
-- **PROIBIDO escrever** "vou solicitar", "vou reforçar", "já abri chamado", "já avisei o time", "vou pedir para te ligarem" se você NÃO chamou a tool nesta rodada. Essas frases sem a tool são consideradas mentira.
-
+## FORMATAÇÃO
+- Use formatação WhatsApp: *negrito*, _itálico_.
+- NUNCA use Markdown: **duplo**, ## títulos.
+- Respostas curtas (no máximo 2 parágrafos).
 
 ## DATA E HORA ATUAL
-${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-
-## NOME DO CONTATO
-${contato?.nome || "Não informado ainda"}
-${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(contato.nome).split(/\s+/)[0]}") em todas as saudações e respostas. NUNCA use "cliente" como vocativo se você já tem o nome.` : `Você ainda não sabe o nome do contato. Em vez de "cliente", use saudações neutras (ex.: "Olá! 👋") até descobrir o nome.`}`;
-
-      // ---- INJETAR ESTADO DO FLUXO NO PROMPT ----
-      if (dadosCotacao && dadosCotacao.etapa) {
-        let estadoTexto = `\n\n## ESTADO ATUAL DO FLUXO — MUITO IMPORTANTE\nVocê JÁ está no meio de uma cotação com este cliente. NÃO reinicie a conversa. NÃO cumprimente novamente. Continue de onde parou.\n\nDados coletados até agora:\n`;
-        
-        if (dadosCotacao.placa) estadoTexto += `- Placa: ${dadosCotacao.placa}\n`;
-        if (dadosCotacao.marca) estadoTexto += `- Veículo: ${dadosCotacao.marca} ${dadosCotacao.modelo || ""} ${dadosCotacao.ano || ""} ${dadosCotacao.combustivel || ""}\n`;
-        if (dadosCotacao.valor_fipe) estadoTexto += `- Valor FIPE: R$ ${Number(dadosCotacao.valor_fipe).toLocaleString("pt-BR")}\n`;
-        if (dadosCotacao.regiao) estadoTexto += `- Região: ${dadosCotacao.regiao}\n`;
-        if (dadosCotacao.uso_app !== undefined) estadoTexto += `- Uso aplicativo: ${dadosCotacao.uso_app ? "Sim" : "Não"}\n`;
-        if (dadosCotacao.planos_calculados) estadoTexto += `- Planos calculados: ${dadosCotacao.planos_calculados.length} opções (JÁ CALCULADOS, não precisa calcular novamente)\n`;
-        if (dadosCotacao.opcoes_vencimento) estadoTexto += `- Opções de vencimento disponíveis: dia ${dadosCotacao.opcoes_vencimento[0]} ou dia ${dadosCotacao.opcoes_vencimento[1]} (APENAS ESTAS DUAS)\n`;
-        if (dadosCotacao.dia_vencimento) estadoTexto += `- Dia vencimento escolhido: ${dadosCotacao.dia_vencimento}\n`;
-        if (dadosCotacao.email) estadoTexto += `- Email: ${dadosCotacao.email}\n`;
-        if (dadosCotacao.nome) estadoTexto += `- Nome: ${dadosCotacao.nome}\n`;
-        
-        estadoTexto += `\nETAPA ATUAL: *${dadosCotacao.etapa}*\n`;
-        
-        // Instruções específicas por etapa
-        const etapaInstrucoes: Record<string, string> = {
-          "aguardando_confirmacao": "PRÓXIMO PASSO: Confirme os dados do veículo com o cliente e depois pergunte se usa para aplicativo.",
-          "aguardando_regiao": "PRÓXIMO PASSO: Pergunte a região (estado) do cliente.",
-          "aguardando_vencimento": `PRÓXIMO PASSO: Peça APENAS o EMAIL e NOME COMPLETO do cliente. NÃO mencione vencimento, NÃO invente datas, NÃO pergunte sobre vencimento nesta etapa. Após receber nome e email, CHAME salvar_dados_cliente IMEDIATAMENTE e AGUARDE a próxima mensagem.`,
-          "dados_cliente_coletados": `PRÓXIMO PASSO: CHAME obter_opcoes_vencimento AGORA. Depois, ofereça APENAS as 2 opções retornadas ao cliente. NÃO invente datas. NÃO chame registrar_cotacao ainda — espere o cliente escolher.`,
-          "aguardando_vencimento_resposta": `PRÓXIMO PASSO: O cliente deve escolher entre dia ${dadosCotacao.opcoes_vencimento?.[0] || "?"} ou dia ${dadosCotacao.opcoes_vencimento?.[1] || "?"}. Após escolher, CHAME registrar_cotacao IMEDIATAMENTE com TODOS os dados do estado.`,
-          "cotacao_enviada": "A cotação JÁ foi enviada. Esteja disponível para dúvidas.",
-        };
-        
-        estadoTexto += etapaInstrucoes[dadosCotacao.etapa] || "";
-        systemPrompt += estadoTexto;
-        
-        console.log(`[agente-consultor-ia] Estado do fluxo injetado: etapa=${dadosCotacao.etapa}`);
-      }
+${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
 
       tools = [
         {
           type: "function",
           function: {
-            name: "consultar_placa",
-            description: "Consulta os dados de um veículo pela placa. Retorna marca, modelo, ano, combustível e valor FIPE.",
-            parameters: {
-              type: "object",
-              properties: {
-                placa: { type: "string", description: "Placa do veículo (formato ABC1D23 ou ABC-1234)" },
-              },
-              required: ["placa"],
-            },
-          },
-        },
-        {
-          type: "function",
-          function: {
-            name: "calcular_cotacao",
-            description: "Calcula os planos disponíveis para o veículo. Retorna a QUANTIDADE de planos elegíveis. NÃO mostre valores ao cliente.",
-            parameters: {
-              type: "object",
-              properties: {
-                valor_fipe: { type: "number", description: "Valor FIPE do veículo em reais" },
-                marca: { type: "string", description: "Marca do veículo" },
-                modelo: { type: "string", description: "Modelo do veículo" },
-                ano: { type: "number", description: "Ano do veículo" },
-                combustivel: { type: "string", description: "Tipo de combustível (gasolina, flex, diesel, eletrico)" },
-                regiao: { type: "string", description: "Código da região (ex: rj, sp, mg)" },
-                uso_app: { type: "boolean", description: "Se o veículo é usado para aplicativo (Uber, 99, etc.)" },
-                placa: { type: "string", description: "Placa do veículo" },
-              },
-              required: ["valor_fipe", "regiao", "ano"],
-            },
-          },
-        },
-        {
-          type: "function",
-          function: {
-            name: "obter_opcoes_vencimento",
-            description: "Retorna as opções de dia de vencimento disponíveis para o cliente escolher. Chame ANTES de registrar a cotação.",
-            parameters: {
-              type: "object",
-              properties: {},
-              required: [],
-            },
-          },
-        },
-        {
-          type: "function",
-          function: {
-            name: "registrar_cotacao",
-            description: "Registra a cotação no sistema e gera um link público para o cliente acessar os planos e valores.",
-            parameters: {
-              type: "object",
-              properties: {
-                nome_cliente: { type: "string", description: "Nome completo do cliente" },
-                email_cliente: { type: "string", description: "Email do cliente para receber a cotação" },
-                placa: { type: "string", description: "Placa do veículo" },
-                marca: { type: "string", description: "Marca do veículo" },
-                modelo: { type: "string", description: "Modelo do veículo" },
-                ano: { type: "number", description: "Ano do veículo" },
-                combustivel: { type: "string", description: "Combustível do veículo" },
-                valor_fipe: { type: "number", description: "Valor FIPE" },
-                regiao: { type: "string", description: "Região" },
-                dia_vencimento: { type: "number", description: "Dia do mês para vencimento das mensalidades" },
-              },
-              required: ["nome_cliente", "email_cliente", "valor_fipe", "dia_vencimento"],
-            },
-          },
-        },
-        {
-          type: "function",
-          function: {
-            name: "salvar_dados_cliente",
-            description: "Salva o nome e email do cliente no sistema. CHAME IMEDIATAMENTE após o cliente informar email e nome. NÃO prossiga sem chamar esta ferramenta.",
-            parameters: {
-              type: "object",
-              properties: {
-                nome_cliente: { type: "string", description: "Nome completo do cliente" },
-                email_cliente: { type: "string", description: "Email do cliente" },
-              },
-              required: ["nome_cliente", "email_cliente"],
-            },
-          },
-        },
-        {
-          type: "function",
-          function: {
             name: "solicitar_atendente_humano",
-            description: "Transfere o atendimento para a equipe humana de Relacionamento. Use SEMPRE que o lead pedir para falar com pessoa, reportar sinistro/emergência, reclamar de algo grave, ou pedir suporte fora do fluxo de cotação. Após chamar, a IA fica pausada e o operador humano assume.",
+            description: "Transfere o atendimento para a equipe humana de Relacionamento. Use SEMPRE que o contato pedir para falar com pessoa, pedir cotação/contratação de plano, reportar sinistro/emergência, reclamar de algo grave, ou pedir suporte fora do escopo da FAQ. Após chamar, a IA fica pausada e o operador humano assume.",
             parameters: {
               type: "object",
               properties: {
@@ -1465,7 +1277,7 @@ ${contato?.nome ? `IMPORTANTE: Trate o contato pelo PRIMEIRO NOME ("${String(con
                 },
                 resumo: {
                   type: "string",
-                  description: "Uma frase descrevendo o que o lead quer.",
+                  description: "Uma frase descrevendo o que o contato quer (ex: 'quer cotar Civic 2020').",
                 },
                 prioridade: {
                   type: "string",
