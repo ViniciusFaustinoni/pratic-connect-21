@@ -1992,6 +1992,9 @@ REGRAS OBRIGATÓRIAS deste contexto:
     ];
     // Rastreia tools que retornaram sucesso nesta rodada — base do validador de saída
     const toolsCalledOk = new Set<string>();
+    // Flag deterministica: se a consulta de boletos falhar (erro_transitorio/timeout/HTTP),
+    // a IA NUNCA pode dizer "em dia" — força transbordo canônico fora do controle do modelo.
+    let boletoErroTransbordo: { motivo: string } | null = null;
 
 
 
