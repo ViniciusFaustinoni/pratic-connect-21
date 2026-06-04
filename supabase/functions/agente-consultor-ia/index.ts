@@ -583,16 +583,22 @@ Deno.serve(async (req) => {
     // Fallback robusto: se a linha vier incompleta, mantém os valores canônicos in-code.
     const FALLBACK_SAUDACAO_INICIAL = "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁";
     const FALLBACK_MSG_POS_IDENT = "Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊";
+    const FALLBACK_MSG_CPF_ENCONTRADO = "Encontrei você, {nome}! Em que posso te ajudar hoje? 😊";
+    const FALLBACK_MSG_CPF_NAO_ENCONTRADO_RETRY = "Não encontrei esse CPF na nossa base. Pode digitar novamente, por favor? 😉";
+    const FALLBACK_MSG_CPF_NAO_ENCONTRADO_TRANSBORDO = "Não consegui localizar seu cadastro. Vou te passar para um de nossos atendentes, tudo bem?";
     const habCfg = {
       saudacao_inicial: FALLBACK_SAUDACAO_INICIAL,
       mensagem_pos_identificacao: FALLBACK_MSG_POS_IDENT,
+      mensagem_cpf_encontrado: FALLBACK_MSG_CPF_ENCONTRADO,
+      mensagem_cpf_nao_encontrado_retry: FALLBACK_MSG_CPF_NAO_ENCONTRADO_RETRY,
+      mensagem_cpf_nao_encontrado_transbordo: FALLBACK_MSG_CPF_NAO_ENCONTRADO_TRANSBORDO,
       gate_saudacao_horas: 2,
       gate_saudacao_aplicar_identificados: true,
     };
     try {
       const { data: habRow } = await supabase
         .from("ia_habilidades")
-        .select("saudacao_inicial, mensagem_pos_identificacao, gate_saudacao_horas, gate_saudacao_aplicar_identificados")
+        .select("saudacao_inicial, mensagem_pos_identificacao, mensagem_cpf_encontrado, mensagem_cpf_nao_encontrado_retry, mensagem_cpf_nao_encontrado_transbordo, gate_saudacao_horas, gate_saudacao_aplicar_identificados")
         .eq("slug", "relacionamento")
         .maybeSingle();
       if (habRow) {
@@ -601,6 +607,15 @@ Deno.serve(async (req) => {
         }
         if ((habRow as any).mensagem_pos_identificacao && String((habRow as any).mensagem_pos_identificacao).trim()) {
           habCfg.mensagem_pos_identificacao = String((habRow as any).mensagem_pos_identificacao).trim();
+        }
+        if ((habRow as any).mensagem_cpf_encontrado && String((habRow as any).mensagem_cpf_encontrado).trim()) {
+          habCfg.mensagem_cpf_encontrado = String((habRow as any).mensagem_cpf_encontrado).trim();
+        }
+        if ((habRow as any).mensagem_cpf_nao_encontrado_retry && String((habRow as any).mensagem_cpf_nao_encontrado_retry).trim()) {
+          habCfg.mensagem_cpf_nao_encontrado_retry = String((habRow as any).mensagem_cpf_nao_encontrado_retry).trim();
+        }
+        if ((habRow as any).mensagem_cpf_nao_encontrado_transbordo && String((habRow as any).mensagem_cpf_nao_encontrado_transbordo).trim()) {
+          habCfg.mensagem_cpf_nao_encontrado_transbordo = String((habRow as any).mensagem_cpf_nao_encontrado_transbordo).trim();
         }
         const horas = Number((habRow as any).gate_saudacao_horas);
         if (Number.isFinite(horas) && horas > 0) habCfg.gate_saudacao_horas = horas;
