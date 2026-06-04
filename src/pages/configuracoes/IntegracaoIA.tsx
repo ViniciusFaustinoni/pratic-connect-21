@@ -65,25 +65,9 @@ export default function IntegracaoIA() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6">
-          <Card className="cursor-pointer hover:border-primary/50 transition" onClick={() => navigate('/configuracoes/integracoes/ia/habilidades')}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Bot className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">Habilidades da IA</CardTitle>
-                    <CardDescription>Vendas, Relacionamento — cada uma com liga/desliga, regras, conhecimento e ferramentas próprias.</CardDescription>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </CardHeader>
-          </Card>
-
           <AIModelConfigCard />
           <OcrEngineConfigCard />
+
 
           <Alert>
             <Sparkles className="h-4 w-4" />
