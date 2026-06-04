@@ -1682,11 +1682,12 @@ REGRAS OBRIGATÓRIAS deste contexto:
     }
 
 
-    // ---- 7.4 INJEÇÃO UNIVERSAL DE COMPORTAMENTO (UI Configurações › Agente Consultor IA)
-    // Aplica `apresentacao_inicial` + `instrucoes_comportamento` em TODOS os branches
-    // (Diretor / Associado / Lead). O branch de Lead já cita `${apresentacao}` e
-    // `${instrucoes}` inline no template, mas este bloco garante que Diretor e Associado
-    // — antes ignorados — também respeitem as edições da UI sem deploy.
+    // ---- 7.4 INJEÇÃO DE COMPORTAMENTO DA HABILIDADE ATIVA ──────────────────
+    // Aplica apresentacao_inicial + instrucoes_comportamento que VIERAM DA
+    // HABILIDADE ROTEADA (ia_habilidades). O gate canônico (bloco 6) já
+    // sobrescreveu `apresentacao` e `instrucoes` com as colunas próprias da
+    // habilidade — aqui só renderizamos no prompt. Conteúdo da habilidade
+    // 'vendas' nunca vaza para a 'relacionamento' e vice-versa.
     if (instrucoes.trim() || apresentacao.trim()) {
       const blocosCfg: string[] = [];
       if (instrucoes.trim()) {
@@ -1695,37 +1696,32 @@ REGRAS OBRIGATÓRIAS deste contexto:
       if (apresentacao.trim()) {
         blocosCfg.push(`### APRESENTAÇÃO INICIAL (use como base na primeira mensagem)\n"${apresentacao.trim()}"`);
       }
-      systemPrompt += `\n\n## CONFIGURAÇÃO DO AGENTE (Configurações › Agente Consultor IA)\n${blocosCfg.join("\n\n")}`;
+      const tituloHab = habilidadeSlugAtiva ? ` — habilidade "${habilidadeSlugAtiva}"` : "";
+      systemPrompt += `\n\n## CONFIGURAÇÃO DA HABILIDADE${tituloHab}\n${blocosCfg.join("\n\n")}`;
     }
 
 
 
-    // ---- 7.5 OVERRIDE EDITORIAL (Relacionamento) — tabelas maya_ia_comportamento + maya_ia_faq
-    // Permite editar persona/regras/tom/saudação e base de conhecimento sem deploy.
-    // Agora com retrieval por palavras-chave: a FAQ que mais casa com a mensagem
-    // atual entra em um bloco "EM DESTAQUE" no topo, antes do bloco completo.
-    try {
-      const audienciaAtual = isDiretor ? "diretor" : isAssociado ? "associado" : "lead";
-      const mayaCfg = await loadMayaEditorialConfig(supabase, audienciaAtual, texto || "");
-      if (mayaCfg) {
-        const blocos: string[] = [];
-        if (mayaCfg.persona) blocos.push(`### PERSONA\n${mayaCfg.persona}`);
-        if (mayaCfg.regras_absolutas) blocos.push(`### REGRAS ABSOLUTAS\n${mayaCfg.regras_absolutas}`);
-        if (mayaCfg.tom_voz) blocos.push(`### TOM DE VOZ\n${mayaCfg.tom_voz}`);
-        if (mayaCfg.saudacao_inicial) blocos.push(`### SAUDAÇÃO INICIAL\n${mayaCfg.saudacao_inicial}`);
-        if (blocos.length > 0) {
-          systemPrompt += `\n\n## CONFIGURAÇÃO EDITORIAL (Relacionamento) — PREVALECE SOBRE QUALQUER REGRA ACIMA EM CONFLITO\n${blocos.join("\n\n")}`;
+    // ---- 7.5 BASE DE CONHECIMENTO + EXEMPLOS DA HABILIDADE ATIVA ───────────
+    // Fonte canônica única pós-04/06/26: ia_habilidade_conhecimento +
+    // ia_habilidade_exemplos, filtrados por slug da habilidade roteada.
+    // Tabelas legadas maya_ia_* não são mais lidas em runtime (backup apenas).
+    if (habilidadeSlugAtiva) {
+      try {
+        const habCfg = await loadHabilidadeContent(supabase, habilidadeSlugAtiva, texto || "");
+        if (habCfg.faqDestaqueText) {
+          systemPrompt += `\n\n## FAQ EM DESTAQUE PARA ESTA MENSAGEM (LEIA PRIMEIRO)\nA mensagem do cliente casou com a(s) entrada(s) abaixo da base de conhecimento desta habilidade. Use o conteúdo delas como resposta — não invente, não desvie, não transborde se a FAQ já cobre o pedido.\n\n${habCfg.faqDestaqueText}`;
+          console.log(`[agente-consultor-ia] FAQ em destaque (${habCfg.faqMatchedIds?.length || 0}) [hab=${habilidadeSlugAtiva}]: ${(habCfg.faqMatchedIds || []).join(",")}`);
         }
-        if (mayaCfg.faqDestaqueText) {
-          systemPrompt += `\n\n## FAQ EM DESTAQUE PARA ESTA MENSAGEM (LEIA PRIMEIRO)\nA mensagem do cliente casou com a(s) entrada(s) abaixo da base de conhecimento. Use o conteúdo delas como resposta — não invente, não desvie, não transborde se a FAQ já cobre o pedido.\n\n${mayaCfg.faqDestaqueText}`;
-          console.log(`[agente-consultor-ia] FAQ em destaque (${mayaCfg.faqMatchedIds?.length || 0}): ${(mayaCfg.faqMatchedIds || []).join(",")}`);
+        if (habCfg.faqText) {
+          systemPrompt += `\n\n## BASE DE CONHECIMENTO DA HABILIDADE (FAQ)\nResponda usando estas informações sempre que a pergunta do cliente casar com algum item. Não invente o que não estiver aqui. Itens da categoria *direcionamento* são respostas prontas para assuntos fora do escopo desta habilidade — use-os no lugar de transbordar ou de executar.\n\n${habCfg.faqText}`;
         }
-        if (mayaCfg.faqText) {
-          systemPrompt += `\n\n## BASE DE CONHECIMENTO (FAQ)\nResponda usando estas informações sempre que a pergunta do cliente casar com algum item. Não invente o que não estiver aqui.\n\n${mayaCfg.faqText}`;
+        if (habCfg.exemplosText) {
+          systemPrompt += `\n\n## EXEMPLOS DE RESPOSTA (mesma habilidade)\nUse como referência de tom e formato.\n\n${habCfg.exemplosText}`;
         }
+      } catch (e) {
+        console.error(`[agente-consultor-ia] Falha ao carregar conteúdo da habilidade '${habilidadeSlugAtiva}':`, (e as any)?.message);
       }
-    } catch (e) {
-      console.error("[agente-consultor-ia] Falha ao carregar config editorial Maya:", (e as any)?.message);
     }
 
 
