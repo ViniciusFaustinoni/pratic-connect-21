@@ -637,7 +637,7 @@ const App = () => (
               <Route path="/relacionamento/analises" element={<AnalisesRelacionamento />} />
               <Route path="/relacionamento/transbordos" element={<TransbordosRelacionamento />} />
               <Route path="/relacionamento/emails" element={<EmailsRelacionamento />} />
-              <Route path="/relacionamento/config-ia" element={<MayaIA />} />
+              <Route path="/relacionamento/config-ia" element={<ConfigIA />} />
 
               <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               
