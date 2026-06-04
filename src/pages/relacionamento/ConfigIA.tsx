@@ -226,6 +226,20 @@ function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
           <Label>Saudação inicial</Label>
           <Textarea rows={2} value={form.saudacao_inicial} onChange={e => setForm({ ...form, saudacao_inicial: e.target.value })} />
         </div>
+        <div>
+          <Label>Tempo sem interação antes de saudar novamente (horas)</Label>
+          <Input
+            type="number"
+            min={0}
+            step={0.5}
+            value={(form as any).gate_saudacao_horas ?? 2}
+            onChange={e => setForm({ ...(form as any), gate_saudacao_horas: e.target.value === '' ? null : Number(e.target.value) } as any)}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Controla quando a IA repete a saudação de cerimônia ao associado já identificado.
+            Dentro dessa janela ela responde curto e cordial; passada a janela, volta a saudar normalmente. Padrão: 2h.
+          </p>
+        </div>
       </div>
 
       <Separator />
