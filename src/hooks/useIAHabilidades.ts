@@ -128,7 +128,7 @@ export function useUpsertIAConhecimento() {
       if (error) throw error;
     },
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ['ia-conhecimento', vars.habilidade_slug] });
+      qc.invalidateQueries({ queryKey: ['ia-conhecimento'] });
       toast.success('Conhecimento salvo.');
     },
     onError: (e: any) => toast.error('Erro: ' + (e?.message || 'desconhecido')),
