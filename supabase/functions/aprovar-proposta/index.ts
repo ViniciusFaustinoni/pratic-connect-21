@@ -1125,10 +1125,49 @@ async function processarVeiculoAprovado(
             .update({ status_contratacao: 'aguardando_aprovacao_monitoramento' })
             .eq('id', contrato.cotacao_id);
         }
+      } else {
+        // C1: defesa em profundidade. Se chegou aqui é porque o gate
+        // gateCaminhoPublicoCompleto deixou passar (race, ou caminho legado
+        // via instalação/agendamento), mas o branch sub-FIPE espera vistoria
+        // materializada. NUNCA promover `cadastro_aprovado` sem vistoria —
+        // reverte e devolve 409 sem_autovistoria_sub_fipe.
+        console.error('[aprovar-proposta] sub-FIPE sem autovistoria materializada — revertendo cadastro_aprovado', {
+          contrato_id, veiculoId, cotacaoId: contrato.cotacao_id,
+        });
+        await supabase
+          .from('contratos')
+          .update({
+            cadastro_aprovado: false,
+            aprovado_em: null,
+            aprovado_por: null,
+            documentos_aprovados_em: null,
+          })
+          .eq('id', contrato_id);
+        try {
+          await insertAuditLog(supabase, {
+            usuario_id: aprovado_por || null,
+            acao: 'aprovar_proposta_bloqueado_sub_fipe_sem_vistoria',
+            modulo: 'contratos',
+            tabela: 'contratos',
+            registro_id: contrato_id,
+            descricao: 'Aprovação revertida: veículo sub-FIPE não possui autovistoria materializada. Cliente precisa concluir o roteiro completo (31 carro / 15 moto + vídeo 360°) antes do Cadastro aprovar.',
+          });
+        } catch { /* best-effort */ }
+        const err = new Error('sem_autovistoria_sub_fipe');
+        (err as any).aprovarPropostaResponse = jsonResponse({
+          success: false,
+          codigo: 'sem_autovistoria_sub_fipe',
+          error: 'sem_autovistoria_sub_fipe',
+          mensagem: 'Veículo sub-FIPE não possui autovistoria materializada. Aguarde o cliente concluir o roteiro completo no link público antes de aprovar.',
+        }, 409);
+        throw err;
       }
-    } catch (e) {
+    } catch (e: any) {
+      // Re-lança sentinelas estruturadas; loga e segue para os demais erros transitórios.
+      if (e?.aprovarPropostaResponse) throw e;
       console.warn('[aprovar-proposta] Erro promoção sub-FIPE pós-autovistoria:', e);
     }
+
 
 
     // CAMADA 2: gating idêntico ao caminho acima — só notifica se veículo realmente ATIVO.
