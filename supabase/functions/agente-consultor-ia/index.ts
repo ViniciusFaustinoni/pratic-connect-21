@@ -232,11 +232,11 @@ async function loadHabilidadeContent(
   // Retrieval para destaque (mesma lógica do loader antigo)
   let faqDestaqueText = "";
   let faqMatchedIds: string[] = [];
-  if (mensagemAtual && raw.faqs.length > 0) {
+  if (mensagemAtual && conhecimento.length > 0) {
     const msgNorm = normalizarParaMatch(mensagemAtual);
     const msgTokens = tokenizarParaMatch(mensagemAtual);
     if (msgNorm.length > 0 && (msgTokens.size > 0 || msgNorm.length >= 3)) {
-      const pontuadas = raw.faqs
+      const pontuadas = conhecimento
         .map((f: any) => ({ f, score: pontuarFaq(msgTokens, msgNorm, f) }))
         .filter((x: any) => x.score >= 3)
         .sort((a: any, b: any) => b.score - a.score)
