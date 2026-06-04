@@ -2864,4 +2864,104 @@ async function executarConsultarBoletosAssociado(
   };
 }
 
+// ============================================================
+// TOOL: enviar_link_reagendamento
+// Invoca a edge `enviar-link-reagendamento` (template Meta).
+// ============================================================
+async function executarEnviarLinkReagendamento(
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { servico_id: string }
+): Promise<any> {
+  if (!args.servico_id) return { success: false, error: "servico_id obrigatório" };
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/enviar-link-reagendamento`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+      body: JSON.stringify({ servico_id: args.servico_id, origem: "agente_ia" }),
+    });
+    const txt = await res.text();
+    let body: any = null;
+    try { body = txt ? JSON.parse(txt) : null; } catch { body = { raw: txt }; }
+    if (!res.ok) {
+      console.error(`[agente-consultor-ia] enviar_link_reagendamento HTTP ${res.status}:`, txt?.slice(0, 200));
+      return { success: false, error: `Edge respondeu ${res.status}`, body };
+    }
+    console.log(`[agente-consultor-ia] enviar_link_reagendamento OK servico=${args.servico_id}`);
+    return { success: true, message: "Link de reagendamento enviado via WhatsApp.", body };
+  } catch (e: any) {
+    console.error(`[agente-consultor-ia] Erro enviar_link_reagendamento:`, e?.message);
+    return { success: false, error: e?.message || "Erro desconhecido" };
+  }
+}
+
+// ============================================================
+// TOOL: confirmar_agendamento
+// Atualiza confirmacoes_agendamento + servicos e notifica profissional.
+// ============================================================
+async function executarConfirmarAgendamento(
+  supabase: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { servico_id: string; telefone: string }
+): Promise<any> {
+  if (!args.servico_id) return { success: false, error: "servico_id obrigatório" };
+  const agora = new Date().toISOString();
+  try {
+    // Busca a confirmacao pendente
+    const { data: conf } = await supabase
+      .from("confirmacoes_agendamento")
+      .select("id, status")
+      .eq("servico_id", args.servico_id)
+      .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha", "aguardando_confirmacao_encaixe"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (conf?.id) {
+      const { error: e1 } = await supabase
+        .from("confirmacoes_agendamento")
+        .update({ status: "confirmada", resposta_cliente: "[via IA]", resposta_recebida_em: agora })
+        .eq("id", conf.id);
+      if (e1) console.error("[agente-consultor-ia] erro update confirmacao:", e1);
+    }
+
+    const { error: e2 } = await supabase
+      .from("servicos")
+      .update({ confirmacao_whatsapp: "confirmada", confirmado_via_whatsapp_em: agora })
+      .eq("id", args.servico_id);
+    if (e2) console.error("[agente-consultor-ia] erro update servico:", e2);
+
+    // Buscar profissional para push (best-effort)
+    try {
+      const { data: serv } = await supabase
+        .from("servicos")
+        .select("profissional_id, hora_agendada, associado:associados(nome)")
+        .eq("id", args.servico_id)
+        .maybeSingle();
+      if (serv?.profissional_id) {
+        const nomeCliente = serv?.associado?.nome || "Cliente";
+        fetch(`${supabaseUrl}/functions/v1/send-push-profissional`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            profissional_id: serv.profissional_id,
+            notification: {
+              title: "✅ Cliente Confirmou!",
+              body: `${String(nomeCliente).split(" ")[0]} confirmou via IA`,
+              tag: `confirmacao-${args.servico_id}`,
+              data: { servico_id: args.servico_id, action: "confirmacao_whatsapp" },
+            },
+          }),
+        }).catch(() => {});
+      }
+    } catch (_) { /* fire-and-forget */ }
+
+    console.log(`[agente-consultor-ia] confirmar_agendamento OK servico=${args.servico_id}`);
+    return { success: true, message: "Agendamento confirmado." };
+  } catch (e: any) {
+    console.error(`[agente-consultor-ia] Erro confirmar_agendamento:`, e?.message);
+    return { success: false, error: e?.message || "Erro desconhecido" };
+  }
+}
 
