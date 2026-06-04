@@ -479,7 +479,7 @@ Deno.serve(async (req) => {
     // "Identificado" = já temos CPF (com lookup SGA registrado) OU nome confirmado.
     const jaIdentificado = !!contato.cpf || !!(contato as any).nome_confirmado_em;
 
-    if (!diretorPreDetectado && !jaIdentificado) {
+    if (!diretorPreDetectado && !jaIdentificado && !contextoAgendamentoPendente) {
       const validateCpf = (raw: string): boolean => {
         const c = raw.replace(/\D/g, "");
         if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
