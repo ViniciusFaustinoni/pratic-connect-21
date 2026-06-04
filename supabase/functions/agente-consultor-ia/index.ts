@@ -680,56 +680,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    const nomeAgente = config.nome_agente || "Vinicius";
+    const nomeAgente = config.nome_agente || "Atendimento Pratic";
     const apresentacao = config.apresentacao_inicial || "";
     const instrucoes = config.instrucoes_comportamento || "";
-    const msgForaHorario = config.mensagem_fora_horario || "";
-    const responderFora = config.responder_fora_horario === "true";
 
-    // ---- 3.5 GATE FORA DE HORÁRIO COMERCIAL (apenas LEAD/vendas) ----
-    // Maya/Relacionamento atende 24/7 (associado já identificado em cache, ou diretor).
-    // Vinicius/Lead respeita janela Seg–Sex 08–18 BRT com debounce 30min.
-    //
-    // Heurística pré-audiência (a detecção formal está adiante no bloco 4B):
-    //   - Diretor: já detectado em `diretorPreDetectado` (linha do gate de identificação).
-    //   - Associado: contato com `cpf` E `sga_associado_encontrado === true` em cache.
-    //   - Associado por telefone: detectado adiante; nesses raros casos sem cache,
-    //     o gate ainda pode disparar uma vez — próxima mensagem terá cache.
-    const associadoEmCache = !!contato.cpf && (contato as any).sga_associado_encontrado === true;
-    const aplicaGateForaHorario = !diretorPreDetectado && !associadoEmCache;
-
-    let gateForaHorarioDisparou = false;
-    try {
-      const agoraBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-      const dow = agoraBRT.getDay(); // 0=dom, 6=sáb
-      const hour = agoraBRT.getHours();
-      const foraHorario = dow === 0 || dow === 6 || hour < 8 || hour >= 18;
-      if (aplicaGateForaHorario && foraHorario && !responderFora && msgForaHorario.trim()) {
-        gateForaHorarioDisparou = true;
-        const ultimaFora = (contato as any).ultima_msg_fora_horario_em
-          ? new Date((contato as any).ultima_msg_fora_horario_em)
-          : null;
-        const podeReenviar = !ultimaFora || (Date.now() - ultimaFora.getTime()) > 30 * 60_000;
-        if (podeReenviar) {
-          await supabase.functions.invoke("whatsapp-send-text", {
-            body: { telefone: telLimpo, mensagem: msgForaHorario, allow_text: true },
-          });
-          await supabase
-            .from("agente_ia_contatos")
-            .update({ ultima_msg_fora_horario_em: new Date().toISOString() })
-            .eq("id", contato.id);
-          console.log(`[agente-consultor-ia] [fora_horario] mensagem enviada para LEAD ${telLimpo}`);
-        } else {
-          console.log(`[agente-consultor-ia] [fora_horario] em debounce (30min) — silêncio intencional`);
-        }
-        return new Response(
-          JSON.stringify({ success: true, gate: "fora_horario" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    } catch (e) {
-      console.warn(`[agente-consultor-ia] [fora_horario] falha no gate, seguindo fluxo normal:`, (e as any)?.message);
-    }
+    // Gate fora-horário legado (Vinicius/Lead) REMOVIDO em 04/06/26.
+    // A habilidade `vendas` foi desativada; `relacionamento` (Atendimento Pratic)
+    // atende lead/associado/diretor 24/7. Gate de horário por habilidade
+    // permanece no roteador (lib/roteador.ts → checarHorario), aplicado se
+    // alguma habilidade definir `horario_atendimento` no banco.
 
     // Observabilidade: estado da config + audiência inferida nesta requisição
     console.log(`[maya_config] ${JSON.stringify({
@@ -737,13 +696,9 @@ Deno.serve(async (req) => {
       nome_agente: nomeAgente,
       has_instrucoes: !!instrucoes,
       has_apresentacao: !!apresentacao,
-      responder_fora_horario: responderFora,
-      has_msg_fora_horario: !!msgForaHorario,
       diretor_pre_detectado: diretorPreDetectado,
-      associado_em_cache: associadoEmCache,
-      aplicou_gate_fora_horario: aplicaGateForaHorario,
-      gate_fora_horario_disparou: gateForaHorarioDisparou,
     })}`);
+
 
 
     // ---- 4. DETECTAR DIRETOR ----
