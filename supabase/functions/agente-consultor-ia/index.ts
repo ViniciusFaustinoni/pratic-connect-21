@@ -1159,13 +1159,28 @@ Deno.serve(async (req) => {
 
     const { data: historico } = await supabase
       .from("whatsapp_mensagens")
-      .select("mensagem, direcao, created_at")
+      .select("mensagem, direcao, created_at, message_id")
       .or(telefonesBusca.map(t => `telefone.eq.${t}`).join(","))
       .gte("created_at", limiteHistorico)
       .order("created_at", { ascending: true })
-      .limit(20);
+      .limit(40);
 
-    let historicoFormatado = (historico || [])
+    // Dedup por message_id: cada saída da Maya pode ter sido gravada 2x na tabela
+    // (linha provedor=meta_oficial + linha provedor=evolution) com o MESMO wamid Meta —
+    // o WhatsApp recebeu 1x só, mas o modelo lê em dobro e replica o padrão (texto
+    // duplicado dentro da mesma resposta). Mantém a 1ª ocorrência por message_id;
+    // linhas sem message_id (entradas antigas / inserts sem wamid) passam sem dedup.
+    // Não altera o histórico no banco — só a leitura para o modelo.
+    const _vistosMid = new Set<string>();
+    const historicoUnico = (historico || []).filter((m: any) => {
+      const mid = m?.message_id;
+      if (!mid) return true;
+      if (_vistosMid.has(mid)) return false;
+      _vistosMid.add(mid);
+      return true;
+    });
+
+    let historicoFormatado = historicoUnico
       .filter((m: any) => m.mensagem && m.mensagem.trim())
       .map((m: any) => ({
         role: m.direcao === "entrada" ? "user" : "assistant",
