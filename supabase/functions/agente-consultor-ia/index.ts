@@ -947,14 +947,12 @@ Deno.serve(async (req) => {
 
       const precisaSaudar =
         !ultimaSaudacao ||
-        horasDesdeSaudacao > 2 ||
-        horasDesdeUltima > 2 ||
+        horasDesdeSaudacao > habCfg.gate_saudacao_horas ||
+        horasDesdeUltima > habCfg.gate_saudacao_horas ||
         diaBrtAgora !== diaBrtUltima;
 
       if (precisaSaudar) {
-        await enviarTexto(
-          "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁"
-        );
+        await enviarTexto(habCfg.saudacao_inicial);
         await supabase
           .from("agente_ia_contatos")
           .update({
