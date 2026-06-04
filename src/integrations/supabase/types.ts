@@ -15722,6 +15722,7 @@ export type Database = {
       }
       ia_habilidades: {
         Row: {
+          apresentacao_inicial: string | null
           ativa: boolean
           atualizado_em: string
           atualizado_por: string | null
@@ -15730,6 +15731,7 @@ export type Database = {
           descricao: string | null
           ferramentas_habilitadas: string[]
           horario_atendimento: Json | null
+          instrucoes_comportamento: string | null
           mensagem_fora_horario: string | null
           nome_agente: string
           nome_exibicao: string
@@ -15741,6 +15743,7 @@ export type Database = {
           tom_voz: string
         }
         Insert: {
+          apresentacao_inicial?: string | null
           ativa?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
@@ -15749,6 +15752,7 @@ export type Database = {
           descricao?: string | null
           ferramentas_habilitadas?: string[]
           horario_atendimento?: Json | null
+          instrucoes_comportamento?: string | null
           mensagem_fora_horario?: string | null
           nome_agente: string
           nome_exibicao: string
@@ -15760,6 +15764,7 @@ export type Database = {
           tom_voz?: string
         }
         Update: {
+          apresentacao_inicial?: string | null
           ativa?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
@@ -15768,6 +15773,7 @@ export type Database = {
           descricao?: string | null
           ferramentas_habilitadas?: string[]
           horario_atendimento?: Json | null
+          instrucoes_comportamento?: string | null
           mensagem_fora_horario?: string | null
           nome_agente?: string
           nome_exibicao?: string
