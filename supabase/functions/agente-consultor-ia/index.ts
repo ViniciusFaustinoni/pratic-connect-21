@@ -1387,8 +1387,9 @@ Deno.serve(async (req) => {
     // ---- 7. MONTAR SYSTEM PROMPT + TOOLS (condicional) ----
     // Observabilidade canônica: log do branch antes de montar o prompt
     const branchPrompt = isDiretor ? "diretor" : isAssociado ? "associado" : "lead";
+    const associadoEmCache = !!(contato as any)?.sga_associado_encontrado;
     const origemAssociado = isAssociado
-      ? (associadoEmCache ? "cache" : (sgaAssociadoOverride ? "sga_override" : "telefone"))
+      ? (sgaAssociadoOverride ? "sga_override" : (associadoEmCache ? "cache" : "telefone"))
       : "none";
     console.log(`[prompt_branch] ${JSON.stringify({
       branch: branchPrompt,
