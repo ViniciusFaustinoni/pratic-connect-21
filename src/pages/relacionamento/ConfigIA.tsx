@@ -304,8 +304,20 @@ function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
 
 // ─────────────────────────── Conhecimento (FAQ) ───────────────────────────
 
-function ConhecimentoTab({ slug }: { slug: string }) {
-  const { data: itens = [] } = useIAConhecimento(slug);
+function ConhecimentoTab({ slug, tipo = 'conhecimento' }: { slug: string; tipo?: 'conhecimento' | 'regra' }) {
+  const isRegra = tipo === 'regra';
+  const labelItem = isRegra ? 'regra' : 'item';
+  const labelItens = isRegra ? 'regras' : 'itens';
+  const ctaAdicionar = isRegra ? 'Adicionar regra' : 'Adicionar ao FAQ';
+  const placeholderCategoria = isRegra
+    ? 'Categoria (ex: cordialidade, formatacao, boletos, sinistro)'
+    : 'Categoria (ex: boletos, cancelamento, direcionamento)';
+  const placeholderPergunta = isRegra ? 'Título / gatilho da regra' : 'Pergunta / gatilho';
+  const placeholderResposta = isRegra ? 'Instrução de comportamento que a IA deve seguir' : 'Resposta que a IA deve dar';
+  const emptyMsg = isRegra ? 'Nenhuma regra cadastrada.' : 'Nenhum item de FAQ cadastrado.';
+  const removeTitle = isRegra ? 'Remover esta regra?' : 'Remover este item do FAQ?';
+
+  const { data: itens = [] } = useIAConhecimento(slug, tipo);
   const upsert = useUpsertIAConhecimento();
   const del = useDeleteIAConhecimento();
 
