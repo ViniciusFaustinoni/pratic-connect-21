@@ -3655,480 +3655,62 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, ignored: "IA desabilitada" }), { headers: corsHeaders });
     }
 
-    // Buscar CPF previamente confirmado para este telefone (estado canônico do agente).
-    // Usado como critério de desempate quando o mesmo número está em mais de um
-    // associado ativo — o telefone sozinho não identifica, o CPF identifica.
-    const telefoneNormBase = telefone.replace(/\D/g, "");
-    let cpfConfirmadoParaTelefone: string | null = null;
-    let contatoIaCache: { cpf: string | null; nome: string | null; sga_associado_encontrado: boolean | null } | null = null;
+
+
+
+    // ========================================
+    // CAMINHO ÚNICO CANÔNICO (Leva 1)
+    // ========================================
+    // Telefone NÃO identifica usuário. Toda identificação é via gate canônico
+    // do `agente-consultor-ia` (CPF ou nome completo, saudação da config
+    // `ia_habilidades.saudacao_inicial`). Aqui apenas: lookup silencioso para
+    // anexar associado_id/lead_id ao log (histórico de chat), bookkeeping de
+    // lead novo, e delegação ao agente.
+
+    // Lookup silencioso de associado (qualquer status) só para anexar ao log.
+    // NUNCA usado para decidir resposta — agente decide via CPF/nome.
+    let assocLogRef: { id: string; nome: string | null } | null = null;
     try {
-      const { data: contatoIaState } = await supabase
-        .from("agente_ia_contatos")
-        .select("cpf, nome, sga_associado_encontrado")
-        .eq("telefone", telefoneNormBase)
+      const { data: assocSilent } = await supabase
+        .from("associados")
+        .select("id, nome")
+        .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
-      contatoIaCache = (contatoIaState as any) || null;
-      const cpfRaw = (contatoIaState?.cpf || "").replace(/\D/g, "");
-      cpfConfirmadoParaTelefone = cpfRaw.length === 11 ? cpfRaw : null;
-    } catch (lookupErr: any) {
-      console.warn(`[whatsapp-webhook] Falha lookup agente_ia_contatos para desempate:`, lookupErr?.message || lookupErr);
+      if (assocSilent) assocLogRef = assocSilent as any;
+    } catch (e: any) {
+      console.warn("[whatsapp-webhook] lookup associado (log only) falhou:", e?.message || e);
     }
 
-    // Buscar associado(s) pelo telefone (qualquer status). Carregamos múltiplos
-    // candidatos pra detectar o caso "telefone compartilhado" e desempatar por CPF.
-    const { data: candidatosAssociados } = await supabase
-      .from("associados")
-      .select("id, nome, status, origem_cadastro, cpf")
-      .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    let associado:
-      | { id: string; nome: string; status: string; origem_cadastro: string | null }
-      | null = null;
-
-    const candidatos = candidatosAssociados || [];
-    if (candidatos.length === 1) {
-      associado = candidatos[0] as any;
-    } else if (candidatos.length > 1) {
-      // Telefone compartilhado por mais de um associado — desempata por CPF
-      // já confirmado e registrado para o contato (não escolher ao acaso, não
-      // cair como desconhecido).
-      if (cpfConfirmadoParaTelefone) {
-        const match = candidatos.find(
-          (c: any) => (c.cpf || "").replace(/\D/g, "") === cpfConfirmadoParaTelefone,
-        );
-        if (match) {
-          associado = match as any;
-          console.log(
-            `[whatsapp-webhook] Telefone compartilhado (${candidatos.length} associados) — desempate por CPF confirmado: associado=${match.id}`,
-          );
-        } else {
-          // CPF confirmado não bate com nenhum dos candidatos por telefone:
-          // mantém o mais recente ativo, mas registra alerta — provavelmente
-          // o associado correto não tem este número cadastrado.
-          const ativo = candidatos.find((c: any) => c.status === "ativo");
-          associado = (ativo || candidatos[0]) as any;
-          console.warn(
-            `[whatsapp-webhook] Telefone compartilhado e CPF confirmado (${cpfConfirmadoParaTelefone}) não corresponde a nenhum candidato. Fallback associado=${associado?.id}`,
-          );
-        }
-      } else {
-        // Sem CPF confirmado e múltiplos candidatos: preservar comportamento
-        // anterior (mais recente ativo) e registrar — agente-consultor-ia
-        // pedirá o CPF na próxima rodada.
-        const ativo = candidatos.find((c: any) => c.status === "ativo");
-        associado = (ativo || candidatos[0]) as any;
-        console.warn(
-          `[whatsapp-webhook] Telefone compartilhado (${candidatos.length}) sem CPF confirmado — selecionado fallback associado=${associado?.id}`,
-        );
-      }
+    // Lookup silencioso de lead existente para bookkeeping/log.
+    let leadLogRef: { id: string; nome: string | null } | null = null;
+    try {
+      const { data: leadSilent } = await supabase
+        .from("leads")
+        .select("id, nome")
+        .or(`telefone.in.(${telefonesBusca.join(",")})`)
+        .maybeSingle();
+      if (leadSilent) leadLogRef = leadSilent as any;
+    } catch (e: any) {
+      console.warn("[whatsapp-webhook] lookup lead (log only) falhou:", e?.message || e);
     }
 
-    // ========================================
-    // FALLBACK CANÔNICO: ASSOCIADO POR CPF CACHEADO (telefone divergente)
-    // ========================================
-    // Quando o telefone do WhatsApp não bate com nenhum associado, mas o
-    // `agente_ia_contatos` já tem `cpf` validado + `sga_associado_encontrado=true`
-    // de rodada anterior, resolver associado pelo CPF. Sem isso, esse telefone
-    // cai como "lead" e dispara o pitch de venda do Vinicius mesmo o usuário
-    // sendo associado conhecido (caso THAIS / 5521985791044 03/06).
-    if (!associado && cpfConfirmadoParaTelefone && contatoIaCache?.sga_associado_encontrado === true) {
+    // Se não é associado conhecido e não tem lead, cria lead (bookkeeping silencioso).
+    if (!assocLogRef && !leadLogRef) {
+      const nomeContatoNovo = data?.pushName || "Contato WhatsApp";
       try {
-        const { data: assocPorCpf } = await supabase
-          .from("associados")
-          .select("id, nome, status, origem_cadastro")
-          .eq("cpf", cpfConfirmadoParaTelefone)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (assocPorCpf) {
-          associado = assocPorCpf as any;
-          console.log(
-            `[whatsapp-webhook] Associado por CPF cacheado (telefone divergente): ${assocPorCpf.nome} (status: ${assocPorCpf.status}) — WhatsApp=${telefoneNormBase}`,
-          );
-        }
-      } catch (e: any) {
-        console.warn(`[whatsapp-webhook] Falha lookup associado por CPF cacheado:`, e?.message || e);
-      }
-    }
-
-    // ========================================
-    // GATE CANÔNICO: SEMPRE EXIGIR CPF NA 1ª INTERAÇÃO
-    // ========================================
-    // Mesmo quando o telefone bate com 1+ associados, nunca identificar
-    // pelo número sozinho — número é compartilhado e gera "Encontrei
-    // você, X" trocando o titular (caso MARCOS x LUIZ 02/06). A IA SEMPRE
-    // pede CPF primeiro e só prossegue após o CPF confirmar quem é.
-    if (associado && !cpfConfirmadoParaTelefone && tipoPrincipal === 'texto') {
-      const cpfTentativa = mensagemTexto.replace(/\D/g, '');
-
-      // (a) Cliente respondeu o CPF → casar contra os candidatos do telefone
-      if (cpfTentativa.length === 11) {
-        const candidatoPorCpf = candidatos.find(
-          (c: any) => (c.cpf || '').replace(/\D/g, '') === cpfTentativa,
-        );
-
-        if (candidatoPorCpf) {
-          // Match: persiste vínculo e segue identificando esse associado
-          associado = candidatoPorCpf as any;
-          const incomingNormUp = telefone.replace(/\D/g, '');
-          try {
-            const { data: contatoExistenteUp } = await supabase
-              .from('agente_ia_contatos')
-              .select('id')
-              .eq('telefone', incomingNormUp)
-              .maybeSingle();
-
-            const payload = {
-              cpf: cpfTentativa,
-              cpf_capturado_em: new Date().toISOString(),
-              sga_associado_encontrado: true,
-              nome: associado.nome,
-              status: 'em_conversa',
-              ultima_interacao: new Date().toISOString(),
-            };
-
-            if (contatoExistenteUp?.id) {
-              await supabase.from('agente_ia_contatos').update(payload).eq('id', contatoExistenteUp.id);
-            } else {
-              await supabase.from('agente_ia_contatos').insert({ telefone: incomingNormUp, ...payload });
-            }
-            console.log(`[whatsapp-webhook] CPF confirmado por gate canônico: tel=${incomingNormUp} associado=${associado.id}`);
-          } catch (persistErr: any) {
-            console.error('[whatsapp-webhook] Falha persistir CPF (gate canônico):', persistErr?.message || persistErr);
-          }
-
-          const primeiroNome = (associado.nome || 'Cliente').split(' ')[0];
-          await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, 'entrada', messageId, tipoPrincipal, mediaArmazenada || undefined, mediaMimetype || undefined, mediaFilename || undefined, associado.id, 'associado', associado.nome);
-          await sendWhatsAppMessage(
-            apiUrl,
-            instancia.instance_name,
-            telefone,
-            `Encontrei você, *${primeiroNome}*! 🎉\n\nComo posso te ajudar hoje? 😊`,
-          );
-          return new Response(JSON.stringify({ ok: true, cpf_confirmed: true, associado_id: associado.id }), { headers: corsHeaders });
-        }
-
-        // CPF não bate com nenhum candidato deste telefone
-        await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, 'entrada', messageId);
-        await sendWhatsAppMessage(
-          apiUrl,
-          instancia.instance_name,
-          telefone,
-          'Não consegui localizar esse CPF nos cadastros vinculados a este número. 😕\n\nPor favor, confira e me envie novamente apenas os *11 dígitos* do seu CPF.',
-        );
-        return new Response(JSON.stringify({ ok: true, cpf_mismatch: true }), { headers: corsHeaders });
-      }
-
-      // (b) Qualquer outra mensagem antes do CPF → pedir CPF
-      await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, 'entrada', messageId);
-      await sendWhatsAppMessage(
-        apiUrl,
-        instancia.instance_name,
-        telefone,
-        'Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu CPF. 😁',
-      );
-      return new Response(JSON.stringify({ ok: true, awaiting_cpf: true }), { headers: corsHeaders });
-    }
-
-
-    // ========================================
-    // ASSOCIADO ENCONTRADO MAS NÃO ATIVO
-    // ========================================
-    if (associado && associado.status !== "ativo") {
-      console.log(`[whatsapp-webhook] Associado encontrado com status ${associado.status}: ${associado.nome}`);
-      const primeiroNome = associado.nome?.split(' ')[0] || 'Cliente';
-      
-      await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId, tipoPrincipal, mediaArmazenada || undefined, mediaMimetype || undefined, mediaFilename || undefined, associado.id, "associado", associado.nome);
-
-      if (associado.status === "suspenso" || associado.status === "bloqueado") {
-        await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-          `Olá *${primeiroNome}*! 👋\n\nIdentifiquei seu cadastro, porém ele encontra-se *temporariamente suspenso*.\n\nPor favor, entre em contato com nossa central para regularizar sua situação:\n📞 *Central PRATICCAR*: (31) 3889-1256\n📧 financeiro@praticcar.com.br\n\nEstamos à disposição! 😊`
-        );
-        return new Response(JSON.stringify({ ok: true, associado_status: associado.status }), { headers: corsHeaders });
-      }
-      
-      if (associado.status === "em_analise" || associado.status === "pendente") {
-        await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-          `Olá *${primeiroNome}*! 👋\n\nSeu cadastro está *em processamento* pela nossa equipe. Em breve você receberá uma atualização!\n\nSe tiver alguma dúvida, estamos à disposição. 😊`
-        );
-        return new Response(JSON.stringify({ ok: true, associado_status: associado.status }), { headers: corsHeaders });
-      }
-
-      if (associado.status === "cancelado") {
-        // Associado cancelado → criar lead para recontratação
-        console.log(`[whatsapp-webhook] Associado cancelado, criando lead para recontratação: ${telefone}`);
-        
-        const { data: leadExistente } = await supabase
-          .from("leads")
-          .select("id")
-          .or(`telefone.in.(${telefonesBusca.join(",")})`)
-          .maybeSingle();
-
-        if (!leadExistente) {
-          await supabase.from("leads").insert({
-            nome: associado.nome || "Contato WhatsApp",
-            telefone: telefoneLimpo,
-            origem: "whatsapp_organico" as any,
-            etapa: "novo" as any,
-            observacoes: `Lead criado automaticamente via WhatsApp. Ex-associado (cancelado). ID anterior: ${associado.id}`,
-          });
-        }
-
-        // Delegar para Maya
-        try {
-          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({ telefone, texto: mensagemTexto, tipo_msg: tipoPrincipal, nome_contato: associado?.nome || data?.pushName || null }),
-          });
-        } catch (agentErr: any) {
-          console.error(`[whatsapp-webhook] Erro delegação agente (cancelado):`, agentErr);
-          await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-            `Olá *${primeiroNome}*! 👋\n\nQue bom te ver de volta! 🚗\n\nVimos que você já fez parte da PRATICCAR. Gostaria de conhecer nossos planos atuais de proteção veicular?\n\nNosso consultor entrará em contato em breve! 😊`
-          );
-        }
-        return new Response(JSON.stringify({ ok: true, associado_status: "cancelado", lead_created: true }), { headers: corsHeaders });
-      }
-
-      // Outros status não mapeados → orientar contato com central
-      await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-        `Olá *${primeiroNome}*! 👋\n\nIdentifiquei seu cadastro. Para melhor atendê-lo, por favor entre em contato com nossa central:\n📞 *Central PRATICCAR*: (31) 3889-1256\n\nEstamos à disposição! 😊`
-      );
-      return new Response(JSON.stringify({ ok: true, associado_status: associado.status }), { headers: corsHeaders });
-    }
-
-    // ========================================
-    // SE NÃO É ASSOCIADO, VERIFICAR SE É LEAD
-    // ========================================
-    if (!associado) {
-      console.log(`[whatsapp-webhook] Associado não encontrado, buscando lead para ${telefone}`);
-      
-      // Buscar lead pelo telefone
-      const { data: lead } = await supabase
-        .from("leads")
-        .select("id, nome, vendedor_id, etapa, telefone")
-        .or(`telefone.in.(${telefonesBusca.join(",")})`)
-        .maybeSingle();
-      
-      if (lead) {
-        console.log(`[whatsapp-webhook] Lead encontrado: ${lead.nome} (${lead.id})`);
-        
-        // Registrar mensagem no histórico do lead
-        await supabase.from("leads_historico").insert({
-          lead_id: lead.id,
-          tipo: "mensagem_whatsapp",
-          descricao: mensagemTexto.substring(0, 500),
-          dados_extras: {
-            telefone,
-            tipo_mensagem: tipoPrincipal,
-            media_url: mediaArmazenada,
-          },
-        });
-        
-        // Atualizar data do último contato
-        await supabase.from("leads")
-          .update({ 
-            data_ultimo_contato: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", lead.id);
-        
-        // Salvar na tabela whatsapp_mensagens com referência ao lead
-        await saveWhatsAppLog(
-          supabase, 
-          instancia.id, 
-          telefone, 
-          mensagemTexto, 
-          "entrada",
-          messageId,
-          tipoPrincipal,
-          mediaArmazenada || undefined,
-          mediaMimetype || undefined,
-          mediaFilename || undefined,
-          lead.id,
-          "lead",
-          lead.nome
-        );
-        
-        // Delegar para agente consultor IA
-        console.log(`[whatsapp-webhook] Delegando lead para agente-consultor-ia: ${telefone}`);
-        try {
-          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({
-              telefone,
-              texto: mensagemTexto,
-              tipo_msg: tipoPrincipal,
-              nome_contato: lead?.nome || data?.pushName || null,
-            }),
-          });
-        } catch (agentErr: any) {
-          console.error(`[whatsapp-webhook] Erro delegação agente (lead):`, agentErr);
-          // Fallback: resposta genérica
-          const primeiroNome = lead.nome?.split(' ')[0] || 'Cliente';
-          await sendWhatsAppMessage(
-            apiUrl,
-            instancia.instance_name,
-            telefone,
-            `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
-          );
-        }
-        
-        return new Response(JSON.stringify({ ok: true, lead_id: lead.id }), { headers: corsHeaders });
-      }
-      
-      // ========================================
-      // NÚMERO DESCONHECIDO - TENTAR IDENTIFICAR POR CPF
-      // ========================================
-      console.log(`[whatsapp-webhook] Número desconhecido: ${telefone}`);
-      
-      // Verificar se a mensagem é um CPF (11 dígitos)
-      const cpfLimpo = mensagemTexto.replace(/\D/g, '');
-      
-      if (cpfLimpo.length === 11 && tipoPrincipal === 'texto') {
-        console.log(`[whatsapp-webhook] Tentando identificar por CPF: ${cpfLimpo}`);
-        
-        // Buscar associado pelo CPF (qualquer status)
-        const { data: associadoPorCpf } = await supabase
-          .from("associados")
-          .select("id, nome, status, whatsapp, telefone")
-          .eq("cpf", cpfLimpo)
-          .order("created_at", { ascending: false })
-          .maybeSingle();
-        
-        if (associadoPorCpf) {
-          if (associadoPorCpf.status === "ativo") {
-            const telNorm = (associadoPorCpf.telefone || "").replace(/\D/g, "");
-            const waNorm = (associadoPorCpf.whatsapp || "").replace(/\D/g, "");
-            const incomingNorm = telefone.replace(/\D/g, "");
-            const jaCadastrado =
-              incomingNorm === telNorm ||
-              incomingNorm === waNorm ||
-              incomingNorm === `55${telNorm}` ||
-              incomingNorm === `55${waNorm}` ||
-              telNorm === `55${incomingNorm}` ||
-              waNorm === `55${incomingNorm}`;
-
-            // Só preenche whatsapp se estiver vazio. NUNCA sobrescreve número existente.
-            if (!waNorm) {
-              await supabase
-                .from("associados")
-                .update({ whatsapp: telefone, updated_at: new Date().toISOString() })
-                .eq("id", associadoPorCpf.id);
-              console.log(`[whatsapp-webhook] WhatsApp vinculado (vazio antes) ao associado ${associadoPorCpf.id}: ${telefone}`);
-            } else if (!jaCadastrado) {
-              console.warn(`[whatsapp-webhook] BLOQUEADO sobrescrita de whatsapp do associado ${associadoPorCpf.id}. Atual=${waNorm} | Recebido=${incomingNorm}. Cadastro precisa de revisão manual.`);
-            }
-
-            const primeiroNome = associadoPorCpf.nome.split(' ')[0];
-
-            // Persistir vínculo telefone↔CPF/associado no estado canônico do agente.
-            // O `agente-consultor-ia` consulta `agente_ia_contatos.cpf` no gate de CPF;
-            // sem isso, a próxima mensagem do cliente cai de novo no pedido de CPF
-            // (debounce de 10min) e a conversa "trava" sem resposta.
-            try {
-              const incomingNormUp = telefone.replace(/\D/g, "");
-              const { data: contatoExistenteUp } = await supabase
-                .from("agente_ia_contatos")
-                .select("id")
-                .eq("telefone", incomingNormUp)
-                .maybeSingle();
-
-              if (contatoExistenteUp?.id) {
-                await supabase
-                  .from("agente_ia_contatos")
-                  .update({
-                    cpf: cpfLimpo,
-                    cpf_capturado_em: new Date().toISOString(),
-                    sga_associado_encontrado: true,
-                    nome: associadoPorCpf.nome,
-                    status: "em_conversa",
-                    ultima_interacao: new Date().toISOString(),
-                  })
-                  .eq("id", contatoExistenteUp.id);
-              } else {
-                await supabase
-                  .from("agente_ia_contatos")
-                  .insert({
-                    telefone: incomingNormUp,
-                    cpf: cpfLimpo,
-                    cpf_capturado_em: new Date().toISOString(),
-                    sga_associado_encontrado: true,
-                    nome: associadoPorCpf.nome,
-                    status: "em_conversa",
-                    ultima_interacao: new Date().toISOString(),
-                  });
-              }
-              console.log(`[whatsapp-webhook] Vínculo telefone↔CPF persistido em agente_ia_contatos (tel=${incomingNormUp}, associado=${associadoPorCpf.id})`);
-            } catch (persistErr: any) {
-              console.error(`[whatsapp-webhook] Falha ao persistir vínculo CPF em agente_ia_contatos:`, persistErr?.message || persistErr);
-            }
-
-            await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-              `Encontrei você, *${primeiroNome}*! 🎉\n\nComo posso te ajudar hoje? 😊`
-            );
-
-            await saveWhatsAppLog(supabase, instancia.id, telefone, `CPF identificado: ${cpfLimpo}`, "entrada", messageId);
-            await saveWhatsAppLog(supabase, instancia.id, telefone, `Associado identificado: ${associadoPorCpf.nome}`, "saida");
-
-            return new Response(JSON.stringify({ ok: true, cpf_linked: true, associado_id: associadoPorCpf.id }), { headers: corsHeaders });
-          } else {
-            // CPF encontrado mas não ativo → informar status
-            const primeiroNome = associadoPorCpf.nome.split(' ')[0];
-            await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId);
-            await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-              `Olá *${primeiroNome}*! Encontrei seu cadastro, porém ele está com status *${associadoPorCpf.status}*.\n\nPor favor, entre em contato com nossa central para mais informações:\n📞 *Central PRATICCAR*: (31) 3889-1256`
-            );
-            return new Response(JSON.stringify({ ok: true, cpf_found_inactive: true }), { headers: corsHeaders });
-          }
-        } else {
-          // CPF não encontrado
-          await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId);
-          await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-            `Não encontrei nenhum cadastro com esse CPF. 😕\n\nSe você deseja contratar um plano de proteção veicular, nosso consultor pode te ajudar! Aguarde um momento. 🚗`
-          );
-          // Continuar para criar lead e delegar para Maya
-        }
-      }
-      
-      // ========================================
-      // CRIAR LEAD AUTOMATICAMENTE + DELEGAR PARA MAYA
-      // ========================================
-      const nomeContato = data?.pushName || "Contato WhatsApp";
-      
-      // Verificar se já existe lead para este telefone
-      const { data: leadExistente2 } = await supabase
-        .from("leads")
-        .select("id")
-        .or(`telefone.in.(${telefonesBusca.join(",")})`)
-        .maybeSingle();
-
-      let leadIdFinal = leadExistente2?.id;
-
-      if (!leadExistente2) {
-        console.log(`[whatsapp-webhook] Criando lead automático para: ${telefone} (${nomeContato})`);
         const { data: leadCriado } = await supabase.from("leads").insert({
-          nome: nomeContato,
+          nome: nomeContatoNovo,
           telefone: telefoneLimpo,
           origem: "whatsapp_organico" as any,
           etapa: "novo" as any,
           observacoes: "Lead criado automaticamente via WhatsApp",
           data_primeiro_contato: new Date().toISOString(),
           data_ultimo_contato: new Date().toISOString(),
-        }).select("id").maybeSingle();
-        
-        leadIdFinal = leadCriado?.id;
-        
+        }).select("id, nome").maybeSingle();
         if (leadCriado) {
+          leadLogRef = leadCriado as any;
           await supabase.from("leads_historico").insert({
             lead_id: leadCriado.id,
             tipo: "mensagem_whatsapp",
@@ -4136,205 +3718,74 @@ serve(async (req) => {
             dados_extras: { telefone, tipo_mensagem: tipoPrincipal },
           });
         }
+      } catch (e: any) {
+        console.warn("[whatsapp-webhook] criar lead automático falhou:", e?.message || e);
       }
-
-      // Salvar mensagem para histórico
-      await saveWhatsAppLog(
-        supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId,
-        tipoPrincipal, mediaArmazenada || undefined, mediaMimetype || undefined, mediaFilename || undefined,
-        leadIdFinal || undefined, leadIdFinal ? "lead" : undefined, nomeContato
-      );
-      
-      // ========================================
-      // DELEGAR PARA AGENTE CONSULTOR IA
-      // ========================================
-      console.log(`[whatsapp-webhook] Delegando número desconhecido para agente-consultor-ia: ${telefone}`);
+    } else if (leadLogRef && !assocLogRef) {
+      // Lead existente: anexa histórico e atualiza último contato (bookkeeping).
       try {
-        const agentRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({
-            telefone,
-            texto: mensagemTexto,
-            tipo_msg: tipoPrincipal,
-            latitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLatitude : null,
-            longitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLongitude : null,
-            nome_contato: nomeContato || data?.pushName || null,
-          }),
+        await supabase.from("leads_historico").insert({
+          lead_id: leadLogRef.id,
+          tipo: "mensagem_whatsapp",
+          descricao: mensagemTexto.substring(0, 500),
+          dados_extras: { telefone, tipo_mensagem: tipoPrincipal, media_url: mediaArmazenada },
         });
-        const agentResult = await agentRes.json();
-        console.log(`[whatsapp-webhook] Agente consultor respondeu:`, JSON.stringify(agentResult).substring(0, 200));
-      } catch (agentErr: any) {
-        console.error(`[whatsapp-webhook] Erro ao delegar para agente-consultor-ia:`, agentErr);
-        await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-          `Olá! 👋 Seja bem-vindo à *PRATICCAR*! 🚗\n\nNosso consultor entrará em contato em breve para apresentar nossos planos de proteção veicular.\n\nSe preferir, acesse nosso site: praticcar.com.br 📞`
-        );
+        await supabase.from("leads")
+          .update({ data_ultimo_contato: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq("id", leadLogRef.id);
+      } catch (e: any) {
+        console.warn("[whatsapp-webhook] bookkeeping lead existente falhou:", e?.message || e);
       }
-      return new Response(JSON.stringify({ ok: true, delegated_to_agent: true, lead_created: !leadExistente2 }), { headers: corsHeaders });
     }
 
-    // ========================================
-    // FLUXO ASSOCIADO: PROCESSAR COM IA
-    // ========================================
-    console.log(`[whatsapp-webhook] Associado encontrado: ${associado.nome} (${associado.id})`);
-
-    // Salvar mensagem recebida com dados de mídia
+    // Log da mensagem de entrada com vínculo (associado tem precedência).
+    const refId = assocLogRef?.id || leadLogRef?.id || undefined;
+    const refTipo = assocLogRef ? "associado" : (leadLogRef ? "lead" : undefined);
+    const refNome = assocLogRef?.nome || leadLogRef?.nome || data?.pushName || undefined;
     await saveWhatsAppLog(
-      supabase, 
-      instancia.id, 
-      telefone, 
-      mensagemTexto, 
-      "entrada",
-      messageId,
+      supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId,
       tipoPrincipal,
-      mediaArmazenada || undefined,
-      mediaMimetype || undefined,
-      mediaFilename || undefined,
-      associado.id,
-      "associado",
-      associado.nome
+      mediaArmazenada || undefined, mediaMimetype || undefined, mediaFilename || undefined,
+      refId, refTipo as any, refNome,
     );
-    await saveMessage(supabase, associado.id, "user", mensagemTexto);
 
-    // Buscar contexto e histórico
-    const context = await getAssociadoContext(supabase, associado.id);
-    // Bloco autoritativo de identidade: quando o CPF já foi confirmado para este
-    // telefone (gate canônico), instrui a IA a NÃO re-pedir CPF no fluxo de boleto.
-    // Importante em telefone compartilhado: este é o CPF do associado que de fato
-    // confirmou a identidade — não o resolvido pelo número.
-    const identidadeCtx = cpfConfirmadoParaTelefone
-      ? `\n\n## IDENTIDADE JÁ CONFIRMADA\nCPF confirmado para este contato: ${cpfConfirmadoParaTelefone} (associado: ${associado.nome}).\nNO FLUXO DE 2ª VIA DE BOLETO: use este CPF direto — NÃO peça o CPF de novo. Chame as tools sem o parâmetro cpf (a tool recupera automaticamente).`
-      : "";
-    const history = await getConversationHistory(supabase, associado.id, telefone);
-
-    // Preparar mensagens para IA
-    const messages = [
-      ...history.map((m: any) => ({ role: m.role, content: m.content })),
-      { role: "user", content: mensagemTexto },
-    ];
-
-    // Loop de tool calls com proteção total
-    let respostaFinal = "Desculpe, não consegui processar sua mensagem. Tente novamente em alguns instantes. 🙏";
-    
+    // Delegação única ao agente. Toda identificação, gate, persona, tools e
+    // transbordo ficam no `agente-consultor-ia`. Sem fallback canned aqui.
+    console.log(`[whatsapp-webhook] Delegando ao agente-consultor-ia (caminho único): ${telefone}`);
     try {
-      const prazoLinkEvento = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
-      const whatsappPrompt = buildWhatsappSystemPrompt(prazoLinkEvento);
-      let aiResponse = await callAI(messages, whatsappPrompt + "\n\n" + context + identidadeCtx);
-      let assistantMessage = aiResponse.choices?.[0]?.message;
-      let iterations = 0;
-      const maxIterations = 4;
-
-      while (assistantMessage?.tool_calls && iterations < maxIterations) {
-        iterations++;
-        const toolResults = [];
-
-        for (const toolCall of assistantMessage.tool_calls) {
-          const toolName = toolCall.function.name;
-          let toolArgs: any = {};
-          try {
-            toolArgs = JSON.parse(toolCall.function.arguments || "{}");
-          } catch (parseErr) {
-            console.error(`[whatsapp-webhook] Erro parse args tool ${toolName}:`, parseErr);
-            toolResults.push({
-              tool_call_id: toolCall.id,
-              role: "tool",
-              content: JSON.stringify({ error: "Argumentos inválidos" }),
-            });
-            continue;
-          }
-          try {
-            const result = await executeTool(supabase, associado.id, toolName, toolArgs, telefone, instancia);
-            toolResults.push({
-              tool_call_id: toolCall.id,
-              role: "tool",
-              content: result,
-            });
-          } catch (toolErr: any) {
-            console.error(`[whatsapp-webhook] Erro executando tool ${toolName}:`, toolErr);
-            toolResults.push({
-              tool_call_id: toolCall.id,
-              role: "tool",
-              content: JSON.stringify({ error: toolErr?.message || "Erro interno na ferramenta" }),
-            });
-          }
-        }
-
-        // Continuar conversa com resultados das tools
-        aiResponse = await callAI(
-          [
-            ...messages,
-            assistantMessage,
-            ...toolResults,
-          ],
-          whatsappPrompt + "\n\n" + context + identidadeCtx
-        );
-        assistantMessage = aiResponse.choices?.[0]?.message;
-      }
-
-      // Extrair resposta final
-      respostaFinal = assistantMessage?.content || "Desculpe, não consegui processar sua mensagem. Tente novamente.";
-    } catch (aiErr: any) {
-      console.error(`[whatsapp-webhook] ERRO PIPELINE IA para ${telefone}:`, aiErr);
-      respostaFinal = "Desculpe, estou com dificuldades técnicas no momento. Por favor, tente novamente em alguns instantes ou entre em contato com nossa central. 🙏";
-      // Log erro IA
+      const agentRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({
+          telefone,
+          texto: mensagemTexto,
+          tipo_msg: tipoPrincipal,
+          latitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLatitude : null,
+          longitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLongitude : null,
+          nome_contato: refNome || null,
+        }),
+      });
+      const agentResult = await agentRes.json().catch(() => ({}));
+      console.log(`[whatsapp-webhook] Agente respondeu:`, JSON.stringify(agentResult).substring(0, 200));
+    } catch (agentErr: any) {
+      console.error(`[whatsapp-webhook] Erro delegação agente:`, agentErr);
+      // Sem fallback canned: o agente é a única fonte de resposta. Erro fica logado.
       try {
         await supabase.from("whatsapp_logs").insert({
           instancia_id: instancia.id,
-          tipo: "erro_pipeline_ia",
-          evento: "ai_failed",
-          erro: aiErr?.message || "Erro desconhecido na IA",
-          payload: { telefone, is_meta: isMetaDelegate },
+          tipo: "erro_delegacao_agente",
+          evento: "agent_invoke_failed",
+          erro: agentErr?.message || "Erro desconhecido na delegação",
+          payload: { telefone },
         });
       } catch (_) { /* ignore */ }
     }
+    return new Response(JSON.stringify({ ok: true, delegated_to_agent: true }), { headers: corsHeaders });
 
-    // Salvar e enviar resposta - capturar messageId para tracking de status
-    await saveMessage(supabase, associado.id, "assistant", respostaFinal);
 
-    // Envio com retry automático
-    let sendResult: { ok: boolean; messageId?: string } = { ok: false };
-    const sendFn = () => isMetaDelegate
-      ? sendWhatsAppViaProxy(telefone, respostaFinal)
-      : sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
-
-    try {
-      sendResult = await sendFn();
-      if (!sendResult.ok) {
-        console.warn(`[whatsapp-webhook] Envio falhou (ok=false), retry #1 para ${telefone}`);
-        await new Promise(r => setTimeout(r, 2000));
-        sendResult = await sendFn();
-      }
-    } catch (sendErr: any) {
-      console.error(`[whatsapp-webhook] FALHA envio tentativa 1 para ${telefone}:`, sendErr);
-      try {
-        await new Promise(r => setTimeout(r, 2000));
-        sendResult = await sendFn();
-      } catch (retryErr: any) {
-        console.error(`[whatsapp-webhook] FALHA envio retry para ${telefone}:`, retryErr);
-      }
-    }
-
-    // Log resultado
-    try {
-      await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
-      if (sendResult.ok) {
-        console.log(`[whatsapp-webhook] ✓ Resposta enviada para ${telefone}`);
-      } else {
-        console.error(`[whatsapp-webhook] ✗ FALHA DEFINITIVA envio para ${telefone}`);
-        await supabase.from("whatsapp_logs").insert({
-          instancia_id: instancia.id,
-          tipo: "erro_envio_ia",
-          evento: "send_failed_final",
-          erro: "Todas as tentativas de envio falharam",
-          payload: { telefone, resposta_length: respostaFinal.length, is_meta: isMetaDelegate },
-        });
-      }
-    } catch (_) { /* ignore log failure */ }
-
-    return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
   } catch (error: any) {
     console.error("[whatsapp-webhook] Erro:", error);
     return new Response(
