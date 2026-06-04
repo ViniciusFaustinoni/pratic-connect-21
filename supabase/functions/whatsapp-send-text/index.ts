@@ -12,6 +12,46 @@ function contemLink(texto: string): boolean {
   return /https?:\/\/\S+/i.test(texto);
 }
 
+// ====== HELPER: Insert idempotente de saída por message_id ======
+// Garante 1 linha por message_id em direcao='saida'. Conjuga:
+//  (a) pré-checagem barata: evita o insert quando a outra rota já gravou (~200ms antes);
+//  (b) tratamento do erro 23505 do índice único parcial
+//      `ux_whatsapp_mensagens_saida_message_id_v1` (cria janela atômica no DB).
+// O associado recebe a mensagem normalmente — só impede a 2ª linha contábil.
+// Inserts sem message_id (erro/bloqueio) seguem o caminho normal.
+async function inserirSaidaIdempotente(
+  supabase: any,
+  payload: Record<string, unknown>,
+  tag: string,
+): Promise<{ inserted: boolean; deduped: boolean; error: any }> {
+  const messageId = payload.message_id as string | null | undefined;
+  if (messageId) {
+    const { data: jaExiste } = await supabase
+      .from("whatsapp_mensagens")
+      .select("id")
+      .eq("message_id", messageId)
+      .eq("direcao", "saida")
+      .limit(1)
+      .maybeSingle();
+    if (jaExiste) {
+      console.log(`[whatsapp-send-text] dedup_saida(${tag}): message_id já registrado, pulando insert (${messageId})`);
+      return { inserted: false, deduped: true, error: null };
+    }
+  }
+  const { error } = await supabase.from("whatsapp_mensagens").insert(payload);
+  if (error) {
+    // 23505 = unique_violation no índice ux_whatsapp_mensagens_saida_message_id_v1
+    // (fecha a janela de corrida entre os 2 provedores quando ambos pré-checam vazio
+    // e disparam o insert simultaneamente). Não é falha real — apenas a 2ª via.
+    if ((error as any)?.code === '23505') {
+      console.log(`[whatsapp-send-text] dedup_saida(${tag}): unique_violation 23505 absorvido (${messageId})`);
+      return { inserted: false, deduped: true, error: null };
+    }
+    return { inserted: false, deduped: false, error };
+  }
+  return { inserted: true, deduped: false, error: null };
+}
+
 // ====== HELPER: Formatar telefone ======
 function formatarTelefone(telefone: string): string {
   let limpo = telefone.replace(/\D/g, "");
