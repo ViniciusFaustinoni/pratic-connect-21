@@ -31,6 +31,20 @@ export default function ConfigIA() {
   const { data: habilidades = [], isLoading } = useIAHabilidades();
   const habilidade = habilidades.find(h => h.slug === SLUG) || null;
 
+  // Lê o kill-switch geral (whatsapp_instancias.ia_habilitada) — quando off,
+  // a habilidade fica bloqueada em runtime mesmo se o switch local estiver on.
+  const [killSwitchOff, setKillSwitchOff] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('whatsapp_instancias')
+        .select('ia_habilitada')
+        .eq('principal', true)
+        .maybeSingle();
+      if (data && data.ia_habilitada === false) setKillSwitchOff(true);
+    })();
+  }, []);
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center gap-3">
@@ -45,11 +59,25 @@ export default function ConfigIA() {
         </div>
       </div>
 
+      {killSwitchOff && (
+        <Alert variant="destructive">
+          <ShieldOff className="h-4 w-4" />
+          <AlertDescription>
+            A IA está <strong>desligada por completo</strong> no painel de integrações
+            (admin). Enquanto isso, esta habilidade fica bloqueada em runtime — mesmo se
+            o switch abaixo estiver ligado. O estado individual é preservado e será
+            respeitado assim que o desligamento geral for revertido.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
           Esta IA atende <strong>leads</strong>, <strong>associados</strong> e <strong>diretoria</strong> 24/7.
           Quando desligada aqui, mensagens entrando no WhatsApp ficam aguardando atendimento humano (com aviso ao cliente).
+          Pedidos fora do escopo (cotação de novo veículo, RH, imprensa, etc.) são <strong>direcionados</strong> via itens da
+          categoria <code>direcionamento</code> na aba <em>Conhecimento (FAQ)</em> — preencha o destino real antes de ativar cada item.
         </AlertDescription>
       </Alert>
 
@@ -71,6 +99,7 @@ export default function ConfigIA() {
     </div>
   );
 }
+
 
 function EditorHabilidade({ habilidade }: { habilidade: IAHabilidade }) {
   const [form, setForm] = useState<IAHabilidade>(habilidade);
