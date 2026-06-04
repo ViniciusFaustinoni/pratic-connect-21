@@ -476,8 +476,145 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 2B-PRE2. RESET DE IDENTIDADE POR DIVERGÊNCIA ----
+    // Detecta sinais de que quem está escrevendo NÃO é o titular cacheado
+    // (telefone compartilhado, troca de dono, captura passada errada).
+    // Padrões: "não sou X", "meu nome é Y", "esse carro não é meu",
+    // "veículo errado", OU CPF de 11 dígitos diferente do cacheado e
+    // válido por DV. Quando dispara, zera cache p/ reentrar no gate canônico.
+    // Ver plano 2026-06-04 / caso Vinicius/Thais +5521992593830.
+    if (!diretorPreDetectado && !contextoAgendamentoPendente && (contato.cpf || (contato as any).nome_confirmado_em)) {
+      const textoLow = (texto || "").toString().toLowerCase().trim();
+      const padraoNega =
+        /(n[ãa]o\s+sou\b|n[ãa]o\s+(é|e)\s+(o|a)?\s*meu\b|aqui\s+(é|e|quem\s+fala\s+(é|e))\s+(o|a)?\s*[a-zà-ÿ]{3,}|meu\s+nome\s+(é|e)\s+[a-zà-ÿ]{3,}|esse\s+carro\s+n[ãa]o\s+(é|e)\s+meu|n[ãa]o\s+(é|e)\s+(esse|meu)\s+(carro|ve[íi]culo)|ve[íi]culo\s+errado|n[ãa]o\s+tenho\s+(esse|este)\s+(carro|ve[íi]culo))/;
+      const validateCpfReset = (raw: string): boolean => {
+        const c = raw.replace(/\D/g, "");
+        if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+        let sum = 0;
+        for (let i = 0; i < 9; i++) sum += parseInt(c[i]) * (10 - i);
+        let d1 = (sum * 10) % 11; if (d1 === 10) d1 = 0;
+        if (d1 !== parseInt(c[9])) return false;
+        sum = 0;
+        for (let i = 0; i < 10; i++) sum += parseInt(c[i]) * (11 - i);
+        let d2 = (sum * 10) % 11; if (d2 === 10) d2 = 0;
+        return d2 === parseInt(c[10]);
+      };
+      let resetDisparado = false;
+      let motivoReset = "";
+      if (padraoNega.test(textoLow)) { resetDisparado = true; motivoReset = "negacao_identidade"; }
+      if (!resetDisparado && contato.cpf) {
+        const matchCpf = (texto || "").toString().match(/(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/);
+        if (matchCpf) {
+          const novo = matchCpf[1].replace(/\D/g, "");
+          if (novo !== contato.cpf && validateCpfReset(novo)) {
+            resetDisparado = true; motivoReset = "cpf_divergente";
+          }
+        }
+      }
+      if (resetDisparado) {
+        console.log(`[reset_identidade] telefone=${telLimpo} motivo=${motivoReset} nome_cacheado=${contato.nome || "?"}`);
+        await supabase
+          .from("agente_ia_contatos")
+          .update({
+            cpf: null,
+            cpf_capturado_em: null,
+            nome: null,
+            nome_confirmado_em: null,
+            sga_associado_id: null,
+            sga_associado_status: null,
+            sga_associado_encontrado: false,
+            ultima_saudacao_em: null,
+            ultima_reconfirmacao_em: null,
+            liberacao_enviada_em: null,
+            cpf_tentativas_invalidas: 0,
+          })
+          .eq("id", contato.id);
+        contato.cpf = null;
+        contato.nome = null;
+        (contato as any).nome_confirmado_em = null;
+        (contato as any).sga_associado_encontrado = false;
+        (contato as any).sga_associado_status = null;
+      }
+    }
+
     // "Identificado" = já temos CPF (com lookup SGA registrado) OU nome confirmado.
     const jaIdentificado = !!contato.cpf || !!(contato as any).nome_confirmado_em;
+
+    // ---- 2B-PRE3. RECONFIRMAÇÃO LEVE DE IDENTIDADE (anti-telefone-compartilhado) ----
+    // Cache de identidade NÃO é eternamente sticky: se passou >2h sem interação
+    // OU mudou o dia BRT desde a última captura/reconfirmação, exige uma
+    // reconfirmação leve antes de tratar o usuário pelo nome cacheado.
+    // Resposta afirmativa ("sim", "isso", "sou eu") libera e atualiza a marca;
+    // qualquer outra resposta é processada pelos blocos de gate/LLM normais
+    // (que vão tratar como interação genérica). Caso Vinicius/Thais 04/06.
+    if (!diretorPreDetectado && !contextoAgendamentoPendente && jaIdentificado) {
+      const ultimaInter = contato.ultima_interacao ? new Date(contato.ultima_interacao) : null;
+      const horasDesdeUltima = ultimaInter ? (Date.now() - ultimaInter.getTime()) / 3_600_000 : Infinity;
+      const ultimaReconf = (contato as any).ultima_reconfirmacao_em
+        ? new Date((contato as any).ultima_reconfirmacao_em)
+        : null;
+      const horasDesdeReconf = ultimaReconf ? (Date.now() - ultimaReconf.getTime()) / 3_600_000 : Infinity;
+      const cpfCap = (contato as any).cpf_capturado_em ? new Date((contato as any).cpf_capturado_em) : null;
+      const nomeConf = (contato as any).nome_confirmado_em ? new Date((contato as any).nome_confirmado_em) : null;
+      const ultimaIdent = [cpfCap, nomeConf, ultimaReconf]
+        .filter((d): d is Date => !!d)
+        .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+      const agoraBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const diaBrtAgora = `${agoraBRT.getFullYear()}-${agoraBRT.getMonth()}-${agoraBRT.getDate()}`;
+      const ultimaIdentBRT = ultimaIdent
+        ? new Date(ultimaIdent.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+        : null;
+      const diaBrtIdent = ultimaIdentBRT
+        ? `${ultimaIdentBRT.getFullYear()}-${ultimaIdentBRT.getMonth()}-${ultimaIdentBRT.getDate()}`
+        : null;
+
+      const identidadeFresca =
+        horasDesdeReconf < 2 ||
+        horasDesdeUltima < 2 ||
+        (!!diaBrtIdent && diaBrtIdent === diaBrtAgora);
+
+      if (!identidadeFresca) {
+        const textoLow2 = (texto || "").toString().toLowerCase().trim();
+        const afirma = /^(sim|isso|isso\s+mesmo|sou\s+eu|sou|correto|exato|exatamente|s|s\.)\b/.test(textoLow2);
+
+        if (afirma && ultimaReconf && horasDesdeReconf < 24) {
+          await supabase
+            .from("agente_ia_contatos")
+            .update({
+              ultima_reconfirmacao_em: new Date().toISOString(),
+              nome_confirmado_em: new Date().toISOString(),
+            })
+            .eq("id", contato.id);
+          (contato as any).nome_confirmado_em = new Date().toISOString();
+          console.log(`[reconfirmacao_identidade] telefone=${telLimpo} confirmado_pelo_cliente`);
+          // segue fluxo normal abaixo
+        } else {
+          const primeiroNome = (contato.nome || "").trim().split(/\s+/)[0] || "";
+          const msg = primeiroNome
+            ? `Olá! Tudo bem? Antes de continuar, me confirma rapidinho: estou falando com *${primeiroNome}*? 🙂\n\nSe não for, me envia seu *nome completo* ou *CPF* (11 dígitos) que eu localizo o cadastro certinho.`
+            : `Olá! Tudo bem? Para confirmar seu cadastro, me envia seu *nome completo* ou *CPF* (11 dígitos), por favor. 🙂`;
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+              body: JSON.stringify({ telefone: telLimpo, mensagem: msg, allow_text: true }),
+            });
+          } catch (e) {
+            console.error(`[reconfirmacao_identidade] envio falhou:`, (e as any)?.message);
+          }
+          await supabase
+            .from("agente_ia_contatos")
+            .update({ ultima_reconfirmacao_em: new Date().toISOString() })
+            .eq("id", contato.id);
+          console.log(`[reconfirmacao_identidade] telefone=${telLimpo} cache=${primeiroNome || "(sem nome)"} reconfirmacao_enviada`);
+          return new Response(
+            JSON.stringify({ success: true, gate: "aguardando_reconfirmacao" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
+
 
     if (!diretorPreDetectado && !jaIdentificado && !contextoAgendamentoPendente) {
       const validateCpf = (raw: string): boolean => {
