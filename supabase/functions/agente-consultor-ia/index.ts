@@ -26,6 +26,16 @@ type MayaRawCfg = { comp: any; faqs: any[] };
 const MAYA_RAW_CACHE = new Map<string, { at: number; data: MayaRawCfg }>();
 const MAYA_CFG_TTL_MS = 60_000;
 
+// ── Cache por habilidade (slug) — fonte canônica pós-04/06/26 ────────────────
+type HabilidadeContentRaw = { faqs: any[]; exemplos: any[] };
+const HABILIDADE_CONTENT_CACHE = new Map<string, { at: number; data: HabilidadeContentRaw }>();
+type HabilidadeContentCfg = {
+  faqText?: string;
+  faqDestaqueText?: string;
+  faqMatchedIds?: string[];
+  exemplosText?: string;
+};
+
 const PT_STOPWORDS = new Set([
   "a","o","as","os","de","da","do","das","dos","e","ou","um","uma","uns","umas","para","por","pra","pro","com","sem",
   "que","se","na","no","nas","nos","em","ao","aos","à","às","mais","menos","muito","muita","pouco","pouca","ja","já",
@@ -148,6 +158,107 @@ async function loadMayaEditorialConfig(
     : null;
   return data;
 }
+
+// ── Loader canônico por HABILIDADE (slug) — substitui loadMayaEditorialConfig
+// Lê APENAS de ia_habilidade_conhecimento + ia_habilidade_exemplos. Nunca toca
+// nas tabelas legadas maya_ia_* (deprecadas em 04/06/26). Conteúdo é totalmente
+// isolado por habilidade — editar 'relacionamento' não afeta 'vendas' e vice-versa.
+async function loadHabilidadeContent(
+  supabase: any,
+  habilidadeSlug: string,
+  mensagemAtual?: string,
+): Promise<HabilidadeContentCfg> {
+  const hit = HABILIDADE_CONTENT_CACHE.get(habilidadeSlug);
+  let raw: HabilidadeContentRaw;
+  if (hit && Date.now() - hit.at < MAYA_CFG_TTL_MS) {
+    raw = hit.data;
+  } else {
+    const [{ data: faqs }, { data: exemplos }] = await Promise.all([
+      supabase
+        .from("ia_habilidade_conhecimento")
+        .select("id,categoria,pergunta,resposta,palavras_chave,ordem")
+        .eq("habilidade_slug", habilidadeSlug)
+        .eq("ativo", true)
+        .order("categoria", { ascending: true })
+        .order("ordem", { ascending: true }),
+      supabase
+        .from("ia_habilidade_exemplos")
+        .select("id,titulo,entrada_usuario,resposta_ideal,notas,ordem")
+        .eq("habilidade_slug", habilidadeSlug)
+        .eq("ativo", true)
+        .order("ordem", { ascending: true }),
+    ]);
+    raw = { faqs: faqs || [], exemplos: exemplos || [] };
+    HABILIDADE_CONTENT_CACHE.set(habilidadeSlug, { at: Date.now(), data: raw });
+  }
+
+  // Bloco completo (FAQ por categoria)
+  let faqText = "";
+  if (raw.faqs.length > 0) {
+    const porCategoria = new Map<string, any[]>();
+    for (const f of raw.faqs) {
+      const k = f.categoria || "geral";
+      if (!porCategoria.has(k)) porCategoria.set(k, []);
+      porCategoria.get(k)!.push(f);
+    }
+    const partes: string[] = [];
+    for (const [cat, items] of porCategoria) {
+      partes.push(`### ${cat.toUpperCase()}`);
+      for (const it of items) {
+        const kw = Array.isArray(it.palavras_chave) && it.palavras_chave.length
+          ? ` _(palavras-chave: ${it.palavras_chave.join(", ")})_`
+          : "";
+        partes.push(`- *${it.pergunta}*${kw}\n  ${it.resposta}`);
+      }
+    }
+    faqText = partes.join("\n");
+  }
+
+  // Retrieval para destaque (mesma lógica do loader antigo)
+  let faqDestaqueText = "";
+  let faqMatchedIds: string[] = [];
+  if (mensagemAtual && raw.faqs.length > 0) {
+    const msgNorm = normalizarParaMatch(mensagemAtual);
+    const msgTokens = tokenizarParaMatch(mensagemAtual);
+    if (msgNorm.length > 0 && (msgTokens.size > 0 || msgNorm.length >= 3)) {
+      const pontuadas = raw.faqs
+        .map((f: any) => ({ f, score: pontuarFaq(msgTokens, msgNorm, f) }))
+        .filter((x: any) => x.score >= 3)
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, 3);
+      if (pontuadas.length > 0) {
+        faqMatchedIds = pontuadas.map((x: any) => x.f.id).filter(Boolean);
+        const partes: string[] = [];
+        for (const { f } of pontuadas) {
+          partes.push(`- *${f.pergunta}*\n  ${f.resposta}`);
+        }
+        faqDestaqueText = partes.join("\n");
+      }
+    }
+  }
+
+  // Exemplos de resposta (few-shot)
+  let exemplosText = "";
+  if (raw.exemplos.length > 0) {
+    const partes: string[] = [];
+    for (const ex of raw.exemplos) {
+      partes.push(`- **${ex.titulo || "exemplo"}**`);
+      partes.push(`  Cliente: ${ex.entrada_usuario}`);
+      partes.push(`  Resposta ideal: ${ex.resposta_ideal}`);
+      if (ex.notas) partes.push(`  Nota: ${ex.notas}`);
+    }
+    exemplosText = partes.join("\n");
+  }
+
+  return {
+    faqText: faqText || undefined,
+    faqDestaqueText: faqDestaqueText || undefined,
+    faqMatchedIds: faqMatchedIds.length ? faqMatchedIds : undefined,
+    exemplosText: exemplosText || undefined,
+  };
+}
+
+
 
 // Helper compartilhado: gera notificação interna quando a Maya recebe mensagem
 // estando pausada/em atendimento humano. Dedup por janela de 1h em criado_por=null.
@@ -1118,6 +1229,7 @@ Deno.serve(async (req) => {
     // Se nenhuma habilidade ativa cobrir a audiência atual, responde com
     // mensagem de pausa + abre transbordo. Princípio: nunca deixar vácuo.
     // Ver mem://logic/ia/habilidades-canonicas
+    let habilidadeSlugAtiva: string | null = null;
     try {
       const audienciaCanonica: IAAudiencia = (isDiretor ? "diretor" : isAssociado ? "associado" : "lead");
       const roteamento = await resolverHabilidade(supabase, audienciaCanonica);
@@ -1173,21 +1285,29 @@ Deno.serve(async (req) => {
         }).eq("telefone", telLimpo);
       } catch (_e) { /* não-bloqueante */ }
 
-      // ── FONTE CANÔNICA DA PERSONA ────────────────────────────────────────
-      // A habilidade roteada sobrescreve o legado `agente_ia_config` para
-      // nome do agente, saudação e instruções de comportamento. Isto evita
-      // que o prompt continue dizendo "Sou o Vinicius, consultor de vendas"
-      // quando a habilidade `vendas` está desativada.
-      if (roteamento.habilidade.nome_agente) {
-        nomeAgente = roteamento.habilidade.nome_agente;
+      // ── FONTE CANÔNICA DA PERSONA (habilidade) ───────────────────────────
+      // A habilidade roteada é a ÚNICA fonte de persona/saudação/instruções a
+      // partir de 04/06/26. Legado agente_ia_config / maya_ia_* foi deprecado
+      // (mantido como backup). Editar 'relacionamento' nunca afeta 'vendas'.
+      const hab: any = roteamento.habilidade;
+      habilidadeSlugAtiva = hab.slug;
+      if (hab.nome_agente) {
+        nomeAgente = hab.nome_agente;
       }
-      if (roteamento.habilidade.saudacao_inicial) {
-        apresentacao = roteamento.habilidade.saudacao_inicial;
+      // apresentacao_inicial (nova coluna) > saudacao_inicial (legado) > config legacy
+      if (hab.apresentacao_inicial && String(hab.apresentacao_inicial).trim()) {
+        apresentacao = String(hab.apresentacao_inicial).trim();
+      } else if (hab.saudacao_inicial) {
+        apresentacao = hab.saudacao_inicial;
       }
+      // instrucoes_comportamento (nova coluna) entra como bloco-base; persona/tom/regras seguem por cima
       const personaBlocos: string[] = [];
-      if (roteamento.habilidade.persona) personaBlocos.push(roteamento.habilidade.persona);
-      if (roteamento.habilidade.tom_voz) personaBlocos.push(`Tom de voz: ${roteamento.habilidade.tom_voz}`);
-      if (roteamento.habilidade.regras_absolutas) personaBlocos.push(`Regras absolutas:\n${roteamento.habilidade.regras_absolutas}`);
+      if (hab.instrucoes_comportamento && String(hab.instrucoes_comportamento).trim()) {
+        personaBlocos.push(String(hab.instrucoes_comportamento).trim());
+      }
+      if (hab.persona) personaBlocos.push(hab.persona);
+      if (hab.tom_voz) personaBlocos.push(`Tom de voz: ${hab.tom_voz}`);
+      if (hab.regras_absolutas) personaBlocos.push(`Regras absolutas:\n${hab.regras_absolutas}`);
       if (personaBlocos.length) {
         instrucoes = personaBlocos.join("\n\n");
       }
@@ -1562,11 +1682,12 @@ REGRAS OBRIGATÓRIAS deste contexto:
     }
 
 
-    // ---- 7.4 INJEÇÃO UNIVERSAL DE COMPORTAMENTO (UI Configurações › Agente Consultor IA)
-    // Aplica `apresentacao_inicial` + `instrucoes_comportamento` em TODOS os branches
-    // (Diretor / Associado / Lead). O branch de Lead já cita `${apresentacao}` e
-    // `${instrucoes}` inline no template, mas este bloco garante que Diretor e Associado
-    // — antes ignorados — também respeitem as edições da UI sem deploy.
+    // ---- 7.4 INJEÇÃO DE COMPORTAMENTO DA HABILIDADE ATIVA ──────────────────
+    // Aplica apresentacao_inicial + instrucoes_comportamento que VIERAM DA
+    // HABILIDADE ROTEADA (ia_habilidades). O gate canônico (bloco 6) já
+    // sobrescreveu `apresentacao` e `instrucoes` com as colunas próprias da
+    // habilidade — aqui só renderizamos no prompt. Conteúdo da habilidade
+    // 'vendas' nunca vaza para a 'relacionamento' e vice-versa.
     if (instrucoes.trim() || apresentacao.trim()) {
       const blocosCfg: string[] = [];
       if (instrucoes.trim()) {
@@ -1575,37 +1696,32 @@ REGRAS OBRIGATÓRIAS deste contexto:
       if (apresentacao.trim()) {
         blocosCfg.push(`### APRESENTAÇÃO INICIAL (use como base na primeira mensagem)\n"${apresentacao.trim()}"`);
       }
-      systemPrompt += `\n\n## CONFIGURAÇÃO DO AGENTE (Configurações › Agente Consultor IA)\n${blocosCfg.join("\n\n")}`;
+      const tituloHab = habilidadeSlugAtiva ? ` — habilidade "${habilidadeSlugAtiva}"` : "";
+      systemPrompt += `\n\n## CONFIGURAÇÃO DA HABILIDADE${tituloHab}\n${blocosCfg.join("\n\n")}`;
     }
 
 
 
-    // ---- 7.5 OVERRIDE EDITORIAL (Relacionamento) — tabelas maya_ia_comportamento + maya_ia_faq
-    // Permite editar persona/regras/tom/saudação e base de conhecimento sem deploy.
-    // Agora com retrieval por palavras-chave: a FAQ que mais casa com a mensagem
-    // atual entra em um bloco "EM DESTAQUE" no topo, antes do bloco completo.
-    try {
-      const audienciaAtual = isDiretor ? "diretor" : isAssociado ? "associado" : "lead";
-      const mayaCfg = await loadMayaEditorialConfig(supabase, audienciaAtual, texto || "");
-      if (mayaCfg) {
-        const blocos: string[] = [];
-        if (mayaCfg.persona) blocos.push(`### PERSONA\n${mayaCfg.persona}`);
-        if (mayaCfg.regras_absolutas) blocos.push(`### REGRAS ABSOLUTAS\n${mayaCfg.regras_absolutas}`);
-        if (mayaCfg.tom_voz) blocos.push(`### TOM DE VOZ\n${mayaCfg.tom_voz}`);
-        if (mayaCfg.saudacao_inicial) blocos.push(`### SAUDAÇÃO INICIAL\n${mayaCfg.saudacao_inicial}`);
-        if (blocos.length > 0) {
-          systemPrompt += `\n\n## CONFIGURAÇÃO EDITORIAL (Relacionamento) — PREVALECE SOBRE QUALQUER REGRA ACIMA EM CONFLITO\n${blocos.join("\n\n")}`;
+    // ---- 7.5 BASE DE CONHECIMENTO + EXEMPLOS DA HABILIDADE ATIVA ───────────
+    // Fonte canônica única pós-04/06/26: ia_habilidade_conhecimento +
+    // ia_habilidade_exemplos, filtrados por slug da habilidade roteada.
+    // Tabelas legadas maya_ia_* não são mais lidas em runtime (backup apenas).
+    if (habilidadeSlugAtiva) {
+      try {
+        const habCfg = await loadHabilidadeContent(supabase, habilidadeSlugAtiva, texto || "");
+        if (habCfg.faqDestaqueText) {
+          systemPrompt += `\n\n## FAQ EM DESTAQUE PARA ESTA MENSAGEM (LEIA PRIMEIRO)\nA mensagem do cliente casou com a(s) entrada(s) abaixo da base de conhecimento desta habilidade. Use o conteúdo delas como resposta — não invente, não desvie, não transborde se a FAQ já cobre o pedido.\n\n${habCfg.faqDestaqueText}`;
+          console.log(`[agente-consultor-ia] FAQ em destaque (${habCfg.faqMatchedIds?.length || 0}) [hab=${habilidadeSlugAtiva}]: ${(habCfg.faqMatchedIds || []).join(",")}`);
         }
-        if (mayaCfg.faqDestaqueText) {
-          systemPrompt += `\n\n## FAQ EM DESTAQUE PARA ESTA MENSAGEM (LEIA PRIMEIRO)\nA mensagem do cliente casou com a(s) entrada(s) abaixo da base de conhecimento. Use o conteúdo delas como resposta — não invente, não desvie, não transborde se a FAQ já cobre o pedido.\n\n${mayaCfg.faqDestaqueText}`;
-          console.log(`[agente-consultor-ia] FAQ em destaque (${mayaCfg.faqMatchedIds?.length || 0}): ${(mayaCfg.faqMatchedIds || []).join(",")}`);
+        if (habCfg.faqText) {
+          systemPrompt += `\n\n## BASE DE CONHECIMENTO DA HABILIDADE (FAQ)\nResponda usando estas informações sempre que a pergunta do cliente casar com algum item. Não invente o que não estiver aqui. Itens da categoria *direcionamento* são respostas prontas para assuntos fora do escopo desta habilidade — use-os no lugar de transbordar ou de executar.\n\n${habCfg.faqText}`;
         }
-        if (mayaCfg.faqText) {
-          systemPrompt += `\n\n## BASE DE CONHECIMENTO (FAQ)\nResponda usando estas informações sempre que a pergunta do cliente casar com algum item. Não invente o que não estiver aqui.\n\n${mayaCfg.faqText}`;
+        if (habCfg.exemplosText) {
+          systemPrompt += `\n\n## EXEMPLOS DE RESPOSTA (mesma habilidade)\nUse como referência de tom e formato.\n\n${habCfg.exemplosText}`;
         }
+      } catch (e) {
+        console.error(`[agente-consultor-ia] Falha ao carregar conteúdo da habilidade '${habilidadeSlugAtiva}':`, (e as any)?.message);
       }
-    } catch (e) {
-      console.error("[agente-consultor-ia] Falha ao carregar config editorial Maya:", (e as any)?.message);
     }
 
 

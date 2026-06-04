@@ -1,18 +1,41 @@
 import { useState, useEffect } from 'react';
-import { Bot, Loader2, Check, AlertCircle } from 'lucide-react';
+import { Bot, Loader2, AlertCircle, ShieldOff, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import {
+  useIAHabilidades,
+  useToggleIAHabilidade,
+  type IAHabilidade,
+} from '@/hooks/useIAHabilidades';
 
+/**
+ * Painel admin de IA WhatsApp.
+ *
+ * Hierarquia canônica (04/06/26):
+ *  1. KILL-SWITCH GERAL (`whatsapp_instancias.ia_habilitada`):
+ *     enquanto desligado, NENHUMA habilidade atende — independente do switch
+ *     individual. Não apaga o estado das habilidades; apenas bloqueia em runtime.
+ *  2. Switch POR HABILIDADE (`ia_habilidades.ativa`):
+ *     liga/desliga cada habilidade de forma independente. Sem efeito cruzado:
+ *     desligar 'vendas' não afeta 'relacionamento' e vice-versa.
+ *
+ * O mesmo switch da habilidade `relacionamento` também aparece em
+ * /relacionamento/config-ia (tela do time de relacionamento).
+ */
 export function WhatsAppIAConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [iaHabilitada, setIaHabilitada] = useState(true);
   const [instanciaId, setInstanciaId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+
+  const { data: habilidades = [], isLoading: loadingHab } = useIAHabilidades();
+  const toggleHab = useToggleIAHabilidade();
 
   useEffect(() => {
     async function loadConfig() {
@@ -37,23 +60,24 @@ export function WhatsAppIAConfig() {
     loadConfig();
   }, []);
 
-  const handleToggle = async (enabled: boolean) => {
+  const handleKillSwitch = async (enabled: boolean) => {
     if (!instanciaId) {
       toast.error('Configure a instância Evolution API primeiro');
       return;
     }
-
     setSaving(true);
     try {
       const { error } = await supabase
         .from('whatsapp_instancias')
         .update({ ia_habilitada: enabled })
         .eq('id', instanciaId);
-
       if (error) throw error;
-
       setIaHabilitada(enabled);
-      toast.success(enabled ? 'IA do WhatsApp ativada!' : 'IA do WhatsApp desativada');
+      toast.success(
+        enabled
+          ? 'IA religada. Habilidades voltam ao estado em que foram deixadas.'
+          : 'IA desligada por completo. Estado de cada habilidade foi preservado.'
+      );
     } catch (error: any) {
       toast.error('Erro ao salvar configuração');
       console.error(error);
@@ -81,59 +105,101 @@ export function WhatsAppIAConfig() {
             <CardTitle className="text-base">Assistente IA WhatsApp</CardTitle>
           </div>
           <Badge variant={iaHabilitada && connected ? 'default' : 'secondary'}>
-            {iaHabilitada && connected ? 'Ativo' : iaHabilitada ? 'Aguardando conexão' : 'Desativado'}
+            {!iaHabilitada
+              ? 'Desligada (geral)'
+              : connected
+              ? 'Ativa'
+              : 'Aguardando conexão'}
           </Badge>
         </div>
         <CardDescription>
-          Responde automaticamente mensagens de associados
+          Desligamento geral prevalece. Quando religado, cada habilidade volta ao estado individual.
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-4">
-        {/* Toggle */}
-        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-          <div className="space-y-0.5">
-            <Label htmlFor="ia-toggle" className="text-sm font-medium">
-              Ativar Assistente IA
-            </Label>
+        {/* Kill-switch geral */}
+        <div className="flex items-start justify-between gap-3 p-3 bg-muted/50 rounded-lg border">
+          <div className="space-y-0.5 flex-1">
+            <div className="flex items-center gap-2">
+              <ShieldOff className="h-4 w-4 text-muted-foreground" />
+              <Label htmlFor="ia-killswitch" className="text-sm font-medium">
+                Desligar IA por completo
+              </Label>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Quando ativo, responde consultas de boletos, sinistros, etc.
+              Bloqueia todas as habilidades enquanto ativo, sem apagar o estado individual de cada uma.
             </p>
           </div>
           <Switch
-            id="ia-toggle"
+            id="ia-killswitch"
             checked={iaHabilitada}
-            onCheckedChange={handleToggle}
+            onCheckedChange={handleKillSwitch}
             disabled={saving || !instanciaId}
           />
         </div>
 
-        {/* Info das capacidades */}
+        <Separator />
+
+        {/* Switches por habilidade */}
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Capacidades da IA
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-muted-foreground" />
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Habilidades
+            </p>
+          </div>
+
+          {loadingHab ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : habilidades.length === 0 ? (
+            <p className="text-xs text-muted-foreground p-3">
+              Nenhuma habilidade cadastrada.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {habilidades.map((h: IAHabilidade) => (
+                <li
+                  key={h.slug}
+                  className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium truncate">
+                        {h.nome_exibicao}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] uppercase">
+                        {h.slug}
+                      </Badge>
+                      {!iaHabilitada && h.ativa && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Bloqueada pelo desligamento geral
+                        </Badge>
+                      )}
+                    </div>
+                    {h.descricao && (
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {h.descricao}
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={h.ativa}
+                    disabled={toggleHab.isPending}
+                    onCheckedChange={(ativa) =>
+                      toggleHab.mutate({ slug: h.slug, ativa })
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-[11px] text-muted-foreground px-1">
+            Editar regras/conhecimento/exemplos de cada habilidade em{' '}
+            <code className="bg-muted px-1 py-0.5 rounded">/relacionamento/config-ia</code>.
           </p>
-          <ul className="text-sm space-y-1.5">
-            <li className="flex items-center gap-2">
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              Consultar boletos pendentes
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              Ver histórico de pagamentos
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              Registrar sinistros (via aprovação)
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              Solicitar assistência 24h
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              Consultar status de veículos
-            </li>
-          </ul>
         </div>
 
         {!instanciaId && (
