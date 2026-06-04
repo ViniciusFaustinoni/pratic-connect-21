@@ -2179,6 +2179,12 @@ REGRAS OBRIGATÓRIAS deste contexto:
                 serviceKey,
                 { cpf: contato?.cpf || null }
               );
+              // Guarda determinístico: erro transitório/timeout/HTTP NUNCA pode ser
+              // interpretado como "em dia". Marca para forçar transbordo após o loop de tools.
+              if (toolResult?.erro_transitorio) {
+                boletoErroTransbordo = { motivo: String(toolResult?.motivo || "sga_indisponivel") };
+                console.warn(`[agente-consultor-ia][boletos] erro_transitorio motivo=${boletoErroTransbordo.motivo} → forçando transbordo`);
+              }
             } else if (fnName === "consultar_situacao_veiculo") {
               toolResult = await executarConsultarSituacaoVeiculo(
                 supabaseUrl,
