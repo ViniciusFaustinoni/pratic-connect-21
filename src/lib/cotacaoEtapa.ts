@@ -228,8 +228,11 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
 
     // 7.b Vistoria escolhida e em andamento
     if (tipoVistoria === 'autovistoria') {
-      // autovistoria_ok significa fotos enviadas → cai pra pagamento
       if (statusContratacao === 'autovistoria_ok' || statusContratacao === 'vistoria_ok') {
+        // E1: sub-FIPE NUNCA tem instalação física — autovistoria completa
+        // + adesão paga = aguardando análise do Cadastro (não "aguardando vistoria",
+        // que sugere instalação por agendar).
+        if (isSubFipe && adesaoPaga === true) return 'em_analise';
         return adesaoPaga === false ? 'realizando_pagamento' : 'aguardando_vistoria';
       }
       return 'realizando_autovistoria';
