@@ -159,6 +159,107 @@ async function loadMayaEditorialConfig(
   return data;
 }
 
+// ── Loader canônico por HABILIDADE (slug) — substitui loadMayaEditorialConfig
+// Lê APENAS de ia_habilidade_conhecimento + ia_habilidade_exemplos. Nunca toca
+// nas tabelas legadas maya_ia_* (deprecadas em 04/06/26). Conteúdo é totalmente
+// isolado por habilidade — editar 'relacionamento' não afeta 'vendas' e vice-versa.
+async function loadHabilidadeContent(
+  supabase: any,
+  habilidadeSlug: string,
+  mensagemAtual?: string,
+): Promise<HabilidadeContentCfg> {
+  const hit = HABILIDADE_CONTENT_CACHE.get(habilidadeSlug);
+  let raw: HabilidadeContentRaw;
+  if (hit && Date.now() - hit.at < MAYA_CFG_TTL_MS) {
+    raw = hit.data;
+  } else {
+    const [{ data: faqs }, { data: exemplos }] = await Promise.all([
+      supabase
+        .from("ia_habilidade_conhecimento")
+        .select("id,categoria,pergunta,resposta,palavras_chave,ordem")
+        .eq("habilidade_slug", habilidadeSlug)
+        .eq("ativo", true)
+        .order("categoria", { ascending: true })
+        .order("ordem", { ascending: true }),
+      supabase
+        .from("ia_habilidade_exemplos")
+        .select("id,titulo,entrada_usuario,resposta_ideal,notas,ordem")
+        .eq("habilidade_slug", habilidadeSlug)
+        .eq("ativo", true)
+        .order("ordem", { ascending: true }),
+    ]);
+    raw = { faqs: faqs || [], exemplos: exemplos || [] };
+    HABILIDADE_CONTENT_CACHE.set(habilidadeSlug, { at: Date.now(), data: raw });
+  }
+
+  // Bloco completo (FAQ por categoria)
+  let faqText = "";
+  if (raw.faqs.length > 0) {
+    const porCategoria = new Map<string, any[]>();
+    for (const f of raw.faqs) {
+      const k = f.categoria || "geral";
+      if (!porCategoria.has(k)) porCategoria.set(k, []);
+      porCategoria.get(k)!.push(f);
+    }
+    const partes: string[] = [];
+    for (const [cat, items] of porCategoria) {
+      partes.push(`### ${cat.toUpperCase()}`);
+      for (const it of items) {
+        const kw = Array.isArray(it.palavras_chave) && it.palavras_chave.length
+          ? ` _(palavras-chave: ${it.palavras_chave.join(", ")})_`
+          : "";
+        partes.push(`- *${it.pergunta}*${kw}\n  ${it.resposta}`);
+      }
+    }
+    faqText = partes.join("\n");
+  }
+
+  // Retrieval para destaque (mesma lógica do loader antigo)
+  let faqDestaqueText = "";
+  let faqMatchedIds: string[] = [];
+  if (mensagemAtual && raw.faqs.length > 0) {
+    const msgNorm = normalizarParaMatch(mensagemAtual);
+    const msgTokens = tokenizarParaMatch(mensagemAtual);
+    if (msgNorm.length > 0 && (msgTokens.size > 0 || msgNorm.length >= 3)) {
+      const pontuadas = raw.faqs
+        .map((f: any) => ({ f, score: pontuarFaq(msgTokens, msgNorm, f) }))
+        .filter((x: any) => x.score >= 3)
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, 3);
+      if (pontuadas.length > 0) {
+        faqMatchedIds = pontuadas.map((x: any) => x.f.id).filter(Boolean);
+        const partes: string[] = [];
+        for (const { f } of pontuadas) {
+          partes.push(`- *${f.pergunta}*\n  ${f.resposta}`);
+        }
+        faqDestaqueText = partes.join("\n");
+      }
+    }
+  }
+
+  // Exemplos de resposta (few-shot)
+  let exemplosText = "";
+  if (raw.exemplos.length > 0) {
+    const partes: string[] = [];
+    for (const ex of raw.exemplos) {
+      partes.push(`- **${ex.titulo || "exemplo"}**`);
+      partes.push(`  Cliente: ${ex.entrada_usuario}`);
+      partes.push(`  Resposta ideal: ${ex.resposta_ideal}`);
+      if (ex.notas) partes.push(`  Nota: ${ex.notas}`);
+    }
+    exemplosText = partes.join("\n");
+  }
+
+  return {
+    faqText: faqText || undefined,
+    faqDestaqueText: faqDestaqueText || undefined,
+    faqMatchedIds: faqMatchedIds.length ? faqMatchedIds : undefined,
+    exemplosText: exemplosText || undefined,
+  };
+}
+
+
+
 // Helper compartilhado: gera notificação interna quando a Maya recebe mensagem
 // estando pausada/em atendimento humano. Dedup por janela de 1h em criado_por=null.
 async function notificarRelacionamentoMensagemPausada(
