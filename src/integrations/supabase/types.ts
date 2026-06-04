@@ -957,6 +957,8 @@ export type Database = {
           sga_associado_status: string | null
           status: string | null
           telefone: string
+          ultima_habilidade_atendeu: string | null
+          ultima_habilidade_atendeu_em: string | null
           ultima_interacao: string | null
           ultima_msg_continuidade_em: string | null
           ultima_msg_fora_horario_em: string | null
@@ -979,6 +981,8 @@ export type Database = {
           sga_associado_status?: string | null
           status?: string | null
           telefone: string
+          ultima_habilidade_atendeu?: string | null
+          ultima_habilidade_atendeu_em?: string | null
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
           ultima_msg_fora_horario_em?: string | null
@@ -1001,6 +1005,8 @@ export type Database = {
           sga_associado_status?: string | null
           status?: string | null
           telefone?: string
+          ultima_habilidade_atendeu?: string | null
+          ultima_habilidade_atendeu_em?: string | null
           ultima_interacao?: string | null
           ultima_msg_continuidade_em?: string | null
           ultima_msg_fora_horario_em?: string | null
@@ -15605,6 +15611,169 @@ export type Database = {
           descricao?: string | null
           id?: string
           tipo?: string
+        }
+        Relationships: []
+      }
+      ia_habilidade_conhecimento: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          categoria: string
+          criado_em: string
+          habilidade_slug: string
+          id: string
+          ordem: number
+          palavras_chave: string[]
+          pergunta: string
+          resposta: string
+          revisar: boolean
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          categoria?: string
+          criado_em?: string
+          habilidade_slug: string
+          id?: string
+          ordem?: number
+          palavras_chave?: string[]
+          pergunta: string
+          resposta: string
+          revisar?: boolean
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          categoria?: string
+          criado_em?: string
+          habilidade_slug?: string
+          id?: string
+          ordem?: number
+          palavras_chave?: string[]
+          pergunta?: string
+          resposta?: string
+          revisar?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_habilidade_conhecimento_habilidade_slug_fkey"
+            columns: ["habilidade_slug"]
+            isOneToOne: false
+            referencedRelation: "ia_habilidades"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      ia_habilidade_exemplos: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          criado_em: string
+          entrada_usuario: string
+          habilidade_slug: string
+          id: string
+          notas: string | null
+          ordem: number
+          resposta_ideal: string
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          entrada_usuario: string
+          habilidade_slug: string
+          id?: string
+          notas?: string | null
+          ordem?: number
+          resposta_ideal: string
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          entrada_usuario?: string
+          habilidade_slug?: string
+          id?: string
+          notas?: string | null
+          ordem?: number
+          resposta_ideal?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ia_habilidade_exemplos_habilidade_slug_fkey"
+            columns: ["habilidade_slug"]
+            isOneToOne: false
+            referencedRelation: "ia_habilidades"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      ia_habilidades: {
+        Row: {
+          ativa: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          audiencias_elegiveis: string[]
+          criado_em: string
+          descricao: string | null
+          ferramentas_habilitadas: string[]
+          horario_atendimento: Json | null
+          mensagem_fora_horario: string | null
+          nome_agente: string
+          nome_exibicao: string
+          persona: string
+          prioridade_roteamento: number
+          regras_absolutas: string
+          saudacao_inicial: string
+          slug: string
+          tom_voz: string
+        }
+        Insert: {
+          ativa?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          audiencias_elegiveis?: string[]
+          criado_em?: string
+          descricao?: string | null
+          ferramentas_habilitadas?: string[]
+          horario_atendimento?: Json | null
+          mensagem_fora_horario?: string | null
+          nome_agente: string
+          nome_exibicao: string
+          persona?: string
+          prioridade_roteamento?: number
+          regras_absolutas?: string
+          saudacao_inicial?: string
+          slug: string
+          tom_voz?: string
+        }
+        Update: {
+          ativa?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          audiencias_elegiveis?: string[]
+          criado_em?: string
+          descricao?: string | null
+          ferramentas_habilitadas?: string[]
+          horario_atendimento?: Json | null
+          mensagem_fora_horario?: string | null
+          nome_agente?: string
+          nome_exibicao?: string
+          persona?: string
+          prioridade_roteamento?: number
+          regras_absolutas?: string
+          saudacao_inicial?: string
+          slug?: string
+          tom_voz?: string
         }
         Relationships: []
       }

@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { aiGatewayFetch } from "../_shared/ai-client.ts";
+import { resolverHabilidade, dentroDoHorario, type IAAudiencia } from "./lib/roteador.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -967,8 +968,73 @@ Deno.serve(async (req) => {
       contato_nome: contato?.nome || null,
     })}`);
 
+    // ─── GATE CANÔNICO: habilidades de IA (liga/desliga por habilidade) ────────
+    // Se nenhuma habilidade ativa cobrir a audiência atual, responde com
+    // mensagem de pausa + abre transbordo. Princípio: nunca deixar vácuo.
+    // Ver mem://logic/ia/habilidades-canonicas
+    try {
+      const audienciaCanonica: IAAudiencia = (isDiretor ? "diretor" : isAssociado ? "associado" : "lead");
+      const roteamento = await resolverHabilidade(supabase, audienciaCanonica);
+      console.log(`[habilidade_selecionada] ${JSON.stringify({
+        audiencia: audienciaCanonica,
+        slug: roteamento.habilidade?.slug || null,
+        motivo: roteamento.motivo,
+      })}`);
+
+      if (!roteamento.habilidade) {
+        const msg = roteamento.mensagem_pausa ||
+          'Olá! Nosso atendimento por IA está pausado no momento. Em instantes um humano fala com você. 🙏';
+        await supabase.functions.invoke("whatsapp-send-text", {
+          body: { telefone: telLimpo, mensagem: msg, allow_text: true },
+        });
+        // Abre pausa/transbordo silencioso para o time atender
+        try {
+          await supabase.from("whatsapp_ia_pausas").insert({
+            telefone: telLimpo,
+            motivo: "habilidade_desligada",
+            expira_em: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+          });
+        } catch (_e) { /* não-bloqueante */ }
+        try {
+          await supabase.from("agente_ia_contatos").update({
+            ultima_habilidade_atendeu: null,
+            ultima_habilidade_atendeu_em: new Date().toISOString(),
+          }).eq("telefone", telLimpo);
+        } catch (_e) { /* não-bloqueante */ }
+        return new Response(JSON.stringify({ ok: true, paused: true, motivo: roteamento.motivo }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Fora do horário desta habilidade → resposta canônica + transbordo
+      const janela = dentroDoHorario(roteamento.habilidade);
+      if (!janela.dentro) {
+        const msg = janela.mensagem ||
+          'Estamos fora do horário de atendimento. Assim que abrir, retornamos. 🙏';
+        await supabase.functions.invoke("whatsapp-send-text", {
+          body: { telefone: telLimpo, mensagem: msg, allow_text: true },
+        });
+        return new Response(JSON.stringify({ ok: true, fora_horario: true, slug: roteamento.habilidade.slug }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Carimba qual habilidade respondeu (auditoria)
+      try {
+        await supabase.from("agente_ia_contatos").update({
+          ultima_habilidade_atendeu: roteamento.habilidade.slug,
+          ultima_habilidade_atendeu_em: new Date().toISOString(),
+        }).eq("telefone", telLimpo);
+      } catch (_e) { /* não-bloqueante */ }
+    } catch (err) {
+      console.error("[habilidade_selecionada] erro no gate, seguindo fluxo legado", err);
+    }
+    // ─── fim gate canônico ────────────────────────────────────────────────────
+
     let systemPrompt: string;
     let tools: any[];
+
+
 
     if (isDiretor) {
       // === PROMPT PARA DIRETORES ===

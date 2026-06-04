@@ -1,7 +1,8 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical, Bot, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AIModelConfigCard } from '@/components/integracoes/AIModelConfigCard';
 import { OcrEngineConfigCard } from '@/components/integracoes/OcrEngineConfigCard';
@@ -64,18 +65,36 @@ export default function IntegracaoIA() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6">
+          <Card className="cursor-pointer hover:border-primary/50 transition" onClick={() => navigate('/configuracoes/integracoes/ia/habilidades')}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Bot className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Habilidades da IA</CardTitle>
+                    <CardDescription>Vendas, Relacionamento — cada uma com liga/desliga, regras, conhecimento e ferramentas próprias.</CardDescription>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </CardHeader>
+          </Card>
+
           <AIModelConfigCard />
           <OcrEngineConfigCard />
 
           <Alert>
             <Sparkles className="h-4 w-4" />
             <AlertDescription>
-              A escolha aqui se aplica <strong>globalmente</strong>: leitura de documentos (CNH/CRLV),
-              assistentes Maya e Vinicius, análise de risco de sinistros, geração de mensagens de WhatsApp,
-              formatação de texto e demais automações que usam IA.
+              O modelo aqui se aplica <strong>globalmente</strong> a todas as habilidades de IA, OCR de documentos,
+              análise de risco e demais automações. Cada habilidade configura sua persona, conhecimento e
+              ferramentas separadamente.
             </AlertDescription>
           </Alert>
         </TabsContent>
+
 
         <TabsContent value="logs">
           <OcrLogsTab />
