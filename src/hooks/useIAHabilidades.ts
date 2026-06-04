@@ -22,6 +22,8 @@ export interface IAHabilidade {
   atualizado_em: string;
 }
 
+export type IATipoItem = 'conhecimento' | 'regra';
+
 export interface IAConhecimento {
   id: string;
   habilidade_slug: string;
@@ -32,6 +34,7 @@ export interface IAConhecimento {
   ordem: number;
   ativo: boolean;
   revisar: boolean;
+  tipo: IATipoItem;
   atualizado_em: string;
 }
 
@@ -98,17 +101,17 @@ export function useToggleIAHabilidade() {
 }
 
 // ─── Conhecimento ─────────────────────────────────────────────
-export function useIAConhecimento(habilidadeSlug?: string) {
+export function useIAConhecimento(habilidadeSlug?: string, tipo?: IATipoItem) {
   return useQuery({
-    queryKey: ['ia-conhecimento', habilidadeSlug],
+    queryKey: ['ia-conhecimento', habilidadeSlug, tipo ?? 'all'],
     enabled: !!habilidadeSlug,
     queryFn: async (): Promise<IAConhecimento[]> => {
-      const { data, error } = await (supabase as any)
+      let q = (supabase as any)
         .from('ia_habilidade_conhecimento')
         .select('*')
-        .eq('habilidade_slug', habilidadeSlug)
-        .order('categoria')
-        .order('ordem');
+        .eq('habilidade_slug', habilidadeSlug);
+      if (tipo) q = q.eq('tipo', tipo);
+      const { data, error } = await q.order('categoria').order('ordem');
       if (error) throw error;
       return (data || []) as IAConhecimento[];
     },
@@ -125,7 +128,7 @@ export function useUpsertIAConhecimento() {
       if (error) throw error;
     },
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ['ia-conhecimento', vars.habilidade_slug] });
+      qc.invalidateQueries({ queryKey: ['ia-conhecimento'] });
       toast.success('Conhecimento salvo.');
     },
     onError: (e: any) => toast.error('Erro: ' + (e?.message || 'desconhecido')),

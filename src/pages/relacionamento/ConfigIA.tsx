@@ -148,14 +148,19 @@ function EditorHabilidade({ habilidade }: { habilidade: IAHabilidade }) {
       <Card>
         <CardContent className="pt-4">
           <Tabs defaultValue="conhecimento">
-            <TabsList className="grid grid-cols-3 w-full">
+            <TabsList className="grid grid-cols-4 w-full">
               <TabsTrigger value="conhecimento">Conhecimento (FAQ)</TabsTrigger>
+              <TabsTrigger value="regras">Regras</TabsTrigger>
               <TabsTrigger value="exemplos">Exemplos</TabsTrigger>
               <TabsTrigger value="config">Configurações</TabsTrigger>
             </TabsList>
 
             <TabsContent value="conhecimento" className="mt-4">
-              <ConhecimentoTab slug={habilidade.slug} />
+              <ConhecimentoTab slug={habilidade.slug} tipo="conhecimento" />
+            </TabsContent>
+
+            <TabsContent value="regras" className="mt-4">
+              <ConhecimentoTab slug={habilidade.slug} tipo="regra" />
             </TabsContent>
 
             <TabsContent value="exemplos" className="mt-4">
@@ -206,8 +211,12 @@ function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
           <Textarea rows={3} value={form.persona} onChange={e => setForm({ ...form, persona: e.target.value })} />
         </div>
         <div>
-          <Label>Regras absolutas</Label>
-          <Textarea rows={4} value={form.regras_absolutas} onChange={e => setForm({ ...form, regras_absolutas: e.target.value })} />
+          <Label>Regras absolutas <span className="text-xs font-normal text-muted-foreground">(backup — somente leitura)</span></Label>
+          <Textarea rows={4} value={form.regras_absolutas} readOnly className="bg-muted/40" />
+          <p className="text-xs text-muted-foreground mt-1">
+            Conteúdo preservado como backup. As regras editáveis vivem agora na aba <strong>Regras</strong>.
+            O mecanismo de transbordo aqui descrito é estrutural e continua intocado.
+          </p>
         </div>
         <div>
           <Label>Tom de voz</Label>
@@ -299,8 +308,20 @@ function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
 
 // ─────────────────────────── Conhecimento (FAQ) ───────────────────────────
 
-function ConhecimentoTab({ slug }: { slug: string }) {
-  const { data: itens = [] } = useIAConhecimento(slug);
+function ConhecimentoTab({ slug, tipo = 'conhecimento' }: { slug: string; tipo?: 'conhecimento' | 'regra' }) {
+  const isRegra = tipo === 'regra';
+  const labelItem = isRegra ? 'regra' : 'item';
+  const labelItens = isRegra ? 'regras' : 'itens';
+  const ctaAdicionar = isRegra ? 'Adicionar regra' : 'Adicionar ao FAQ';
+  const placeholderCategoria = isRegra
+    ? 'Categoria (ex: cordialidade, formatacao, boletos, sinistro)'
+    : 'Categoria (ex: boletos, cancelamento, direcionamento)';
+  const placeholderPergunta = isRegra ? 'Título / gatilho da regra' : 'Pergunta / gatilho';
+  const placeholderResposta = isRegra ? 'Instrução de comportamento que a IA deve seguir' : 'Resposta que a IA deve dar';
+  const emptyMsg = isRegra ? 'Nenhuma regra cadastrada.' : 'Nenhum item de FAQ cadastrado.';
+  const removeTitle = isRegra ? 'Remover esta regra?' : 'Remover este item do FAQ?';
+
+  const { data: itens = [] } = useIAConhecimento(slug, tipo);
   const upsert = useUpsertIAConhecimento();
   const del = useDeleteIAConhecimento();
 
@@ -342,7 +363,7 @@ function ConhecimentoTab({ slug }: { slug: string }) {
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={`Buscar em ${itens.length} item${itens.length === 1 ? '' : 's'}…`}
+            placeholder={`Buscar em ${itens.length} ${itens.length === 1 ? labelItem : labelItens}…`}
             value={busca}
             onChange={e => setBusca(e.target.value)}
             className="pl-8"
@@ -357,21 +378,21 @@ function ConhecimentoTab({ slug }: { slug: string }) {
       {formOpen && (
         <Card>
           <CardContent className="pt-4 space-y-2">
-            <Input placeholder="Categoria (ex: boletos, cancelamento, direcionamento)" value={novo.categoria}
+            <Input placeholder={placeholderCategoria} value={novo.categoria}
               onChange={e => setNovo({ ...novo, categoria: e.target.value })} />
-            <Input placeholder="Pergunta / gatilho" value={novo.pergunta}
+            <Input placeholder={placeholderPergunta} value={novo.pergunta}
               onChange={e => setNovo({ ...novo, pergunta: e.target.value })} />
-            <Textarea rows={3} placeholder="Resposta que a IA deve dar" value={novo.resposta}
+            <Textarea rows={3} placeholder={placeholderResposta} value={novo.resposta}
               onChange={e => setNovo({ ...novo, resposta: e.target.value })} />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setFormOpen(false)}>Cancelar</Button>
               <Button size="sm" disabled={upsert.isPending} onClick={async () => {
                 if (!novo.pergunta || !novo.resposta) return;
-                await upsert.mutateAsync({ habilidade_slug: slug, ...novo });
+                await upsert.mutateAsync({ habilidade_slug: slug, tipo, ...novo });
                 setNovo({ pergunta: '', resposta: '', categoria: 'geral' });
                 setFormOpen(false);
               }}>
-                <Plus className="h-4 w-4 mr-1" /> Adicionar ao FAQ
+                <Plus className="h-4 w-4 mr-1" /> {ctaAdicionar}
               </Button>
             </div>
           </CardContent>
@@ -403,7 +424,7 @@ function ConhecimentoTab({ slug }: { slug: string }) {
         ))}
         {filtrados.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-6">
-            {busca ? 'Nenhum item bate com a busca.' : 'Nenhum item de FAQ cadastrado.'}
+            {busca ? 'Nenhum resultado para a busca.' : emptyMsg}
           </p>
         )}
       </div>
@@ -411,7 +432,7 @@ function ConhecimentoTab({ slug }: { slug: string }) {
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover este item do FAQ?</AlertDialogTitle>
+            <AlertDialogTitle>{removeTitle}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDelete?.pergunta}
               <br /><br />
