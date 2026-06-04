@@ -1358,6 +1358,64 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
       systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
     }
 
+    // Contexto de AGENDAMENTO PENDENTE — espelha cobranca/CPF, com tools p/ agir
+    if (contextoAgendamentoPendente) {
+      const c = contextoAgendamentoPendente;
+      const dataFmt = c.data ? (() => { const [y, m, d] = c.data!.split("-"); return `${d}/${m}/${y}`; })() : "—";
+      const periodoFmt = c.periodo === "manha" ? "manhã" : c.periodo === "tarde" ? "tarde" : (c.hora || c.periodo || "—");
+      const tipoFmt = (c.tipo || "atendimento").replace(/_/g, " ");
+      const nomeFmt = c.nome_cliente ? c.nome_cliente.split(" ")[0] : "o cliente";
+      systemPrompt += `\n\n## CONTEXTO DE AGENDAMENTO PENDENTE (USE COMO VERDADE)
+Foi enviado a este contato em ${new Date(c.enviado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} um pedido de confirmação de ${tipoFmt}:
+- Cliente: *${c.nome_cliente || "—"}*
+- Data: *${dataFmt}* (${periodoFmt})
+- Endereço: ${c.endereco || "—"}
+- servico_id: ${c.servico_id}
+
+REGRAS OBRIGATÓRIAS deste contexto:
+- NÃO peça CPF. O contato já está identificado pelo agendamento.
+- Trate ${nomeFmt} pelo primeiro nome.
+- Se a mensagem expressar reagendar / remarcar / mudar / outro dia / outro horário / não posso / impossível / adiar / hoje não / amanhã não → CHAME *enviar_link_reagendamento* (servico_id="${c.servico_id}") na MESMA rodada e responda algo curto e cordial avisando que enviou o link.
+- Se confirmar (sim / ok / confirmo / pode vir / estarei / tudo certo) → CHAME *confirmar_agendamento* (servico_id="${c.servico_id}") e agradeça a confirmação.
+- Se cancelar → CHAME *solicitar_atendente_humano* (motivo='outros', resumo='cliente quer cancelar agendamento') porque cancelamento exige humano.
+- NUNCA prometa que "alguém vai entrar em contato" — chame a tool e diga o que ela faz.
+- NUNCA invente data, hora ou endereço diferentes do bloco acima.`;
+
+      // Acrescenta tools de agendamento (idempotente: só se ainda não existirem)
+      const haveReagendar = tools.some((t: any) => t?.function?.name === "enviar_link_reagendamento");
+      if (!haveReagendar) {
+        tools.push({
+          type: "function",
+          function: {
+            name: "enviar_link_reagendamento",
+            description: "Envia ao cliente um link (via template WhatsApp Meta 'reagendamento_servico') para escolher uma nova data/horário/endereço do serviço de campo. Use SEMPRE que o cliente pedir para reagendar, remarcar, mudar data, dizer 'não posso hoje', 'outro dia', 'adiar'.",
+            parameters: {
+              type: "object",
+              properties: {
+                servico_id: { type: "string", description: "ID do serviço pendente (use o servico_id do CONTEXTO DE AGENDAMENTO PENDENTE)." },
+              },
+              required: ["servico_id"],
+            },
+          },
+        });
+        tools.push({
+          type: "function",
+          function: {
+            name: "confirmar_agendamento",
+            description: "Confirma o agendamento pendente do cliente. Use SEMPRE que o cliente responder afirmativamente (sim, ok, confirmo, pode vir, estarei, beleza, blz, positivo, tudo certo). Marca o serviço como confirmado e notifica o profissional.",
+            parameters: {
+              type: "object",
+              properties: {
+                servico_id: { type: "string", description: "ID do serviço (use o servico_id do CONTEXTO DE AGENDAMENTO PENDENTE)." },
+              },
+              required: ["servico_id"],
+            },
+          },
+        });
+      }
+    }
+
+
     // ---- 7.4 INJEÇÃO UNIVERSAL DE COMPORTAMENTO (UI Configurações › Agente Consultor IA)
     // Aplica `apresentacao_inicial` + `instrucoes_comportamento` em TODOS os branches
     // (Diretor / Associado / Lead). O branch de Lead já cita `${apresentacao}` e
