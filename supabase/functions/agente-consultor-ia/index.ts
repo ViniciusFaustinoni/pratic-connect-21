@@ -1514,6 +1514,12 @@ Resolver dúvidas operacionais simples sozinho(a) e transbordar para a equipe hu
 - **PROIBIDO escrever frases como** "vou solicitar à equipe", "vou reforçar com o Relacionamento", "já abri um chamado", "já avisei o time", "vou pedir prioridade", "fiz a solicitação", "vou pedir para te ligarem". Se você não chamou a tool *solicitar_atendente_humano* nesta mesma rodada, ESSAS FRASES SÃO MENTIRA — não use.
 - Seja cordial, curto e direto.
 
+## REGRA ABSOLUTA — SITUAÇÃO DO VEÍCULO (LEIA COM ATENÇÃO)
+1. **Situação de veículo vem SEMPRE da tool *consultar_situacao_veiculo*, NUNCA de dedução.** Se o associado perguntar se o veículo dele está ativo, em análise, suspenso, cancelado, inadimplente, "se a proteção está valendo", "se pode usar a assistência", "se está coberto" — você é OBRIGADO a chamar *consultar_situacao_veiculo* com a placa antes de responder. PROIBIDO afirmar status a partir do histórico da conversa, de boletos vistos antes, do nome do plano, do tempo de cadastro ou de qualquer suposição. Se você não chamou a tool nesta rodada, a situação é DESCONHECIDA — diga "deixa eu confirmar essa informação pra você" e chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='status veículo não confirmado pelo SGA').
+2. **Só responde sobre placa do próprio associado em atendimento.** A tool já valida que a placa pertence ao CPF do contato. Quando a tool devolver `placa_de_outro_titular` ou `sem_cpf_identificado`, você NÃO pode confirmar nem negar nada sobre essa placa, NÃO pode dizer "essa placa é de outra pessoa", "essa placa não está no seu cadastro", "essa placa existe em outro associado" — qualquer uma dessas frases vaza informação cruzada. Resposta canônica única: "Deixa eu confirmar isso com o time pra você." + chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='placa pedida não confere com titular identificado').
+3. **Você informa SITUAÇÃO, NUNCA detalhes de cobertura.** A tool devolve a situação cadastral do veículo (por exemplo ATIVO, INADIMPLENTE, INATIVO) — você pode reportar isso textualmente ("seu veículo consta como *ATIVO* no nosso sistema"). PROIBIDO afirmar o que o plano cobre ou não cobre, se cobre colisão, roubo, terceiros, evento X, valor Y. Pergunta sobre o que o plano cobre, o que está incluso, se cobre tal coisa → NÃO responda por conta própria, chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='dúvida sobre cobertura do plano').
+
+
 
 ## QUANDO CHAMAR A TOOL consultar_boletos_associado (OBRIGATÓRIO)
 Chame SEMPRE que o associado pedir:
@@ -1584,6 +1590,23 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
             parameters: {
               type: "object",
               properties: {},
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "consultar_situacao_veiculo",
+            description: "Consulta no SGA (Hinova) a SITUAÇÃO CADASTRAL de um veículo por placa (ATIVO, INADIMPLENTE, INATIVO, etc.) e VALIDA que essa placa pertence ao CPF do associado em atendimento. Use SEMPRE que o associado perguntar sobre status do veículo dele: 'meu carro está ativo?', 'minha proteção está valendo?', 'posso usar a assistência?', 'meu veículo está em análise?', 'está suspenso?', 'está coberto?'. NUNCA afirme situação sem chamar esta tool. NUNCA reporte detalhes de cobertura (o que está coberto, o que não está) — para isso chame solicitar_atendente_humano.",
+            parameters: {
+              type: "object",
+              properties: {
+                placa: {
+                  type: "string",
+                  description: "Placa do veículo (formato livre, será sanitizada). Use a placa que o associado mencionou na conversa.",
+                },
+              },
+              required: ["placa"],
             },
           },
         },
@@ -1866,6 +1889,10 @@ REGRAS OBRIGATÓRIAS deste contexto:
       { role: "system", content: systemPrompt },
       ...messages,
     ];
+    // Rastreia tools que retornaram sucesso nesta rodada — base do validador de saída
+    const toolsCalledOk = new Set<string>();
+
+
 
     for (let iteration = 0; iteration < 5; iteration++) {
       const aiResponse = await aiGatewayFetch({
@@ -2049,6 +2076,15 @@ REGRAS OBRIGATÓRIAS deste contexto:
                 serviceKey,
                 { cpf: contato?.cpf || null }
               );
+            } else if (fnName === "consultar_situacao_veiculo") {
+              toolResult = await executarConsultarSituacaoVeiculo(
+                supabaseUrl,
+                serviceKey,
+                { placa: String(args?.placa || ""), cpf_contato: contato?.cpf || null }
+              );
+              if (toolResult?.success && toolResult?.titular_confere) {
+                toolsCalledOk.add("consultar_situacao_veiculo");
+              }
             } else if (fnName === "enviar_link_reagendamento") {
               toolResult = await executarEnviarLinkReagendamento(
                 supabaseUrl,
@@ -2083,6 +2119,9 @@ REGRAS OBRIGATÓRIAS deste contexto:
           if (fnName === "consultar_boletos_associado") {
             toolContent = `⚠️ BOLETOS OFICIAIS DO SGA - USE APENAS ESTES VALORES/DATAS/LINHAS, NÃO INVENTE. Se encontrados=0 e sem erro, diga que está em dia. Se erro_transitorio=true, chame solicitar_atendente_humano.\n${toolContent}`;
           }
+          if (fnName === "consultar_situacao_veiculo") {
+            toolContent = `⚠️ SITUAÇÃO OFICIAL DO SGA — USE APENAS ESTE STATUS, NUNCA INVENTE. Se titular_confere=false (placa_de_outro_titular OU sem_cpf_identificado), você NÃO PODE confirmar nem negar nada sobre a placa — responda APENAS "Deixa eu confirmar isso com o time pra você." e chame solicitar_atendente_humano. Se erro=indisponivel, chame solicitar_atendente_humano. Se match OK, reporte a situação cadastral textualmente (ex: "seu veículo consta como *ATIVO*"). NUNCA descreva o que o plano cobre ou não cobre.\n${toolContent}`;
+          }
 
           currentMessages.push({
             role: "tool",
@@ -2115,13 +2154,52 @@ REGRAS OBRIGATÓRIAS deste contexto:
 
 
     // ---- 10. DIVIDIR E ENVIAR RESPOSTA ----
-    // Validador de saída: garante começo, meio e fim — Maya nunca manda string vazia/só whitespace
-    const respostaFinal = (resposta || "").toString().trim() ||
+    // Validador de saída 1: garante começo, meio e fim — Maya nunca manda string vazia/só whitespace
+    let respostaFinal = (resposta || "").toString().trim() ||
       ("Recebi sua mensagem! 🙂 Pode reformular pra eu te ajudar? " +
        "Se preferir falar com um *atendente humano*, é só responder *atendente*.");
     if (respostaFinal !== resposta) {
       console.warn(`[agente-consultor-ia] validador_saida: resposta substituída por fallback (vazia) tel=${telLimpo}`);
     }
+
+    // Validador de saída 2 (defesa em profundidade): afirmação de SITUAÇÃO de veículo
+    // sem ter chamado consultar_situacao_veiculo com sucesso nesta rodada.
+    // Gatilhos são FRASES de afirmação (não palavras soltas), para minimizar falso-positivo
+    // quando a IA está só ecoando o termo do associado ou usando em contexto institucional.
+    if (isAssociado && !toolsCalledOk.has("consultar_situacao_veiculo")) {
+      const txt = respostaFinal.toLowerCase();
+      const padroesAfirmacaoSituacao = [
+        /\best[áa]\s+ativ[oa]\b/,
+        /\bconsta\s+(como\s+)?ativ[oa]\b/,
+        /\best[áa]\s+inadimplent[ea]\b/,
+        /\bconsta\s+(como\s+)?inadimplent[ea]\b/,
+        /\best[áa]\s+em\s+an[áa]lise\b/,
+        /\best[áa]\s+suspens[oa]\b/,
+        /\best[áa]\s+cancelad[oa]\b/,
+        /\bsem\s+cobertura\b/,
+        /\bsua?\s+prote[çc][ãa]o\s+(est[áa]\s+)?(ativa|valendo|em\s+dia)\b/,
+        /\b(voc[êe]\s+)?(pode|est[áa]\s+livre\s+para)\s+usar\s+a\s+assist[êe]ncia\b/,
+        /\bseu\s+ve[íi]culo\s+(est[áa]|consta)\b/,
+      ];
+      const violou = padroesAfirmacaoSituacao.some((re) => re.test(txt));
+      if (violou) {
+        console.warn(`[agente-consultor-ia] validador_saida:situacao_sem_tool tel=${telLimpo} resposta="${respostaFinal.substring(0, 200)}"`);
+        respostaFinal =
+          "Deixa eu confirmar a situação do seu veículo com a equipe — já te respondo. 🙂";
+        try {
+          await executarSolicitarAtendenteHumano(supabase, telLimpo, {
+            motivo: "duvida_complexa",
+            resumo: "validador_saida: IA afirmou situação de veículo sem consultar SGA",
+            prioridade: "normal",
+            contato_nome: contato?.nome || associadoNome || null,
+            associado_id: null,
+          });
+        } catch (e: any) {
+          console.error(`[agente-consultor-ia] validador_saida:situacao_sem_tool — falha transbordo: ${e?.message}`);
+        }
+      }
+    }
+
 
     const partes = dividirMensagem(respostaFinal, 1000);
 
@@ -3340,3 +3418,128 @@ async function executarConfirmarAgendamento(
   }
 }
 
+
+// ============================================================
+// TOOL: consultar_situacao_veiculo
+// Consulta a situação cadastral de um veículo no SGA (Hinova) por placa
+// e VALIDA que essa placa pertence ao CPF do associado em atendimento.
+//
+// Regras canônicas:
+//  - Sem CPF do contato: retorna sem_cpf_identificado (titular_confere=false).
+//  - Placa não encontrada / SGA fora: retorna indisponivel.
+//  - CPF do titular SGA ≠ CPF do contato: retorna placa_de_outro_titular
+//    (titular_confere=false). Nunca expõe nome do outro titular nem confirma
+//    a existência da placa de forma utilizável — o prompt obriga a IA a
+//    transbordar com mensagem genérica nesse caso.
+//  - Match OK: retorna {success, titular_confere:true, placa, situacao_codigo,
+//    situacao_descricao}.
+// ============================================================
+async function executarConsultarSituacaoVeiculo(
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { placa: string; cpf_contato: string | null }
+) {
+  const placaLimpa = String(args?.placa || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const cpfContato = String(args?.cpf_contato || "").replace(/\D/g, "");
+
+  if (!placaLimpa || placaLimpa.length < 6) {
+    return {
+      success: false,
+      error: "placa_invalida",
+      titular_confere: false,
+      instrucao: "Peça a placa do veículo ao associado e tente novamente.",
+    };
+  }
+
+  if (cpfContato.length !== 11) {
+    console.log(`[tool:consultar_situacao_veiculo] sem CPF do contato (placa=${placaLimpa})`);
+    return {
+      success: false,
+      error: "sem_cpf_identificado",
+      titular_confere: false,
+      instrucao: "Sem CPF identificado para o contato — não posso confirmar titularidade. Diga ao associado 'deixa eu confirmar' e chame solicitar_atendente_humano.",
+    };
+  }
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${supabaseUrl}/functions/v1/sga-buscar-veiculo-associado`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      body: JSON.stringify({ placa: placaLimpa }),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (e: any) {
+    console.error(`[tool:consultar_situacao_veiculo] fetch falhou placa=${placaLimpa}: ${e?.message}`);
+    return {
+      success: false,
+      error: "indisponivel",
+      titular_confere: false,
+      instrucao: "SGA indisponível — não posso confirmar a situação agora. Chame solicitar_atendente_humano.",
+    };
+  }
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    console.error(`[tool:consultar_situacao_veiculo] HTTP ${resp.status} placa=${placaLimpa}: ${t.substring(0, 200)}`);
+    return {
+      success: false,
+      error: "indisponivel",
+      titular_confere: false,
+      instrucao: "SGA indisponível — não posso confirmar a situação agora. Chame solicitar_atendente_humano.",
+    };
+  }
+
+  const data: any = await resp.json().catch(() => ({}));
+
+  if (data?.erro_transitorio) {
+    return {
+      success: false,
+      error: "indisponivel",
+      motivo: data?.motivo || "sga_transitorio",
+      titular_confere: false,
+      instrucao: "SGA indisponível — chame solicitar_atendente_humano.",
+    };
+  }
+
+  if (!data?.encontrado || !data?.veiculo) {
+    // Placa não encontrada no SGA. Tratamos como "fora do escopo informativo":
+    // não confirmamos nem negamos, encaminha humano.
+    console.log(`[tool:consultar_situacao_veiculo] placa não encontrada no SGA placa=${placaLimpa}`);
+    return {
+      success: false,
+      error: "placa_nao_encontrada",
+      titular_confere: false,
+      instrucao: "Placa não localizada no SGA. NÃO confirme nem negue — diga 'deixa eu confirmar isso com o time' e chame solicitar_atendente_humano.",
+    };
+  }
+
+  const cpfTitularSga = String(data?.associado?.cpf || "").replace(/\D/g, "");
+
+  if (!cpfTitularSga || cpfTitularSga !== cpfContato) {
+    // Gate de titularidade: placa não pertence ao CPF do contato.
+    // NÃO retornamos nome/dados do titular real — só o flag.
+    console.warn(`[tool:consultar_situacao_veiculo] placa de outro titular placa=${placaLimpa} cpf_contato=${cpfContato.substring(0, 3)}*** cpf_sga=${(cpfTitularSga || "vazio").substring(0, 3)}***`);
+    return {
+      success: false,
+      error: "placa_de_outro_titular",
+      titular_confere: false,
+      instrucao: "Esta placa NÃO pertence ao CPF do associado em atendimento. PROIBIDO confirmar, negar ou comentar a existência da placa. Responda APENAS 'deixa eu confirmar isso com o time' e chame solicitar_atendente_humano (motivo='duvida_complexa').",
+    };
+  }
+
+  const veic = data.veiculo;
+  console.log(`[tool:consultar_situacao_veiculo] match OK placa=${placaLimpa} situacao=${veic.descricao_situacao}`);
+  return {
+    success: true,
+    titular_confere: true,
+    placa: veic.placa || placaLimpa,
+    situacao_codigo: veic.codigo_situacao || null,
+    situacao_descricao: veic.descricao_situacao || null,
+    instrucao: "Reporte a situação cadastral textualmente (ex: 'seu veículo consta como *ATIVO* no nosso sistema'). NUNCA descreva o que o plano cobre ou não cobre — para isso chame solicitar_atendente_humano.",
+  };
+}
