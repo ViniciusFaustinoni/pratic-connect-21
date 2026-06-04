@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { aiGatewayFetch } from "../_shared/ai-client.ts";
+import { resolverHabilidade, dentroDoHorario, type IAAudiencia } from "./lib/roteador.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
