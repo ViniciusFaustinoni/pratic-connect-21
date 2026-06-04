@@ -556,12 +556,46 @@ Deno.serve(async (req) => {
 
     // ---- 2B. GATE DE SAUDAÇÃO + IDENTIFICAÇÃO (skip diretores) ----
     // Regras canônicas (Relacionamento › Chat):
-    //   - Saudação obrigatória bloqueante: primeira msg do dia BRT OU >2h sem interagir → mensagem padrão pedindo nome completo OU CPF.
+    //   - Saudação obrigatória bloqueante: primeira msg do dia BRT OU >gate_saudacao_horas sem interagir → mensagem padrão pedindo nome completo OU CPF.
     //   - Validações canônicas únicas: CPF (11 dígitos + DV) OU Nome Completo (≥2 palavras, ≥10 chars, sem dígitos).
-    //   - Liberação após captura: "Certo, obrigada pelo retorno! Em que podemos te ajudar hoje?"
+    //   - Liberação após captura: mensagem_pos_identificacao da config.
     //   - "Maya nunca deixa vácuo": qualquer texto livre dentro do gate gera resposta (saudação OU continuidade debounced).
     let cpfSgaContexto: { encontrado: boolean; nome?: string; status?: string; cpfMascarado: string } | null = null;
     let sgaAssociadoOverride: { nome: string; status: string } | null = null;
+
+    // Carrega config canônica da habilidade `relacionamento` (textos e gatilho de tempo da saudação).
+    // Fallback robusto: se a linha vier incompleta, mantém os valores canônicos in-code.
+    const FALLBACK_SAUDACAO_INICIAL = "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁";
+    const FALLBACK_MSG_POS_IDENT = "Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊";
+    const habCfg = {
+      saudacao_inicial: FALLBACK_SAUDACAO_INICIAL,
+      mensagem_pos_identificacao: FALLBACK_MSG_POS_IDENT,
+      gate_saudacao_horas: 2,
+      gate_saudacao_aplicar_identificados: true,
+    };
+    try {
+      const { data: habRow } = await supabase
+        .from("ia_habilidades")
+        .select("saudacao_inicial, mensagem_pos_identificacao, gate_saudacao_horas, gate_saudacao_aplicar_identificados")
+        .eq("slug", "relacionamento")
+        .maybeSingle();
+      if (habRow) {
+        if (habRow.saudacao_inicial && String(habRow.saudacao_inicial).trim()) {
+          habCfg.saudacao_inicial = String(habRow.saudacao_inicial).trim();
+        }
+        if ((habRow as any).mensagem_pos_identificacao && String((habRow as any).mensagem_pos_identificacao).trim()) {
+          habCfg.mensagem_pos_identificacao = String((habRow as any).mensagem_pos_identificacao).trim();
+        }
+        const horas = Number((habRow as any).gate_saudacao_horas);
+        if (Number.isFinite(horas) && horas > 0) habCfg.gate_saudacao_horas = horas;
+        if (typeof (habRow as any).gate_saudacao_aplicar_identificados === "boolean") {
+          habCfg.gate_saudacao_aplicar_identificados = (habRow as any).gate_saudacao_aplicar_identificados;
+        }
+      }
+    } catch (e) {
+      console.warn("[agente-consultor-ia] habCfg load falhou — usando fallback:", (e as any)?.message);
+    }
+
 
     // Pré-detecta diretor por telefone (mesma lógica do bloco 4, antecipada aqui)
     let diretorPreDetectado = false;
@@ -828,7 +862,7 @@ Deno.serve(async (req) => {
         console.log(`[agente-consultor-ia] [gate_identificacao] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
 
         // Liberação canônica + return: próxima mensagem do cliente segue o fluxo normal
-        await enviarTexto("Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊");
+        await enviarTexto(habCfg.mensagem_pos_identificacao);
         return new Response(
           JSON.stringify({ success: true, gate: "identificado_cpf", sga_encontrado: encontrado }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -851,7 +885,7 @@ Deno.serve(async (req) => {
         (contato as any).nome_confirmado_em = new Date().toISOString();
         console.log(`[agente-consultor-ia] [gate_identificacao] Nome completo capturado: ${nomeFmt}`);
 
-        await enviarTexto("Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊");
+        await enviarTexto(habCfg.mensagem_pos_identificacao);
         return new Response(
           JSON.stringify({ success: true, gate: "identificado_nome" }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -913,14 +947,12 @@ Deno.serve(async (req) => {
 
       const precisaSaudar =
         !ultimaSaudacao ||
-        horasDesdeSaudacao > 2 ||
-        horasDesdeUltima > 2 ||
+        horasDesdeSaudacao > habCfg.gate_saudacao_horas ||
+        horasDesdeUltima > habCfg.gate_saudacao_horas ||
         diaBrtAgora !== diaBrtUltima;
 
       if (precisaSaudar) {
-        await enviarTexto(
-          "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁"
-        );
+        await enviarTexto(habCfg.saudacao_inicial);
         await supabase
           .from("agente_ia_contatos")
           .update({
@@ -957,9 +989,47 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ---- 2C. SUPRESSÃO DE SAUDAÇÃO CERIMONIOSA (associado já identificado dentro da janela) ----
+    // Quando o associado já-identificado manda uma saudação pura ("oi", "bom dia", "boa tarde", etc.)
+    // dentro da janela canônica (mesmo dia BRT E ≤gate_saudacao_horas desde a última interação),
+    // injeta instrução no system prompt para a LLM responder curto e cordial, sem repetir saudação
+    // de cerimônia nem a saudação de identificação. Regra de tempo lida da config (habCfg).
+    let suprimirSaudacaoCerimonia = false;
+    if (
+      !diretorPreDetectado &&
+      !contextoAgendamentoPendente &&
+      jaIdentificado &&
+      habCfg.gate_saudacao_aplicar_identificados
+    ) {
+      const textoIdLow = (texto || "").toString().toLowerCase().trim();
+      const ehSaudacaoPura =
+        /^(oi|olá|ola|hi|hello|bom\s*dia|boa\s*tarde|boa\s*noite|e\s*a[íi]|opa|tudo\s*bem|tudo\s*bom|td\s*bem|blz|beleza)[\s!?.,😀-🙏❤-➿]*$/i
+          .test(textoIdLow);
+      if (ehSaudacaoPura) {
+        const ultimaInterId = contato.ultima_interacao ? new Date(contato.ultima_interacao) : null;
+        const horasDesdeUltimaId = ultimaInterId
+          ? (Date.now() - ultimaInterId.getTime()) / 3_600_000
+          : Infinity;
+        const agoraBRTId = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const diaBrtAgoraId = `${agoraBRTId.getFullYear()}-${agoraBRTId.getMonth()}-${agoraBRTId.getDate()}`;
+        const ultimaBRTId = ultimaInterId
+          ? new Date(ultimaInterId.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+          : null;
+        const diaBrtUltimaId = ultimaBRTId
+          ? `${ultimaBRTId.getFullYear()}-${ultimaBRTId.getMonth()}-${ultimaBRTId.getDate()}`
+          : null;
+        const dentroJanela =
+          horasDesdeUltimaId <= habCfg.gate_saudacao_horas && diaBrtAgoraId === diaBrtUltimaId;
+        if (dentroJanela) {
+          suprimirSaudacaoCerimonia = true;
+          console.log(`[agente-consultor-ia] [gate_identificacao] supressao_saudacao_cerimonia ATIVA (janela ${habCfg.gate_saudacao_horas}h, identificado)`);
+        }
+      }
+    }
 
 
     // ---- 3. CARREGAR CONFIGURAÇÕES ----
+
     const { data: configRows } = await supabase
       .from("agente_ia_config")
       .select("chave, valor");
@@ -1638,6 +1708,14 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
         : `O cliente acabou de informar o CPF ${cpfSgaContexto.cpfMascarado}, mas NÃO encontramos cadastro no SGA. Informe isso de forma cordial e siga como lead em cotação.`;
       systemPrompt += `\n\n## CONTEXTO DE IDENTIFICAÇÃO (NÃO REPETIR)\n${ctx}\nNÃO peça o CPF de novo. NÃO repita a saudação inicial de identificação.`;
     }
+
+    // Supressão de saudação cerimoniosa: conversa em andamento hoje, dentro da janela canônica.
+    if (suprimirSaudacaoCerimonia) {
+      const primeiroNome = (contato.nome || "").trim().split(/\s+/)[0] || "";
+      systemPrompt += `\n\n## CONVERSA EM ANDAMENTO — NÃO RESSAUDE\nO cliente já está em conversa ativa hoje (dentro da janela de ${habCfg.gate_saudacao_horas}h). Ele apenas mandou um cumprimento curto ("oi", "bom dia", etc.). NÃO repita a saudação de identificação ("Olá! Tudo bem? Para iniciarmos..."), NÃO use cerimônia de abertura de turno ("Como posso ajudá-lo hoje?", "Em que podemos te ajudar hoje?"). Responda curto e cordial usando o primeiro nome${primeiroNome ? ` (ex: "Oi, ${primeiroNome}! Como posso ajudar?")` : ""}. Se houver assunto/pedido na mesma mensagem, vá direto ao assunto sem rodeios.`;
+    }
+
+
 
     // Contexto de AGENDAMENTO PENDENTE — espelha cobranca/CPF, com tools p/ agir
     if (contextoAgendamentoPendente) {
