@@ -26,6 +26,16 @@ type MayaRawCfg = { comp: any; faqs: any[] };
 const MAYA_RAW_CACHE = new Map<string, { at: number; data: MayaRawCfg }>();
 const MAYA_CFG_TTL_MS = 60_000;
 
+// ── Cache por habilidade (slug) — fonte canônica pós-04/06/26 ────────────────
+type HabilidadeContentRaw = { faqs: any[]; exemplos: any[] };
+const HABILIDADE_CONTENT_CACHE = new Map<string, { at: number; data: HabilidadeContentRaw }>();
+type HabilidadeContentCfg = {
+  faqText?: string;
+  faqDestaqueText?: string;
+  faqMatchedIds?: string[];
+  exemplosText?: string;
+};
+
 const PT_STOPWORDS = new Set([
   "a","o","as","os","de","da","do","das","dos","e","ou","um","uma","uns","umas","para","por","pra","pro","com","sem",
   "que","se","na","no","nas","nos","em","ao","aos","à","às","mais","menos","muito","muita","pouco","pouca","ja","já",
