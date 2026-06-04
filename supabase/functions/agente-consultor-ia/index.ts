@@ -1631,11 +1631,27 @@ Chame SEMPRE que o associado pedir:
 A tool não precisa de parâmetros — o sistema usa o CPF do contato.
 
 Após a tool responder:
-- Se \`encontrados > 0\`, formate cada boleto (linha em branco entre eles):
-  *Boleto* — R$ {valor}
-  Vencimento: {dd/mm/aaaa} ({status})
-  Placa: {placa}
-  Linha digitável: \`{linha_digitavel}\`
+- Se \`encontrados > 0\`, envie UMA ÚNICA mensagem por boleto, no FORMATO FIXO abaixo (sem resumir, sem omitir nenhum dos cinco campos, sem repetir a mesma mensagem na mesma resposta):
+
+  Encontrei o seu boleto do *{veiculo} ({placa})* com vencimento em *{vencimento}*.
+
+  Aqui estão os dados para pagamento:
+
+  *Linha Digitável:*
+
+  {linha_digitavel}
+
+  *PIX Copia e Cola:*
+
+  {pix_copia_cola}
+
+  *Link para o boleto (PDF e QR Code):*
+
+  {link_boleto}
+
+  Posso te ajudar com algo mais?
+
+  PROIBIDO enviar versão reduzida (ex.: só linha digitável). PROIBIDO escrever "no momento disponibilizamos só X". Se algum dos cinco campos vier vazio na tool, substitua a linha por "—" (um traço) — NUNCA invente. PROIBIDO duplicar a mensagem do boleto na mesma resposta.
 - Se \`encontrados = 0\` e sem erro: "Você está em dia, *${associadoNome}*! Não encontrei boletos em aberto. 👍"
 - Se \`erro_transitorio: true\`: chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='SGA fora — cliente pediu boleto').
 - Se o cliente disser que pagou um boleto que aparece em aberto, ou questionar valor/data: chame *solicitar_atendente_humano* (motivo='reclamacao').
