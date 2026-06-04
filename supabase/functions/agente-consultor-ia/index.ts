@@ -1818,6 +1818,10 @@ REGRAS OBRIGATÓRIAS deste contexto:
     if (habilidadeSlugAtiva) {
       try {
         const habCfg = await loadHabilidadeContent(supabase, habilidadeSlugAtiva, texto || "");
+        if (habCfg.regrasText) {
+          systemPrompt += `\n\n## REGRAS DE COMPORTAMENTO DESTA HABILIDADE\nAs entradas abaixo são regras obrigatórias e têm prioridade absoluta sobre a base de conhecimento. Nunca ignore, nunca contradiga, nunca relaxe — mesmo que o cliente insista. Em caso de conflito entre uma regra e uma resposta da FAQ, a regra prevalece.\n\n${habCfg.regrasText}`;
+          console.log(`[agente-consultor-ia] Regras injetadas [hab=${habilidadeSlugAtiva}]`);
+        }
         if (habCfg.faqDestaqueText) {
           systemPrompt += `\n\n## FAQ EM DESTAQUE PARA ESTA MENSAGEM (LEIA PRIMEIRO)\nA mensagem do cliente casou com a(s) entrada(s) abaixo da base de conhecimento desta habilidade. Use o conteúdo delas como resposta — não invente, não desvie, não transborde se a FAQ já cobre o pedido.\n\n${habCfg.faqDestaqueText}`;
           console.log(`[agente-consultor-ia] FAQ em destaque (${habCfg.faqMatchedIds?.length || 0}) [hab=${habilidadeSlugAtiva}]: ${(habCfg.faqMatchedIds || []).join(",")}`);
