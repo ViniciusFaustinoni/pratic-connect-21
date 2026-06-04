@@ -12,6 +12,46 @@ function contemLink(texto: string): boolean {
   return /https?:\/\/\S+/i.test(texto);
 }
 
+// ====== HELPER: Insert idempotente de saída por message_id ======
+// Garante 1 linha por message_id em direcao='saida'. Conjuga:
+//  (a) pré-checagem barata: evita o insert quando a outra rota já gravou (~200ms antes);
+//  (b) tratamento do erro 23505 do índice único parcial
+//      `ux_whatsapp_mensagens_saida_message_id_v1` (cria janela atômica no DB).
+// O associado recebe a mensagem normalmente — só impede a 2ª linha contábil.
+// Inserts sem message_id (erro/bloqueio) seguem o caminho normal.
+async function inserirSaidaIdempotente(
+  supabase: any,
+  payload: Record<string, unknown>,
+  tag: string,
+): Promise<{ inserted: boolean; deduped: boolean; error: any }> {
+  const messageId = payload.message_id as string | null | undefined;
+  if (messageId) {
+    const { data: jaExiste } = await supabase
+      .from("whatsapp_mensagens")
+      .select("id")
+      .eq("message_id", messageId)
+      .eq("direcao", "saida")
+      .limit(1)
+      .maybeSingle();
+    if (jaExiste) {
+      console.log(`[whatsapp-send-text] dedup_saida(${tag}): message_id já registrado, pulando insert (${messageId})`);
+      return { inserted: false, deduped: true, error: null };
+    }
+  }
+  const { error } = await supabase.from("whatsapp_mensagens").insert(payload);
+  if (error) {
+    // 23505 = unique_violation no índice ux_whatsapp_mensagens_saida_message_id_v1
+    // (fecha a janela de corrida entre os 2 provedores quando ambos pré-checam vazio
+    // e disparam o insert simultaneamente). Não é falha real — apenas a 2ª via.
+    if ((error as any)?.code === '23505') {
+      console.log(`[whatsapp-send-text] dedup_saida(${tag}): unique_violation 23505 absorvido (${messageId})`);
+      return { inserted: false, deduped: true, error: null };
+    }
+    return { inserted: false, deduped: false, error };
+  }
+  return { inserted: true, deduped: false, error: null };
+}
+
 // ====== HELPER: Formatar telefone ======
 function formatarTelefone(telefone: string): string {
   let limpo = telefone.replace(/\D/g, "");
@@ -87,11 +127,11 @@ async function enviarViaEvolution(
     throw new Error(result.message || "Erro ao enviar");
   }
 
-  const { error: e2 } = await supabase.from("whatsapp_mensagens").insert({
+  const { error: e2 } = await inserirSaidaIdempotente(supabase, {
     instancia_id: instancia.id, telefone: telefoneFormatado, tipo: "text",
     mensagem, direcao: "saida", status: "enviada", message_id: result.key?.id,
     provedor: "evolution",
-  });
+  }, "evolution_ok");
   if (e2) console.error("[whatsapp-send-text] insert FAIL (evolution ok):", JSON.stringify(e2));
 
   console.log(`[whatsapp-send-text] ✓ Evolution: ${telefoneFormatado} - ID: ${result.key?.id}`);
@@ -397,14 +437,14 @@ async function enviarViaMeta(
           
           if (retryResponse.ok) {
             const retryMessageId = retryResult.messages?.[0]?.id;
-            const { error: eRetry } = await supabase.from("whatsapp_mensagens").insert({
+            const { error: eRetry } = await inserirSaidaIdempotente(supabase, {
               telefone: telefoneFormatado,
               tipo: templateName ? "template" : "text",
               mensagem,
               direcao: "saida", status: 'enviada', message_id: retryMessageId,
               template_variaveis: templateName ? { nome: templateName, body: bodyParams, button: buttonParams } : null,
               provedor: "meta_oficial",
-            });
+            }, "meta_retry");
             if (eRetry) console.error("[whatsapp-send-text] insert FAIL (meta retry):", JSON.stringify(eRetry));
             console.log(`[whatsapp-send-text] ✓ Meta (retry #1 button split): ${telefoneFormatado} - ID: ${retryMessageId}`);
             return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial', persisted: !eRetry };
@@ -445,7 +485,7 @@ async function enviarViaMeta(
   // CHECK em whatsapp_mensagens só aceita: pendente|enviando|enviada|entregue|lida|erro|cancelada.
   // 'enviada_texto_livre' violava o CHECK e o insert falhava silenciosamente — a mensagem chegava
   // ao associado mas não persistia, sumindo do chat. Canonical: 'enviada'.
-  const { error: insertErr } = await supabase.from("whatsapp_mensagens").insert({
+  const { error: insertErr } = await inserirSaidaIdempotente(supabase, {
     telefone: telefoneFormatado,
     tipo: templateName ? "template" : "text",
     mensagem,
@@ -453,7 +493,7 @@ async function enviarViaMeta(
     // template_id é uuid; templateName é o NOME (string) → guardamos em template_variaveis.nome
     template_variaveis: templateName ? { nome: templateName, body: bodyParams, button: buttonParams } : null,
     provedor: "meta_oficial",
-  });
+  }, "meta_ok");
   if (insertErr) {
     console.error("[whatsapp-send-text] ⚠️ insert FAIL (meta ok):", JSON.stringify(insertErr), "payload_keys:", Object.keys({ telefoneFormatado, mensagem, messageId, templateName }));
   } else {
