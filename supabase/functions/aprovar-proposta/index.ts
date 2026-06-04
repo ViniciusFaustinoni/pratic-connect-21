@@ -1650,7 +1650,11 @@ serve(async (req) => {
 
     return jsonResponse({ success: true, contratoId: contrato_id, associadoId, mensagem: mensagemRetorno });
 
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.aprovarPropostaResponse) {
+      console.warn('[aprovar-proposta] resposta estruturada propagada:', error.message);
+      return error.aprovarPropostaResponse;
+    }
     console.error('[aprovar-proposta] Erro:', error);
     const t = translateDbError(error);
     return new Response(
