@@ -1019,7 +1019,7 @@ Deno.serve(async (req) => {
     ) {
       const textoIdLow = (texto || "").toString().toLowerCase().trim();
       const ehSaudacaoPura =
-        /^(oi|olá|ola|hi|hello|bom\s*dia|boa\s*tarde|boa\s*noite|e\s*a[íi]|opa|tudo\s*bem|tudo\s*bom|td\s*bem|blz|beleza)[\s!?.,😀-🙏❤-➿]*$/i
+        /^(oi|olá|ola|hi|hello|bom\s*dia|boa\s*tarde|boa\s*noite|e\s*a[íi]|opa|tudo\s*bem|tudo\s*bom|td\s*bem|blz|beleza)[\s!?.,\u{1F600}-\u{1F64F}\u{2764}-\u{27BF}]*$/iu
           .test(textoIdLow);
       if (ehSaudacaoPura) {
         const ultimaInterId = contato.ultima_interacao ? new Date(contato.ultima_interacao) : null;
