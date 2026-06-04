@@ -1290,6 +1290,7 @@ Deno.serve(async (req) => {
       // partir de 04/06/26. Legado agente_ia_config / maya_ia_* foi deprecado
       // (mantido como backup). Editar 'relacionamento' nunca afeta 'vendas'.
       const hab: any = roteamento.habilidade;
+      habilidadeSlugAtiva = hab.slug;
       if (hab.nome_agente) {
         nomeAgente = hab.nome_agente;
       }
