@@ -2239,6 +2239,31 @@ REGRAS OBRIGATÓRIAS deste contexto:
           });
         }
 
+        // Curto-circuito determinístico: consulta de boleto falhou (transitório/timeout/HTTP).
+        // NÃO devolvemos o controle ao modelo (que insiste em dizer "em dia" quando vê boletos:[]).
+        // Aciona transbordo canônico e responde fora do modelo.
+        if (boletoErroTransbordo) {
+          try {
+            await executarSolicitarAtendenteHumano(
+              supabase,
+              telLimpo,
+              {
+                motivo: "duvida_complexa",
+                resumo: `SGA indisponível na consulta de boletos (${boletoErroTransbordo.motivo}) — cliente pediu situação financeira.`,
+                prioridade: "normal",
+                contato_nome: contato?.nome || associadoNome || null,
+                associado_id: null,
+              }
+            );
+          } catch (e: any) {
+            console.error(`[agente-consultor-ia][boletos] falha ao acionar transbordo:`, e?.message);
+          }
+          resposta = "Não consegui consultar seus boletos agora — nosso sistema financeiro está com instabilidade momentânea. 🙏\n\n" +
+            "Já passei seu atendimento para um *atendente humano* do nosso time. Em instantes alguém fala com você por aqui mesmo.";
+          console.log(`[agente-consultor-ia][boletos] transbordo deterministico aplicado tel=${telLimpo} motivo=${boletoErroTransbordo.motivo}`);
+          break;
+        }
+
         continue;
       }
 
