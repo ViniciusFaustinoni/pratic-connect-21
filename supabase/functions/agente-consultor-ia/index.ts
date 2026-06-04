@@ -1889,6 +1889,10 @@ REGRAS OBRIGATÓRIAS deste contexto:
       { role: "system", content: systemPrompt },
       ...messages,
     ];
+    // Rastreia tools que retornaram sucesso nesta rodada — base do validador de saída
+    const toolsCalledOk = new Set<string>();
+
+
 
     for (let iteration = 0; iteration < 5; iteration++) {
       const aiResponse = await aiGatewayFetch({
