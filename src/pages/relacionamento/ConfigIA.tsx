@@ -148,9 +148,10 @@ function EditorHabilidade({ habilidade }: { habilidade: IAHabilidade }) {
       <Card>
         <CardContent className="pt-4">
           <Tabs defaultValue="conhecimento">
-            <TabsList className="grid grid-cols-2 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="conhecimento">Conhecimento (FAQ)</TabsTrigger>
               <TabsTrigger value="exemplos">Exemplos</TabsTrigger>
+              <TabsTrigger value="config">Configurações</TabsTrigger>
             </TabsList>
 
             <TabsContent value="conhecimento" className="mt-4">
@@ -160,12 +161,13 @@ function EditorHabilidade({ habilidade }: { habilidade: IAHabilidade }) {
             <TabsContent value="exemplos" className="mt-4">
               <ExemplosTab slug={habilidade.slug} />
             </TabsContent>
+
+            <TabsContent value="config" className="mt-4">
+              <ConfigAvancada habilidade={habilidade} />
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
-
-      {/* Configuração avançada — collapsible, fechado por padrão */}
-      <ConfigAvancada habilidade={habilidade} />
     </div>
   );
 }
