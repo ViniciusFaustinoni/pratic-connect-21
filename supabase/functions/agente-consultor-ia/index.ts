@@ -177,7 +177,7 @@ async function loadHabilidadeContent(
     const [{ data: faqs }, { data: exemplos }] = await Promise.all([
       supabase
         .from("ia_habilidade_conhecimento")
-        .select("id,categoria,pergunta,resposta,palavras_chave,ordem")
+        .select("id,categoria,pergunta,resposta,palavras_chave,ordem,tipo")
         .eq("habilidade_slug", habilidadeSlug)
         .eq("ativo", true)
         .order("categoria", { ascending: true })
@@ -193,11 +193,25 @@ async function loadHabilidadeContent(
     HABILIDADE_CONTENT_CACHE.set(habilidadeSlug, { at: Date.now(), data: raw });
   }
 
-  // Bloco completo (FAQ por categoria)
+  // Partição por tipo: 'regra' → bloco de REGRAS; resto (incluindo NULL) → CONHECIMENTO/FAQ
+  const regras = raw.faqs.filter((f: any) => f.tipo === "regra");
+  const conhecimento = raw.faqs.filter((f: any) => f.tipo !== "regra");
+
+  // Bloco de REGRAS (achatado — regra é regra, sem categoria)
+  let regrasText = "";
+  if (regras.length > 0) {
+    const partes: string[] = [];
+    for (const it of regras) {
+      partes.push(`- *${it.pergunta}*\n  ${it.resposta}`);
+    }
+    regrasText = partes.join("\n");
+  }
+
+  // Bloco completo de CONHECIMENTO/FAQ (por categoria)
   let faqText = "";
-  if (raw.faqs.length > 0) {
+  if (conhecimento.length > 0) {
     const porCategoria = new Map<string, any[]>();
-    for (const f of raw.faqs) {
+    for (const f of conhecimento) {
       const k = f.categoria || "geral";
       if (!porCategoria.has(k)) porCategoria.set(k, []);
       porCategoria.get(k)!.push(f);
