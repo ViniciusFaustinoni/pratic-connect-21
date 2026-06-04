@@ -54,7 +54,7 @@ export default function ConfigIA() {
         <div>
           <h1 className="text-xl font-semibold">Configuração da IA de Atendimento</h1>
           <p className="text-sm text-muted-foreground">
-            Personalidade, conhecimento (FAQ), exemplos de resposta e ferramentas da IA que atende leads e associados no WhatsApp.
+            Personalidade, conhecimento (FAQ), exemplos de resposta e ferramentas da IA que atende associados no WhatsApp.
           </p>
         </div>
       </div>
