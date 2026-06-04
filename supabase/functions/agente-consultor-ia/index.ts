@@ -862,7 +862,7 @@ Deno.serve(async (req) => {
         console.log(`[agente-consultor-ia] [gate_identificacao] CPF capturado (${cpfMascarado}) — SGA encontrado=${encontrado}`);
 
         // Liberação canônica + return: próxima mensagem do cliente segue o fluxo normal
-        await enviarTexto("Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊");
+        await enviarTexto(habCfg.mensagem_pos_identificacao);
         return new Response(
           JSON.stringify({ success: true, gate: "identificado_cpf", sga_encontrado: encontrado }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
