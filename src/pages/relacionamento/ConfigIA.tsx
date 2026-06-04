@@ -183,140 +183,117 @@ function ConfigAvancada({ habilidade }: { habilidade: IAHabilidade }) {
   const handleSave = () => upsert.mutate(form);
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card>
-        <CollapsibleTrigger asChild>
-          <button className="w-full flex items-center justify-between p-4 hover:bg-muted/30 rounded-lg text-left">
-            <div className="flex items-center gap-3">
-              <Settings2 className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <div className="text-sm font-medium">Configuração avançada</div>
-                <div className="text-xs text-muted-foreground">
-                  Identidade & regras, ferramentas e horário de atendimento
-                </div>
-              </div>
-            </div>
-            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
-          </button>
-        </CollapsibleTrigger>
-
-        <CollapsibleContent>
-          <div className="px-4 pb-4 space-y-6">
-            <Separator />
-
-            {/* Identidade & Regras */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold">Identidade & Regras</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Nome exibido internamente</Label>
-                  <Input value={form.nome_exibicao} onChange={e => setForm({ ...form, nome_exibicao: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Como a IA assina mensagens</Label>
-                  <Input value={form.nome_agente} onChange={e => setForm({ ...form, nome_agente: e.target.value })} />
-                </div>
-              </div>
-              <div>
-                <Label>Descrição (uso interno)</Label>
-                <Input value={form.descricao || ''} onChange={e => setForm({ ...form, descricao: e.target.value })} />
-              </div>
-              <div>
-                <Label>Persona</Label>
-                <Textarea rows={3} value={form.persona} onChange={e => setForm({ ...form, persona: e.target.value })} />
-              </div>
-              <div>
-                <Label>Regras absolutas</Label>
-                <Textarea rows={4} value={form.regras_absolutas} onChange={e => setForm({ ...form, regras_absolutas: e.target.value })} />
-              </div>
-              <div>
-                <Label>Tom de voz</Label>
-                <Textarea rows={2} value={form.tom_voz} onChange={e => setForm({ ...form, tom_voz: e.target.value })} />
-              </div>
-              <div>
-                <Label>Saudação inicial</Label>
-                <Textarea rows={2} value={form.saudacao_inicial} onChange={e => setForm({ ...form, saudacao_inicial: e.target.value })} />
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Ferramentas */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Ferramentas que esta IA pode usar</h3>
-              <div className="space-y-1.5">
-                {TOOLS_CATALOG.map(t => {
-                  const on = form.ferramentas_habilitadas.includes(t.name);
-                  return (
-                    <label key={t.name} className="flex items-start gap-2 p-2 rounded hover:bg-muted/40 cursor-pointer">
-                      <input type="checkbox" checked={on} className="mt-1"
-                        onChange={() => setForm({
-                          ...form,
-                          ferramentas_habilitadas: on
-                            ? form.ferramentas_habilitadas.filter(x => x !== t.name)
-                            : [...form.ferramentas_habilitadas, t.name],
-                        })} />
-                      <div>
-                        <div className="text-sm font-mono">{t.name}</div>
-                        <div className="text-xs text-muted-foreground">{t.descricao}</div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Horário */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                <Clock className="h-4 w-4" /> Horário de atendimento <span className="text-xs font-normal text-muted-foreground">(vazio = 24/7)</span>
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="início HH:MM" value={form.horario_atendimento?.inicio || ''}
-                  onChange={e => setForm({
-                    ...form,
-                    horario_atendimento: {
-                      ...(form.horario_atendimento || { dias: ['seg','ter','qua','qui','sex'], timezone: 'America/Sao_Paulo' }),
-                      inicio: e.target.value,
-                    },
-                  })} />
-                <Input placeholder="fim HH:MM" value={form.horario_atendimento?.fim || ''}
-                  onChange={e => setForm({
-                    ...form,
-                    horario_atendimento: {
-                      ...(form.horario_atendimento || { dias: ['seg','ter','qua','qui','sex'], timezone: 'America/Sao_Paulo' }),
-                      fim: e.target.value,
-                    },
-                  })} />
-              </div>
-              <div>
-                <Label className="text-xs">Mensagem fora do horário</Label>
-                <Textarea rows={2} value={form.mensagem_fora_horario || ''}
-                  onChange={e => setForm({ ...form, mensagem_fora_horario: e.target.value })} />
-              </div>
-              <Button variant="ghost" size="sm"
-                onClick={() => setForm({ ...form, horario_atendimento: null, mensagem_fora_horario: null })}>
-                Limpar (= 24/7)
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {form.audiencias_elegiveis.map(a => (
-                <Badge key={a} variant="secondary" className="text-xs">{a}</Badge>
-              ))}
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={handleSave} disabled={upsert.isPending}>
-                <Save className="h-4 w-4 mr-2" /> Salvar configuração avançada
-              </Button>
-            </div>
+    <div className="space-y-6">
+      {/* Identidade & Regras */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold">Identidade & Regras</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Nome exibido internamente</Label>
+            <Input value={form.nome_exibicao} onChange={e => setForm({ ...form, nome_exibicao: e.target.value })} />
           </div>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
+          <div>
+            <Label>Como a IA assina mensagens</Label>
+            <Input value={form.nome_agente} onChange={e => setForm({ ...form, nome_agente: e.target.value })} />
+          </div>
+        </div>
+        <div>
+          <Label>Descrição (uso interno)</Label>
+          <Input value={form.descricao || ''} onChange={e => setForm({ ...form, descricao: e.target.value })} />
+        </div>
+        <div>
+          <Label>Persona</Label>
+          <Textarea rows={3} value={form.persona} onChange={e => setForm({ ...form, persona: e.target.value })} />
+        </div>
+        <div>
+          <Label>Regras absolutas</Label>
+          <Textarea rows={4} value={form.regras_absolutas} onChange={e => setForm({ ...form, regras_absolutas: e.target.value })} />
+        </div>
+        <div>
+          <Label>Tom de voz</Label>
+          <Textarea rows={2} value={form.tom_voz} onChange={e => setForm({ ...form, tom_voz: e.target.value })} />
+        </div>
+        <div>
+          <Label>Saudação inicial</Label>
+          <Textarea rows={2} value={form.saudacao_inicial} onChange={e => setForm({ ...form, saudacao_inicial: e.target.value })} />
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Ferramentas */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold">Ferramentas que esta IA pode usar</h3>
+        <div className="space-y-1.5">
+          {TOOLS_CATALOG.map(t => {
+            const on = form.ferramentas_habilitadas.includes(t.name);
+            return (
+              <label key={t.name} className="flex items-start gap-2 p-2 rounded hover:bg-muted/40 cursor-pointer">
+                <input type="checkbox" checked={on} className="mt-1"
+                  onChange={() => setForm({
+                    ...form,
+                    ferramentas_habilitadas: on
+                      ? form.ferramentas_habilitadas.filter(x => x !== t.name)
+                      : [...form.ferramentas_habilitadas, t.name],
+                  })} />
+                <div>
+                  <div className="text-sm font-mono">{t.name}</div>
+                  <div className="text-xs text-muted-foreground">{t.descricao}</div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Horário */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5">
+          <Clock className="h-4 w-4" /> Horário de atendimento <span className="text-xs font-normal text-muted-foreground">(vazio = 24/7)</span>
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Input placeholder="início HH:MM" value={form.horario_atendimento?.inicio || ''}
+            onChange={e => setForm({
+              ...form,
+              horario_atendimento: {
+                ...(form.horario_atendimento || { dias: ['seg','ter','qua','qui','sex'], timezone: 'America/Sao_Paulo' }),
+                inicio: e.target.value,
+              },
+            })} />
+          <Input placeholder="fim HH:MM" value={form.horario_atendimento?.fim || ''}
+            onChange={e => setForm({
+              ...form,
+              horario_atendimento: {
+                ...(form.horario_atendimento || { dias: ['seg','ter','qua','qui','sex'], timezone: 'America/Sao_Paulo' }),
+                fim: e.target.value,
+              },
+            })} />
+        </div>
+        <div>
+          <Label className="text-xs">Mensagem fora do horário</Label>
+          <Textarea rows={2} value={form.mensagem_fora_horario || ''}
+            onChange={e => setForm({ ...form, mensagem_fora_horario: e.target.value })} />
+        </div>
+        <Button variant="ghost" size="sm"
+          onClick={() => setForm({ ...form, horario_atendimento: null, mensagem_fora_horario: null })}>
+          Limpar (= 24/7)
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {form.audiencias_elegiveis.map(a => (
+          <Badge key={a} variant="secondary" className="text-xs">{a}</Badge>
+        ))}
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={upsert.isPending}>
+          <Save className="h-4 w-4 mr-2" /> Salvar configurações
+        </Button>
+      </div>
+    </div>
   );
 }
 
