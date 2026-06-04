@@ -680,9 +680,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const nomeAgente = config.nome_agente || "Atendimento Pratic";
-    const apresentacao = config.apresentacao_inicial || "";
-    const instrucoes = config.instrucoes_comportamento || "";
+    // Defaults vindos do legado `agente_ia_config`. Serão SOBRESCRITOS abaixo
+    // pela habilidade ativa roteada (fonte canônica — `ia_habilidades`).
+    let nomeAgente = config.nome_agente || "Atendimento Pratic";
+    let apresentacao = config.apresentacao_inicial || "";
+    let instrucoes = config.instrucoes_comportamento || "";
 
     // Gate fora-horário legado (Vinicius/Lead) REMOVIDO em 04/06/26.
     // A habilidade `vendas` foi desativada; `relacionamento` (Atendimento Pratic)
