@@ -485,7 +485,7 @@ async function enviarViaMeta(
   // CHECK em whatsapp_mensagens só aceita: pendente|enviando|enviada|entregue|lida|erro|cancelada.
   // 'enviada_texto_livre' violava o CHECK e o insert falhava silenciosamente — a mensagem chegava
   // ao associado mas não persistia, sumindo do chat. Canonical: 'enviada'.
-  const { error: insertErr } = await supabase.from("whatsapp_mensagens").insert({
+  const { error: insertErr } = await inserirSaidaIdempotente(supabase, {
     telefone: telefoneFormatado,
     tipo: templateName ? "template" : "text",
     mensagem,
@@ -493,7 +493,7 @@ async function enviarViaMeta(
     // template_id é uuid; templateName é o NOME (string) → guardamos em template_variaveis.nome
     template_variaveis: templateName ? { nome: templateName, body: bodyParams, button: buttonParams } : null,
     provedor: "meta_oficial",
-  });
+  }, "meta_ok");
   if (insertErr) {
     console.error("[whatsapp-send-text] ⚠️ insert FAIL (meta ok):", JSON.stringify(insertErr), "payload_keys:", Object.keys({ telefoneFormatado, mensagem, messageId, templateName }));
   } else {
