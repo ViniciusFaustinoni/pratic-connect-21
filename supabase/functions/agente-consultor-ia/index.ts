@@ -556,12 +556,46 @@ Deno.serve(async (req) => {
 
     // ---- 2B. GATE DE SAUDAÇÃO + IDENTIFICAÇÃO (skip diretores) ----
     // Regras canônicas (Relacionamento › Chat):
-    //   - Saudação obrigatória bloqueante: primeira msg do dia BRT OU >2h sem interagir → mensagem padrão pedindo nome completo OU CPF.
+    //   - Saudação obrigatória bloqueante: primeira msg do dia BRT OU >gate_saudacao_horas sem interagir → mensagem padrão pedindo nome completo OU CPF.
     //   - Validações canônicas únicas: CPF (11 dígitos + DV) OU Nome Completo (≥2 palavras, ≥10 chars, sem dígitos).
-    //   - Liberação após captura: "Certo, obrigada pelo retorno! Em que podemos te ajudar hoje?"
+    //   - Liberação após captura: mensagem_pos_identificacao da config.
     //   - "Maya nunca deixa vácuo": qualquer texto livre dentro do gate gera resposta (saudação OU continuidade debounced).
     let cpfSgaContexto: { encontrado: boolean; nome?: string; status?: string; cpfMascarado: string } | null = null;
     let sgaAssociadoOverride: { nome: string; status: string } | null = null;
+
+    // Carrega config canônica da habilidade `relacionamento` (textos e gatilho de tempo da saudação).
+    // Fallback robusto: se a linha vier incompleta, mantém os valores canônicos in-code.
+    const FALLBACK_SAUDACAO_INICIAL = "Olá! Tudo bem? Para iniciarmos o seu atendimento e localizarmos seu cadastro, por gentileza, informe o seu *nome completo* ou o *CPF*. 😁";
+    const FALLBACK_MSG_POS_IDENT = "Certo, obrigada pelo retorno! Em que podemos te ajudar hoje? 😊";
+    const habCfg = {
+      saudacao_inicial: FALLBACK_SAUDACAO_INICIAL,
+      mensagem_pos_identificacao: FALLBACK_MSG_POS_IDENT,
+      gate_saudacao_horas: 2,
+      gate_saudacao_aplicar_identificados: true,
+    };
+    try {
+      const { data: habRow } = await supabase
+        .from("ia_habilidades")
+        .select("saudacao_inicial, mensagem_pos_identificacao, gate_saudacao_horas, gate_saudacao_aplicar_identificados")
+        .eq("slug", "relacionamento")
+        .maybeSingle();
+      if (habRow) {
+        if (habRow.saudacao_inicial && String(habRow.saudacao_inicial).trim()) {
+          habCfg.saudacao_inicial = String(habRow.saudacao_inicial).trim();
+        }
+        if ((habRow as any).mensagem_pos_identificacao && String((habRow as any).mensagem_pos_identificacao).trim()) {
+          habCfg.mensagem_pos_identificacao = String((habRow as any).mensagem_pos_identificacao).trim();
+        }
+        const horas = Number((habRow as any).gate_saudacao_horas);
+        if (Number.isFinite(horas) && horas > 0) habCfg.gate_saudacao_horas = horas;
+        if (typeof (habRow as any).gate_saudacao_aplicar_identificados === "boolean") {
+          habCfg.gate_saudacao_aplicar_identificados = (habRow as any).gate_saudacao_aplicar_identificados;
+        }
+      }
+    } catch (e) {
+      console.warn("[agente-consultor-ia] habCfg load falhou — usando fallback:", (e as any)?.message);
+    }
+
 
     // Pré-detecta diretor por telefone (mesma lógica do bloco 4, antecipada aqui)
     let diretorPreDetectado = false;
