@@ -1596,6 +1596,23 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
         {
           type: "function",
           function: {
+            name: "consultar_situacao_veiculo",
+            description: "Consulta no SGA (Hinova) a SITUAÇÃO CADASTRAL de um veículo por placa (ATIVO, INADIMPLENTE, INATIVO, etc.) e VALIDA que essa placa pertence ao CPF do associado em atendimento. Use SEMPRE que o associado perguntar sobre status do veículo dele: 'meu carro está ativo?', 'minha proteção está valendo?', 'posso usar a assistência?', 'meu veículo está em análise?', 'está suspenso?', 'está coberto?'. NUNCA afirme situação sem chamar esta tool. NUNCA reporte detalhes de cobertura (o que está coberto, o que não está) — para isso chame solicitar_atendente_humano.",
+            parameters: {
+              type: "object",
+              properties: {
+                placa: {
+                  type: "string",
+                  description: "Placa do veículo (formato livre, será sanitizada). Use a placa que o associado mencionou na conversa.",
+                },
+              },
+              required: ["placa"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
             name: "solicitar_atendente_humano",
             description: "Transfere o atendimento para a equipe humana de Relacionamento. Use SEMPRE que o associado pedir retorno, reclamar de demora, reportar sinistro/emergência, pedir para falar com pessoa, ou repetir a mesma queixa. Após chamar, a IA fica pausada e o operador humano assume.",
             parameters: {
