@@ -1992,6 +1992,9 @@ REGRAS OBRIGATÓRIAS deste contexto:
     ];
     // Rastreia tools que retornaram sucesso nesta rodada — base do validador de saída
     const toolsCalledOk = new Set<string>();
+    // Flag deterministica: se a consulta de boletos falhar (erro_transitorio/timeout/HTTP),
+    // a IA NUNCA pode dizer "em dia" — força transbordo canônico fora do controle do modelo.
+    let boletoErroTransbordo: { motivo: string } | null = null;
 
 
 
@@ -2176,6 +2179,12 @@ REGRAS OBRIGATÓRIAS deste contexto:
                 serviceKey,
                 { cpf: contato?.cpf || null }
               );
+              // Guarda determinístico: erro transitório/timeout/HTTP NUNCA pode ser
+              // interpretado como "em dia". Marca para forçar transbordo após o loop de tools.
+              if (toolResult?.erro_transitorio) {
+                boletoErroTransbordo = { motivo: String(toolResult?.motivo || "sga_indisponivel") };
+                console.warn(`[agente-consultor-ia][boletos] erro_transitorio motivo=${boletoErroTransbordo.motivo} → forçando transbordo`);
+              }
             } else if (fnName === "consultar_situacao_veiculo") {
               toolResult = await executarConsultarSituacaoVeiculo(
                 supabaseUrl,
@@ -2228,6 +2237,31 @@ REGRAS OBRIGATÓRIAS deste contexto:
             tool_call_id: toolCall.id,
             content: toolContent,
           });
+        }
+
+        // Curto-circuito determinístico: consulta de boleto falhou (transitório/timeout/HTTP).
+        // NÃO devolvemos o controle ao modelo (que insiste em dizer "em dia" quando vê boletos:[]).
+        // Aciona transbordo canônico e responde fora do modelo.
+        if (boletoErroTransbordo) {
+          try {
+            await executarSolicitarAtendenteHumano(
+              supabase,
+              telLimpo,
+              {
+                motivo: "duvida_complexa",
+                resumo: `SGA indisponível na consulta de boletos (${boletoErroTransbordo.motivo}) — cliente pediu situação financeira.`,
+                prioridade: "normal",
+                contato_nome: contato?.nome || associadoNome || null,
+                associado_id: null,
+              }
+            );
+          } catch (e: any) {
+            console.error(`[agente-consultor-ia][boletos] falha ao acionar transbordo:`, e?.message);
+          }
+          resposta = "Não consegui consultar seus boletos agora — nosso sistema financeiro está com instabilidade momentânea. 🙏\n\n" +
+            "Já passei seu atendimento para um *atendente humano* do nosso time. Em instantes alguém fala com você por aqui mesmo.";
+          console.log(`[agente-consultor-ia][boletos] transbordo deterministico aplicado tel=${telLimpo} motivo=${boletoErroTransbordo.motivo}`);
+          break;
         }
 
         continue;
