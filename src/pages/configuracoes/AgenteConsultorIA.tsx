@@ -79,8 +79,8 @@ function KillSwitchAgente() {
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAtivo
-                  ? 'O Vinicius está respondendo mensagens automaticamente no WhatsApp.'
-                  : 'O Vinicius NÃO está respondendo nenhuma mensagem. As mensagens recebidas continuam registradas para atendimento humano.'}
+                  ? 'O Atendimento Pratic está respondendo mensagens automaticamente no WhatsApp.'
+                  : 'O Atendimento Pratic NÃO está respondendo nenhuma mensagem. As mensagens recebidas continuam registradas para atendimento humano.'}
               </p>
             </div>
           </div>
