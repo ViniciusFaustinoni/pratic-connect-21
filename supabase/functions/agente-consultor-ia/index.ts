@@ -1996,43 +1996,42 @@ REGRAS OBRIGATÓRIAS deste contexto:
 
 
     for (let iteration = 0; iteration < 5; iteration++) {
-      const aiResponse = await aiGatewayFetch({
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: currentMessages,
-          tools,
-          max_tokens: 2048,
-        }),
-        signal: AbortSignal.timeout(55000),
+      // Chamada via callAI com override explícito → garante que `RELACIONAMENTO_MODEL`
+      // realmente vai pro provider (aiGatewayFetch antigo ignorava `model` do caller,
+      // forçando o do `ai_model_config` global). Fallback automático em DEFAULT_CONFIG
+      // (gemini-3-flash-preview) se o pro falhar.
+      const aiResult = await callAI({
+        messages: currentMessages,
+        tools,
+        max_tokens: 2048,
+        override: { provider: "lovable", model: RELACIONAMENTO_MODEL },
+        fallbackToLovable: true,
       });
 
-      if (!aiResponse.ok) {
-        const errText = await aiResponse.text();
-        console.error(`[agente-consultor-ia] AI Error ${aiResponse.status}: ${errText.substring(0, 200)}`);
+      if (!aiResult.ok) {
+        console.error(`[agente-consultor-ia] AI Error ${aiResult.status}: ${String(aiResult.errorMessage ?? "").substring(0, 200)}`);
 
-        if (aiResponse.status === 429) {
+        if (aiResult.status === 429) {
           return new Response(
             JSON.stringify({ success: false, error: "Rate limit excedido." }),
             { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        if (aiResponse.status === 402) {
+        if (aiResult.status === 402) {
           return new Response(
             JSON.stringify({ success: false, error: "Créditos de IA esgotados." }),
             { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        throw new Error(`AI Error: ${aiResponse.status}`);
+        throw new Error(`AI Error: ${aiResult.status}`);
       }
 
-      const aiData = await aiResponse.json();
-      const choice = aiData.choices?.[0];
+      const aiData = aiResult.data;
+      const choice = aiData?.choices?.[0];
       const message = choice?.message;
+
+      // Evidência por turno do modelo realmente usado (vem na resposta do provider).
+      console.log(`[agente-consultor-ia][modelo] requested=${RELACIONAMENTO_MODEL} used=${aiData?.model ?? "unknown"} iter=${iteration}`);
 
       if (!message) {
         // Maya nunca deixa vácuo — fallback canônico (começo, meio, fim)
