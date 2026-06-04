@@ -3418,3 +3418,128 @@ async function executarConfirmarAgendamento(
   }
 }
 
+
+// ============================================================
+// TOOL: consultar_situacao_veiculo
+// Consulta a situação cadastral de um veículo no SGA (Hinova) por placa
+// e VALIDA que essa placa pertence ao CPF do associado em atendimento.
+//
+// Regras canônicas:
+//  - Sem CPF do contato: retorna sem_cpf_identificado (titular_confere=false).
+//  - Placa não encontrada / SGA fora: retorna indisponivel.
+//  - CPF do titular SGA ≠ CPF do contato: retorna placa_de_outro_titular
+//    (titular_confere=false). Nunca expõe nome do outro titular nem confirma
+//    a existência da placa de forma utilizável — o prompt obriga a IA a
+//    transbordar com mensagem genérica nesse caso.
+//  - Match OK: retorna {success, titular_confere:true, placa, situacao_codigo,
+//    situacao_descricao}.
+// ============================================================
+async function executarConsultarSituacaoVeiculo(
+  supabaseUrl: string,
+  serviceKey: string,
+  args: { placa: string; cpf_contato: string | null }
+) {
+  const placaLimpa = String(args?.placa || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const cpfContato = String(args?.cpf_contato || "").replace(/\D/g, "");
+
+  if (!placaLimpa || placaLimpa.length < 6) {
+    return {
+      success: false,
+      error: "placa_invalida",
+      titular_confere: false,
+      instrucao: "Peça a placa do veículo ao associado e tente novamente.",
+    };
+  }
+
+  if (cpfContato.length !== 11) {
+    console.log(`[tool:consultar_situacao_veiculo] sem CPF do contato (placa=${placaLimpa})`);
+    return {
+      success: false,
+      error: "sem_cpf_identificado",
+      titular_confere: false,
+      instrucao: "Sem CPF identificado para o contato — não posso confirmar titularidade. Diga ao associado 'deixa eu confirmar' e chame solicitar_atendente_humano.",
+    };
+  }
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${supabaseUrl}/functions/v1/sga-buscar-veiculo-associado`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      body: JSON.stringify({ placa: placaLimpa }),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (e: any) {
+    console.error(`[tool:consultar_situacao_veiculo] fetch falhou placa=${placaLimpa}: ${e?.message}`);
+    return {
+      success: false,
+      error: "indisponivel",
+      titular_confere: false,
+      instrucao: "SGA indisponível — não posso confirmar a situação agora. Chame solicitar_atendente_humano.",
+    };
+  }
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    console.error(`[tool:consultar_situacao_veiculo] HTTP ${resp.status} placa=${placaLimpa}: ${t.substring(0, 200)}`);
+    return {
+      success: false,
+      error: "indisponivel",
+      titular_confere: false,
+      instrucao: "SGA indisponível — não posso confirmar a situação agora. Chame solicitar_atendente_humano.",
+    };
+  }
+
+  const data: any = await resp.json().catch(() => ({}));
+
+  if (data?.erro_transitorio) {
+    return {
+      success: false,
+      error: "indisponivel",
+      motivo: data?.motivo || "sga_transitorio",
+      titular_confere: false,
+      instrucao: "SGA indisponível — chame solicitar_atendente_humano.",
+    };
+  }
+
+  if (!data?.encontrado || !data?.veiculo) {
+    // Placa não encontrada no SGA. Tratamos como "fora do escopo informativo":
+    // não confirmamos nem negamos, encaminha humano.
+    console.log(`[tool:consultar_situacao_veiculo] placa não encontrada no SGA placa=${placaLimpa}`);
+    return {
+      success: false,
+      error: "placa_nao_encontrada",
+      titular_confere: false,
+      instrucao: "Placa não localizada no SGA. NÃO confirme nem negue — diga 'deixa eu confirmar isso com o time' e chame solicitar_atendente_humano.",
+    };
+  }
+
+  const cpfTitularSga = String(data?.associado?.cpf || "").replace(/\D/g, "");
+
+  if (!cpfTitularSga || cpfTitularSga !== cpfContato) {
+    // Gate de titularidade: placa não pertence ao CPF do contato.
+    // NÃO retornamos nome/dados do titular real — só o flag.
+    console.warn(`[tool:consultar_situacao_veiculo] placa de outro titular placa=${placaLimpa} cpf_contato=${cpfContato.substring(0, 3)}*** cpf_sga=${(cpfTitularSga || "vazio").substring(0, 3)}***`);
+    return {
+      success: false,
+      error: "placa_de_outro_titular",
+      titular_confere: false,
+      instrucao: "Esta placa NÃO pertence ao CPF do associado em atendimento. PROIBIDO confirmar, negar ou comentar a existência da placa. Responda APENAS 'deixa eu confirmar isso com o time' e chame solicitar_atendente_humano (motivo='duvida_complexa').",
+    };
+  }
+
+  const veic = data.veiculo;
+  console.log(`[tool:consultar_situacao_veiculo] match OK placa=${placaLimpa} situacao=${veic.descricao_situacao}`);
+  return {
+    success: true,
+    titular_confere: true,
+    placa: veic.placa || placaLimpa,
+    situacao_codigo: veic.codigo_situacao || null,
+    situacao_descricao: veic.descricao_situacao || null,
+    instrucao: "Reporte a situação cadastral textualmente (ex: 'seu veículo consta como *ATIVO* no nosso sistema'). NUNCA descreva o que o plano cobre ou não cobre — para isso chame solicitar_atendente_humano.",
+  };
+}
