@@ -2072,6 +2072,15 @@ REGRAS OBRIGATÓRIAS deste contexto:
                 serviceKey,
                 { cpf: contato?.cpf || null }
               );
+            } else if (fnName === "consultar_situacao_veiculo") {
+              toolResult = await executarConsultarSituacaoVeiculo(
+                supabaseUrl,
+                serviceKey,
+                { placa: String(args?.placa || ""), cpf_contato: contato?.cpf || null }
+              );
+              if (toolResult?.success && toolResult?.titular_confere) {
+                toolsCalledOk.add("consultar_situacao_veiculo");
+              }
             } else if (fnName === "enviar_link_reagendamento") {
               toolResult = await executarEnviarLinkReagendamento(
                 supabaseUrl,
