@@ -148,14 +148,19 @@ function EditorHabilidade({ habilidade }: { habilidade: IAHabilidade }) {
       <Card>
         <CardContent className="pt-4">
           <Tabs defaultValue="conhecimento">
-            <TabsList className="grid grid-cols-3 w-full">
+            <TabsList className="grid grid-cols-4 w-full">
               <TabsTrigger value="conhecimento">Conhecimento (FAQ)</TabsTrigger>
+              <TabsTrigger value="regras">Regras</TabsTrigger>
               <TabsTrigger value="exemplos">Exemplos</TabsTrigger>
               <TabsTrigger value="config">Configurações</TabsTrigger>
             </TabsList>
 
             <TabsContent value="conhecimento" className="mt-4">
-              <ConhecimentoTab slug={habilidade.slug} />
+              <ConhecimentoTab slug={habilidade.slug} tipo="conhecimento" />
+            </TabsContent>
+
+            <TabsContent value="regras" className="mt-4">
+              <ConhecimentoTab slug={habilidade.slug} tipo="regra" />
             </TabsContent>
 
             <TabsContent value="exemplos" className="mt-4">
