@@ -983,6 +983,25 @@ Deno.serve(async (req) => {
           ultima_habilidade_atendeu_em: new Date().toISOString(),
         }).eq("telefone", telLimpo);
       } catch (_e) { /* não-bloqueante */ }
+
+      // ── FONTE CANÔNICA DA PERSONA ────────────────────────────────────────
+      // A habilidade roteada sobrescreve o legado `agente_ia_config` para
+      // nome do agente, saudação e instruções de comportamento. Isto evita
+      // que o prompt continue dizendo "Sou o Vinicius, consultor de vendas"
+      // quando a habilidade `vendas` está desativada.
+      if (roteamento.habilidade.nome_agente) {
+        nomeAgente = roteamento.habilidade.nome_agente;
+      }
+      if (roteamento.habilidade.saudacao_inicial) {
+        apresentacao = roteamento.habilidade.saudacao_inicial;
+      }
+      const personaBlocos: string[] = [];
+      if (roteamento.habilidade.persona) personaBlocos.push(roteamento.habilidade.persona);
+      if (roteamento.habilidade.tom_voz) personaBlocos.push(`Tom de voz: ${roteamento.habilidade.tom_voz}`);
+      if (roteamento.habilidade.regras_absolutas) personaBlocos.push(`Regras absolutas:\n${roteamento.habilidade.regras_absolutas}`);
+      if (personaBlocos.length) {
+        instrucoes = personaBlocos.join("\n\n");
+      }
     } catch (err) {
       console.error("[habilidade_selecionada] erro no gate, seguindo fluxo legado", err);
     }
