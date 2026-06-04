@@ -3415,8 +3415,16 @@ async function executarConsultarBoletosAssociado(
   const fmtData = (d: any) => {
     if (!d) return null;
     try {
-      const dt = new Date(String(d));
-      if (isNaN(dt.getTime())) return String(d);
+      const s = String(d);
+      // DATE puro "YYYY-MM-DD" (ou "YYYY-MM-DDT..."): tratar como data civil,
+      // sem conversão de timezone (evita deslocar 10/06 → 09/06 em UTC-3).
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) {
+        const [, ano, mes, dia] = m;
+        return `${dia}/${mes}/${ano}`;
+      }
+      const dt = new Date(s);
+      if (isNaN(dt.getTime())) return s;
       return dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
     } catch { return String(d); }
   };
