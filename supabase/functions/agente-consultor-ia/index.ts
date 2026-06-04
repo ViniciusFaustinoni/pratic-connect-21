@@ -7,6 +7,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Normaliza nome vindo do SGA (geralmente CAPS) → primeiro nome em capitalização normal.
+// Ex.: "MARCOS VINICIUS DATIVO MACHADO" → "Marcos".
+function formatarPrimeiroNome(nome: string | null | undefined): string {
+  const raw = (nome || "").toString().trim();
+  if (!raw) return "";
+  const primeiro = raw.split(/\s+/)[0] || "";
+  if (!primeiro) return "";
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
+}
+
+
+
 /**
  * Cache de configuração editorial da Maya (60s) — evita 1 query/mensagem.
  * Tabelas: maya_ia_comportamento (por audiência), maya_ia_faq (base de conhecimento).
@@ -895,7 +907,7 @@ Deno.serve(async (req) => {
 
           // Renderiza mensagem da config substituindo {nome} pelo nome do SGA (full name).
           // Fallback: primeiro nome do cadastro local ou string sem o placeholder.
-          const nomeParaRender = (nomeSga || contato.nome || "").toString().trim();
+          const nomeParaRender = formatarPrimeiroNome(nomeSga || contato.nome);
           const tmpl = habCfg.mensagem_cpf_encontrado || FALLBACK_MSG_CPF_ENCONTRADO;
           const msgFinal = nomeParaRender
             ? tmpl.replace(/\{nome\}/gi, nomeParaRender)
@@ -1299,6 +1311,14 @@ Deno.serve(async (req) => {
         console.log(`[agente-consultor-ia] Associado via SGA (CPF): ${associadoNome}`);
       }
     }
+
+    // Normaliza o nome para primeiro nome capitalizado em TODAS as injeções de prompt
+    // (SGA grava em CAPS — evita "MARCOS VINICIUS DATIVO MACHADO" gritado no texto).
+    if (associadoNome) {
+      associadoNome = formatarPrimeiroNome(associadoNome);
+    }
+
+
 
 
     // ---- 5. HORÁRIO COMERCIAL DESATIVADO - Agente funciona 24h ----
@@ -3344,7 +3364,14 @@ async function executarConsultarBoletosAssociado(
     };
   }
 
-  const todos: any[] = Array.isArray(data?.boletos) ? data.boletos : [];
+  // A edge `sga-listar-boletos-associado` devolve { veiculos: [{ placa, boletos_abertos: [...] }, ...] }.
+  // `boletos_abertos` JÁ vem filtrado SOMENTE com boletos em aberto (a edge separa pagos/baixados
+  // antes de empurrar para esse array). Aqui apenas achatamos por veículo, anexando a placa.
+  const veiculosResp: any[] = Array.isArray(data?.veiculos) ? data.veiculos : [];
+  const todos: any[] = veiculosResp.flatMap((v: any) => {
+    const abertos: any[] = Array.isArray(v?.boletos_abertos) ? v.boletos_abertos : [];
+    return abertos.map((b: any) => ({ ...b, placa: v?.placa ?? b?.placa ?? null }));
+  });
 
   const fmtData = (d: any) => {
     if (!d) return null;
