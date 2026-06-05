@@ -1,44 +1,67 @@
-# Bug: drawer e transbordo mostram associado errado quando 2 cadastros compartilham telefone
+## Auditoria de mudanças por cron — Softruck & Rede Veículos (últimos 60 dias)
 
-## Causa raiz
+### Escopo
 
-Dois associados ativos compartilham o telefone `21982244909`:
-- MARCOS VINICIUS DATIVO MACHADO (autor real da conversa)
-- LUIZ FERNANDO DE SOUZA FILHO
+Apenas eventos cuja origem é **cron / reconciliação noturna**, excluindo o que aconteceu **durante** um processo (adesão, troca, substituição, ativação ao vivo no fluxo do usuário).
 
-A resolução de "associado por telefone" no front (`ContatoDetalheDrawer.tsx`, e mesma lógica na lista de Transbordo) faz `select … .or(ilike %tel%) .limit(1).maybeSingle()` sem `order by` nem preferência por match exato — Postgres devolve qualquer linha, e está caindo no LUIZ. O cabeçalho do chat acerta porque vem da última mensagem em `whatsapp_mensagens` (que tem o `push_name`/contato real do WhatsApp).
+### Crons relevantes confirmados
 
-Não é problema da IA, do boleto, da identificação, do roteador, nem do envio. É só a resolução de "qual associado pertence a este telefone" no front, quando há colisão.
+| Job | Frequência | O que faz |
+|---|---|---|
+| `softruck-reconciliar-pending-10min` | a cada 10 min | Reprocessa ativações Softruck travadas em PENDING e detecta desvínculo remoto |
+| `rede-veiculos-sync-cron-30min` | a cada 30 min | Sincroniza status de cliente/veículo na Rede |
+| `cron-softruck-troca-retry` | a cada 5 min | Retry de vínculo Softruck em trocas de titularidade |
 
-## Escopo desta correção (frontend-only)
+### Fontes de verdade (já mapeadas)
 
-1. **`ContatoDetalheDrawer.tsx`** — trocar a busca por uma que:
-   - Busque TODOS os associados que casam pelo telefone normalizado (sem `limit(1)`).
-   - Prefira o associado cujo `nome` (case-insensitive, sem acento) corresponda ao `nomeContato` que o ChatPanel já passa via prop (o nome que veio do WhatsApp, ex.: "MARCOS VINICIUS DATIVO MAC...").
-   - Fallback: se nenhum nome casar, NÃO escolher arbitrariamente — mostrar bloco "Mais de um cadastro vinculado a este telefone" listando os candidatos (nome + status + botão "Abrir cadastro"), e ocultar o "Abrir cadastro completo" único.
-   - Match exato `telefone = '<norm>'` ganha prioridade sobre `ilike %…%` (evita pegar telefone que apenas contém os mesmos dígitos).
+1. **`rastreadores_vinculo_historico`** — mudanças de vínculo no nosso DB feitas pelo cron (origem `auto_desvinculo_remoto_softruck`).
+2. **`rastreadores_api_logs`** — TODAS as chamadas que o cron disparou contra Softruck/Rede (filtrar por `operacao` com prefixo `CRON_`, `RECONCILED_FROM_PENDING`, `AUTO_DESVINCULO_REMOTO`, e por reconciliação 30min da Rede).
+3. **`rastreadores_sync_queue`** — itens que falharam ao vivo e foram concluídos por retry (`tentativas > 1`).
 
-2. **Fila de Transbordo (`/relacionamento/transbordos`)** — aplicar a mesma desambiguação:
-   - Localizar o hook/componente que resolve `associado` a partir do `telefone` da pausa de transbordo.
-   - Quando houver colisão, exibir o nome que veio da própria conversa (`whatsapp_mensagens.push_name` ou `agente_ia_contatos.nome`) em vez do primeiro associado retornado. Se ainda assim ambíguo, marcar a linha com um chip discreto "⚠ múltiplos cadastros" e manter o nome do WhatsApp.
+### Volume preliminar (60d)
 
-3. **Sem migração de dados.** Não fundir nem renumerar os dois cadastros — a duplicidade de telefone é dado real e pode existir legitimamente (familiares no mesmo número). Só corrigir a UI para não inventar associação.
+- 2.711 reconciliações Softruck a partir de PENDING (sucesso) — **maior bloco**
+- 1.061 execuções do job `CRON_RECONCILIAR_PENDING` 
+- 42 desvínculos automáticos Softruck (rastreador sumiu remoto → desvinculamos local)
+- 4 itens na fila finalizados após retry (3 sucesso, 1 falha permanente)
+- 2.100 consultas de status na Rede (cron 30min) + 22 erros + 40 sem_resultado
 
-## Fora de escopo
+### O que a auditoria vai entregar
 
-- IA / prompt / validador de saída / tool de transbordo.
-- Boleto, situação do veículo, identificação, roteador, envio.
-- Habilidade vendas.
-- Receptiva no ar — não tocar.
-- Gravação automática de resumo/eventos (etapa seguinte separada).
+CSV em `/mnt/documents/auditoria-cron-rastreadores-60d.csv` com **uma linha por evento cron** contendo:
 
-## Arquivos previstos
+- `data_hora` (BRT)
+- `plataforma` (softruck / rede_veiculos)
+- `job_cron` (qual cron disparou)
+- `operacao` (ativar / desvincular / reconciliar / atualizar status)
+- `rastreador_codigo` / `imei`
+- `placa_anterior` → `placa_nova`
+- `status_anterior` → `status_novo`
+- `veiculo_id` / `associado_nome`
+- `resultado` (sucesso / erro)
+- `motivo` (ex.: "pending → success após N tentativas", "desvinculado remotamente na Softruck", "vínculo refeito após erro inicial")
+- `tentativas_ate_concluir`
+- `link_painel` (rota interna para o rastreador)
 
-- `src/components/eventos/chat-ia/ContatoDetalheDrawer.tsx` — trocar query e renderização quando houver múltiplos.
-- Componente/hook da tela `Transbordo` (a confirmar na implementação) — mesma desambiguação.
+**Resumo executivo** (TXT/markdown) com:
+- Totais por job, por plataforma, por tipo de modificação
+- Top 10 rastreadores com mais intervenções cron
+- Casos onde o cron **modificou** estado na Softruck/Rede (POST/PUT) vs. apenas **leu** (GET de reconciliação)
+- Lista das 1 falha permanente + 22 erros de Rede que ainda merecem olhar humano
 
-## Validação
+### Plano de execução (build mode)
 
-- Abrir o chat do MARCOS (telefone 21982244909): drawer deve mostrar "MARCOS VINICIUS DATIVO MACHADO", não LUIZ.
-- Abrir o chat de qualquer telefone sem colisão: comportamento inalterado.
-- Tela `/relacionamento/transbordos` para esse telefone deve mostrar "MARCOS VINICIUS …" (nome da conversa), não LUIZ.
+1. Script SQL único que junta `rastreadores_api_logs` (filtrando operações de origem cron) + `rastreadores_vinculo_historico` (origem `auto_*`) + `rastreadores_sync_queue` (tentativas>1) com left-join em `rastreadores`, `veiculos`, `associados`.
+2. Export para CSV via `psql COPY ... TO STDOUT WITH CSV HEADER` em `/mnt/documents/`.
+3. Gerar `resumo-auditoria-cron-rastreadores-60d.md` com os agregados.
+4. Entregar via `<presentation-artifact>` os dois arquivos.
+
+### Fora de escopo (não confundir com cron)
+
+- Vínculos feitos durante adesão / troca / substituição ao vivo (origem `trigger_db` no histórico — 369 eventos).
+- Ações manuais de operador no painel (botão "Reprocessar Sincronização Softruck", etc.).
+- Backfills disparados manualmente da tela `/configuracoes/integracoes/sga-hinova`.
+
+### Decisão pendente
+
+Confirma que você quer **CSV + resumo markdown** entregues como arquivos baixáveis? Se preferir uma tela dentro do sistema (`/configuracoes/integracoes/.../auditoria-cron`) com filtros e paginação, eu replanejo — leva mais tempo e mexe em UI, mas fica reutilizável.
