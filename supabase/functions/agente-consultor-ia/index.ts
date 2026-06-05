@@ -2229,6 +2229,43 @@ REGRAS OBRIGATÓRIAS deste contexto:
               if (toolResult?.erro_transitorio) {
                 boletoErroTransbordo = { motivo: String(toolResult?.motivo || "sga_indisponivel") };
                 console.warn(`[agente-consultor-ia][boletos] erro_transitorio motivo=${boletoErroTransbordo.motivo} → forçando transbordo`);
+              } else if (toolResult?.success && Array.isArray(toolResult?.boletos) && toolResult.boletos.length > 0) {
+                // Evento HISTÓRICO em Detalhes do contato: boleto enviado.
+                // Pega o 1º boleto aberto com linha_digitavel; descrição por template fixa.
+                try {
+                  const aberto = toolResult.boletos.find((b: any) =>
+                    b && b.linha_digitavel && String(b.linha_digitavel).trim().length > 0
+                  );
+                  if (aberto) {
+                    const venc = String(aberto.vencimento || aberto.data_vencimento || "");
+                    let vencFmt = "—";
+                    if (venc) {
+                      const d = new Date(venc);
+                      if (!isNaN(d.getTime())) {
+                        vencFmt = new Intl.DateTimeFormat("pt-BR", {
+                          timeZone: "America/Sao_Paulo",
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                        }).format(d);
+                      } else {
+                        vencFmt = venc;
+                      }
+                    }
+                    await registrarEventoContato(
+                      supabase,
+                      telLimpo,
+                      "boleto_enviado",
+                      `Enviado boleto, vencimento ${vencFmt}.`,
+                      {
+                        dedupe_key: `boleto|${String(aberto.linha_digitavel).slice(0, 80)}`,
+                        vencimento: venc || null,
+                        valor: aberto.valor_boleto ?? aberto.valor ?? null,
+                        origem: "agente-consultor-ia/consultar_boletos",
+                      },
+                    );
+                  }
+                } catch (e: any) {
+                  console.error(`[eventos_contato] falha ao registrar boleto_enviado tel=${telLimpo}:`, e?.message);
+                }
               }
             } else if (fnName === "consultar_situacao_veiculo") {
               toolResult = await executarConsultarSituacaoVeiculo(
@@ -3436,6 +3473,22 @@ async function executarSolicitarAtendenteHumano(
 
   console.log(`[transbordo] ✓ Aberto p/ ${telLimpo} motivo=${payload.motivo} prioridade=${payload.prioridade}`);
 
+  // ─── Registro automático em Detalhes do contato ───
+  // Centralizado aqui para cobrir os 5 call-sites de transbordo de uma vez.
+  // Descrições são geradas por TEMPLATE no código (nunca pelo modelo) — assim
+  // o registro NUNCA afirma execução, sempre descreve pedido e encaminhamento.
+  // Não-bloqueante: falhas são apenas logadas.
+  try {
+    await registrarEventoTransbordoContato(supabase, telLimpo, payload);
+  } catch (e: any) {
+    console.error(`[eventos_contato] falha ao registrar evento de transbordo tel=${telLimpo}:`, e?.message);
+  }
+  try {
+    await atualizarResumoAtendimentoContato(supabase, telLimpo, payload);
+  } catch (e: any) {
+    console.error(`[eventos_contato] falha ao atualizar resumo tel=${telLimpo}:`, e?.message);
+  }
+
   const primeiroNome = payload.contato_nome ? String(payload.contato_nome).split(/\s+/)[0] : "";
   return {
     success: true,
@@ -3446,6 +3499,152 @@ async function executarSolicitarAtendenteHumano(
     pausada_ate: pausadaAte,
     motivo: motivoTransbordo,
   };
+}
+
+// ============================================================
+// Detalhes do contato — registro automático (eventos + resumo)
+// Templates FIXOS no código. Nunca afirmam execução; só descrevem o
+// pedido do associado e o encaminhamento ao Relacionamento.
+// ============================================================
+const REGEX_PEDIDO_CANCELAMENTO = /cancel|baixa|vendi|parar de cobrar|n[ãa]o quero mais/i;
+
+function classificarTipoEvento(motivo: string, resumo: string): {
+  tipo: "pedido_cancelamento" | "sinistro_emergencia" | "reclamacao" | "transbordo_humano";
+  descricao: string;
+} {
+  const resumoTxt = String(resumo || "").trim();
+  if (motivo === "sinistro_emergencia") {
+    return {
+      tipo: "sinistro_emergencia",
+      descricao: resumoTxt ? `Relatou sinistro/emergência — ${resumoTxt}` : "Relatou sinistro/emergência.",
+    };
+  }
+  if (motivo === "reclamacao") {
+    return {
+      tipo: "reclamacao",
+      descricao: resumoTxt ? `Reclamou — ${resumoTxt}` : "Reclamou.",
+    };
+  }
+  if (motivo === "outros" && REGEX_PEDIDO_CANCELAMENTO.test(resumoTxt)) {
+    return {
+      tipo: "pedido_cancelamento",
+      descricao: `Pediu cancelamento — ${resumoTxt}`,
+    };
+  }
+  return {
+    tipo: "transbordo_humano",
+    descricao: resumoTxt
+      ? `Atendimento encaminhado para Relacionamento — ${resumoTxt}`
+      : "Atendimento encaminhado para Relacionamento.",
+  };
+}
+
+async function registrarEventoContato(
+  supabase: any,
+  telefone: string,
+  tipo: string,
+  descricao: string,
+  metadata: Record<string, any>,
+) {
+  const telLimpo = (telefone || "").replace(/\D/g, "");
+  if (!telLimpo) return;
+  const dedupeKey = String(metadata?.dedupe_key || "");
+  // Dedupe: skip se já houver evento (mesmo telefone, mesmo tipo, mesma dedupe_key) nos últimos 30 min
+  if (dedupeKey) {
+    const desde = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const { data: existente } = await supabase
+      .from("contato_eventos_importantes")
+      .select("id")
+      .eq("telefone", telLimpo)
+      .eq("tipo", tipo)
+      .eq("metadata->>dedupe_key", dedupeKey)
+      .gte("ocorrido_em", desde)
+      .limit(1)
+      .maybeSingle();
+    if (existente?.id) {
+      console.log(`[eventos_contato] dedupe hit tel=${telLimpo} tipo=${tipo} key=${dedupeKey.slice(0, 60)}`);
+      return;
+    }
+  }
+  const { error } = await supabase.from("contato_eventos_importantes").insert({
+    telefone: telLimpo,
+    tipo,
+    descricao: String(descricao || "").slice(0, 1000),
+    ocorrido_em: new Date().toISOString(),
+    criado_por: "ia",
+    metadata,
+  });
+  if (error) {
+    console.error(`[eventos_contato] insert falhou tel=${telLimpo} tipo=${tipo}:`, error.message);
+  } else {
+    console.log(`[eventos_contato] gravado tel=${telLimpo} tipo=${tipo}`);
+  }
+}
+
+async function registrarEventoTransbordoContato(
+  supabase: any,
+  telefone: string,
+  payload: { motivo: string; resumo: string; prioridade: "normal" | "alta"; contato_nome: string | null },
+) {
+  const { tipo, descricao } = classificarTipoEvento(payload.motivo, payload.resumo);
+  const dedupeKey = `${payload.motivo}|${String(payload.resumo || "").slice(0, 80)}`;
+  await registrarEventoContato(supabase, telefone, tipo, descricao, {
+    dedupe_key: dedupeKey,
+    motivo_transbordo: payload.motivo,
+    prioridade: payload.prioridade,
+    origem: "agente-consultor-ia/transbordo",
+  });
+}
+
+async function atualizarResumoAtendimentoContato(
+  supabase: any,
+  telefone: string,
+  payload: { motivo: string; resumo: string; contato_nome: string | null },
+) {
+  const telLimpo = (telefone || "").replace(/\D/g, "");
+  if (!telLimpo) return;
+
+  // "Quem" SEMPRE pelo nome identificado por CPF nesta sessão (agente_ia_contatos.nome
+  // só conta quando há cpf preenchido — telefone pode ter mais de um associado, então
+  // NUNCA derivamos nome por busca por telefone). Fallbacks: payload.contato_nome →
+  // "não identificado".
+  let quem = "não identificado";
+  try {
+    const { data: c } = await supabase
+      .from("agente_ia_contatos")
+      .select("nome, cpf")
+      .eq("telefone", telLimpo)
+      .maybeSingle();
+    if (c?.cpf && c?.nome) {
+      quem = String(c.nome).trim();
+    } else if (payload.contato_nome) {
+      quem = String(payload.contato_nome).trim();
+    }
+  } catch (_) {
+    if (payload.contato_nome) quem = String(payload.contato_nome).trim();
+  }
+
+  const pedido = String(payload.resumo || "").trim() || "(sem detalhes registrados)";
+  const resumoTexto = [
+    `Quem: ${quem}`,
+    `O que pediu: ${pedido}`,
+    `Status: aguardando equipe de Relacionamento`,
+    `Motivo do transbordo: ${payload.motivo}`,
+  ].join("\n");
+
+  const { error } = await supabase
+    .from("agente_ia_contatos")
+    .update({
+      resumo_atendimento: resumoTexto,
+      resumo_atualizado_em: new Date().toISOString(),
+    })
+    .eq("telefone", telLimpo);
+
+  if (error) {
+    console.error(`[eventos_contato] update resumo falhou tel=${telLimpo}:`, error.message);
+  } else {
+    console.log(`[eventos_contato] resumo atualizado tel=${telLimpo} quem="${quem}"`);
+  }
 }
 
 // ============================================================
