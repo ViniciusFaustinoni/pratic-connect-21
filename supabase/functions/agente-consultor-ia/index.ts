@@ -2384,7 +2384,7 @@ REGRAS OBRIGATÓRIAS deste contexto:
     // Aplica-se a associado E lead (cancelamento pode chegar por qualquer porta).
     // Falsos-positivos são aceitáveis — o pior caso é encaminhar para humano à toa.
     // Métrica observável via log [validador_saida:acao_contrato_sem_tool] para tuning.
-    if (isAssociado || (typeof isLead !== "undefined" && isLead)) {
+    {
       const txt = respostaFinal.toLowerCase();
       const padroesAcaoContrato = [
         // "já registrei sua solicitação / pedido / cancelamento / baixa"
