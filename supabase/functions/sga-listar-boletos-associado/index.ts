@@ -334,6 +334,8 @@ serve(async (req) => {
           typeof s === 'string' && /n[aã]o foi poss[ií]vel disponibilizar/i.test(s);
         const linhaDig = b?.linha_digitavel ?? b?.linha_digitavel_boleto ?? null;
         const linkBol = b?.link_boleto ?? b?.url_boleto ?? null;
+        const pixCopiaCola = b?.pix?.copia_cola ?? b?.pix_copia_cola ?? null;
+        const pixQrcode = b?.pix?.qrcode ?? b?.pix_qrcode ?? null;
         saldo += valor;
         abertos.push({
           nosso_numero: b?.nosso_numero ? String(b.nosso_numero) : null,
@@ -342,6 +344,8 @@ serve(async (req) => {
           data_emissao: parseDataHinova(b?.data_emissao ?? b?.emissao),
           linha_digitavel: isSentinela(linhaDig) ? null : linhaDig,
           link_boleto: isSentinela(linkBol) ? null : linkBol,
+          pix_copia_cola: typeof pixCopiaCola === 'string' && pixCopiaCola.trim() ? pixCopiaCola.trim() : null,
+          pix_qrcode: typeof pixQrcode === 'string' && pixQrcode.trim() ? pixQrcode.trim() : null,
           situacao_label: situacaoRaw ? String(situacaoRaw) : status,
         });
       }
