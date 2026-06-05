@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, PhoneCall, PowerOff, Loader2 } from 'lucide-react';
+import { ExternalLink, PhoneCall, PowerOff, Loader2, FileText, Clock } from 'lucide-react';
+import { useContatoRegistroAtendimento, type EventoImportante } from '@/hooks/useContatoRegistroAtendimento';
 import { AssociadoFichaCompletaDialog } from '@/components/servicos-campo/AssociadoFichaCompletaDialog';
 import {
   Sheet,
