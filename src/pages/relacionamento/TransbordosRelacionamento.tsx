@@ -133,6 +133,11 @@ export default function TransbordosRelacionamento() {
                         <UserAvatar src={t.avatar_url} name={t.nome} size="sm" />
                         <div className="min-w-0">
                           <p className="font-medium truncate">{t.nome || 'Contato desconhecido'}</p>
+                          {t.multiplos_cadastros && !t.associado_id && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                              ⚠ Múltiplos cadastros neste telefone
+                            </p>
+                          )}
                           {!t.nome && (
                             <p className="text-xs text-muted-foreground">Sem vínculo de associado</p>
                           )}
