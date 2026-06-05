@@ -170,6 +170,35 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
             <div className="flex justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : ambiguo ? (
+            <div className="space-y-2 text-sm">
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
+                <strong>Mais de um cadastro vinculado a este telefone.</strong>{' '}
+                Selecione qual cadastro abrir.
+              </div>
+              <ul className="space-y-1.5">
+                {candidatos.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center justify-between gap-2 rounded border p-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{c.nome || 'Sem nome'}</p>
+                      {c.status && (
+                        <Badge variant="secondary" className="mt-0.5 text-[10px]">{c.status}</Badge>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setFichaAssocId(c.id); setFichaOpen(true); }}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-1" /> Abrir
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : associado ? (
             <div className="space-y-2 text-sm">
               {associado.email && (
@@ -179,7 +208,7 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
                 variant="default"
                 size="sm"
                 className="w-full mt-2"
-                onClick={() => setFichaOpen(true)}
+                onClick={() => { setFichaAssocId(associado.id); setFichaOpen(true); }}
               >
                 <ExternalLink className="h-4 w-4 mr-2" /> Abrir cadastro completo
               </Button>
