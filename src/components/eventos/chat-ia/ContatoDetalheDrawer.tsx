@@ -40,26 +40,45 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
 
   const telLimpo = telefone?.replace(/\D/g, '') ?? '';
 
-  const { data: associado, isLoading } = useQuery({
-    queryKey: ['contato-associado', telLimpo],
-    enabled: open && !!telLimpo,
-    queryFn: async () => {
-      const variacoes = [telLimpo];
-      if (telLimpo.startsWith('55')) variacoes.push(telLimpo.slice(2));
-      else variacoes.push(`55${telLimpo}`);
+  const variantes = (() => {
+    if (!telLimpo) return [] as string[];
+    const set = new Set<string>([telLimpo]);
+    if (telLimpo.startsWith('55') && telLimpo.length >= 12) set.add(telLimpo.slice(2));
+    else if (telLimpo.length >= 10) set.add(`55${telLimpo}`);
+    return Array.from(set);
+  })();
 
+  const normNome = (n: string | null | undefined) =>
+    (n || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\.+$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const { data: candidatos = [], isLoading } = useQuery({
+    queryKey: ['contato-associados', variantes],
+    enabled: open && variantes.length > 0,
+    queryFn: async () => {
+      // Match exato por telefone OU whatsapp — sem ilike %…% (que pegaria números
+      // que apenas contêm os mesmos dígitos). Pode haver MAIS DE UM cadastro
+      // legitimamente vinculado ao mesmo número (familiares).
+      const orParts = variantes
+        .flatMap((v) => [`telefone.eq.${v}`, `whatsapp.eq.${v}`])
+        .join(',');
       const { data, error } = await supabase
         .from('associados')
         .select('id, nome, telefone, whatsapp, avatar_url, status, email')
-        .or(
-          variacoes
-            .flatMap((v) => [`telefone.ilike.%${v}%`, `whatsapp.ilike.%${v}%`])
-            .join(',')
-        )
-        .limit(1)
-        .maybeSingle();
+        .or(orParts)
+        .limit(20);
       if (error) throw error;
-      return data as {
+      const seen = new Set<string>();
+      return ((data ?? []) as any[]).filter((a) => {
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      }) as Array<{
         id: string;
         nome: string | null;
         telefone: string | null;
@@ -67,9 +86,30 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
         avatar_url: string | null;
         status: string | null;
         email: string | null;
-      } | null;
+      }>;
     },
   });
+
+  // Desambiguação: quando houver mais de um, prefere o associado cujo nome bate
+  // (exato ou prefixo) com o nome que veio da conversa (push_name).
+  const associado = (() => {
+    if (candidatos.length === 0) return null;
+    if (candidatos.length === 1) return candidatos[0];
+    const alvo = normNome(nomeContato);
+    if (alvo) {
+      const exato = candidatos.find((c) => normNome(c.nome) === alvo);
+      if (exato) return exato;
+      const prefixo = candidatos.find((c) => {
+        const n = normNome(c.nome);
+        return !!n && (n.startsWith(alvo) || alvo.startsWith(n));
+      });
+      if (prefixo) return prefixo;
+    }
+    return null; // ambiguidade não resolvida
+  })();
+
+  const ambiguo = candidatos.length > 1 && !associado;
+  const [fichaAssocId, setFichaAssocId] = useState<string | undefined>(undefined);
 
   const handleEncerrar = async () => {
     if (!telefone) return;
