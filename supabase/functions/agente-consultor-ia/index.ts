@@ -2229,6 +2229,43 @@ REGRAS OBRIGATÓRIAS deste contexto:
               if (toolResult?.erro_transitorio) {
                 boletoErroTransbordo = { motivo: String(toolResult?.motivo || "sga_indisponivel") };
                 console.warn(`[agente-consultor-ia][boletos] erro_transitorio motivo=${boletoErroTransbordo.motivo} → forçando transbordo`);
+              } else if (toolResult?.success && Array.isArray(toolResult?.boletos) && toolResult.boletos.length > 0) {
+                // Evento HISTÓRICO em Detalhes do contato: boleto enviado.
+                // Pega o 1º boleto aberto com linha_digitavel; descrição por template fixa.
+                try {
+                  const aberto = toolResult.boletos.find((b: any) =>
+                    b && b.linha_digitavel && String(b.linha_digitavel).trim().length > 0
+                  );
+                  if (aberto) {
+                    const venc = String(aberto.vencimento || aberto.data_vencimento || "");
+                    let vencFmt = "—";
+                    if (venc) {
+                      const d = new Date(venc);
+                      if (!isNaN(d.getTime())) {
+                        vencFmt = new Intl.DateTimeFormat("pt-BR", {
+                          timeZone: "America/Sao_Paulo",
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                        }).format(d);
+                      } else {
+                        vencFmt = venc;
+                      }
+                    }
+                    await registrarEventoContato(
+                      supabase,
+                      telLimpo,
+                      "boleto_enviado",
+                      `Enviado boleto, vencimento ${vencFmt}.`,
+                      {
+                        dedupe_key: `boleto|${String(aberto.linha_digitavel).slice(0, 80)}`,
+                        vencimento: venc || null,
+                        valor: aberto.valor_boleto ?? aberto.valor ?? null,
+                        origem: "agente-consultor-ia/consultar_boletos",
+                      },
+                    );
+                  }
+                } catch (e: any) {
+                  console.error(`[eventos_contato] falha ao registrar boleto_enviado tel=${telLimpo}:`, e?.message);
+                }
               }
             } else if (fnName === "consultar_situacao_veiculo") {
               toolResult = await executarConsultarSituacaoVeiculo(
