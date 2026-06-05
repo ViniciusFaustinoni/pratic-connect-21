@@ -3470,44 +3470,13 @@ async function executarConsultarBoletosAssociado(
       placa: b.placa || b.veiculo_placa || null,
       veiculo: b.veiculo || "Veículo",
       linha_digitavel: b.linhaDigitavel || b.linha_digitavel || b.codigoBarras || null,
-      pix_copia_cola: null as string | null,
+      pix_copia_cola: b.pix_copia_cola || b.pixCopiaCola || (b.pix && b.pix.copia_cola) || null,
       link_boleto: b.link_boleto || b.linkBoleto || b.url_boleto || null,
       nosso_numero: b.nosso_numero || null,
     };
   });
 
-  // Enriquecimento via tabela local `cobrancas`: PIX copia-e-cola e link do PDF
-  // (o SGA Hinova não retorna PIX, e o link nem sempre vem preenchido).
-  try {
-    const linhas = normalizados.map(n => (n.linha_digitavel ? String(n.linha_digitavel).replace(/\D/g, "") : null)).filter(Boolean) as string[];
-    const nossos = normalizados.map(n => n.nosso_numero).filter(Boolean) as string[];
-    if (linhas.length || nossos.length) {
-      const orParts: string[] = [];
-      if (linhas.length) orParts.push(`linha_digitavel.in.(${linhas.map(l => `"${l}"`).join(",")})`);
-      if (nossos.length) orParts.push(`nosso_numero.in.(${nossos.map(n => `"${n}"`).join(",")})`);
-      const { data: cobs } = await _supabase
-        .from("cobrancas")
-        .select("linha_digitavel, nosso_numero, pix_copia_cola, boleto_url")
-        .or(orParts.join(","))
-        .limit(50);
-      const byLinha = new Map<string, any>();
-      const byNosso = new Map<string, any>();
-      for (const c of (cobs || [])) {
-        if (c.linha_digitavel) byLinha.set(String(c.linha_digitavel).replace(/\D/g, ""), c);
-        if (c.nosso_numero) byNosso.set(String(c.nosso_numero), c);
-      }
-      for (const n of normalizados) {
-        const ld = n.linha_digitavel ? String(n.linha_digitavel).replace(/\D/g, "") : null;
-        const hit = (ld && byLinha.get(ld)) || (n.nosso_numero && byNosso.get(String(n.nosso_numero))) || null;
-        if (hit) {
-          n.pix_copia_cola = hit.pix_copia_cola || null;
-          n.link_boleto = n.link_boleto || hit.boleto_url || null;
-        }
-      }
-    }
-  } catch (e: any) {
-    console.warn("[tool:consultar_boletos] enriquecimento cobrancas falhou:", e?.message);
-  }
+
 
   normalizados.sort((a: any, b: any) => {
     if (a.aberto !== b.aberto) return a.aberto ? -1 : 1;
