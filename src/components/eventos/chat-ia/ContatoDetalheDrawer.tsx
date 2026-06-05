@@ -296,9 +296,9 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
         </div>
       </SheetContent>
       <AssociadoFichaCompletaDialog
-        associadoId={associado?.id}
+        associadoId={fichaAssocId ?? associado?.id}
         open={fichaOpen}
-        onOpenChange={setFichaOpen}
+        onOpenChange={(v) => { setFichaOpen(v); if (!v) setFichaAssocId(undefined); }}
       />
     </Sheet>
   );
