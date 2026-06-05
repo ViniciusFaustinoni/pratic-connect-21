@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, PhoneCall, PowerOff, Loader2 } from 'lucide-react';
+import { ExternalLink, PhoneCall, PowerOff, Loader2, FileText, Clock } from 'lucide-react';
+import { useContatoRegistroAtendimento, type EventoImportante } from '@/hooks/useContatoRegistroAtendimento';
 import { AssociadoFichaCompletaDialog } from '@/components/servicos-campo/AssociadoFichaCompletaDialog';
 import {
   Sheet,
@@ -34,6 +35,8 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
   const [encerrando, setEncerrando] = useState(false);
   const [fichaOpen, setFichaOpen] = useState(false);
   const { pausa, ativa, pausarPorEncerramento } = useIaPausa(telefone);
+  const { resumo, resumoAtualizadoEm, eventos, isLoading: registroLoading } =
+    useContatoRegistroAtendimento(open ? telefone : null);
 
   const telLimpo = telefone?.replace(/\D/g, '') ?? '';
 
@@ -147,6 +150,55 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
 
           <Separator />
 
+          {/* Resumo do atendimento */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Resumo do atendimento</p>
+            </div>
+            {registroLoading ? (
+              <div className="h-10 rounded bg-muted/40 animate-pulse" />
+            ) : resumo && resumo.trim() ? (
+              <div className="space-y-1">
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{resumo}</p>
+                {resumoAtualizadoEm && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Atualizado em {formatarDataHoraBR(resumoAtualizadoEm)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs italic text-muted-foreground">Sem resumo ainda.</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Eventos importantes */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Eventos importantes</p>
+            </div>
+            {registroLoading ? (
+              <div className="space-y-1.5">
+                <div className="h-4 rounded bg-muted/40 animate-pulse" />
+                <div className="h-4 rounded bg-muted/40 animate-pulse w-3/4" />
+              </div>
+            ) : eventos.length === 0 ? (
+              <p className="text-xs italic text-muted-foreground">Nenhum evento registrado ainda.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {eventos.map((ev) => (
+                  <EventoLinha key={ev.id} evento={ev} />
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <Separator />
+
+
           <div className="space-y-2">
             <p className="text-sm font-medium">Encerrar atendimento</p>
             <p className="text-xs text-muted-foreground">
@@ -182,3 +234,37 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
     </Sheet>
   );
 }
+
+const TZ_BRT = 'America/Sao_Paulo';
+
+function formatarDataHoraBR(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', {
+    timeZone: TZ_BRT,
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function isMesmoDiaBR(iso: string): boolean {
+  const fmt = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ_BRT, day: '2-digit', month: '2-digit', year: 'numeric' });
+  return fmt.format(new Date(iso)) === fmt.format(new Date());
+}
+
+function EventoLinha({ evento }: { evento: EventoImportante }) {
+  const hojeBR = isMesmoDiaBR(evento.ocorrido_em);
+  const data = new Date(evento.ocorrido_em);
+  const horaBR = data.toLocaleTimeString('pt-BR', { timeZone: TZ_BRT, hour: '2-digit', minute: '2-digit' });
+  const dataBR = data.toLocaleDateString('pt-BR', { timeZone: TZ_BRT, day: '2-digit', month: '2-digit' });
+  return (
+    <li className="flex gap-2 text-xs leading-snug">
+      <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+        {hojeBR ? horaBR : `${dataBR} ${horaBR}`}
+      </span>
+      <span className="text-muted-foreground">·</span>
+      <span className="flex-1">{evento.descricao}</span>
+    </li>
+  );
+}
+

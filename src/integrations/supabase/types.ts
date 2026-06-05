@@ -953,6 +953,8 @@ export type Database = {
           nome: string | null
           nome_confirmado_em: string | null
           resetado_em: string | null
+          resumo_atendimento: string | null
+          resumo_atualizado_em: string | null
           sga_associado_encontrado: boolean | null
           sga_associado_id: string | null
           sga_associado_status: string | null
@@ -979,6 +981,8 @@ export type Database = {
           nome?: string | null
           nome_confirmado_em?: string | null
           resetado_em?: string | null
+          resumo_atendimento?: string | null
+          resumo_atualizado_em?: string | null
           sga_associado_encontrado?: boolean | null
           sga_associado_id?: string | null
           sga_associado_status?: string | null
@@ -1005,6 +1009,8 @@ export type Database = {
           nome?: string | null
           nome_confirmado_em?: string | null
           resetado_em?: string | null
+          resumo_atendimento?: string | null
+          resumo_atualizado_em?: string | null
           sga_associado_encontrado?: boolean | null
           sga_associado_id?: string | null
           sga_associado_status?: string | null
@@ -9271,6 +9277,39 @@ export type Database = {
             referencedColumns: ["sinistro_id"]
           },
         ]
+      }
+      contato_eventos_importantes: {
+        Row: {
+          created_at: string
+          criado_por: string
+          descricao: string
+          id: string
+          metadata: Json
+          ocorrido_em: string
+          telefone: string
+          tipo: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string
+          descricao: string
+          id?: string
+          metadata?: Json
+          ocorrido_em?: string
+          telefone: string
+          tipo: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string
+          descricao?: string
+          id?: string
+          metadata?: Json
+          ocorrido_em?: string
+          telefone?: string
+          tipo?: string
+        }
+        Relationships: []
       }
       contrato_retificacoes: {
         Row: {
