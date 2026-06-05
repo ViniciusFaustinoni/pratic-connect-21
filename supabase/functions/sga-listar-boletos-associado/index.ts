@@ -49,6 +49,8 @@ interface BoletoAberto {
   data_emissao: string | null;
   linha_digitavel: string | null;
   link_boleto: string | null;
+  pix_copia_cola: string | null;
+  pix_qrcode: string | null;
   situacao_label: string;
 }
 
