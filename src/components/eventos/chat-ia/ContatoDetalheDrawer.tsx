@@ -150,6 +150,55 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
 
           <Separator />
 
+          {/* Resumo do atendimento */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Resumo do atendimento</p>
+            </div>
+            {registroLoading ? (
+              <div className="h-10 rounded bg-muted/40 animate-pulse" />
+            ) : resumo && resumo.trim() ? (
+              <div className="space-y-1">
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{resumo}</p>
+                {resumoAtualizadoEm && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Atualizado em {formatarDataHoraBR(resumoAtualizadoEm)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs italic text-muted-foreground">Sem resumo ainda.</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Eventos importantes */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Eventos importantes</p>
+            </div>
+            {registroLoading ? (
+              <div className="space-y-1.5">
+                <div className="h-4 rounded bg-muted/40 animate-pulse" />
+                <div className="h-4 rounded bg-muted/40 animate-pulse w-3/4" />
+              </div>
+            ) : eventos.length === 0 ? (
+              <p className="text-xs italic text-muted-foreground">Nenhum evento registrado ainda.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {eventos.map((ev) => (
+                  <EventoLinha key={ev.id} evento={ev} />
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <Separator />
+
+
           <div className="space-y-2">
             <p className="text-sm font-medium">Encerrar atendimento</p>
             <p className="text-xs text-muted-foreground">
