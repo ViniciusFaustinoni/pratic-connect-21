@@ -2425,8 +2425,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
               {/* Seletor de versão FIPE — quando a API retorna múltiplas variantes (ex.: manual vs Easytronic) */}
               {veiculoEncontrado?.success && (veiculoEncontrado.fipeAlternativas?.length ?? 0) > 1 && (
-                <div className="space-y-1 p-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
-                  <Label className="text-xs text-amber-900 dark:text-amber-200">
+                <div className="space-y-2 p-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
+                  <Label className="block text-xs leading-snug text-amber-900 dark:text-amber-200">
                     {veiculoEncontrado.fipeAlternativas!.length} versões FIPE encontradas — confira combustível/câmbio/motorização do CRLV
                   </Label>
                   <Select
@@ -2451,14 +2451,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                       toast.success('Versão FIPE atualizada');
                     }}
                   >
-                    <SelectTrigger className="h-9 bg-background">
-                      <SelectValue placeholder="Selecione a versão correta" />
+                    <SelectTrigger className="h-9 w-full bg-background text-sm [&>span]:block [&>span]:truncate [&>span]:text-left">
+                      <SelectValue placeholder="Selecione a versão correta">
+                        {veiculoEncontrado.fipeData?.descricao || 'Selecione a versão correta'}
+                      </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="max-w-[600px]">
+                    <SelectContent className="max-w-[calc(100vw-2rem)] sm:max-w-[600px]">
                       {veiculoEncontrado.fipeAlternativas!.map((alt) => (
                         <SelectItem key={String(alt.codigo)} value={String(alt.codigo)}>
                           <div className="flex flex-col text-left">
-                            <span className="font-medium">{alt.descricao}</span>
+                            <span className="font-medium whitespace-normal break-words">{alt.descricao}</span>
                             <span className="text-xs text-muted-foreground">
                               R$ {Number(alt.valor).toLocaleString('pt-BR')} · cód. {alt.codigo}{alt.ano ? ` · ${alt.ano}` : ''}
                             </span>
