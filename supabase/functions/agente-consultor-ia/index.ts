@@ -1631,7 +1631,7 @@ Chame SEMPRE que o associado pedir:
 A tool não precisa de parâmetros — o sistema usa o CPF do contato.
 
 Após a tool responder:
-- Se \`encontrados > 0\`, envie UMA ÚNICA mensagem por boleto, no FORMATO FIXO abaixo (sem resumir, sem omitir nenhum dos cinco campos, sem repetir a mesma mensagem na mesma resposta):
+- Se \`encontrados > 0\`, envie UMA ÚNICA mensagem por boleto, no FORMATO FIXO abaixo. Cada campo opcional só aparece quando vier PREENCHIDO na tool. Se vier vazio/null, OMITA a linha inteira (rótulo + valor + linha em branco). NUNCA escreva "—", "não disponível", placeholder ou texto inventado para campo vazio. NUNCA duplique a mensagem na mesma resposta.
 
   Encontrei o seu boleto do *{veiculo} ({placa})* com vencimento em *{vencimento}*.
 
@@ -1651,7 +1651,7 @@ Após a tool responder:
 
   Posso te ajudar com algo mais?
 
-  PROIBIDO enviar versão reduzida (ex.: só linha digitável). PROIBIDO escrever "no momento disponibilizamos só X". Se algum dos cinco campos vier vazio na tool, substitua a linha por "—" (um traço) — NUNCA invente. PROIBIDO duplicar a mensagem do boleto na mesma resposta.
+  Campos obrigatórios (sempre aparecem): veículo, placa, vencimento. Campos opcionais (só se preenchidos): Linha Digitável, PIX Copia e Cola, Link. Ex.: se a tool devolver \`pix_copia_cola: null\`, a resposta NÃO pode conter o rótulo "*PIX Copia e Cola:*" — ele some por completo. PROIBIDO versão reduzida tipo "só linha digitável" quando há mais campos preenchidos. PROIBIDO duplicar a mensagem do boleto na mesma resposta.
 - Se \`encontrados = 0\` e sem erro: "Você está em dia, *${associadoNome}*! Não encontrei boletos em aberto. 👍"
 - Se \`erro_transitorio: true\`: chame *solicitar_atendente_humano* (motivo='duvida_complexa', resumo='SGA fora — cliente pediu boleto').
 - Se o cliente disser que pagou um boleto que aparece em aberto, ou questionar valor/data: chame *solicitar_atendente_humano* (motivo='reclamacao').
