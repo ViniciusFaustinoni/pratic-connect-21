@@ -2379,6 +2379,62 @@ REGRAS OBRIGATÓRIAS deste contexto:
       }
     }
 
+    // Validador de saída 3 (defesa em profundidade): afirmação de EXECUÇÃO de ação
+    // de contrato/cadastro/cobrança que a IA NÃO tem ferramenta para realizar.
+    // Aplica-se a associado E lead (cancelamento pode chegar por qualquer porta).
+    // Falsos-positivos são aceitáveis — o pior caso é encaminhar para humano à toa.
+    // Métrica observável via log [validador_saida:acao_contrato_sem_tool] para tuning.
+    if (isAssociado || (typeof isLead !== "undefined" && isLead)) {
+      const txt = respostaFinal.toLowerCase();
+      const padroesAcaoContrato = [
+        // "já registrei sua solicitação / pedido / cancelamento / baixa"
+        /\bj[áa]\s+registrei\b/,
+        /\bregistrei\s+(sua|seu|o|a)\s+(solicita[çc][ãa]o|pedido|cancelamento|baixa)\b/,
+        // baixa / processei / conclui / efetivei
+        /\b(dei|fiz)\s+(a\s+)?baixa\b/,
+        /\bbaixei\s+(seu|sua|o|a)\b/,
+        /\bprocessei\s+(seu|sua|o|a|sua\s+solicita[çc][ãa]o)\b/,
+        /\bconclu[íi]\s+(o|seu)\s+cancelamento\b/,
+        /\befetivei\s+(o|seu)\s+cancelamento\b/,
+        // cancelei algo do cliente
+        /\bcancelei\s+(seu|sua|o\s+seu|a\s+sua|o|a)\b/,
+        /\bfiz\s+o\s+cancelamento\b/,
+        // cobranças
+        /\b(interromp(i|emos)|parei|paramos|suspend(i|emos)|bloque(ei|amos))\s+(as?\s+)?(cobran[çc]a|cobran[çc]as|mensalidade|mensalidades|d[ée]bito|d[ée]bitos)\b/,
+        // cadastro
+        /\b(atualizei|alterei|mudei|corrigi)\s+(seu|seus|sua|o\s+seu|a\s+sua)\s+(cadastro|endere[çc]o|telefone|email|e-mail|dados)\b/,
+        // titularidade
+        /\bfiz\s+a\s+transfer[êe]ncia\b/,
+        /\btransferi\s+(a\s+)?titularidade\b/,
+        // desconto / acordo
+        /\bapliquei\s+(o\s+)?desconto\b/,
+        /\bfiz\s+o\s+acordo\b/,
+        /\bparcelei\s+(seu|sua|o)\b/,
+        // plano
+        /\b(troquei|mudei|alterei)\s+(seu|o\s+seu)\s+plano\b/,
+        /\bfiz\s+(o\s+)?upgrade\b/,
+        /\bfiz\s+(o\s+)?downgrade\b/,
+      ];
+      const violouAcao = padroesAcaoContrato.some((re) => re.test(txt));
+      if (violouAcao) {
+        console.warn(`[agente-consultor-ia] validador_saida:acao_contrato_sem_tool tel=${telLimpo} resposta="${respostaFinal.substring(0, 240)}"`);
+        respostaFinal =
+          "Recebi seu pedido. Vou encaminhar para a equipe responsável dar andamento e te retornar por aqui. 🙏";
+        try {
+          await executarSolicitarAtendenteHumano(supabase, telLimpo, {
+            motivo: "reclamacao",
+            resumo: "validador_saida: IA alegou executar ação de contrato/cadastro sem ferramenta",
+            prioridade: "alta",
+            contato_nome: contato?.nome || associadoNome || null,
+            associado_id: null,
+          });
+        } catch (e: any) {
+          console.error(`[agente-consultor-ia] validador_saida:acao_contrato_sem_tool — falha transbordo: ${e?.message}`);
+        }
+      }
+    }
+
+
 
     const partes = dividirMensagem(respostaFinal, 1000);
 
