@@ -35,6 +35,8 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
   const [encerrando, setEncerrando] = useState(false);
   const [fichaOpen, setFichaOpen] = useState(false);
   const { pausa, ativa, pausarPorEncerramento } = useIaPausa(telefone);
+  const { resumo, resumoAtualizadoEm, eventos, isLoading: registroLoading } =
+    useContatoRegistroAtendimento(open ? telefone : null);
 
   const telLimpo = telefone?.replace(/\D/g, '') ?? '';
 
