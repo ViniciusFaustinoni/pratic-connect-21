@@ -1,67 +1,64 @@
-## Auditoria de mudanças por cron — Softruck & Rede Veículos (últimos 60 dias)
+## Levantamento: funil de cadastros do link público (últimos 30 dias)
 
 ### Escopo
+- Universo: `cotacoes` criadas nos últimos 30 dias que entraram no link público (i.e. `status_contratacao IS NOT NULL` — significa que o associado clicou e iniciou alguma etapa).
+- Sem alterações no sistema. Apenas leitura + geração de planilha.
 
-Apenas eventos cuja origem é **cron / reconciliação noturna**, excluindo o que aconteceu **durante** um processo (adesão, troca, substituição, ativação ao vivo no fluxo do usuário).
+### Classificação de etapa (onde cada cadastro parou)
+Reaproveitar a fonte única canônica do projeto:
+- `getEtapaVenda(cotacao)` → `etapaVendaParaPendente` (de `src/lib/etapaPendentePublica.ts`)
+- Complementada pelo estado real do contrato/associado para distinguir "chegou no Cadastro", "chegou no Monitoramento", "finalizado (SGA)".
 
-### Crons relevantes confirmados
+Buckets finais (mutuamente exclusivos):
+1. **Link público — escolhendo plano** (`aguardando_escolha_plano`)
+2. **Link público — enviando documentos**
+3. **Link público — assinando contrato**
+4. **Link público — pagando adesão**
+5. **Link público — escolhendo vistoria**
+6. **Link público — fazendo autovistoria** (relevante p/ sub-FIPE)
+7. **Link público — agendando instalação**
+8. **Aguardando execução do agendamento** (bola com a operação)
+9. **Cadastro — aguardando aprovação** (`status_contratacao='aguardando_aprovacao_cadastro'`)
+10. **Monitoramento — aguardando aprovação** (`aguardando_aprovacao_monitoramento`)
+11. **Finalizado (SGA)** — `contratos.cadastro_aprovado=true` + `aprovado_em IS NOT NULL` + `associados.status='ativo'` + `veiculos.status='ativo'` (caminho canônico do `ativar-associado`)
+12. **Terminal sem sucesso** — cancelado/recusado
 
-| Job | Frequência | O que faz |
-|---|---|---|
-| `softruck-reconciliar-pending-10min` | a cada 10 min | Reprocessa ativações Softruck travadas em PENDING e detecta desvínculo remoto |
-| `rede-veiculos-sync-cron-30min` | a cada 30 min | Sincroniza status de cliente/veículo na Rede |
-| `cron-softruck-troca-retry` | a cada 5 min | Retry de vínculo Softruck em trocas de titularidade |
+### Classificação sub-FIPE
+Regra canônica do projeto:
+- **Carro**: `valor_fipe < 30.000`
+- **Moto**: `valor_fipe < 9.000`
+- Tipo do veículo derivado de `marcas_modelos.tipo_veiculo` (com override por nome quando catálogo divergir — Honda/BMW podem aparecer como 'carro' indevidamente). Para o levantamento, basta `marcas_modelos` + heurística de keyword (CG, Biz, NMAX, etc.) como fallback.
+- Diesel é tratado à parte (rastreador sempre obrigatório, nunca é sub-FIPE).
 
-### Fontes de verdade (já mapeadas)
+### Entregáveis (planilha XLSX em `/mnt/documents/`)
+`/mnt/documents/funil-cadastros-link-publico-30d.xlsx` com 4 abas:
 
-1. **`rastreadores_vinculo_historico`** — mudanças de vínculo no nosso DB feitas pelo cron (origem `auto_desvinculo_remoto_softruck`).
-2. **`rastreadores_api_logs`** — TODAS as chamadas que o cron disparou contra Softruck/Rede (filtrar por `operacao` com prefixo `CRON_`, `RECONCILED_FROM_PENDING`, `AUTO_DESVINCULO_REMOTO`, e por reconciliação 30min da Rede).
-3. **`rastreadores_sync_queue`** — itens que falharam ao vivo e foram concluídos por retry (`tentativas > 1`).
+1. **Resumo**
+   - Total iniciados
+   - Quantos finalizaram (SGA)
+   - Quantos pararam antes
+   - % conversão geral
+   - % conversão sub-FIPE vs não-sub-FIPE
+   - % conversão por tipo (carro/moto/diesel)
 
-### Volume preliminar (60d)
+2. **Funil por etapa**
+   - Cada etapa × contagem × % do total × % do "parados antes"
 
-- 2.711 reconciliações Softruck a partir de PENDING (sucesso) — **maior bloco**
-- 1.061 execuções do job `CRON_RECONCILIAR_PENDING` 
-- 42 desvínculos automáticos Softruck (rastreador sumiu remoto → desvinculamos local)
-- 4 itens na fila finalizados após retry (3 sucesso, 1 falha permanente)
-- 2.100 consultas de status na Rede (cron 30min) + 22 erros + 40 sem_resultado
+3. **Funil cruzado sub-FIPE × etapa**
+   - Matriz: linhas = etapa, colunas = [sub-FIPE carro, sub-FIPE moto, acima FIPE carro, acima FIPE moto, diesel]
+   - Permite ver se a sangria está concentrada em sub-FIPE (hipótese do usuário: autovistoria completa 31/15 + vídeo trava o associado)
 
-### O que a auditoria vai entregar
+4. **Detalhe**
+   - 1 linha por cotação: número, data criação, telefone, placa, marca/modelo, valor FIPE, tipo veículo, sub-FIPE (sim/não), etapa em que parou, dias parada, vendedor, link público
 
-CSV em `/mnt/documents/auditoria-cron-rastreadores-60d.csv` com **uma linha por evento cron** contendo:
+### Como o levantamento é feito
+1. Query única em `cotacoes` + joins (`contrato`, `planos`, `instalacoes`, `vistorias`, `marcas_modelos`, `associados`, `veiculos`) — `created_at >= now() - interval '30 days'` e `status_contratacao IS NOT NULL`.
+2. Script Node/TS local em `/tmp` aplica `getEtapaVenda` + `etapaVendaParaPendente` (reaproveita a lib do projeto via cópia ad-hoc) e classifica sub-FIPE.
+3. Gera o XLSX via `xlsx` (já presente em `node_modules`).
+4. Anexa o arquivo com `presentation-artifact`.
 
-- `data_hora` (BRT)
-- `plataforma` (softruck / rede_veiculos)
-- `job_cron` (qual cron disparou)
-- `operacao` (ativar / desvincular / reconciliar / atualizar status)
-- `rastreador_codigo` / `imei`
-- `placa_anterior` → `placa_nova`
-- `status_anterior` → `status_novo`
-- `veiculo_id` / `associado_nome`
-- `resultado` (sucesso / erro)
-- `motivo` (ex.: "pending → success após N tentativas", "desvinculado remotamente na Softruck", "vínculo refeito após erro inicial")
-- `tentativas_ate_concluir`
-- `link_painel` (rota interna para o rastreador)
+### Observação importante
+Não vou alterar nada no banco nem em código. O resultado é só a planilha — o usuário usa para decidir onde atuar depois.
 
-**Resumo executivo** (TXT/markdown) com:
-- Totais por job, por plataforma, por tipo de modificação
-- Top 10 rastreadores com mais intervenções cron
-- Casos onde o cron **modificou** estado na Softruck/Rede (POST/PUT) vs. apenas **leu** (GET de reconciliação)
-- Lista das 1 falha permanente + 22 erros de Rede que ainda merecem olhar humano
-
-### Plano de execução (build mode)
-
-1. Script SQL único que junta `rastreadores_api_logs` (filtrando operações de origem cron) + `rastreadores_vinculo_historico` (origem `auto_*`) + `rastreadores_sync_queue` (tentativas>1) com left-join em `rastreadores`, `veiculos`, `associados`.
-2. Export para CSV via `psql COPY ... TO STDOUT WITH CSV HEADER` em `/mnt/documents/`.
-3. Gerar `resumo-auditoria-cron-rastreadores-60d.md` com os agregados.
-4. Entregar via `<presentation-artifact>` os dois arquivos.
-
-### Fora de escopo (não confundir com cron)
-
-- Vínculos feitos durante adesão / troca / substituição ao vivo (origem `trigger_db` no histórico — 369 eventos).
-- Ações manuais de operador no painel (botão "Reprocessar Sincronização Softruck", etc.).
-- Backfills disparados manualmente da tela `/configuracoes/integracoes/sga-hinova`.
-
-### Decisão pendente
-
-Confirma que você quer **CSV + resumo markdown** entregues como arquivos baixáveis? Se preferir uma tela dentro do sistema (`/configuracoes/integracoes/.../auditoria-cron`) com filtros e paginação, eu replanejo — leva mais tempo e mexe em UI, mas fica reutilizável.
+### Dúvida antes de executar
+Você quer que eu inclua **cotações de troca de titularidade e substituição** no levantamento, ou só **novas adesões puras** (excluindo `origem_troca_titularidade=true` e `tipo_entrada='substituicao_placa'`)? A hipótese de sangria sub-FIPE é mais limpa olhando só novas adesões — sugiro essa, mas confirma.
