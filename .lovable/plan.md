@@ -1,50 +1,44 @@
-# Fix: data de vencimento do boleto exibida 1 dia antes
+# Bug: drawer e transbordo mostram associado errado quando 2 cadastros compartilham telefone
 
-## Causa raiz (confirmada)
+## Causa raiz
 
-Em `supabase/functions/agente-consultor-ia/index.ts`, linhas 3415–3422, a função `fmtData` faz:
+Dois associados ativos compartilham o telefone `21982244909`:
+- MARCOS VINICIUS DATIVO MACHADO (autor real da conversa)
+- LUIZ FERNANDO DE SOUZA FILHO
 
-```ts
-const dt = new Date(String(d));                 // "2026-06-10" → UTC midnight
-return dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-// → "09/06/2026" (UTC-3 puxa para o dia anterior)
-```
+A resolução de "associado por telefone" no front (`ContatoDetalheDrawer.tsx`, e mesma lógica na lista de Transbordo) faz `select … .or(ilike %tel%) .limit(1).maybeSingle()` sem `order by` nem preferência por match exato — Postgres devolve qualquer linha, e está caindo no LUIZ. O cabeçalho do chat acerta porque vem da última mensagem em `whatsapp_mensagens` (que tem o `push_name`/contato real do WhatsApp).
 
-É o único ponto de formatação de data de boleto no agente. Nenhum outro `toLocaleDateString` está no arquivo — os demais `new Date(...)` lidam com timestamps ISO completos (gates de saudação, pausas, etc.) e não sofrem do bug.
+Não é problema da IA, do boleto, da identificação, do roteador, nem do envio. É só a resolução de "qual associado pertence a este telefone" no front, quando há colisão.
 
-## Correção
+## Escopo desta correção (frontend-only)
 
-Substituir `fmtData` por um parser que trata `YYYY-MM-DD` como data civil (sem timezone), preservando timestamps ISO completos como fallback:
+1. **`ContatoDetalheDrawer.tsx`** — trocar a busca por uma que:
+   - Busque TODOS os associados que casam pelo telefone normalizado (sem `limit(1)`).
+   - Prefira o associado cujo `nome` (case-insensitive, sem acento) corresponda ao `nomeContato` que o ChatPanel já passa via prop (o nome que veio do WhatsApp, ex.: "MARCOS VINICIUS DATIVO MAC...").
+   - Fallback: se nenhum nome casar, NÃO escolher arbitrariamente — mostrar bloco "Mais de um cadastro vinculado a este telefone" listando os candidatos (nome + status + botão "Abrir cadastro"), e ocultar o "Abrir cadastro completo" único.
+   - Match exato `telefone = '<norm>'` ganha prioridade sobre `ilike %…%` (evita pegar telefone que apenas contém os mesmos dígitos).
 
-```ts
-const fmtData = (d: any) => {
-  if (!d) return null;
-  try {
-    const s = String(d);
-    // DATE puro "YYYY-MM-DD" (ou "YYYY-MM-DDT..." cortando a parte de hora):
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const [, ano, mes, dia] = m;
-      return `${dia}/${mes}/${ano}`;
-    }
-    // Fallback para outros formatos (ISO com offset): respeita o instante.
-    const dt = new Date(s);
-    if (isNaN(dt.getTime())) return s;
-    return dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  } catch { return String(d); }
-};
-```
+2. **Fila de Transbordo (`/relacionamento/transbordos`)** — aplicar a mesma desambiguação:
+   - Localizar o hook/componente que resolve `associado` a partir do `telefone` da pausa de transbordo.
+   - Quando houver colisão, exibir o nome que veio da própria conversa (`whatsapp_mensagens.push_name` ou `agente_ia_contatos.nome`) em vez do primeiro associado retornado. Se ainda assim ambíguo, marcar a linha com um chip discreto "⚠ múltiplos cadastros" e manter o nome do WhatsApp.
 
-Resultado: `2026-06-10` → `10/06/2026`, sem deslocamento.
+3. **Sem migração de dados.** Não fundir nem renumerar os dois cadastros — a duplicidade de telefone é dado real e pode existir legitimamente (familiares no mesmo número). Só corrigir a UI para não inventar associação.
 
-## Escopo
+## Fora de escopo
 
-- Único arquivo alterado: `supabase/functions/agente-consultor-ia/index.ts` (apenas o bloco de `fmtData`, linhas 3415–3422).
-- Deploy: `agente-consultor-ia`.
-- **Não toca**: tratamento `erro_transitorio` do boleto (já corrigido), formato de envio, situação do veículo, identificação, roteador, envio (`whatsapp-send-text`), habilidade vendas, datas de saudação/pausa.
+- IA / prompt / validador de saída / tool de transbordo.
+- Boleto, situação do veículo, identificação, roteador, envio.
+- Habilidade vendas.
+- Receptiva no ar — não tocar.
+- Gravação automática de resumo/eventos (etapa seguinte separada).
 
-## Validação em produção
+## Arquivos previstos
 
-1. `curl_edge_functions` em `sga-listar-boletos-associado` com CPF `14194896742` → confirmar `data_vencimento: "2026-06-10"`.
-2. Inspecionar o prompt/tool result do agente para o mesmo CPF (via `edge_function_logs` filtrando o turno mais recente) e confirmar que a string formatada do vencimento é `10/06/2026`.
-3. Frase de fechamento: data exibida agora bate com a data do SGA; fallback é o comportamento antigo (apenas para strings com offset explícito, que não é o caso dos boletos Hinova).
+- `src/components/eventos/chat-ia/ContatoDetalheDrawer.tsx` — trocar query e renderização quando houver múltiplos.
+- Componente/hook da tela `Transbordo` (a confirmar na implementação) — mesma desambiguação.
+
+## Validação
+
+- Abrir o chat do MARCOS (telefone 21982244909): drawer deve mostrar "MARCOS VINICIUS DATIVO MACHADO", não LUIZ.
+- Abrir o chat de qualquer telefone sem colisão: comportamento inalterado.
+- Tela `/relacionamento/transbordos` para esse telefone deve mostrar "MARCOS VINICIUS …" (nome da conversa), não LUIZ.

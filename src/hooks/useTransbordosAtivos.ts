@@ -10,6 +10,8 @@ export interface TransbordoAtivo {
   associado_id: string | null;
   nome: string | null;
   avatar_url: string | null;
+  /** True quando mais de um associado ativo compartilha este telefone. */
+  multiplos_cadastros: boolean;
 }
 
 const normalizar = (t: string | null | undefined) => (t || '').replace(/\D/g, '');
@@ -21,6 +23,15 @@ function variantesTelefone(tel: string): string[] {
   if (d.startsWith('55') && d.length >= 12) set.add(d.slice(2));
   else if (d.length >= 10) set.add('55' + d);
   return Array.from(set);
+}
+
+function normalizarNome(n: string | null | undefined): string {
+  return (n || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function useTransbordosAtivos() {
@@ -36,35 +47,86 @@ export function useTransbordosAtivos() {
         .gt('pausada_ate', new Date().toISOString())
         .order('created_at', { ascending: false });
       if (error) throw error;
-      const rows = (pausas ?? []) as Array<Omit<TransbordoAtivo, 'associado_id' | 'nome' | 'avatar_url'>>;
+      const rows = (pausas ?? []) as Array<Omit<TransbordoAtivo, 'associado_id' | 'nome' | 'avatar_url' | 'multiplos_cadastros'>>;
       if (!rows.length) return [];
 
-      // Junta com associados pelo telefone/whatsapp (normalizando)
+      // Carrega TODOS os associados e indexa por variante de telefone como LISTA
+      // (um mesmo número pode pertencer a mais de um cadastro — familiares etc.).
       const { data: assocs } = await supabase
         .from('associados')
         .select('id, nome, telefone, whatsapp, avatar_url')
         .or('telefone.not.is.null,whatsapp.not.is.null');
 
-      const lookup = new Map<string, { id: string; nome: string; avatar_url: string | null }>();
+      type Assoc = { id: string; nome: string | null; avatar_url: string | null };
+      const lookup = new Map<string, Assoc[]>();
       (assocs ?? []).forEach((a: any) => {
+        const visto = new Set<string>();
         for (const t of [a.telefone, a.whatsapp]) {
           for (const v of variantesTelefone(t)) {
-            if (!lookup.has(v)) lookup.set(v, { id: a.id, nome: a.nome, avatar_url: a.avatar_url ?? null });
+            if (visto.has(v)) continue;
+            visto.add(v);
+            const arr = lookup.get(v) ?? [];
+            if (!arr.some((x) => x.id === a.id)) {
+              arr.push({ id: a.id, nome: a.nome ?? null, avatar_url: a.avatar_url ?? null });
+            }
+            lookup.set(v, arr);
           }
         }
       });
 
+      // Nome real do contato no WhatsApp (fonte preferencial para desambiguar)
+      const telVariantesAll = Array.from(
+        new Set(rows.flatMap((r) => variantesTelefone(r.telefone)))
+      );
+      const contatosNome = new Map<string, string>();
+      if (telVariantesAll.length) {
+        const { data: contatos } = await sb
+          .from('agente_ia_contatos')
+          .select('telefone, nome')
+          .in('telefone', telVariantesAll);
+        (contatos ?? []).forEach((c: any) => {
+          if (c.nome) {
+            for (const v of variantesTelefone(c.telefone)) contatosNome.set(v, c.nome);
+          }
+        });
+      }
+
       return rows.map((r) => {
-        let match: { id: string; nome: string; avatar_url: string | null } | undefined;
-        for (const v of variantesTelefone(r.telefone)) {
-          match = lookup.get(v);
-          if (match) break;
+        const variantes = variantesTelefone(r.telefone);
+        const candidatosSet = new Map<string, Assoc>();
+        for (const v of variantes) {
+          for (const a of lookup.get(v) ?? []) candidatosSet.set(a.id, a);
         }
+        const candidatos = Array.from(candidatosSet.values());
+
+        let nomeContato: string | null = null;
+        for (const v of variantes) {
+          const n = contatosNome.get(v);
+          if (n) { nomeContato = n; break; }
+        }
+
+        const multiplos = candidatos.length > 1;
+        let escolhido: Assoc | null = null;
+
+        if (candidatos.length === 1) {
+          escolhido = candidatos[0];
+        } else if (multiplos && nomeContato) {
+          const alvo = normalizarNome(nomeContato);
+          escolhido =
+            candidatos.find((c) => normalizarNome(c.nome) === alvo) ??
+            candidatos.find((c) => {
+              const n = normalizarNome(c.nome);
+              return !!n && (n.startsWith(alvo) || alvo.startsWith(n));
+            }) ?? null;
+        }
+
         return {
           ...r,
-          associado_id: match?.id ?? null,
-          nome: match?.nome ?? null,
-          avatar_url: match?.avatar_url ?? null,
+          associado_id: escolhido?.id ?? null,
+          // Quando há ambiguidade não resolvida, prefere o nome que veio da conversa
+          nome: escolhido?.nome ?? nomeContato ?? null,
+          avatar_url: escolhido?.avatar_url ?? null,
+          multiplos_cadastros: multiplos,
         };
       });
     },
