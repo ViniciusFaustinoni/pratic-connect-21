@@ -234,3 +234,37 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
     </Sheet>
   );
 }
+
+const TZ_BRT = 'America/Sao_Paulo';
+
+function formatarDataHoraBR(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', {
+    timeZone: TZ_BRT,
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function isMesmoDiaBR(iso: string): boolean {
+  const fmt = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ_BRT, day: '2-digit', month: '2-digit', year: 'numeric' });
+  return fmt.format(new Date(iso)) === fmt.format(new Date());
+}
+
+function EventoLinha({ evento }: { evento: EventoImportante }) {
+  const hojeBR = isMesmoDiaBR(evento.ocorrido_em);
+  const data = new Date(evento.ocorrido_em);
+  const horaBR = data.toLocaleTimeString('pt-BR', { timeZone: TZ_BRT, hour: '2-digit', minute: '2-digit' });
+  const dataBR = data.toLocaleDateString('pt-BR', { timeZone: TZ_BRT, day: '2-digit', month: '2-digit' });
+  return (
+    <li className="flex gap-2 text-xs leading-snug">
+      <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+        {hojeBR ? horaBR : `${dataBR} ${horaBR}`}
+      </span>
+      <span className="text-muted-foreground">·</span>
+      <span className="flex-1">{evento.descricao}</span>
+    </li>
+  );
+}
+
