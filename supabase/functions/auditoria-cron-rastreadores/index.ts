@@ -58,40 +58,39 @@ Deno.serve(async (req) => {
   const rastreadorIds = new Set<string>();
   [...apiRows, ...(histRows ?? []), ...(filaRows ?? [])].forEach((r: any) => r.rastreador_id && rastreadorIds.add(r.rastreador_id));
 
-  const { data: rastreadores } = await supa
-    .from('rastreadores')
-    .select('id, codigo, imei, status, veiculo_id')
-    .in('id', [...rastreadorIds]);
-  const rastMap = new Map((rastreadores ?? []).map((r: any) => [r.id, r]));
+  async function fetchInBatches(table: string, ids: string[], select: string) {
+    const out: any[] = [];
+    for (let i = 0; i < ids.length; i += 150) {
+      const chunk = ids.slice(i, i + 150);
+      const { data, error } = await supa.from(table).select(select).in('id', chunk).limit(chunk.length);
+      if (error) console.error(`[fetchInBatches] ${table}`, error.message);
+      if (data) out.push(...data);
+    }
+    return out;
+  }
+
+  const rastreadores = await fetchInBatches('rastreadores', [...rastreadorIds], 'id, codigo, imei, status, veiculo_id');
+  const rastMap = new Map(rastreadores.map((r: any) => [r.id, r]));
 
   const veiculoIds = new Set<string>();
-  (rastreadores ?? []).forEach((r: any) => r.veiculo_id && veiculoIds.add(r.veiculo_id));
+  rastreadores.forEach((r: any) => r.veiculo_id && veiculoIds.add(r.veiculo_id));
 
-  const { data: veiculos } = await supa
-    .from('veiculos')
-    .select('id, placa, associado_id')
-    .in('id', [...veiculoIds]);
-  const veicMap = new Map((veiculos ?? []).map((v: any) => [v.id, v]));
-
-  const associadoIds = new Set<string>();
-  (veiculos ?? []).forEach((v: any) => v.associado_id && associadoIds.add(v.associado_id));
-
-  const { data: associados } = await supa
-    .from('associados')
-    .select('id, nome, cpf')
-    .in('id', [...associadoIds]);
-  const assMap = new Map((associados ?? []).map((a: any) => [a.id, a]));
-
-  // Resolve veiculos for historico (anterior + novo separately)
   const veicHistIds = new Set<string>();
   (histRows ?? []).forEach((h: any) => {
     if (h.veiculo_id_anterior) veicHistIds.add(h.veiculo_id_anterior);
     if (h.veiculo_id_novo) veicHistIds.add(h.veiculo_id_novo);
   });
-  const { data: veicHist } = veicHistIds.size
-    ? await supa.from('veiculos').select('id, placa, associado_id').in('id', [...veicHistIds])
-    : { data: [] };
-  const veicHistMap = new Map((veicHist ?? []).map((v: any) => [v.id, v]));
+  veicHistIds.forEach((id) => veiculoIds.add(id));
+
+  const veiculos = await fetchInBatches('veiculos', [...veiculoIds], 'id, placa, associado_id');
+  const veicMap = new Map(veiculos.map((v: any) => [v.id, v]));
+  const veicHistMap = veicMap;
+
+  const associadoIds = new Set<string>();
+  veiculos.forEach((v: any) => v.associado_id && associadoIds.add(v.associado_id));
+
+  const associados = await fetchInBatches('associados', [...associadoIds], 'id, nome, cpf');
+  const assMap = new Map(associados.map((a: any) => [a.id, a]));
 
   const motivos: Record<string, string> = {
     AUTO_DESVINCULO_REMOTO: 'Softruck removeu vínculo remotamente; cron desvinculou no DB',
