@@ -131,6 +131,37 @@ export default function AnaliseRelacionamentoDrawer({ analise, open, onOpenChang
         </SheetHeader>
 
         <div className="space-y-4 mt-4">
+          {/* Motivo destacado — análise criada pelo consultor com débito assumido */}
+          {meta.motivo === 'debito_sga_assumido' && (
+            <Card className="border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30">
+              <CardContent className="p-3 space-y-2 text-sm">
+                <div className="flex items-center gap-2 font-medium text-amber-900 dark:text-amber-100">
+                  <Badge className="bg-amber-600 text-white hover:bg-amber-600">Débito SGA assumido pelo consultor</Badge>
+                </div>
+                {meta.assumido_por_nome && (
+                  <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
+                    Assumido por: <strong>{meta.assumido_por_nome}</strong>
+                  </p>
+                )}
+                {meta.justificativa && (
+                  <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
+                    <span className="font-medium">Justificativa:</span> {meta.justificativa}
+                  </p>
+                )}
+                {analise.associado_id && (
+                  <a
+                    href={`/financeiro/cobrancas?associado=${analise.associado_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    Ver financeiro do associado <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Documento assinado */}
           <Card>
             <CardContent className="p-3 space-y-2">

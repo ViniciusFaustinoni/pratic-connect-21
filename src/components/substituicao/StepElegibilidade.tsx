@@ -1,18 +1,33 @@
-import { CheckCircle2, XCircle, AlertTriangle, Clock, Loader2, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Clock, Loader2, ExternalLink, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { useVerificarElegibilidade } from '@/hooks/useSubstituicaoVeiculo';
 import { cn } from '@/lib/utils';
 
+export interface AssumirDebitoPayload {
+  assumiuDebito: boolean;
+  justificativa?: string;
+}
+
 interface StepElegibilidadeProps {
   associadoId: string;
-  onNext: (hasEventoProprio: boolean, evento?: { id: string; tipo: string }) => void;
+  onNext: (
+    hasEventoProprio: boolean,
+    evento?: { id: string; tipo: string },
+    debitoCtx?: AssumirDebitoPayload,
+  ) => void;
 }
 
 export function StepElegibilidade({ associadoId, onNext }: StepElegibilidadeProps) {
   const { data: elegibilidade, isLoading, error } = useVerificarElegibilidade(associadoId);
+  const [assumirDebito, setAssumirDebito] = useState(false);
+  const [justificativa, setJustificativa] = useState('');
 
   if (isLoading) {
     return (
@@ -40,13 +55,19 @@ export function StepElegibilidade({ associadoId, onNext }: StepElegibilidadeProp
   const hasEventoTerceiros = evento_ativo.tem && evento_ativo.tipo === 'terceiros';
   const semEvento = !evento_ativo.tem;
 
-  const canProceed = adimplente && rastreador_devolvido && (semEvento || hasEventoTerceiros || hasEventoProprio);
+  const justificativaOk = justificativa.trim().length >= 10;
+  const debitoLiberado = adimplente || (assumirDebito && justificativaOk);
+  const canProceed = debitoLiberado && rastreador_devolvido && (semEvento || hasEventoTerceiros || hasEventoProprio);
 
   const handleNext = () => {
+    const debitoCtx: AssumirDebitoPayload | undefined = !adimplente
+      ? { assumiuDebito: assumirDebito, justificativa: justificativa.trim() || undefined }
+      : undefined;
+
     if (hasEventoProprio && evento_ativo.evento_id) {
-      onNext(true, { id: evento_ativo.evento_id, tipo: evento_ativo.tipo! });
+      onNext(true, { id: evento_ativo.evento_id, tipo: evento_ativo.tipo! }, debitoCtx);
     } else {
-      onNext(false);
+      onNext(false, undefined, debitoCtx);
     }
   };
 
@@ -86,6 +107,58 @@ export function StepElegibilidade({ associadoId, onNext }: StepElegibilidadeProp
               {adimplente ? 'OK' : 'Pendente'}
             </Badge>
           </div>
+
+          {/* Assumir responsabilidade pelo débito — destrava sem cancelar a análise */}
+          {!adimplente && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-900 dark:text-amber-100">
+                    Assumir responsabilidade e seguir com a substituição
+                  </p>
+                  <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">
+                    O consultor pode prosseguir mesmo com débitos em aberto. Esta substituição
+                    será enviada ao Relacionamento como uma análise pendente para verificar
+                    boletos e decidir entre cobrança ou ciência. O fluxo canônico segue
+                    normalmente até a ativação.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="assumir-debito"
+                  checked={assumirDebito}
+                  onCheckedChange={(v) => setAssumirDebito(v === true)}
+                />
+                <Label htmlFor="assumir-debito" className="text-sm leading-snug cursor-pointer">
+                  Estou ciente das cobranças em aberto deste associado e assumo a
+                  responsabilidade por prosseguir com esta substituição.
+                </Label>
+              </div>
+
+              {assumirDebito && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="just-debito" className="text-xs">
+                    Justificativa <span className="text-muted-foreground">(mín. 10 caracteres)</span>
+                  </Label>
+                  <Textarea
+                    id="just-debito"
+                    value={justificativa}
+                    onChange={(e) => setJustificativa(e.target.value)}
+                    placeholder="Ex.: associado negociou pagamento na renovação, encaminhar p/ análise do Relacionamento…"
+                    rows={3}
+                  />
+                  {!justificativaOk && justificativa.length > 0 && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Justificativa muito curta.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Rastreador */}
           <div className={cn(

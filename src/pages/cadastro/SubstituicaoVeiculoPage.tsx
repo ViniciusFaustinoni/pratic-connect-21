@@ -41,6 +41,13 @@ export default function SubstituicaoVeiculoPage() {
   const [dadosNovoVeiculo, setDadosNovoVeiculo] = useState<Partial<DadosNovoVeiculo>>({});
   const [beneficiosSelecionados, setBeneficiosSelecionados] = useState<Record<string, boolean | string>>({});
   const [diaVencimentoSubstituicao, setDiaVencimentoSubstituicao] = useState<number | null>(null);
+  // Contexto preservado entre a etapa de elegibilidade e a criação real da
+  // substituição: quando o consultor assume a responsabilidade por débitos em
+  // aberto, esses dados viram metadata da `analises_relacionamento`.
+  const [debitoAssumidoCtx, setDebitoAssumidoCtx] = useState<{
+    assumiuDebito: boolean;
+    justificativa?: string;
+  } | null>(null);
 
   const iniciarSubstituicao = useIniciarSubstituicao();
 
@@ -98,6 +105,10 @@ export default function SubstituicaoVeiculoPage() {
     if (substituicaoId) return substituicaoId;
     if (!associadoId || !veiculoAtivo) throw new Error('Dados insuficientes');
 
+    const observacoes = debitoAssumidoCtx?.assumiuDebito
+      ? `[debito_sga_assumido] ${debitoAssumidoCtx.justificativa || ''}`.trim()
+      : undefined;
+
     const result = await iniciarSubstituicao.mutateAsync({
       associado_id: associadoId,
       veiculo_antigo_id: veiculoAtivo.id,
@@ -107,14 +118,49 @@ export default function SubstituicaoVeiculoPage() {
       mensalidade_antiga: 0,
       cota_participacao_antiga: 0,
       consultor_id: consultorId,
+      ...(observacoes ? { observacoes } : {}),
     });
 
     setSubstituicaoId(result.id);
     setTokenPublico((result as any).token_publico || null);
+
+    // Quando o consultor assumiu débito em aberto, abre uma análise pendente
+    // pro Relacionamento. Trilha paralela: NÃO bloqueia nenhuma etapa
+    // posterior da substituição. Idempotente por (origem_tabela, origem_id).
+    if (debitoAssumidoCtx?.assumiuDebito) {
+      try {
+        await (supabase as any).rpc('fn_criar_analise_relacionamento', {
+          _tipo: 'substituicao',
+          _origem_tabela: 'substituicoes_veiculo',
+          _origem_id: result.id,
+          _associado_id: associadoId,
+          _veiculo_id: veiculoAtivo.id,
+          _contrato_id: null,
+          _termo_url: null,
+          _termo_assinado_em: null,
+          _metadata: {
+            motivo: 'debito_sga_assumido',
+            assumido_por: profile?.id || null,
+            assumido_por_nome: profile?.nome || null,
+            justificativa: debitoAssumidoCtx.justificativa || null,
+            placa_antiga: veiculoAtivo.placa || null,
+          },
+        });
+      } catch (e) {
+        console.error('[SubstituicaoVeiculoPage] falha ao criar análise de relacionamento:', e);
+        toast.error('Substituição criada, mas a análise do Relacionamento não foi registrada. Avise o time.');
+      }
+    }
+
     return result.id;
   };
 
-  const handleElegibilidadeNext = (hasEventoProprio: boolean, evento?: { id: string; tipo: string }) => {
+  const handleElegibilidadeNext = (
+    hasEventoProprio: boolean,
+    evento?: { id: string; tipo: string },
+    debitoCtx?: { assumiuDebito: boolean; justificativa?: string },
+  ) => {
+    if (debitoCtx) setDebitoAssumidoCtx(debitoCtx);
     completeStep(1);
     if (hasEventoProprio && evento) {
       setEventoAtivo(evento);
