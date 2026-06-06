@@ -1,44 +1,45 @@
+# Substituição com débito SGA — Assumir responsabilidade + Análises do Relacionamento
+
 ## Problema
 
-No modal de Cotação Rápida (usado também em Substituição de Placa), quando a placa retorna 2+ versões FIPE, o `SelectTrigger` mostra o conteúdo completo do `SelectItem` selecionado (descrição em uma linha + linha secundária com valor e código). Como o trigger tem altura fixa `h-9` e o item interno é um `flex-col` de duas linhas, no mobile o texto:
+No `StepElegibilidade` (fluxo de Substituição), quando o associado tem débitos no SGA o card "Adimplência" fica vermelho e o botão **Próximo** é desabilitado (`canProceed = adimplente && ...`). Consultor trava no caso `RJN2A96 / PATRICK FARIAS / R$ 218,70`.
 
-- transborda para fora do trigger,
-- sobrepõe visualmente o rótulo de aviso âmbar acima ("2 versões FIPE encontradas — confira…"),
-- e deixa a linha "R$ 40.393 · cód. 001242-4" vazando logo abaixo do campo.
+Regra correta (mesma lógica das outras Análises de Relacionamento): o consultor pode **assumir a responsabilidade** ciente do débito, prosseguir, e isso gera um registro em `analises_relacionamento` (tipo `substituicao`, status `pendente`). O Relacionamento confere na aba **/relacionamento/analises**, marca ciente / cobra / resolve — exatamente como já faz hoje para Troca e Cancelamento Voluntário.
 
-É o que aparece no print enviado.
+**A substituição segue o fluxo canônico inteiro normalmente até o fim** — assinatura do termo de substituição, agendamento de instalação + retirada, vistoria, aprovação Cadastro, Monitoramento, ativação via `ativar-associado`. A análise de débito é uma trilha paralela do Relacionamento, **não bloqueia nenhuma etapa posterior**.
 
-Arquivo afetado: `src/components/cotacoes/CotacaoFormDialog.tsx`, bloco do seletor entre as linhas **2426–2471**.
+## Mudanças
 
-## Correção (somente UI / responsividade)
+### 1. UI — `src/components/substituicao/StepElegibilidade.tsx`
+- Quando `adimplente=false`, em vez de só bloquear, mostrar abaixo do card vermelho de Adimplência:
+  - Checkbox: **"Estou ciente do débito de R$ X,XX e assumo a responsabilidade por prosseguir. Esta substituição será enviada ao Relacionamento para análise."**
+  - Textarea **Justificativa** (obrigatória, ≥10 chars) quando checkbox marcado.
+- `canProceed = (adimplente || debitoAssumido) && rastreador_devolvido && (regras de evento atuais inalteradas)`.
+- `onNext` propaga payload extra: `{ assumiuDebito: boolean; justificativa?: string; valorDebito?: number; debitosSnapshot?: any[] }`.
 
-Mudanças mínimas no mesmo bloco, sem mexer em lógica, estado ou regras de negócio:
+### 2. Página/Hook — `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` + `useSubstituicaoVeiculo`
+- Recebe o payload e, ao criar a `substituicoes_veiculo` (status `iniciada`), grava em `metadata`/`observacoes` o flag `debito_sga_assumido`.
+- Imediatamente após criar a substituição, chama `supabase.rpc('fn_criar_analise_relacionamento', …)` com:
+  - `p_tipo='substituicao'`, `p_status='pendente'`
+  - `p_origem_tabela='substituicoes_veiculo'`, `p_origem_id=<id>`
+  - `p_associado_id`, `p_veiculo_id` (antigo), `p_justificativa`
+  - `p_metadata = { motivo:'debito_sga_assumido', valor_debito, assumido_por:<profile_id>, debitos_snapshot:[…] }`
+- Idempotência garantida pelo `UNIQUE (origem_tabela, origem_id)` já existente.
 
-1. **Forçar o trigger a mostrar apenas a descrição em uma linha, truncada**
-   Passar uma string controlada como filho de `SelectValue` (sobrescreve o render padrão que copia os children do item):
-   ```tsx
-   <SelectValue placeholder="Selecione a versão correta">
-     {veiculoEncontrado.fipeData?.descricao || veiculoEncontrado.vehicleData?.modelo || 'Selecione a versão correta'}
-   </SelectValue>
-   ```
+### 3. Análises do Relacionamento (`/relacionamento/analises`)
+- Garantir que o filtro/aba liste `tipo='substituicao'` (se hoje só mostra troca/cancelamento, adicionar aba ou incluir no "Todas").
+- Renderizar `metadata.motivo='debito_sga_assumido'` com chip âmbar "Débito SGA assumido pelo consultor", mostrar valor e link "Ver financeiro" do associado. Ações já existentes (Assumir / Resolver / Justificar) inalteradas.
 
-2. **Truncar dentro do trigger no mobile** (Radix envolve o valor em um `<span>`):
-   No `SelectTrigger`, ajustar a className para:
-   ```
-   className="h-9 bg-background w-full [&>span]:block [&>span]:truncate [&>span]:text-left text-sm"
-   ```
+### 4. Fluxo canônico depois disso — INALTERADO
+- Substituição segue: assinar termo → agendar retirada+instalação no link público → vistoria → Cadastro → Monitoramento → `ativar-associado`.
+- **Nenhum guard novo, nenhum bloqueio adicional.** A análise pendente do Relacionamento é informativa/operacional e **não trava** Cadastro, Monitoramento nem ativação.
 
-3. **Garantir respiro entre o rótulo âmbar e o select** no container do bloco (linha 2428):
-   trocar `space-y-1` por `space-y-2` e o `Label` ganhar `block leading-snug` para o aviso de duas linhas não encostar no trigger.
+## Fora de escopo
+- Nada de mudança em elegibilidade de planos, SGA, regras de débito do Cadastro (que continuam aplicáveis em outros fluxos), ou nos demais bloqueios do `StepElegibilidade` (`rastreador_devolvido`, `evento_proprio`).
+- Sem migração: enum `tipo='substituicao'` já existe e `fn_criar_analise_relacionamento` já está pronta.
 
-4. **Dropdown abre dentro da viewport mobile**: trocar `SelectContent` `max-w-[600px]` por `className="max-w-[calc(100vw-2rem)] sm:max-w-[600px]"` para evitar overflow horizontal em telas pequenas. Cada `SelectItem` mantém as duas linhas (descrição + valor/código), mas com `whitespace-normal break-words` no `<span className="font-medium">` para descrições muito longas quebrarem corretamente dentro do dropdown.
-
-## Fora do escopo
-
-- Nada de lógica do `onValueChange`, parsing FIPE, regra do 1%, busca por placa ou fluxo de Substituição.
-- Nenhum outro componente além desse bloco do `CotacaoFormDialog.tsx`.
-- Sem mudança em tokens do design system ou no `index.css`.
-
-## Verificação
-
-Reproduzir no preview em viewport 360–414 px com uma placa que retorne múltiplas variantes FIPE (ex.: o caso da Fiat Idea Adventure do print): o trigger fica em uma linha truncada, o aviso âmbar e o subtítulo "R$ … · cód. …" deixam de sobrepor, e o dropdown abre dentro da tela.
+## Critério de aceite
+1. Substituição `RJN2A96` (R$ 218,70 em aberto): consultor marca ciente + justifica + clica **Próximo** e segue todas as etapas até o fim sem novos bloqueios.
+2. Surge 1 linha em `analises_relacionamento` (`tipo='substituicao'`, `status='pendente'`) visível em **/relacionamento/analises** com chip "Débito SGA assumido".
+3. Marcar Resolvido / Ciente no Relacionamento usa o mesmo fluxo de hoje, sem regressão nas trilhas Troca/Cancelamento.
+4. Fluxo canônico da substituição (termo → agendamento → vistoria → Cadastro → Monitoramento → ativação) roda até o fim mesmo com a análise ainda pendente.
