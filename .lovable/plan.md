@@ -1,45 +1,43 @@
-# Substituição com débito SGA — Assumir responsabilidade + Análises do Relacionamento
+# Cobrança via linha digitável SGA no StepElegibilidade
 
-## Problema
+Hoje a tela só permite uma saída quando há débito: marcar "assumir responsabilidade + justificativa". Vamos adicionar uma **segunda saída paralela**: o consultor pode optar por **cobrar agora**, puxando a linha digitável dos boletos do SGA para o associado pagar antes de seguir.
 
-No `StepElegibilidade` (fluxo de Substituição), quando o associado tem débitos no SGA o card "Adimplência" fica vermelho e o botão **Próximo** é desabilitado (`canProceed = adimplente && ...`). Consultor trava no caso `RJN2A96 / PATRICK FARIAS / R$ 218,70`.
+## Escopo
 
-Regra correta (mesma lógica das outras Análises de Relacionamento): o consultor pode **assumir a responsabilidade** ciente do débito, prosseguir, e isso gera um registro em `analises_relacionamento` (tipo `substituicao`, status `pendente`). O Relacionamento confere na aba **/relacionamento/analises**, marca ciente / cobra / resolve — exatamente como já faz hoje para Troca e Cancelamento Voluntário.
+Mudança **apenas de UI/presentation** em `src/components/substituicao/StepElegibilidade.tsx`. Reuso integral do hook `useBoletosSgaPorAssociado` (já existe e é usado em Troca). Nenhuma migration, nenhum edge novo, nenhuma alteração no fluxo canônico nem em `SubstituicaoVeiculoPage`/`useSubstituicaoVeiculo`.
 
-**A substituição segue o fluxo canônico inteiro normalmente até o fim** — assinatura do termo de substituição, agendamento de instalação + retirada, vistoria, aprovação Cadastro, Monitoramento, ativação via `ativar-associado`. A análise de débito é uma trilha paralela do Relacionamento, **não bloqueia nenhuma etapa posterior**.
+## Comportamento
 
-## Mudanças
+Quando `adimplente=false`, o bloco âmbar atual ganha duas abas/duas ações lado a lado:
 
-### 1. UI — `src/components/substituicao/StepElegibilidade.tsx`
-- Quando `adimplente=false`, em vez de só bloquear, mostrar abaixo do card vermelho de Adimplência:
-  - Checkbox: **"Estou ciente do débito de R$ X,XX e assumo a responsabilidade por prosseguir. Esta substituição será enviada ao Relacionamento para análise."**
-  - Textarea **Justificativa** (obrigatória, ≥10 chars) quando checkbox marcado.
-- `canProceed = (adimplente || debitoAssumido) && rastreador_devolvido && (regras de evento atuais inalteradas)`.
-- `onNext` propaga payload extra: `{ assumiuDebito: boolean; justificativa?: string; valorDebito?: number; debitosSnapshot?: any[] }`.
+**Opção A — Assumir responsabilidade** (já existe, inalterado)
+- Checkbox + justificativa ≥10 chars → libera `canProceed` → cria análise pendente no Relacionamento como hoje.
 
-### 2. Página/Hook — `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` + `useSubstituicaoVeiculo`
-- Recebe o payload e, ao criar a `substituicoes_veiculo` (status `iniciada`), grava em `metadata`/`observacoes` o flag `debito_sga_assumido`.
-- Imediatamente após criar a substituição, chama `supabase.rpc('fn_criar_analise_relacionamento', …)` com:
-  - `p_tipo='substituicao'`, `p_status='pendente'`
-  - `p_origem_tabela='substituicoes_veiculo'`, `p_origem_id=<id>`
-  - `p_associado_id`, `p_veiculo_id` (antigo), `p_justificativa`
-  - `p_metadata = { motivo:'debito_sga_assumido', valor_debito, assumido_por:<profile_id>, debitos_snapshot:[…] }`
-- Idempotência garantida pelo `UNIQUE (origem_tabela, origem_id)` já existente.
+**Opção B — Cobrar agora (novo)**
+- Botão "Buscar boletos no SGA" dispara `useBoletosSgaPorAssociado(codigoHinova, cpf)`.
+- Lista os boletos em aberto (vencidos + a vencer dentro de `diasFuturo`), respeitando a memória `sga-boletos-campos-canonicos-e-lookahead` (campos `valor_boleto`/`situacao_boleto`, ignorar BAIXADO com sentinela).
+- Para cada boleto exibe: vencimento, valor, situação (Vencido/A vencer), e:
+  - Linha digitável com botão **Copiar** (clipboard).
+  - Botão **Copiar link do boleto** quando `link_boleto` existir.
+- Mensagem-guia: "Encaminhe a linha digitável ao associado. Após o pagamento ser baixado no SGA, recarregue para destravar a substituição."
+- Botão **Recarregar status** que invalida a query de elegibilidade (`useVerificarElegibilidade`) + a do SGA. Se vier `adimplente=true`, o bloco âmbar desaparece e segue normalmente.
 
-### 3. Análises do Relacionamento (`/relacionamento/analises`)
-- Garantir que o filtro/aba liste `tipo='substituicao'` (se hoje só mostra troca/cancelamento, adicionar aba ou incluir no "Todas").
-- Renderizar `metadata.motivo='debito_sga_assumido'` com chip âmbar "Débito SGA assumido pelo consultor", mostrar valor e link "Ver financeiro" do associado. Ações já existentes (Assumir / Resolver / Justificar) inalteradas.
+As duas opções são **mutuamente independentes** — o consultor escolhe uma. Se assumir responsabilidade, não precisa cobrar; se cobrar e o pagamento baixar, não precisa assumir.
 
-### 4. Fluxo canônico depois disso — INALTERADO
-- Substituição segue: assinar termo → agendar retirada+instalação no link público → vistoria → Cadastro → Monitoramento → `ativar-associado`.
-- **Nenhum guard novo, nenhum bloqueio adicional.** A análise pendente do Relacionamento é informativa/operacional e **não trava** Cadastro, Monitoramento nem ativação.
+## Detalhes técnicos
+
+- Hook reusado: `useBoletosSgaPorAssociado(codigoHinova, cpf)`. Para obter `codigo_hinova` e CPF do associado, ler de `associados` via `useQuery` simples (`select codigo_hinova, cpf where id = associadoId`) — padrão já usado no projeto.
+- Recarregar = `queryClient.invalidateQueries({ queryKey: ['sga-boletos-por-associado', ...] })` + invalidar `['substituicao-elegibilidade', associadoId]`.
+- Empty states: "Nenhum boleto em aberto retornado pelo SGA" (orienta a recarregar elegibilidade) e erro transitório (mostra retry).
+- Layout: duas sub-seções no bloco âmbar com separador sutil; nada de tabs novas para não inflar a tela.
+- Sem nova memória nem migration.
 
 ## Fora de escopo
-- Nada de mudança em elegibilidade de planos, SGA, regras de débito do Cadastro (que continuam aplicáveis em outros fluxos), ou nos demais bloqueios do `StepElegibilidade` (`rastreador_devolvido`, `evento_proprio`).
-- Sem migração: enum `tipo='substituicao'` já existe e `fn_criar_analise_relacionamento` já está pronta.
+
+- Disparar cobrança WhatsApp/email automaticamente (só copy/paste manual nesta iteração).
+- Quitação direta via Asaas/gateway.
+- Mudar regras de elegibilidade ou o caminho canônico da substituição.
 
 ## Critério de aceite
-1. Substituição `RJN2A96` (R$ 218,70 em aberto): consultor marca ciente + justifica + clica **Próximo** e segue todas as etapas até o fim sem novos bloqueios.
-2. Surge 1 linha em `analises_relacionamento` (`tipo='substituicao'`, `status='pendente'`) visível em **/relacionamento/analises** com chip "Débito SGA assumido".
-3. Marcar Resolvido / Ciente no Relacionamento usa o mesmo fluxo de hoje, sem regressão nas trilhas Troca/Cancelamento.
-4. Fluxo canônico da substituição (termo → agendamento → vistoria → Cadastro → Monitoramento → ativação) roda até o fim mesmo com a análise ainda pendente.
+
+Em `RJN2A96` (PATRICK, R$ 218,70): consultor vê no bloco âmbar tanto "Assumir responsabilidade" quanto "Cobrar agora"; ao clicar em "Buscar boletos no SGA", a linha digitável do boleto de R$ 218,70 aparece com botão Copiar; ao pagar e clicar "Recarregar status", `adimplente` vira `true` e o `canProceed` libera sem precisar de justificativa.
