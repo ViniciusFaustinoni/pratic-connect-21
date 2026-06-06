@@ -19,9 +19,14 @@
  *    → disparo: UPDATE de termo_cancelamento_assinado_em (NULL → not null)
  *    → tipo: substituicao
  *
+ * EXCEÇÃO controlada (06/06/26): a tela de Substituição (Cadastro › Processos)
+ * chama `fn_criar_analise_relacionamento` direto do frontend quando o consultor
+ * marca "assumir responsabilidade" por débito em aberto, antes mesmo do termo
+ * ser assinado. É o único ponto de inserção frontend permitido e usa a mesma
+ * função SECURITY DEFINER, mantendo idempotência por (origem_tabela='substituicoes_veiculo', origem_id).
+ *
  * Qualquer regressão na fila (silenciosa / vazia inesperadamente)
  * deve ser investigada primeiro nesses 3 triggers + fn_criar_analise_relacionamento.
- * NENHUM código frontend insere diretamente nesta tabela.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
