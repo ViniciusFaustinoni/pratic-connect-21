@@ -29,9 +29,57 @@ interface StepElegibilidadeProps {
 }
 
 export function StepElegibilidade({ associadoId, onNext }: StepElegibilidadeProps) {
+  const queryClient = useQueryClient();
   const { data: elegibilidade, isLoading, error } = useVerificarElegibilidade(associadoId);
   const [assumirDebito, setAssumirDebito] = useState(false);
   const [justificativa, setJustificativa] = useState('');
+  const [mostrarCobranca, setMostrarCobranca] = useState(false);
+
+  // Dados do associado p/ consultar SGA (codigo_hinova + cpf)
+  const { data: associadoSga } = useQuery({
+    queryKey: ['associado-sga-keys', associadoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('associados')
+        .select('codigo_hinova, cpf')
+        .eq('id', associadoId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!associadoId,
+    staleTime: 60_000,
+  });
+
+  const codigoHinova = associadoSga?.codigo_hinova ?? null;
+  const cpfAssociado = associadoSga?.cpf ?? null;
+
+  const {
+    data: sgaBoletos,
+    isFetching: isFetchingBoletos,
+    refetch: refetchBoletos,
+  } = useBoletosSgaPorAssociado(codigoHinova, cpfAssociado, mostrarCobranca);
+
+  const copiar = async (texto: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success(`${label} copiado`);
+    } catch {
+      toast.error('Não foi possível copiar');
+    }
+  };
+
+  const recarregarStatus = async () => {
+    await Promise.all([
+      refetchBoletos(),
+      queryClient.invalidateQueries({ queryKey: ['substituicoes', 'elegibilidade', associadoId] }),
+    ]);
+    toast.info('Status recarregado');
+  };
+
+  const boletosAbertos = (sgaBoletos?.veiculos ?? []).flatMap((v) =>
+    (v.boletos_abertos ?? []).map((b) => ({ ...b, placa: v.placa })),
+  );
 
   if (isLoading) {
     return (
