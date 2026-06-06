@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Clock, Loader2, ExternalLink, ShieldAlert } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, XCircle, AlertTriangle, Clock, Loader2, ExternalLink, ShieldAlert, Receipt, Copy, RefreshCw, Link2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -8,6 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useVerificarElegibilidade } from '@/hooks/useSubstituicaoVeiculo';
+import { useBoletosSgaPorAssociado } from '@/hooks/useBoletosSgaPorAssociado';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 export interface AssumirDebitoPayload {
