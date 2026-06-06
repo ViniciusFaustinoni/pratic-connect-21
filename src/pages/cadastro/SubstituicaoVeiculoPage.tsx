@@ -41,6 +41,13 @@ export default function SubstituicaoVeiculoPage() {
   const [dadosNovoVeiculo, setDadosNovoVeiculo] = useState<Partial<DadosNovoVeiculo>>({});
   const [beneficiosSelecionados, setBeneficiosSelecionados] = useState<Record<string, boolean | string>>({});
   const [diaVencimentoSubstituicao, setDiaVencimentoSubstituicao] = useState<number | null>(null);
+  // Contexto preservado entre a etapa de elegibilidade e a criação real da
+  // substituição: quando o consultor assume a responsabilidade por débitos em
+  // aberto, esses dados viram metadata da `analises_relacionamento`.
+  const [debitoAssumidoCtx, setDebitoAssumidoCtx] = useState<{
+    assumiuDebito: boolean;
+    justificativa?: string;
+  } | null>(null);
 
   const iniciarSubstituicao = useIniciarSubstituicao();
 
