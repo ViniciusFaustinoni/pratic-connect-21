@@ -209,6 +209,135 @@ export function StepElegibilidade({ associadoId, onNext }: StepElegibilidadeProp
                   )}
                 </div>
               )}
+
+              {/* Separador entre as duas saídas */}
+              <div className="border-t border-amber-200 dark:border-amber-900/60 pt-3">
+                <div className="flex items-start gap-2">
+                  <Receipt className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 text-sm">
+                    <p className="font-medium text-amber-900 dark:text-amber-100">
+                      Cobrar agora pela linha digitável
+                    </p>
+                    <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">
+                      Puxe os boletos em aberto direto do SGA, envie a linha digitável ao
+                      associado e, após o pagamento ser baixado, recarregue para destravar
+                      a substituição sem precisar assumir responsabilidade.
+                    </p>
+                  </div>
+                </div>
+
+                {!mostrarCobranca ? (
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMostrarCobranca(true)}
+                    >
+                      <Receipt className="h-3.5 w-3.5 mr-1" />
+                      Buscar boletos no SGA
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-amber-800 dark:text-amber-200">
+                        {isFetchingBoletos
+                          ? 'Consultando SGA…'
+                          : `${boletosAbertos.length} boleto(s) em aberto`}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={recarregarStatus}
+                        disabled={isFetchingBoletos}
+                      >
+                        <RefreshCw className={cn('h-3.5 w-3.5 mr-1', isFetchingBoletos && 'animate-spin')} />
+                        Recarregar status
+                      </Button>
+                    </div>
+
+                    {isFetchingBoletos ? (
+                      <div className="flex items-center justify-center py-6 text-amber-700 dark:text-amber-300">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Buscando boletos no SGA…
+                      </div>
+                    ) : sgaBoletos?.erro_transitorio ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          Falha temporária ao consultar o SGA. Tente recarregar em alguns segundos.
+                        </AlertDescription>
+                      </Alert>
+                    ) : boletosAbertos.length === 0 ? (
+                      <p className="text-xs text-amber-800/80 dark:text-amber-200/80 py-3">
+                        Nenhum boleto em aberto retornado pelo SGA. Se o pagamento foi feito
+                        recentemente, clique em <strong>Recarregar status</strong> para revalidar
+                        a elegibilidade.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {boletosAbertos.map((b, idx) => (
+                          <div
+                            key={`${b.nosso_numero ?? idx}-${idx}`}
+                            className="rounded-md border border-amber-200 dark:border-amber-900/60 bg-background p-3 space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div className="text-sm">
+                                <span className="font-medium">
+                                  {b.placa} · {b.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  venc. {b.data_vencimento ? new Date(b.data_vencimento).toLocaleDateString('pt-BR') : '—'}
+                                </span>
+                              </div>
+                              <Badge variant="outline" className="text-xs">
+                                {b.situacao_label || 'Em aberto'}
+                              </Badge>
+                            </div>
+
+                            {b.linha_digitavel && (
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 text-[11px] bg-muted px-2 py-1 rounded truncate">
+                                  {b.linha_digitavel}
+                                </code>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => copiar(b.linha_digitavel!, 'Linha digitável')}
+                                >
+                                  <Copy className="h-3.5 w-3.5 mr-1" />
+                                  Copiar
+                                </Button>
+                              </div>
+                            )}
+
+                            {b.link_boleto && (
+                              <div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copiar(b.link_boleto!, 'Link do boleto')}
+                                >
+                                  <Link2 className="h-3.5 w-3.5 mr-1" />
+                                  Copiar link do boleto
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                          Encaminhe a linha digitável ao associado. Após o pagamento ser
+                          baixado no SGA, clique em <strong>Recarregar status</strong> para
+                          destravar a substituição.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
