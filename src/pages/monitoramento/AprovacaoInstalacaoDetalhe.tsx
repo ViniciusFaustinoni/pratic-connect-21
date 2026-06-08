@@ -597,6 +597,9 @@ export default function AprovacaoInstalacaoDetalhe() {
         </div>
       </div>
 
+      {/* Bypass aplicado (Troca de Titularidade fora da janela / convertida) — DESTAQUE */}
+      <BypassAplicadoBanner bypassAplicado={(data as any)?.bypassAplicado} destaque />
+
       {/* Dados do Associado */}
       <Card className="border-border">
         <CardHeader className="pb-3">
