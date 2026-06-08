@@ -264,6 +264,25 @@ export function PropostaMidiaGrid({
     </div>
   );
 
+  // Resolve URL de exibição para reenvios cujo `documento_id` é NULL
+  // (peças de autovistoria: vídeo 360° vai p/ vistorias.video_360_url,
+  // fotos vão p/ vistoria_fotos). Casa pelo `tipo_documento` do reenvio.
+  const resolveFallbackUrl = (tipo: string): string | null => {
+    if (!tipo) return null;
+    const t = tipo.toLowerCase();
+    if (t.includes('video')) return video360Url || null;
+    const foto = fotos.find((f) => (f.tipo || '').toLowerCase() === t);
+    return foto?.arquivo_url || null;
+  };
+
+  const handleAprovarReenvio = onAprovarDocumento
+    ? (solicitadoId: string) => onAprovarDocumento(`solicitado-${solicitadoId}`)
+    : undefined;
+  const handleReprovarReenvio = onReprovarDocumento
+    ? (solicitadoId: string, motivo: string) =>
+        onReprovarDocumento(`solicitado-${solicitadoId}`, motivo)
+    : undefined;
+
   return (
     <>
       {hasDocsSolicitados ? (
@@ -275,6 +294,9 @@ export function PropostaMidiaGrid({
             contratoId={contratoId}
             contratoLinkToken={contratoLinkToken}
             associadoId={associadoId}
+            resolveFallbackUrl={resolveFallbackUrl}
+            onAprovar={handleAprovarReenvio}
+            onReprovar={handleReprovarReenvio}
           />
         </div>
       ) : (
