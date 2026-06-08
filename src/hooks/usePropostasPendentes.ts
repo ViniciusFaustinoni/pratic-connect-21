@@ -899,8 +899,12 @@ export function usePropostasPendentes() {
             bairro: associado?.bairro ?? (contrato as any).cliente_bairro,
             cidade: associado?.cidade ?? null,
           }),
+          // Lista não resolve processoOrigem (custo de N+1). Só useProposta
+          // (drawer) faz o lookup completo para exibir a aba "Processo".
+          processoOrigem: null,
         } as PropostaPendente;
       });
+
 
       return propostas.filter((p): p is PropostaPendente => p !== null);
     },
