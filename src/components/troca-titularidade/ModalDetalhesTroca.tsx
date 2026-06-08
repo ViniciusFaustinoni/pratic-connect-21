@@ -34,6 +34,7 @@ import { VincularRastreadorExistenteCard } from '@/components/rastreadores/Vincu
 import { ValidarImeiPorPlacaCard } from './ValidarImeiPorPlacaCard';
 import { validarImeiPorPlaca, type ValidacaoOrigem } from '@/lib/troca-titularidade/validarImeiPorPlaca';
 import { PontasPendentesCard } from './PontasPendentesCard';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 
 interface Props {
   open: boolean;
