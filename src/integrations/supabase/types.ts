@@ -1563,6 +1563,199 @@ export type Database = {
         }
         Relationships: []
       }
+      aprovacoes_bypass_troca: {
+        Row: {
+          associado_id: string | null
+          ciente_em: string | null
+          ciente_por: string | null
+          contrato_id: string | null
+          cotacao_id: string | null
+          created_at: string
+          id: string
+          justificativa: string
+          metadata: Json
+          nome_autorizador: string
+          observacao_supervisor: string | null
+          operador_nome: string | null
+          operador_user_id: string | null
+          placa: string | null
+          solicitacao_troca_id: string | null
+          status: string
+          tipo: string
+          updated_at: string
+          veiculo_id: string | null
+        }
+        Insert: {
+          associado_id?: string | null
+          ciente_em?: string | null
+          ciente_por?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          id?: string
+          justificativa: string
+          metadata?: Json
+          nome_autorizador: string
+          observacao_supervisor?: string | null
+          operador_nome?: string | null
+          operador_user_id?: string | null
+          placa?: string | null
+          solicitacao_troca_id?: string | null
+          status?: string
+          tipo: string
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Update: {
+          associado_id?: string | null
+          ciente_em?: string | null
+          ciente_por?: string | null
+          contrato_id?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          id?: string
+          justificativa?: string
+          metadata?: Json
+          nome_autorizador?: string
+          observacao_supervisor?: string | null
+          operador_nome?: string | null
+          operador_user_id?: string | null
+          placa?: string | null
+          solicitacao_troca_id?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "vw_cotacoes_em_limbo"
+            referencedColumns: ["cotacao_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_solicitacao_troca_id_fkey"
+            columns: ["solicitacao_troca_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_troca_titularidade"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_bypass_troca_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aprovacoes_elegibilidade: {
         Row: {
           ano: number

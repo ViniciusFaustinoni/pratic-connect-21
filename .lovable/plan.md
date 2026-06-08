@@ -1,68 +1,51 @@
-# Bypass de janela de Troca — Cadastro decide, com rastreabilidade total
+# Bypass de Janela na Troca — 4º destino: Comercial › Aprovações
 
-Reaproveita o modelo do dialog atual. Quando `aprovar-proposta` devolve `JANELA_TROCA_EXPIRADA`, abre o modal com **duas opções**. Ao aprovar com bypass, a informação propaga para Monitoramento, Relacionamento › Análises e `logs_auditoria`.
+Mantém tudo que já está no plano anterior (Cadastro decide, banner, `logs_auditoria`, `analises_relacionamento`, `contratos.bypass_aplicado`, banner em Monitoramento) e **adiciona uma nova aba em `/vendas/aprovacoes-fipe`** seguindo exatamente o padrão de Redução de Cota / Elegibilidade: visibilidade + ciência, **não-bloqueante**.
 
-## 1. Modal do Cadastro (`BypassJanelaTrocaDialog`)
+---
 
-Renomeia o dialog atual e remove o gate de diretor (qualquer Cadastro pode operar).
+## 1. Nova tabela `aprovacoes_bypass_troca`
 
-- **Título:** "Troca fora da janela — escolha como prosseguir"
-- **Campos obrigatórios nas DUAS opções:**
-  - `nome_autorizador` (text, ≥3 chars) — quem na empresa autorizou
-  - `justificativa` (textarea, ≥20 chars)
-  - checkbox **"Confirmo que tenho responsabilidade por esta decisão e ela está autorizada por {nome_autorizador}"** (obrigatório marcar)
-- **Duas ações:**
-  1. **"Aprovar Troca fora da janela"** (âmbar) → `aprovar-troca-cadastro` com `bypass_janela: true`, `bypass_nome_autorizador`, `bypass_justificativa`. Segue como Troca normal.
-  2. **"Converter em cotação normal"** (secundário, confirmação extra) → `converter-troca-em-cotacao-normal`. Cancela a Troca; novo interessado refaz como nova adesão.
+Colunas de domínio (`status`, `tipo` [`bypass_janela` | `troca_convertida_cotacao`], `contrato_id`, `cotacao_id`, `associado_id`, `placa`, `nome_autorizador`, `justificativa`, `operador_user_id`, `ciente_por`, `ciente_em`, `observacao_supervisor`). RLS: leitura/atualização para quem tem `canManageConsultores` (mesma permissão do `/vendas/aprovacoes-fipe`); insert só via service_role (edges). GRANTs canônicos.
 
-Gatilho: `PropostaAnalise.tsx` já intercepta `codigo === 'JANELA_TROCA_EXPIRADA'`.
+## 2. Ingestão (write nos 4 destinos)
 
-## 2. Edges
+Tanto `aprovar-troca-cadastro` (com `bypass_janela=true`) quanto `converter-troca-em-cotacao-normal` passam a gravar **também** em `aprovacoes_bypass_troca` com `status='ciente_pendente'`, além dos 3 destinos já planejados (logs, análises de relacionamento, `contratos.bypass_aplicado`). Falha do insert é não-bloqueante e logada — não derruba o fluxo de Cadastro.
 
-**`aprovar-troca-cadastro`** — aceita `bypass_janela`, `bypass_nome_autorizador` (≥3), `bypass_justificativa` (≥20). Sem gate de diretor. Pula o check de janela, grava em `contratos.bypass_aplicado` (jsonb array): `{codigo:'JANELA_TROCA_EXPIRADA', nome_autorizador, justificativa, operador_user_id, operador_nome, aplicado_em}`. Sem flag → mantém 409.
+## 3. Hook + edge de ciência
 
-**`converter-troca-em-cotacao-normal`** (nova) — Params `contrato_id`, `nome_autorizador` (≥3), `justificativa` (≥20). Cancela `solicitacoes_troca_titularidade`, cotação/contrato, libera `veiculos.em_troca_titularidade=false`. Idempotente.
+- `useAprovacoesBypassTroca(status?)` (padrão idêntico a `useAprovacoesFipeMenor`).
+- `useMarcarCienteBypassTroca({ id, observacao })` → edge `marcar-ciente-bypass-troca` valida permissão `canManageConsultores`, seta `status='ciente'`, `ciente_por`, `ciente_em`, `observacao_supervisor`. Log auditoria `[BYPASS_TROCA_CIENTE]`.
 
-## 3. Rastreabilidade canônica (3 destinos)
+## 4. UI em `/vendas/aprovacoes-fipe`
 
-Em **ambos** os caminhos (bypass aprovado OU conversão), a edge grava:
+Adiciona **3ª aba de seção** ao lado de "Redução de Cota" e "Elegibilidade":
 
-**A. `logs_auditoria`** — `acao='criar'`, prefixo `[TROCA_BYPASS_JANELA]` ou `[TROCA_CONVERTIDA_EM_COTACAO]`, payload contendo `nome_autorizador`, `justificativa`, `operador_user_id`, `operador_nome`, `contrato_id`, `solicitacao_troca_id`. Passa pelo helper `insertAuditLog` (vigia universal).
+- Trigger: `Bypass Troca` (ícone `AlertTriangle` âmbar) + tooltip "Trocas de titularidade aprovadas fora da janela ou convertidas em cotação normal pelo Cadastro. Apenas ciência — não bloqueia o fluxo."
+- Sub-abas Pendentes / Cientes / Todas (idênticas ao padrão).
+- Card por solicitação mostrando: tipo (badge âmbar "Aprovada fora da janela" ou cinza "Convertida em cotação"), número da cotação/contrato, associado, veículo+placa, **autorizado por {nome_autorizador}**, operador do Cadastro, data BRT, justificativa, link "Abrir contrato".
+- Botão `Marcar como Ciente` abre o mesmo `Dialog` reusado (resumo + alerta "ciência apenas, não altera o processo" + textarea opcional).
 
-**B. `analises_relacionamento`** — insere via `fn_criar_analise_relacionamento` (4º gatilho canônico, somando-se aos 3 já documentados em `mem://logic/operations/analises-relacionamento-ingestao`):
-- `tipo`: `bypass_janela_troca` ou `troca_convertida_cotacao`
-- `dados`: `{nome_autorizador, justificativa, operador, contrato_id, placa, associado_id}`
-- Fila Relacionamento › Análises mostra novo chip âmbar "Bypass de janela".
+## 5. Badge no menu lateral
 
-**C. `contratos.bypass_aplicado` (jsonb)** — para alimentar o banner permanente.
+`AppSidebar` ganha contador de pendentes da nova aba (mesmo padrão de `useAprovacoesFipeMenor` / `aprovacoesMonCount`). Soma ao badge existente em "Aprovações" do menu Comercial, OU vira badge próprio — manter padrão atual do item.
 
-## 4. Banner `BypassAplicadoBanner`
+## 6. Memórias atualizadas
 
-Lê `contrato.bypass_aplicado[]`. Visual âmbar, `AlertTriangle`. Mostra: código humanizado, **autorizado por {nome_autorizador}**, operador, data BRT, justificativa.
+- `troca-titularidade-janela-mesmo-dia`: adiciona Comercial como 4º destino.
+- `analises-relacionamento-ingestao`: nota o paralelo com Comercial.
+- Nova memória curta `aprovacoes-bypass-troca-comercial` documentando a aba não-bloqueante.
 
-Renderizado em:
-- `PropostaAnalise.tsx` (Cadastro)
-- `ModalDetalhesTroca.tsx`
-- **`AprovacaoInstalacaoDetalhe.tsx` (Monitoramento)** — destaque no topo, antes do card de ação; legenda no botão Aprovar reforça o aviso
-- `AssociadoDetalhe.tsx` (histórico)
-- Detalhe da análise em Relacionamento › Análises
+---
 
-## 5. Migração
+## Detalhes técnicos
 
-```sql
-ALTER TABLE public.contratos
-  ADD COLUMN IF NOT EXISTS bypass_aplicado jsonb NOT NULL DEFAULT '[]'::jsonb;
-CREATE INDEX IF NOT EXISTS idx_contratos_bypass_aplicado
-  ON public.contratos USING gin (bypass_aplicado);
-```
-
-Sem alteração de schema em `analises_relacionamento` (campo `dados jsonb` já comporta o payload); apenas extensão dos `tipo` aceitos.
-
-## 6. Memória canônica
-
-- Atualiza `mem://logic/operations/troca-titularidade-janela-mesmo-dia` com a decisão Cadastro-exclusiva + tríade autorizador/justificativa/checkbox.
-- Atualiza `mem://logic/operations/analises-relacionamento-ingestao` para registrar o 4º gatilho (bypass + conversão).
+- Mesma página `src/pages/vendas/AprovacoesFipeMenor.tsx`: `SectionTab` vira `'reducao_cota' | 'elegibilidade' | 'bypass_troca'`; componente novo `<PainelAprovacoesBypassTroca/>` em `src/components/aprovacoes/`.
+- Sem reuso de `aprovacoes_fipe_menor` (domínio diferente). Tabela separada evita misturar contadores e RLS.
+- Idempotência: edges fazem `upsert` por `(contrato_id, tipo)` — reaprovar mesmo contrato não duplica linha pendente.
+- Performance: índice `(status, created_at desc)` para a listagem.
 
 ## Fora de escopo
-
-Bypass para outros códigos (`documentos_nao_aprovados`, `autovistoria_pendente`, etc.), notificações em tempo real, conversão automática.
+- Notificação realtime para Comercial (segue padrão pull do `useAprovacoesFipeMenor`).
+- Reverter bypass a partir da tela Comercial (somente ciência).
+- Alterar a regra de quem aprova (continua exclusivo do Cadastro).

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, Clock, Car, TrendingDown, Loader2, ShieldOff, ShieldCheck, HelpCircle, Eye } from 'lucide-react';
+import { CheckCircle2, Clock, Car, TrendingDown, Loader2, ShieldOff, ShieldCheck, HelpCircle, Eye, AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card, CardContent } from '@/components/ui/card';
 import { PainelAprovacoesElegibilidade } from '@/components/aprovacoes/PainelAprovacoesElegibilidade';
+import { PainelAprovacoesBypassTroca } from '@/components/aprovacoes/PainelAprovacoesBypassTroca';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,7 +33,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   ciente: { label: 'Ciente', color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
 };
 
-type SectionTab = 'reducao_cota' | 'elegibilidade';
+type SectionTab = 'reducao_cota' | 'elegibilidade' | 'bypass_troca';
 
 export default function AprovacoesFipeMenor() {
   const [section, setSection] = useState<SectionTab>('reducao_cota');
@@ -99,6 +100,18 @@ export default function AprovacoesFipeMenor() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={8} className="max-w-xs text-xs z-50">
                   Veículos fora da whitelist de aceitação do plano que necessitam aprovação manual para inclusão
+                </TooltipContent>
+              </Tooltip>
+            </TabsTrigger>
+            <TabsTrigger value="bypass_troca" className="gap-1.5">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              Bypass Troca
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={8} className="max-w-xs text-xs z-50">
+                  Trocas de titularidade aprovadas fora da janela ou convertidas em cotação normal pelo Cadastro. Apenas ciência — não bloqueia o fluxo.
                 </TooltipContent>
               </Tooltip>
             </TabsTrigger>
@@ -191,6 +204,11 @@ export default function AprovacoesFipeMenor() {
         {/* ===== ELEGIBILIDADE ===== */}
         <TabsContent value="elegibilidade" className="space-y-4">
           <PainelAprovacoesElegibilidade />
+        </TabsContent>
+
+        {/* ===== BYPASS TROCA ===== */}
+        <TabsContent value="bypass_troca" className="space-y-4">
+          <PainelAprovacoesBypassTroca />
         </TabsContent>
       </Tabs>
 
