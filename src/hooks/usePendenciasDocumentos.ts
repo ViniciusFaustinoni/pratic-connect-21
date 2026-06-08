@@ -16,13 +16,16 @@ export interface PendenciaPropostaAgrupada {
   placa: string | null;
   linkPublico: string | null;
   vendedorId: string | null;
-  pendencias: Array<{ id: string; tipo: string; label: string; descricao: string | null }>;
+  aguardandoDesde: string;
+  horasParado: number;
+  pendencias: Array<{ id: string; tipo: string; label: string; descricao: string | null; createdAt: string }>;
 }
 
 interface RawRow {
   id: string;
   tipo_documento: string;
   descricao: string | null;
+  created_at: string;
   associado_id: string;
   contrato_id: string | null;
   associados: { nome: string | null; telefone: string | null } | null;
@@ -80,7 +83,7 @@ export function usePendenciasDocumentos() {
       let q = supabase
         .from('documentos_solicitados')
         .select(
-          `id, tipo_documento, descricao, associado_id, contrato_id,
+          `id, tipo_documento, descricao, created_at, associado_id, contrato_id,
            associados:associado_id ( nome, telefone ),
            contratos:contrato_id ( id, numero, status, veiculo_placa, vendedor_id, link_token, cotacao_token_publico )`,
         )
@@ -113,9 +116,13 @@ export function usePendenciasDocumentos() {
           tipo: r.tipo_documento,
           label: labelTipo(r.tipo_documento, r.descricao),
           descricao: r.descricao,
+          createdAt: r.created_at,
         };
         if (existente) {
           existente.pendencias.push(item);
+          if (new Date(r.created_at).getTime() < new Date(existente.aguardandoDesde).getTime()) {
+            existente.aguardandoDesde = r.created_at;
+          }
         } else {
           map.set(chave, {
             contratoId: r.contrato_id || '',
@@ -126,13 +133,22 @@ export function usePendenciasDocumentos() {
             placa: r.contratos?.veiculo_placa || null,
             linkPublico: buildLink(r.contratos?.link_token || null, r.contratos?.cotacao_token_publico || null),
             vendedorId: r.contratos?.vendedor_id || null,
+            aguardandoDesde: r.created_at,
+            horasParado: 0,
             pendencias: [item],
           });
         }
       }
 
-      return Array.from(map.values()).sort((a, b) =>
-        (a.associadoNome || '').localeCompare(b.associadoNome || ''),
+      const agora = Date.now();
+      const lista = Array.from(map.values()).map((item) => ({
+        ...item,
+        horasParado: Math.max(0, (agora - new Date(item.aguardandoDesde).getTime()) / 3_600_000),
+      }));
+
+      // Mais antigos primeiro — o que está parado há mais tempo vira prioridade.
+      return lista.sort(
+        (a, b) => new Date(a.aguardandoDesde).getTime() - new Date(b.aguardandoDesde).getTime(),
       );
     },
   });
