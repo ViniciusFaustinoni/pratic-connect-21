@@ -1675,8 +1675,10 @@ export function useProposta(contratoId: string | undefined) {
           bairro: (associado as any)?.bairro ?? (contrato as any).cliente_bairro,
           cidade: (associado as any)?.cidade ?? null,
         }),
+        processoOrigem,
       };
       return result;
+
     },
     enabled: !!contratoId,
   });
