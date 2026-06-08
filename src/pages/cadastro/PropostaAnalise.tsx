@@ -80,6 +80,11 @@ export default function PropostaAnalise() {
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   const [showBypassJanela, setShowBypassJanela] = useState(false);
   const [bypassJustificativa, setBypassJustificativa] = useState('');
+  const [bypassNomeAutorizador, setBypassNomeAutorizador] = useState('');
+  const [bypassResponsabilidade, setBypassResponsabilidade] = useState(false);
+  const [bypassAcao, setBypassAcao] = useState<'aprovar' | 'converter'>('aprovar');
+  const [showConfirmConverter, setShowConfirmConverter] = useState(false);
+  const [convertendoTroca, setConvertendoTroca] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
   const [documentoReverter, setDocumentoReverter] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
