@@ -205,6 +205,11 @@ export default function AprovacoesFipeMenor() {
         <TabsContent value="elegibilidade" className="space-y-4">
           <PainelAprovacoesElegibilidade />
         </TabsContent>
+
+        {/* ===== BYPASS TROCA ===== */}
+        <TabsContent value="bypass_troca" className="space-y-4">
+          <PainelAprovacoesBypassTroca />
+        </TabsContent>
       </Tabs>
 
       {/* Dialog de "Marcar como Ciente" */}
