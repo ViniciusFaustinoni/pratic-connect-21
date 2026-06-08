@@ -95,7 +95,12 @@ export default function PropostaAnalise() {
   // Sub-etapa 1 do Cadastro: aprovação dos documentos (gate para sub-etapa 2)
   // Ver mem://logic/operations/cadastro-duas-subetapas
   const documentosAprovadosEm = (proposta as any)?.documentos_aprovados_em as string | null | undefined;
-  const subEtapa1Liberada = !!documentosAprovadosEm;
+  // Troca de titularidade não tem sub-etapa 1 (edge aprovar-documentos-cadastro
+  // recusa com fluxo_troca_titularidade) — aprova direto via aprovar-proposta.
+  const isTrocaTitularidade =
+    ((proposta as any)?.tipo_entrada === 'troca_titularidade') ||
+    !!((proposta as any)?.origem_troca_titularidade_id);
+  const subEtapa1Liberada = !!documentosAprovadosEm || isTrocaTitularidade;
   const [isAprovandoDocs, setIsAprovandoDocs] = useState(false);
 
   const handleAprovarDocumentos = async () => {
