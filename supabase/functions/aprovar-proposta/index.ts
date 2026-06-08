@@ -154,9 +154,9 @@ async function atualizarVeiculoComDocs(
 async function tratarTrocaTitularidade(
   supabase: any,
   contrato: any,
-  ctx: { contrato_id: string; aprovado_por: string; agora: string; supabaseUrl: string; supabaseServiceKey: string; authHeader: string | null },
+  ctx: { contrato_id: string; aprovado_por: string; agora: string; supabaseUrl: string; supabaseServiceKey: string; authHeader: string | null; bypass_janela?: boolean; bypass_justificativa?: string },
 ): Promise<{ response: Response } | null> {
-  const { contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader } = ctx;
+  const { contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader, bypass_janela, bypass_justificativa } = ctx;
 
   // ──────────────────────────────────────────────────────────────────────
   // DESVIO: TROCA DE TITULARIDADE
@@ -225,7 +225,10 @@ async function tratarTrocaTitularidade(
       // aprovar-troca-cadastro exige Authorization para resolver o aprovador.
       Authorization: authHeader || `Bearer ${supabaseServiceKey}`,
     },
-    body: JSON.stringify({ solicitacao_id: solicitacaoTroca.id }),
+    body: JSON.stringify({
+      solicitacao_id: solicitacaoTroca.id,
+      ...(bypass_janela ? { bypass_janela: true, bypass_justificativa: bypass_justificativa || '' } : {}),
+    }),
   });
   const trocaJson: any = await trocaResp.json().catch(() => ({}));
 
@@ -1515,7 +1518,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor } = await req.json();
+    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor, bypass_janela, bypass_justificativa } = await req.json();
 
     if (!contrato_id || !aprovado_por) {
       throw new Error('contrato_id e aprovado_por são obrigatórios');
@@ -1531,6 +1534,7 @@ serve(async (req) => {
     // Desvio: Troca de Titularidade (early-return)
     const troca = await tratarTrocaTitularidade(supabase, contrato, {
       contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader,
+      bypass_janela, bypass_justificativa,
     });
     if (troca) return troca.response;
     // ──────────────────────────────────────────────────────────────────────

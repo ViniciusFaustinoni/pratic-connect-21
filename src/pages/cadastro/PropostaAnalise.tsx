@@ -13,6 +13,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   AlertTriangle,
   CheckCircle,
@@ -75,9 +78,13 @@ export default function PropostaAnalise() {
   const [showReprovar, setShowReprovar] = useState(false);
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
+  const [showBypassJanela, setShowBypassJanela] = useState(false);
+  const [bypassJustificativa, setBypassJustificativa] = useState('');
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
   const [documentoReverter, setDocumentoReverter] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
+  const { hasRole } = useAuth();
+  const isDiretor = hasRole('diretor');
   const [sgaLiberado, setSgaLiberado] = useState(false);
   
   // Campos editáveis do veículo para SGA Hinova
@@ -285,9 +292,47 @@ export default function PropostaAnalise() {
       }
     } catch (error: any) {
       console.error('[PropostaAnalise] Erro ao aprovar:', error);
-      toast.error('Erro ao aprovar proposta', { 
-        description: error?.message || 'Tente novamente. Se o problema persistir, atualize a página.' 
+      // Troca de titularidade fora da janela: oferecer bypass auditado (diretor).
+      if (error?.codigo === 'JANELA_TROCA_EXPIRADA' && isTrocaTitularidade && isDiretor) {
+        setBypassJustificativa('');
+        setShowBypassJanela(true);
+        return;
+      }
+      toast.error('Erro ao aprovar proposta', {
+        description: error?.message || 'Tente novamente. Se o problema persistir, atualize a página.'
       });
+    }
+  };
+
+  const handleConfirmarBypassJanela = async () => {
+    if (!id) return;
+    const justificativa = bypassJustificativa.trim();
+    if (justificativa.length < 10) {
+      toast.error('Justificativa obrigatória', { description: 'Descreva o motivo em pelo menos 10 caracteres.' });
+      return;
+    }
+    setShowBypassJanela(false);
+    try {
+      const chassiInformado = veiculoChassi?.trim();
+      await aprovarMutation.mutateAsync({
+        contratoId: id,
+        veiculoRenavam: veiculoRenavam || undefined,
+        veiculoChassi: chassiInformado ? normalizeChassi(chassiInformado) : undefined,
+        bypassJanela: true,
+        bypassJustificativa: justificativa,
+      });
+      try { await registrarLog({ acao: 'aprovar', modulo: 'cotacoes', descricao: `[TROCA_BYPASS_JANELA] ${id}: ${justificativa}`, entidade_id: id, tabela: 'contratos' }); } catch {}
+      try {
+        const cotacaoId = (proposta as any)?.cotacao_id || (proposta as any)?.cotacao?.id;
+        if (cotacaoId) await gerarVistoriaLinkMut.mutateAsync({ cotacaoId });
+      } catch (linkErr) {
+        console.warn('[PropostaAnalise] Falha ao gerar link de vistoria (não bloqueante):', linkErr);
+      }
+      if (nextProposta) navigate(`/cadastro/propostas/${nextProposta.id}`);
+      else navigate('/cadastro/propostas');
+    } catch (err: any) {
+      console.error('[PropostaAnalise] Bypass janela falhou:', err);
+      toast.error('Falha no bypass', { description: err?.message || 'Tente novamente.' });
     }
   };
 
@@ -949,6 +994,43 @@ export default function PropostaAnalise() {
         onOpenChange={(o) => !o && setDocumentoReverter(null)}
         onConfirm={handleReverterReprovacaoDocumento}
       />
+
+      {/* Bypass de janela mesmo-dia em Troca de Titularidade (Diretor) */}
+      <AlertDialog open={showBypassJanela} onOpenChange={setShowBypassJanela}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Aprovar troca fora da janela (Diretor)
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              A janela canônica de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo de cancelamento) já expirou.
+              Esta aprovação será registrada em <strong>logs_auditoria</strong> com sua justificativa e o caso seguirá para o Monitoramento decidir a vistoria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="bypass-justificativa">Justificativa (mínimo 10 caracteres)</Label>
+            <Textarea
+              id="bypass-justificativa"
+              value={bypassJustificativa}
+              onChange={(e) => setBypassJustificativa(e.target.value)}
+              placeholder="Ex.: Cliente já assinou termo + adesão paga; resgate excepcional autorizado pelo diretor."
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">{bypassJustificativa.trim().length} / 10 caracteres</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmarBypassJanela}
+              disabled={bypassJustificativa.trim().length < 10 || aprovarMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {aprovarMutation.isPending ? 'Aprovando…' : 'Aprovar fora da janela'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
