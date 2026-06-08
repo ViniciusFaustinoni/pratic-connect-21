@@ -16,13 +16,16 @@ export interface PendenciaPropostaAgrupada {
   placa: string | null;
   linkPublico: string | null;
   vendedorId: string | null;
-  pendencias: Array<{ id: string; tipo: string; label: string; descricao: string | null }>;
+  aguardandoDesde: string;
+  horasParado: number;
+  pendencias: Array<{ id: string; tipo: string; label: string; descricao: string | null; createdAt: string }>;
 }
 
 interface RawRow {
   id: string;
   tipo_documento: string;
   descricao: string | null;
+  created_at: string;
   associado_id: string;
   contrato_id: string | null;
   associados: { nome: string | null; telefone: string | null } | null;
