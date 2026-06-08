@@ -154,9 +154,9 @@ async function atualizarVeiculoComDocs(
 async function tratarTrocaTitularidade(
   supabase: any,
   contrato: any,
-  ctx: { contrato_id: string; aprovado_por: string; agora: string; supabaseUrl: string; supabaseServiceKey: string; authHeader: string | null },
+  ctx: { contrato_id: string; aprovado_por: string; agora: string; supabaseUrl: string; supabaseServiceKey: string; authHeader: string | null; bypass_janela?: boolean; bypass_justificativa?: string },
 ): Promise<{ response: Response } | null> {
-  const { contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader } = ctx;
+  const { contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader, bypass_janela, bypass_justificativa } = ctx;
 
   // ──────────────────────────────────────────────────────────────────────
   // DESVIO: TROCA DE TITULARIDADE
