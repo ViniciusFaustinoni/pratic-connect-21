@@ -346,15 +346,17 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         }
       }
 
-      // Carrega cadastro_aprovado do contrato (canônico p/ sub-estado da tela)
+      // Carrega cadastro_aprovado + bypass_aplicado do contrato (canônico p/ sub-estado e banner)
       let cadastroAprovado = false;
+      let bypassAplicado: any[] = [];
       if (servico.contrato_id) {
         const { data: cRow } = await supabase
           .from('contratos')
-          .select('cadastro_aprovado')
+          .select('cadastro_aprovado, bypass_aplicado')
           .eq('id', servico.contrato_id)
           .maybeSingle();
         cadastroAprovado = !!(cRow as any)?.cadastro_aprovado;
+        bypassAplicado = Array.isArray((cRow as any)?.bypass_aplicado) ? (cRow as any).bypass_aplicado : [];
       }
 
       return {
@@ -372,6 +374,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         vistoriaModalidade,
         cadastroAprovado,
         vistoriaTecnico,
+        bypassAplicado,
       };
     },
     enabled: !!servicoId,
