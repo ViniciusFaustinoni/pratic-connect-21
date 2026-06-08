@@ -1593,6 +1593,46 @@ export function useProposta(contratoId: string | undefined) {
 
       const planoTemRouboFurto = await checkPlanoTemRouboFurto(contrato.plano_id);
 
+      // ============================================
+      // RESOLVE PROCESSO DE ORIGEM (Substituição / Troca)
+      // Lê dados_extras da cotação primeiro; fallback procura por cotacao_id
+      // nas tabelas de solicitação (mesmo padrão de troca-fallback-antigo-por-veiculo).
+      // ============================================
+      let processoOrigem: PropostaPendente['processoOrigem'] = null;
+      const tipoEntradaContrato = ((contrato as any).tipo_entrada || (cotacaoDetalhe as any)?.tipo_entrada || '').toString();
+      const dadosExtrasCot = (cotacaoDetalhe as any)?.dados_extras || {};
+      const isSubst = tipoEntradaContrato === 'substituicao_placa' || tipoEntradaContrato === 'substituicao';
+      const isTroca = tipoEntradaContrato === 'troca_titularidade' || !!(contrato as any).origem_troca_titularidade_id;
+      if (isSubst) {
+        let sid: string | null = dadosExtrasCot?.solicitacao_substituicao_id || null;
+        if (!sid && contrato.cotacao_id) {
+          const { data: sol } = await (supabase as any)
+            .from('solicitacoes_substituicao_placa')
+            .select('id')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          sid = sol?.id || null;
+        }
+        if (sid) processoOrigem = { tipo: 'substituicao', solicitacaoId: sid };
+      } else if (isTroca) {
+        let sid: string | null = dadosExtrasCot?.solicitacao_troca_id || null;
+        if (!sid && contrato.cotacao_id) {
+          const { data: sol } = await (supabase as any)
+            .from('solicitacoes_troca_titularidade')
+            .select('id')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          sid = sol?.id || null;
+        }
+        if (sid) processoOrigem = { tipo: 'troca_titularidade', solicitacaoId: sid };
+      }
+
+
+
       const result: PropostaPendente = {
         ...contrato,
         cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
