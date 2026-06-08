@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { solicitacao_id, observacao, bypass_janela, bypass_justificativa } = await req.json();
+    const { solicitacao_id, observacao, bypass_janela, bypass_justificativa, bypass_nome_autorizador } = await req.json();
     if (!solicitacao_id) {
       return new Response(JSON.stringify({ error: 'solicitacao_id obrigatório' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -28,11 +28,20 @@ Deno.serve(async (req) => {
     }
     const wantsBypass = bypass_janela === true;
     const justificativa = typeof bypass_justificativa === 'string' ? bypass_justificativa.trim() : '';
-    if (wantsBypass && justificativa.length < 10) {
-      return new Response(JSON.stringify({
-        error: 'Justificativa obrigatória (mínimo 10 caracteres) para aprovar fora da janela.',
-        code: 'BYPASS_JUSTIFICATIVA_OBRIGATORIA',
-      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const nomeAutorizador = typeof bypass_nome_autorizador === 'string' ? bypass_nome_autorizador.trim() : '';
+    if (wantsBypass) {
+      if (nomeAutorizador.length < 3) {
+        return new Response(JSON.stringify({
+          error: 'Nome do autorizador obrigatório (mínimo 3 caracteres).',
+          code: 'BYPASS_AUTORIZADOR_OBRIGATORIO',
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (justificativa.length < 20) {
+        return new Response(JSON.stringify({
+          error: 'Justificativa obrigatória (mínimo 20 caracteres) para aprovar fora da janela.',
+          code: 'BYPASS_JUSTIFICATIVA_OBRIGATORIA',
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
