@@ -288,56 +288,156 @@ export function DocumentosSolicitadosCard({
                 Já reenviados pelo cliente
               </p>
             )}
-            {documentosSolicitados.map((doc) => (
-              <div
-                key={doc.id}
-                className="border-l-4 border-amber-500 pl-4 py-3 bg-card rounded-r-lg shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FileText className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                      <p className="font-medium text-sm text-foreground">
-                        {formatTipo(doc.tipo_documento, doc.descricao)}
-                      </p>
+            {documentosSolicitados.map((doc) => {
+              const url = doc.documento?.arquivo_url ?? resolveFallbackUrl?.(doc.tipo_documento) ?? null;
+              const docStatus = (doc.documento?.status || '').toLowerCase();
+              const jaAprovado = docStatus === 'aprovado';
+              const jaReprovado = docStatus === 'reprovado';
+              const podeDecidir = !!(onAprovar || onReprovar) && !jaAprovado && !jaReprovado;
+              const isPending = pendingId === doc.id;
+              const isReprovando = reprovandoId === doc.id;
+              return (
+                <div
+                  key={doc.id}
+                  className="border-l-4 border-amber-500 pl-4 pr-3 py-3 bg-card rounded-r-lg shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        <p className="font-medium text-sm text-foreground">
+                          {formatTipo(doc.tipo_documento, doc.descricao)}
+                        </p>
+                        {jaAprovado && (
+                          <Badge className="bg-success/15 text-success border-success/30 text-[10px]">Aprovado</Badge>
+                        )}
+                        {jaReprovado && (
+                          <Badge className="bg-destructive/15 text-destructive border-destructive/30 text-[10px]">Reprovado</Badge>
+                        )}
+                      </div>
+
+                      {doc.enviado_em && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                          <Calendar className="h-3 w-3" />
+                          Enviado em: {format(new Date(doc.enviado_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                        </div>
+                      )}
+
+                      {doc.observacao_solicitacao && (
+                        <div className="text-xs text-muted-foreground mt-2 bg-muted/50 rounded p-2 border-l-2 border-muted-foreground/30">
+                          <span className="font-medium">Motivo da solicitação:</span> {doc.observacao_solicitacao}
+                        </div>
+                      )}
+
+                      {doc.observacao_cliente && (
+                        <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-2 bg-primary/5 rounded p-2 border-l-2 border-primary/30">
+                          <MessageSquare className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                          <span>
+                            <span className="font-medium">Obs. do cliente:</span> {doc.observacao_cliente}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {doc.enviado_em && (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                        <Calendar className="h-3 w-3" />
-                        Enviado em: {format(new Date(doc.enviado_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                      </div>
-                    )}
-
-                    {doc.observacao_solicitacao && (
-                      <div className="text-xs text-muted-foreground mt-2 bg-muted/50 rounded p-2 border-l-2 border-muted-foreground/30">
-                        <span className="font-medium">Motivo da solicitação:</span> {doc.observacao_solicitacao}
-                      </div>
-                    )}
-
-                    {doc.observacao_cliente && (
-                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-2 bg-primary/5 rounded p-2 border-l-2 border-primary/30">
-                        <MessageSquare className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                        <span>
-                          <span className="font-medium">Obs. do cliente:</span> {doc.observacao_cliente}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      {url && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                          onClick={() => handleVisualizar(url)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          Visualizar
+                        </Button>
+                      )}
+                      {podeDecidir && (
+                        <div className="flex gap-1.5">
+                          {onAprovar && (
+                            <Button
+                              size="sm"
+                              className="bg-success hover:bg-success/90 text-white"
+                              disabled={isPending || isReprovando}
+                              onClick={async () => {
+                                try {
+                                  setPendingId(doc.id);
+                                  await onAprovar(doc.id);
+                                } finally {
+                                  setPendingId(null);
+                                }
+                              }}
+                            >
+                              <Check className="h-4 w-4 mr-1" />
+                              Aprovar
+                            </Button>
+                          )}
+                          {onReprovar && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={isPending || isReprovando}
+                              onClick={() => {
+                                setReprovandoId(doc.id);
+                                setMotivoReprovacao('');
+                              }}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Reprovar
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  {doc.documento?.arquivo_url && (
-                    <Button
-                      size="sm"
-                      className="bg-amber-500 hover:bg-amber-600 text-white flex-shrink-0"
-                      onClick={() => handleVisualizar(doc.documento!.arquivo_url)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Visualizar
-                    </Button>
+                  {isReprovando && (
+                    <div className="mt-3 space-y-2 border-t pt-3">
+                      <p className="text-xs font-semibold text-destructive">
+                        Motivo da reprovação (será enviado ao cliente):
+                      </p>
+                      <Textarea
+                        value={motivoReprovacao}
+                        onChange={(e) => setMotivoReprovacao(e.target.value)}
+                        placeholder="Ex.: imagem fora de foco, faltou enquadrar o painel ligado..."
+                        rows={2}
+                        className="text-sm"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setReprovandoId(null);
+                            setMotivoReprovacao('');
+                          }}
+                          disabled={isPending}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={isPending || motivoReprovacao.trim().length < 3}
+                          onClick={async () => {
+                            if (!onReprovar) return;
+                            try {
+                              setPendingId(doc.id);
+                              await onReprovar(doc.id, motivoReprovacao.trim());
+                              setReprovandoId(null);
+                              setMotivoReprovacao('');
+                            } finally {
+                              setPendingId(null);
+                            }
+                          }}
+                        >
+                          Confirmar reprovação
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>
