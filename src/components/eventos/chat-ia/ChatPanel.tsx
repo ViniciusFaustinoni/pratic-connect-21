@@ -432,6 +432,8 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                     )}
                     <div className={cn('flex min-w-0', isEntrada ? 'justify-start' : 'justify-end')}>
                       <div
+                        ref={isEntrada && msg.message_id && !(msg as any).lida_pelo_operador_em ? bubbleRef : undefined}
+                        data-whats-msg-id={isEntrada ? msg.message_id ?? undefined : undefined}
                         className={cn(
                           'max-w-[75%] min-w-0 p-3 rounded-lg shadow-sm break-words [overflow-wrap:anywhere]',
                           isEntrada
@@ -439,6 +441,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                             : 'bg-green-100 dark:bg-green-900/30 rounded-tr-none'
                         )}
                       >
+
 
                         <div className="flex items-center gap-1.5 mb-1">
                           {isEntrada ? (
