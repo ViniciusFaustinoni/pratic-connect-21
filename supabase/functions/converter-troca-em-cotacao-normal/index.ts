@@ -194,6 +194,38 @@ Deno.serve(async (req) => {
       console.error('[converter-troca] falha ao criar analise_relacionamento:', aErr);
     }
 
+    // 5) aprovacoes_bypass_troca (4º destino — Comercial › Aprovações, ciência não-bloqueante)
+    try {
+      let placaParaFila: string | null = null;
+      if (sol.veiculo_id) {
+        const { data: v } = await admin
+          .from('veiculos').select('placa').eq('id', sol.veiculo_id).maybeSingle();
+        placaParaFila = (v as any)?.placa || null;
+      }
+      await admin.from('aprovacoes_bypass_troca').upsert({
+        tipo: 'troca_convertida_cotacao',
+        status: 'ciente_pendente',
+        solicitacao_troca_id: solicitacao_id,
+        contrato_id: contratoTrocaId,
+        cotacao_id: sol.cotacao_id || null,
+        associado_id: sol.associado_antigo_id || null,
+        veiculo_id: sol.veiculo_id || null,
+        placa: placaParaFila,
+        nome_autorizador: nomeAutorizador,
+        justificativa: just,
+        operador_user_id: user.id,
+        operador_nome: operadorNome,
+        metadata: {
+          codigo: 'TROCA_CONVERTIDA_EM_COTACAO',
+          termo_assinado_em: sol.termo_cancelamento_assinado_em,
+          aplicado_em: aplicadoEm,
+        },
+      }, { onConflict: 'contrato_id,tipo' });
+    } catch (fErr) {
+      console.error('[converter-troca] falha ao inserir aprovacoes_bypass_troca:', fErr);
+    }
+
+
     return new Response(JSON.stringify({
       success: true,
       status: 'cancelada',
