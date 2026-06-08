@@ -1531,6 +1531,7 @@ serve(async (req) => {
     // Desvio: Troca de Titularidade (early-return)
     const troca = await tratarTrocaTitularidade(supabase, contrato, {
       contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader,
+      bypass_janela, bypass_justificativa,
     });
     if (troca) return troca.response;
     // ──────────────────────────────────────────────────────────────────────
