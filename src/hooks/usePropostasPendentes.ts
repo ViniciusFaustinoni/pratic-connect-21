@@ -237,7 +237,20 @@ export interface PropostaPendente {
     uf: string | null;
     cep: string | null;
   } | null;
+  /**
+   * Quando a proposta vem de um processo paralelo (Substituição de Veículo
+   * ou Troca de Titularidade), aponta para a solicitação de origem para
+   * que o Cadastro consiga ver o lado antigo (veículo a substituir ou
+   * titular anterior) sem sair da tela canônica de aprovação.
+   * Resolvido a partir de `cotacoes.dados_extras` com fallback por
+   * `cotacao_id` na tabela de solicitações correspondente.
+   */
+  processoOrigem: {
+    tipo: 'substituicao' | 'troca_titularidade';
+    solicitacaoId: string;
+  } | null;
 }
+
 
 // Normaliza string para comparação de endereço (trim + lowercase + sem acento)
 function _normEnd(v: string | null | undefined): string {
@@ -886,8 +899,12 @@ export function usePropostasPendentes() {
             bairro: associado?.bairro ?? (contrato as any).cliente_bairro,
             cidade: associado?.cidade ?? null,
           }),
+          // Lista não resolve processoOrigem (custo de N+1). Só useProposta
+          // (drawer) faz o lookup completo para exibir a aba "Processo".
+          processoOrigem: null,
         } as PropostaPendente;
       });
+
 
       return propostas.filter((p): p is PropostaPendente => p !== null);
     },
@@ -1039,10 +1056,11 @@ export function useProposta(contratoId: string | undefined) {
             plano_escolhido_id, vistoria_permite_encaixe, 
             vistoria_data_agendada, vistoria_horario_agendado,
             vistoria_completa_data_agendada, vistoria_completa_horario_agendado,
-            tipo_vistoria, veiculo_blindado, cenario_adesao, tipo_entrada,
+            tipo_vistoria, veiculo_blindado, cenario_adesao, tipo_entrada, dados_extras,
             vistoria_endereco_logradouro, vistoria_endereco_numero, vistoria_endereco_bairro, vistoria_endereco_cidade, vistoria_endereco_estado, vistoria_endereco_cep,
             vistoria_completa_endereco_logradouro, vistoria_completa_endereco_numero, vistoria_completa_endereco_bairro, vistoria_completa_endereco_cidade, vistoria_completa_endereco_estado, vistoria_completa_endereco_cep
           `)
+
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
         
@@ -1575,6 +1593,46 @@ export function useProposta(contratoId: string | undefined) {
 
       const planoTemRouboFurto = await checkPlanoTemRouboFurto(contrato.plano_id);
 
+      // ============================================
+      // RESOLVE PROCESSO DE ORIGEM (Substituição / Troca)
+      // Lê dados_extras da cotação primeiro; fallback procura por cotacao_id
+      // nas tabelas de solicitação (mesmo padrão de troca-fallback-antigo-por-veiculo).
+      // ============================================
+      let processoOrigem: PropostaPendente['processoOrigem'] = null;
+      const tipoEntradaContrato = ((contrato as any).tipo_entrada || (cotacaoDetalhe as any)?.tipo_entrada || '').toString();
+      const dadosExtrasCot = (cotacaoDetalhe as any)?.dados_extras || {};
+      const isSubst = tipoEntradaContrato === 'substituicao_placa' || tipoEntradaContrato === 'substituicao';
+      const isTroca = tipoEntradaContrato === 'troca_titularidade' || !!(contrato as any).origem_troca_titularidade_id;
+      if (isSubst) {
+        let sid: string | null = dadosExtrasCot?.solicitacao_substituicao_id || null;
+        if (!sid && contrato.cotacao_id) {
+          const { data: sol } = await (supabase as any)
+            .from('solicitacoes_substituicao_placa')
+            .select('id')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          sid = sol?.id || null;
+        }
+        if (sid) processoOrigem = { tipo: 'substituicao', solicitacaoId: sid };
+      } else if (isTroca) {
+        let sid: string | null = dadosExtrasCot?.solicitacao_troca_id || null;
+        if (!sid && contrato.cotacao_id) {
+          const { data: sol } = await (supabase as any)
+            .from('solicitacoes_troca_titularidade')
+            .select('id')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          sid = sol?.id || null;
+        }
+        if (sid) processoOrigem = { tipo: 'troca_titularidade', solicitacaoId: sid };
+      }
+
+
+
       const result: PropostaPendente = {
         ...contrato,
         cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
@@ -1617,8 +1675,10 @@ export function useProposta(contratoId: string | undefined) {
           bairro: (associado as any)?.bairro ?? (contrato as any).cliente_bairro,
           cidade: (associado as any)?.cidade ?? null,
         }),
+        processoOrigem,
       };
       return result;
+
     },
     enabled: !!contratoId,
   });
