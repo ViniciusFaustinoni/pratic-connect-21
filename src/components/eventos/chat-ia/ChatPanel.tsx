@@ -19,6 +19,8 @@ import { useIaPausa } from '@/hooks/useIaPausa';
 import { useConcluirTransbordo } from '@/hooks/useTransbordosAtivos';
 import { ContatoDetalheDrawer } from './ContatoDetalheDrawer';
 import { ContatoDetalheEventosDrawer } from './ContatoDetalheEventosDrawer';
+import { useMarkMessagesRead } from '@/hooks/useMarkMessagesRead';
+
 
 interface ChatPanelProps {
   telefone: string | null;
@@ -49,6 +51,35 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   const { data: mensagens, isLoading, refetch } = useWhatsAppHistorico(telefone, 200);
   const { pausa, ativa: iaPausada, pausarPorIntervencao } = useIaPausa(telefone);
   const concluirTransbordo = useConcluirTransbordo();
+  const { enqueue: marcarMsgLidaProvedor } = useMarkMessagesRead(telefone);
+
+  // IntersectionObserver para markAsRead: quando bolha de entrada entra
+  // na viewport (>=60%), enfileira o message_id para o edge `whatsapp-mark-read`.
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const vp = getViewport();
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const el = entry.target as HTMLElement;
+          const id = el.dataset.whatsMsgId;
+          if (!id) continue;
+          marcarMsgLidaProvedor(id);
+          observerRef.current?.unobserve(el);
+        }
+      },
+      { root: vp ?? null, threshold: 0.6 },
+    );
+    return () => { observerRef.current?.disconnect(); observerRef.current = null; };
+  }, [telefone, marcarMsgLidaProvedor]);
+
+  const bubbleRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el || !observerRef.current) return;
+    observerRef.current.observe(el);
+  }, []);
+
   
 
   // Limpa pendentes que já apareceram no histórico (por message_id, ou heurística texto+janela)
@@ -401,6 +432,8 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                     )}
                     <div className={cn('flex min-w-0', isEntrada ? 'justify-start' : 'justify-end')}>
                       <div
+                        ref={isEntrada && msg.message_id && !(msg as any).lida_pelo_operador_em ? bubbleRef : undefined}
+                        data-whats-msg-id={isEntrada ? msg.message_id ?? undefined : undefined}
                         className={cn(
                           'max-w-[75%] min-w-0 p-3 rounded-lg shadow-sm break-words [overflow-wrap:anywhere]',
                           isEntrada
@@ -408,6 +441,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
                             : 'bg-green-100 dark:bg-green-900/30 rounded-tr-none'
                         )}
                       >
+
 
                         <div className="flex items-center gap-1.5 mb-1">
                           {isEntrada ? (

@@ -33817,6 +33817,7 @@ export type Database = {
           erro_mensagem: string | null
           id: string
           instancia_id: string | null
+          lida_pelo_operador_em: string | null
           media_filename: string | null
           media_mimetype: string | null
           media_url: string | null
@@ -33843,6 +33844,7 @@ export type Database = {
           erro_mensagem?: string | null
           id?: string
           instancia_id?: string | null
+          lida_pelo_operador_em?: string | null
           media_filename?: string | null
           media_mimetype?: string | null
           media_url?: string | null
@@ -33869,6 +33871,7 @@ export type Database = {
           erro_mensagem?: string | null
           id?: string
           instancia_id?: string | null
+          lida_pelo_operador_em?: string | null
           media_filename?: string | null
           media_mimetype?: string | null
           media_url?: string | null

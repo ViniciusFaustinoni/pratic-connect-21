@@ -1,64 +1,71 @@
-## Objetivo
 
-Hoje a tela canônica de aprovação do Cadastro (`/cadastro/propostas/:id` → `PropostaAnalise` → `PropostaDetalhesTabs`) só mostra o lado **novo** (cliente + veículo que estão entrando). Em **Substituição de Veículo** e **Troca de Titularidade**, o analista precisa também ver o lado **antigo** para decidir — exatamente o mesmo conteúdo que existe nos drawers dedicados (`SubstituicaoDetalhePage` e `ModalDetalhesTroca`). O caminho de Processos (Outros Processos) continua existindo, mas o ponto canônico de aprovação passa a ser autossuficiente.
+# Confirmação de leitura — Chat IA do Relacionamento
 
-## Escopo (apenas presentation/UI)
+Implementar os dois lados do recibo de leitura no `/eventos/chat-ia`:
 
-Nenhum edge function, nenhuma trigger, nenhum schema de banco muda. Tudo é leitura + renderização no Cadastro.
+1. **Saída (✓✓ azul nas nossas mensagens)**: garantir que `whatsapp_mensagens.status='lida'` + `read_at` chegue à UI em tempo real e os ✓✓ pintem de azul quando o cliente lê no WhatsApp dele.
+2. **Entrada (operador → cliente)**: quando o operador rola e a mensagem do cliente fica visível na viewport, disparar `markAsRead` na Evolution/Meta para o cliente ver ✓✓ azul no aparelho dele.
 
-## Passos
+A UI já renderiza ✓✓ baseado em `msg.status` (`ChatPanel.tsx:481`) e os webhooks (`whatsapp-webhook` MESSAGES_UPDATE 4=READ e `whatsapp-meta-webhook` statuses=read) já gravam `status='lida'` + `read_at`. Falta: realtime no painel para refletir a mudança sem reload, e o lado inbound (markAsRead) que hoje não existe.
 
-### 1. Extrair "miolo" dos drawers dedicados para componentes reaproveitáveis
+---
 
-- `src/components/substituicao/SubstituicaoDetalheConteudo.tsx` (novo): recebe `solicitacaoId` (ou objeto completo) e renderiza tudo que hoje vive no corpo do `SubstituicaoDetalhePage` — header com veículo antigo × novo, snapshot SGA, status do termo, timeline, agendamentos vinculados, rastreador antigo, observações.
-- `src/components/troca-titularidade/TrocaDetalheConteudo.tsx` (novo): mesmo padrão para `ModalDetalhesTroca` — dados do titular antigo (nome, CPF mascarado, telefone, e-mail), contrato anterior, status do termo de cancelamento, snapshot SGA, timeline.
-- Os arquivos atuais (`SubstituicaoDetalhePage.tsx` e `ModalDetalhesTroca.tsx`) passam a ser cascas finas que renderizam o componente extraído dentro do layout de página/dialog que já têm.
+## 1. Saída — realtime de status
 
-### 2. Enriquecer `useProposta` com o "processo de origem"
+Hoje o `ChatPanel` carrega o histórico via `useWhatsAppHistorico`/query e não escuta `UPDATE` em `whatsapp_mensagens` para a conversa aberta. Resultado: ✓✓ azul só aparece depois de refresh manual.
 
-No retorno de `useProposta(contratoId)` (`src/hooks/usePropostasPendentes.ts`), quando o contrato tiver `tipo_entrada` igual a `substituicao_placa` / `substituicao` / `troca_titularidade`, anexar um campo novo `processoOrigem` com a forma:
+- Adicionar um subscribe Realtime em `ChatPanel.tsx` (ou hook dedicado `useWhatsAppMensagensRealtime(telefone)`) com canal por `telefone` filtrando `event:'UPDATE'` em `public.whatsapp_mensagens` e fazendo `queryClient.setQueryData` na chave do histórico para mesclar `status`/`read_at`/`delivered_at`/`sent_at` por `message_id`.
+- Throttle leve (mesma técnica do `useCotacoesRealtime`) para não invalidar a query inteira a cada ACK.
+- Garantir que a tabela está em `supabase_realtime` publication e tem `replica identity full` (migração se faltar) — sem isso o subscribe não recebe os UPDATEs.
 
-```ts
-processoOrigem?:
-  | { tipo: 'substituicao'; solicitacaoId: string }
-  | { tipo: 'troca_titularidade'; solicitacaoId: string }
+## 2. Entrada — markAsRead disparado por viewport
+
+### Edge function nova: `whatsapp-mark-read`
+- Body: `{ instancia_id, telefone, message_ids: string[] }`.
+- Resolve a instância (Evolution × Meta oficial) lendo `whatsapp_instancias` igual aos outros edges.
+- **Evolution**: `POST /chat/markMessageAsRead/{instance}` com `read_messages: [{ remoteJid, fromMe:false, id }]`.
+- **Meta oficial**: para cada `message_id` do cliente, `POST https://graph.facebook.com/v20.0/{phone_number_id}/messages` com `{ messaging_product:"whatsapp", status:"read", message_id }`.
+- Idempotência: ignora `message_ids` que já estão em `whatsapp_mensagens` com `direcao='entrada'` E `lida_pelo_operador_em IS NOT NULL` (campo novo, ver §3).
+- Loga em `whatsapp_logs` com `evento:'mark_read'` + ids; erros não bloqueiam (best-effort por mensagem).
+- Auth: valida JWT em código (padrão dos outros edges) e checa se o usuário tem acesso ao módulo Relacionamento.
+
+### Migração mínima
+- Adicionar coluna `lida_pelo_operador_em timestamptz` em `whatsapp_mensagens` (não afeta o status canônico do WhatsApp; só evita re-disparo). Sem novas tabelas.
+- Conferir `alter publication supabase_realtime add table whatsapp_mensagens` + `alter table whatsapp_mensagens replica identity full` (se não estiverem aplicados).
+
+### UI — hook `useMarkMessagesRead`
+- No `ChatPanel.tsx`, observar as bolhas de mensagem de `entrada` ainda sem `lida_pelo_operador_em` com `IntersectionObserver` (threshold 0.6).
+- Bufferiza ids vistos por 800ms e dispara um único `supabase.functions.invoke('whatsapp-mark-read', { body: { instancia_id, telefone, message_ids }})`.
+- Dispara também quando a janela ganha foco (`visibilitychange`/`focus`) e tem msgs pendentes — cobre o caso de operador já estar com a conversa aberta quando chega mensagem nova.
+- Botão manual "Marcar lidas" continua funcionando: além do `last_read_at` local que já existe, agora também chama o mesmo edge com os ids não-lidos.
+- Não dispara quando a IA estiver no controle (`whatsapp_ia_pausas`/`status='atendimento_humano'` é irrelevante aqui — markAsRead é só do operador humano olhando o chat).
+
+## 3. Detalhes técnicos
+
+- Tabela `whatsapp_mensagens` já tem `status`, `sent_at`, `delivered_at`, `read_at`, `direcao`, `message_id`, `instancia_id`. Reaproveitar.
+- A coluna `read_at` representa "lida pelo destinatário no WhatsApp" (saída). Para o lado inbound, usar `lida_pelo_operador_em` para não misturar semântica.
+- Webhooks atuais já cobrem saída: `whatsapp-webhook` MESSAGES_UPDATE status 4 e `whatsapp-meta-webhook` statuses `read`. Não mexer.
+- Evolution `markMessageAsRead` precisa do `remoteJid` (telefone com `@s.whatsapp.net`) — montar a partir de `telefone`.
+- Meta oficial: ler `phone_number_id` da `whatsapp_meta_config`/instância como já feito em `whatsapp-send-text`.
+
+## 4. Arquivos tocados
+
+```text
+supabase/functions/whatsapp-mark-read/index.ts           [NOVO]
+supabase/migrations/<ts>_whatsapp_mark_read.sql          [NOVO] coluna + realtime
+src/components/eventos/chat-ia/ChatPanel.tsx             [edit] subscribe + IO
+src/hooks/useWhatsAppMensagensRealtime.ts                [NOVO]
+src/hooks/useMarkMessagesRead.ts                         [NOVO]
+src/components/eventos/chat-ia/ConversasList.tsx         [edit] botão "Marcar lidas" também chama o edge
+src/pages/eventos/EventosChatIA.tsx                      [edit] passa instancia_id ao panel/lista
 ```
 
-A resolução do `solicitacaoId` segue o padrão já usado em outros lugares: ler `cotacoes.dados_extras.solicitacao_substituicao_id` / `dados_extras.solicitacao_troca_id`, com fallback por `veiculo_id`/`associado_id` quando `dados_extras` estiver vazio (mesma estratégia da memória `troca-fallback-antigo-por-veiculo`).
+## 5. Fora de escopo
 
-### 3. Adicionar aba condicional no `PropostaDetalhesTabs`
+- Recibo entre operadores internos (avatares de quem leu) — não pedido.
+- Mudanças no agente IA / `agente-consultor-ia` / pausas — markAsRead é puramente humano.
+- Mudanças na renderização do ✓✓ (já existe).
 
-Quando `proposta.processoOrigem` existir, renderizar uma 5ª `TabsTrigger` com label dinâmico ("Substituição" ou "Troca de Titularidade") e ícone. O conteúdo da aba é simplesmente:
+## 6. Saneamento (não-bloqueante, opcional)
 
-- `<SubstituicaoDetalheConteudo solicitacaoId={...} />`, ou
-- `<TrocaDetalheConteudo solicitacaoId={...} />`.
-
-O grid das abas passa a ser responsivo (`grid-cols-2 sm:grid-cols-5` quando a aba extra aparece).
-
-### 4. Reforço no header da proposta
-
-No `PropostaHeroHeader`, manter o chip "Substituição de Veículo" / "Troca de Titularidade" já existente (TIPO_ENTRADA_LABEL) e adicionar um pequeno botão âncora "Ver processo" que muda a aba para `processo` (estado controlado via `defaultValue`/`value`).
-
-## Detalhes técnicos
-
-- **Sem duplicação de dados**: o componente extraído faz as próprias queries (`useSubstituicaoVeiculo`, `useSolicitacaoTrocaTitularidade`), igual aos drawers atuais — não precisamos passar nada além do `solicitacaoId`.
-- **Sem mexer em aprovação**: gates de sub-etapa 1 (documentos) e sub-etapa 2 (vistoria) continuam idênticos. A aba "Processo" é informativa.
-- **Drawers dedicados continuam**: `/cadastro/processos` segue funcional como atalho/visão de fila — só deixou de ser obrigatório para fechar a aprovação.
-- **Permissões**: nenhuma RLS muda; o Cadastro já lê `solicitacoes_substituicao_placa` e `solicitacoes_troca_titularidade` nessas telas.
-
-## Arquivos tocados
-
-- `src/components/substituicao/SubstituicaoDetalheConteudo.tsx` (novo)
-- `src/components/substituicao/ModalDetalhesSubstituicao.tsx` (usa o novo componente)
-- `src/pages/cadastro/SubstituicaoDetalhePage.tsx` (usa o novo componente)
-- `src/components/troca-titularidade/TrocaDetalheConteudo.tsx` (novo)
-- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` (usa o novo componente)
-- `src/hooks/usePropostasPendentes.ts` (campo `processoOrigem` em `useProposta`)
-- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` (aba condicional)
-- `src/components/cadastro/proposta/PropostaHeroHeader.tsx` (botão "Ver processo")
-
-## Fora de escopo
-
-- Unificar/aposentar as filas Processos › Titularidade e Processos › Substituição.
-- Mudanças em edge functions, triggers, SGA ou Autentique.
-- Saneamento de casos passados — a UI nova aparece em qualquer proposta atual.
+- Backfill: `update whatsapp_mensagens set status='lida', read_at=updated_at where direcao='saida' and status in ('enviada','entregue') and updated_at > now() - interval '30 days'` — **NÃO executar**; o realtime + webhook vai cobrir daqui pra frente. Listar como débito caso o usuário queira limpar o histórico visual.
