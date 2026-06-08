@@ -9495,6 +9495,7 @@ export type Database = {
           biometric_resend_count: number
           biometric_resent_at: string | null
           biometric_resent_by: string | null
+          bypass_aplicado: Json
           cadastro_aprovado: boolean
           carencia_isenta: boolean | null
           carencia_motivo_isencao: string | null
@@ -9627,6 +9628,7 @@ export type Database = {
           biometric_resend_count?: number
           biometric_resent_at?: string | null
           biometric_resent_by?: string | null
+          bypass_aplicado?: Json
           cadastro_aprovado?: boolean
           carencia_isenta?: boolean | null
           carencia_motivo_isencao?: string | null
@@ -9759,6 +9761,7 @@ export type Database = {
           biometric_resend_count?: number
           biometric_resent_at?: string | null
           biometric_resent_by?: string | null
+          bypass_aplicado?: Json
           cadastro_aprovado?: boolean
           carencia_isenta?: boolean | null
           carencia_motivo_isencao?: string | null
