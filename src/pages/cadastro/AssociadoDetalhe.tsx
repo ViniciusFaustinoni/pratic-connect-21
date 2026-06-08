@@ -32,6 +32,7 @@ import {
 import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
 import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
 import { useContratoDoAssociado, useContratosDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado, useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 import { useFotosVistoriaUnificada, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
