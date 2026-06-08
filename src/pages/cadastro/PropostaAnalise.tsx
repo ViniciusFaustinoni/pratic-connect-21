@@ -105,6 +105,12 @@ export default function PropostaAnalise() {
 
   const handleAprovarDocumentos = async () => {
     if (!id) return;
+    if (isTrocaTitularidade) {
+      toast.info('Troca de titularidade aprova direto', {
+        description: 'Este fluxo não tem sub-etapa de documentos — use o botão "Aprovar Proposta".',
+      });
+      return;
+    }
     setIsAprovandoDocs(true);
     try {
       const { data: sess } = await supabase.auth.getUser();
