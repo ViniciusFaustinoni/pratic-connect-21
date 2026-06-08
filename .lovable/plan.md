@@ -1,62 +1,54 @@
-# Reanálise — visualizar e aprovar reenvios no Cadastro
-
 ## Diagnóstico
 
-O card "Documentos da Reanálise" (`DocumentosSolicitadosCard`) lista os itens que o cliente reenviou, mas:
+**Cotação:** COT-20260608-151148216-914 (RICARDO DA SILVA) — Troca de titularidade, Chevrolet Classic LS placa LQY5543.
 
-1. **Não tem botões Aprovar/Reprovar** — só "Visualizar". As ações existem em `PropostaAnalise.handleAprovarDocumento('solicitado-<id>')` e `handleReprovarDocumento(...)`, mas só são expostas no Step 1 (Documentos cadastrais) via `mergeDocsReenviadosNaLista`.
-2. **Quando o reenvio é vídeo 360°** (caso da screenshot): o fluxo público `DocumentosPendentesPublico` (linhas 227–294) grava o arquivo em `vistorias.video_360_url` + `vistoria_fotos` e marca `documentos_solicitados.status='enviado'` **sem criar linha em `documentos`** → `documentos_solicitados.documento_id` fica NULL → o card esconde até o botão Visualizar (depende de `doc.documento?.arquivo_url`) e o item nem entra na lista mesclada do Step 1.
+**Erro na UI (etapa Pagamento):**
+> "Antes de confirmar a adesão isenta, é necessário concluir a autovistoria completa do veículo (roteiro de fotos + vídeo 360°)."
 
-Resultado: o Cadastro só vê "video_360 — Enviado em 08/06/2026 às 11:21", sem qualquer ação possível, exatamente como na imagem.
+**Causa raiz:** A edge `confirmar-adesao-zerada` (gate D1, linhas 88–149) checa se o veículo é sub-FIPE via `fn_veiculo_precisa_rastreador(veiculo_id)`. O veículo `de304508…` (LQY5543, herdado do titular antigo) tem `veiculos.valor_fipe = 28.908` (snapshot SGA), abaixo do mínimo de R$ 30.000 para carros — então a função retorna `false` e o gate exige autovistoria completa (31 fotos + vídeo 360°).
 
-## O que mudar (somente frontend + uma resolução de URL no hook)
+Mas isto é **Troca de Titularidade**, fluxo no qual **autovistoria nunca é exigida** (canônico — o veículo já é conhecido do sistema; Monitoramento decide vistoria presencial se quiser). Os dois lados confirmam: `cotacoes.tipo_entrada = 'troca_titularidade'` e `cotacoes.origem_troca_titularidade = true`.
 
-### 1. Resolver URL de exibição também para peças de autovistoria sem `documento_id`
+O gate D1 foi escrito para o fluxo de nova adesão sub-FIPE e esqueceu de excluir Troca, então trava o pagamento da adesão isenta do novo titular.
 
-Em `src/hooks/usePropostasPendentes.ts`, complementar `documentos_solicitados_enviados` com uma `arquivo_url_fallback` quando `documento` é NULL:
+## Correção
 
-- Se `tipo_documento` é vídeo (`video_360`/`video`) → usar `vistoria.video_360_url` da proposta.
-- Se `tipo_documento` é foto de autovistoria (chassi, motor, lateral, pneu…) → buscar em `vistoria_fotos.arquivo_url` mais recente para aquela `vistoria_id`+`tipo` (consulta única em lote já feita no hook, expandindo o select existente).
+Adicionar bypass do gate D1 quando a cotação for Troca de Titularidade.
 
-Não criar tabela nem mudar como o link público grava — apenas resolver a URL no lado do Cadastro.
+### Arquivo
 
-### 2. Card recebe handlers e mostra Aprovar/Reprovar por item reenviado
+`supabase/functions/confirmar-adesao-zerada/index.ts`
 
-Em `src/components/cadastro/DocumentosSolicitadosCard.tsx`:
+### Mudança
 
-- Adicionar props `onAprovar(solicitadoId)`, `onReprovar(solicitadoId, motivo)`, `isPending`.
-- Em cada item da seção "Já reenviados pelo cliente":
-  - Botão **Visualizar** usa `doc.documento?.arquivo_url ?? doc.arquivo_url_fallback`.
-  - Botões **Aprovar** (verde) e **Reprovar** (vermelho, abre modal com motivo) ao lado.
-  - Quando `documentos.status === 'aprovado'` ou `documentos_solicitados.status === 'aprovado'`: troca por badge "Aprovado".
-- Manter o card oculto quando não há reenviados nem pendentes (comportamento atual).
+Antes do bloco `try` do gate D1 (linha 93), ler a cotação e pular o gate se for troca:
 
-### 3. Passar os handlers nos dois pontos de uso
+```ts
+const { data: cotacaoMeta } = await supabase
+  .from('cotacoes')
+  .select('tipo_entrada, origem_troca_titularidade, dados_extras')
+  .eq('id', cotacao_id)
+  .maybeSingle();
 
-- `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` (linha 263): propagar `onAprovarDocumento`/`onReprovarDocumento` recebidos do `PropostaApprovalStepper`/`PropostaAnalise` para o card, usando o id no formato `solicitado-<id>` que os handlers de `PropostaAnalise.tsx` (linhas 343–430) já entendem.
-- `PropostaApprovalStepper` (linha 436) já chama `PropostaMidiaGrid` no Step 2 — propagar pelos mesmos props.
+const isTroca =
+  cotacaoMeta?.tipo_entrada === 'troca_titularidade' ||
+  cotacaoMeta?.origem_troca_titularidade === true ||
+  !!(cotacaoMeta?.dados_extras as any)?.solicitacao_troca_id;
 
-### 4. Modal de motivo no Reprovar
+if (!isTroca) {
+  // ── D1: Gate sub-FIPE autovistoria completa (apenas nova adesão) ──
+  // ...bloco existente intocado...
+}
+```
 
-Reusar o mesmo dialog usado em `DocumentosAnexadosPanel` para reprovar (texto curto, salva como `observacao_cliente`). Sem componente novo se já houver helper compartilhado; caso contrário, dialog inline simples.
+## Por que aqui e não em outro lugar
 
-## Comportamento esperado após a mudança
+- O gate D1 é uma proteção de **nova adesão sub-FIPE** (memória `sub-fipe-gates-canonicos`). Troca tem fluxo próprio e nunca passa por essa exigência.
+- Não mexer em `fn_veiculo_precisa_rastreador` (essa função está correta para nova adesão; o problema é só aplicabilidade do gate no contexto de troca).
+- Demais gates da troca (`aprovar-troca-cadastro`, `aprovar-proposta` branch troca) continuam intocados.
 
-- Card "Documentos da Reanálise" mostra o item `video_360` com **Visualizar** (abre o vídeo da `vistorias.video_360_url`), **Aprovar** e **Reprovar**.
-- Aprovar → `documentos_solicitados.status='aprovado'` (e `documentos.status='aprovado'` quando houver `documento_id`).
-- Reprovar → volta a solicitação para `status='pendente'`, limpa `enviado_em`/`documento_id`, grava motivo em `observacao_cliente`. Cliente é notificado para reenviar (comportamento já existente em `handleReprovarDocumento`).
-- Peças de autovistoria mantêm o efeito canônico: reenviar zera `vistoria_concluida_em` (já implementado em `DocumentosPendentesPublico`), permanecendo válida a memória `documentos-solicitados-reabre-autovistoria`.
+## Verificação após build
 
-## Fora do escopo
-
-- Não mexer no fluxo público de reenvio (`DocumentosPendentesPublico`) — ele já grava no lugar canônico.
-- Não criar novas tabelas, edge functions, triggers ou políticas.
-- Não alterar como o Step 1 (documentos cadastrais) processa reenvios CNH/CRLV/comprovante — segue idêntico via `mergeDocsReenviadosNaLista`.
-
-## Arquivos tocados
-
-- `src/hooks/usePropostasPendentes.ts` — adicionar `arquivo_url_fallback` em `documentos_solicitados_enviados`.
-- `src/components/cadastro/DocumentosSolicitadosCard.tsx` — botões Aprovar/Reprovar + fallback de URL.
-- `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` — propagar handlers ao card.
-- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — propagar handlers do stepper ao MidiaGrid.
-- `src/pages/cadastro/PropostaAnalise.tsx` — nada a fazer (handlers já aceitam `solicitado-<id>`).
+1. Reabrir o link público da COT-20260608-151148216-914 → clicar "Tentar Novamente" na etapa Pagamento.
+2. Esperado: adesão isenta confirmada, etapa Pagamento marcada como concluída, segue para Vistoria/conclusão do link da troca.
+3. Logs `[confirmar-adesao-zerada]` não devem mais registrar `bloqueado: autovistoria sub-FIPE incompleta` para esta cotação.
