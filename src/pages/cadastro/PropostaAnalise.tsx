@@ -994,6 +994,43 @@ export default function PropostaAnalise() {
         onOpenChange={(o) => !o && setDocumentoReverter(null)}
         onConfirm={handleReverterReprovacaoDocumento}
       />
+
+      {/* Bypass de janela mesmo-dia em Troca de Titularidade (Diretor) */}
+      <AlertDialog open={showBypassJanela} onOpenChange={setShowBypassJanela}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Aprovar troca fora da janela (Diretor)
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              A janela canônica de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo de cancelamento) já expirou.
+              Esta aprovação será registrada em <strong>logs_auditoria</strong> com sua justificativa e o caso seguirá para o Monitoramento decidir a vistoria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="bypass-justificativa">Justificativa (mínimo 10 caracteres)</Label>
+            <Textarea
+              id="bypass-justificativa"
+              value={bypassJustificativa}
+              onChange={(e) => setBypassJustificativa(e.target.value)}
+              placeholder="Ex.: Cliente já assinou termo + adesão paga; resgate excepcional autorizado pelo diretor."
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">{bypassJustificativa.trim().length} / 10 caracteres</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmarBypassJanela}
+              disabled={bypassJustificativa.trim().length < 10 || aprovarMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {aprovarMutation.isPending ? 'Aprovando…' : 'Aprovar fora da janela'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
