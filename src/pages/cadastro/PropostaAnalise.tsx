@@ -78,9 +78,13 @@ export default function PropostaAnalise() {
   const [showReprovar, setShowReprovar] = useState(false);
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
+  const [showBypassJanela, setShowBypassJanela] = useState(false);
+  const [bypassJustificativa, setBypassJustificativa] = useState('');
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
   const [documentoReverter, setDocumentoReverter] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
+  const { hasRole } = useAuth();
+  const isDiretor = hasRole('diretor');
   const [sgaLiberado, setSgaLiberado] = useState(false);
   
   // Campos editáveis do veículo para SGA Hinova
