@@ -1088,14 +1088,16 @@ export default function PropostaAnalise() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Troca fora da janela — escolha como prosseguir
+              Troca fora do prazo — escolha como prosseguir
             </AlertDialogTitle>
             <AlertDialogDescription>
-              A janela canônica de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo de cancelamento) já expirou.
-              Escolha entre <strong>aprovar fora da janela</strong> (segue para o Monitoramento como Troca normal)
-              ou <strong>converter em cotação normal</strong> (cancela a troca; o novo titular precisa refazer como nova adesão).
-              A decisão é registrada em <strong>logs_auditoria</strong>, na fila <strong>Relacionamento › Análises</strong> e
-              fica visível no Monitoramento.
+              O prazo para concluir essa Troca de Titularidade no mesmo dia da assinatura do termo de cancelamento já passou. Você tem duas opções:
+              <br /><br />
+              • <strong>Aprovar fora do prazo</strong>: a troca segue normalmente para o Monitoramento.
+              <br />
+              • <strong>Converter em cotação normal</strong>: a troca é cancelada e o novo titular precisa começar como uma adesão nova.
+              <br /><br />
+              Sua decisão fica registrada no histórico da proposta, aparece para o Relacionamento (em Análises) e também para o time do Monitoramento.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
