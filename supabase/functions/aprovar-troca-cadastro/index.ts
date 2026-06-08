@@ -231,6 +231,45 @@ Deno.serve(async (req) => {
       } catch (aErr) {
         console.error('[aprovar-troca-cadastro] falha ao criar analise_relacionamento:', aErr);
       }
+
+      // 3b.4) aprovacoes_bypass_troca (4º destino — Comercial › Aprovações, ciência não-bloqueante)
+      try {
+        let contratoIdParaFila: string | null = null;
+        let placaParaFila: string | null = null;
+        if (sol.cotacao_id) {
+          const { data: ctr2 } = await admin
+            .from('contratos')
+            .select('id, veiculos:veiculo_id(placa)')
+            .eq('cotacao_id', sol.cotacao_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          contratoIdParaFila = (ctr2 as any)?.id || null;
+          placaParaFila = (ctr2 as any)?.veiculos?.placa || null;
+        }
+        await admin.from('aprovacoes_bypass_troca').upsert({
+          tipo: 'bypass_janela',
+          status: 'ciente_pendente',
+          solicitacao_troca_id: solicitacao_id,
+          contrato_id: contratoIdParaFila,
+          cotacao_id: sol.cotacao_id || null,
+          associado_id: sol.associado_antigo_id || null,
+          veiculo_id: sol.veiculo_id || null,
+          placa: placaParaFila,
+          nome_autorizador: nomeAutorizador,
+          justificativa,
+          operador_user_id: user.id,
+          operador_nome: operadorNome,
+          metadata: {
+            codigo: 'JANELA_TROCA_EXPIRADA',
+            termo_assinado_em: sol.termo_cancelamento_assinado_em,
+            aplicado_em: aplicadoEm,
+          },
+        }, { onConflict: 'contrato_id,tipo' });
+      } catch (fErr) {
+        console.error('[aprovar-troca-cadastro] falha ao inserir aprovacoes_bypass_troca:', fErr);
+      }
+
       console.log('[aprovar-troca-cadastro] BYPASS_JANELA aplicado', { solicitacao_id, user_id: user.id, nomeAutorizador });
     }
 
