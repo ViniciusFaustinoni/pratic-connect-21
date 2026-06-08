@@ -718,12 +718,16 @@ export default function PropostaAnalise() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 px-4 pb-8">
+      {/* Bypass aplicado (Troca de Titularidade fora da janela / convertida) */}
+      <BypassAplicadoBanner bypassAplicado={(proposta as any)?.bypass_aplicado} />
+
       {/* ZONA 1: Header Hero (sem botões de ação) */}
       <PropostaHeroHeader
         proposta={proposta}
         onVoltar={() => navigate('/cadastro/propostas')}
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
       />
+
 
       {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA */}
       <ObservacoesCotacaoCard
