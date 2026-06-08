@@ -27,7 +27,7 @@ const CODIGO_LABEL: Record<string, string> = {
 function formatarDataBRT(iso?: string | null): string {
   if (!iso) return '—';
   try {
-    return formatInTimeZone(new Date(iso), 'America/Sao_Paulo', "dd/MM/yyyy 'às' HH:mm");
+    return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
   } catch {
     return iso;
   }
