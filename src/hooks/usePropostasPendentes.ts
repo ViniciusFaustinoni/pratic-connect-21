@@ -1752,7 +1752,7 @@ export function useAprovarProposta() {
   const { profile } = useAuth();
 
   return useMutation({
-    mutationFn: async (params: { contratoId: string; veiculoRenavam?: string; veiculoChassi?: string; bypassJanela?: boolean; bypassJustificativa?: string }) => {
+    mutationFn: async (params: { contratoId: string; veiculoRenavam?: string; veiculoChassi?: string; bypassJanela?: boolean; bypassJustificativa?: string; bypassNomeAutorizador?: string }) => {
       if (!profile?.id) {
         throw new Error('Usuário não autenticado');
       }
@@ -1763,7 +1763,11 @@ export function useAprovarProposta() {
           aprovado_por: profile.id,
           veiculo_renavam: params.veiculoRenavam || null,
           veiculo_chassi: params.veiculoChassi || null,
-          ...(params.bypassJanela ? { bypass_janela: true, bypass_justificativa: params.bypassJustificativa || '' } : {}),
+          ...(params.bypassJanela ? {
+            bypass_janela: true,
+            bypass_justificativa: params.bypassJustificativa || '',
+            bypass_nome_autorizador: params.bypassNomeAutorizador || '',
+          } : {}),
         },
       });
 
