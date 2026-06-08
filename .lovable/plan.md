@@ -1,68 +1,64 @@
-# Diagnóstico — COT-20260606-142420151-266 (PATRICK · LTP7C50 ← RJN2A96)
+## Objetivo
 
-## Estado no banco
+Hoje a tela canônica de aprovação do Cadastro (`/cadastro/propostas/:id` → `PropostaAnalise` → `PropostaDetalhesTabs`) só mostra o lado **novo** (cliente + veículo que estão entrando). Em **Substituição de Veículo** e **Troca de Titularidade**, o analista precisa também ver o lado **antigo** para decidir — exatamente o mesmo conteúdo que existe nos drawers dedicados (`SubstituicaoDetalhePage` e `ModalDetalhesTroca`). O caminho de Processos (Outros Processos) continua existindo, mas o ponto canônico de aprovação passa a ser autossuficiente.
 
-- `cotacoes` 3a2147db: `tipo_entrada='substituicao_placa'`, `dados_extras.tipo_entrada='substituicao_placa'`, `dados_extras.solicitacao_substituicao_id=a8194750…`, `dados_extras.veiculo_antigo_id=9d4ca07a…` (RJN2A96), `status_contratacao='aguardando_aprovacao_cadastro'`, `vistoria_completa_data_agendada='2026-06-09 tarde'`, `tipo_vistoria='autovistoria'`, `contrato_gerado_id=6786afcc…`.
-- `contratos` 6786afcc: `status='assinado'`, `tipo_entrada='substituicao_placa'`, `autentique_documento_id` presente (termo da Autentique foi disparado — mas como **termo de filiação**, não de substituição — ver bug raiz #2).
-- `servicos` da cotação: **apenas 1 linha** — `vistoria_entrada` modalidade `autovistoria` (e6c1d6ef…), status `em_analise`. **Nenhum** `instalacao` nem `vistoria_retirada`.
-- `agendamentos_base` da cotação: **vazio**. `instalacoes` da cotação: **vazio**.
-- `substituicoes_veiculo` para o associado/contrato: **vazio** — a entidade canônica nunca foi materializada.
-- `solicitacoes_substituicao_placa` a8194750: `status='cotacao_criada'`, `termo_cancelamento_*` todos `null` (esperado — substituição usa o próprio termo de filiação como cancelamento, não o termo da troca).
-- Veículos: `LTP7C50` em `em_analise` (novo, ok), `RJN2A96` ainda `ativo` (antigo, esperado até efetivar).
-- Edge functions invocadas: `efetivar-substituicao`, `criar-substituicao-agendamentos-separados` e `enviar-termo-cancelamento-substituicao` **nunca rodaram** para esta cotação.
+## Escopo (apenas presentation/UI)
 
-## Bug raiz
+Nenhum edge function, nenhuma trigger, nenhum schema de banco muda. Tudo é leitura + renderização no Cadastro.
 
-Existem **3 leituras** comparando `tipo_entrada` com o literal errado `'substituicao'` (canônico é `'substituicao_placa'`, ver `mem://constraints/contracts/tipo-entrada-substituicao-canonical`):
+## Passos
 
-1. `src/pages/public/CotacaoContratacao.tsx:173`
-   ```ts
-   const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
-   ```
-   Como `dados_extras.tipo_entrada` vem `'substituicao_placa'` (escrita normalizada pelo `normalizarTipoEntrada`), `isSubstituicao` ficou **permanentemente `false`** no link público. Resultado: o associado nunca viu o seletor "mesmo local / locais separados" nem o componente `AgendamentoSubstituicaoSeparado`. Como o veículo tem FIPE R$ 70.995 (> R$ 30k), o caminho "adesão acima do mínimo" abriu a **autovistoria enxuta opcional** — que NÃO existe em substituição (canônico passo 7 exige instalação física + retirada). O cliente fez a autovistoria, a cotação foi promovida para `aguardando_aprovacao_cadastro`, e o caminho de substituição (retirada do antigo, termo de substituição, materialização em `substituicoes_veiculo`) nunca ocorreu.
+### 1. Extrair "miolo" dos drawers dedicados para componentes reaproveitáveis
 
-2. `supabase/functions/autentique-create/index.ts:275` e
-3. `supabase/functions/autentique-create-by-token/index.ts:473`
-   Mesma comparação errada → o termo gerado para o contrato 6786afcc saiu como "Proposta de Filiação", não como "Proposta de Substituição".
+- `src/components/substituicao/SubstituicaoDetalheConteudo.tsx` (novo): recebe `solicitacaoId` (ou objeto completo) e renderiza tudo que hoje vive no corpo do `SubstituicaoDetalhePage` — header com veículo antigo × novo, snapshot SGA, status do termo, timeline, agendamentos vinculados, rastreador antigo, observações.
+- `src/components/troca-titularidade/TrocaDetalheConteudo.tsx` (novo): mesmo padrão para `ModalDetalhesTroca` — dados do titular antigo (nome, CPF mascarado, telefone, e-mail), contrato anterior, status do termo de cancelamento, snapshot SGA, timeline.
+- Os arquivos atuais (`SubstituicaoDetalhePage.tsx` e `ModalDetalhesTroca.tsx`) passam a ser cascas finas que renderizam o componente extraído dentro do layout de página/dialog que já têm.
 
-## Plano
+### 2. Enriquecer `useProposta` com o "processo de origem"
 
-### Parte 1 — Saneamento do caso (PATRICK)
+No retorno de `useProposta(contratoId)` (`src/hooks/usePropostasPendentes.ts`), quando o contrato tiver `tipo_entrada` igual a `substituicao_placa` / `substituicao` / `troca_titularidade`, anexar um campo novo `processoOrigem` com a forma:
 
-Objetivo: reabrir o caminho canônico para o associado agendar **instalação no veículo novo + retirada no antigo** sem refazer cotação/pagamento.
+```ts
+processoOrigem?:
+  | { tipo: 'substituicao'; solicitacaoId: string }
+  | { tipo: 'troca_titularidade'; solicitacaoId: string }
+```
 
-1. Cancelar/limpar o ramo da autovistoria que se materializou indevidamente:
-   - `UPDATE servicos SET status='cancelada', motivo_cancelamento='saneamento: substituição não permite autovistoria — fluxo canônico exige instalação+retirada presencial', cancelada_em=now() WHERE id='e6c1d6ef-b528-447d-833f-a16d2cafc50a'`.
-   - `UPDATE vistorias SET status='cancelada' WHERE id='9214bb9d-bad1-40dd-bfab-1eeac3a43d88'` (e marcar fotos como descartadas se houver).
-2. Devolver a cotação ao ponto de agendamento (mantém pagamento e contrato):
-   - `UPDATE cotacoes SET status_contratacao='aguardando_agendamento', vistoria_concluida_em=NULL, vistoria_completa_data_agendada=NULL, vistoria_completa_periodo=NULL, tipo_vistoria=NULL WHERE id='3a2147db-…'`.
-   - Limpar bandeiras de cadastro promovido: `UPDATE contratos SET cadastro_aprovado=false, aprovado_em=NULL, documentos_aprovados_em=NULL WHERE id='6786afcc-…'` (já estão `false`/`null` — defesa).
-3. Reabrir o link público (sem invalidar token). Após o fix da Parte 2, o link já vai renderizar `AgendamentoSubstituicaoSeparado` → cliente agenda os 2 serviços → `criar-substituicao-agendamentos-separados` materializa retirada + instalação + `substituicoes_veiculo`.
-4. Comunicar o associado por WhatsApp com o link existente — não disparar novo termo (contrato 6786afcc já assinado é aproveitado).
+A resolução do `solicitacaoId` segue o padrão já usado em outros lugares: ler `cotacoes.dados_extras.solicitacao_substituicao_id` / `dados_extras.solicitacao_troca_id`, com fallback por `veiculo_id`/`associado_id` quando `dados_extras` estiver vazio (mesma estratégia da memória `troca-fallback-antigo-por-veiculo`).
 
-Tudo via migration única (sem alterar schema, só dados) com auditoria em `logs_auditoria`.
+### 3. Adicionar aba condicional no `PropostaDetalhesTabs`
 
-### Parte 2 — Correção definitiva (impedir reincidência)
+Quando `proposta.processoOrigem` existir, renderizar uma 5ª `TabsTrigger` com label dinâmico ("Substituição" ou "Troca de Titularidade") e ícone. O conteúdo da aba é simplesmente:
 
-1. **Trocar o literal errado nos 3 pontos** para usar `normalizarTipoEntrada` (já existe em `src/lib/cotacoes/tipoEntrada.ts` e `supabase/functions/_shared/tipo-entrada.ts`) ou comparar explicitamente com `'substituicao_placa'` aceitando o alias `'substituicao'` como defesa em profundidade:
-   - `src/pages/public/CotacaoContratacao.tsx:173`
-   - `supabase/functions/autentique-create/index.ts:275`
-   - `supabase/functions/autentique-create-by-token/index.ts:473`
+- `<SubstituicaoDetalheConteudo solicitacaoId={...} />`, ou
+- `<TrocaDetalheConteudo solicitacaoId={...} />`.
 
-2. **Bloquear autovistoria em substituição no link público**: em `CotacaoContratacao.tsx`, na seção que decide entre autovistoria/agendamento (ramo "FIPE acima do mínimo"), forçar `tipoVistoria='presencial'` quando `isSubstituicao=true` e nunca renderizar o cartão de autovistoria opcional (canônico passo 7).
+O grid das abas passa a ser responsivo (`grid-cols-2 sm:grid-cols-5` quando a aba extra aparece).
 
-3. **Guard backend (defesa em profundidade)**: em `supabase/functions/finalizar-autovistoria-cotacao/index.ts`, rejeitar com `409 { code: 'autovistoria_nao_permitida_em_substituicao' }` quando `cotacoes.tipo_entrada='substituicao_placa'` (ou `dados_extras.solicitacao_substituicao_id` presente). Garante que, mesmo se o front regredir, o banco não promove a cotação por autovistoria.
+### 4. Reforço no header da proposta
 
-4. **Atualizar memória `mem://constraints/contracts/tipo-entrada-substituicao-canonical`** com o aprendizado: leitores DEVEM normalizar; literal `'substituicao'` jamais aparece em DB nem deve ser comparado diretamente. Linkar este caso (LTP7C50 / COT-20260606-142420151-266) como evidência.
+No `PropostaHeroHeader`, manter o chip "Substituição de Veículo" / "Troca de Titularidade" já existente (TIPO_ENTRADA_LABEL) e adicionar um pequeno botão âncora "Ver processo" que muda a aba para `processo` (estado controlado via `defaultValue`/`value`).
 
-### Fora de escopo
+## Detalhes técnicos
 
-- Não mexer no fluxo de troca de titularidade.
-- Não criar novo edge nem nova tabela — a infra de substituição já está completa (`criar-substituicao-agendamentos-separados`, `efetivar-substituicao`, `substituicoes_veiculo`), só não foi acionada por causa do `if` quebrado.
-- Não alterar `dados_extras.tipo_entrada` em cotações antigas — a normalização escreve `substituicao_placa`; o que estava errado eram os LEITORES.
+- **Sem duplicação de dados**: o componente extraído faz as próprias queries (`useSubstituicaoVeiculo`, `useSolicitacaoTrocaTitularidade`), igual aos drawers atuais — não precisamos passar nada além do `solicitacaoId`.
+- **Sem mexer em aprovação**: gates de sub-etapa 1 (documentos) e sub-etapa 2 (vistoria) continuam idênticos. A aba "Processo" é informativa.
+- **Drawers dedicados continuam**: `/cadastro/processos` segue funcional como atalho/visão de fila — só deixou de ser obrigatório para fechar a aprovação.
+- **Permissões**: nenhuma RLS muda; o Cadastro já lê `solicitacoes_substituicao_placa` e `solicitacoes_troca_titularidade` nessas telas.
 
-## Critério de aceite
+## Arquivos tocados
 
-- Reabrindo o link público do PATRICK após o saneamento, aparece o seletor "mesmo local / locais separados" e ao confirmar locais separados o componente `AgendamentoSubstituicaoSeparado` deixa o cliente agendar instalação (LTP7C50) e retirada (RJN2A96). Ao confirmar, `criar-substituicao-agendamentos-separados` materializa 2 serviços + `substituicoes_veiculo`.
-- Nova cotação `tipo_entrada='substituicao_placa'` no link público nunca mais oferece autovistoria; tentar invocar `finalizar-autovistoria-cotacao` para uma substituição retorna 409.
-- Novo contrato de substituição é enviado à Autentique com o rótulo "Proposta de Substituição".
+- `src/components/substituicao/SubstituicaoDetalheConteudo.tsx` (novo)
+- `src/components/substituicao/ModalDetalhesSubstituicao.tsx` (usa o novo componente)
+- `src/pages/cadastro/SubstituicaoDetalhePage.tsx` (usa o novo componente)
+- `src/components/troca-titularidade/TrocaDetalheConteudo.tsx` (novo)
+- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` (usa o novo componente)
+- `src/hooks/usePropostasPendentes.ts` (campo `processoOrigem` em `useProposta`)
+- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` (aba condicional)
+- `src/components/cadastro/proposta/PropostaHeroHeader.tsx` (botão "Ver processo")
+
+## Fora de escopo
+
+- Unificar/aposentar as filas Processos › Titularidade e Processos › Substituição.
+- Mudanças em edge functions, triggers, SGA ou Autentique.
+- Saneamento de casos passados — a UI nova aparece em qualquer proposta atual.
