@@ -95,11 +95,22 @@ export default function PropostaAnalise() {
   // Sub-etapa 1 do Cadastro: aprovação dos documentos (gate para sub-etapa 2)
   // Ver mem://logic/operations/cadastro-duas-subetapas
   const documentosAprovadosEm = (proposta as any)?.documentos_aprovados_em as string | null | undefined;
-  const subEtapa1Liberada = !!documentosAprovadosEm;
+  // Troca de titularidade não tem sub-etapa 1 (edge aprovar-documentos-cadastro
+  // recusa com fluxo_troca_titularidade) — aprova direto via aprovar-proposta.
+  const isTrocaTitularidade =
+    ((proposta as any)?.tipo_entrada === 'troca_titularidade') ||
+    !!((proposta as any)?.origem_troca_titularidade_id);
+  const subEtapa1Liberada = !!documentosAprovadosEm || isTrocaTitularidade;
   const [isAprovandoDocs, setIsAprovandoDocs] = useState(false);
 
   const handleAprovarDocumentos = async () => {
     if (!id) return;
+    if (isTrocaTitularidade) {
+      toast.info('Troca de titularidade aprova direto', {
+        description: 'Este fluxo não tem sub-etapa de documentos — use o botão "Aprovar Proposta".',
+      });
+      return;
+    }
     setIsAprovandoDocs(true);
     try {
       const { data: sess } = await supabase.auth.getUser();
@@ -788,7 +799,7 @@ export default function PropostaAnalise() {
           planoTemRouboFurto={planoTemRouboFurto}
           aguardandoMonitoramentoVistoria={aguardandoMonitoramentoVistoria}
           aprovarApenasDocumentos={aprovarApenasDocumentos}
-          documentosAprovadosEm={documentosAprovadosEm ?? null}
+          documentosAprovadosEm={documentosAprovadosEm ?? (isTrocaTitularidade ? new Date(0).toISOString() : null)}
           onAprovarDocumentos={handleAprovarDocumentos}
           isAprovandoDocumentos={isAprovandoDocs}
         />
