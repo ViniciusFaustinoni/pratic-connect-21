@@ -1,71 +1,62 @@
+# Reanálise — visualizar e aprovar reenvios no Cadastro
 
-# Confirmação de leitura — Chat IA do Relacionamento
+## Diagnóstico
 
-Implementar os dois lados do recibo de leitura no `/eventos/chat-ia`:
+O card "Documentos da Reanálise" (`DocumentosSolicitadosCard`) lista os itens que o cliente reenviou, mas:
 
-1. **Saída (✓✓ azul nas nossas mensagens)**: garantir que `whatsapp_mensagens.status='lida'` + `read_at` chegue à UI em tempo real e os ✓✓ pintem de azul quando o cliente lê no WhatsApp dele.
-2. **Entrada (operador → cliente)**: quando o operador rola e a mensagem do cliente fica visível na viewport, disparar `markAsRead` na Evolution/Meta para o cliente ver ✓✓ azul no aparelho dele.
+1. **Não tem botões Aprovar/Reprovar** — só "Visualizar". As ações existem em `PropostaAnalise.handleAprovarDocumento('solicitado-<id>')` e `handleReprovarDocumento(...)`, mas só são expostas no Step 1 (Documentos cadastrais) via `mergeDocsReenviadosNaLista`.
+2. **Quando o reenvio é vídeo 360°** (caso da screenshot): o fluxo público `DocumentosPendentesPublico` (linhas 227–294) grava o arquivo em `vistorias.video_360_url` + `vistoria_fotos` e marca `documentos_solicitados.status='enviado'` **sem criar linha em `documentos`** → `documentos_solicitados.documento_id` fica NULL → o card esconde até o botão Visualizar (depende de `doc.documento?.arquivo_url`) e o item nem entra na lista mesclada do Step 1.
 
-A UI já renderiza ✓✓ baseado em `msg.status` (`ChatPanel.tsx:481`) e os webhooks (`whatsapp-webhook` MESSAGES_UPDATE 4=READ e `whatsapp-meta-webhook` statuses=read) já gravam `status='lida'` + `read_at`. Falta: realtime no painel para refletir a mudança sem reload, e o lado inbound (markAsRead) que hoje não existe.
+Resultado: o Cadastro só vê "video_360 — Enviado em 08/06/2026 às 11:21", sem qualquer ação possível, exatamente como na imagem.
 
----
+## O que mudar (somente frontend + uma resolução de URL no hook)
 
-## 1. Saída — realtime de status
+### 1. Resolver URL de exibição também para peças de autovistoria sem `documento_id`
 
-Hoje o `ChatPanel` carrega o histórico via `useWhatsAppHistorico`/query e não escuta `UPDATE` em `whatsapp_mensagens` para a conversa aberta. Resultado: ✓✓ azul só aparece depois de refresh manual.
+Em `src/hooks/usePropostasPendentes.ts`, complementar `documentos_solicitados_enviados` com uma `arquivo_url_fallback` quando `documento` é NULL:
 
-- Adicionar um subscribe Realtime em `ChatPanel.tsx` (ou hook dedicado `useWhatsAppMensagensRealtime(telefone)`) com canal por `telefone` filtrando `event:'UPDATE'` em `public.whatsapp_mensagens` e fazendo `queryClient.setQueryData` na chave do histórico para mesclar `status`/`read_at`/`delivered_at`/`sent_at` por `message_id`.
-- Throttle leve (mesma técnica do `useCotacoesRealtime`) para não invalidar a query inteira a cada ACK.
-- Garantir que a tabela está em `supabase_realtime` publication e tem `replica identity full` (migração se faltar) — sem isso o subscribe não recebe os UPDATEs.
+- Se `tipo_documento` é vídeo (`video_360`/`video`) → usar `vistoria.video_360_url` da proposta.
+- Se `tipo_documento` é foto de autovistoria (chassi, motor, lateral, pneu…) → buscar em `vistoria_fotos.arquivo_url` mais recente para aquela `vistoria_id`+`tipo` (consulta única em lote já feita no hook, expandindo o select existente).
 
-## 2. Entrada — markAsRead disparado por viewport
+Não criar tabela nem mudar como o link público grava — apenas resolver a URL no lado do Cadastro.
 
-### Edge function nova: `whatsapp-mark-read`
-- Body: `{ instancia_id, telefone, message_ids: string[] }`.
-- Resolve a instância (Evolution × Meta oficial) lendo `whatsapp_instancias` igual aos outros edges.
-- **Evolution**: `POST /chat/markMessageAsRead/{instance}` com `read_messages: [{ remoteJid, fromMe:false, id }]`.
-- **Meta oficial**: para cada `message_id` do cliente, `POST https://graph.facebook.com/v20.0/{phone_number_id}/messages` com `{ messaging_product:"whatsapp", status:"read", message_id }`.
-- Idempotência: ignora `message_ids` que já estão em `whatsapp_mensagens` com `direcao='entrada'` E `lida_pelo_operador_em IS NOT NULL` (campo novo, ver §3).
-- Loga em `whatsapp_logs` com `evento:'mark_read'` + ids; erros não bloqueiam (best-effort por mensagem).
-- Auth: valida JWT em código (padrão dos outros edges) e checa se o usuário tem acesso ao módulo Relacionamento.
+### 2. Card recebe handlers e mostra Aprovar/Reprovar por item reenviado
 
-### Migração mínima
-- Adicionar coluna `lida_pelo_operador_em timestamptz` em `whatsapp_mensagens` (não afeta o status canônico do WhatsApp; só evita re-disparo). Sem novas tabelas.
-- Conferir `alter publication supabase_realtime add table whatsapp_mensagens` + `alter table whatsapp_mensagens replica identity full` (se não estiverem aplicados).
+Em `src/components/cadastro/DocumentosSolicitadosCard.tsx`:
 
-### UI — hook `useMarkMessagesRead`
-- No `ChatPanel.tsx`, observar as bolhas de mensagem de `entrada` ainda sem `lida_pelo_operador_em` com `IntersectionObserver` (threshold 0.6).
-- Bufferiza ids vistos por 800ms e dispara um único `supabase.functions.invoke('whatsapp-mark-read', { body: { instancia_id, telefone, message_ids }})`.
-- Dispara também quando a janela ganha foco (`visibilitychange`/`focus`) e tem msgs pendentes — cobre o caso de operador já estar com a conversa aberta quando chega mensagem nova.
-- Botão manual "Marcar lidas" continua funcionando: além do `last_read_at` local que já existe, agora também chama o mesmo edge com os ids não-lidos.
-- Não dispara quando a IA estiver no controle (`whatsapp_ia_pausas`/`status='atendimento_humano'` é irrelevante aqui — markAsRead é só do operador humano olhando o chat).
+- Adicionar props `onAprovar(solicitadoId)`, `onReprovar(solicitadoId, motivo)`, `isPending`.
+- Em cada item da seção "Já reenviados pelo cliente":
+  - Botão **Visualizar** usa `doc.documento?.arquivo_url ?? doc.arquivo_url_fallback`.
+  - Botões **Aprovar** (verde) e **Reprovar** (vermelho, abre modal com motivo) ao lado.
+  - Quando `documentos.status === 'aprovado'` ou `documentos_solicitados.status === 'aprovado'`: troca por badge "Aprovado".
+- Manter o card oculto quando não há reenviados nem pendentes (comportamento atual).
 
-## 3. Detalhes técnicos
+### 3. Passar os handlers nos dois pontos de uso
 
-- Tabela `whatsapp_mensagens` já tem `status`, `sent_at`, `delivered_at`, `read_at`, `direcao`, `message_id`, `instancia_id`. Reaproveitar.
-- A coluna `read_at` representa "lida pelo destinatário no WhatsApp" (saída). Para o lado inbound, usar `lida_pelo_operador_em` para não misturar semântica.
-- Webhooks atuais já cobrem saída: `whatsapp-webhook` MESSAGES_UPDATE status 4 e `whatsapp-meta-webhook` statuses `read`. Não mexer.
-- Evolution `markMessageAsRead` precisa do `remoteJid` (telefone com `@s.whatsapp.net`) — montar a partir de `telefone`.
-- Meta oficial: ler `phone_number_id` da `whatsapp_meta_config`/instância como já feito em `whatsapp-send-text`.
+- `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` (linha 263): propagar `onAprovarDocumento`/`onReprovarDocumento` recebidos do `PropostaApprovalStepper`/`PropostaAnalise` para o card, usando o id no formato `solicitado-<id>` que os handlers de `PropostaAnalise.tsx` (linhas 343–430) já entendem.
+- `PropostaApprovalStepper` (linha 436) já chama `PropostaMidiaGrid` no Step 2 — propagar pelos mesmos props.
 
-## 4. Arquivos tocados
+### 4. Modal de motivo no Reprovar
 
-```text
-supabase/functions/whatsapp-mark-read/index.ts           [NOVO]
-supabase/migrations/<ts>_whatsapp_mark_read.sql          [NOVO] coluna + realtime
-src/components/eventos/chat-ia/ChatPanel.tsx             [edit] subscribe + IO
-src/hooks/useWhatsAppMensagensRealtime.ts                [NOVO]
-src/hooks/useMarkMessagesRead.ts                         [NOVO]
-src/components/eventos/chat-ia/ConversasList.tsx         [edit] botão "Marcar lidas" também chama o edge
-src/pages/eventos/EventosChatIA.tsx                      [edit] passa instancia_id ao panel/lista
-```
+Reusar o mesmo dialog usado em `DocumentosAnexadosPanel` para reprovar (texto curto, salva como `observacao_cliente`). Sem componente novo se já houver helper compartilhado; caso contrário, dialog inline simples.
 
-## 5. Fora de escopo
+## Comportamento esperado após a mudança
 
-- Recibo entre operadores internos (avatares de quem leu) — não pedido.
-- Mudanças no agente IA / `agente-consultor-ia` / pausas — markAsRead é puramente humano.
-- Mudanças na renderização do ✓✓ (já existe).
+- Card "Documentos da Reanálise" mostra o item `video_360` com **Visualizar** (abre o vídeo da `vistorias.video_360_url`), **Aprovar** e **Reprovar**.
+- Aprovar → `documentos_solicitados.status='aprovado'` (e `documentos.status='aprovado'` quando houver `documento_id`).
+- Reprovar → volta a solicitação para `status='pendente'`, limpa `enviado_em`/`documento_id`, grava motivo em `observacao_cliente`. Cliente é notificado para reenviar (comportamento já existente em `handleReprovarDocumento`).
+- Peças de autovistoria mantêm o efeito canônico: reenviar zera `vistoria_concluida_em` (já implementado em `DocumentosPendentesPublico`), permanecendo válida a memória `documentos-solicitados-reabre-autovistoria`.
 
-## 6. Saneamento (não-bloqueante, opcional)
+## Fora do escopo
 
-- Backfill: `update whatsapp_mensagens set status='lida', read_at=updated_at where direcao='saida' and status in ('enviada','entregue') and updated_at > now() - interval '30 days'` — **NÃO executar**; o realtime + webhook vai cobrir daqui pra frente. Listar como débito caso o usuário queira limpar o histórico visual.
+- Não mexer no fluxo público de reenvio (`DocumentosPendentesPublico`) — ele já grava no lugar canônico.
+- Não criar novas tabelas, edge functions, triggers ou políticas.
+- Não alterar como o Step 1 (documentos cadastrais) processa reenvios CNH/CRLV/comprovante — segue idêntico via `mergeDocsReenviadosNaLista`.
+
+## Arquivos tocados
+
+- `src/hooks/usePropostasPendentes.ts` — adicionar `arquivo_url_fallback` em `documentos_solicitados_enviados`.
+- `src/components/cadastro/DocumentosSolicitadosCard.tsx` — botões Aprovar/Reprovar + fallback de URL.
+- `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` — propagar handlers ao card.
+- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — propagar handlers do stepper ao MidiaGrid.
+- `src/pages/cadastro/PropostaAnalise.tsx` — nada a fazer (handlers já aceitam `solicitado-<id>`).
