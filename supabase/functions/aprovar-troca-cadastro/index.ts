@@ -119,47 +119,119 @@ Deno.serve(async (req) => {
     if (!sol.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela && !wantsBypass) {
       return new Response(
         JSON.stringify({
-          error: 'Aprovação bloqueada: passou da janela de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo). Diretor pode aprovar fora da janela com justificativa.',
+          error: 'Aprovação bloqueada: passou da janela de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo). Cadastro pode aprovar fora da janela informando autorizador, justificativa e marcando o termo de responsabilidade.',
           code: 'JANELA_TROCA_EXPIRADA',
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    // 3b) Bypass diretor: valida role + grava auditoria.
+    // 3b) Bypass do Cadastro: sem gate de role (qualquer Cadastro autoriza),
+    // mas exige autorizador + justificativa + termo de responsabilidade (validados
+    // no front e revalidados na entrada). Persiste em:
+    //   - logs_auditoria (vigia universal)
+    //   - contratos.bypass_aplicado (banner permanente em Cadastro/Monitoramento)
+    //   - analises_relacionamento (fila Relacionamento › Análises)
+    let aplicadoEm: string | null = null;
+    let operadorNome: string | null = null;
     if (wantsBypass) {
-      const { data: roles } = await admin
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id);
-      const isDiretor = (roles || []).some((r: any) => r.role === 'diretor');
-      if (!isDiretor) {
-        return new Response(JSON.stringify({
-          error: 'Apenas perfil Diretor pode aprovar troca fora da janela de mesmo-dia.',
-          code: 'BYPASS_NEGADO_ROLE',
-        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      aplicadoEm = new Date().toISOString();
+      try {
+        const { data: prof0 } = await admin
+          .from('profiles')
+          .select('nome')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        operadorNome = (prof0 as any)?.nome || user.email || 'cadastro';
+      } catch (_) {
+        operadorNome = user.email || 'cadastro';
       }
+
+      // 3b.1) logs_auditoria
       try {
         await admin.from('logs_auditoria').insert([{
           usuario_id: user.id,
-          usuario_nome: user.email || 'diretor',
+          usuario_nome: operadorNome || user.email || 'cadastro',
           acao: 'aprovar',
           modulo: 'cotacoes',
-          descricao: `[TROCA_BYPASS_JANELA] Solicitação ${solicitacao_id} aprovada fora da janela mesmo-dia. Justificativa: ${justificativa}`,
+          descricao: `[TROCA_BYPASS_JANELA] Solicitação ${solicitacao_id} aprovada fora da janela mesmo-dia. Autorizado por: ${nomeAutorizador}. Justificativa: ${justificativa}`,
           tabela: 'solicitacoes_troca_titularidade',
           registro_id: solicitacao_id,
           dados_novos: {
             bypass_janela: true,
+            nome_autorizador: nomeAutorizador,
             justificativa,
+            operador_user_id: user.id,
+            operador_nome: operadorNome,
             termo_assinado_em: sol.termo_cancelamento_assinado_em,
             cotacao_id: sol.cotacao_id,
             veiculo_id: sol.veiculo_id,
+            aplicado_em: aplicadoEm,
           },
         }]);
       } catch (auditErr) {
         console.error('[aprovar-troca-cadastro] falha ao gravar auditoria de bypass:', auditErr);
       }
-      console.log('[aprovar-troca-cadastro] BYPASS_JANELA aplicado', { solicitacao_id, user_id: user.id });
+
+      // 3b.2) contratos.bypass_aplicado (append no jsonb array do contrato da troca)
+      try {
+        let contratoTrocaId: string | null = null;
+        if (sol.cotacao_id) {
+          const { data: ctr } = await admin
+            .from('contratos')
+            .select('id, bypass_aplicado')
+            .eq('cotacao_id', sol.cotacao_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          contratoTrocaId = (ctr as any)?.id || null;
+          if (contratoTrocaId) {
+            const arr = Array.isArray((ctr as any)?.bypass_aplicado) ? (ctr as any).bypass_aplicado : [];
+            arr.push({
+              codigo: 'JANELA_TROCA_EXPIRADA',
+              nome_autorizador: nomeAutorizador,
+              justificativa,
+              operador_user_id: user.id,
+              operador_nome: operadorNome,
+              aplicado_em: aplicadoEm,
+              solicitacao_troca_id: solicitacao_id,
+            });
+            await admin.from('contratos').update({ bypass_aplicado: arr }).eq('id', contratoTrocaId);
+          }
+        }
+      } catch (cErr) {
+        console.error('[aprovar-troca-cadastro] falha ao gravar bypass_aplicado no contrato:', cErr);
+      }
+
+      // 3b.3) analises_relacionamento (fila Relacionamento › Análises)
+      try {
+        const { data: assocAntigo } = sol.associado_antigo_id
+          ? await admin.from('associados').select('id').eq('id', sol.associado_antigo_id).maybeSingle()
+          : { data: null } as any;
+        await admin.rpc('fn_criar_analise_relacionamento', {
+          _tipo: 'troca_titularidade',
+          _origem_tabela: 'contratos.bypass_janela',
+          _origem_id: solicitacao_id,
+          _associado_id: (assocAntigo as any)?.id || sol.associado_antigo_id || null,
+          _veiculo_id: sol.veiculo_id || null,
+          _contrato_id: null,
+          _termo_url: null,
+          _termo_assinado_em: sol.termo_cancelamento_assinado_em,
+          _metadata: {
+            subtipo: 'bypass_janela_troca',
+            codigo: 'JANELA_TROCA_EXPIRADA',
+            nome_autorizador: nomeAutorizador,
+            justificativa,
+            operador_user_id: user.id,
+            operador_nome: operadorNome,
+            cotacao_id: sol.cotacao_id,
+            aplicado_em: aplicadoEm,
+          },
+        });
+      } catch (aErr) {
+        console.error('[aprovar-troca-cadastro] falha ao criar analise_relacionamento:', aErr);
+      }
+      console.log('[aprovar-troca-cadastro] BYPASS_JANELA aplicado', { solicitacao_id, user_id: user.id, nomeAutorizador });
     }
 
 
