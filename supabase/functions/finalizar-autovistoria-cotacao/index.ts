@@ -47,12 +47,35 @@ Deno.serve(async (req) => {
     // 1. Cotação
     const { data: cotacao, error: errCot } = await supabase
       .from('cotacoes')
-      .select('id, numero, nome_solicitante, telefone1_solicitante, tipo_vistoria, veiculo_placa, veiculo_chassi, veiculo_marca, veiculo_modelo, veiculo_combustivel, valor_fipe, tipo_veiculo, km_atual, status_contratacao, vistoria_concluida_em')
+      .select('id, numero, nome_solicitante, telefone1_solicitante, tipo_vistoria, veiculo_placa, veiculo_chassi, veiculo_marca, veiculo_modelo, veiculo_combustivel, valor_fipe, tipo_veiculo, km_atual, status_contratacao, vistoria_concluida_em, tipo_entrada, dados_extras')
       .eq('id', cotacaoId)
       .maybeSingle();
 
     if (errCot || !cotacao) {
       return jsonResponse({ success: false, error: 'Cotação não encontrada' }, 404);
+    }
+
+    // 1.a Guard canônico: SUBSTITUIÇÃO de placa NUNCA usa autovistoria.
+    // Canônico (passo 7) exige instalação presencial no veículo novo + retirada do antigo,
+    // agendados via AgendamentoSubstituicaoSeparado/criar-substituicao-agendamentos-separados.
+    // Defesa em profundidade: mesmo se o front regredir (caso LTP7C50 / COT-20260606-142420151-266),
+    // o backend recusa promover a cotação por autovistoria.
+    const dadosExtrasCot = ((cotacao as any).dados_extras || {}) as Record<string, any>;
+    const tipoEntradaCot = String((cotacao as any).tipo_entrada || dadosExtrasCot.tipo_entrada || '').trim();
+    const ehSubstituicao = tipoEntradaCot === 'substituicao_placa'
+      || tipoEntradaCot === 'substituicao'
+      || !!dadosExtrasCot.solicitacao_substituicao_id;
+    if (ehSubstituicao) {
+      console.warn('[finalizar-autovistoria-cotacao] BLOQUEADO: substituicao_placa não permite autovistoria', {
+        cotacaoId,
+        tipoEntradaCot,
+        solicitacao_substituicao_id: dadosExtrasCot.solicitacao_substituicao_id || null,
+      });
+      return jsonResponse({
+        success: false,
+        code: 'autovistoria_nao_permitida_em_substituicao',
+        error: 'Substituição de placa exige instalação presencial no veículo novo + retirada do antigo. Autovistoria não é caminho válido neste fluxo.',
+      }, 409);
     }
 
     // 1.b Detectar sub-FIPE (carro <30k / moto <9k não-Diesel) — exige passagem pelo Cadastro

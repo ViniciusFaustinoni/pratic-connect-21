@@ -168,10 +168,23 @@ export default function CotacaoContratacao() {
     return null;
   }, [instalacaoPublica, cotacao]);
 
-  // Substituição: detectar se é substituição e controlar etapa de "mesmo local"
+  // Substituição: detectar se é substituição e controlar etapa de "mesmo local".
+  // Canônico: `tipo_entrada='substituicao_placa'` (memória `tipo-entrada-substituicao-canonical`).
+  // Aceitamos o alias legado `'substituicao'` por defesa em profundidade — escritas
+  // novas SEMPRE normalizam para `substituicao_placa` via `normalizarTipoEntrada`.
+  // Olha tanto em `cotacoes.tipo_entrada` quanto em `dados_extras.tipo_entrada`, pois
+  // alguns fluxos antigos só preencheram um dos dois.
   const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
-  const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
-  const isTrocaTitularidade = dadosExtras?.tipo_entrada === 'troca_titularidade';
+  const tipoEntradaCot = String(
+    (cotacao as any)?.tipo_entrada || dadosExtras?.tipo_entrada || '',
+  ).trim();
+  const isSubstituicao =
+    tipoEntradaCot === 'substituicao_placa' ||
+    tipoEntradaCot === 'substituicao' ||
+    !!dadosExtras?.solicitacao_substituicao_id;
+  const isTrocaTitularidade =
+    tipoEntradaCot === 'troca_titularidade' ||
+    dadosExtras?.tipo_entrada === 'troca_titularidade';
   const solicitacaoTrocaId = (dadosExtras?.solicitacao_troca_id as string | undefined) || null;
   const { data: solicitacaoTroca, isLoading: loadingSolicitacaoTroca, isFetched: solicitacaoTrocaFetched } = useSolicitacaoTrocaPublicaPorCotacao(
     isTrocaTitularidade ? cotacao?.id : null,
