@@ -95,6 +95,25 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   // no contexto de Troca de Titularidade).
   const precisaValidarImei = precisaVinculoRastreador;
 
+  // Bypass aplicado (Troca fora da janela / convertida) — busca pelo contrato da cotação.
+  const { data: bypassData } = useQuery({
+    queryKey: ['troca-bypass-aplicado', solicitacao?.cotacao_id],
+    enabled: !!solicitacao?.cotacao_id,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contratos')
+        .select('bypass_aplicado')
+        .eq('cotacao_id', solicitacao!.cotacao_id as any)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return Array.isArray((data as any)?.bypass_aplicado) ? (data as any).bypass_aplicado : [];
+    },
+  });
+
+
+
   /**
    * Garante a validação placa ↔ IMEI antes de qualquer mutação de decisão do
    * Monitoramento (aprovar, solicitar vistoria, agendar manutenção). Retorna
