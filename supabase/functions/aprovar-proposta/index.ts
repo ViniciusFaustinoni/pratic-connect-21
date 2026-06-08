@@ -227,7 +227,7 @@ async function tratarTrocaTitularidade(
     },
     body: JSON.stringify({
       solicitacao_id: solicitacaoTroca.id,
-      ...(bypass_janela ? { bypass_janela: true, bypass_justificativa: bypass_justificativa || '' } : {}),
+      ...(bypass_janela ? { bypass_janela: true, bypass_justificativa: bypass_justificativa || '', bypass_nome_autorizador: bypass_nome_autorizador || '' } : {}),
     }),
   });
   const trocaJson: any = await trocaResp.json().catch(() => ({}));
