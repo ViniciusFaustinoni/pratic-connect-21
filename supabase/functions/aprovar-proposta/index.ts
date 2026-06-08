@@ -225,7 +225,10 @@ async function tratarTrocaTitularidade(
       // aprovar-troca-cadastro exige Authorization para resolver o aprovador.
       Authorization: authHeader || `Bearer ${supabaseServiceKey}`,
     },
-    body: JSON.stringify({ solicitacao_id: solicitacaoTroca.id }),
+    body: JSON.stringify({
+      solicitacao_id: solicitacaoTroca.id,
+      ...(bypass_janela ? { bypass_janela: true, bypass_justificativa: bypass_justificativa || '' } : {}),
+    }),
   });
   const trocaJson: any = await trocaResp.json().catch(() => ({}));
 
