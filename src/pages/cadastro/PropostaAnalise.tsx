@@ -297,9 +297,14 @@ export default function PropostaAnalise() {
       }
     } catch (error: any) {
       console.error('[PropostaAnalise] Erro ao aprovar:', error);
-      // Troca de titularidade fora da janela: oferecer bypass auditado (diretor).
-      if (error?.codigo === 'JANELA_TROCA_EXPIRADA' && isTrocaTitularidade && isDiretor) {
+      // Troca de titularidade fora da janela: o Cadastro decide entre
+      // aprovar fora da janela (com autorizador+justificativa+termo de
+      // responsabilidade) ou converter em cotação normal.
+      if (error?.codigo === 'JANELA_TROCA_EXPIRADA' && isTrocaTitularidade) {
         setBypassJustificativa('');
+        setBypassNomeAutorizador('');
+        setBypassResponsabilidade(false);
+        setBypassAcao('aprovar');
         setShowBypassJanela(true);
         return;
       }
@@ -309,13 +314,24 @@ export default function PropostaAnalise() {
     }
   };
 
+  const bypassFormValido = () => {
+    return (
+      bypassNomeAutorizador.trim().length >= 3 &&
+      bypassJustificativa.trim().length >= 20 &&
+      bypassResponsabilidade
+    );
+  };
+
   const handleConfirmarBypassJanela = async () => {
     if (!id) return;
-    const justificativa = bypassJustificativa.trim();
-    if (justificativa.length < 10) {
-      toast.error('Justificativa obrigatória', { description: 'Descreva o motivo em pelo menos 10 caracteres.' });
+    if (!bypassFormValido()) {
+      toast.error('Preencha os campos obrigatórios', {
+        description: 'Autorizador (≥3), justificativa (≥20) e confirmação de responsabilidade.',
+      });
       return;
     }
+    const justificativa = bypassJustificativa.trim();
+    const nomeAutorizador = bypassNomeAutorizador.trim();
     setShowBypassJanela(false);
     try {
       const chassiInformado = veiculoChassi?.trim();
@@ -325,8 +341,17 @@ export default function PropostaAnalise() {
         veiculoChassi: chassiInformado ? normalizeChassi(chassiInformado) : undefined,
         bypassJanela: true,
         bypassJustificativa: justificativa,
+        bypassNomeAutorizador: nomeAutorizador,
       });
-      try { await registrarLog({ acao: 'aprovar', modulo: 'cotacoes', descricao: `[TROCA_BYPASS_JANELA] ${id}: ${justificativa}`, entidade_id: id, tabela: 'contratos' }); } catch {}
+      try {
+        await registrarLog({
+          acao: 'aprovar',
+          modulo: 'cotacoes',
+          descricao: `[TROCA_BYPASS_JANELA] ${id} - Autorizado por ${nomeAutorizador}: ${justificativa}`,
+          entidade_id: id,
+          tabela: 'contratos',
+        });
+      } catch {}
       try {
         const cotacaoId = (proposta as any)?.cotacao_id || (proposta as any)?.cotacao?.id;
         if (cotacaoId) await gerarVistoriaLinkMut.mutateAsync({ cotacaoId });
@@ -338,6 +363,58 @@ export default function PropostaAnalise() {
     } catch (err: any) {
       console.error('[PropostaAnalise] Bypass janela falhou:', err);
       toast.error('Falha no bypass', { description: err?.message || 'Tente novamente.' });
+    }
+  };
+
+  const handleConverterEmCotacaoNormal = async () => {
+    if (!id) return;
+    if (!bypassFormValido()) {
+      toast.error('Preencha os campos obrigatórios', {
+        description: 'Autorizador (≥3), justificativa (≥20) e confirmação de responsabilidade.',
+      });
+      return;
+    }
+    // Resolve solicitacao_id via cotacao da proposta.
+    const cotacaoId = (proposta as any)?.cotacao_id || (proposta as any)?.cotacao?.id;
+    if (!cotacaoId) {
+      toast.error('Cotação não encontrada para esta proposta.');
+      return;
+    }
+    setConvertendoTroca(true);
+    try {
+      const { data: sol, error: solErr } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id')
+        .eq('cotacao_id', cotacaoId)
+        .maybeSingle();
+      if (solErr) throw solErr;
+      if (!sol?.id) throw new Error('Solicitação de troca não encontrada.');
+
+      const { data, error } = await supabase.functions.invoke('converter-troca-em-cotacao-normal', {
+        body: {
+          solicitacao_id: (sol as any).id,
+          nome_autorizador: bypassNomeAutorizador.trim(),
+          justificativa: bypassJustificativa.trim(),
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success('Troca convertida em cotação normal', {
+        description: 'A troca foi cancelada. O cliente precisa iniciar uma nova adesão.',
+      });
+      setShowConfirmConverter(false);
+      setShowBypassJanela(false);
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+      if (nextProposta) navigate(`/cadastro/propostas/${nextProposta.id}`);
+      else navigate('/cadastro/propostas');
+    } catch (err: any) {
+      console.error('[PropostaAnalise] Conversão falhou:', err);
+      toast.error('Falha ao converter em cotação normal', {
+        description: err?.message || 'Tente novamente.',
+      });
+    } finally {
+      setConvertendoTroca(false);
     }
   };
 
