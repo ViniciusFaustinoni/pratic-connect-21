@@ -107,15 +107,52 @@ Deno.serve(async (req) => {
       return new Date() <= fimDiaBRTemUTC;
     })();
 
-    if (!sol.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela) {
+    if (!sol.autovistoria_concluida_em && !dispensaAutovistoriaPorJanela && !wantsBypass) {
       return new Response(
         JSON.stringify({
-          error: 'Aprovação bloqueada: passou da janela de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo). O fluxo de troca expirou — peça nova adesão.',
+          error: 'Aprovação bloqueada: passou da janela de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo). Diretor pode aprovar fora da janela com justificativa.',
           code: 'JANELA_TROCA_EXPIRADA',
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
+
+    // 3b) Bypass diretor: valida role + grava auditoria.
+    if (wantsBypass) {
+      const { data: roles } = await admin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id);
+      const isDiretor = (roles || []).some((r: any) => r.role === 'diretor');
+      if (!isDiretor) {
+        return new Response(JSON.stringify({
+          error: 'Apenas perfil Diretor pode aprovar troca fora da janela de mesmo-dia.',
+          code: 'BYPASS_NEGADO_ROLE',
+        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      try {
+        await admin.from('logs_auditoria').insert([{
+          usuario_id: user.id,
+          usuario_nome: user.email || 'diretor',
+          acao: 'aprovar',
+          modulo: 'cotacoes',
+          descricao: `[TROCA_BYPASS_JANELA] Solicitação ${solicitacao_id} aprovada fora da janela mesmo-dia. Justificativa: ${justificativa}`,
+          tabela: 'solicitacoes_troca_titularidade',
+          registro_id: solicitacao_id,
+          dados_novos: {
+            bypass_janela: true,
+            justificativa,
+            termo_assinado_em: sol.termo_cancelamento_assinado_em,
+            cotacao_id: sol.cotacao_id,
+            veiculo_id: sol.veiculo_id,
+          },
+        }]);
+      } catch (auditErr) {
+        console.error('[aprovar-troca-cadastro] falha ao gravar auditoria de bypass:', auditErr);
+      }
+      console.log('[aprovar-troca-cadastro] BYPASS_JANELA aplicado', { solicitacao_id, user_id: user.id });
+    }
+
 
     // 4) Resolver profile.id do aprovador
     const { data: prof } = await admin
