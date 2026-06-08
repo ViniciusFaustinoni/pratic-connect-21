@@ -154,9 +154,9 @@ async function atualizarVeiculoComDocs(
 async function tratarTrocaTitularidade(
   supabase: any,
   contrato: any,
-  ctx: { contrato_id: string; aprovado_por: string; agora: string; supabaseUrl: string; supabaseServiceKey: string; authHeader: string | null; bypass_janela?: boolean; bypass_justificativa?: string },
+  ctx: { contrato_id: string; aprovado_por: string; agora: string; supabaseUrl: string; supabaseServiceKey: string; authHeader: string | null; bypass_janela?: boolean; bypass_justificativa?: string; bypass_nome_autorizador?: string },
 ): Promise<{ response: Response } | null> {
-  const { contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader, bypass_janela, bypass_justificativa } = ctx;
+  const { contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader, bypass_janela, bypass_justificativa, bypass_nome_autorizador } = ctx;
 
   // ──────────────────────────────────────────────────────────────────────
   // DESVIO: TROCA DE TITULARIDADE
@@ -227,7 +227,7 @@ async function tratarTrocaTitularidade(
     },
     body: JSON.stringify({
       solicitacao_id: solicitacaoTroca.id,
-      ...(bypass_janela ? { bypass_janela: true, bypass_justificativa: bypass_justificativa || '' } : {}),
+      ...(bypass_janela ? { bypass_janela: true, bypass_justificativa: bypass_justificativa || '', bypass_nome_autorizador: bypass_nome_autorizador || '' } : {}),
     }),
   });
   const trocaJson: any = await trocaResp.json().catch(() => ({}));
@@ -1518,7 +1518,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor, bypass_janela, bypass_justificativa } = await req.json();
+    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor, bypass_janela, bypass_justificativa, bypass_nome_autorizador } = await req.json();
 
     if (!contrato_id || !aprovado_por) {
       throw new Error('contrato_id e aprovado_por são obrigatórios');
@@ -1534,7 +1534,7 @@ serve(async (req) => {
     // Desvio: Troca de Titularidade (early-return)
     const troca = await tratarTrocaTitularidade(supabase, contrato, {
       contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader,
-      bypass_janela, bypass_justificativa,
+      bypass_janela, bypass_justificativa, bypass_nome_autorizador,
     });
     if (troca) return troca.response;
     // ──────────────────────────────────────────────────────────────────────

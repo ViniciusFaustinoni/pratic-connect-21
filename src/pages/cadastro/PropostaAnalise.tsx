@@ -55,6 +55,7 @@ import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDi
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
 import { ReverterReprovacaoDocumentoDialog, type NovoStatusReversao } from '@/components/cadastro/ReverterReprovacaoDocumentoDialog';
 import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 import { registrarLog } from '@/hooks/useAuditLog';
 import { resolverGatesAprovacaoCadastro } from '@/lib/cadastro/gatesAprovacaoCadastro';
 import { toastErroEdge } from '@/lib/ui/toastErroEdge';
@@ -80,6 +81,11 @@ export default function PropostaAnalise() {
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   const [showBypassJanela, setShowBypassJanela] = useState(false);
   const [bypassJustificativa, setBypassJustificativa] = useState('');
+  const [bypassNomeAutorizador, setBypassNomeAutorizador] = useState('');
+  const [bypassResponsabilidade, setBypassResponsabilidade] = useState(false);
+  const [bypassAcao, setBypassAcao] = useState<'aprovar' | 'converter'>('aprovar');
+  const [showConfirmConverter, setShowConfirmConverter] = useState(false);
+  const [convertendoTroca, setConvertendoTroca] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
   const [documentoReverter, setDocumentoReverter] = useState<DocumentoAnexadoCompleto | null>(null);
   const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
@@ -292,9 +298,14 @@ export default function PropostaAnalise() {
       }
     } catch (error: any) {
       console.error('[PropostaAnalise] Erro ao aprovar:', error);
-      // Troca de titularidade fora da janela: oferecer bypass auditado (diretor).
-      if (error?.codigo === 'JANELA_TROCA_EXPIRADA' && isTrocaTitularidade && isDiretor) {
+      // Troca de titularidade fora da janela: o Cadastro decide entre
+      // aprovar fora da janela (com autorizador+justificativa+termo de
+      // responsabilidade) ou converter em cotação normal.
+      if (error?.codigo === 'JANELA_TROCA_EXPIRADA' && isTrocaTitularidade) {
         setBypassJustificativa('');
+        setBypassNomeAutorizador('');
+        setBypassResponsabilidade(false);
+        setBypassAcao('aprovar');
         setShowBypassJanela(true);
         return;
       }
@@ -304,13 +315,24 @@ export default function PropostaAnalise() {
     }
   };
 
+  const bypassFormValido = () => {
+    return (
+      bypassNomeAutorizador.trim().length >= 3 &&
+      bypassJustificativa.trim().length >= 20 &&
+      bypassResponsabilidade
+    );
+  };
+
   const handleConfirmarBypassJanela = async () => {
     if (!id) return;
-    const justificativa = bypassJustificativa.trim();
-    if (justificativa.length < 10) {
-      toast.error('Justificativa obrigatória', { description: 'Descreva o motivo em pelo menos 10 caracteres.' });
+    if (!bypassFormValido()) {
+      toast.error('Preencha os campos obrigatórios', {
+        description: 'Autorizador (≥3), justificativa (≥20) e confirmação de responsabilidade.',
+      });
       return;
     }
+    const justificativa = bypassJustificativa.trim();
+    const nomeAutorizador = bypassNomeAutorizador.trim();
     setShowBypassJanela(false);
     try {
       const chassiInformado = veiculoChassi?.trim();
@@ -320,8 +342,17 @@ export default function PropostaAnalise() {
         veiculoChassi: chassiInformado ? normalizeChassi(chassiInformado) : undefined,
         bypassJanela: true,
         bypassJustificativa: justificativa,
+        bypassNomeAutorizador: nomeAutorizador,
       });
-      try { await registrarLog({ acao: 'aprovar', modulo: 'cotacoes', descricao: `[TROCA_BYPASS_JANELA] ${id}: ${justificativa}`, entidade_id: id, tabela: 'contratos' }); } catch {}
+      try {
+        await registrarLog({
+          acao: 'aprovar',
+          modulo: 'cotacoes',
+          descricao: `[TROCA_BYPASS_JANELA] ${id} - Autorizado por ${nomeAutorizador}: ${justificativa}`,
+          entidade_id: id,
+          tabela: 'contratos',
+        });
+      } catch {}
       try {
         const cotacaoId = (proposta as any)?.cotacao_id || (proposta as any)?.cotacao?.id;
         if (cotacaoId) await gerarVistoriaLinkMut.mutateAsync({ cotacaoId });
@@ -333,6 +364,58 @@ export default function PropostaAnalise() {
     } catch (err: any) {
       console.error('[PropostaAnalise] Bypass janela falhou:', err);
       toast.error('Falha no bypass', { description: err?.message || 'Tente novamente.' });
+    }
+  };
+
+  const handleConverterEmCotacaoNormal = async () => {
+    if (!id) return;
+    if (!bypassFormValido()) {
+      toast.error('Preencha os campos obrigatórios', {
+        description: 'Autorizador (≥3), justificativa (≥20) e confirmação de responsabilidade.',
+      });
+      return;
+    }
+    // Resolve solicitacao_id via cotacao da proposta.
+    const cotacaoId = (proposta as any)?.cotacao_id || (proposta as any)?.cotacao?.id;
+    if (!cotacaoId) {
+      toast.error('Cotação não encontrada para esta proposta.');
+      return;
+    }
+    setConvertendoTroca(true);
+    try {
+      const { data: sol, error: solErr } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id')
+        .eq('cotacao_id', cotacaoId)
+        .maybeSingle();
+      if (solErr) throw solErr;
+      if (!sol?.id) throw new Error('Solicitação de troca não encontrada.');
+
+      const { data, error } = await supabase.functions.invoke('converter-troca-em-cotacao-normal', {
+        body: {
+          solicitacao_id: (sol as any).id,
+          nome_autorizador: bypassNomeAutorizador.trim(),
+          justificativa: bypassJustificativa.trim(),
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success('Troca convertida em cotação normal', {
+        description: 'A troca foi cancelada. O cliente precisa iniciar uma nova adesão.',
+      });
+      setShowConfirmConverter(false);
+      setShowBypassJanela(false);
+      queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+      if (nextProposta) navigate(`/cadastro/propostas/${nextProposta.id}`);
+      else navigate('/cadastro/propostas');
+    } catch (err: any) {
+      console.error('[PropostaAnalise] Conversão falhou:', err);
+      toast.error('Falha ao converter em cotação normal', {
+        description: err?.message || 'Tente novamente.',
+      });
+    } finally {
+      setConvertendoTroca(false);
     }
   };
 
@@ -636,12 +719,16 @@ export default function PropostaAnalise() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 px-4 pb-8">
+      {/* Bypass aplicado (Troca de Titularidade fora da janela / convertida) */}
+      <BypassAplicadoBanner bypassAplicado={(proposta as any)?.bypass_aplicado} />
+
       {/* ZONA 1: Header Hero (sem botões de ação) */}
       <PropostaHeroHeader
         proposta={proposta}
         onVoltar={() => navigate('/cadastro/propostas')}
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
       />
+
 
       {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA */}
       <ObservacoesCotacaoCard
@@ -995,42 +1082,134 @@ export default function PropostaAnalise() {
         onConfirm={handleReverterReprovacaoDocumento}
       />
 
-      {/* Bypass de janela mesmo-dia em Troca de Titularidade (Diretor) */}
+      {/* Bypass de janela mesmo-dia em Troca de Titularidade (decisão do Cadastro) */}
       <AlertDialog open={showBypassJanela} onOpenChange={setShowBypassJanela}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Aprovar troca fora da janela (Diretor)
+              Troca fora da janela — escolha como prosseguir
             </AlertDialogTitle>
             <AlertDialogDescription>
               A janela canônica de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo de cancelamento) já expirou.
-              Esta aprovação será registrada em <strong>logs_auditoria</strong> com sua justificativa e o caso seguirá para o Monitoramento decidir a vistoria.
+              Escolha entre <strong>aprovar fora da janela</strong> (segue para o Monitoramento como Troca normal)
+              ou <strong>converter em cotação normal</strong> (cancela a troca; o novo titular precisa refazer como nova adesão).
+              A decisão é registrada em <strong>logs_auditoria</strong>, na fila <strong>Relacionamento › Análises</strong> e
+              fica visível no Monitoramento.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="bypass-justificativa">Justificativa (mínimo 10 caracteres)</Label>
-            <Textarea
-              id="bypass-justificativa"
-              value={bypassJustificativa}
-              onChange={(e) => setBypassJustificativa(e.target.value)}
-              placeholder="Ex.: Cliente já assinou termo + adesão paga; resgate excepcional autorizado pelo diretor."
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">{bypassJustificativa.trim().length} / 10 caracteres</p>
+
+          <div className="space-y-3 py-2">
+            <div className="flex gap-2 p-1 bg-muted rounded-md">
+              <Button
+                type="button"
+                size="sm"
+                variant={bypassAcao === 'aprovar' ? 'default' : 'ghost'}
+                className={bypassAcao === 'aprovar' ? 'flex-1 bg-amber-600 hover:bg-amber-700 text-white' : 'flex-1'}
+                onClick={() => setBypassAcao('aprovar')}
+              >
+                Aprovar fora da janela
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={bypassAcao === 'converter' ? 'default' : 'ghost'}
+                className="flex-1"
+                onClick={() => setBypassAcao('converter')}
+              >
+                Converter em cotação normal
+              </Button>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="bypass-autorizador">Nome de quem autorizou *</Label>
+              <input
+                id="bypass-autorizador"
+                value={bypassNomeAutorizador}
+                onChange={(e) => setBypassNomeAutorizador(e.target.value)}
+                placeholder="Ex.: João Silva (Gerente Comercial)"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">{bypassNomeAutorizador.trim().length} / 3 caracteres mínimos</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="bypass-justificativa">Justificativa *</Label>
+              <Textarea
+                id="bypass-justificativa"
+                value={bypassJustificativa}
+                onChange={(e) => setBypassJustificativa(e.target.value)}
+                placeholder="Ex.: Cliente já assinou termo + adesão paga; resgate excepcional autorizado pelo gerente comercial em ligação às 14h."
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">{bypassJustificativa.trim().length} / 20 caracteres mínimos</p>
+            </div>
+
+            <label className="flex items-start gap-2 p-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bypassResponsabilidade}
+                onChange={(e) => setBypassResponsabilidade(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-sm text-amber-900 dark:text-amber-100">
+                Confirmo que tenho responsabilidade por esta decisão e que ela está autorizada por{' '}
+                <strong>{bypassNomeAutorizador.trim() || '— preencha o nome acima —'}</strong>.
+              </span>
+            </label>
           </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {bypassAcao === 'aprovar' ? (
+              <AlertDialogAction
+                onClick={handleConfirmarBypassJanela}
+                disabled={!bypassFormValido() || aprovarMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                {aprovarMutation.isPending ? 'Aprovando…' : 'Aprovar fora da janela'}
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); if (bypassFormValido()) setShowConfirmConverter(true); }}
+                disabled={!bypassFormValido() || convertendoTroca}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Converter em cotação normal
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação extra para conversão (ação destrutiva) */}
+      <AlertDialog open={showConfirmConverter} onOpenChange={setShowConfirmConverter}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Confirmar conversão em cotação normal
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação <strong>cancela definitivamente</strong> a troca de titularidade:
+              a solicitação, a cotação derivada e o contrato derivado serão cancelados,
+              e o veículo voltará a ficar disponível. O novo titular precisará iniciar
+              uma <strong>nova adesão</strong> do zero.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={convertendoTroca}>Voltar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleConfirmarBypassJanela}
-              disabled={bypassJustificativa.trim().length < 10 || aprovarMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700"
+              onClick={handleConverterEmCotacaoNormal}
+              disabled={convertendoTroca}
+              className="bg-destructive hover:bg-destructive/90"
             >
-              {aprovarMutation.isPending ? 'Aprovando…' : 'Aprovar fora da janela'}
+              {convertendoTroca ? 'Convertendo…' : 'Sim, converter agora'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }

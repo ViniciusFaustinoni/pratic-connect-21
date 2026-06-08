@@ -32,6 +32,7 @@ import {
 import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
 import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
 import { useContratoDoAssociado, useContratosDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado, useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 import { useFotosVistoriaUnificada, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
@@ -528,6 +529,9 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar
         </Button>
       )}
+
+      {/* Bypass aplicado em Troca de Titularidade (histórico permanente) */}
+      <BypassAplicadoBanner bypassAplicado={(contrato as any)?.bypass_aplicado} />
 
       {/* Alerts */}
       {status === 'suspenso' && (

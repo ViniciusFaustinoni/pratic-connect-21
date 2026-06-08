@@ -47,6 +47,7 @@ import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/Conf
 import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
 import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
 import { servicoConcluidoEmCampo } from '@/lib/servicos/terminaisPositivos';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 
 // Hook para buscar detalhes completos do serviço
 function useServicoDetalheAprovacao(servicoId: string | undefined) {
@@ -346,15 +347,17 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         }
       }
 
-      // Carrega cadastro_aprovado do contrato (canônico p/ sub-estado da tela)
+      // Carrega cadastro_aprovado + bypass_aplicado do contrato (canônico p/ sub-estado e banner)
       let cadastroAprovado = false;
+      let bypassAplicado: any[] = [];
       if (servico.contrato_id) {
         const { data: cRow } = await supabase
           .from('contratos')
-          .select('cadastro_aprovado')
+          .select('cadastro_aprovado, bypass_aplicado')
           .eq('id', servico.contrato_id)
           .maybeSingle();
         cadastroAprovado = !!(cRow as any)?.cadastro_aprovado;
+        bypassAplicado = Array.isArray((cRow as any)?.bypass_aplicado) ? (cRow as any).bypass_aplicado : [];
       }
 
       return {
@@ -372,6 +375,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         vistoriaModalidade,
         cadastroAprovado,
         vistoriaTecnico,
+        bypassAplicado,
       };
     },
     enabled: !!servicoId,
@@ -593,6 +597,9 @@ export default function AprovacaoInstalacaoDetalhe() {
           </p>
         </div>
       </div>
+
+      {/* Bypass aplicado (Troca de Titularidade fora da janela / convertida) — DESTAQUE */}
+      <BypassAplicadoBanner bypassAplicado={(data as any)?.bypassAplicado} destaque />
 
       {/* Dados do Associado */}
       <Card className="border-border">

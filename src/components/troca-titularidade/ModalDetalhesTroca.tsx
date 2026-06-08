@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
@@ -34,6 +34,7 @@ import { VincularRastreadorExistenteCard } from '@/components/rastreadores/Vincu
 import { ValidarImeiPorPlacaCard } from './ValidarImeiPorPlacaCard';
 import { validarImeiPorPlaca, type ValidacaoOrigem } from '@/lib/troca-titularidade/validarImeiPorPlaca';
 import { PontasPendentesCard } from './PontasPendentesCard';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 
 interface Props {
   open: boolean;
@@ -93,6 +94,25 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   // depende da validação placa ↔ IMEI (substitui o card de busca livre por IMEI
   // no contexto de Troca de Titularidade).
   const precisaValidarImei = precisaVinculoRastreador;
+
+  // Bypass aplicado (Troca fora da janela / convertida) — busca pelo contrato da cotação.
+  const { data: bypassData } = useQuery({
+    queryKey: ['troca-bypass-aplicado', solicitacao?.cotacao_id],
+    enabled: !!solicitacao?.cotacao_id,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contratos')
+        .select('bypass_aplicado')
+        .eq('cotacao_id', solicitacao!.cotacao_id as any)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return Array.isArray((data as any)?.bypass_aplicado) ? (data as any).bypass_aplicado : [];
+    },
+  });
+
+
 
   /**
    * Garante a validação placa ↔ IMEI antes de qualquer mutação de decisão do
@@ -254,7 +274,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           <p className="text-muted-foreground">Solicitação não encontrada</p>
         ) : (
           <>
+            <BypassAplicadoBanner bypassAplicado={bypassData} destaque={modo === 'monitoramento'} />
             <div className="flex items-center justify-between gap-2 flex-wrap">
+
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant={STATUS_LABELS[solicitacao.status].variant}>
                   {STATUS_LABELS[solicitacao.status].label}
