@@ -47,6 +47,7 @@ import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/Conf
 import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
 import { resolverFotosVeiculo } from '@/lib/fotosVeiculo/resolverFotosVeiculo';
 import { servicoConcluidoEmCampo } from '@/lib/servicos/terminaisPositivos';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 
 // Hook para buscar detalhes completos do serviço
 function useServicoDetalheAprovacao(servicoId: string | undefined) {
