@@ -237,7 +237,20 @@ export interface PropostaPendente {
     uf: string | null;
     cep: string | null;
   } | null;
+  /**
+   * Quando a proposta vem de um processo paralelo (Substituição de Veículo
+   * ou Troca de Titularidade), aponta para a solicitação de origem para
+   * que o Cadastro consiga ver o lado antigo (veículo a substituir ou
+   * titular anterior) sem sair da tela canônica de aprovação.
+   * Resolvido a partir de `cotacoes.dados_extras` com fallback por
+   * `cotacao_id` na tabela de solicitações correspondente.
+   */
+  processoOrigem: {
+    tipo: 'substituicao' | 'troca_titularidade';
+    solicitacaoId: string;
+  } | null;
 }
+
 
 // Normaliza string para comparação de endereço (trim + lowercase + sem acento)
 function _normEnd(v: string | null | undefined): string {
