@@ -96,6 +96,13 @@ interface PropostaMidiaGridProps {
   contratoId?: string;
   contratoLinkToken?: string | null;
   associadoId?: string;
+  /**
+   * Handlers do Cadastro para aprovar/reprovar reenvios. Usam o mesmo
+   * contrato dos handlers do Step 1 (id prefixado `solicitado-<id>`)
+   * implementado em PropostaAnalise.
+   */
+  onAprovarDocumento?: (docId: string) => Promise<void> | void;
+  onReprovarDocumento?: (docId: string, motivo: string) => Promise<void> | void;
 }
 
 export function PropostaMidiaGrid({
@@ -109,6 +116,8 @@ export function PropostaMidiaGrid({
   contratoId,
   contratoLinkToken,
   associadoId,
+  onAprovarDocumento,
+  onReprovarDocumento,
 }: PropostaMidiaGridProps) {
   const [showVideo, setShowVideo] = useState(false);
   const [showGaleria, setShowGaleria] = useState(false);
