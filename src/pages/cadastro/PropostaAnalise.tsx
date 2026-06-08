@@ -1077,42 +1077,134 @@ export default function PropostaAnalise() {
         onConfirm={handleReverterReprovacaoDocumento}
       />
 
-      {/* Bypass de janela mesmo-dia em Troca de Titularidade (Diretor) */}
+      {/* Bypass de janela mesmo-dia em Troca de Titularidade (decisão do Cadastro) */}
       <AlertDialog open={showBypassJanela} onOpenChange={setShowBypassJanela}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Aprovar troca fora da janela (Diretor)
+              Troca fora da janela — escolha como prosseguir
             </AlertDialogTitle>
             <AlertDialogDescription>
               A janela canônica de mesmo-dia (até 23:59:59 BRT do dia da assinatura do termo de cancelamento) já expirou.
-              Esta aprovação será registrada em <strong>logs_auditoria</strong> com sua justificativa e o caso seguirá para o Monitoramento decidir a vistoria.
+              Escolha entre <strong>aprovar fora da janela</strong> (segue para o Monitoramento como Troca normal)
+              ou <strong>converter em cotação normal</strong> (cancela a troca; o novo titular precisa refazer como nova adesão).
+              A decisão é registrada em <strong>logs_auditoria</strong>, na fila <strong>Relacionamento › Análises</strong> e
+              fica visível no Monitoramento.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="bypass-justificativa">Justificativa (mínimo 10 caracteres)</Label>
-            <Textarea
-              id="bypass-justificativa"
-              value={bypassJustificativa}
-              onChange={(e) => setBypassJustificativa(e.target.value)}
-              placeholder="Ex.: Cliente já assinou termo + adesão paga; resgate excepcional autorizado pelo diretor."
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">{bypassJustificativa.trim().length} / 10 caracteres</p>
+
+          <div className="space-y-3 py-2">
+            <div className="flex gap-2 p-1 bg-muted rounded-md">
+              <Button
+                type="button"
+                size="sm"
+                variant={bypassAcao === 'aprovar' ? 'default' : 'ghost'}
+                className={bypassAcao === 'aprovar' ? 'flex-1 bg-amber-600 hover:bg-amber-700 text-white' : 'flex-1'}
+                onClick={() => setBypassAcao('aprovar')}
+              >
+                Aprovar fora da janela
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={bypassAcao === 'converter' ? 'default' : 'ghost'}
+                className="flex-1"
+                onClick={() => setBypassAcao('converter')}
+              >
+                Converter em cotação normal
+              </Button>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="bypass-autorizador">Nome de quem autorizou *</Label>
+              <input
+                id="bypass-autorizador"
+                value={bypassNomeAutorizador}
+                onChange={(e) => setBypassNomeAutorizador(e.target.value)}
+                placeholder="Ex.: João Silva (Gerente Comercial)"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">{bypassNomeAutorizador.trim().length} / 3 caracteres mínimos</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="bypass-justificativa">Justificativa *</Label>
+              <Textarea
+                id="bypass-justificativa"
+                value={bypassJustificativa}
+                onChange={(e) => setBypassJustificativa(e.target.value)}
+                placeholder="Ex.: Cliente já assinou termo + adesão paga; resgate excepcional autorizado pelo gerente comercial em ligação às 14h."
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">{bypassJustificativa.trim().length} / 20 caracteres mínimos</p>
+            </div>
+
+            <label className="flex items-start gap-2 p-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bypassResponsabilidade}
+                onChange={(e) => setBypassResponsabilidade(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-sm text-amber-900 dark:text-amber-100">
+                Confirmo que tenho responsabilidade por esta decisão e que ela está autorizada por{' '}
+                <strong>{bypassNomeAutorizador.trim() || '— preencha o nome acima —'}</strong>.
+              </span>
+            </label>
           </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {bypassAcao === 'aprovar' ? (
+              <AlertDialogAction
+                onClick={handleConfirmarBypassJanela}
+                disabled={!bypassFormValido() || aprovarMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                {aprovarMutation.isPending ? 'Aprovando…' : 'Aprovar fora da janela'}
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); if (bypassFormValido()) setShowConfirmConverter(true); }}
+                disabled={!bypassFormValido() || convertendoTroca}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Converter em cotação normal
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação extra para conversão (ação destrutiva) */}
+      <AlertDialog open={showConfirmConverter} onOpenChange={setShowConfirmConverter}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Confirmar conversão em cotação normal
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação <strong>cancela definitivamente</strong> a troca de titularidade:
+              a solicitação, a cotação derivada e o contrato derivado serão cancelados,
+              e o veículo voltará a ficar disponível. O novo titular precisará iniciar
+              uma <strong>nova adesão</strong> do zero.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={convertendoTroca}>Voltar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleConfirmarBypassJanela}
-              disabled={bypassJustificativa.trim().length < 10 || aprovarMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700"
+              onClick={handleConverterEmCotacaoNormal}
+              disabled={convertendoTroca}
+              className="bg-destructive hover:bg-destructive/90"
             >
-              {aprovarMutation.isPending ? 'Aprovando…' : 'Aprovar fora da janela'}
+              {convertendoTroca ? 'Convertendo…' : 'Sim, converter agora'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }
