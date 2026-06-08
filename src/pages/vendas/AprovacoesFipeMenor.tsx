@@ -103,6 +103,18 @@ export default function AprovacoesFipeMenor() {
                 </TooltipContent>
               </Tooltip>
             </TabsTrigger>
+            <TabsTrigger value="bypass_troca" className="gap-1.5">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              Bypass Troca
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={8} className="max-w-xs text-xs z-50">
+                  Trocas de titularidade aprovadas fora da janela ou convertidas em cotação normal pelo Cadastro. Apenas ciência — não bloqueia o fluxo.
+                </TooltipContent>
+              </Tooltip>
+            </TabsTrigger>
           </TabsList>
         </TooltipProvider>
 
