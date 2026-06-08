@@ -529,6 +529,9 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         </Button>
       )}
 
+      {/* Bypass aplicado em Troca de Titularidade (histórico permanente) */}
+      <BypassAplicadoBanner bypassAplicado={(contrato as any)?.bypass_aplicado} />
+
       {/* Alerts */}
       {status === 'suspenso' && (
         <AssociadoSuspensoAlert motivo={associado.motivo_bloqueio} dataBloqueio={associado.data_bloqueio} />
