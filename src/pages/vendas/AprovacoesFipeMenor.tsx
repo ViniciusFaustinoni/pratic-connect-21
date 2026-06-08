@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, Clock, Car, TrendingDown, Loader2, ShieldOff, ShieldCheck, HelpCircle, Eye } from 'lucide-react';
+import { CheckCircle2, Clock, Car, TrendingDown, Loader2, ShieldOff, ShieldCheck, HelpCircle, Eye, AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card, CardContent } from '@/components/ui/card';
 import { PainelAprovacoesElegibilidade } from '@/components/aprovacoes/PainelAprovacoesElegibilidade';
+import { PainelAprovacoesBypassTroca } from '@/components/aprovacoes/PainelAprovacoesBypassTroca';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
