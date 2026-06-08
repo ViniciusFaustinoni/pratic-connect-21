@@ -69,6 +69,18 @@ interface DocumentosSolicitadosCardProps {
   contratoId?: string;
   contratoLinkToken?: string | null;
   associadoId?: string;
+  /**
+   * Resolve a URL do arquivo quando `documento_id` é NULL (peças de
+   * autovistoria: vídeo 360° em `vistorias.video_360_url`, fotos em
+   * `vistoria_fotos`). Recebe `tipo_documento` do reenvio.
+   */
+  resolveFallbackUrl?: (tipoDocumento: string) => string | null;
+  /**
+   * Aprova o reenvio. Recebe o id puro do `documentos_solicitados` (sem
+   * prefixo); quem cuida do roteamento é o caller.
+   */
+  onAprovar?: (solicitadoId: string) => Promise<void> | void;
+  onReprovar?: (solicitadoId: string, motivo: string) => Promise<void> | void;
 }
 
 export function DocumentosSolicitadosCard({
@@ -77,8 +89,14 @@ export function DocumentosSolicitadosCard({
   contratoId,
   contratoLinkToken,
   associadoId,
+  resolveFallbackUrl,
+  onAprovar,
+  onReprovar,
 }: DocumentosSolicitadosCardProps) {
   const cancelarMutation = useCancelarDocumentosSolicitados();
+  const [reprovandoId, setReprovandoId] = useState<string | null>(null);
+  const [motivoReprovacao, setMotivoReprovacao] = useState('');
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const temEnviados = documentosSolicitados && documentosSolicitados.length > 0;
   const temPendentes = documentosPendentes && documentosPendentes.length > 0;
   const linkPublico = contratoLinkToken ? `https://app.praticcar.org/acompanhar/${contratoLinkToken}` : null;
