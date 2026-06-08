@@ -33,7 +33,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   ciente: { label: 'Ciente', color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
 };
 
-type SectionTab = 'reducao_cota' | 'elegibilidade';
+type SectionTab = 'reducao_cota' | 'elegibilidade' | 'bypass_troca';
 
 export default function AprovacoesFipeMenor() {
   const [section, setSection] = useState<SectionTab>('reducao_cota');
