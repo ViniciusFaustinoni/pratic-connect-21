@@ -438,6 +438,8 @@ export function PropostaApprovalStepper({
               contratoId={proposta.id}
               contratoLinkToken={proposta.contrato_link_token}
               associadoId={proposta.associado_id || undefined}
+              onAprovarDocumento={onAprovarDocumento}
+              onReprovarDocumento={onReprovarDocumento}
             />
 
             {proposta.vistoria && (proposta.vistoria.observacoes || proposta.vistoria.km_atual) && (
