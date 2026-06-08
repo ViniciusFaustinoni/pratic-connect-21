@@ -55,6 +55,7 @@ import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDi
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
 import { ReverterReprovacaoDocumentoDialog, type NovoStatusReversao } from '@/components/cadastro/ReverterReprovacaoDocumentoDialog';
 import { ObservacoesCotacaoCard } from '@/components/cadastro/ObservacoesCotacaoCard';
+import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
 import { registrarLog } from '@/hooks/useAuditLog';
 import { resolverGatesAprovacaoCadastro } from '@/lib/cadastro/gatesAprovacaoCadastro';
 import { toastErroEdge } from '@/lib/ui/toastErroEdge';
