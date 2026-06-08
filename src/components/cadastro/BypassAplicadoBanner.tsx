@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { formatInTimeZone } from 'date-fns-tz';
+// BRT manual formatting to avoid date-fns-tz dependency
 
 export interface BypassAplicadoItem {
   codigo: string;
