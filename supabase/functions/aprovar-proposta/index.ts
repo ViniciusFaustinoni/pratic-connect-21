@@ -1518,7 +1518,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor, bypass_janela, bypass_justificativa } = await req.json();
+    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor, bypass_janela, bypass_justificativa, bypass_nome_autorizador } = await req.json();
 
     if (!contrato_id || !aprovado_por) {
       throw new Error('contrato_id e aprovado_por são obrigatórios');
@@ -1534,7 +1534,7 @@ serve(async (req) => {
     // Desvio: Troca de Titularidade (early-return)
     const troca = await tratarTrocaTitularidade(supabase, contrato, {
       contrato_id, aprovado_por, agora, supabaseUrl, supabaseServiceKey, authHeader,
-      bypass_janela, bypass_justificativa,
+      bypass_janela, bypass_justificativa, bypass_nome_autorizador,
     });
     if (troca) return troca.response;
     // ──────────────────────────────────────────────────────────────────────
