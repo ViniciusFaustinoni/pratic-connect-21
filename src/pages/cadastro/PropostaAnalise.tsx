@@ -292,9 +292,47 @@ export default function PropostaAnalise() {
       }
     } catch (error: any) {
       console.error('[PropostaAnalise] Erro ao aprovar:', error);
-      toast.error('Erro ao aprovar proposta', { 
-        description: error?.message || 'Tente novamente. Se o problema persistir, atualize a página.' 
+      // Troca de titularidade fora da janela: oferecer bypass auditado (diretor).
+      if (error?.codigo === 'JANELA_TROCA_EXPIRADA' && isTrocaTitularidade && isDiretor) {
+        setBypassJustificativa('');
+        setShowBypassJanela(true);
+        return;
+      }
+      toast.error('Erro ao aprovar proposta', {
+        description: error?.message || 'Tente novamente. Se o problema persistir, atualize a página.'
       });
+    }
+  };
+
+  const handleConfirmarBypassJanela = async () => {
+    if (!id) return;
+    const justificativa = bypassJustificativa.trim();
+    if (justificativa.length < 10) {
+      toast.error('Justificativa obrigatória', { description: 'Descreva o motivo em pelo menos 10 caracteres.' });
+      return;
+    }
+    setShowBypassJanela(false);
+    try {
+      const chassiInformado = veiculoChassi?.trim();
+      await aprovarMutation.mutateAsync({
+        contratoId: id,
+        veiculoRenavam: veiculoRenavam || undefined,
+        veiculoChassi: chassiInformado ? normalizeChassi(chassiInformado) : undefined,
+        bypassJanela: true,
+        bypassJustificativa: justificativa,
+      });
+      try { await registrarLog({ acao: 'aprovar', modulo: 'cotacoes', descricao: `[TROCA_BYPASS_JANELA] ${id}: ${justificativa}`, entidade_id: id, tabela: 'contratos' }); } catch {}
+      try {
+        const cotacaoId = (proposta as any)?.cotacao_id || (proposta as any)?.cotacao?.id;
+        if (cotacaoId) await gerarVistoriaLinkMut.mutateAsync({ cotacaoId });
+      } catch (linkErr) {
+        console.warn('[PropostaAnalise] Falha ao gerar link de vistoria (não bloqueante):', linkErr);
+      }
+      if (nextProposta) navigate(`/cadastro/propostas/${nextProposta.id}`);
+      else navigate('/cadastro/propostas');
+    } catch (err: any) {
+      console.error('[PropostaAnalise] Bypass janela falhou:', err);
+      toast.error('Falha no bypass', { description: err?.message || 'Tente novamente.' });
     }
   };
 
