@@ -961,7 +961,8 @@ export function useProposta(contratoId: string | undefined) {
           cadastro_aprovado,
           documentos_aprovados_em,
           documentos_aprovados_por,
-          tipo_entrada
+          tipo_entrada,
+          bypass_aplicado
 
         `)
         .eq('id', contratoId)
