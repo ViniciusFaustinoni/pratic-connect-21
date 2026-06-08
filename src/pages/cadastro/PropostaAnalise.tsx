@@ -799,7 +799,7 @@ export default function PropostaAnalise() {
           planoTemRouboFurto={planoTemRouboFurto}
           aguardandoMonitoramentoVistoria={aguardandoMonitoramentoVistoria}
           aprovarApenasDocumentos={aprovarApenasDocumentos}
-          documentosAprovadosEm={documentosAprovadosEm ?? null}
+          documentosAprovadosEm={documentosAprovadosEm ?? (isTrocaTitularidade ? new Date(0).toISOString() : null)}
           onAprovarDocumentos={handleAprovarDocumentos}
           isAprovandoDocumentos={isAprovandoDocs}
         />
