@@ -85,12 +85,29 @@ Deno.serve(async (req) => {
 
     console.log('[confirmar-adesao-zerada] início', { cotacao_id, origem });
 
-    // ── D1: Gate sub-FIPE autovistoria completa ────────────────────────────
+    // ── Bypass: Troca de Titularidade nunca exige autovistoria ─────────────
+    // Canônico: no fluxo de troca, o veículo já é conhecido e a autovistoria
+    // é dispensada. Sem isso, veículos com snapshot FIPE < mínimo (ex.: SGA)
+    // travariam o pagamento do novo titular pedindo roteiro completo.
+    const { data: cotacaoMeta } = await supabase
+      .from('cotacoes')
+      .select('tipo_entrada, origem_troca_titularidade, dados_extras')
+      .eq('id', cotacao_id)
+      .maybeSingle();
+    const isTroca =
+      (cotacaoMeta as any)?.tipo_entrada === 'troca_titularidade' ||
+      (cotacaoMeta as any)?.origem_troca_titularidade === true ||
+      !!((cotacaoMeta as any)?.dados_extras?.solicitacao_troca_id);
+    if (isTroca) {
+      console.log('[confirmar-adesao-zerada] bypass gate sub-FIPE: troca de titularidade', { cotacao_id });
+    }
+
+    // ── D1: Gate sub-FIPE autovistoria completa (somente nova adesão) ──────
     // CANÔNICO: adesão zerada (isenta_*/agencia_em_maos) NÃO pode promover
     // `status_contratacao='pagamento_ok'` enquanto a autovistoria sub-FIPE
     // estiver incompleta. Sem esse gate, casos como d3126a85/c735c5e6 (3 fotos)
     // pulavam direto para o Cadastro com vistoria parcial.
-    try {
+    if (!isTroca) try {
       const { data: contratoGate } = await supabase
         .from('contratos')
         .select('id, veiculo_id')
