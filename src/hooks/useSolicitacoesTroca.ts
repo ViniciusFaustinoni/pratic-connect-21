@@ -39,6 +39,12 @@ export interface ManutencaoTrocaPayload {
 
 export type TipoVistoriaRetirada = 'retirada' | 'enxuta' | 'completa';
 
+export interface VistoriaTrocaPayload {
+  data_agendada: string;
+  periodo: 'manha' | 'tarde';
+  endereco: ManutencaoTrocaPayload['endereco'];
+}
+
 export interface RetiradaTrocaPayload {
   rastreador_id: string;
   tipo_vistoria: TipoVistoriaRetirada;
@@ -47,6 +53,8 @@ export interface RetiradaTrocaPayload {
   justificativa: string;
   endereco: ManutencaoTrocaPayload['endereco'];
 }
+
+
 
 
 export interface SolicitacaoTroca {
