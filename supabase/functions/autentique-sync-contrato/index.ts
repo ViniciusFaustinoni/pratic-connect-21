@@ -385,34 +385,20 @@ serve(async (req) => {
     else if (anySignerViewed) overallStatus = "viewed";
 
     // ═══ REVISÃO BIOMÉTRICA MANUAL (PF_FACIAL) ═══
-    // Só é "review" enquanto biometric_approved/rejected ainda não foram setados.
-    let biometricStatus: "review" | "rejected" | null = null;
-    const signersInBiometricReview = signersWithSignAction.filter((s: any) => {
-      const viewed = !!s.viewed?.created_at;
-      const signed = !!s.signed?.created_at;
-      const rejected = !!s.rejected?.created_at;
-      const bioApproved = !!s.biometric_approved?.created_at;
-      const bioRejected = !!s.biometric_rejected?.created_at;
-      return viewed && !signed && !rejected && !bioApproved && !bioRejected;
-    });
+    // Só consideramos "review" quando há sinal EXPLÍCITO do Autentique.
+    // A heurística antiga (viewed && !signed && >15min) gerava falso positivo
+    // toda vez que o cliente só abria o e-mail e fechava sem assinar — o que é
+    // o comportamento mais comum. A API GraphQL do Autentique não expõe um
+    // campo "biometric_in_review", então NÃO é possível inferir com segurança.
+    // Mantemos apenas o sinal de rejeição (biometric_rejected); aprovação cai
+    // naturalmente em isEffectivelySigned e vira overallStatus="signed".
+    let biometricStatus: "rejected" | null = null;
     const anySignerBiometricRejected = signersWithSignAction.some(
       (s: any) => !!s.biometric_rejected?.created_at,
     );
 
     if (anySignerBiometricRejected) {
       biometricStatus = "rejected";
-    } else if (
-      signersInBiometricReview.length > 0 &&
-      overallStatus === "viewed" &&
-      !allSignersSigned
-    ) {
-      const oldestView = signersInBiometricReview
-        .map((s: any) => new Date(s.viewed.created_at).getTime())
-        .reduce((a: number, b: number) => Math.min(a, b), Date.now());
-      const minutesSinceView = (Date.now() - oldestView) / 1000 / 60;
-      if (minutesSinceView >= 15) {
-        biometricStatus = "review";
-      }
     }
 
     console.log("[autentique-sync-contrato] Status calculado:", {
@@ -433,41 +419,11 @@ serve(async (req) => {
       })),
     });
 
-    // Persistir e notificar diretoria quando entra em revisão biométrica
-    if (biometricStatus === "review" && contrato.autentique_status !== "biometric_review") {
-      console.log("[autentique-sync-contrato] ⚠ Marcando contrato em revisão biométrica");
-      await supabase
-        .from("contratos")
-        .update({ autentique_status: "biometric_review" })
-        .eq("id", contrato.id);
-
-      try {
-        const { data: diretores } = await supabase
-          .from("user_roles")
-          .select("user_id")
-          .in("role", ["diretor", "admin"]);
-
-        if (diretores && diretores.length > 0) {
-          const painelUrl = `https://painel.autentique.com.br/documentos/${documentId}`;
-          const notificacoes = diretores.map((d: any) => ({
-            user_id: d.user_id,
-            tipo: "contrato_biometria_revisao",
-            titulo: "Assinatura aguardando aprovação biométrica",
-            mensagem: `Contrato ${contrato.numero || contrato.id.slice(0, 8)} de ${signerName} está aguardando aprovação manual da biometria no painel Autentique.`,
-            link: painelUrl,
-            metadata: {
-              contrato_id: contrato.id,
-              autentique_documento_id: documentId,
-              signer_name: signerName,
-            },
-          }));
-          await supabase.from("notificacoes").insert(notificacoes);
-          console.log(`[autentique-sync-contrato] ✓ ${notificacoes.length} notificações enviadas`);
-        }
-      } catch (notifErr) {
-        console.error("[autentique-sync-contrato] Erro ao notificar diretores:", notifErr);
-      }
-    } else if (biometricStatus === "rejected" && contrato.autentique_status !== "biometric_rejected") {
+    // Persistir rejeição biométrica (sinal explícito do Autentique).
+    // Estado "biometric_review" foi removido: sem sinal canônico do Autentique
+    // qualquer inferência temporal produzia falso positivo (cliente que só abre
+    // o e-mail). Aprovação biométrica cai em isEffectivelySigned → "signed".
+    if (biometricStatus === "rejected" && contrato.autentique_status !== "biometric_rejected") {
       await supabase
         .from("contratos")
         .update({ autentique_status: "biometric_rejected" })
