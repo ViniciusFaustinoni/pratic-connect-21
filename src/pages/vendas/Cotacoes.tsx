@@ -987,22 +987,34 @@ export default function Cotacoes() {
         // Reset do filtro de Status — ele só existe em "Em Andamento" e fica "fantasma" entre abas
         setStatusFilter('all');
       }} className="space-y-4">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
-          <TabsTrigger value="em_andamento" className="gap-2">
-            Em Andamento
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3 h-auto p-1">
+          <TabsTrigger
+            value="em_andamento"
+            className="flex-col sm:flex-row gap-0.5 sm:gap-2 px-1 sm:px-3 py-1.5 text-[11px] sm:text-sm leading-tight min-w-0"
+          >
+            <span className="truncate max-w-full">Em Andamento</span>
+            <Badge variant="secondary" className="h-4 sm:h-5 px-1 sm:px-1.5 text-[9px] sm:text-[10px]">
               {cotacoesEmAndamentoTotal}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="finalizadas" className="gap-2">
-            Finalizadas
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+          <TabsTrigger
+            value="finalizadas"
+            className="flex-col sm:flex-row gap-0.5 sm:gap-2 px-1 sm:px-3 py-1.5 text-[11px] sm:text-sm leading-tight min-w-0"
+          >
+            <span className="truncate max-w-full">Finalizadas</span>
+            <Badge variant="secondary" className="h-4 sm:h-5 px-1 sm:px-1.5 text-[9px] sm:text-[10px]">
               {cotacoesFinalizadasTotal}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="outros_processos" className="gap-2">
-            Outros Processos
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+          <TabsTrigger
+            value="outros_processos"
+            className="flex-col sm:flex-row gap-0.5 sm:gap-2 px-1 sm:px-3 py-1.5 text-[11px] sm:text-sm leading-tight min-w-0"
+          >
+            <span className="truncate max-w-full">
+              <span className="sm:hidden">Outros</span>
+              <span className="hidden sm:inline">Outros Processos</span>
+            </span>
+            <Badge variant="secondary" className="h-4 sm:h-5 px-1 sm:px-1.5 text-[9px] sm:text-[10px]">
               {outrosCount}
             </Badge>
           </TabsTrigger>
