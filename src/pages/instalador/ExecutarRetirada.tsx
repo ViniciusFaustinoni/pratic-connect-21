@@ -76,9 +76,22 @@ const MOTIVO_COLORS: Record<string, string> = {
   busca_apreensao: 'bg-orange-600 text-white',
 };
 
-export default function ExecutarRetirada() {
-  const { id: servicoId } = useParams<{ id: string }>();
+interface ExecutarRetiradaProps {
+  /** Sobrepõe o id da rota — usado quando embedado em modal (Coordenador de Monitoramento). */
+  servicoIdProp?: string;
+  vistoriaInterna?: boolean;
+  /** Substitui o navigate('/instalador/tarefas') quando embedado. */
+  onClose?: () => void;
+}
+
+export default function ExecutarRetirada({ servicoIdProp, vistoriaInterna, onClose }: ExecutarRetiradaProps = {}) {
+  const params = useParams<{ id: string }>();
+  const servicoId = servicoIdProp ?? params.id;
   const navigate = useNavigate();
+  const exitToList = () => {
+    if (onClose) onClose();
+    else navigate('/instalador/tarefas');
+  };
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const { data: multaValor = 400 } = useMultaRastreador();
