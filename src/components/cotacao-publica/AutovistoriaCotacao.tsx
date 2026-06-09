@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Camera, 
-  CheckCircle2, 
-  Loader2, 
+import {
+  Camera,
+  CheckCircle2,
+  Loader2,
   AlertCircle,
   Image as ImageIcon,
   Gauge,
@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   ScanLine,
   Video,
+  CloudOff,
+  CloudUpload,
 } from 'lucide-react';
 import {
   getFotosAutovistoria,
@@ -26,16 +28,18 @@ import {
   type TipoVeiculo,
   type FotoAutovistoria,
 } from '@/data/autovistoriaConfig';
-import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao, type PlacaOcrResultado } from '@/hooks/useCotacaoVistoria';
+import { useFotosCotacaoVistoria, useFinalizarVistoriaCotacao, type PlacaOcrResultado } from '@/hooks/useCotacaoVistoria';
+import { useAutovistoriaOfflineUpload } from '@/hooks/useAutovistoriaOfflineUpload';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { compressImage } from '@/lib/imageCompressor';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
+import { offlineDB, removerMidia } from '@/lib/offline/db';
 
 
 interface AutovistoriaCotacaoProps {
@@ -55,25 +59,25 @@ const COTACOES_TESTE_BYPASS_OCR_PLACA = new Set<string>([
 ]);
 
 export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosOverride, titulo }: AutovistoriaCotacaoProps) {
-  const fotos = fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo);
+  const fotos = useMemo(
+    () => (fotosOverride && fotosOverride.length > 0 ? fotosOverride : getFotosAutovistoria(tipoVeiculo)),
+    [fotosOverride, tipoVeiculo],
+  );
   const totalFotos = fotos.length;
   const instrucoesVideo = getInstrucoesVideo360(tipoVeiculo);
   const labelVideo = getLabelVideo360(tipoVeiculo);
-  
+
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
-  const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
   const [kmOcrFalhou, setKmOcrFalhou] = useState(false);
   const [kmManualInput, setKmManualInput] = useState('');
   const [salvandoKm, setSalvandoKm] = useState(false);
-  const [previewLocal, setPreviewLocal] = useState<string | null>(null);
-  const [hidratado, setHidratado] = useState(false);
   const [placaOcrPorFoto, setPlacaOcrPorFoto] = useState<Record<string, PlacaOcrResultado>>({});
   const [placaMismatch, setPlacaMismatch] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [videoProgress, setVideoProgress] = useState(0);
   const [etapa, setEtapa] = useState<'fotos' | 'video'>('fotos');
+  /** Quando true, o useEffect de auto-posicionamento para no índice atual e
+   *  permite o usuário navegar livre via thumbnails. */
+  const [navegacaoManual, setNavegacaoManual] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -81,264 +85,224 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
 
   const capability = useDeviceCapability();
   const { data: fotosExistentes, isLoading: carregandoFotos } = useFotosCotacaoVistoria(cotacaoId);
-  const uploadMutation = useUploadFotoCotacaoVistoria();
   const finalizarMutation = useFinalizarVistoriaCotacao();
 
-  const fotoAtual = fotos[fotoAtualIndex];
-  const fotosCompletadas = Object.keys(fotosEnviadas).length;
+  const offline = useAutovistoriaOfflineUpload(cotacaoId);
+
+  /**
+   * Reconciliação canônica (toda renderização):
+   *  - URL remota: fotos já confirmadas em `cotacoes_vistoria_fotos`.
+   *  - URL local: blobs ainda na fila Dexie aguardando upload.
+   *
+   * Uma mídia conta como "presente" se EITHER lado tem registro. Isso elimina
+   * a flag `hidratado` (que mascarava o estado real após refresh/discard) e
+   * garante que o cliente NUNCA volte ao começo se já capturou algo.
+   */
+  const { fotosRemotas, videoUrl } = useMemo(() => {
+    const remotas: Record<string, string> = {};
+    let video: string | null = null;
+    for (const foto of fotosExistentes || []) {
+      if (!foto.tipo || !foto.arquivo_url) continue;
+      if (foto.tipo === 'video_360') {
+        video = foto.arquivo_url;
+      } else {
+        remotas[foto.tipo] = foto.arquivo_url;
+      }
+    }
+    return { fotosRemotas: remotas, videoUrl: video };
+  }, [fotosExistentes]);
+
+  /** Slot → URL exibível (local preferida; remota como fallback). */
+  const urlsExibiveis = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = { ...fotosRemotas };
+    for (const [slot, url] of Object.entries(offline.urlsLocais)) {
+      out[slot] = url;
+    }
+    return out;
+  }, [fotosRemotas, offline.urlsLocais]);
+
+  const slotsCompletos = useMemo<Set<string>>(() => {
+    const s = new Set<string>();
+    for (const k of Object.keys(fotosRemotas)) s.add(k);
+    for (const k of Object.keys(offline.urlsLocais)) s.add(k);
+    return s;
+  }, [fotosRemotas, offline.urlsLocais]);
+
+  const fotosCompletadas = fotos.reduce((acc, f) => acc + (slotsCompletos.has(f.id) ? 1 : 0), 0);
+  const videoPresente = !!videoUrl || !!offline.urlsLocais['video_360'];
   const totalItens = totalFotos + 1; // fotos + vídeo 360°
-  const itensCompletados = fotosCompletadas + (videoUrl ? 1 : 0);
+  const itensCompletados = fotosCompletadas + (videoPresente ? 1 : 0);
   const progresso = (itensCompletados / totalItens) * 100;
   const todasFotosEnviadas = fotosCompletadas >= totalFotos;
-  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
+  const todasEnviadas = todasFotosEnviadas && videoPresente;
 
-  
-  // Reidratar fotos existentes (refresh mantém progresso)
+  const fotoAtual = fotos[fotoAtualIndex];
+
+  /**
+   * Auto-posiciona no primeiro slot pendente (somente enquanto o usuário
+   * não navegou manualmente). Roda continuamente para corrigir a posição
+   * após refresh, restauração de aba ou novas capturas em background.
+   */
   useEffect(() => {
-    if (fotosExistentes && fotosExistentes.length > 0 && !hidratado) {
-      const fotosMap: Record<string, string> = {};
-      let videoExistente: string | null = null;
-
-      for (const foto of fotosExistentes) {
-        if (!foto.tipo || !foto.arquivo_url) continue;
-        if (foto.tipo === 'video_360') {
-          videoExistente = foto.arquivo_url;
-        } else {
-          fotosMap[foto.tipo] = foto.arquivo_url;
-        }
-      }
-
-      if (Object.keys(fotosMap).length > 0) {
-        setFotosEnviadas(fotosMap);
-        toast.success(`${Object.keys(fotosMap).length} foto(s) carregada(s) de sessão anterior`);
-      }
-      if (videoExistente) {
-        setVideoUrl(videoExistente);
-      }
-
-      // Ir para próxima foto pendente
-      const indexPendente = fotos.findIndex(f => !fotosMap[f.id]);
-      if (indexPendente >= 0) {
+    if (navegacaoManual) return;
+    if (carregandoFotos) return;
+    const indexPendente = fotos.findIndex((f) => !slotsCompletos.has(f.id));
+    if (indexPendente >= 0) {
+      if (indexPendente !== fotoAtualIndex || etapa !== 'fotos') {
+        setEtapa('fotos');
         setFotoAtualIndex(indexPendente);
-      } else if (!videoExistente) {
-        // Todas as fotos prontas e vídeo pendente: já abre na etapa do vídeo
-        setEtapa('video');
       }
-
-      setHidratado(true);
+    } else if (!videoPresente && etapa !== 'video') {
+      // Todas as fotos prontas. Se ainda falta vídeo, vai pra etapa de vídeo.
+      setEtapa('video');
     }
-  }, [fotosExistentes, fotos, hidratado]);
-  
-  // Limpar previews ao desmontar para liberar memória
-  useEffect(() => {
-    return () => {
-      if (previewLocal) {
-        revokePreview(previewLocal);
-      }
-    };
-  }, []);
+  }, [carregandoFotos, fotos, slotsCompletos, videoPresente, navegacaoManual, fotoAtualIndex, etapa]);
 
-  // Telemetria + alerta após restauração de aba (Chrome matou o processo por OOM)
+  /** Aviso único após restauração de aba pelo Chrome (descarte por OOM). */
   useEffect(() => {
     console.log(
-      `[Autovistoria] Capacidade do dispositivo: deviceMemory=${capability.deviceMemory ?? '?'}GB cores=${capability.hardwareConcurrency ?? '?'} lowEnd=${capability.lowEnd} heap=${capability.usedHeapMB ?? '?'}MB wasDiscarded=${capability.wasDiscarded}`
+      `[Autovistoria] Capacidade: deviceMemory=${capability.deviceMemory ?? '?'}GB cores=${capability.hardwareConcurrency ?? '?'} lowEnd=${capability.lowEnd} heap=${capability.usedHeapMB ?? '?'}MB wasDiscarded=${capability.wasDiscarded}`,
     );
-    if (capability.wasDiscarded && !restauradoToastRef.current) {
+    if (capability.wasDiscarded && !restauradoToastRef.current && (slotsCompletos.size > 0 || videoPresente)) {
       restauradoToastRef.current = true;
-      toast.info('Continuamos de onde você parou. Toque para enviar a próxima foto.', {
+      toast.info('Continuamos de onde você parou. Sua captura anterior foi mantida.', {
         duration: 6000,
       });
     }
-  }, [capability]);
+  }, [capability, slotsCompletos, videoPresente]);
+
+  /** Reage a resultados de OCR (placa + odômetro) propagados pelo worker. */
+  useEffect(() => {
+    const slot = fotoAtual?.id;
+    if (!slot) return;
+    const r = offline.ocrPorSlot[slot];
+    if (!r) return;
+
+    if (slot === 'odometro' || slot === 'painel_ligado') {
+      if (r.kmExtraido && r.kmExtraido !== kmIdentificado) {
+        setKmIdentificado(r.kmExtraido);
+        setKmOcrFalhou(false);
+        void (publicSupabase as any)
+          .from('cotacoes')
+          .update({ km_atual: r.kmExtraido })
+          .eq('id', cotacaoId)
+          .then(() => {})
+          .catch(() => {});
+      } else if (r.ocrFalhou && !kmIdentificado && !kmOcrFalhou) {
+        setKmOcrFalhou(true);
+        toast.warning('Não conseguimos ler a quilometragem. Informe abaixo.', { duration: 6000 });
+      }
+    }
+
+    if (r.placaOcr) {
+      setPlacaOcrPorFoto((prev) => (prev[slot] === r.placaOcr ? prev : { ...prev, [slot]: r.placaOcr! }));
+      const bypass = COTACOES_TESTE_BYPASS_OCR_PLACA.has(cotacaoId);
+      if (!bypass && !r.placaOcr.skipped) {
+        if (!r.placaOcr.legivel) {
+          toast.warning('Placa ilegível na foto enviada. Refaça se for o caso.', { duration: 5000 });
+        } else if (!r.placaOcr.match) {
+          const lida = r.placaOcr.placa || 'desconhecida';
+          setPlacaMismatch(`Placa lida (${lida}) diferente da cadastrada. Refaça se necessário.`);
+        } else {
+          setPlacaMismatch(null);
+        }
+      }
+    }
+  }, [offline.ocrPorSlot, fotoAtual, cotacaoId, kmIdentificado, kmOcrFalhou]);
 
   const handleCapturarFoto = () => {
     inputRef.current?.click();
   };
-  
+
+  /**
+   * Captura → comprime → enfileira Dexie → avança UI.
+   * O upload acontece em background no worker. Falha de upload NUNCA
+   * descarta o blob (sobrevive a refresh/discard).
+   */
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
-    // Validar tamanho (max 15MB antes de comprimir)
+
     if (file.size > 15 * 1024 * 1024) {
       toast.error('Arquivo muito grande. Máximo 15MB.');
       e.target.value = '';
       return;
     }
-    
-    // Preview local imediato usando Object URL
-    if (previewLocal) {
-      revokePreview(previewLocal);
-    }
-    const localUrl = createOptimizedPreview(file);
-    setPreviewLocal(localUrl);
-    
+
     try {
-      // Comprimir imagem para economizar memória e acelerar upload
-      // Perfil é resolvido automaticamente conforme deviceMemory (low/mid/high)
-      let arquivoFinal = file;
+      let arquivoFinal: File | Blob = file;
       if (file.size > 250 * 1024) {
         toast.loading('Otimizando imagem...', { id: 'compress' });
         try {
           arquivoFinal = await compressImage(file);
-          toast.dismiss('compress');
         } catch (compressError) {
-          console.warn('[AutovistoriaCotacao] Erro na compressão, usando original:', compressError);
+          console.warn('[AutovistoriaCotacao] compressão falhou, usando original:', compressError);
+        } finally {
           toast.dismiss('compress');
         }
       }
 
-      // Tentar obter geolocalização
-      let latitude: number | undefined;
-      let longitude: number | undefined;
-      
-      if (navigator.geolocation) {
-        try {
-          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: true,
-              timeout: 5000,
-              maximumAge: 0
-            });
-          });
-          latitude = position.coords.latitude;
-          longitude = position.coords.longitude;
-        } catch {
-          console.log('Geolocalização não disponível');
-        }
-      }
-      
-      const result = await uploadMutation.mutateAsync({
-        cotacaoId,
-        fotoId: fotoAtual.id,
-        file: arquivoFinal,
-        latitude,
-        longitude,
-      });
-      
-      // Atualizar estado local
-      setFotosEnviadas(prev => ({ ...prev, [fotoAtual.id]: result.url }));
-      
-      // Liberar preview local após sucesso
-      revokePreview(localUrl);
-      setPreviewLocal(null);
-      
-      // Se extraiu KM do odômetro/painel
-      const isFotoOdometro = fotoAtual.id === 'odometro' || fotoAtual.id === 'painel_ligado';
-      const odometroOcrFalhou = isFotoOdometro && !result.kmExtraido && (result as any).ocrFalhou;
-      if (result.kmExtraido) {
-        setKmIdentificado(result.kmExtraido);
+      const slot = fotoAtual.id;
+      await offline.enfileirarFoto(slot, arquivoFinal);
+      toast.success('Foto salva.', { duration: 1800 });
+
+      if (slot === 'odometro' || slot === 'painel_ligado') {
         setKmOcrFalhou(false);
-        // Persiste KM na cotação
-        try {
-          await (publicSupabase as any).from('cotacoes').update({ km_atual: result.kmExtraido }).eq('id', cotacaoId);
-        } catch (e) { console.warn('[AutovistoriaCotacao] erro ao salvar km_atual:', e); }
-        toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
-      } else if (odometroOcrFalhou) {
-        setKmOcrFalhou(true);
-        setKmIdentificado(null);
-        toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', { duration: 6000 });
-      } else {
-        toast.success('Foto enviada com sucesso.');
-      }
-      
-      // OCR de placa (6 fotos exteriores)
-      let bloqueadoPorPlaca = false;
-      const bypassOcrPlaca = COTACOES_TESTE_BYPASS_OCR_PLACA.has(cotacaoId);
-      if (result.placaOcr) {
-        setPlacaOcrPorFoto((prev) => ({ ...prev, [fotoAtual.id]: result.placaOcr! }));
-        if (bypassOcrPlaca) {
-          // Cotação de teste autorizada — não bloqueia por OCR de placa
-          setPlacaMismatch(null);
-        } else if (result.placaOcr.skipped) {
-          // 0KM ou sem placa real — não valida
-        } else if (!result.placaOcr.legivel) {
-          setPlacaMismatch(null);
-          toast.warning('Não conseguimos ler a placa nesta foto. Refaça com a placa nítida e enquadrada.', { duration: 6000 });
-          bloqueadoPorPlaca = true;
-        } else if (!result.placaOcr.match) {
-          const lida = result.placaOcr.placa || 'desconhecida';
-          setPlacaMismatch(`Placa lida (${lida}) diferente da placa cadastrada. Confirme se é o veículo correto.`);
-          toast.error('Placa não confere com o veículo cadastrado.', { duration: 8000 });
-          bloqueadoPorPlaca = true;
-        } else {
-          setPlacaMismatch(null);
-        }
       }
 
-      // Avançar para próxima foto / etapa do vídeo automaticamente
-      // Não avança se OCR do odômetro falhou ou se placa não confere/ilegível
-      if (!odometroOcrFalhou && !bloqueadoPorPlaca) {
-        const eraUltimaFoto = fotoAtualIndex >= totalFotos - 1;
-        setTimeout(() => {
-          if (eraUltimaFoto) {
-            setEtapa('video');
-            toast.success('Fotos concluídas! Agora grave o vídeo 360°.');
-          } else {
-            setFotoAtualIndex((prev) => Math.min(prev + 1, totalFotos - 1));
-          }
-        }, 300);
-      }
-    } catch (error: any) {
-      console.error('[AutovistoriaCotacao] Erro no upload:', error);
-      toast.error('Não foi possível enviar a foto. Tente novamente.', {
-        action: {
-          label: 'Tentar novamente',
-          onClick: () => inputRef.current?.click(),
-        },
+      // Deixa o auto-posicionamento reagir à mudança em `slotsCompletos`.
+      setNavegacaoManual(false);
+    } catch (error: unknown) {
+      console.error('[AutovistoriaCotacao] erro ao enfileirar foto:', error);
+      toast.error('Não foi possível salvar a foto. Tente novamente.', {
+        action: { label: 'Tentar novamente', onClick: () => inputRef.current?.click() },
       });
     }
-    
     e.target.value = '';
   };
 
-  const handleUploadVideo = useCallback(async (file: File) => {
-    setUploadingVideo(true);
-    setVideoProgress(0);
-    try {
-      const result = await uploadMutation.mutateAsync({
-        cotacaoId,
-        fotoId: 'video_360',
-        file,
-        onProgress: (pct: number) => setVideoProgress(pct),
-      } as any);
-      setVideoUrl(result.url);
-      toast.success('Vídeo 360° enviado!');
-    } catch (e) {
-      console.error('[AutovistoriaCotacao] erro no upload do vídeo:', e);
-      // toast já tratado no helper
-    } finally {
-      setUploadingVideo(false);
-      setVideoProgress(0);
-    }
-  }, [cotacaoId, uploadMutation]);
+  const handleUploadVideo = useCallback(
+    async (file: File) => {
+      try {
+        await offline.enfileirarVideo(file);
+        toast.success('Vídeo salvo.', { duration: 1800 });
+      } catch (e) {
+        console.error('[AutovistoriaCotacao] erro ao enfileirar vídeo:', e);
+        toast.error('Não foi possível salvar o vídeo. Tente novamente.');
+      }
+    },
+    [offline],
+  );
 
   const handleFinalizar = async () => {
     if (finalizandoRef.current || finalizarMutation.isPending) return;
     if (!todasFotosEnviadas) {
-      toast.error('Envie todas as fotos antes de finalizar.');
+      toast.error('Capture todas as fotos antes de finalizar.');
       return;
     }
-    if (!videoUrl) {
+    if (!videoPresente) {
       toast.error('Grave o vídeo 360° terminando no painel ligado.');
       return;
     }
+    if (offline.pendentes > 0) {
+      toast.warning('Aguarde o envio das últimas mídias antes de concluir.', { duration: 4000 });
+      void offline.forcarSync();
+      return;
+    }
     finalizandoRef.current = true;
-    
     try {
-      await finalizarMutation.mutateAsync({
-        cotacaoId,
-        tipoVistoria: 'autovistoria'
-      });
+      await finalizarMutation.mutateAsync({ cotacaoId, tipoVistoria: 'autovistoria' });
       onComplete();
     } catch (error) {
       console.error('Erro ao finalizar:', error);
       finalizandoRef.current = false;
     }
   };
-  
-  const fotoJaEnviada = !!fotosEnviadas[fotoAtual?.id];
-  const isUploading = uploadMutation.isPending;
+
+  const fotoJaEnviada = !!fotoAtual && slotsCompletos.has(fotoAtual.id);
+  const fotoEmRemoto = !!fotoAtual && !!fotosRemotas[fotoAtual.id];
+  const fotoEmFila = !!fotoAtual && !!offline.urlsLocais[fotoAtual.id];
+  const isUploading = fotoEmFila && !fotoEmRemoto; // local presente, ainda subindo
 
   if (carregandoFotos) {
     return (
@@ -366,6 +330,42 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       <CardContent className="space-y-4">
         <InAppBrowserBanner persistent />
 
+        {offline.pendentes > 0 && (
+          <div className={cn(
+            "rounded-lg border p-3 flex items-start gap-2",
+            offline.comErro > 0
+              ? "border-destructive/40 bg-destructive/10 text-destructive"
+              : "border-primary/30 bg-primary/10 text-primary"
+          )}>
+            {offline.online ? (
+              <CloudUpload className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            ) : (
+              <CloudOff className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 space-y-1 text-xs">
+              <p className="font-semibold">
+                {offline.pendentes} {offline.pendentes === 1 ? 'mídia aguardando envio' : 'mídias aguardando envio'}
+                {offline.comErro > 0 && ` · ${offline.comErro} com falha`}
+              </p>
+              <p className="leading-relaxed text-foreground/80">
+                {offline.online
+                  ? 'Suas capturas estão salvas no aparelho e sendo enviadas em segundo plano.'
+                  : 'Sem internet no momento. Suas capturas estão salvas e serão enviadas quando a conexão voltar.'}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void offline.forcarSync()}
+              disabled={offline.sincronizando || !offline.online}
+              className="h-8 shrink-0"
+            >
+              {offline.sincronizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Tentar enviar agora'}
+            </Button>
+          </div>
+        )}
+
+
         {capability.lowEnd && (
           <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-900 dark:text-amber-200 flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
@@ -391,7 +391,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
         {/* Indicadores de fotos (miniaturas) + vídeo */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           {fotos.map((foto, index) => {
-            const enviada = !!fotosEnviadas[foto.id];
+            const enviada = slotsCompletos.has(foto.id);
             const atual = etapa === 'fotos' && index === fotoAtualIndex;
 
             return (
@@ -462,10 +462,10 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             
             {/* Área de preview / captura */}
             <div className="relative aspect-[4/3] bg-muted/30 rounded-xl border border-border/50 overflow-hidden">
-              {(previewLocal || fotosEnviadas[fotoAtual.id]) ? (
+              {urlsExibiveis[fotoAtual.id] ? (
                 <div className="relative w-full h-full">
                   <img
-                    src={previewLocal || fotosEnviadas[fotoAtual.id]}
+                    src={urlsExibiveis[fotoAtual.id]}
                     alt={fotoAtual.label}
                     className="w-full h-full object-cover"
                   />
@@ -721,10 +721,18 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
 
             <VideoCapture
               onCapture={handleUploadVideo}
-              onReset={() => setVideoUrl(null)}
-              videoUrl={videoUrl || undefined}
-              uploading={uploadingVideo}
-              uploadProgress={uploadingVideo ? videoProgress : undefined}
+              onReset={async () => {
+                // Remove pendência local (se houver). Vídeo remoto fica até o cliente regravar.
+                const pend = await offlineDB.midias_pendentes
+                  .where('vistoria_id')
+                  .equals(cotacaoId)
+                  .and((m) => m.tipo === 'video')
+                  .toArray();
+                for (const p of pend) await removerMidia(p.id);
+              }}
+              videoUrl={offline.urlsLocais['video_360'] || videoUrl || undefined}
+              uploading={!!offline.progressoUpload['video_360']}
+              uploadProgress={offline.progressoUpload['video_360']}
               maxDuration={120}
               label="Grave o vídeo 360° terminando no painel ligado"
             />

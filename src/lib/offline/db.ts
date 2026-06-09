@@ -11,10 +11,10 @@ export type SyncStatus = 'pendente' | 'enviando' | 'enviada' | 'erro';
 export interface MidiaPendente {
   /** UUID gerado no cliente — também usado como idempotency key no servidor */
   id: string;
-  /** ID da vistoria a que pertence (para origem 'publico', usar o token do link) */
+  /** ID da vistoria a que pertence (para 'publico', usar o token do link; para 'cotacao_publica', usar o cotacao_id) */
   vistoria_id: string;
   /** Origem da vistoria — define qual fluxo de upload usar */
-  origem: 'regulador' | 'instalador' | 'publico';
+  origem: 'regulador' | 'instalador' | 'publico' | 'cotacao_publica';
   /** Token público do link de vistoria (apenas quando origem === 'publico') */
   token?: string;
   tipo: MidiaTipo;
@@ -33,7 +33,7 @@ export interface MidiaPendente {
 
 export interface VistoriaPendente {
   id: string; // mesmo ID da vistoria no servidor
-  origem: 'regulador' | 'instalador' | 'publico';
+  origem: 'regulador' | 'instalador' | 'publico' | 'cotacao_publica';
   /** Snapshot dos dados (não-mídia) salvos offline para envio na finalização */
   payload: Record<string, unknown>;
   status: SyncStatus | 'rascunho';
@@ -76,7 +76,7 @@ export function gerarClientId(): string {
  */
 export async function enfileirarMidia(params: {
   vistoria_id: string;
-  origem: 'regulador' | 'instalador' | 'publico';
+  origem: 'regulador' | 'instalador' | 'publico' | 'cotacao_publica';
   token?: string;
   tipo: MidiaTipo;
   slot: string | number;
