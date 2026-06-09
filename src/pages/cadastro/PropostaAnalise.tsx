@@ -64,6 +64,8 @@ import {
   PropostaDetalhesTabs,
   PropostaApprovalStepper,
 } from '@/components/cadastro/proposta';
+import { TrocaProcessoCard } from '@/components/cadastro/proposta/TrocaProcessoCard';
+import { SubstituicaoProcessoCard } from '@/components/cadastro/proposta/SubstituicaoProcessoCard';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 import { isValidChassi, normalizeChassi } from '@/lib/chassi';
 
