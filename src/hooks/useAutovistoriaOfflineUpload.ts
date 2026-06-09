@@ -106,10 +106,12 @@ export function useAutovistoriaOfflineUpload(
   cotacaoId: string | undefined,
 ): UseAutovistoriaOfflineUploadResult {
   const online = useOnlineStatus();
+  const queryClient = useQueryClient();
   const [sincronizando, setSincronizando] = useState(false);
   const [progressoUpload, setProgressoUpload] = useState<Record<string, number>>({});
   const [ocrPorSlot, setOcrPorSlot] = useState<Record<string, AutovistoriaOcrResult>>({});
   const trabalhando = useRef(false);
+
 
   // Lista reativa de mídias pendentes para esta cotação.
   const pendentesList = useLiveQuery(
