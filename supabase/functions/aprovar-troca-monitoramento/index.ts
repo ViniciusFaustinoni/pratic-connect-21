@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   try {
     const body = (await req.json()) as Body;
     const { solicitacao_id, acao, observacao } = body;
-    if (!solicitacao_id || !['aprovar', 'solicitar_vistoria', 'agendar_manutencao'].includes(acao)) {
+    if (!solicitacao_id || !['aprovar', 'solicitar_vistoria', 'agendar_manutencao', 'solicitar_retirada'].includes(acao)) {
       return new Response(JSON.stringify({ error: 'parâmetros inválidos' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -71,6 +71,18 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    if (acao === 'solicitar_retirada') {
+      const r = body.retirada;
+      if (!r?.rastreador_id || !r?.data_agendada || !r?.periodo
+          || !['retirada', 'enxuta', 'completa'].includes(String(r?.tipo_vistoria))
+          || !r?.justificativa || r.justificativa.trim().length < 10
+          || !r?.endereco?.logradouro || !r?.endereco?.cep) {
+        return new Response(JSON.stringify({ error: 'dados de retirada incompletos' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
