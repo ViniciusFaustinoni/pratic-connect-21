@@ -27,9 +27,10 @@ interface ChatPanelProps {
   nomeContato: string | null;
   avatarUrl: string | null;
   drawerVariant?: 'relacionamento' | 'eventos' | 'monitoramento';
+  onBack?: () => void;
 }
 
-export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'relacionamento' }: ChatPanelProps) {
+export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'relacionamento', onBack }: ChatPanelProps) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
