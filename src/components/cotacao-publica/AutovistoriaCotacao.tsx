@@ -330,6 +330,42 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       <CardContent className="space-y-4">
         <InAppBrowserBanner persistent />
 
+        {offline.pendentes > 0 && (
+          <div className={cn(
+            "rounded-lg border p-3 flex items-start gap-2",
+            offline.comErro > 0
+              ? "border-destructive/40 bg-destructive/10 text-destructive"
+              : "border-primary/30 bg-primary/10 text-primary"
+          )}>
+            {offline.online ? (
+              <CloudUpload className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            ) : (
+              <CloudOff className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 space-y-1 text-xs">
+              <p className="font-semibold">
+                {offline.pendentes} {offline.pendentes === 1 ? 'mídia aguardando envio' : 'mídias aguardando envio'}
+                {offline.comErro > 0 && ` · ${offline.comErro} com falha`}
+              </p>
+              <p className="leading-relaxed text-foreground/80">
+                {offline.online
+                  ? 'Suas capturas estão salvas no aparelho e sendo enviadas em segundo plano.'
+                  : 'Sem internet no momento. Suas capturas estão salvas e serão enviadas quando a conexão voltar.'}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void offline.forcarSync()}
+              disabled={offline.sincronizando || !offline.online}
+              className="h-8 shrink-0"
+            >
+              {offline.sincronizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Tentar enviar agora'}
+            </Button>
+          </div>
+        )}
+
+
         {capability.lowEnd && (
           <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-900 dark:text-amber-200 flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
