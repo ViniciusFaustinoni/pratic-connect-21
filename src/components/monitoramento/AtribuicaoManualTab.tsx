@@ -664,7 +664,7 @@ export default function AtribuicaoManualTab() {
                 </button>
               )}
             </CardHeader>
-            <CardContent className="space-y-4 max-h-[65vh] overflow-y-auto">
+            <CardContent className="space-y-4 lg:max-h-[65vh] lg:overflow-y-auto">
               {Object.keys(grouped).length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-6">Nenhum serviço pendente</p>
               )}
