@@ -458,9 +458,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       setSelectedAssociadoId(associadoLocalId);
       setSelectedAssociadoCpf(cpfLimpo);
       setSelectedCodigoHinova(sgaSnapshot?.associado?.codigo_associado ?? null);
-      // Abre Troca ANTES de fechar pai (evita reset prematuro do useEffect)
-      setShowTrocaTitularidade(true);
-      setTimeout(() => onOpenChange(false), 0);
+      // Fecha o chooser ANTES e espera a animação para evitar colisão de
+      // dois Radix Dialogs (overlay/posicionamento quebrados).
+      onOpenChange(false);
+      setTimeout(() => setShowTrocaTitularidade(true), 220);
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao redirecionar para Troca de Titularidade');
     } finally {
