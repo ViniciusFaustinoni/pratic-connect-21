@@ -92,14 +92,17 @@ export function useSituacaoFinanceiraCadastro({
   });
 
   const bypass = useMutation({
-    mutationFn: async (motivo: string) => {
+    mutationFn: async (input: { motivo: string; nome_autorizador: string }) => {
       const { data, error } = await supabase.functions.invoke(
         'verificar-situacao-financeira-cadastro',
         {
           body: {
             contrato_id: contratoId ?? undefined,
             solicitacao_troca_id: solicitacaoTrocaId ?? undefined,
-            bypass: { motivo },
+            bypass: {
+              motivo: input.motivo,
+              nome_autorizador: input.nome_autorizador,
+            },
           },
         }
       );
