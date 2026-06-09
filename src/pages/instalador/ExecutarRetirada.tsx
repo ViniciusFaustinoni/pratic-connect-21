@@ -80,7 +80,7 @@ interface ExecutarRetiradaProps {
   /** Sobrepõe o id da rota — usado quando embedado em modal (Coordenador de Monitoramento). */
   servicoIdProp?: string;
   vistoriaInterna?: boolean;
-  /** Substitui o exitToList() quando embedado. */
+  /** Substitui o navigate de saída para a lista quando embedado. */
   onClose?: () => void;
 }
 
@@ -90,7 +90,7 @@ export default function ExecutarRetirada({ servicoIdProp, vistoriaInterna, onClo
   const navigate = useNavigate();
   const exitToList = () => {
     if (onClose) onClose();
-    else exitToList();
+    else navigate('/instalador/tarefas');
   };
   const queryClient = useQueryClient();
   const { profile } = useAuth();
