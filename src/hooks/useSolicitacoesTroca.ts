@@ -18,7 +18,7 @@ export type StatusTroca =
   | 'cancelada'
   | 'expirada';
 
-export type TipoVistoriaTroca = 'somente_fotos' | 'fotos_com_rastreador' | 'manutencao';
+export type TipoVistoriaTroca = 'somente_fotos' | 'fotos_com_rastreador' | 'manutencao' | 'retirada';
 
 export interface ManutencaoTrocaPayload {
   rastreador_id: string;
@@ -36,6 +36,18 @@ export interface ManutencaoTrocaPayload {
     longitude?: number | null;
   };
 }
+
+export type TipoVistoriaRetirada = 'retirada' | 'enxuta' | 'completa';
+
+export interface RetiradaTrocaPayload {
+  rastreador_id: string;
+  tipo_vistoria: TipoVistoriaRetirada;
+  data_agendada: string;
+  periodo: 'manha' | 'tarde';
+  justificativa: string;
+  endereco: ManutencaoTrocaPayload['endereco'];
+}
+
 
 export interface SolicitacaoTroca {
   id: string;
