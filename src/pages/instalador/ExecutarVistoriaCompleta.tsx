@@ -978,7 +978,9 @@ export default function ExecutarVistoriaCompleta() {
           <p className="mt-2 text-center text-xs text-amber-400">
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
             {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${totalFotosObrigatorias - totalFotosEnviadas}). `}
-            {!videoEnviado && 'Envie o vídeo 360°. '}
+            {!videoEnviado && (videoPendenteUpload
+              ? '⏳ Aguardando upload do vídeo 360° concluir antes de aprovar. '
+              : 'Envie o vídeo 360°. ')}
             {!rastreadorVinculado && '📡 Vincule o IMEI do rastreador. '}
             {rastreadorVinculado && precisaConfirmarPosicao && !posicaoConfirmada && '📍 Confirme a posição do rastreador no mapa.'}
           </p>
