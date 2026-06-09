@@ -326,7 +326,101 @@ Deno.serve(async (req) => {
         new Date(m.data_agendada).toLocaleDateString('pt-BR'),
         m.periodo === 'manha' ? 'manhã' : 'tarde',
       ]);
+    } else if (acao === 'solicitar_retirada') {
+      // Materializa 2 serviços paralelos: retirada_rastreador + vistoria
+      // acompanhante (tipo escolhido pelo Monitoramento). Solicitação fica
+      // em aguardando_vistoria — Aprovar volta quando ambos terminarem.
+      const r = body.retirada!;
+      const { data: rast, error: rErr } = await admin
+        .from('rastreadores')
+        .select('id, codigo, veiculo_id')
+        .eq('id', r.rastreador_id)
+        .maybeSingle();
+      if (rErr || !rast) throw new Error('Rastreador não encontrado');
+
+      const veiculoIdAlvo = rast.veiculo_id || solicitacao.veiculo_id;
+      const baseServico = {
+        status: 'pendente' as const,
+        data_agendada: r.data_agendada,
+        periodo: r.periodo,
+        veiculo_id: veiculoIdAlvo,
+        associado_id: solicitacao.associado_antigo_id,
+        local_vistoria: 'cliente',
+        permite_encaixe: true,
+        origem: 'troca_titularidade',
+        logradouro: r.endereco.logradouro,
+        numero: r.endereco.numero || null,
+        bairro: r.endereco.bairro,
+        cidade: r.endereco.cidade,
+        uf: r.endereco.uf,
+        cep: r.endereco.cep,
+        latitude: r.endereco.latitude || null,
+        longitude: r.endereco.longitude || null,
+      };
+
+      // 1) Serviço de retirada do rastreador
+      const { data: servRetirada, error: srErr } = await admin
+        .from('servicos')
+        .insert({
+          ...baseServico,
+          tipo: 'retirada_rastreador',
+          rastreador_id: r.rastreador_id,
+          observacoes: `[monitoramento_retirada] ${r.justificativa}`,
+        })
+        .select('id')
+        .single();
+      if (srErr) throw srErr;
+
+      // 2) Serviço de vistoria acompanhante (tipo escolhido)
+      const vistoriaTipo = r.tipo_vistoria === 'retirada' ? 'vistoria_retirada' : 'vistoria_entrada';
+      const modalidade =
+        r.tipo_vistoria === 'enxuta' ? 'enxuta_pos_retirada'
+        : r.tipo_vistoria === 'completa' ? 'completa_pos_retirada'
+        : null;
+      const { data: servVistoria, error: svErr } = await admin
+        .from('servicos')
+        .insert({
+          ...baseServico,
+          tipo: vistoriaTipo,
+          modalidade,
+          observacoes: `[monitoramento_retirada] Vistoria acompanhante (${r.tipo_vistoria}). ${r.justificativa}`,
+        })
+        .select('id')
+        .single();
+      if (svErr) {
+        // rollback do irmão
+        await admin.from('servicos').delete().eq('id', servRetirada.id);
+        throw svErr;
+      }
+
+      // Log canônico em análises de relacionamento (não-bloqueante)
+      try {
+        await admin.from('analises_relacionamento').insert({
+          tipo: 'monitoramento_solicitou_retirada',
+          status: 'pendente',
+          solicitacao_troca_id: solicitacao_id,
+          associado_id: solicitacao.associado_antigo_id,
+          veiculo_id: veiculoIdAlvo,
+          observacoes: `Retirada solicitada pelo Monitoramento. Vistoria escolhida: ${r.tipo_vistoria}. Justificativa: ${r.justificativa}`,
+          criado_por: profileId,
+        });
+      } catch (logErr) {
+        console.warn('[aprovar-troca-monitoramento] analises_relacionamento falhou (não bloqueante):', logErr);
+      }
+
+      const { error: updErr } = await admin
+        .from('solicitacoes_troca_titularidade')
+        .update({
+          ...baseUpdate,
+          status: 'aguardando_vistoria',
+          tipo_vistoria_troca: 'retirada',
+          servico_manutencao_id: servRetirada.id,
+          servico_vistoria_id: servVistoria.id,
+        })
+        .eq('id', solicitacao_id);
+      if (updErr) throw updErr;
     }
+
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
