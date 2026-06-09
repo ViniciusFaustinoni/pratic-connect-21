@@ -225,6 +225,7 @@ export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
   vistoria_periodica: 'Vistoria Periódica',
   vistoria_manutencao: 'Vistoria de Manutenção',
   vistoria_retirada: 'Retirada de Rastreador',
+  retirada_rastreador: 'Retirada de Rastreador',
 };
 
 export const STATUS_SERVICO_LABELS: Record<StatusServico, string> = {
