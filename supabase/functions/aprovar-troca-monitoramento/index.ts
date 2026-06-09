@@ -75,6 +75,18 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    if (acao === 'solicitar_vistoria') {
+      const v = body.vistoria;
+      if (!v?.data_agendada || !v?.periodo
+          || !['manha', 'tarde'].includes(v.periodo)
+          || !v?.endereco?.logradouro || !v?.endereco?.cep
+          || !v?.endereco?.bairro || !v?.endereco?.cidade || !v?.endereco?.uf) {
+        return new Response(JSON.stringify({ error: 'dados de vistoria incompletos (data, período, endereço)' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     if (acao === 'agendar_manutencao' && (!body.manutencao?.rastreador_id || !body.manutencao?.data_agendada || !body.manutencao?.periodo)) {
       return new Response(JSON.stringify({ error: 'dados de manutenção incompletos' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
