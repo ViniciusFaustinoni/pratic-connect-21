@@ -130,7 +130,23 @@ serve(async (req) => {
         console.warn("[whatsapp-mark-read] Meta config ausente — registrando local sem chamar API");
         for (const m of pendentes) marcarLocal.push(m.message_id);
       } else {
+        // Meta exige o wamid puro (ex.: "wamid.HBg..."); IDs gravados com
+        // prefixo "chatwoot_" precisam ser saneados antes da chamada.
+        const sanitizeWamid = (id: string): string => {
+          if (!id) return id;
+          let s = id;
+          if (s.startsWith("chatwoot_")) s = s.slice("chatwoot_".length);
+          return s;
+        };
+
         for (const m of pendentes) {
+          const wamid = sanitizeWamid(m.message_id);
+          if (!wamid.startsWith("wamid.")) {
+            console.warn(`[whatsapp-mark-read] meta skip id inválido: ${m.message_id}`);
+            falharam.push({ message_id: m.message_id, reason: "meta_invalid_wamid" });
+            marcarLocal.push(m.message_id);
+            continue;
+          }
           try {
             const res = await fetch(
               `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
@@ -143,13 +159,13 @@ serve(async (req) => {
                 body: JSON.stringify({
                   messaging_product: "whatsapp",
                   status: "read",
-                  message_id: m.message_id,
+                  message_id: wamid,
                 }),
               },
             );
             const raw = await res.text();
             if (!res.ok) {
-              console.warn(`[whatsapp-mark-read] meta falhou ${m.message_id}: ${res.status} ${raw}`);
+              console.warn(`[whatsapp-mark-read] meta falhou ${m.message_id} (wamid=${wamid}): ${res.status} ${raw}`);
               falharam.push({ message_id: m.message_id, reason: `meta_${res.status}` });
               // Mesmo com falha externa, registramos local pra não re-tentar em loop.
               marcarLocal.push(m.message_id);
