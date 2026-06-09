@@ -28,6 +28,8 @@ import { RealocarServicoSimplesDialog } from './RealocarServicoSimplesDialog';
 import { CancelarServicoDialog } from './CancelarServicoDialog';
 import { DevolverAoCadastroDialog } from './DevolverAoCadastroDialog';
 import { MarcarManutencaoDialog } from '@/components/monitoramento/MarcarManutencaoDialog';
+import { MarcarRetiradaDialog } from '@/components/monitoramento/MarcarRetiradaDialog';
+
 import { LiberarServicoButton } from './LiberarServicoButton';
 import { usePermissions } from '@/hooks/usePermissions';
 
