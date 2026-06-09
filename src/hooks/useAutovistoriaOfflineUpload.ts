@@ -357,13 +357,34 @@ export function useAutovistoriaOfflineUpload(
             );
           if (dbError) throw dbError;
 
-          // 4) remove da fila local (só agora — antes disso, blob ainda é fonte da verdade)
+          // 3.5) GARANTE que `fotosRemotas` já contém o slot ANTES de remover
+          // o blob da fila local. Sem este refetch, há uma janela em que o
+          // blob sai do `urlsLocais` e o React Query ainda não buscou — o
+          // slot some do `slotsCompletos`, o contador regride e o auto-
+          // posicionamento volta ao mesmo item ("Toque para fotografar").
+          // Era exatamente o sintoma reportado: "só persiste se eu atualizo
+          // a página". Refetch fecha a janela.
+          try {
+            await queryClient.refetchQueries({
+              queryKey: ['cotacao-vistoria-fotos', cotacaoId],
+              exact: true,
+            });
+          } catch (e) {
+            // Refetch nunca pode bloquear o worker — se falhar, invalida
+            // assíncrono e segue. O blob ainda é removido a seguir; pior
+            // caso, a UI fica 1 ciclo desatualizada (ainda melhor que loop).
+            console.warn('[autovistoria-offline] refetch pós-upsert falhou:', e);
+            queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', cotacaoId] });
+          }
+
+          // 4) remove da fila local (agora seguro — fotosRemotas já tem o slot)
           await removerMidia(item.id);
           setProgressoUpload((p) => {
             const novo = { ...p };
             delete novo[slotKey];
             return novo;
           });
+
 
           logAuditoriaFire(cotacaoId, 'criar', '[autovistoria_upload_ok]', {
             slot: slotKey,
