@@ -69,6 +69,13 @@ const MOTO_OPCIONAIS = [
 
 const VIDEO_TIPO = 'video_360';
 
+// Via 2 (Roubo & Furto pelo celular) — autovistoria enxuta:
+// chassi + motor + vídeo 360°. Mesma exigência da autovistoria opcional
+// acima-FIPE (ver `EtapaVistoria.tsx` quando viaSubFipe='rf_celular'
+// chama `AutovistoriaCotacao` SEM `fotosOverride`).
+const RF_OBRIGATORIAS_CARRO = ['chassi', 'motor'] as const;
+const RF_OBRIGATORIAS_MOTO = ['chassi', 'motor_direito'] as const;
+
 export interface AutovistoriaCompletudeInput {
   tipo: TipoVeiculoSubFipe;
   fotosEnviadas: string[]; // lista de `tipo` em cotacoes_vistoria_fotos
@@ -84,6 +91,10 @@ export interface AutovistoriaCompletudeResultado {
 
 export function obrigatoriasParaTipo(tipo: TipoVeiculoSubFipe): readonly string[] {
   return tipo === 'moto' ? MOTO_OBRIGATORIAS : CARRO_OBRIGATORIAS;
+}
+
+export function obrigatoriasParaTipoRF(tipo: TipoVeiculoSubFipe): readonly string[] {
+  return tipo === 'moto' ? RF_OBRIGATORIAS_MOTO : RF_OBRIGATORIAS_CARRO;
 }
 
 export function checarCompletudeAutovistoriaSubFipe(
@@ -102,3 +113,21 @@ export function checarCompletudeAutovistoriaSubFipe(
     recebidas: input.fotosEnviadas.length,
   };
 }
+
+// Via 2 (R&F pelo celular): apenas chassi + motor + vídeo 360°.
+export function checarCompletudeAutovistoriaSubFipeRF(
+  input: AutovistoriaCompletudeInput,
+): AutovistoriaCompletudeResultado {
+  const enviadas = new Set(input.fotosEnviadas);
+  const obrig = obrigatoriasParaTipoRF(input.tipo);
+  const obrigatoriasFaltantes = obrig.filter((id) => !enviadas.has(id));
+  const videoFaltante = !enviadas.has(VIDEO_TIPO) && !enviadas.has('video');
+  return {
+    ok: obrigatoriasFaltantes.length === 0 && !videoFaltante,
+    obrigatoriasFaltantes,
+    videoFaltante,
+    esperadasMin: obrig.length + 1,
+    recebidas: input.fotosEnviadas.length,
+  };
+}
+
