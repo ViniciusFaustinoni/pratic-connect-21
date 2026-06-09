@@ -508,14 +508,14 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   </Button>
                   {modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento' && (
                     <>
-                      <DropdownMenu>
+                      <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" disabled={aprovarMonitoramento.isPending}>
                             {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
                             Solicitar Vistoria <ChevronDown className="h-3 w-3 ml-1" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-64">
+                        <DropdownMenuContent align="end" className="w-64" onCloseAutoFocus={(e) => e.preventDefault()}>
                           <DropdownMenuLabel>Tipo de vistoria</DropdownMenuLabel>
                           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleSolicitarVistoria('somente_fotos'); }}>
                             <Camera className="h-4 w-4 mr-2" />
