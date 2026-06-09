@@ -184,11 +184,12 @@ export function ServicosFilters({ filters, onChange, onClear }: ServicosFiltersP
         maxLength={2}
       />
 
-      {hasActiveFilters && (
-        <Button variant="ghost" size="sm" onClick={onClear} className="gap-1">
-          <X className="h-3.5 w-3.5" /> Limpar
-        </Button>
-      )}
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={onClear} className="gap-1">
+            <X className="h-3.5 w-3.5" /> Limpar
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
