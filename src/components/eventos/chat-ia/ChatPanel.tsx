@@ -116,25 +116,53 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
     vp.scrollTo({ top: vp.scrollHeight, behavior });
   };
 
-  // Realtime subscription (INSERT + UPDATE de status)
+  // Realtime subscription (INSERT + UPDATE de status) com auto-recover
+  // — se o socket cair (CHANNEL_ERROR/TIMED_OUT) refazemos a subscrição
+  // em vez de ficar mudo até o usuário recarregar a página.
   useEffect(() => {
     if (!telefone) return;
     const telefoneLimpo = telefone.replace(/\D/g, '');
     const telefoneComDDI = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`;
 
-    const channel = supabase
-      .channel(`chat-ia-${telefoneComDDI}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'whatsapp_mensagens',
-        filter: `telefone=eq.${telefoneComDDI}`,
-      }, () => {
-        refetch();
-      })
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
-    return () => { supabase.removeChannel(channel); };
+    const connect = () => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`chat-ia-${telefoneComDDI}-${Date.now()}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'whatsapp_mensagens',
+          filter: `telefone=eq.${telefoneComDDI}`,
+        }, () => {
+          refetch();
+        })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (channel) { supabase.removeChannel(channel); channel = null; }
+            if (!cancelled) {
+              retryTimer = setTimeout(connect, 2000);
+              // Garante que mesmo sem realtime as mensagens novas apareçam.
+              refetch();
+            }
+          }
+        });
+    };
+    connect();
+
+    // Polling curto de segurança enquanto a conversa está aberta — cobre
+    // qualquer janela em que o socket esteja reconectando.
+    const pollTimer = setInterval(() => { refetch(); }, 5000);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      clearInterval(pollTimer);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [telefone, refetch]);
 
   // Detecta se o usuário está "colado no fim" para respeitar a intenção dele.
