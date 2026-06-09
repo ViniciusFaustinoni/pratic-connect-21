@@ -1,0 +1,1 @@
+ALTER TABLE public.sga_situacao_check ADD COLUMN IF NOT EXISTS bypass_autorizador text;

@@ -5,7 +5,7 @@
 //
 // Input:
 //   { contrato_id?, solicitacao_troca_id?, force?: boolean,
-//     bypass?: { motivo: string } }
+//     bypass?: { motivo: string; nome_autorizador: string } }
 // Output:
 //   { ok: true, check: SgaSituacaoCheckRow, sga: ResponseSga, liberado: boolean }
 
@@ -125,7 +125,9 @@ serve(async (req) => {
   // 2) Bypass (Diretor) — valida permissão e grava registro liberador
   if (bypass) {
     const motivo = String(bypass.motivo || '').trim();
-    if (motivo.length < 5) return json(400, { error: 'bypass_motivo_obrigatorio' });
+    const nomeAutorizador = String(bypass.nome_autorizador || '').trim();
+    if (motivo.length < 20) return json(400, { error: 'bypass_motivo_obrigatorio', detalhe: 'Justificativa deve ter ao menos 20 caracteres.' });
+    if (nomeAutorizador.length < 3) return json(400, { error: 'bypass_autorizador_obrigatorio', detalhe: 'Nome de quem autorizou deve ter ao menos 3 caracteres.' });
     if (!userId) return json(401, { error: 'nao_autenticado' });
     const { data: perm } = await admin.rpc('has_permission', {
       _user_id: userId,
@@ -147,6 +149,7 @@ serve(async (req) => {
       motivo: 'bypass_diretor',
       bypass: true,
       bypass_motivo: motivo,
+      bypass_autorizador: nomeAutorizador,
       bypass_por: userId,
       payload: null,
     }).select().single();
