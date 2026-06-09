@@ -297,10 +297,11 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
       finalizandoRef.current = false;
     }
   };
-  };
-  
-  const fotoJaEnviada = !!fotosEnviadas[fotoAtual?.id];
-  const isUploading = uploadMutation.isPending;
+
+  const fotoJaEnviada = !!fotoAtual && slotsCompletos.has(fotoAtual.id);
+  const fotoEmRemoto = !!fotoAtual && !!fotosRemotas[fotoAtual.id];
+  const fotoEmFila = !!fotoAtual && !!offline.urlsLocais[fotoAtual.id];
+  const isUploading = fotoEmFila && !fotoEmRemoto; // local presente, ainda subindo
 
   if (carregandoFotos) {
     return (
