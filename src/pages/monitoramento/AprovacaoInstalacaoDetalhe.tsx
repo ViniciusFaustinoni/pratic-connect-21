@@ -34,6 +34,8 @@ import {
   Expand,
   UserSearch,
   Undo2,
+  PackageMinus,
+
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
@@ -42,6 +44,8 @@ import {
 import { veiculoSubFipe, exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
 import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
+import { MarcarRetiradaDialog } from '@/components/monitoramento/MarcarRetiradaDialog';
+
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
 import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
@@ -478,6 +482,8 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [corrigirOpen, setCorrigirOpen] = useState(false);
   const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
   const [solicitarVistoriaOpen, setSolicitarVistoriaOpen] = useState(false);
+  const [retiradaOpen, setRetiradaOpen] = useState(false);
+
   const [devolverOpen, setDevolverOpen] = useState(false);
   
 
@@ -1335,6 +1341,21 @@ export default function AprovacaoInstalacaoDetalhe() {
                 </Button>
               )}
 
+              {!!servico.veiculo_id && (
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-[200px] border-amber-500/60 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                  onClick={() => setRetiradaOpen(true)}
+                  disabled={aprovar.isPending || reprovar.isPending}
+                  title="Converter este serviço em Retirada do Rastreador + vistoria acompanhante"
+                >
+                  <PackageMinus className="h-4 w-4 mr-2" />
+                  Solicitar Retirada
+                </Button>
+              )}
+
+
+
 
               {mostrarReprovar && (
                 <Button
@@ -1367,6 +1388,18 @@ export default function AprovacaoInstalacaoDetalhe() {
               cenarioPadrao={isAtendimentoBase ? 'base' : 'rota'}
               onSuccess={() => navigate('/monitoramento/aprovacao-associados')}
             />
+
+            {!!servico.veiculo_id && (
+              <MarcarRetiradaDialog
+                open={retiradaOpen}
+                onOpenChange={setRetiradaOpen}
+                servicoId={servico.id}
+                veiculoId={servico.veiculo_id}
+                veiculoPlaca={veiculo?.placa || undefined}
+                onSuccess={() => navigate('/monitoramento/aprovacao-associados')}
+              />
+            )}
+
           </>
         );
       })()}

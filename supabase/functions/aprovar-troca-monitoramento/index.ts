@@ -8,8 +8,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-type Acao = 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao';
+type Acao = 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao' | 'solicitar_retirada';
 type TipoVistoriaTroca = 'somente_fotos' | 'fotos_com_rastreador';
+type TipoVistoriaRetirada = 'retirada' | 'enxuta' | 'completa';
+
+interface EnderecoBody {
+  logradouro: string;
+  numero?: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
 
 interface Body {
   solicitacao_id: string;
@@ -23,18 +35,19 @@ interface Body {
     data_agendada: string;        // YYYY-MM-DD
     periodo: 'manha' | 'tarde';
     motivo?: string;
-    endereco: {
-      logradouro: string;
-      numero?: string | null;
-      bairro: string;
-      cidade: string;
-      uf: string;
-      cep: string;
-      latitude?: number | null;
-      longitude?: number | null;
-    };
+    endereco: EnderecoBody;
+  };
+  // solicitar_retirada — cria 2 servicos (retirada_rastreador + vistoria do tipo escolhido)
+  retirada?: {
+    rastreador_id: string;
+    tipo_vistoria: TipoVistoriaRetirada;
+    data_agendada: string;        // YYYY-MM-DD
+    periodo: 'manha' | 'tarde';
+    justificativa: string;        // >=10 chars
+    endereco: EnderecoBody;
   };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -42,7 +55,7 @@ Deno.serve(async (req) => {
   try {
     const body = (await req.json()) as Body;
     const { solicitacao_id, acao, observacao } = body;
-    if (!solicitacao_id || !['aprovar', 'solicitar_vistoria', 'agendar_manutencao'].includes(acao)) {
+    if (!solicitacao_id || !['aprovar', 'solicitar_vistoria', 'agendar_manutencao', 'solicitar_retirada'].includes(acao)) {
       return new Response(JSON.stringify({ error: 'parâmetros inválidos' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -58,6 +71,18 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    if (acao === 'solicitar_retirada') {
+      const r = body.retirada;
+      if (!r?.rastreador_id || !r?.data_agendada || !r?.periodo
+          || !['retirada', 'enxuta', 'completa'].includes(String(r?.tipo_vistoria))
+          || !r?.justificativa || r.justificativa.trim().length < 10
+          || !r?.endereco?.logradouro || !r?.endereco?.cep) {
+        return new Response(JSON.stringify({ error: 'dados de retirada incompletos' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -93,6 +118,10 @@ Deno.serve(async (req) => {
     if (acao === 'agendar_manutencao' && solicitacao.status !== 'aguardando_monitoramento') {
       throw new Error('Manutenção só pode ser agendada com a solicitação em aguardando monitoramento');
     }
+    if (acao === 'solicitar_retirada' && solicitacao.status !== 'aguardando_monitoramento') {
+      throw new Error('Retirada só pode ser solicitada com a solicitação em aguardando monitoramento');
+    }
+
     if (acao === 'aprovar' && !['aguardando_monitoramento', 'aguardando_vistoria', 'aguardando_manutencao'].includes(solicitacao.status as string)) {
       throw new Error(`Solicitação no status "${solicitacao.status}" não pode ser aprovada`);
     }
@@ -297,7 +326,109 @@ Deno.serve(async (req) => {
         new Date(m.data_agendada).toLocaleDateString('pt-BR'),
         m.periodo === 'manha' ? 'manhã' : 'tarde',
       ]);
+    } else if (acao === 'solicitar_retirada') {
+      // Materializa 2 serviços paralelos: retirada_rastreador + vistoria
+      // acompanhante (tipo escolhido pelo Monitoramento). Solicitação fica
+      // em aguardando_vistoria — Aprovar volta quando ambos terminarem.
+      const r = body.retirada!;
+      const { data: rast, error: rErr } = await admin
+        .from('rastreadores')
+        .select('id, codigo, veiculo_id')
+        .eq('id', r.rastreador_id)
+        .maybeSingle();
+      if (rErr || !rast) throw new Error('Rastreador não encontrado');
+
+      const veiculoIdAlvo = rast.veiculo_id || solicitacao.veiculo_id;
+      const baseServico = {
+        status: 'pendente' as const,
+        data_agendada: r.data_agendada,
+        periodo: r.periodo,
+        veiculo_id: veiculoIdAlvo,
+        associado_id: solicitacao.associado_antigo_id,
+        local_vistoria: 'cliente',
+        permite_encaixe: true,
+        origem: 'troca_titularidade',
+        logradouro: r.endereco.logradouro,
+        numero: r.endereco.numero || null,
+        bairro: r.endereco.bairro,
+        cidade: r.endereco.cidade,
+        uf: r.endereco.uf,
+        cep: r.endereco.cep,
+        latitude: r.endereco.latitude || null,
+        longitude: r.endereco.longitude || null,
+      };
+
+      // 1) Serviço de retirada do rastreador
+      const { data: servRetirada, error: srErr } = await admin
+        .from('servicos')
+        .insert({
+          ...baseServico,
+          tipo: 'retirada_rastreador',
+          rastreador_id: r.rastreador_id,
+          observacoes: `[monitoramento_retirada] ${r.justificativa}`,
+        })
+        .select('id')
+        .single();
+      if (srErr) throw srErr;
+
+      // 2) Serviço de vistoria acompanhante (tipo escolhido)
+      const vistoriaTipo = r.tipo_vistoria === 'retirada' ? 'vistoria_retirada' : 'vistoria_entrada';
+      const modalidade =
+        r.tipo_vistoria === 'enxuta' ? 'enxuta_pos_retirada'
+        : r.tipo_vistoria === 'completa' ? 'completa_pos_retirada'
+        : null;
+      const { data: servVistoria, error: svErr } = await admin
+        .from('servicos')
+        .insert({
+          ...baseServico,
+          tipo: vistoriaTipo,
+          modalidade,
+          observacoes: `[monitoramento_retirada] Vistoria acompanhante (${r.tipo_vistoria}). ${r.justificativa}`,
+        })
+        .select('id')
+        .single();
+      if (svErr) {
+        // rollback do irmão
+        await admin.from('servicos').delete().eq('id', servRetirada.id);
+        throw svErr;
+      }
+
+      // Log canônico em análises de relacionamento (não-bloqueante)
+      try {
+        await admin.from('analises_relacionamento').insert({
+          tipo: 'monitoramento_solicitou_retirada',
+          status: 'pendente',
+          associado_id: solicitacao.associado_antigo_id,
+          veiculo_id: veiculoIdAlvo,
+          origem_tabela: 'solicitacoes_troca_titularidade',
+          origem_id: solicitacao_id,
+          justificativa: r.justificativa,
+          metadata: {
+            tipo_vistoria_escolhida: r.tipo_vistoria,
+            servico_retirada_id: servRetirada.id,
+            servico_vistoria_id: servVistoria.id,
+            rastreador_id: r.rastreador_id,
+            actor_profile_id: profileId,
+          },
+        });
+      } catch (logErr) {
+        console.warn('[aprovar-troca-monitoramento] analises_relacionamento falhou (não bloqueante):', logErr);
+      }
+
+
+      const { error: updErr } = await admin
+        .from('solicitacoes_troca_titularidade')
+        .update({
+          ...baseUpdate,
+          status: 'aguardando_vistoria',
+          tipo_vistoria_troca: 'retirada',
+          servico_manutencao_id: servRetirada.id,
+          servico_vistoria_id: servVistoria.id,
+        })
+        .eq('id', solicitacao_id);
+      if (updErr) throw updErr;
     }
+
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

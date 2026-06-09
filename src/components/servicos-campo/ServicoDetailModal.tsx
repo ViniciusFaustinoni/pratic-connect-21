@@ -19,14 +19,17 @@ import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
-  MapPinned, MoreHorizontal, Hash, Wrench,
+  MapPinned, MoreHorizontal, Hash, Wrench, PackageMinus,
 
 } from 'lucide-react';
+
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { RealocarServicoSimplesDialog } from './RealocarServicoSimplesDialog';
 import { CancelarServicoDialog } from './CancelarServicoDialog';
 import { DevolverAoCadastroDialog } from './DevolverAoCadastroDialog';
 import { MarcarManutencaoDialog } from '@/components/monitoramento/MarcarManutencaoDialog';
+import { MarcarRetiradaDialog } from '@/components/monitoramento/MarcarRetiradaDialog';
+
 import { LiberarServicoButton } from './LiberarServicoButton';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -70,6 +73,8 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
   const [cancelarOpen, setCancelarOpen] = useState(false);
   const [devolverOpen, setDevolverOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
+  const [retiradaOpen, setRetiradaOpen] = useState(false);
+
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
   const podeAcoesMonitor = !!(isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento);
 
@@ -259,6 +264,20 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                         Tratar como Manutenção
                       </Button>
                     )}
+
+                    {podeAcoesMonitor && isInstalacao && statusDevolvivel && servico.veiculo_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9 border-amber-500/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                        onClick={() => setRetiradaOpen(true)}
+                        title="Opcional: converter este serviço em Retirada do Rastreador + vistoria acompanhante"
+                      >
+                        <PackageMinus className="h-4 w-4" />
+                        Tratar como Retirada
+                      </Button>
+                    )}
+
 
                   </>
                 );
@@ -565,6 +584,19 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
           onSuccess={() => onOpenChange(false)}
         />
       )}
+
+      {isInstalacao && servico.veiculo_id && (
+        <MarcarRetiradaDialog
+          open={retiradaOpen}
+          onOpenChange={setRetiradaOpen}
+          servicoId={servico.id}
+          veiculoId={servico.veiculo_id}
+          veiculoPlaca={servico.veiculo?.placa || undefined}
+          onSuccess={() => onOpenChange(false)}
+        />
+      )}
+
+
 
     </>
   );

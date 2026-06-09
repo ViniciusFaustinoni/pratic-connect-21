@@ -23,8 +23,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
+import { SolicitarRetiradaTrocaDialog } from './SolicitarRetiradaTrocaDialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Wrench, Camera, ChevronDown } from 'lucide-react';
+import { Wrench, Camera, ChevronDown, PackageMinus } from 'lucide-react';
+
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
 import { RefreshCw } from 'lucide-react';
 import { useSyncTermoCancelamento } from '@/hooks/useSyncTermoCancelamento';
@@ -69,6 +71,8 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [criandoCotacao, setCriandoCotacao] = useState(false);
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
+  const [retiradaOpen, setRetiradaOpen] = useState(false);
+
   const [sgaLiberado, setSgaLiberado] = useState(false);
   const [activeTab, setActiveTab] = useState('dados');
 
@@ -240,6 +244,12 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     if (!(await garantirImeiValidado())) return;
     setManutencaoOpen(true);
   };
+
+  const handleAbrirRetirada = async () => {
+    if (!(await garantirImeiValidado())) return;
+    setRetiradaOpen(true);
+  };
+
 
   const handleReprovar = async () => {
     if (!solicitacao || !motivoReprovar.trim() || modo === 'readonly') return;
@@ -521,10 +531,20 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      <Button
+                        variant="outline"
+                        onClick={handleAbrirRetirada}
+                        disabled={aprovarMonitoramento.isPending || validandoImei}
+                        className="border-amber-500/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                      >
+                        <PackageMinus className="h-4 w-4 mr-2" />
+                        Solicitar Retirada
+                      </Button>
                       <Button variant="outline" onClick={handleAbrirManutencao} disabled={aprovarMonitoramento.isPending || validandoImei}>
                         <Wrench className="h-4 w-4 mr-2" />
                         Agendar manutenção
                       </Button>
+
                     </>
                   )}
                   {(() => {
@@ -657,6 +677,21 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           }}
         />
       )}
+
+      {solicitacao && (
+        <SolicitarRetiradaTrocaDialog
+          open={retiradaOpen}
+          onOpenChange={setRetiradaOpen}
+          solicitacaoId={solicitacao.id}
+          veiculoId={solicitacao.veiculo_id}
+          onAgendado={() => {
+            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+            onOpenChange(false);
+          }}
+        />
+      )}
     </Dialog>
+
   );
 }
