@@ -76,7 +76,7 @@ export function gerarClientId(): string {
  */
 export async function enfileirarMidia(params: {
   vistoria_id: string;
-  origem: 'regulador' | 'instalador' | 'publico';
+  origem: 'regulador' | 'instalador' | 'publico' | 'cotacao_publica';
   token?: string;
   tipo: MidiaTipo;
   slot: string | number;
