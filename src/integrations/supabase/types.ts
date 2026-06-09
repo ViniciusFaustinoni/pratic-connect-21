@@ -36383,6 +36383,7 @@ export type Database = {
         | "advogado"
         | "sindicante"
         | "analista_monitoramento"
+        | "relacionamento"
       aviso_sga_decisao: "ignorado_prosseguiu" | "cancelou" | "visualizou"
       aviso_sga_tipo:
         | "placa_duplicada_outro_vendedor"
@@ -36850,6 +36851,7 @@ export const Constants = {
         "advogado",
         "sindicante",
         "analista_monitoramento",
+        "relacionamento",
       ],
       aviso_sga_decisao: ["ignorado_prosseguiu", "cancelou", "visualizou"],
       aviso_sga_tipo: [
