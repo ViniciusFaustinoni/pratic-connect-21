@@ -172,7 +172,9 @@ function removeDiacritics(s: string): string {
 }
 
 function tokenizeModelo(s: string): string[] {
-  return s.split(/[\s/]+/).filter(Boolean);
+  // Hífen tratado como separador para casar "T-CROSS" (cadastro) com "T CROSS" (DETRAN),
+  // "C-CROSS" com "C Cross", etc. Sem isso, modelos hifenizados nunca batem.
+  return s.split(/[\s/\-]+/).filter(Boolean);
 }
 
 /**
