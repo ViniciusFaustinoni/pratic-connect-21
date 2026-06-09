@@ -41,8 +41,9 @@ export default function VistoriasInstalacoesMon() {
       <AlertaImprevistosPendentes />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="overflow-x-auto -mx-4 px-4">
-          <TabsList className="w-auto inline-flex">
+        <div className="overflow-x-auto -mx-3 sm:-mx-4 px-3 sm:px-4 scrollbar-thin">
+          <TabsList className="w-auto inline-flex h-9">
+
             {manualAtiva && (
               <TabsTrigger value="atribuicao-manual" className="gap-2 shrink-0">
                 <Hand className="h-4 w-4" />
