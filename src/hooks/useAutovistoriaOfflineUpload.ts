@@ -420,7 +420,7 @@ export function useAutovistoriaOfflineUpload(
       trabalhando.current = false;
       setSincronizando(false);
     }
-  }, [cotacaoId, rodarOcrPosUpload]);
+  }, [cotacaoId, rodarOcrPosUpload, queryClient]);
 
   // Roda quando ficar online, a cada 10s, e quando aparecem novas pendências.
   useEffect(() => {
