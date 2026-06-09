@@ -585,6 +585,19 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
         />
       )}
 
+      {isInstalacao && servico.veiculo_id && (
+        <MarcarRetiradaDialog
+          open={retiradaOpen}
+          onOpenChange={setRetiradaOpen}
+          servicoId={servico.id}
+          veiculoId={servico.veiculo_id}
+          veiculoPlaca={servico.veiculo?.placa || undefined}
+          onSuccess={() => onOpenChange(false)}
+        />
+      )}
+
+
+
     </>
   );
 }
