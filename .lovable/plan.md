@@ -1,100 +1,90 @@
+## Diagnóstico (com base no código, não em suposição)
 
-## Diretriz do usuário
+KXL5D31 / COT-20260609-124904496-110:
+- `tipo_entrada='inclusao'`, `cenario_adesao='isenta_rota'`, `status_contratacao='contrato_assinado'`
+- `dados_extras.via_vistoria_sub_fipe = NULL` (cliente nunca chegou no seletor)
+- 0 fotos, `vistoria_concluida_em IS NULL`
+- Veículo é sub-FIPE → `fn_veiculo_precisa_rastreador=false`
 
-Nenhuma das duas trocas pode ser auto-efetivada agora. Ambas precisam seguir o **caminho canônico real**: aparecer em **Serviços de Campo / Atribuição Manual do Monitoramento**, onde o coordenador atribui a um técnico ou realiza a vistoria manualmente. Só depois disso o Monitoramento aprova de novo, e aí sim o `efetivar-troca-titularidade` roda.
+Sub-FIPE no `EtapaVistoria.tsx` já tem 3 vias canônicas:
+- **Via 1** `completa_celular` — 30 fotos + vídeo 360° (carro) / 10 + vídeo (moto)
+- **Via 2** `rf_celular` — fotos R&F + vídeo 360°, depois agenda presencial
+- **Via 3** `sem_fotos` — pula fotos pelo celular, agenda presencial direto
 
----
+A via escolhida persiste em `cotacoes.dados_extras.via_vistoria_sub_fipe`.
 
-## Parte 1 — `solicitar_vistoria` passa a materializar serviço (correção estrutural)
+**Causa raiz do erro:** `confirmar-adesao-zerada` (linhas 104–163) ignora `via_vistoria_sub_fipe`. O único escape do gate é `troca_titularidade`. Logo, qualquer cliente sub-FIPE que escolheu Via 3 (ou ainda não escolheu via, como KXL5D31) bate em `autovistoria_pendente` com 0 fotos. Não é processo novo — é o gate desalinhado das 3 vias que já existem.
 
-Hoje a ação só seta `status='aguardando_vistoria'` + `tipo_vistoria_troca` e dispara WhatsApp. Não cria nada executável → vistoria nunca chega ao Monitoramento. **Esta é a raiz dos casos.**
-
-Novo comportamento na edge `aprovar-troca-monitoramento` (branch `solicitar_vistoria`):
-
-- Ampliar body para receber `vistoria: { data_agendada, periodo, endereco }` (mesmo shape de `manutencao`/`retirada`). Validar antes de qualquer escrita.
-- Resolver `veiculo_id` (da solicitação) e `associado_id` = `novo_associado_id` (vistoria é executada com base no novo titular).
-- Criar 1 registro em `servicos` com:
-  - `tipo = 'vistoria_entrada'` (canônico — equivale a instalação na primeira visita; segue memória `vistoria_entrada ≡ instalacao`).
-  - `modalidade = 'somente_fotos_troca'` quando `tipo_vistoria_troca='somente_fotos'`, ou `'fotos_instalacao_troca'` quando `'fotos_com_rastreador'`.
-  - `instalar_rastreador = (tipo === 'fotos_com_rastreador')`.
-  - `status='pendente'`, `permite_encaixe=true`, `local_vistoria='cliente'`, `origem='troca_titularidade'`.
-  - Endereço completo do body.
-  - `data_agendada` / `periodo` do body.
-- Gravar `servico_vistoria_id` em `solicitacoes_troca_titularidade` + manter `status='aguardando_vistoria'`.
-- Notificação Meta atual permanece.
-
-Resultado: o serviço aparece imediatamente em **Atribuição Manual** (a exceção canônica `origem='troca_titularidade'` já está prevista nos 5 hooks operacionais — `mem://logic/operations/gate-cadastro-monitoramento-universal`).
-
-### UI
-
-Trocar o atual `Button` simples "Solicitar vistoria" do `ModalDetalhesTroca.tsx` por um Dialog dedicado (`DialogSolicitarVistoriaTroca.tsx`) que coleta:
-- Tipo (somente fotos × fotos + instalação de rastreador)
-- Data (com `useDatasAgendamentoUF` — janela por UF, mesma do link público)
-- Período (manhã/tarde)
-- Endereço (autocomplete CEP / mesmos campos usados em manutenção e retirada)
-
-Toast de erro usa o helper `toastErroEdge` para mostrar o `code` quando voltar 400/409.
-
-## Parte 2 — `aprovar` propaga erro real do efetivar
-
-Substituir o fire-and-forget atual (linhas 218–244):
-
-1. Chamar `efetivar-troca-titularidade` e ler `success`, `error`, `etapa_falha`.
-2. Se `!success`:
-   - **Reverter** `aprovado_monitoramento_em`/`aprovado_monitoramento_por` (ficaria preenchido pelo `baseUpdate` e esconderia o item da fila — comportamento errado).
-   - Setar `sga_status='falha'` + `observacao_monitoramento` anexa com `etapa_falha`.
-   - Inserir em `sga_sync_queue` `{ tipo:'troca_titularidade', placa, payload:{ solicitacao_id, cenario_override:'B' }, proximo_retry_em: now()+1min }`.
-   - Retornar **502** com `Retry-After: 60` e body `{ success:false, code:'falha_efetivar_troca', etapa_falha, error }`.
-3. Se `success`: caminho atual permanece.
-
-Idem para a chamada `ativar-associado` que hoje é fire-and-forget (linhas 195–213): se voltar `!success`, propagar 502 com `code:'falha_ativar_novo_titular'` antes de chamar efetivar (e nem invocar efetivar, evitando estado parcial).
-
-Front (`ModalDetalhesTroca.tsx`) já tem `toastErroEdge` para a action "Aprovar"; bastará repassar.
-
-## Parte 3 — Destravar LQY5543 e LUJ0G95 manualmente (sem efetivar)
-
-Ambos precisam **voltar para o estado canônico de "vistoria pendente"** com `servicos` materializado para o Monitoramento ver.
-
-### LQY5543 (solicitação `50e43757`)
-
-Estado atual: `status='aguardando_vistoria'`, `tipo_vistoria_troca='fotos_com_rastreador'`, `instalar_rastreador=true`, `servico_vistoria_id=NULL`, `aprovado_monitoramento_em=09/06 15:25`.
-
-Ações (via `supabase--insert`):
-1. INSERT em `servicos`:
-   - `tipo='vistoria_entrada'`, `modalidade='fotos_instalacao_troca'`, `instalar_rastreador=true`.
-   - `associado_id = novo_associado_id`, `veiculo_id` = veículo da solicitação.
-   - `status='pendente'`, `permite_encaixe=true`, `local_vistoria='cliente'`, `origem='troca_titularidade'`.
-   - Endereço herdado do contrato novo (`contratos.cotacao_id = solicitacao.cotacao_id`, novo titular).
-   - `data_agendada` = preencher com hoje + 1 dia útil (Monitoramento reagenda se precisar) **ou** deixar NULL se a coluna permitir — confirmar antes de rodar; preferência: NULL + flag de "aguardando atribuição".
-   - `observacoes = '[destravamento_manual] Serviço materializado retroativamente — solicitar_vistoria não criou serviço antes do hotfix.'`.
-2. UPDATE `solicitacoes_troca_titularidade` set `servico_vistoria_id = <id>`.
-3. Manter `status='aguardando_vistoria'`. Cobertura suspensa permanece — religa só quando efetivar rodar pós-vistoria/aprovação.
-
-### LUJ0G95 (solicitação `aaf27c03`)
-
-Estado atual: manutenção `vistoria_manutencao` já concluída (09/06), `status='aguardando_monitoramento'`, `aprovado_monitoramento_em=09/06 13:03` preenchido mesmo após `efetivar` ter falhado silenciosamente. Novo contrato em `assinado`, não ativado.
-
-Ações:
-1. UPDATE `solicitacoes_troca_titularidade` set `aprovado_monitoramento_em=NULL`, `aprovado_monitoramento_por=NULL`, `sga_status='pendente'`, `observacao_monitoramento` anexa `'[destravamento_manual] Aprovação anterior falhou no efetivar; reaberta para Monitoramento decidir novamente.'`.
-2. Sem novo `servico` — manutenção já foi feita. A solicitação volta para a fila pendente do Monitoramento (`status` continua em `aguardando_monitoramento`), com o histórico da manutenção visível.
-3. Não tocar no contrato novo nem em `ativar-associado` — Monitoramento clica "Aprovar" pela tela e o fluxo corrigido (Parte 2) cuida do resto, propagando erro se reaparecer.
+Ordem canônica sub-FIPE permanece como é hoje (Plano → Documentos → Contrato → Pagamento → Vistoria). O ajuste é só no gate + numa proteção de UX pra impedir clicar "Confirmar adesão isenta" sem antes ter aberto a etapa 5 e escolhido a via.
 
 ---
 
-## Arquivos a alterar (Partes 1 e 2)
+## Parte 1 — Destrave de KXL5D31 (1ª rodada)
 
-- `supabase/functions/aprovar-troca-monitoramento/index.ts`
-- `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
-- Novo: `src/components/troca-titularidade/DialogSolicitarVistoriaTroca.tsx`
+Como o cliente ainda não escolheu via, o destrave canônico é:
+1. Confirmar com o associado **qual via ele quer** (presumivelmente Via 3 "sem fotos" — pela situação relatada).
+2. Gravar `dados_extras.via_vistoria_sub_fipe='sem_fotos'` na cotação (única manipulação manual — apenas registra a escolha que ele faria pela UI).
+3. Reenviar o link público; cliente reabre etapa 5 (Vistoria) → escolhe a via já marcada → vai para `sub_fipe_presencial_chooser` (agendamento presencial). Esse passo já cria/atualiza serviço de vistoria presencial pelo caminho normal do componente.
+4. Após o cliente concluir o agendamento, o gate de `confirmar-adesao-zerada` precisa estar JÁ corrigido (Parte 2) pra reconhecer Via 3 e liberar a adesão isenta — caso contrário ele bate no mesmo erro. **Por isso o destrave real só completa após a Parte 2 mergeada.**
 
-Sem migration de schema. Os destravamentos (Parte 3) entram via `supabase--insert` em uma única chamada.
+Se o associado preferir Via 1 ou 2, basta orientá-lo a tirar as fotos no link público — sem ação no banco.
 
-## Validação
+Nenhum atalho de status ou criação de serviço fantasma: o cliente continua percorrendo o caminho canônico do link público intocável.
 
-1. LQY5543: após destravamento, conferir que serviço aparece em **Monitoramento › Serviços › Atribuição Manual** com badge "Troca de titularidade".
-2. LUJ0G95: aparecer de volta em **Monitoramento › Aprovações › Troca de Titularidade › Pendentes**. Clicar Aprovar e verificar comportamento: success → efetivada; falha → 502 visível no toast + entry em `sga_sync_queue` (visível em `/configuracoes/integracoes/sga-hinova?placa=LUJ0G95`).
-3. Smoke E2E em troca nova: solicitar vistoria pelo Dialog → serviço criado → técnico conclui → aprovar passa.
+---
 
-## Pós-implementação
+## Parte 2 — Correção raiz: gate respeitar as 3 vias sub-FIPE
 
-Registrar memória nova `mem://logic/operations/troca-solicitar-vistoria-materializa-servico` reforçando que `solicitar_vistoria` cria `servicos.tipo='vistoria_entrada'` com `origem='troca_titularidade'`, e atualizar `mem://logic/operations/troca-titularidade-etapas-obrigatorias` com o code estruturado novo (`falha_efetivar_troca` / `falha_ativar_novo_titular`).
+Mexer **só** em `supabase/functions/confirmar-adesao-zerada/index.ts`. Manter a ordem do stepper, manter as 3 vias existentes, manter o componente `EtapaVistoria`.
+
+### Regras do gate por via (todas dentro do `if (isSubFipe)` existente)
+
+Ler `via = (cotacaoMeta as any)?.dados_extras?.via_vistoria_sub_fipe` logo no início do bloco sub-FIPE e decidir:
+
+- `via === 'completa_celular'` (Via 1) — mantém o comportamento atual: chama `checarCompletudeAutovistoriaSubFipe(...)`. Bloqueia com 409 `autovistoria_pendente` se incompleta. (sem mudança funcional)
+- `via === 'rf_celular'` (Via 2) — exige só as fotos obrigatórias do conjunto R&F (`obrigatoriasParaTipoRF` — adicionar helper em `_shared/fotosVistoriaSubFipe.ts`) + vídeo 360°. Se completo, libera. Senão, 409 `autovistoria_rf_pendente`.
+- `via === 'sem_fotos'` (Via 3) — libera o gate sem checar fotos. A vistoria presencial é responsabilidade do back-office (já materializada pelo fluxo do `sub_fipe_presencial_chooser`).
+- `via == null` (cliente clicou em confirmar isenta sem escolher via) — 409 novo `via_sub_fipe_nao_escolhida` com mensagem "Escolha como será sua vistoria na etapa 5 antes de confirmar a adesão isenta."
+
+Escape `troca_titularidade` continua acima desse bloco, intacto.
+
+### Defesa em profundidade na UI (mínima, dentro de presentation/frontend)
+
+No `EtapaPagamentoCotacao.tsx`, antes de chamar `confirmarAdesaoIsenta('adesao_zerada', …)`, checar `cotacao.dados_extras?.via_vistoria_sub_fipe`. Se sub-FIPE e via não escolhida, em vez de chamar a edge, mostrar toast "Volte à etapa Vistoria para escolher como sua vistoria será feita." e (idealmente) navegar o `etapaAtual` pra 4 (índice da vistoria). Sem reordenar steps, sem mudar fluxo, só evita o 409 ruim e direciona o usuário.
+
+### Memória canônica
+
+Atualizar `mem://logic/operations/sub-fipe-gates-canonicos` para registrar:
+- Gate de `confirmar-adesao-zerada` agora reconhece as 3 vias sub-FIPE canonicamente (Via 1 completa, Via 2 R&F, Via 3 sem fotos liberada para back-office).
+- `via_vistoria_sub_fipe='sem_fotos'` é caminho oficial; ausência de via é erro do cliente, não do back-end.
+- Inclusão sub-FIPE segue exatamente o mesmo ciclo de adesão sub-FIPE — não há gate específico de inclusão.
+
+---
+
+## Detalhes técnicos
+
+### Arquivos tocados
+- `supabase/functions/confirmar-adesao-zerada/index.ts` — branch por via no bloco `isSubFipe`.
+- `supabase/functions/_shared/fotosVistoriaSubFipe.ts` — novo helper `obrigatoriasParaTipoRF` e variante `checarCompletudeAutovistoriaSubFipeRF`.
+- `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx` — guard local + redirect pra etapa 5 quando sub-FIPE sem via escolhida.
+- Memória `mem://logic/operations/sub-fipe-gates-canonicos`.
+
+### Sem mudanças em
+- `EtapaVistoria.tsx`, `CotacaoContratacao.tsx` (ordem do stepper preservada).
+- Triggers DB, `aprovar-proposta`, `finalizar-autovistoria-cotacao`.
+- Fluxo acima-FIPE (autovistoria opcional enxuta) — branch isolado.
+
+### Validação
+1. Reenviar KXL5D31: associado escolhe Via 3 → agenda presencial → confirma adesão isenta → passa direto, contrato segue pra Cadastro/Monitoramento via caminho canônico de `vistoria-sem-rastreador-flow`.
+2. Cotação sub-FIPE nova Via 1 incompleta → continua bloqueada (regressão zero).
+3. Cotação sub-FIPE Via 2 com fotos R&F + vídeo → libera.
+4. Cotação sub-FIPE sem via escolhida → 409 didático + redirect UI.
+5. Cotação acima-FIPE isenta → comportamento idêntico ao atual.
+
+### Manual data fix (proposto, depende de aprovação)
+```
+UPDATE cotacoes
+SET dados_extras = jsonb_set(coalesce(dados_extras,'{}'::jsonb), '{via_vistoria_sub_fipe}', '"sem_fotos"')
+WHERE id = 'fb3a2b12-4b98-466e-b8c4-4ff4d2c063d4';
+```
+Só rodar **após** o cliente confirmar por WhatsApp que quer Via 3. Se preferir Via 1 ou 2, não rodar — basta orientá-lo a tirar as fotos.
