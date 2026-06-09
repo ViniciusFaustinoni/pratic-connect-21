@@ -1,55 +1,57 @@
-## Contexto
+## Causa raiz
 
-Ontem, no fluxo de **Troca de Titularidade fora da janela**, o Cadastro ganhou um modal de responsabilidade com 3 campos obrigatórios:
-1. **Nome de quem autorizou** (≥3 caracteres)
-2. **Justificativa** (≥20 caracteres)
-3. **Checkbox de responsabilidade** ("Confirmo que tenho responsabilidade por esta decisão e que ela está autorizada por X")
+A `DialogContent` em `src/components/associados/TrocaTitularidadeDialog.tsx` (linha 289) usa:
 
-Esse modal vive em `src/pages/cadastro/PropostaAnalise.tsx` (linhas 1098–1198) e grava em `logs_auditoria` + `aprovacoes_bypass_troca`.
-
-Hoje, em **Cadastro › Propostas Pendentes**, quando o associado tem boletos em aberto / situação financeira INADIMPLENTE / verificação inconclusiva no SGA, o bypass usa um modal **mais frouxo**: só um `Textarea` de motivo ≥5 caracteres em `SituacaoFinanceiraGate.tsx` (linhas 106–127). Não exige nome do autorizador nem termo de responsabilidade.
-
-Queremos **alinhar os dois modais**: o bypass financeiro passa a ter o mesmo nível de rigor do bypass de troca.
-
-## Mudanças
-
-### 1. `src/components/cadastro/SituacaoFinanceiraGate.tsx`
-Substituir o modal atual (Textarea simples) por uma versão adaptada do modal de responsabilidade:
-- **Título** dinâmico permanece (inadimplente / inconclusivo / erro_consulta_sga).
-- **Descrição** dinâmica adaptada para o contexto financeiro (mantém o aviso de auditoria SGA).
-- **Campos**:
-  - Input "Nome de quem autorizou *" (≥3 chars, com contador).
-  - Textarea "Justificativa *" (≥20 chars, com contador) — substitui o motivo atual.
-  - Checkbox "Confirmo que tenho responsabilidade por esta decisão e que ela está autorizada por **{nome}**" em bloco âmbar.
-- **Botão Confirmar** só habilita quando os 3 critérios passam (mesma regra de `bypassFormValido()` da Troca).
-- **Estados locais** novos: `bypassNomeAutorizador`, `bypassJustificativa`, `bypassResponsabilidade` — substituem `motivo`.
-
-### 2. `src/hooks/useSituacaoFinanceiraCadastro.ts`
-Estender a assinatura de `bypass.mutateAsync` para aceitar objeto:
+```tsx
+<DialogContent className="max-w-md relative">
 ```
-{ motivo: string; nome_autorizador: string }
+
+O `cn()` aplica `tailwind-merge`, que **deduplica utilitários conflitantes da mesma categoria** (no caso, `position`). A base do `DialogContent` (`src/components/ui/dialog.tsx`) começa com `fixed left-[50%] top-[50%] … translate-x-[-50%] translate-y-[-50%] …`. Quando o consumidor passa `relative`, o merge mantém **só `relative`** e descarta `fixed`.
+
+Resultado:
+
+- `position: relative` faz com que `left:50%` e `top:50%` virem coordenadas **dentro do containing block ancestral** (a barra `flex items-center gap-2` no header de `Cotacoes.tsx`, onde `NovaEntradaDialog` está renderizado).
+- A `DialogContent` aparece grudada na borda direita da tela (próximo ao botão "+ Nova Cotação"), com largura mal calculada (header + alert ficam fora do viewport, só os campos de formulário aparecem), e sem nenhum overlay escurecendo a tela.
+- Bug não é a colisão entre os dois Dialogs que tentei resolver com `setTimeout(220)` na resposta anterior — o `delay` não conserta porque o problema é puramente CSS na própria `DialogContent` da Troca.
+
+O `relative` foi colocado lá originalmente para servir de âncora ao overlay `<div className="absolute inset-0 z-20 …">` do progresso de "Criando solicitação de troca…". Mas `position: fixed` **também é** "positioned", então o `absolute` filho já se ancora corretamente na própria `DialogContent` sem precisar do `relative`.
+
+## Plano
+
+### 1. Corrigir `src/components/associados/TrocaTitularidadeDialog.tsx`
+Remover `relative` da className da `DialogContent`:
+
+```tsx
+<DialogContent className="max-w-md">
 ```
-em vez de apenas `string`. Envia ambos no body para a edge.
 
-### 3. `supabase/functions/verificar-situacao-financeira-cadastro/index.ts`
-- Aceitar `bypass: { motivo, nome_autorizador }`.
-- Validar `nome_autorizador.length >= 3` e `motivo.length >= 20` (alinhado ao bypass de Troca; sobe de 5 → 20).
-- Persistir `nome_autorizador` em `sga_situacao_check` (coluna nova `bypass_autorizador` text nullable) **ou**, se preferir não migrar, dentro de `detalhes` jsonb. **Recomendação:** coluna dedicada para facilitar relatórios/auditoria (mini migração).
-- `cotacao_avisos_sga.detalhes` ganha `nome_autorizador` no espelho gravado pelo hook.
+O overlay interno `<div className="absolute inset-0 …">` continua se ancorando corretamente, agora à `DialogContent` em `position: fixed` (que já é containing block para `absolute`).
 
-### 4. `logs_auditoria`
-Acrescentar entry no `onSuccess` do bypass com descrição `[CADASTRO_BYPASS_FINANCEIRO] {contrato} - Autorizado por {nome}: {motivo}` (mesmo padrão `[TROCA_BYPASS_JANELA]`). Hoje o gate financeiro só grava em `sga_situacao_check` + `cotacao_avisos_sga`; o log unificado fica mais auditável.
+### 2. Reverter o paliativo do `OutrasEntradasMenu.tsx`
+A resposta anterior introduziu `onOpenChange(false); setTimeout(() => setShowTrocaTitularidade(true), 220)` nos dois pontos de abertura (busca de associado e redirecionamento de substituição). Com a causa real corrigida, o `setTimeout` vira ruído: atrasa a abertura sem necessidade e reintroduz a janela em que o `useEffect` de reset poderia zerar `selectedAssociadoId` se a guarda `!showTrocaTitularidade` falhar.
 
-## Fora de escopo
+Voltar à ordem original do código: abrir `setShowTrocaTitularidade(true)` **antes** de fechar o chooser, conforme o comentário canônico:
+```tsx
+setShowTrocaTitularidade(true);
+setTimeout(() => onOpenChange(false), 0);
+```
 
-- A regra de **quem** pode acionar o bypass (`isDiretor || isCoordenadorMonitoramento` + permissão `cadastro.bypass_inadimplencia_sga`) **permanece igual**.
-- O fluxo de Troca de Titularidade **não muda**.
-- Bypass de FIPE, bypass de Inconclusivo e bypass de Erro SGA usam o **mesmo modal** novo (já era o caso) — só ganham os campos extras.
+### 3. Auditar outros `DialogContent` com classes de posição conflitantes
+Varrer o projeto por `DialogContent className="..."` contendo `relative`, `absolute`, `static` ou `sticky` e remover/refatorar — qualquer um desses quebra a posição `fixed` da base via tailwind-merge. Mesma varredura para `AlertDialogContent`. Reportar achados; corrigir os que estiverem claramente errados (manter apenas se houver justificativa documentada).
 
-## Arquivos afetados
+### 4. Memória do projeto
+Criar `mem://constraints/ui/dialog-content-position-fixed-imutavel` registrando:
+- `DialogContent`/`AlertDialogContent` **nunca** podem receber `relative`/`absolute`/`static`/`sticky` na className — `tailwind-merge` derruba o `fixed` da base e o modal desancorra do viewport.
+- Para ancorar overlays internos, basta `absolute inset-0` no filho (o `fixed` da `DialogContent` já é containing block).
+- Caso de referência: `TrocaTitularidadeDialog` 09/06/26 — modal apareceu grudado na borda direita do header de `/vendas/cotacoes`.
 
-- `src/components/cadastro/SituacaoFinanceiraGate.tsx` (refactor do dialog)
-- `src/hooks/useSituacaoFinanceiraCadastro.ts` (assinatura do mutation)
-- `supabase/functions/verificar-situacao-financeira-cadastro/index.ts` (validação + persistência)
-- 1 migration curta para `sga_situacao_check.bypass_autorizador text`
-- (opcional) atualizar `mem://logic/operations/gate-financeiro-cadastro-inconclusivo` com o novo padrão de bypass
+## Resultado esperado
+
+- Modal de Troca de Titularidade volta a abrir centralizado no viewport, com overlay escuro, header ("Troca de Titularidade" + descrição), alerta informativo e formulário completos e roláveis dentro do dialog.
+- O overlay de progresso ("Criando solicitação de troca…") continua cobrindo o conteúdo do modal corretamente.
+- Sem necessidade de delays artificiais entre fechar o chooser e abrir a Troca.
+
+## Fora do escopo
+
+- Não vou adicionar `<DialogPortal>` à base `dialog.tsx` (mudança grande de escopo cross-app — proposta separada se quiser, mas não resolve este bug).
+- Não vou mexer no fluxo de busca SGA, `importar-associado-sga`, nem na lógica de criação da troca.
