@@ -389,7 +389,17 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-border bg-card md:gap-3 md:px-4">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="md:hidden p-2 -ml-1 rounded-md hover:bg-muted shrink-0"
+            aria-label="Voltar"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setDrawerAberto(true)}
