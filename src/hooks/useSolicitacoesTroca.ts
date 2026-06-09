@@ -235,10 +235,11 @@ export function useAprovarTrocaMonitoramento() {
   return useMutation({
     mutationFn: async (params: {
       solicitacao_id: string;
-      acao: 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao';
+      acao: 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao' | 'solicitar_retirada';
       observacao?: string;
       tipo_vistoria_troca?: TipoVistoriaTroca;
       manutencao?: ManutencaoTrocaPayload;
+      retirada?: RetiradaTrocaPayload;
     }) => {
       const { data, error } = await supabase.functions.invoke('aprovar-troca-monitoramento', { body: params });
       if (error) {
@@ -261,12 +262,15 @@ export function useAprovarTrocaMonitoramento() {
         ? 'Troca efetivada'
         : vars.acao === 'agendar_manutencao'
           ? 'Manutenção agendada'
-          : 'Vistoria solicitada';
+          : vars.acao === 'solicitar_retirada'
+            ? 'Retirada + vistoria solicitadas'
+            : 'Vistoria solicitada';
       toast.success(data?.silent ? 'Processado em segundo plano' : msg);
     },
     onError: (e: Error) => toast.error(e.message),
   });
 }
+
 
 export function useReprovarTroca() {
   const qc = useQueryClient();
