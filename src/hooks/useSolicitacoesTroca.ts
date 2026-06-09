@@ -246,9 +246,11 @@ export function useAprovarTrocaMonitoramento() {
       acao: 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao' | 'solicitar_retirada';
       observacao?: string;
       tipo_vistoria_troca?: TipoVistoriaTroca;
+      vistoria?: VistoriaTrocaPayload;
       manutencao?: ManutencaoTrocaPayload;
       retirada?: RetiradaTrocaPayload;
     }) => {
+
       const { data, error } = await supabase.functions.invoke('aprovar-troca-monitoramento', { body: params });
       if (error) {
         const esperados: StatusTroca[] = params.acao === 'aprovar'
