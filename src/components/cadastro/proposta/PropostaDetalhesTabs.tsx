@@ -22,7 +22,6 @@ import {
   Puzzle,
   Building2,
   CheckCircle,
-  Repeat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -30,8 +29,6 @@ import { ptBR } from 'date-fns/locale';
 import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
 import { formatPeriodoLabel } from '@/lib/periodo-utils';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
-import { SubstituicaoProcessoCard } from './SubstituicaoProcessoCard';
-import { TrocaProcessoCard } from './TrocaProcessoCard';
 
 
 // Categoria de "situação especial" (taxi/leilão/aplicativo/etc.) — não confundir
@@ -150,21 +147,14 @@ export function PropostaDetalhesTabs({
   const faltaRenavam = !proposta.veiculo_renavam && !veiculoRenavam;
   const faltaChassi = !proposta.veiculo_chassi && !veiculoChassi;
 
-  const processo = proposta.processoOrigem;
-  const tabProcessoLabel = processo?.tipo === 'substituicao'
-    ? 'Substit.'
-    : processo?.tipo === 'troca_titularidade'
-      ? 'Troca'
-      : null;
+
+
 
   return (
     <Tabs defaultValue="cliente" className="w-full">
       {/* Sticky tabs bar - labels sempre visíveis */}
       <div className="sticky top-[41px] z-10 bg-background/95 backdrop-blur-sm pb-2 pt-1 -mx-1 px-1">
-        <TabsList className={cn(
-          "w-full grid h-auto bg-muted/50 p-1 rounded-xl",
-          processo ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"
-        )}>
+        <TabsList className="w-full grid h-auto bg-muted/50 p-1 rounded-xl grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="cliente" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
             <User className="h-3.5 w-3.5" />
             <span>Cliente</span>
@@ -187,24 +177,9 @@ export function PropostaDetalhesTabs({
             <FileCheck className="h-3.5 w-3.5" />
             <span>Contrato</span>
           </TabsTrigger>
-          {processo && (
-            <TabsTrigger value="processo" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm rounded-lg">
-              <Repeat className="h-3.5 w-3.5" />
-              <span>{tabProcessoLabel}</span>
-            </TabsTrigger>
-          )}
         </TabsList>
       </div>
 
-      {processo && (
-        <TabsContent value="processo" className="mt-3">
-          {processo.tipo === 'substituicao' ? (
-            <SubstituicaoProcessoCard solicitacaoId={processo.solicitacaoId} />
-          ) : (
-            <TrocaProcessoCard solicitacaoId={processo.solicitacaoId} />
-          )}
-        </TabsContent>
-      )}
 
       {/* Tab Cliente */}
       <TabsContent value="cliente" className="mt-3">
