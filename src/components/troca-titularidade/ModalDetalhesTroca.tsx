@@ -524,7 +524,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                               <p className="text-xs text-muted-foreground">Veículo sem rastreador novo</p>
                             </div>
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('fotos_com_rastreador')}>
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleSolicitarVistoria('fotos_com_rastreador'); }}>
                             <ShieldCheck className="h-4 w-4 mr-2" />
                             <div>
                               <p className="text-sm font-medium">Fotos + instalação de rastreador</p>
