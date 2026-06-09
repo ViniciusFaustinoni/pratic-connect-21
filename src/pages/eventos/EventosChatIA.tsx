@@ -333,10 +333,16 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     }
   }, [conversas, userId, queryClient]);
 
+  const conversaAberta = !!telefoneSelecionado;
+
   return (
     <div className="h-[calc(100dvh-8rem)] flex rounded-lg border border-border bg-card overflow-hidden">
-      {/* Sidebar - Conversations List */}
-      <div className="w-[440px] shrink-0">
+      {/* Sidebar - Conversations List
+          Mobile: ocupa 100% e some quando uma conversa é aberta.
+          Desktop (md+): largura fixa de 440px sempre visível. */}
+      <div
+        className={`${conversaAberta ? 'hidden' : 'flex'} md:flex w-full md:w-[440px] shrink-0`}
+      >
         <ConversasList
           conversas={conversas}
           isLoading={isLoading}
@@ -346,13 +352,19 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
         />
       </div>
 
-      {/* Chat Panel */}
-      <div className="flex-1 min-w-0">
+      {/* Chat Panel
+          Mobile: aparece em tela cheia quando uma conversa é selecionada. */}
+      <div className={`${conversaAberta ? 'flex' : 'hidden'} md:flex flex-1 min-w-0`}>
         <ChatPanel
           telefone={telefoneSelecionado}
           nomeContato={nomeContato}
           avatarUrl={avatarUrl}
           drawerVariant={drawerVariant}
+          onBack={() => {
+            setTelefoneSelecionado(null);
+            setNomeContato(null);
+            setAvatarUrl(null);
+          }}
         />
       </div>
     </div>

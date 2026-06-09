@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
-import { Send, Mic, Square, RotateCcw, ArrowDown, Bot, User, Loader2, MessageSquare, Paperclip, BotOff, Smile } from 'lucide-react';
+import { Send, Mic, Square, RotateCcw, ArrowDown, ArrowLeft, Bot, User, Loader2, MessageSquare, Paperclip, BotOff, Smile } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { format } from 'date-fns';
@@ -27,9 +27,10 @@ interface ChatPanelProps {
   nomeContato: string | null;
   avatarUrl: string | null;
   drawerVariant?: 'relacionamento' | 'eventos' | 'monitoramento';
+  onBack?: () => void;
 }
 
-export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'relacionamento' }: ChatPanelProps) {
+export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'relacionamento', onBack }: ChatPanelProps) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -388,7 +389,17 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-border bg-card md:gap-3 md:px-4">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="md:hidden p-2 -ml-1 rounded-md hover:bg-muted shrink-0"
+            aria-label="Voltar"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setDrawerAberto(true)}
