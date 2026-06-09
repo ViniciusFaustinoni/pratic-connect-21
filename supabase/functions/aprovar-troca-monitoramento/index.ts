@@ -29,6 +29,14 @@ interface Body {
   observacao?: string | null;
   // solicitar_vistoria
   tipo_vistoria_troca?: TipoVistoriaTroca;
+  // NOVO: dados para materializar o serviço de vistoria que o Monitoramento
+  // está pedindo (data/período/endereço). Obrigatório no fluxo atual — sem
+  // ele o serviço não aparece em Atribuição Manual.
+  vistoria?: {
+    data_agendada: string;        // YYYY-MM-DD
+    periodo: 'manha' | 'tarde';
+    endereco: EnderecoBody;
+  };
   // agendar_manutencao
   manutencao?: {
     rastreador_id: string;
@@ -47,6 +55,7 @@ interface Body {
     endereco: EnderecoBody;
   };
 }
+
 
 
 Deno.serve(async (req) => {
