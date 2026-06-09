@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { aiGatewayFetch } from "../_shared/ai-client.ts";
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
+
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -373,9 +375,11 @@ async function processarMensagemUsuario(
         console.log(`[whatsapp-meta-webhook] ✓ Inserido na fila IA para ${telefone}`);
       }
 
-      // Best-effort: disparar processador imediatamente (não depender disso)
+      // Disparo imediato garantido em background para reduzir a dependência do cron.
+      // Sem waitUntil, este fetch pode morrer junto com a request do webhook e a fila
+      // só ser consumida no próximo ciclo do cron (até 1 min depois).
       try {
-        fetch(`${supabaseUrl}/functions/v1/processar-fila-ia`, {
+        const processarAgora = fetch(`${supabaseUrl}/functions/v1/processar-fila-ia`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -385,6 +389,10 @@ async function processarMensagemUsuario(
         }).catch(() => {
           // Ignorar erro - o cron vai pegar em até 1 minuto
         });
+
+        if (typeof EdgeRuntime !== "undefined" && typeof EdgeRuntime.waitUntil === "function") {
+          EdgeRuntime.waitUntil(processarAgora);
+        }
       } catch (_) { /* ignore */ }
     } catch (err) {
       console.error(`[whatsapp-meta-webhook] Erro ao inserir na fila IA:`, err);
