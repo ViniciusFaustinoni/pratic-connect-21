@@ -269,8 +269,10 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   );
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+
         <DialogHeader>
           <DialogTitle>Solicitação de Troca de Titularidade</DialogTitle>
           <DialogDescription>
@@ -515,14 +517,14 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-64">
                           <DropdownMenuLabel>Tipo de vistoria</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('somente_fotos')}>
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleSolicitarVistoria('somente_fotos'); }}>
                             <Camera className="h-4 w-4 mr-2" />
                             <div>
                               <p className="text-sm font-medium">Somente fotos</p>
                               <p className="text-xs text-muted-foreground">Veículo sem rastreador novo</p>
                             </div>
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('fotos_com_rastreador')}>
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleSolicitarVistoria('fotos_com_rastreador'); }}>
                             <ShieldCheck className="h-4 w-4 mr-2" />
                             <div>
                               <p className="text-sm font-medium">Fotos + instalação de rastreador</p>
@@ -663,35 +665,39 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           }}
         />
       )}
-
-      {solicitacao && (
-        <AgendarManutencaoTrocaDialog
-          open={manutencaoOpen}
-          onOpenChange={setManutencaoOpen}
-          solicitacaoId={solicitacao.id}
-          veiculoId={solicitacao.veiculo_id}
-          onAgendado={() => {
-            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
-            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
-            onOpenChange(false);
-          }}
-        />
-      )}
-
-      {solicitacao && (
-        <SolicitarRetiradaTrocaDialog
-          open={retiradaOpen}
-          onOpenChange={setRetiradaOpen}
-          solicitacaoId={solicitacao.id}
-          veiculoId={solicitacao.veiculo_id}
-          onAgendado={() => {
-            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
-            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
-            onOpenChange(false);
-          }}
-        />
-      )}
     </Dialog>
 
+
+    {/* Modais auxiliares renderizados FORA do Dialog pai pra evitar
+        sobreposição de overlays/focus-trap do Radix (clicks "fantasma"). */}
+    {solicitacao && (
+      <AgendarManutencaoTrocaDialog
+        open={manutencaoOpen}
+        onOpenChange={setManutencaoOpen}
+        solicitacaoId={solicitacao.id}
+        veiculoId={solicitacao.veiculo_id}
+        onAgendado={() => {
+          qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+          qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+          onOpenChange(false);
+        }}
+      />
+    )}
+
+    {solicitacao && (
+      <SolicitarRetiradaTrocaDialog
+        open={retiradaOpen}
+        onOpenChange={setRetiradaOpen}
+        solicitacaoId={solicitacao.id}
+        veiculoId={solicitacao.veiculo_id}
+        onAgendado={() => {
+          qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+          qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+          onOpenChange(false);
+        }}
+      />
+    )}
+    </>
   );
 }
+
