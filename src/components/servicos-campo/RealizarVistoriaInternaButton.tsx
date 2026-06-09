@@ -47,7 +47,7 @@ function resolverRotaTecnico(tipo: Servico['tipo']): string | null {
   if (tipo === 'instalacao' || tipo === 'vistoria_entrada' || tipo === 'revistoria') {
     return '/instalador/instalacao';
   }
-  if (tipo === 'vistoria_retirada') return '/instalador/retirada';
+  if (tipo === 'retirada_rastreador' || tipo === 'vistoria_retirada') return '/instalador/retirada';
   if (tipo === 'vistoria_manutencao') return '/instalador/manutencao';
   // Demais tipos de vistoria (saída, sinistro, periódica, cancelamento)
   return '/instalador/vistoria';
