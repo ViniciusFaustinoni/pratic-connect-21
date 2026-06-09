@@ -1393,7 +1393,7 @@ serve(async (req) => {
                   nome: novoAssoc.nome || undefined,
                   cpf: (novoAssoc.cpf || '').replace(/\D/g, '') || undefined,
                   email: novoAssoc.email || undefined,
-                  telefone: novoAssoc.telefone1 || undefined,
+                  telefone: novoAssoc.telefone || undefined,
                 }).filter(([, v]) => v !== undefined && v !== null && v !== '')
               )
             : null;
