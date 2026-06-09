@@ -74,13 +74,13 @@ function DraggableServico({ servico }: { servico: any }) {
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className={cn(
-              'text-[10px]',
+              'text-[10px] whitespace-nowrap',
               getTipoBadgeClass(servico.tipo)
             )}>
               {getTipoLabel(servico.tipo)}
             </Badge>
             {servico.permite_encaixe && (
-              <Badge variant="secondary" className="text-[10px]">Encaixe</Badge>
+              <Badge variant="secondary" className="text-[10px] whitespace-nowrap">Encaixe</Badge>
             )}
             {servico.aguardando_rota_pos_fotos && (
               <Badge
