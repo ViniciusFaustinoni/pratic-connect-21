@@ -5,7 +5,7 @@
 //
 // Input:
 //   { contrato_id?, solicitacao_troca_id?, force?: boolean,
-//     bypass?: { motivo: string } }
+//     bypass?: { motivo: string; nome_autorizador: string } }
 // Output:
 //   { ok: true, check: SgaSituacaoCheckRow, sga: ResponseSga, liberado: boolean }
 
