@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Camera, 
-  CheckCircle2, 
-  Loader2, 
+import {
+  Camera,
+  CheckCircle2,
+  Loader2,
   AlertCircle,
   Image as ImageIcon,
   Gauge,
@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   ScanLine,
   Video,
+  CloudOff,
+  CloudUpload,
 } from 'lucide-react';
 import {
   getFotosAutovistoria,
@@ -26,11 +28,12 @@ import {
   type TipoVeiculo,
   type FotoAutovistoria,
 } from '@/data/autovistoriaConfig';
-import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao, type PlacaOcrResultado } from '@/hooks/useCotacaoVistoria';
+import { useFotosCotacaoVistoria, useFinalizarVistoriaCotacao, type PlacaOcrResultado } from '@/hooks/useCotacaoVistoria';
+import { useAutovistoriaOfflineUpload } from '@/hooks/useAutovistoriaOfflineUpload';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { compressImage } from '@/lib/imageCompressor';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
