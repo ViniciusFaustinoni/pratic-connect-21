@@ -22,7 +22,6 @@ import {
   Puzzle,
   Building2,
   CheckCircle,
-  Repeat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -30,8 +29,6 @@ import { ptBR } from 'date-fns/locale';
 import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
 import { formatPeriodoLabel } from '@/lib/periodo-utils';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
-import { SubstituicaoProcessoCard } from './SubstituicaoProcessoCard';
-import { TrocaProcessoCard } from './TrocaProcessoCard';
 
 
 // Categoria de "situação especial" (taxi/leilão/aplicativo/etc.) — não confundir
