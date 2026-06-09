@@ -118,6 +118,10 @@ Deno.serve(async (req) => {
     if (acao === 'agendar_manutencao' && solicitacao.status !== 'aguardando_monitoramento') {
       throw new Error('Manutenção só pode ser agendada com a solicitação em aguardando monitoramento');
     }
+    if (acao === 'solicitar_retirada' && solicitacao.status !== 'aguardando_monitoramento') {
+      throw new Error('Retirada só pode ser solicitada com a solicitação em aguardando monitoramento');
+    }
+
     if (acao === 'aprovar' && !['aguardando_monitoramento', 'aguardando_vistoria', 'aguardando_manutencao'].includes(solicitacao.status as string)) {
       throw new Error(`Solicitação no status "${solicitacao.status}" não pode ser aprovada`);
     }
