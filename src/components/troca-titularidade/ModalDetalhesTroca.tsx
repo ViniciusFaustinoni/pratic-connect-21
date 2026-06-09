@@ -531,10 +531,20 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      <Button
+                        variant="outline"
+                        onClick={handleAbrirRetirada}
+                        disabled={aprovarMonitoramento.isPending || validandoImei}
+                        className="border-amber-500/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                      >
+                        <PackageMinus className="h-4 w-4 mr-2" />
+                        Solicitar Retirada
+                      </Button>
                       <Button variant="outline" onClick={handleAbrirManutencao} disabled={aprovarMonitoramento.isPending || validandoImei}>
                         <Wrench className="h-4 w-4 mr-2" />
                         Agendar manutenção
                       </Button>
+
                     </>
                   )}
                   {(() => {
