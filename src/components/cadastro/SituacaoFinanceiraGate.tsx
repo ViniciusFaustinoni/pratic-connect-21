@@ -36,10 +36,15 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
   const registrarAviso = useRegistrarAvisoSGA();
   const [bypassOpen, setBypassOpen] = useState(false);
   const [bypassOrigem, setBypassOrigem] = useState<'inconclusivo' | 'inadimplente' | 'erro_consulta_sga'>('inadimplente');
-  const [motivo, setMotivo] = useState('');
+  const [nomeAutorizador, setNomeAutorizador] = useState('');
+  const [justificativa, setJustificativa] = useState('');
+  const [responsabilidade, setResponsabilidade] = useState(false);
 
   const abrirBypass = (origem: 'inconclusivo' | 'inadimplente' | 'erro_consulta_sga') => {
     setBypassOrigem(origem);
+    setNomeAutorizador('');
+    setJustificativa('');
+    setResponsabilidade(false);
     setBypassOpen(true);
   };
 
@@ -59,20 +64,33 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
 
   const descricaoDialog =
     bypassOrigem === 'inconclusivo'
-      ? 'Confirme que verificou manualmente os boletos do CPF no painel SGA. Esta ação será registrada com seu nome.'
+      ? 'Confirme que verificou manualmente os boletos do CPF no painel SGA. Esta ação ficará registrada no histórico da proposta e na auditoria SGA.'
       : bypassOrigem === 'erro_consulta_sga'
-        ? 'A consulta ao SGA falhou. Prossiga apenas se confirmou a situação financeira por outro meio. Esta ação será registrada com seu nome.'
-        : 'Esta ação será registrada com seu nome e ficará disponível na auditoria SGA. Descreva o motivo da liberação manual.';
+        ? 'A consulta ao SGA falhou. Prossiga apenas se confirmou a situação financeira por outro meio. Esta ação ficará registrada no histórico da proposta e na auditoria SGA.'
+        : 'O associado possui pendência financeira no SGA. A liberação manual ficará registrada no histórico da proposta e na auditoria SGA.';
 
-  const placeholderDialog =
+  const placeholderJustificativa =
     bypassOrigem === 'inconclusivo'
-      ? 'Ex.: verificado no SGA, sem boletos vencidos em nenhuma matrícula…'
+      ? 'Ex.: verificado no painel SGA em todas as matrículas do CPF, sem boletos vencidos. Autorizado por gerente comercial em ligação.'
       : bypassOrigem === 'erro_consulta_sga'
-        ? 'Ex.: SGA indisponível, situação confirmada por contato direto com o financeiro…'
-        : 'Ex.: pagamento confirmado por cópia de comprovante anexado…';
+        ? 'Ex.: SGA indisponível; situação confirmada pelo financeiro às 14h via WhatsApp, sem débitos em aberto.'
+        : 'Ex.: pagamento confirmado por cópia de comprovante anexado ao protocolo X; autorizado pelo gerente comercial.';
 
-  const onConfirmBypass = () =>
-    bypass.mutate(motivo.trim(), {
+  const bypassFormValido =
+    nomeAutorizador.trim().length >= 3 &&
+    justificativa.trim().length >= 20 &&
+    responsabilidade;
+
+  const onConfirmBypass = () => {
+    if (!bypassFormValido) {
+      toast.error('Preencha os campos obrigatórios', {
+        description: 'Autorizador (≥3), justificativa (≥20) e confirmação de responsabilidade.',
+      });
+      return;
+    }
+    const motivoTrim = justificativa.trim();
+    const autorizadorTrim = nomeAutorizador.trim();
+    bypass.mutate({ motivo: motivoTrim, nome_autorizador: autorizadorTrim }, {
       onSuccess: async () => {
         try {
           await registrarAviso.mutateAsync({
@@ -85,11 +103,12 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
                   ? 'Gate inconclusivo (SGA sem sinal). Verificado manualmente.'
                   : 'Consulta ao SGA falhou. Operador prosseguiu manualmente.',
             decisao: 'ignorado_prosseguiu',
-            motivo: motivo.trim(),
+            motivo: motivoTrim,
             contrato_id: contratoId ?? null,
             cpf: data?.check?.cpf ?? null,
             detalhes: {
               origem_resultado: bypassOrigem,
+              nome_autorizador: autorizadorTrim,
               saldo_devedor: data?.check?.saldo_devedor,
               qtd_boletos_abertos: data?.check?.qtd_boletos_abertos,
               solicitacao_troca_id: solicitacaoTrocaId ?? null,
@@ -98,30 +117,85 @@ export function SituacaoFinanceiraGate({ contratoId, solicitacaoTrocaId, onChang
         } catch (e) {
           console.warn('[SituacaoFinanceiraGate] falha ao espelhar bypass em cotacao_avisos_sga', e);
         }
+        try {
+          await registrarLog({
+            acao: 'aprovar',
+            modulo: 'cotacoes',
+            descricao: `[CADASTRO_BYPASS_FINANCEIRO] ${contratoId ?? solicitacaoTrocaId ?? '—'} (${bypassOrigem}) - Autorizado por ${autorizadorTrim}: ${motivoTrim}`,
+            entidade_id: contratoId ?? solicitacaoTrocaId ?? undefined,
+            tabela: contratoId ? 'contratos' : 'solicitacoes_troca_titularidade',
+          });
+        } catch (e) {
+          console.warn('[SituacaoFinanceiraGate] falha ao gravar logs_auditoria', e);
+        }
         toast.success('Bypass registrado — análise liberada');
         setBypassOpen(false);
-        setMotivo('');
+        setNomeAutorizador('');
+        setJustificativa('');
+        setResponsabilidade(false);
       },
       onError: (e: any) => toast.error(e?.message || 'Falha ao registrar bypass'),
     });
+  };
 
   const bypassDialog = (
     <Dialog open={bypassOpen} onOpenChange={setBypassOpen}>
-      <DialogContent>
+      <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{tituloDialog}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            {tituloDialog}
+          </DialogTitle>
           <DialogDescription>{descricaoDialog}</DialogDescription>
         </DialogHeader>
-        <Textarea
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-          placeholder={placeholderDialog}
-          rows={4}
-        />
+
+        <div className="space-y-3 py-2">
+          <div className="space-y-1">
+            <Label htmlFor="bypass-fin-autorizador">Nome de quem autorizou *</Label>
+            <input
+              id="bypass-fin-autorizador"
+              value={nomeAutorizador}
+              onChange={(e) => setNomeAutorizador(e.target.value)}
+              placeholder="Ex.: João Silva (Gerente Comercial)"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">{nomeAutorizador.trim().length} / 3 caracteres mínimos</p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="bypass-fin-justificativa">Justificativa *</Label>
+            <Textarea
+              id="bypass-fin-justificativa"
+              value={justificativa}
+              onChange={(e) => setJustificativa(e.target.value)}
+              placeholder={placeholderJustificativa}
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">{justificativa.trim().length} / 20 caracteres mínimos</p>
+          </div>
+
+          <label className="flex items-start gap-2 p-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={responsabilidade}
+              onChange={(e) => setResponsabilidade(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span className="text-sm text-amber-900 dark:text-amber-100">
+              Confirmo que tenho responsabilidade por esta decisão e que ela está autorizada por{' '}
+              <strong>{nomeAutorizador.trim() || '— preencha o nome acima —'}</strong>.
+            </span>
+          </label>
+        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setBypassOpen(false)}>Cancelar</Button>
-          <Button disabled={motivo.trim().length < 5 || bypass.isPending} onClick={onConfirmBypass}>
-            Confirmar bypass
+          <Button
+            disabled={!bypassFormValido || bypass.isPending}
+            onClick={onConfirmBypass}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            {bypass.isPending ? 'Registrando…' : 'Confirmar bypass'}
           </Button>
         </DialogFooter>
       </DialogContent>
