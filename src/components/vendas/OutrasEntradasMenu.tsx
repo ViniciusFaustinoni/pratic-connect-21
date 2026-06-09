@@ -364,19 +364,14 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
           return;
         }
       }
-      // Mantém o estado selecionado (o useEffect de reset já protege com
-      // !showTrocaTitularidade) e fecha o chooser ANTES de abrir o dialog
-      // de Troca, esperando a animação de close do Radix Dialog terminar.
-      // Sem essa espera, os dois Dialogs colidem (overlay sumido, conteúdo
-      // clipado à direita, header fora da tela).
       setSelectedAssociadoId(finalId);
       setSelectedAssociadoNome(finalNome);
       setSelectedAssociadoCpf(finalCpf);
       setSelectedCodigoHinova(
         (associado.codigo_hinova ?? associado.codigo_associado ?? null) as number | null,
       );
-      onOpenChange(false);
-      setTimeout(() => setShowTrocaTitularidade(true), 220);
+      setShowTrocaTitularidade(true);
+      setTimeout(() => onOpenChange(false), 0);
     }
   };
 
@@ -458,10 +453,8 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       setSelectedAssociadoId(associadoLocalId);
       setSelectedAssociadoCpf(cpfLimpo);
       setSelectedCodigoHinova(sgaSnapshot?.associado?.codigo_associado ?? null);
-      // Fecha o chooser ANTES e espera a animação para evitar colisão de
-      // dois Radix Dialogs (overlay/posicionamento quebrados).
-      onOpenChange(false);
-      setTimeout(() => setShowTrocaTitularidade(true), 220);
+      setShowTrocaTitularidade(true);
+      setTimeout(() => onOpenChange(false), 0);
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao redirecionar para Troca de Titularidade');
     } finally {

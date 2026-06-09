@@ -286,7 +286,7 @@ export function TrocaTitularidadeDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-md relative">
+      <DialogContent className="max-w-md">
         {enviando && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 rounded-lg bg-background/95 backdrop-blur-sm p-6 text-center animate-in fade-in duration-200">
             {progressDone ? (
