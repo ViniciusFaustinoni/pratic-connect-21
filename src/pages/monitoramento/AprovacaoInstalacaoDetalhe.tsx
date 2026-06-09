@@ -44,6 +44,8 @@ import {
 import { veiculoSubFipe, exigeInstalacaoTecnica } from '@/hooks/useSolicitarVistoriaTecnico';
 import { useDevolverAoCadastro } from '@/hooks/useDevolverAoCadastro';
 import { SolicitarVistoriaTecnicoDialog } from '@/components/monitoramento/SolicitarVistoriaTecnicoDialog';
+import { MarcarRetiradaDialog } from '@/components/monitoramento/MarcarRetiradaDialog';
+
 import { CorrigirDadosVeiculoDialog } from '@/components/monitoramento/CorrigirDadosVeiculoDialog';
 import { ConfirmarDevolverCadastroDialog } from '@/components/monitoramento/ConfirmarDevolverCadastroDialog';
 import { VincularRastreadorExistenteCard } from '@/components/rastreadores/VincularRastreadorExistenteCard';
