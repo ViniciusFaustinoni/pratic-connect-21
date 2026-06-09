@@ -265,6 +265,20 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                       </Button>
                     )}
 
+                    {podeAcoesMonitor && isInstalacao && statusDevolvivel && servico.veiculo_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9 border-amber-500/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                        onClick={() => setRetiradaOpen(true)}
+                        title="Opcional: converter este serviço em Retirada do Rastreador + vistoria acompanhante"
+                      >
+                        <PackageMinus className="h-4 w-4" />
+                        Tratar como Retirada
+                      </Button>
+                    )}
+
+
                   </>
                 );
               })()}
