@@ -686,7 +686,7 @@ export default function AtribuicaoManualTab() {
         </div>
 
         {/* ── Right: Vistoriadores + Prestadores ── */}
-        <div className="lg:col-span-2 space-y-3 max-h-[80vh] overflow-y-auto">
+        <div className="lg:col-span-2 space-y-3 lg:max-h-[80vh] lg:overflow-y-auto">
           {/* Técnicos Internos */}
           <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
             <User className="h-4 w-4" />
