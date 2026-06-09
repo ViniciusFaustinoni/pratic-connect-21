@@ -665,35 +665,8 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           }}
         />
       )}
-
-      {solicitacao && (
-        <AgendarManutencaoTrocaDialog
-          open={manutencaoOpen}
-          onOpenChange={setManutencaoOpen}
-          solicitacaoId={solicitacao.id}
-          veiculoId={solicitacao.veiculo_id}
-          onAgendado={() => {
-            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
-            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
-            onOpenChange(false);
-          }}
-        />
-      )}
-
-      {solicitacao && (
-        <SolicitarRetiradaTrocaDialog
-          open={retiradaOpen}
-          onOpenChange={setRetiradaOpen}
-          solicitacaoId={solicitacao.id}
-          veiculoId={solicitacao.veiculo_id}
-          onAgendado={() => {
-            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
-            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
-            onOpenChange(false);
-          }}
-        />
-      )}
     </Dialog>
+
 
     {/* Modais auxiliares renderizados FORA do Dialog pai pra evitar
         sobreposição de overlays/focus-trap do Radix (clicks "fantasma"). */}
