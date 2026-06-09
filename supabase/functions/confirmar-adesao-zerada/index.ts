@@ -132,9 +132,40 @@ Deno.serve(async (req) => {
           const via = ((cotacaoMeta as any)?.dados_extras?.via_vistoria_sub_fipe || null) as
             | 'completa_celular' | 'rf_celular' | 'sem_fotos' | null;
 
-          // Via 3 (sem_fotos): liberar gate; vistoria presencial é back-office.
+          // Via 3 (sem_fotos): exige agendamento presencial vivo (rota OU base)
+          // escolhido pelo cliente no chooser sub_fipe_presencial_chooser.
+          // Monitoramento atribuirá o serviço seguindo esse agendamento.
           if (via === 'sem_fotos') {
-            console.log('[confirmar-adesao-zerada] sub-FIPE Via 3 (sem_fotos): gate liberado', { cotacao_id });
+            let temPresencial = false;
+            const { data: servPres } = await supabase
+              .from('servicos')
+              .select('id')
+              .eq('cotacao_id', cotacao_id)
+              .in('tipo', ['instalacao', 'vistoria_entrada'])
+              .in('status', ['agendada', 'em_rota', 'em_andamento'])
+              .limit(1)
+              .maybeSingle();
+            if (servPres?.id) temPresencial = true;
+            if (!temPresencial) {
+              const { data: agBase } = await supabase
+                .from('agendamentos_base')
+                .select('id')
+                .eq('cotacao_id', cotacao_id)
+                .in('status', ['agendado', 'confirmado', 'em_andamento'])
+                .limit(1)
+                .maybeSingle();
+              if (agBase?.id) temPresencial = true;
+            }
+            if (!temPresencial) {
+              console.warn('[confirmar-adesao-zerada] Via 3 sub-FIPE sem agendamento presencial', { cotacao_id });
+              return jsonResponse({
+                success: false,
+                error: 'agendamento_presencial_pendente',
+                code: 'agendamento_presencial_pendente',
+                mensagem: 'Antes de confirmar a adesão isenta, volte à etapa Vistoria e escolha onde será a vistoria presencial (rota ou base).',
+              }, 409);
+            }
+            console.log('[confirmar-adesao-zerada] sub-FIPE Via 3 (sem_fotos): gate liberado com agendamento presencial', { cotacao_id });
           } else if (via === null) {
             // Cliente clicou em confirmar sem escolher via.
             console.warn('[confirmar-adesao-zerada] bloqueado: via sub-FIPE não escolhida', { cotacao_id });

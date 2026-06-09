@@ -1129,41 +1129,110 @@ async function processarVeiculoAprovado(
             .eq('id', contrato.cotacao_id);
         }
       } else {
-        // C1: defesa em profundidade. Se chegou aqui é porque o gate
-        // gateCaminhoPublicoCompleto deixou passar (race, ou caminho legado
-        // via instalação/agendamento), mas o branch sub-FIPE espera vistoria
-        // materializada. NUNCA promover `cadastro_aprovado` sem vistoria —
-        // reverte e devolve 409 sem_autovistoria_sub_fipe.
-        console.error('[aprovar-proposta] sub-FIPE sem autovistoria materializada — revertendo cadastro_aprovado', {
-          contrato_id, veiculoId, cotacaoId: contrato.cotacao_id,
-        });
-        await supabase
-          .from('contratos')
-          .update({
-            cadastro_aprovado: false,
-            aprovado_em: null,
-            aprovado_por: null,
-            documentos_aprovados_em: null,
-          })
-          .eq('id', contrato_id);
-        try {
-          await insertAuditLog(supabase, {
-            usuario_id: aprovado_por || null,
-            acao: 'aprovar_proposta_bloqueado_sub_fipe_sem_vistoria',
-            modulo: 'contratos',
-            tabela: 'contratos',
-            registro_id: contrato_id,
-            descricao: 'Aprovação revertida: veículo sub-FIPE não possui autovistoria materializada. Cliente precisa concluir o roteiro completo (31 carro / 15 moto + vídeo 360°) antes do Cadastro aprovar.',
+        // Sem autovistoria materializada. Comportamento canônico depende da via:
+        //   - Via 3 (sem_fotos): legítimo — Cadastro analisa só documentos.
+        //     Exige agendamento presencial vivo (rota OU base) para seguir.
+        //     Não promove `servico vistoria_entrada` (não existe) e não libera
+        //     cobertura. Monitoramento atribuirá o serviço presencial.
+        //   - Via 1/2 ou via ausente: defesa C1 — reverte cadastro_aprovado.
+        if (viaSubFipe === 'sem_fotos') {
+          // Conta como "agendamento presencial vivo": servico instalacao/vistoria_entrada
+          // (criado por criar-instalacao-pos-pagamento) OU agendamento_base aberto.
+          let temPresencial = false;
+          if (contrato.cotacao_id) {
+            const { data: servPres } = await supabase
+              .from('servicos')
+              .select('id')
+              .eq('cotacao_id', contrato.cotacao_id)
+              .in('tipo', ['instalacao', 'vistoria_entrada'])
+              .in('status', ['agendada', 'em_rota', 'em_andamento'])
+              .limit(1)
+              .maybeSingle();
+            if (servPres?.id) temPresencial = true;
+            if (!temPresencial) {
+              const { data: agBase } = await supabase
+                .from('agendamentos_base')
+                .select('id')
+                .eq('cotacao_id', contrato.cotacao_id)
+                .in('status', ['agendado', 'confirmado', 'em_andamento'])
+                .limit(1)
+                .maybeSingle();
+              if (agBase?.id) temPresencial = true;
+            }
+          }
+          if (!temPresencial) {
+            console.error('[aprovar-proposta] sub-FIPE Via 3 sem agendamento presencial — revertendo', {
+              contrato_id, veiculoId, cotacaoId: contrato.cotacao_id,
+            });
+            await supabase
+              .from('contratos')
+              .update({
+                cadastro_aprovado: false,
+                aprovado_em: null,
+                aprovado_por: null,
+                documentos_aprovados_em: null,
+              })
+              .eq('id', contrato_id);
+            try {
+              await insertAuditLog(supabase, {
+                usuario_id: aprovado_por || null,
+                acao: 'aprovar_proposta_bloqueado_sub_fipe_sem_agendamento',
+                modulo: 'contratos',
+                tabela: 'contratos',
+                registro_id: contrato_id,
+                descricao: 'Aprovação revertida: Via 3 sub-FIPE (sem fotos) sem agendamento presencial vivo. Cliente precisa escolher rota ou base no link público antes do Cadastro aprovar.',
+              });
+            } catch { /* best-effort */ }
+            const err = new Error('sem_agendamento_sub_fipe');
+            (err as any).aprovarPropostaResponse = jsonResponse({
+              success: false,
+              codigo: 'sem_agendamento_sub_fipe',
+              error: 'sem_agendamento_sub_fipe',
+              mensagem: 'Via 3 sub-FIPE: cliente ainda não escolheu rota ou base para a vistoria presencial. Aguarde o agendamento antes de aprovar.',
+            }, 409);
+            throw err;
+          }
+          // Via 3 OK: só atualiza cotação; Monitoramento atribui o presencial.
+          if (contrato.cotacao_id) {
+            await supabase
+              .from('cotacoes')
+              .update({ status_contratacao: 'aguardando_aprovacao_monitoramento' })
+              .eq('id', contrato.cotacao_id);
+          }
+          console.log(`[aprovar-proposta] sub-FIPE Via 3: Cadastro aprovou só documentos; presencial pendente no Monitoramento.`);
+        } else {
+          // C1: defesa em profundidade para Via 1/2 ou via ausente.
+          console.error('[aprovar-proposta] sub-FIPE sem autovistoria materializada — revertendo cadastro_aprovado', {
+            contrato_id, veiculoId, cotacaoId: contrato.cotacao_id, via: viaSubFipe,
           });
-        } catch { /* best-effort */ }
-        const err = new Error('sem_autovistoria_sub_fipe');
-        (err as any).aprovarPropostaResponse = jsonResponse({
-          success: false,
-          codigo: 'sem_autovistoria_sub_fipe',
-          error: 'sem_autovistoria_sub_fipe',
-          mensagem: 'Veículo sub-FIPE não possui autovistoria materializada. Aguarde o cliente concluir o roteiro completo no link público antes de aprovar.',
-        }, 409);
-        throw err;
+          await supabase
+            .from('contratos')
+            .update({
+              cadastro_aprovado: false,
+              aprovado_em: null,
+              aprovado_por: null,
+              documentos_aprovados_em: null,
+            })
+            .eq('id', contrato_id);
+          try {
+            await insertAuditLog(supabase, {
+              usuario_id: aprovado_por || null,
+              acao: 'aprovar_proposta_bloqueado_sub_fipe_sem_vistoria',
+              modulo: 'contratos',
+              tabela: 'contratos',
+              registro_id: contrato_id,
+              descricao: 'Aprovação revertida: veículo sub-FIPE não possui autovistoria materializada. Cliente precisa concluir o roteiro completo (31 carro / 15 moto + vídeo 360°) antes do Cadastro aprovar.',
+            });
+          } catch { /* best-effort */ }
+          const err = new Error('sem_autovistoria_sub_fipe');
+          (err as any).aprovarPropostaResponse = jsonResponse({
+            success: false,
+            codigo: 'sem_autovistoria_sub_fipe',
+            error: 'sem_autovistoria_sub_fipe',
+            mensagem: 'Veículo sub-FIPE não possui autovistoria materializada. Aguarde o cliente concluir o roteiro completo no link público antes de aprovar.',
+          }, 409);
+          throw err;
+        }
       }
     } catch (e: any) {
       // Re-lança sentinelas estruturadas; loga e segue para os demais erros transitórios.
