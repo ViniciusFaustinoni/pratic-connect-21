@@ -522,21 +522,59 @@ export async function buscarSituacaoFinanceiraVeiculo(
     return null;
   }
 
-  const normaliza = (raw: string): string | null => {
-    const t = (raw || '').trim();
-    if (!t) return null;
-    try {
-      const j = JSON.parse(t);
-      const v = (j?.situacao_financeira ?? j?.situacao ?? j?.status ?? (typeof j === 'string' ? j : null)) as any;
-      if (v == null) return null;
-      const up = String(v).trim().toUpperCase();
+  const placaSan = (v: any) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const placaInSan = placaIn ? placaSan(placaIn) : '';
+  const codStr = codNum && Number.isFinite(codNum as number) ? String(codNum) : '';
+
+  const extrairDeItem = (item: any): string | null => {
+    if (item == null) return null;
+    if (typeof item === 'string') {
+      const up = item.trim().toUpperCase();
       if (up === 'ADIMPLENTE' || up === 'INADIMPLENTE') return up;
       return null;
+    }
+    const v = item?.situacao_financeira ?? item?.situacao ?? item?.status ?? null;
+    if (v == null) return null;
+    const up = String(v).trim().toUpperCase();
+    if (up === 'ADIMPLENTE' || up === 'INADIMPLENTE') return up;
+    return null;
+  };
+
+  const normaliza = (raw: string): { sit: string | null; forma: 'array' | 'objeto' | 'texto' | 'vazio' } => {
+    const t = (raw || '').trim();
+    if (!t) return { sit: null, forma: 'vazio' };
+    try {
+      const j = JSON.parse(t);
+      if (Array.isArray(j)) {
+        if (j.length === 0) return { sit: null, forma: 'array' };
+        // Preferir item que case com código ou placa consultados
+        let alvo: any = null;
+        if (codStr) {
+          alvo = j.find((it: any) => String(it?.codigo_veiculo ?? '').trim() === codStr) ?? null;
+        }
+        if (!alvo && placaInSan) {
+          alvo = j.find((it: any) => placaSan(it?.placa) === placaInSan) ?? null;
+        }
+        if (!alvo) alvo = j[0];
+        // Se houver QUALQUER item INADIMPLENTE no conjunto, prevalece (defensivo)
+        const algumInadimplente = j.some((it: any) => extrairDeItem(it) === 'INADIMPLENTE');
+        if (algumInadimplente) return { sit: 'INADIMPLENTE', forma: 'array' };
+        return { sit: extrairDeItem(alvo), forma: 'array' };
+      }
+      if (typeof j === 'object' && j !== null) {
+        return { sit: extrairDeItem(j), forma: 'objeto' };
+      }
+      if (typeof j === 'string') {
+        const up = j.trim().toUpperCase();
+        if (up === 'ADIMPLENTE' || up === 'INADIMPLENTE') return { sit: up, forma: 'texto' };
+        return { sit: null, forma: 'texto' };
+      }
+      return { sit: null, forma: 'objeto' };
     } catch {
       const up = t.toUpperCase();
-      if (up.includes('INADIMPLENTE')) return 'INADIMPLENTE';
-      if (up.includes('ADIMPLENTE')) return 'ADIMPLENTE';
-      return null;
+      if (up.includes('INADIMPLENTE')) return { sit: 'INADIMPLENTE', forma: 'texto' };
+      if (up.includes('ADIMPLENTE')) return { sit: 'ADIMPLENTE', forma: 'texto' };
+      return { sit: null, forma: 'texto' };
     }
   };
 
@@ -569,9 +607,9 @@ export async function buscarSituacaoFinanceiraVeiculo(
     if (!r.ok) {
       throwHttpError(r.status, txt, `buscarSituacaoFinanceiraVeiculo ${path}`);
     }
-    const out = normaliza(txt);
-    console.log(`[situacao-financeira] ok ${path} param=${p} -> ${out} sample=${txt.slice(0, 160)}`);
-    return out;
+    const { sit, forma } = normaliza(txt);
+    console.log(`[situacao-financeira] ok ${path} param=${p} forma=${forma} -> ${sit} sample=${txt.slice(0, 240)}`);
+    return sit;
   }
   console.warn(
     `[situacao-financeira] 404 em todas as tentativas (cod=${codigoVeiculo} placa=${placaIn}). Verifique se o endpoint está liberado no token SGA.`,
