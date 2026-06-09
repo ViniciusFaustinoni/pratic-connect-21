@@ -265,7 +265,25 @@ export function findModelEligibility(
     });
   }
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    // Telemetria de silêncio: regra tem cadastro p/ essa marca mas nenhum
+    // entry casou com o modelo do veículo. Quase sempre é erro de digitação
+    // no cadastro (ex.: "T-CROSS" antes do fix do tokenizador). Logar pra
+    // auditoria não-bloqueante — não muda comportamento.
+    const hasAnyForBrand = modelos.some((e: any) => {
+      if (!e || typeof e !== 'object') return false;
+      const em = removeDiacritics((e.marca || '').toUpperCase());
+      return !em || ctxMarca.includes(em) || em.includes(ctxMarca);
+    });
+    if (hasAnyForBrand && ctxMarca && ctxModelo) {
+      console.warn('[elegibilidade] modelo nao casou em marca_modelo', {
+        marca: ctxMarca,
+        modelo: ctxModelo,
+        entries: modelos.map((e: any) => e?.modelo).filter(Boolean),
+      });
+    }
+    return null;
+  }
 
   candidates.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
