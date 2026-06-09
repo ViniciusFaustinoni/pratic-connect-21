@@ -41,7 +41,7 @@ const cards: Array<{
 
 export function ServicosMetricasCards({ metricas, faseAtiva, onFaseClick }: MetricasProps) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
       {cards.map((c) => {
         const Icon = c.icon;
         const isActive = faseAtiva === c.fase && c.fase !== 'todos';
@@ -55,12 +55,12 @@ export function ServicosMetricasCards({ metricas, faseAtiva, onFaseClick }: Metr
             )}
             onClick={() => onFaseClick(c.fase === 'todos' ? 'todos' : c.fase)}
           >
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground line-clamp-1">{c.label}</span>
-                <Icon className={cn('h-4 w-4', c.colorClass)} />
+            <CardContent className="p-2.5 sm:p-3">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] sm:text-xs text-muted-foreground line-clamp-1 leading-tight">{c.label}</span>
+                <Icon className={cn('h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0', c.colorClass)} />
               </div>
-              <div className={cn('text-2xl font-bold mt-1', c.colorClass)}>{value}</div>
+              <div className={cn('text-xl sm:text-2xl font-bold mt-0.5 sm:mt-1', c.colorClass)}>{value}</div>
             </CardContent>
           </Card>
         );
