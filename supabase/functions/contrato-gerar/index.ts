@@ -1384,7 +1384,7 @@ serve(async (req) => {
           //    copiados do titular anterior na criação da solicitação.
           const { data: novoAssoc } = await supabase
             .from('associados')
-            .select('nome, cpf, email, telefone1')
+            .select('nome, cpf, email, telefone')
             .eq('id', associadoId)
             .maybeSingle();
           const novoTitularDadosRehidratado = novoAssoc
