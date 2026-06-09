@@ -245,6 +245,12 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     setManutencaoOpen(true);
   };
 
+  const handleAbrirRetirada = async () => {
+    if (!(await garantirImeiValidado())) return;
+    setRetiradaOpen(true);
+  };
+
+
   const handleReprovar = async () => {
     if (!solicitacao || !motivoReprovar.trim() || modo === 'readonly') return;
     await reprovar.mutateAsync({ solicitacao_id: solicitacao.id, motivo: motivoReprovar, etapa: modo });
