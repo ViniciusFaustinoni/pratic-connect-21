@@ -39,6 +39,12 @@ export interface ManutencaoTrocaPayload {
 
 export type TipoVistoriaRetirada = 'retirada' | 'enxuta' | 'completa';
 
+export interface VistoriaTrocaPayload {
+  data_agendada: string;
+  periodo: 'manha' | 'tarde';
+  endereco: ManutencaoTrocaPayload['endereco'];
+}
+
 export interface RetiradaTrocaPayload {
   rastreador_id: string;
   tipo_vistoria: TipoVistoriaRetirada;
@@ -47,6 +53,8 @@ export interface RetiradaTrocaPayload {
   justificativa: string;
   endereco: ManutencaoTrocaPayload['endereco'];
 }
+
+
 
 
 export interface SolicitacaoTroca {
@@ -238,9 +246,11 @@ export function useAprovarTrocaMonitoramento() {
       acao: 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao' | 'solicitar_retirada';
       observacao?: string;
       tipo_vistoria_troca?: TipoVistoriaTroca;
+      vistoria?: VistoriaTrocaPayload;
       manutencao?: ManutencaoTrocaPayload;
       retirada?: RetiradaTrocaPayload;
     }) => {
+
       const { data, error } = await supabase.functions.invoke('aprovar-troca-monitoramento', { body: params });
       if (error) {
         const esperados: StatusTroca[] = params.acao === 'aprovar'

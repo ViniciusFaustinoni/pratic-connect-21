@@ -24,6 +24,8 @@ import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
 import { SolicitarRetiradaTrocaDialog } from './SolicitarRetiradaTrocaDialog';
+import { SolicitarVistoriaTrocaDialog } from './SolicitarVistoriaTrocaDialog';
+
 import { Wrench, Camera, PackageMinus } from 'lucide-react';
 
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
@@ -656,31 +658,18 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     {/* Modais auxiliares renderizados FORA do Dialog pai pra evitar
         sobreposição de overlays/focus-trap do Radix (clicks "fantasma"). */}
     {solicitacao && (
-      <Dialog open={vistoriaOpen} onOpenChange={setVistoriaOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Solicitar vistoria</DialogTitle>
-            <DialogDescription>Escolha o tipo de vistoria para a troca de titularidade.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <Button variant="outline" className="h-auto justify-start py-3" onClick={() => void handleSolicitarVistoria('somente_fotos')} disabled={aprovarMonitoramento.isPending}>
-              <Camera className="h-4 w-4 mr-2 shrink-0" />
-              <div className="text-left">
-                <p className="text-sm font-medium">Somente fotos</p>
-                <p className="text-xs text-muted-foreground">Veículo sem rastreador novo</p>
-              </div>
-            </Button>
-            <Button variant="outline" className="h-auto justify-start py-3" onClick={() => void handleSolicitarVistoria('fotos_com_rastreador')} disabled={aprovarMonitoramento.isPending}>
-              <ShieldCheck className="h-4 w-4 mr-2 shrink-0" />
-              <div className="text-left">
-                <p className="text-sm font-medium">Fotos + instalação de rastreador</p>
-                <p className="text-xs text-muted-foreground">Veículo precisa de rastreador novo</p>
-              </div>
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SolicitarVistoriaTrocaDialog
+        open={vistoriaOpen}
+        onOpenChange={setVistoriaOpen}
+        solicitacaoId={solicitacao.id}
+        onSolicitado={() => {
+          qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+          qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+          onOpenChange(false);
+        }}
+      />
     )}
+
 
     {solicitacao && (
       <AgendarManutencaoTrocaDialog
