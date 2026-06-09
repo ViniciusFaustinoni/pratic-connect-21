@@ -147,12 +147,8 @@ export function PropostaDetalhesTabs({
   const faltaRenavam = !proposta.veiculo_renavam && !veiculoRenavam;
   const faltaChassi = !proposta.veiculo_chassi && !veiculoChassi;
 
-  const processo = proposta.processoOrigem;
-  const tabProcessoLabel = processo?.tipo === 'substituicao'
-    ? 'Substit.'
-    : processo?.tipo === 'troca_titularidade'
-      ? 'Troca'
-      : null;
+
+
 
   return (
     <Tabs defaultValue="cliente" className="w-full">
