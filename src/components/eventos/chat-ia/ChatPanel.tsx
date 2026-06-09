@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
-import { Send, Mic, Square, RotateCcw, ArrowDown, Bot, User, Loader2, MessageSquare, Paperclip, BotOff, Smile } from 'lucide-react';
+import { Send, Mic, Square, RotateCcw, ArrowDown, ArrowLeft, Bot, User, Loader2, MessageSquare, Paperclip, BotOff, Smile } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { format } from 'date-fns';
