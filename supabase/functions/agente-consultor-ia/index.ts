@@ -2,11 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { aiGatewayFetch, callAI } from "../_shared/ai-client.ts";
 
-// Modelo dedicado da habilidade `relacionamento` (Maya). Override por habilidade —
-// não respeita `ai_model_config` global (que vale para OCR / risco / chat etc.).
+// Modelo dedicado da habilidade `relacionamento` (Maya). Priorizamos baixa latência
+// no WhatsApp; respostas longas ou profundas demais pioram a experiência operacional.
 // Fallback automático cai em DEFAULT_CONFIG (`google/gemini-3-flash-preview`)
 // dentro de callAI quando este modelo falhar.
-const RELACIONAMENTO_MODEL = "google/gemini-2.5-pro";
+const RELACIONAMENTO_MODEL = "google/gemini-3-flash-preview";
 import { resolverHabilidade, dentroDoHorario, type IAAudiencia } from "./lib/roteador.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -2051,7 +2051,7 @@ REGRAS OBRIGATÓRIAS deste contexto:
       const aiResult = await callAI({
         messages: currentMessages,
         tools,
-        max_tokens: 2048,
+        max_tokens: 4096,
         override: { provider: "lovable", model: RELACIONAMENTO_MODEL },
         fallbackToLovable: true,
       });
