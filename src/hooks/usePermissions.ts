@@ -146,6 +146,7 @@ export function usePermissions() {
   const isAnalistaCadastroOnly = isAnalistaCadastro && !hasPrivilegedRole;
   const isVendedorCltOnly = hasRole('vendedor_clt') && !hasPrivilegedRole;
   const isVendedorOnly = isVendedor() && !hasPrivilegedRole && !isAnalistaCadastro;
+  const isRelacionamentoOnly = hasRoleByName('relacionamento') && !hasPrivilegedRole;
 
   const isVistoriadorBase = false;
   const isVistoriadorBaseOnly = false;
@@ -217,6 +218,7 @@ export function usePermissions() {
     isAnalistaCadastroOnly,
     isVendedorCltOnly,
     isVendedorOnly,
+    isRelacionamentoOnly,
     isPerfilLimitado,
     isCoordenadorMonitoramento,
     isCoordenadorMonitoramentoOnly,
