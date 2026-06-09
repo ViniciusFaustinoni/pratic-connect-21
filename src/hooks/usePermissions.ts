@@ -218,6 +218,7 @@ export function usePermissions() {
     isAnalistaCadastroOnly,
     isVendedorCltOnly,
     isVendedorOnly,
+    isRelacionamentoOnly,
     isPerfilLimitado,
     isCoordenadorMonitoramento,
     isCoordenadorMonitoramentoOnly,
