@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   offlineDB,
