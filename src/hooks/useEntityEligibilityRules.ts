@@ -172,9 +172,31 @@ function removeDiacritics(s: string): string {
 }
 
 function tokenizeModelo(s: string): string[] {
-  // Hífen tratado como separador para casar "T-CROSS" (cadastro) com "T CROSS" (DETRAN),
-  // "C-CROSS" com "C Cross", etc. Sem isso, modelos hifenizados nunca batem.
-  return s.split(/[\s/\-]+/).filter(Boolean);
+  // Qualquer caractere não-alfanumérico é separador. Cobre hífen, ponto,
+  // barra, parênteses, vírgula, underscore, "&", etc. Sem isso, modelos
+  // hifenizados/pontuados ("T-CROSS", "1.6 16V", "C4 CACTUS (NEW)") nunca
+  // batem com cadastros escritos noutra forma.
+  return s.split(/[^A-Z0-9]+/i).filter(Boolean);
+}
+
+/**
+ * Conjunto expandido de tokens do contexto, incluindo concatenações de
+ * tokens adjacentes (até 8 chars). Permite casar cadastros "compactos"
+ * (CRV, HB20, C3) com formas "soltas" do DETRAN/FIPE (CR-V, HB 20,
+ * C 3 PICASSO) SEM reintroduzir falsos positivos tipo 208⊂2008
+ * (a comparação continua sendo por TOKEN, nunca substring).
+ */
+function buildCtxTokenSet(tokens: string[]): Set<string> {
+  const set = new Set<string>(tokens);
+  for (let i = 0; i < tokens.length; i++) {
+    let acc = tokens[i];
+    for (let j = i + 1; j < tokens.length; j++) {
+      acc += tokens[j];
+      if (acc.length > 8) break;
+      set.add(acc);
+    }
+  }
+  return set;
 }
 
 /**
