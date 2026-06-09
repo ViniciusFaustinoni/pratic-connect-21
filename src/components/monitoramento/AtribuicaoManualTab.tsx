@@ -74,13 +74,13 @@ function DraggableServico({ servico }: { servico: any }) {
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className={cn(
-              'text-[10px]',
+              'text-[10px] whitespace-nowrap',
               getTipoBadgeClass(servico.tipo)
             )}>
               {getTipoLabel(servico.tipo)}
             </Badge>
             {servico.permite_encaixe && (
-              <Badge variant="secondary" className="text-[10px]">Encaixe</Badge>
+              <Badge variant="secondary" className="text-[10px] whitespace-nowrap">Encaixe</Badge>
             )}
             {servico.aguardando_rota_pos_fotos && (
               <Badge
@@ -623,18 +623,18 @@ export default function AtribuicaoManualTab() {
                 Serviços Pendentes
                 <Badge variant="secondary" className="ml-auto">{servicosFiltrados.length}</Badge>
               </CardTitle>
-              <div className="flex gap-2 mt-2">
+              <div className="flex flex-col sm:flex-row gap-2 mt-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por nome, placa, bairro, cidade ou zona..."
+                    placeholder="Buscar por nome, placa, bairro..."
                     value={busca}
                     onChange={e => setBusca(e.target.value)}
                     className="pl-9 h-9"
                   />
                 </div>
                 <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-                  <SelectTrigger className="w-40 h-9">
+                  <SelectTrigger className="w-full sm:w-40 h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -664,7 +664,7 @@ export default function AtribuicaoManualTab() {
                 </button>
               )}
             </CardHeader>
-            <CardContent className="space-y-4 max-h-[65vh] overflow-y-auto">
+            <CardContent className="space-y-4 lg:max-h-[65vh] lg:overflow-y-auto">
               {Object.keys(grouped).length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-6">Nenhum serviço pendente</p>
               )}
@@ -686,7 +686,7 @@ export default function AtribuicaoManualTab() {
         </div>
 
         {/* ── Right: Vistoriadores + Prestadores ── */}
-        <div className="lg:col-span-2 space-y-3 max-h-[80vh] overflow-y-auto">
+        <div className="lg:col-span-2 space-y-3 lg:max-h-[80vh] lg:overflow-y-auto">
           {/* Técnicos Internos */}
           <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
             <User className="h-4 w-4" />

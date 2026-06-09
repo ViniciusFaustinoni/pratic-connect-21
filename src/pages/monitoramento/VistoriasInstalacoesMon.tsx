@@ -30,10 +30,10 @@ export default function VistoriasInstalacoesMon() {
   }, [tabFromUrl]);
 
   return (
-    <div className="container mx-auto py-6 space-y-4">
+    <div className="container mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 max-w-full overflow-x-hidden">
       <div>
-        <h1 className="text-2xl font-bold">Serviços de Campo</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl sm:text-2xl font-bold">Serviços de Campo</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Acompanhe instalações, vistorias, retiradas, encaixes, viagens e manutenções em um único painel
         </p>
       </div>
@@ -41,8 +41,9 @@ export default function VistoriasInstalacoesMon() {
       <AlertaImprevistosPendentes />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="overflow-x-auto -mx-4 px-4">
-          <TabsList className="w-auto inline-flex">
+        <div className="overflow-x-auto -mx-3 sm:-mx-4 px-3 sm:px-4 scrollbar-thin">
+          <TabsList className="w-auto inline-flex h-9">
+
             {manualAtiva && (
               <TabsTrigger value="atribuicao-manual" className="gap-2 shrink-0">
                 <Hand className="h-4 w-4" />
