@@ -245,7 +245,16 @@ export function findModelEligibility(
       score = 0;
     } else {
       if (entryTokens.length === 0) continue;
-      const allTokensPresent = entryTokens.every(t => ctxTokenSet.has(t));
+      let allTokensPresent = entryTokens.every(t => ctxTokenSet.has(t));
+      if (!allTokensPresent && entryTokens.length > 1) {
+        // Fallback: cadastro hifenizado/fragmentado ("HR-V" → [HR,V]) contra
+        // ctx compacto ("HRV"). Concatenação só vale se ≤8 chars (mesma
+        // política de buildCtxTokenSet) e estiver no token set do ctx.
+        const compact = entryTokens.join('');
+        if (compact.length <= 8 && ctxTokenSet.has(compact)) {
+          allTokensPresent = true;
+        }
+      }
       if (!allTokensPresent) continue;
       score = entryTokens.length;
     }
