@@ -27515,6 +27515,7 @@ export type Database = {
         Row: {
           associado_id: string | null
           bypass: boolean
+          bypass_autorizador: string | null
           bypass_motivo: string | null
           bypass_por: string | null
           codigo_hinova: number | null
@@ -27534,6 +27535,7 @@ export type Database = {
         Insert: {
           associado_id?: string | null
           bypass?: boolean
+          bypass_autorizador?: string | null
           bypass_motivo?: string | null
           bypass_por?: string | null
           codigo_hinova?: number | null
@@ -27553,6 +27555,7 @@ export type Database = {
         Update: {
           associado_id?: string | null
           bypass?: boolean
+          bypass_autorizador?: string | null
           bypass_motivo?: string | null
           bypass_por?: string | null
           codigo_hinova?: number | null

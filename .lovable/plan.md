@@ -1,47 +1,55 @@
-# Auditoria do matching marca×modelo na elegibilidade
+## Contexto
 
-O bug do T-CROSS é uma **instância** de um problema mais geral: o tokenizador de `findModelEligibility` em `src/hooks/useEntityEligibilityRules.ts` decide silenciosamente "não casou" sempre que a forma escrita no cadastro (`entity_eligibility_rules.rule_config.modelos[].modelo`) usa pontuação/espaçamento diferente da forma do DETRAN/FIPE. Já corrigimos hífen, mas a mesma classe de falha existe com outros caracteres e com cadastros tipo `CRV` × FIPE `CR-V`, `HB20` × `HB 20`, `C3` × `C 3 PICASSO`, etc. — e não há sinal nenhum quando isso acontece em produção.
+Ontem, no fluxo de **Troca de Titularidade fora da janela**, o Cadastro ganhou um modal de responsabilidade com 3 campos obrigatórios:
+1. **Nome de quem autorizou** (≥3 caracteres)
+2. **Justificativa** (≥20 caracteres)
+3. **Checkbox de responsabilidade** ("Confirmo que tenho responsabilidade por esta decisão e que ela está autorizada por X")
 
-A auditoria tem três frentes: **endurecer o motor**, **mapear divergências reais no banco** e **garantir que regressões futuras gritem**.
+Esse modal vive em `src/pages/cadastro/PropostaAnalise.tsx` (linhas 1098–1198) e grava em `logs_auditoria` + `aprovacoes_bypass_troca`.
 
----
+Hoje, em **Cadastro › Propostas Pendentes**, quando o associado tem boletos em aberto / situação financeira INADIMPLENTE / verificação inconclusiva no SGA, o bypass usa um modal **mais frouxo**: só um `Textarea` de motivo ≥5 caracteres em `SituacaoFinanceiraGate.tsx` (linhas 106–127). Não exige nome do autorizador nem termo de responsabilidade.
 
-## 1. Endurecer o motor de matching
+Queremos **alinhar os dois modais**: o bypass financeiro passa a ter o mesmo nível de rigor do bypass de troca.
 
-Em `src/hooks/useEntityEligibilityRules.ts`:
+## Mudanças
 
-- **Tokenizador robusto.** Trocar `split(/[\s/\-]+/)` por um split em **qualquer não-alfanumérico** (`/[^a-z0-9]+/i` após `removeDiacritics` + uppercase). Cobre hífen, ponto, vírgula, parênteses, barra, underscore, ` & `, etc.
-- **Chave compacta de fallback.** Para cada string, gerar também `compact = só [A-Z0-9]` (ex.: `HR-V` → `HRV`, `CR-V` → `CRV`, `C 3` → `C3`). Casamento aceito quando **ou** todos os tokens da entry estão no ctx, **ou** o `compact(entry.modelo)` está contido nos `compact` dos tokens/concatenação do ctx. Resolve `CRV ↔ CR-V`, `HB20 ↔ HB 20`, `C3 ↔ C 3` sem afrouxar (`208` ainda não casa com `2008` porque a comparação `compact` é por token, não substring).
-- **Telemetria de silêncio.** Quando uma `rule_type='marca_modelo'` é avaliada e nenhum candidato é retornado para um contexto com `marca+modelo` preenchidos, logar `console.warn('[elegibilidade] modelo nao casou', { ruleId, marca, modelo, versao, entries: modelos.map(m=>m.modelo) })`. Hoje o silêncio é o bug — sem sinal, ninguém percebe.
+### 1. `src/components/cadastro/SituacaoFinanceiraGate.tsx`
+Substituir o modal atual (Textarea simples) por uma versão adaptada do modal de responsabilidade:
+- **Título** dinâmico permanece (inadimplente / inconclusivo / erro_consulta_sga).
+- **Descrição** dinâmica adaptada para o contexto financeiro (mantém o aviso de auditoria SGA).
+- **Campos**:
+  - Input "Nome de quem autorizou *" (≥3 chars, com contador).
+  - Textarea "Justificativa *" (≥20 chars, com contador) — substitui o motivo atual.
+  - Checkbox "Confirmo que tenho responsabilidade por esta decisão e que ela está autorizada por **{nome}**" em bloco âmbar.
+- **Botão Confirmar** só habilita quando os 3 critérios passam (mesma regra de `bypassFormValido()` da Troca).
+- **Estados locais** novos: `bypassNomeAutorizador`, `bypassJustificativa`, `bypassResponsabilidade` — substituem `motivo`.
 
-## 2. Mapear divergências reais hoje no banco
+### 2. `src/hooks/useSituacaoFinanceiraCadastro.ts`
+Estender a assinatura de `bypass.mutateAsync` para aceitar objeto:
+```
+{ motivo: string; nome_autorizador: string }
+```
+em vez de apenas `string`. Envia ambos no body para a edge.
 
-Script único (rodável em `/tmp`, gerando relatório em `/mnt/documents/auditoria-elegibilidade-modelos.csv`) que:
+### 3. `supabase/functions/verificar-situacao-financeira-cadastro/index.ts`
+- Aceitar `bypass: { motivo, nome_autorizador }`.
+- Validar `nome_autorizador.length >= 3` e `motivo.length >= 20` (alinhado ao bypass de Troca; sobe de 5 → 20).
+- Persistir `nome_autorizador` em `sga_situacao_check` (coluna nova `bypass_autorizador` text nullable) **ou**, se preferir não migrar, dentro de `detalhes` jsonb. **Recomendação:** coluna dedicada para facilitar relatórios/auditoria (mini migração).
+- `cotacao_avisos_sga.detalhes` ganha `nome_autorizador` no espelho gravado pelo hook.
 
-1. Lê todas as `entity_eligibility_rules` com `rule_type='marca_modelo'`.
-2. Para cada `entry` (marca+modelo), simula `findModelEligibility` contra **todas** as linhas de `marcas_modelos` da mesma marca.
-3. Classifica em três buckets:
-   - **órfã** — entry que não casa com nenhum modelo do catálogo FIPE/DETRAN (forte sinal de erro de digitação tipo `T-CROSS` antes do fix).
-   - **ambígua** — entry que casa com famílias diferentes do esperado (ex.: `GOL` casando com `GOLF`, se ocorrer).
-   - **ok** — entry que casa com ≥1 modelo coerente.
-4. Entrega CSV para o time de produto revisar e corrigir os cadastros suspeitos, sem o agente mexer nos dados.
-
-O resultado dessa auditoria é o que prova que o fix do motor cobre o universo real — e a planilha vira a lista de cadastros para limpeza manual no painel.
-
-## 3. Regressão travada
-
-- **Testes unitários** novos em `src/hooks/__tests__/useEntityEligibilityRules.test.ts` cobrindo: `T-CROSS ↔ T CROSS`, `HR-V ↔ HRV`, `CR-V ↔ CRV`, `C3 ↔ C 3 PICASSO`, `HB20 ↔ HB 20`, `208 ≠ 2008`, `GOL ≠ GOLF`, wildcard `TODOS`, ano/combustível como filtro pós-token.
-- **Memória de projeto** em `mem://logic/quotation/elegibilidade-matching-marca-modelo-canonico` documentando: tokenização canônica (não-alfanumérico = separador), chave compacta como fallback, regra `208 ≠ 2008`, telemetria obrigatória de "modelo não casou".
-
-## Arquivos afetados
-
-- `src/hooks/useEntityEligibilityRules.ts` — tokenização + fallback compacto + warn de silêncio.
-- `src/hooks/__tests__/useEntityEligibilityRules.test.ts` — novo, cobre a matriz acima.
-- `/tmp/auditoria-elegibilidade-modelos.ts` — script de auditoria (descartável).
-- `/mnt/documents/auditoria-elegibilidade-modelos.csv` — entregável para o time de produto.
-- `mem://logic/quotation/elegibilidade-matching-marca-modelo-canonico` + index.
+### 4. `logs_auditoria`
+Acrescentar entry no `onSuccess` do bypass com descrição `[CADASTRO_BYPASS_FINANCEIRO] {contrato} - Autorizado por {nome}: {motivo}` (mesmo padrão `[TROCA_BYPASS_JANELA]`). Hoje o gate financeiro só grava em `sga_situacao_check` + `cotacao_avisos_sga`; o log unificado fica mais auditável.
 
 ## Fora de escopo
 
-- Não vou editar nenhuma linha de `entity_eligibility_rules` automaticamente — a planilha existe justamente para a revisão humana decidir caso a caso.
-- Não vou tocar em `usePlanosCotacao`, `CotacaoFormDialog` nem nas regras de região; o bug do T-CROSS estava 100% no matching de modelo.
+- A regra de **quem** pode acionar o bypass (`isDiretor || isCoordenadorMonitoramento` + permissão `cadastro.bypass_inadimplencia_sga`) **permanece igual**.
+- O fluxo de Troca de Titularidade **não muda**.
+- Bypass de FIPE, bypass de Inconclusivo e bypass de Erro SGA usam o **mesmo modal** novo (já era o caso) — só ganham os campos extras.
+
+## Arquivos afetados
+
+- `src/components/cadastro/SituacaoFinanceiraGate.tsx` (refactor do dialog)
+- `src/hooks/useSituacaoFinanceiraCadastro.ts` (assinatura do mutation)
+- `supabase/functions/verificar-situacao-financeira-cadastro/index.ts` (validação + persistência)
+- 1 migration curta para `sga_situacao_check.bypass_autorizador text`
+- (opcional) atualizar `mem://logic/operations/gate-financeiro-cadastro-inconclusivo` com o novo padrão de bypass
