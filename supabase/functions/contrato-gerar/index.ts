@@ -1378,10 +1378,32 @@ serve(async (req) => {
           .maybeSingle();
 
         if (solTroca && !solTroca.efetivada_em) {
-          // 1) Vincular novo associado à solicitação (idempotente)
+          // 1) Vincular novo associado à solicitação (idempotente) e rehidratar
+          //    `novo_titular_dados` com o cadastro real do novo associado, para
+          //    que a UI (modais, cards, fila) pare de exibir dados legados
+          //    copiados do titular anterior na criação da solicitação.
+          const { data: novoAssoc } = await supabase
+            .from('associados')
+            .select('nome, cpf, email, telefone')
+            .eq('id', associadoId)
+            .maybeSingle();
+          const novoTitularDadosRehidratado = novoAssoc
+            ? Object.fromEntries(
+                Object.entries({
+                  nome: novoAssoc.nome || undefined,
+                  cpf: (novoAssoc.cpf || '').replace(/\D/g, '') || undefined,
+                  email: novoAssoc.email || undefined,
+                  telefone: novoAssoc.telefone || undefined,
+                }).filter(([, v]) => v !== undefined && v !== null && v !== '')
+              )
+            : null;
           await supabase
             .from('solicitacoes_troca_titularidade')
-            .update({ novo_associado_id: associadoId })
+            .update({
+              novo_associado_id: associadoId,
+              ...(novoTitularDadosRehidratado ? { novo_titular_dados: novoTitularDadosRehidratado } : {}),
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', solTroca.id);
 
           // 2) Só criar serviço de vistoria AGORA se o Monitoramento já tinha

@@ -95,12 +95,17 @@ Deno.serve(async (req) => {
     // Aqui apenas vinculamos a cotação. O status permanece `aguardando_cadastro`
     // (setado em autentique-webhook quando o termo de cancelamento é assinado).
     // O operador do Cadastro aprova manualmente em /cadastro/aprovacoes-troca.
+    // A cotação é a fonte da verdade do novo titular (operador acaba de preencher
+    // no modal de cotação). Sobrescrevemos o snapshot legado da solicitação para
+    // evitar que dados antigos (ex.: nome copiado do titular anterior) persistam
+    // após vincular a cotação. Mantemos campos extras do snapshot que a cotação
+    // não cobre (ex.: endereço estruturado preenchido manualmente).
     const snapshotAtual = ((sol.novo_titular_dados as Record<string, unknown> | null) || {}) as Record<string, string>;
     const snapshotCotacao = {
-      nome: snapshotAtual.nome || cot.nome_solicitante || undefined,
-      cpf: (snapshotAtual.cpf || cot.cliente_cpf || '').replace(/\D/g, '') || undefined,
-      email: snapshotAtual.email || cot.email_solicitante || undefined,
-      telefone: snapshotAtual.telefone || cot.telefone1_solicitante || undefined,
+      nome: cot.nome_solicitante || snapshotAtual.nome || undefined,
+      cpf: ((cot.cliente_cpf || snapshotAtual.cpf || '') as string).replace(/\D/g, '') || undefined,
+      email: cot.email_solicitante || snapshotAtual.email || undefined,
+      telefone: cot.telefone1_solicitante || snapshotAtual.telefone || undefined,
     };
 
     const novoTitularDados = Object.fromEntries(
