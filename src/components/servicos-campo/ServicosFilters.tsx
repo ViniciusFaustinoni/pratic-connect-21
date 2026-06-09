@@ -67,8 +67,8 @@ export function ServicosFilters({ filters, onChange, onClear }: ServicosFiltersP
     !!filters.uf;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="relative flex-1 min-w-[220px] max-w-md">
+    <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+      <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar nome, placa, protocolo, IMEI..."
@@ -77,6 +77,8 @@ export function ServicosFilters({ filters, onChange, onClear }: ServicosFiltersP
           className="pl-9"
         />
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
 
       {/* Tipo */}
       <Popover>
