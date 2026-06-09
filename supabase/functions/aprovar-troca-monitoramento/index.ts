@@ -8,8 +8,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-type Acao = 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao';
+type Acao = 'aprovar' | 'solicitar_vistoria' | 'agendar_manutencao' | 'solicitar_retirada';
 type TipoVistoriaTroca = 'somente_fotos' | 'fotos_com_rastreador';
+type TipoVistoriaRetirada = 'retirada' | 'enxuta' | 'completa';
+
+interface EnderecoBody {
+  logradouro: string;
+  numero?: string | null;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  cep: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
 
 interface Body {
   solicitacao_id: string;
@@ -23,18 +35,19 @@ interface Body {
     data_agendada: string;        // YYYY-MM-DD
     periodo: 'manha' | 'tarde';
     motivo?: string;
-    endereco: {
-      logradouro: string;
-      numero?: string | null;
-      bairro: string;
-      cidade: string;
-      uf: string;
-      cep: string;
-      latitude?: number | null;
-      longitude?: number | null;
-    };
+    endereco: EnderecoBody;
+  };
+  // solicitar_retirada — cria 2 servicos (retirada_rastreador + vistoria do tipo escolhido)
+  retirada?: {
+    rastreador_id: string;
+    tipo_vistoria: TipoVistoriaRetirada;
+    data_agendada: string;        // YYYY-MM-DD
+    periodo: 'manha' | 'tarde';
+    justificativa: string;        // >=10 chars
+    endereco: EnderecoBody;
   };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
