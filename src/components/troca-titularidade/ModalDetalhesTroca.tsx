@@ -24,8 +24,7 @@ import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
 import { SolicitarRetiradaTrocaDialog } from './SolicitarRetiradaTrocaDialog';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Wrench, Camera, ChevronDown, PackageMinus } from 'lucide-react';
+import { Wrench, Camera, PackageMinus } from 'lucide-react';
 
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
 import { RefreshCw } from 'lucide-react';
@@ -70,6 +69,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
   const [criandoCotacao, setCriandoCotacao] = useState(false);
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
+  const [vistoriaOpen, setVistoriaOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const [retiradaOpen, setRetiradaOpen] = useState(false);
 
@@ -231,6 +231,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const handleSolicitarVistoria = async (tipo: 'somente_fotos' | 'fotos_com_rastreador') => {
     if (!solicitacao) return;
     if (!(await garantirImeiValidado())) return;
+    setVistoriaOpen(false);
     await aprovarMonitoramento.mutateAsync({
       solicitacao_id: solicitacao.id,
       acao: 'solicitar_vistoria',
@@ -243,6 +244,11 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const handleAbrirManutencao = async () => {
     if (!(await garantirImeiValidado())) return;
     setManutencaoOpen(true);
+  };
+
+  const handleAbrirVistoria = async () => {
+    if (!(await garantirImeiValidado())) return;
+    setVistoriaOpen(true);
   };
 
   const handleAbrirRetirada = async () => {
@@ -508,31 +514,10 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   </Button>
                   {modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento' && (
                     <>
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" disabled={aprovarMonitoramento.isPending}>
-                            {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
-                            Solicitar Vistoria <ChevronDown className="h-3 w-3 ml-1" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-64" onCloseAutoFocus={(e) => e.preventDefault()}>
-                          <DropdownMenuLabel>Tipo de vistoria</DropdownMenuLabel>
-                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleSolicitarVistoria('somente_fotos'); }}>
-                            <Camera className="h-4 w-4 mr-2" />
-                            <div>
-                              <p className="text-sm font-medium">Somente fotos</p>
-                              <p className="text-xs text-muted-foreground">Veículo sem rastreador novo</p>
-                            </div>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleSolicitarVistoria('fotos_com_rastreador'); }}>
-                            <ShieldCheck className="h-4 w-4 mr-2" />
-                            <div>
-                              <p className="text-sm font-medium">Fotos + instalação de rastreador</p>
-                              <p className="text-xs text-muted-foreground">Veículo precisa de rastreador novo</p>
-                            </div>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button variant="outline" onClick={handleAbrirVistoria} disabled={aprovarMonitoramento.isPending || validandoImei}>
+                        {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
+                        Solicitar Vistoria
+                      </Button>
                       <Button
                         variant="outline"
                         onClick={handleAbrirRetirada}
@@ -670,6 +655,33 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
     {/* Modais auxiliares renderizados FORA do Dialog pai pra evitar
         sobreposição de overlays/focus-trap do Radix (clicks "fantasma"). */}
+    {solicitacao && (
+      <Dialog open={vistoriaOpen} onOpenChange={setVistoriaOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Solicitar vistoria</DialogTitle>
+            <DialogDescription>Escolha o tipo de vistoria para a troca de titularidade.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Button variant="outline" className="h-auto justify-start py-3" onClick={() => void handleSolicitarVistoria('somente_fotos')} disabled={aprovarMonitoramento.isPending}>
+              <Camera className="h-4 w-4 mr-2 shrink-0" />
+              <div className="text-left">
+                <p className="text-sm font-medium">Somente fotos</p>
+                <p className="text-xs text-muted-foreground">Veículo sem rastreador novo</p>
+              </div>
+            </Button>
+            <Button variant="outline" className="h-auto justify-start py-3" onClick={() => void handleSolicitarVistoria('fotos_com_rastreador')} disabled={aprovarMonitoramento.isPending}>
+              <ShieldCheck className="h-4 w-4 mr-2 shrink-0" />
+              <div className="text-left">
+                <p className="text-sm font-medium">Fotos + instalação de rastreador</p>
+                <p className="text-xs text-muted-foreground">Veículo precisa de rastreador novo</p>
+              </div>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+
     {solicitacao && (
       <AgendarManutencaoTrocaDialog
         open={manutencaoOpen}
