@@ -32,6 +32,7 @@ const TIPO_COLOR: Record<TipoServico, string> = {
   vistoria_periodica: 'bg-cyan-100 text-cyan-800 hover:bg-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-200',
   vistoria_manutencao: 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-200',
   vistoria_retirada: 'bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-200',
+  retirada_rastreador: 'bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-200',
 };
 
 interface ServicoTipoBadgeProps {
