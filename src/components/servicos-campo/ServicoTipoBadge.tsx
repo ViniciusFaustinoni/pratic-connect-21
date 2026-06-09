@@ -20,6 +20,7 @@ const TIPO_ICON: Record<TipoServico, React.ComponentType<{ className?: string }>
   vistoria_periodica: FileSearch,
   vistoria_manutencao: Settings,
   vistoria_retirada: PackageX,
+  retirada_rastreador: PackageX,
 };
 
 const TIPO_COLOR: Record<TipoServico, string> = {
