@@ -39,6 +39,7 @@ import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
+import { offlineDB, removerMidia } from '@/lib/offline/db';
 
 
 interface AutovistoriaCotacaoProps {
