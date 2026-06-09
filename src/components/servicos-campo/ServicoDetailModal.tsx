@@ -19,9 +19,10 @@ import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
-  MapPinned, MoreHorizontal, Hash, Wrench,
+  MapPinned, MoreHorizontal, Hash, Wrench, PackageMinus,
 
 } from 'lucide-react';
+
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { RealocarServicoSimplesDialog } from './RealocarServicoSimplesDialog';
 import { CancelarServicoDialog } from './CancelarServicoDialog';
