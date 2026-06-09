@@ -5,6 +5,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-chatwoot-token",
 };
 
+// Mapeia status do Chatwoot/WhatsApp → status canônico interno
+// sent → enviada (✓), delivered → entregue (✓✓ cinza), read → lida (✓✓ azul), failed → erro (✗)
+const STATUS_MAP: Record<string, string> = {
+  sent: "enviada",
+  delivered: "entregue",
+  read: "lida",
+  failed: "erro",
+};
+
+// Hierarquia para impedir regressão: nunca sobrescrever um status "mais avançado"
+// com um anterior (defesa contra eventos fora de ordem).
+// Ex.: se já está "lida", um delivered atrasado NÃO pode rebaixar para "entregue".
+const STATUS_NIVEL: Record<string, number> = {
+  enviando: 0,
+  enviada: 1,
+  entregue: 2,
+  lida: 3,
+  reproduzida: 3,
+  erro: -1, // erro é terminal lateral; trata à parte
+};
+
+function statusInferiorOuIgual(novo: string): string[] {
+  // retorna os status que NÃO devem ser sobrescritos pelo `novo`
+  const nivelNovo = STATUS_NIVEL[novo] ?? 0;
+  return Object.keys(STATUS_NIVEL).filter(
+    (s) => STATUS_NIVEL[s] >= 0 && STATUS_NIVEL[s] > nivelNovo,
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -32,6 +61,86 @@ Deno.serve(async (req) => {
     const event = payload.event || "";
 
     console.log(`[chatwoot-webhook] Evento recebido: ${event}`);
+
+    // ============================================================
+    // BRANCH NOVO: message_updated → status de entrega/leitura (✓ → ✓✓ → ✓✓ azul)
+    // ============================================================
+    if (event.includes("message_updated")) {
+      const msg = payload.messages?.[0] || payload || {};
+      const rawStatus = msg.status || msg.message_status || "";
+      const sourceId = msg.source_id || null;
+
+      if (!sourceId) {
+        console.log("[chatwoot-webhook] message_updated sem source_id, ignorando");
+        return new Response(
+          JSON.stringify({ success: true, ignorado: true, motivo: "source_id ausente" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const novoStatus = STATUS_MAP[String(rawStatus).toLowerCase()];
+      if (!novoStatus) {
+        console.log(`[chatwoot-webhook] message_updated status desconhecido (${rawStatus}), ignorando`);
+        return new Response(
+          JSON.stringify({ success: true, ignorado: true, motivo: `status ${rawStatus} não mapeado` }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Monta UPDATE com timestamps coerentes e proteção contra regressão.
+      const updateData: Record<string, any> = {
+        status: novoStatus,
+        updated_at: new Date().toISOString(),
+      };
+      if (novoStatus === "entregue") updateData.delivered_at = new Date().toISOString();
+      if (novoStatus === "lida") {
+        updateData.read_at = new Date().toISOString();
+        // garante coerência: lida implica entregue
+        updateData.delivered_at = updateData.delivered_at ?? new Date().toISOString();
+      }
+
+      // Casa tanto saídas Meta-diretas (`wamid...`) quanto entradas via Chatwoot (`chatwoot_wamid...`)
+      const idsCandidatos = [sourceId, `chatwoot_${sourceId}`];
+      const naoRegredir = statusInferiorOuIgual(novoStatus);
+
+      let q = supabase
+        .from("whatsapp_mensagens")
+        .update(updateData)
+        .in("message_id", idsCandidatos);
+
+      // Proteção: NUNCA rebaixar status (lida não vira entregue, entregue não vira enviada)
+      if (naoRegredir.length > 0) {
+        q = q.not("status", "in", `(${naoRegredir.map((s) => `"${s}"`).join(",")})`);
+      }
+
+      const { error: upErr, count } = await q.select("id", { count: "exact", head: true });
+
+      if (upErr) {
+        console.error(`[chatwoot-webhook] status update FALHOU ${sourceId} → ${novoStatus}: ${upErr.message}`);
+      } else {
+        console.log(`[chatwoot-webhook] status update ${sourceId} → ${novoStatus} (${count ?? 0} linhas)`);
+      }
+
+      // Heartbeat de telemetria — mesma tabela usada pelo meta-webhook
+      try {
+        await supabase
+          .from("whatsapp_meta_config")
+          .update({
+            last_webhook_at: new Date().toISOString(),
+            last_webhook_event: `chatwoot:${event}`,
+            last_webhook_statuses_count: 1,
+            last_webhook_error: null,
+          })
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+      } catch (telErr) {
+        console.error("[chatwoot-webhook] telemetria falhou:", telErr);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, source_id: sourceId, status: novoStatus, linhas: count ?? 0 }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Aceitar tanto "message_created" quanto "automation_event.message_created"
     if (!event.includes("message_created")) {
