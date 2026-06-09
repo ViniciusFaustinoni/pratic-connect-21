@@ -425,10 +425,10 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
             
             {/* Área de preview / captura */}
             <div className="relative aspect-[4/3] bg-muted/30 rounded-xl border border-border/50 overflow-hidden">
-              {(previewLocal || fotosEnviadas[fotoAtual.id]) ? (
+              {urlsExibiveis[fotoAtual.id] ? (
                 <div className="relative w-full h-full">
                   <img
-                    src={previewLocal || fotosEnviadas[fotoAtual.id]}
+                    src={urlsExibiveis[fotoAtual.id]}
                     alt={fotoAtual.label}
                     className="w-full h-full object-cover"
                   />
