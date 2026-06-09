@@ -70,10 +70,10 @@ export function RealizarVistoriaInternaButton({
   const rotaBase = resolverRotaTecnico(servico.tipo);
   if (!rotaBase) return null;
 
-  // Para instalação / vistoria_entrada / revistoria abrimos a tela embedada em modal.
-  // Demais tipos (retirada, manutenção, vistoria genérica) seguem com window.open
-  // por enquanto, já que reusam outras páginas do app do instalador.
-  const podeEmbedar = rotaBase === '/instalador/instalacao';
+  // Embedamos em modal full-screen as telas que já aceitam props
+  // (servicoIdProp / vistoriaInterna / onClose): instalação e retirada.
+  // Demais tipos (manutenção, vistoria genérica) seguem com window.open.
+  const podeEmbedar = rotaBase === '/instalador/instalacao' || rotaBase === '/instalador/retirada';
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
