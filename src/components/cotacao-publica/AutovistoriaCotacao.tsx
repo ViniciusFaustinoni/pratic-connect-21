@@ -684,10 +684,18 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
 
             <VideoCapture
               onCapture={handleUploadVideo}
-              onReset={() => setVideoUrl(null)}
-              videoUrl={videoUrl || undefined}
-              uploading={uploadingVideo}
-              uploadProgress={uploadingVideo ? videoProgress : undefined}
+              onReset={async () => {
+                // Remove pendência local (se houver). Vídeo remoto fica até o cliente regravar.
+                const pend = await offlineDB.midias_pendentes
+                  .where('vistoria_id')
+                  .equals(cotacaoId)
+                  .and((m) => m.tipo === 'video')
+                  .toArray();
+                for (const p of pend) await removerMidia(p.id);
+              }}
+              videoUrl={offline.urlsLocais['video_360'] || videoUrl || undefined}
+              uploading={!!offline.progressoUpload['video_360']}
+              uploadProgress={offline.progressoUpload['video_360']}
               maxDuration={120}
               label="Grave o vídeo 360° terminando no painel ligado"
             />
