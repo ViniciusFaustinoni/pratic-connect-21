@@ -677,6 +677,21 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
           }}
         />
       )}
+
+      {solicitacao && (
+        <SolicitarRetiradaTrocaDialog
+          open={retiradaOpen}
+          onOpenChange={setRetiradaOpen}
+          solicitacaoId={solicitacao.id}
+          veiculoId={solicitacao.veiculo_id}
+          onAgendado={() => {
+            qc.invalidateQueries({ queryKey: ['solicitacao-troca', solicitacao.id] });
+            qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+            onOpenChange(false);
+          }}
+        />
+      )}
     </Dialog>
+
   );
 }
