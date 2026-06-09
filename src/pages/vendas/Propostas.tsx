@@ -203,7 +203,7 @@ export default function Propostas() {
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
-          <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+          <div className="relative w-full sm:flex-1 sm:min-w-[180px] sm:max-w-[280px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar consultor..."
@@ -215,8 +215,8 @@ export default function Propostas() {
 
           {/* Sort */}
           <Select value={sortBy} onValueChange={handleSortChange}>
-            <SelectTrigger className="w-[200px] h-9">
-              <ArrowUpDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+            <SelectTrigger className="flex-1 sm:flex-none sm:w-[200px] h-9 min-w-0">
+              <ArrowUpDown className="h-3.5 w-3.5 mr-2 text-muted-foreground shrink-0" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -228,8 +228,8 @@ export default function Propostas() {
 
           {/* Period */}
           <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoFiltro)}>
-            <SelectTrigger className="w-[140px] h-9">
-              <Calendar className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+            <SelectTrigger className="flex-1 sm:flex-none sm:w-[140px] h-9 min-w-0">
+              <Calendar className="h-3.5 w-3.5 mr-2 text-muted-foreground shrink-0" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -239,7 +239,7 @@ export default function Propostas() {
           </Select>
 
           {/* View Toggle */}
-          <div className="flex border rounded-lg ml-auto">
+          <div className="flex border rounded-lg sm:ml-auto">
             <Button
               variant="ghost"
               size="icon"
@@ -266,11 +266,11 @@ export default function Propostas() {
         </div>
 
         {/* Performance Filter Chips */}
-        <div className="flex items-center gap-2">
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <Badge
             variant={performanceFilter === 'todos' ? 'default' : 'outline'}
-            className="cursor-pointer text-xs"
+            className="cursor-pointer text-xs whitespace-nowrap"
             onClick={() => setPerformanceFilter('todos')}
           >
             Todos ({(data?.consultores || []).length})
@@ -278,9 +278,9 @@ export default function Propostas() {
           <Badge
             variant={performanceFilter === 'top' ? 'default' : 'outline'}
             className={cn(
-              "cursor-pointer text-xs",
-              performanceFilter === 'top' 
-                ? "bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-yellow-500" 
+              "cursor-pointer text-xs whitespace-nowrap",
+              performanceFilter === 'top'
+                ? "bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-yellow-500"
                 : "border-yellow-500/50 text-yellow-700 hover:bg-yellow-50 dark:text-yellow-400 dark:hover:bg-yellow-950/30"
             )}
             onClick={() => handlePerformanceFilter('top')}
@@ -290,9 +290,9 @@ export default function Propostas() {
           <Badge
             variant={performanceFilter === 'regular' ? 'default' : 'outline'}
             className={cn(
-              "cursor-pointer text-xs",
-              performanceFilter === 'regular' 
-                ? "bg-green-500 hover:bg-green-600 text-green-950 border-green-500" 
+              "cursor-pointer text-xs whitespace-nowrap",
+              performanceFilter === 'regular'
+                ? "bg-green-500 hover:bg-green-600 text-green-950 border-green-500"
                 : "border-green-500/50 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30"
             )}
             onClick={() => handlePerformanceFilter('regular')}
@@ -302,9 +302,9 @@ export default function Propostas() {
           <Badge
             variant={performanceFilter === 'atencao' ? 'default' : 'outline'}
             className={cn(
-              "cursor-pointer text-xs",
-              performanceFilter === 'atencao' 
-                ? "bg-red-500 hover:bg-red-600 text-red-950 border-red-500" 
+              "cursor-pointer text-xs whitespace-nowrap",
+              performanceFilter === 'atencao'
+                ? "bg-red-500 hover:bg-red-600 text-red-950 border-red-500"
                 : "border-red-500/50 text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
             )}
             onClick={() => handlePerformanceFilter('atencao')}
