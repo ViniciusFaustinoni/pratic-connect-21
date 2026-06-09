@@ -33,8 +33,13 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Isso força o uso da role "anon" mesmo quando o usuário está logado em outra aba
 export const publicSupabase = createClient<LooseDatabase>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
+    // storageKey distinto evita "Multiple GoTrueClient instances detected in the
+    // same browser context" — quando dois clients compartilham a mesma chave,
+    // o segundo a montar quebra a sessão e derruba o socket realtime do primeiro
+    // (CHANNEL_ERROR em chat-ia, pendencias-documentos-rt etc).
+    storageKey: 'sb-iyxdgmukrrdkffraptsx-public-auth-token',
     persistSession: false,
     autoRefreshToken: false,
     storage: undefined,
-  }
+  },
 });

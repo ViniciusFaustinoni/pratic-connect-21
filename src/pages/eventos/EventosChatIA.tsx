@@ -77,24 +77,42 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento', escopo
     },
   });
 
-  // Realtime: atualiza a lista de conversas assim que uma nova mensagem é gravada
+  // Realtime: atualiza a lista de conversas assim que uma nova mensagem é gravada.
+  // Auto-recover em CHANNEL_ERROR/TIMED_OUT pra não ficar mudo depois de
+  // refresh de token ou queda momentânea de socket.
   useEffect(() => {
     if (!instanciasAtivas?.length) return;
-    const channel = supabase
-      .channel('chat-ia-mensagens-rt')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
-        (payload) => {
-          const inst = (payload.new as any)?.instancia_id;
-          if (!inst || (instanciasAtivas && instanciasAtivas.includes(inst))) {
-            queryClient.invalidateQueries({ queryKey: ['chat-ia-conversas', instanciasAtivas] });
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const connect = () => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`chat-ia-mensagens-rt-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
+          (payload) => {
+            const inst = (payload.new as any)?.instancia_id;
+            if (!inst || (instanciasAtivas && instanciasAtivas.includes(inst))) {
+              queryClient.invalidateQueries({ queryKey: ['chat-ia-conversas', instanciasAtivas] });
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (channel) { supabase.removeChannel(channel); channel = null; }
+            if (!cancelled) retryTimer = setTimeout(connect, 2000);
+          }
+        });
+    };
+    connect();
+
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [instanciasAtivas, queryClient]);
 
