@@ -24,8 +24,7 @@ import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
 import { SolicitarRetiradaTrocaDialog } from './SolicitarRetiradaTrocaDialog';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Wrench, Camera, ChevronDown, PackageMinus } from 'lucide-react';
+import { Wrench, Camera, PackageMinus } from 'lucide-react';
 
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
 import { RefreshCw } from 'lucide-react';
@@ -70,6 +69,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
   const [criandoCotacao, setCriandoCotacao] = useState(false);
   const [formCotacaoOpen, setFormCotacaoOpen] = useState(false);
+  const [vistoriaOpen, setVistoriaOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const [retiradaOpen, setRetiradaOpen] = useState(false);
 
@@ -231,6 +231,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const handleSolicitarVistoria = async (tipo: 'somente_fotos' | 'fotos_com_rastreador') => {
     if (!solicitacao) return;
     if (!(await garantirImeiValidado())) return;
+    setVistoriaOpen(false);
     await aprovarMonitoramento.mutateAsync({
       solicitacao_id: solicitacao.id,
       acao: 'solicitar_vistoria',
@@ -243,6 +244,11 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const handleAbrirManutencao = async () => {
     if (!(await garantirImeiValidado())) return;
     setManutencaoOpen(true);
+  };
+
+  const handleAbrirVistoria = async () => {
+    if (!(await garantirImeiValidado())) return;
+    setVistoriaOpen(true);
   };
 
   const handleAbrirRetirada = async () => {
