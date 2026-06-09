@@ -33,7 +33,7 @@ export interface MidiaPendente {
 
 export interface VistoriaPendente {
   id: string; // mesmo ID da vistoria no servidor
-  origem: 'regulador' | 'instalador' | 'publico';
+  origem: 'regulador' | 'instalador' | 'publico' | 'cotacao_publica';
   /** Snapshot dos dados (não-mídia) salvos offline para envio na finalização */
   payload: Record<string, unknown>;
   status: SyncStatus | 'rascunho';
