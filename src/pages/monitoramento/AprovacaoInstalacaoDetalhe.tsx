@@ -34,6 +34,8 @@ import {
   Expand,
   UserSearch,
   Undo2,
+  PackageMinus,
+
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
