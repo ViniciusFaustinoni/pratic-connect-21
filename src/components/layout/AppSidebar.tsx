@@ -717,7 +717,15 @@ export function AppSidebar() {
         });
       }
     }
-    
+
+    // Whitelist canônico do perfil Relacionamento: apenas Relacionamento, Cadastro,
+    // Comercial (Vendas) e Monitoramento. Bloqueia vazamento via permissions cruzadas
+    // (ex.: canManageCadastro abrindo Documentos).
+    if (permissions.isRelacionamentoOnly) {
+      const allowed = new Set(['relacionamento', 'cadastro', 'vendas', 'monitoramento']);
+      baseGroups = baseGroups.filter(g => allowed.has(g.id));
+    }
+
     return baseGroups;
   }, [permissions, additionalModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount, propostasPendentesCount, isItemVisible]);
 
