@@ -198,22 +198,52 @@ Deno.serve(async (req) => {
         .eq('id', solicitacao_id);
       if (error) throw error;
 
-      // Ativação do contrato do novo titular (idempotente)
-      if (solicitacao.novo_associado_id) {
+      // Helper: reverter aprovação + marcar falha + enfileirar retry SGA.
+      // Mantém a solicitação visível em "Pendentes do Monitoramento" para o
+      // operador reprocessar a partir da UI corrigida.
+      const reverterEMarcar = async (code: string, errMsg: string, etapa?: string) => {
+        await admin
+          .from('solicitacoes_troca_titularidade')
+          .update({
+            aprovado_monitoramento_por: null,
+            aprovado_monitoramento_em: null,
+            sga_status: 'falha',
+            observacao_monitoramento:
+              `${observacao ? observacao + ' | ' : ''}[${code}] ${etapa ? `etapa=${etapa} ` : ''}${(errMsg || '').slice(0, 400)}`,
+          })
+          .eq('id', solicitacao_id);
         try {
-          let contratoNovoId: string | null = null;
-          if (solicitacao.cotacao_id) {
-            const { data: contratoNovo } = await admin
-              .from('contratos')
-              .select('id')
-              .eq('cotacao_id', solicitacao.cotacao_id)
-              .eq('associado_id', solicitacao.novo_associado_id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            contratoNovoId = contratoNovo?.id || null;
-          }
-          await fetch(`${SUPABASE_URL}/functions/v1/ativar-associado`, {
+          await admin.from('sga_sync_queue').insert({
+            veiculo_id: solicitacao.veiculo_id,
+            associado_id: solicitacao.novo_associado_id || solicitacao.associado_antigo_id,
+            status: 'pendente',
+            origem: 'troca_titularidade_efetivar',
+            etapa_parou: etapa || code,
+            erro_ultimo: errMsg?.slice(0, 1000) || null,
+            proximo_reenvio_em: new Date(Date.now() + 60_000).toISOString(),
+          });
+        } catch (qErr) {
+          console.warn('[aprovar-troca-monitoramento] falha ao enfileirar sga_sync_queue:', qErr);
+        }
+      };
+
+      // Ativação do contrato do novo titular — propaga erro (sem ela o contrato
+      // nasce 'assinado' e o veículo nunca promove).
+      if (solicitacao.novo_associado_id) {
+        let contratoNovoId: string | null = null;
+        if (solicitacao.cotacao_id) {
+          const { data: contratoNovo } = await admin
+            .from('contratos')
+            .select('id')
+            .eq('cotacao_id', solicitacao.cotacao_id)
+            .eq('associado_id', solicitacao.novo_associado_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          contratoNovoId = contratoNovo?.id || null;
+        }
+        try {
+          const ativResp = await fetch(`${SUPABASE_URL}/functions/v1/ativar-associado`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -229,14 +259,37 @@ Deno.serve(async (req) => {
               metadata: { solicitacao_troca_id: solicitacao_id },
             }),
           });
+          const ativJson = await ativResp.json().catch(() => ({}));
+          // ativar-associado retorna { success } ou { error }
+          const ativOk = ativResp.ok && (ativJson?.success !== false) && !ativJson?.error;
+          if (!ativOk) {
+            const errMsg = ativJson?.error || ativJson?.message || `HTTP ${ativResp.status}`;
+            await reverterEMarcar('falha_ativar_novo_titular', errMsg, 'ativar-associado');
+            return new Response(JSON.stringify({
+              success: false,
+              code: 'falha_ativar_novo_titular',
+              error: errMsg,
+            }), {
+              status: 502,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+            });
+          }
         } catch (ativErr) {
-          console.error('[aprovar-troca-monitoramento] erro ao ativar novo associado:', ativErr);
+          const msg = ativErr instanceof Error ? ativErr.message : String(ativErr);
+          await reverterEMarcar('falha_ativar_novo_titular', msg, 'ativar-associado');
+          return new Response(JSON.stringify({
+            success: false,
+            code: 'falha_ativar_novo_titular',
+            error: msg,
+          }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+          });
         }
       }
 
       // Efetivação (transferência de veículo + cancelamento contrato antigo + SGA).
       // A própria edge atualiza status='efetivada' em caso de sucesso.
-      let efetivadaOk = false;
       try {
         const efetivResp = await fetch(`${SUPABASE_URL}/functions/v1/efetivar-troca-titularidade`, {
           method: 'POST',
@@ -247,27 +300,69 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ solicitacao_id, cenario_override: 'B' }),
         });
         const efetivJson = await efetivResp.json().catch(() => ({}));
-        efetivadaOk = !!efetivJson?.success;
-        if (!efetivadaOk) {
+        if (!efetivJson?.success) {
+          const errMsg = efetivJson?.error || efetivJson?.message || `HTTP ${efetivResp.status}`;
+          const etapa = efetivJson?.etapa_falha || null;
           console.error('[aprovar-troca-monitoramento] efetivar-troca falhou:', efetivJson);
+          await reverterEMarcar('falha_efetivar_troca', errMsg, etapa);
+          return new Response(JSON.stringify({
+            success: false,
+            code: 'falha_efetivar_troca',
+            etapa_falha: etapa,
+            error: errMsg,
+          }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+          });
         }
       } catch (efetErr) {
-        console.error('[aprovar-troca-monitoramento] erro ao efetivar troca:', efetErr);
-      }
-
-      // Fallback: se a efetivação falhou, manter a solicitação visível em
-      // "Pendentes" para reprocessamento (não promover a 'liberada/efetivada').
-      if (!efetivadaOk) {
-        await admin
-          .from('solicitacoes_troca_titularidade')
-          .update({ sga_status: 'falha' })
-          .eq('id', solicitacao_id);
+        const msg = efetErr instanceof Error ? efetErr.message : String(efetErr);
+        console.error('[aprovar-troca-monitoramento] erro ao efetivar troca:', msg);
+        await reverterEMarcar('falha_efetivar_troca', msg);
+        return new Response(JSON.stringify({
+          success: false,
+          code: 'falha_efetivar_troca',
+          error: msg,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+        });
       }
     } else if (acao === 'solicitar_vistoria') {
-      // Persiste a modalidade da vistoria escolhida pelo monitoramento e
-      // muda a solicitação para aguardando_vistoria. A vistoria em si é
-      // executada pelo NOVO titular pelo link público (autovistoria).
+      // CANÔNICO: materializa um serviço de campo (vistoria_entrada) com o
+      // endereço do novo titular para o Monitoramento atribuir/executar.
+      // origem='troca_titularidade' é a exceção que dispensa cadastro_aprovado
+      // na Atribuição Manual (ver memória gate-cadastro-monitoramento-universal).
       const tipo = body.tipo_vistoria_troca!;
+      const v = body.vistoria!;
+      const associadoServico = solicitacao.novo_associado_id || solicitacao.associado_antigo_id;
+
+      const { data: servico, error: sErr } = await admin
+        .from('servicos')
+        .insert({
+          tipo: 'vistoria_entrada',
+          status: 'pendente',
+          data_agendada: v.data_agendada,
+          periodo: v.periodo,
+          associado_id: associadoServico,
+          veiculo_id: solicitacao.veiculo_id,
+          local_vistoria: 'cliente',
+          permite_encaixe: true,
+          origem: 'troca_titularidade',
+          observacoes: `[monitoramento_troca] Vistoria solicitada (${tipo === 'fotos_com_rastreador' ? 'fotos + instalação de rastreador' : 'somente fotos'}) para troca de titularidade ${solicitacao_id}.`,
+          logradouro: v.endereco.logradouro,
+          numero: v.endereco.numero || null,
+          bairro: v.endereco.bairro,
+          cidade: v.endereco.cidade,
+          uf: v.endereco.uf,
+          cep: v.endereco.cep,
+          latitude: v.endereco.latitude || null,
+          longitude: v.endereco.longitude || null,
+        })
+        .select('id')
+        .single();
+      if (sErr) throw sErr;
+
       const { error } = await admin
         .from('solicitacoes_troca_titularidade')
         .update({
@@ -275,12 +370,18 @@ Deno.serve(async (req) => {
           status: 'aguardando_vistoria',
           tipo_vistoria_troca: tipo,
           instalar_rastreador: tipo === 'fotos_com_rastreador',
+          servico_vistoria_id: servico.id,
         })
         .eq('id', solicitacao_id);
-      if (error) throw error;
+      if (error) {
+        // rollback do serviço criado
+        await admin.from('servicos').delete().eq('id', servico.id);
+        throw error;
+      }
 
       const tipoLabel = tipo === 'fotos_com_rastreador' ? 'Fotos + instalação de rastreador' : 'Somente fotos';
       await notificarTroca('troca_vistoria_agendada', [tipoLabel]);
+
     } else if (acao === 'agendar_manutencao') {
       // Cria serviço de campo (vistoria_manutencao) com endereço informado.
       const m = body.manutencao!;
