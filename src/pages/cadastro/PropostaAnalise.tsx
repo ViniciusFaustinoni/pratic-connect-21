@@ -731,6 +731,14 @@ export default function PropostaAnalise() {
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
       />
 
+      {/* Antigo × Novo (Troca de Titularidade / Substituição de Veículo) — sempre visível */}
+      {(proposta as any)?.processoOrigem?.tipo === 'troca_titularidade' && (
+        <TrocaProcessoCard solicitacaoId={(proposta as any).processoOrigem.solicitacaoId} />
+      )}
+      {(proposta as any)?.processoOrigem?.tipo === 'substituicao' && (
+        <SubstituicaoProcessoCard solicitacaoId={(proposta as any).processoOrigem.solicitacaoId} />
+      )}
+
 
       {/* Observações do operador + Tipo da Cotação + Histórico de avisos SGA */}
       <ObservacoesCotacaoCard
