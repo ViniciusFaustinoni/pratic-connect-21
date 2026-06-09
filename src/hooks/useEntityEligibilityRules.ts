@@ -172,9 +172,31 @@ function removeDiacritics(s: string): string {
 }
 
 function tokenizeModelo(s: string): string[] {
-  // Hífen tratado como separador para casar "T-CROSS" (cadastro) com "T CROSS" (DETRAN),
-  // "C-CROSS" com "C Cross", etc. Sem isso, modelos hifenizados nunca batem.
-  return s.split(/[\s/\-]+/).filter(Boolean);
+  // Qualquer caractere não-alfanumérico é separador. Cobre hífen, ponto,
+  // barra, parênteses, vírgula, underscore, "&", etc. Sem isso, modelos
+  // hifenizados/pontuados ("T-CROSS", "1.6 16V", "C4 CACTUS (NEW)") nunca
+  // batem com cadastros escritos noutra forma.
+  return s.split(/[^A-Z0-9]+/i).filter(Boolean);
+}
+
+/**
+ * Conjunto expandido de tokens do contexto, incluindo concatenações de
+ * tokens adjacentes (até 8 chars). Permite casar cadastros "compactos"
+ * (CRV, HB20, C3) com formas "soltas" do DETRAN/FIPE (CR-V, HB 20,
+ * C 3 PICASSO) SEM reintroduzir falsos positivos tipo 208⊂2008
+ * (a comparação continua sendo por TOKEN, nunca substring).
+ */
+function buildCtxTokenSet(tokens: string[]): Set<string> {
+  const set = new Set<string>(tokens);
+  for (let i = 0; i < tokens.length; i++) {
+    let acc = tokens[i];
+    for (let j = i + 1; j < tokens.length; j++) {
+      acc += tokens[j];
+      if (acc.length > 8) break;
+      set.add(acc);
+    }
+  }
+  return set;
 }
 
 /**
@@ -195,7 +217,8 @@ export function findModelEligibility(
 
   const ctxMarca = removeDiacritics((ctx.marca || '').toUpperCase());
   const ctxModelo = removeDiacritics((ctx.modelo || '').toUpperCase());
-  const ctxTokenSet = new Set(tokenizeModelo(ctxModelo));
+  const ctxTokens = tokenizeModelo(ctxModelo);
+  const ctxTokenSet = buildCtxTokenSet(ctxTokens);
 
   type Candidate = {
     entry: any;
@@ -222,7 +245,16 @@ export function findModelEligibility(
       score = 0;
     } else {
       if (entryTokens.length === 0) continue;
-      const allTokensPresent = entryTokens.every(t => ctxTokenSet.has(t));
+      let allTokensPresent = entryTokens.every(t => ctxTokenSet.has(t));
+      if (!allTokensPresent && entryTokens.length > 1) {
+        // Fallback: cadastro hifenizado/fragmentado ("HR-V" → [HR,V]) contra
+        // ctx compacto ("HRV"). Concatenação só vale se ≤8 chars (mesma
+        // política de buildCtxTokenSet) e estiver no token set do ctx.
+        const compact = entryTokens.join('');
+        if (compact.length <= 8 && ctxTokenSet.has(compact)) {
+          allTokensPresent = true;
+        }
+      }
       if (!allTokensPresent) continue;
       score = entryTokens.length;
     }
@@ -242,7 +274,25 @@ export function findModelEligibility(
     });
   }
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    // Telemetria de silêncio: regra tem cadastro p/ essa marca mas nenhum
+    // entry casou com o modelo do veículo. Quase sempre é erro de digitação
+    // no cadastro (ex.: "T-CROSS" antes do fix do tokenizador). Logar pra
+    // auditoria não-bloqueante — não muda comportamento.
+    const hasAnyForBrand = modelos.some((e: any) => {
+      if (!e || typeof e !== 'object') return false;
+      const em = removeDiacritics((e.marca || '').toUpperCase());
+      return !em || ctxMarca.includes(em) || em.includes(ctxMarca);
+    });
+    if (hasAnyForBrand && ctxMarca && ctxModelo) {
+      console.warn('[elegibilidade] modelo nao casou em marca_modelo', {
+        marca: ctxMarca,
+        modelo: ctxModelo,
+        entries: modelos.map((e: any) => e?.modelo).filter(Boolean),
+      });
+    }
+    return null;
+  }
 
   candidates.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
@@ -343,7 +393,7 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       // Mesma lógica de tokens do findModelEligibility (todos os tokens da entry
       // devem ser tokens exatos do veículo) — evita falso match Corolla→Fielder etc.
       const ctxModeloNorm = removeDiacritics((ctx.modelo || '').toUpperCase());
-      const ctxTokenSetLegacy = new Set(tokenizeModelo(ctxModeloNorm));
+      const ctxTokenSetLegacy = buildCtxTokenSet(tokenizeModelo(ctxModeloNorm));
       const matchModeloLegacy = (raw: string): boolean => {
         const norm = removeDiacritics((raw || '').toUpperCase());
         const tokens = tokenizeModelo(norm);
