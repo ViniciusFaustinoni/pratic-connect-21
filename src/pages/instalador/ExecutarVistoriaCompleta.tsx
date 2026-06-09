@@ -373,7 +373,13 @@ export default function ExecutarVistoriaCompleta() {
   // não bloqueamos a aprovação por eles.
   const conferenciaCompleta = modoApenasInstalacao || (Object.values(conferencia).every(Boolean) && hodometro.length > 0);
   const todasFotosEnviadas = totalFotosObrigatorias === 0 ? true : totalFotosEnviadas >= totalFotosObrigatorias;
-  const videoEnviado = modoApenasInstalacao || !!video360Url;
+  // IMPORTANTE: o gate exige o vídeo JÁ PERSISTIDO NO SERVIDOR (video_360_url da
+  // vistoria), nunca o preview local (blob no IndexedDB). Caso contrário o técnico
+  // aprova com vídeo pendente na fila offline; se a sync falhar ou o app fechar
+  // antes do upload concluir, a vistoria fica concluida sem vídeo
+  // (caso OOV8C87 — 31 fotos OK, vídeo perdido).
+  const videoEnviado = modoApenasInstalacao || !!video360UrlServidor;
+  const videoPendenteUpload = !modoApenasInstalacao && !video360UrlServidor && !!offlineQueue.previewVideo;
   // Rastreador é obrigatório quando o veículo precisa de rastreador.
   // O vínculo veículo↔rastreador vive em `rastreadores.veiculo_id` (e em
   // `instalacoes.rastreador_id` quando há instalação prévia). A tabela `veiculos`
@@ -972,7 +978,9 @@ export default function ExecutarVistoriaCompleta() {
           <p className="mt-2 text-center text-xs text-amber-400">
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
             {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${totalFotosObrigatorias - totalFotosEnviadas}). `}
-            {!videoEnviado && 'Envie o vídeo 360°. '}
+            {!videoEnviado && (videoPendenteUpload
+              ? '⏳ Aguardando upload do vídeo 360° concluir antes de aprovar. '
+              : 'Envie o vídeo 360°. ')}
             {!rastreadorVinculado && '📡 Vincule o IMEI do rastreador. '}
             {rastreadorVinculado && precisaConfirmarPosicao && !posicaoConfirmada && '📍 Confirme a posição do rastreador no mapa.'}
           </p>
