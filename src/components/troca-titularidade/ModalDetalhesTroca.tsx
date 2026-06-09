@@ -517,7 +517,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-64">
                           <DropdownMenuLabel>Tipo de vistoria</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleSolicitarVistoria('somente_fotos')}>
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleSolicitarVistoria('somente_fotos'); }}>
                             <Camera className="h-4 w-4 mr-2" />
                             <div>
                               <p className="text-sm font-medium">Somente fotos</p>
