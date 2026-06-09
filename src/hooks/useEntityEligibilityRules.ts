@@ -217,7 +217,8 @@ export function findModelEligibility(
 
   const ctxMarca = removeDiacritics((ctx.marca || '').toUpperCase());
   const ctxModelo = removeDiacritics((ctx.modelo || '').toUpperCase());
-  const ctxTokenSet = new Set(tokenizeModelo(ctxModelo));
+  const ctxTokens = tokenizeModelo(ctxModelo);
+  const ctxTokenSet = buildCtxTokenSet(ctxTokens);
 
   type Candidate = {
     entry: any;
