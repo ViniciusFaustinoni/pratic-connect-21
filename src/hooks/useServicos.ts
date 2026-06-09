@@ -16,7 +16,8 @@ export type TipoServico =
   | 'vistoria_sinistro'
   | 'vistoria_periodica'
   | 'vistoria_manutencao'
-  | 'vistoria_retirada';
+  | 'vistoria_retirada'
+  | 'retirada_rastreador';
 
 export type StatusServico = 
   | 'pendente' 
