@@ -24,6 +24,8 @@ import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 import { AgendarManutencaoTrocaDialog } from './AgendarManutencaoTrocaDialog';
 import { SolicitarRetiradaTrocaDialog } from './SolicitarRetiradaTrocaDialog';
+import { SolicitarVistoriaTrocaDialog } from './SolicitarVistoriaTrocaDialog';
+
 import { Wrench, Camera, PackageMinus } from 'lucide-react';
 
 import { SgaSyncCrossBadge } from './SgaSyncCrossBadge';
