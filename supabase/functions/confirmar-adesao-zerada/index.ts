@@ -104,11 +104,16 @@ Deno.serve(async (req) => {
       console.log('[confirmar-adesao-zerada] bypass gate sub-FIPE: troca de titularidade', { cotacao_id });
     }
 
-    // ── D1: Gate sub-FIPE autovistoria completa (somente nova adesão) ──────
-    // CANÔNICO: adesão zerada (isenta_*/agencia_em_maos) NÃO pode promover
-    // `status_contratacao='pagamento_ok'` enquanto a autovistoria sub-FIPE
-    // estiver incompleta. Sem esse gate, casos como d3126a85/c735c5e6 (3 fotos)
-    // pulavam direto para o Cadastro com vistoria parcial.
+    // ── D1: Gate sub-FIPE — agora canônico por via escolhida ──────────────
+    // Sub-FIPE tem 3 vias canônicas (persistidas em
+    // `cotacoes.dados_extras.via_vistoria_sub_fipe` pelo `EtapaVistoria.tsx`):
+    //   - 'completa_celular' (Via 1): roteiro completo 30/10 fotos + vídeo 360°.
+    //   - 'rf_celular'       (Via 2): chassi + motor + vídeo 360° (enxuta).
+    //   - 'sem_fotos'        (Via 3): pula fotos pelo celular; vistoria
+    //                                 presencial é executada pelo back-office.
+    // O gate respeita a via escolhida pelo cliente. Ausência de via é erro do
+    // próprio cliente (clicou em "Confirmar adesão isenta" sem antes abrir a
+    // etapa 5 e escolher como será a vistoria).
     if (!isTroca) try {
       const { data: contratoGate } = await supabase
         .from('contratos')
@@ -124,51 +129,77 @@ Deno.serve(async (req) => {
           .rpc('fn_veiculo_precisa_rastreador', { _veiculo_id: veiculoIdGate });
         const isSubFipe = precisaRastreador === false;
         if (isSubFipe) {
-          const { data: vinfo } = await supabase
-            .from('veiculos')
-            .select('marca, modelo, marca_modelo:marcas_modelos(tipo_veiculo)')
-            .eq('id', veiculoIdGate)
-            .maybeSingle();
-          const tipoCat = ((vinfo as any)?.marca_modelo?.tipo_veiculo || '').toLowerCase();
-          let tipoSub: TipoVeiculoSubFipe = 'carro';
-          if (tipoCat === 'moto') {
-            tipoSub = 'moto';
-          } else {
-            const marcaMod = (((vinfo as any)?.marca || '') + ' ' + ((vinfo as any)?.modelo || '')).toUpperCase();
-            if (/MOTO|CG|XRE|FAZER|YBR|TITAN|BIZ|POP|BROS|FAN/.test(marcaMod)) tipoSub = 'moto';
-          }
-          const { data: fotos } = await supabase
-            .from('cotacoes_vistoria_fotos')
-            .select('tipo')
-            .eq('cotacao_id', cotacao_id);
-          const completude = checarCompletudeAutovistoriaSubFipe({
-            tipo: tipoSub,
-            fotosEnviadas: ((fotos || []) as any[]).map((f) => f.tipo),
-          });
-          if (!completude.ok) {
-            console.warn('[confirmar-adesao-zerada] bloqueado: autovistoria sub-FIPE incompleta', {
-              cotacao_id, tipo: tipoSub,
-              faltantes: completude.obrigatoriasFaltantes,
-              videoFaltante: completude.videoFaltante,
-              recebidas: completude.recebidas,
-            });
+          const via = ((cotacaoMeta as any)?.dados_extras?.via_vistoria_sub_fipe || null) as
+            | 'completa_celular' | 'rf_celular' | 'sem_fotos' | null;
+
+          // Via 3 (sem_fotos): liberar gate; vistoria presencial é back-office.
+          if (via === 'sem_fotos') {
+            console.log('[confirmar-adesao-zerada] sub-FIPE Via 3 (sem_fotos): gate liberado', { cotacao_id });
+          } else if (via === null) {
+            // Cliente clicou em confirmar sem escolher via.
+            console.warn('[confirmar-adesao-zerada] bloqueado: via sub-FIPE não escolhida', { cotacao_id });
             return jsonResponse({
               success: false,
-              error: 'autovistoria_pendente',
-              code: 'autovistoria_pendente',
-              mensagem: 'Antes de confirmar a adesão isenta, é necessário concluir a autovistoria completa do veículo (roteiro de fotos + vídeo 360°).',
-              tipoVeiculo: tipoSub,
-              faltantes: completude.obrigatoriasFaltantes,
-              videoFaltante: completude.videoFaltante,
-              esperadasMin: completude.esperadasMin,
-              recebidas: completude.recebidas,
+              error: 'via_sub_fipe_nao_escolhida',
+              code: 'via_sub_fipe_nao_escolhida',
+              mensagem: 'Antes de confirmar a adesão isenta, volte à etapa Vistoria e escolha como sua vistoria será feita (completa pelo celular, só Roubo & Furto pelo celular, ou presencial sem fotos).',
             }, 409);
+          } else {
+            // Via 1 (completa) ou Via 2 (R&F) — checar fotos correspondentes.
+            const { data: vinfo } = await supabase
+              .from('veiculos')
+              .select('marca, modelo, marca_modelo:marcas_modelos(tipo_veiculo)')
+              .eq('id', veiculoIdGate)
+              .maybeSingle();
+            const tipoCat = ((vinfo as any)?.marca_modelo?.tipo_veiculo || '').toLowerCase();
+            let tipoSub: TipoVeiculoSubFipe = 'carro';
+            if (tipoCat === 'moto') {
+              tipoSub = 'moto';
+            } else {
+              const marcaMod = (((vinfo as any)?.marca || '') + ' ' + ((vinfo as any)?.modelo || '')).toUpperCase();
+              if (/MOTO|CG|XRE|FAZER|YBR|TITAN|BIZ|POP|BROS|FAN/.test(marcaMod)) tipoSub = 'moto';
+            }
+            const { data: fotos } = await supabase
+              .from('cotacoes_vistoria_fotos')
+              .select('tipo')
+              .eq('cotacao_id', cotacao_id);
+            const fotosEnviadas = ((fotos || []) as any[]).map((f) => f.tipo);
+
+            const completude = via === 'rf_celular'
+              ? checarCompletudeAutovistoriaSubFipeRF({ tipo: tipoSub, fotosEnviadas })
+              : checarCompletudeAutovistoriaSubFipe({ tipo: tipoSub, fotosEnviadas });
+
+            if (!completude.ok) {
+              const codeErr = via === 'rf_celular' ? 'autovistoria_rf_pendente' : 'autovistoria_pendente';
+              const mensagem = via === 'rf_celular'
+                ? 'Antes de confirmar a adesão isenta, conclua a vistoria de Roubo & Furto pelo celular (foto do chassi, do motor e vídeo 360°).'
+                : 'Antes de confirmar a adesão isenta, é necessário concluir a autovistoria completa do veículo (roteiro de fotos + vídeo 360°).';
+              console.warn('[confirmar-adesao-zerada] bloqueado: autovistoria sub-FIPE incompleta', {
+                cotacao_id, via, tipo: tipoSub,
+                faltantes: completude.obrigatoriasFaltantes,
+                videoFaltante: completude.videoFaltante,
+                recebidas: completude.recebidas,
+              });
+              return jsonResponse({
+                success: false,
+                error: codeErr,
+                code: codeErr,
+                mensagem,
+                via,
+                tipoVeiculo: tipoSub,
+                faltantes: completude.obrigatoriasFaltantes,
+                videoFaltante: completude.videoFaltante,
+                esperadasMin: completude.esperadasMin,
+                recebidas: completude.recebidas,
+              }, 409);
+            }
           }
         }
       }
     } catch (gateErr) {
       console.warn('[confirmar-adesao-zerada] gate sub-FIPE falhou (segue por fail-safe):', gateErr);
     }
+
 
     // 1) Execução atômica via RPC
     const { data: rpcRows, error: rpcError } = await supabase.rpc('fn_confirmar_adesao_zerada', {
