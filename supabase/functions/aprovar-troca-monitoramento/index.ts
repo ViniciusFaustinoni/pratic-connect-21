@@ -398,15 +398,23 @@ Deno.serve(async (req) => {
         await admin.from('analises_relacionamento').insert({
           tipo: 'monitoramento_solicitou_retirada',
           status: 'pendente',
-          solicitacao_troca_id: solicitacao_id,
           associado_id: solicitacao.associado_antigo_id,
           veiculo_id: veiculoIdAlvo,
-          observacoes: `Retirada solicitada pelo Monitoramento. Vistoria escolhida: ${r.tipo_vistoria}. Justificativa: ${r.justificativa}`,
-          criado_por: profileId,
+          origem_tabela: 'solicitacoes_troca_titularidade',
+          origem_id: solicitacao_id,
+          justificativa: r.justificativa,
+          metadata: {
+            tipo_vistoria_escolhida: r.tipo_vistoria,
+            servico_retirada_id: servRetirada.id,
+            servico_vistoria_id: servVistoria.id,
+            rastreador_id: r.rastreador_id,
+            actor_profile_id: profileId,
+          },
         });
       } catch (logErr) {
         console.warn('[aprovar-troca-monitoramento] analises_relacionamento falhou (não bloqueante):', logErr);
       }
+
 
       const { error: updErr } = await admin
         .from('solicitacoes_troca_titularidade')
