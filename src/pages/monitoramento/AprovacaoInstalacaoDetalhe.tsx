@@ -1388,6 +1388,18 @@ export default function AprovacaoInstalacaoDetalhe() {
               cenarioPadrao={isAtendimentoBase ? 'base' : 'rota'}
               onSuccess={() => navigate('/monitoramento/aprovacao-associados')}
             />
+
+            {!!servico.veiculo_id && (
+              <MarcarRetiradaDialog
+                open={retiradaOpen}
+                onOpenChange={setRetiradaOpen}
+                servicoId={servico.id}
+                veiculoId={servico.veiculo_id}
+                veiculoPlaca={veiculo?.placa || undefined}
+                onSuccess={() => navigate('/monitoramento/aprovacao-associados')}
+              />
+            )}
+
           </>
         );
       })()}
