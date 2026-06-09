@@ -354,7 +354,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete, fotosO
         {/* Indicadores de fotos (miniaturas) + vídeo */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           {fotos.map((foto, index) => {
-            const enviada = !!fotosEnviadas[foto.id];
+            const enviada = slotsCompletos.has(foto.id);
             const atual = etapa === 'fotos' && index === fotoAtualIndex;
 
             return (
