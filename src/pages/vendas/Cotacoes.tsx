@@ -907,13 +907,13 @@ export default function Cotacoes() {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Cotações</h1>
-          <p className="text-sm text-muted-foreground">
-            {permissions.cotacao.viewScope === 'all' 
+      <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Cotações</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            {permissions.cotacao.viewScope === 'all'
               ? `Gerencie todas as cotações`
               : 'Gerencie suas cotações'}
             {funilCounts && funilCounts.total > 0 && (
@@ -921,11 +921,11 @@ export default function Cotacoes() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           {/* Botões "Relatório Inteligente" e "Planos e Benefícios" removidos a pedido */}
           <PermissionGate permission="cotacao.canCreate">
-            <Button 
-              className="gap-2 shadow-md hover:shadow-lg transition-all" 
+            <Button
+              className="gap-2 shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
               onClick={() => { setNovaEntradaMounted(true); setShowNovaEntrada(true); }}
             >
               <Plus className="h-4 w-4" />
