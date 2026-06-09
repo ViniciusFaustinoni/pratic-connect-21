@@ -623,18 +623,18 @@ export default function AtribuicaoManualTab() {
                 Serviços Pendentes
                 <Badge variant="secondary" className="ml-auto">{servicosFiltrados.length}</Badge>
               </CardTitle>
-              <div className="flex gap-2 mt-2">
+              <div className="flex flex-col sm:flex-row gap-2 mt-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por nome, placa, bairro, cidade ou zona..."
+                    placeholder="Buscar por nome, placa, bairro..."
                     value={busca}
                     onChange={e => setBusca(e.target.value)}
                     className="pl-9 h-9"
                   />
                 </div>
                 <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-                  <SelectTrigger className="w-40 h-9">
+                  <SelectTrigger className="w-full sm:w-40 h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
