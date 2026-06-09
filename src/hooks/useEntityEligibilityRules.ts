@@ -384,7 +384,7 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       // Mesma lógica de tokens do findModelEligibility (todos os tokens da entry
       // devem ser tokens exatos do veículo) — evita falso match Corolla→Fielder etc.
       const ctxModeloNorm = removeDiacritics((ctx.modelo || '').toUpperCase());
-      const ctxTokenSetLegacy = new Set(tokenizeModelo(ctxModeloNorm));
+      const ctxTokenSetLegacy = buildCtxTokenSet(tokenizeModelo(ctxModeloNorm));
       const matchModeloLegacy = (raw: string): boolean => {
         const norm = removeDiacritics((raw || '').toUpperCase());
         const tokens = tokenizeModelo(norm);
