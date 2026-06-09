@@ -335,7 +335,6 @@ export default function PropostaAnalise() {
     }
     const justificativa = bypassJustificativa.trim();
     const nomeAutorizador = bypassNomeAutorizador.trim();
-    setShowBypassJanela(false);
     try {
       const chassiInformado = veiculoChassi?.trim();
       await aprovarMutation.mutateAsync({
@@ -346,6 +345,7 @@ export default function PropostaAnalise() {
         bypassJustificativa: justificativa,
         bypassNomeAutorizador: nomeAutorizador,
       });
+      setShowBypassJanela(false);
       try {
         await registrarLog({
           acao: 'aprovar',
@@ -365,9 +365,12 @@ export default function PropostaAnalise() {
       else navigate('/cadastro/propostas');
     } catch (err: any) {
       console.error('[PropostaAnalise] Bypass janela falhou:', err);
-      toast.error('Falha no bypass', { description: err?.message || 'Tente novamente.' });
+      toast.error('Falha no bypass', {
+        description: err?.codigo ? `${err.codigo}: ${err?.message || ''}` : (err?.message || 'Tente novamente.'),
+      });
     }
   };
+
 
   const handleConverterEmCotacaoNormal = async () => {
     if (!id) return;
