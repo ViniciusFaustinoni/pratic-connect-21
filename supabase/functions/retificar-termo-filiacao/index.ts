@@ -320,6 +320,11 @@ serve(async (req) => {
     templateData.regrasDepreciacao = regrasDepreciacao;
     if (regrasVenda) templateData.regrasVenda = regrasVenda;
 
+    // Cascade de substituição (placa anterior / modelo / FIPE) — reexecuta SEMPRE
+    // a partir das fontes vivas, nunca reusa payload antigo da retificação anterior.
+    await aplicarSubstituicaoNoTemplateData(supabase, contratoNovo, templateData, '[retificar-termo-filiacao]');
+
+
     // Coberturas/benefícios elegíveis
     const planoId = contratoNovo!.planos?.id || contratoNovo!.plano_id;
     if (planoId) {
