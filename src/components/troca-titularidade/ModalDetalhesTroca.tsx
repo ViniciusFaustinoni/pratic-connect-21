@@ -38,6 +38,7 @@ import { ValidarImeiPorPlacaCard } from './ValidarImeiPorPlacaCard';
 import { validarImeiPorPlaca, type ValidacaoOrigem } from '@/lib/troca-titularidade/validarImeiPorPlaca';
 import { PontasPendentesCard } from './PontasPendentesCard';
 import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
+import { useSolicitacaoEmLimbo } from '@/hooks/useTrocaLimbo';
 
 interface Props {
   open: boolean;
