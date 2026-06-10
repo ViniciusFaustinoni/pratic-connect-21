@@ -37,6 +37,7 @@ import {
   gerarSecaoCoberturasInjetavel,
 } from "../_shared/template-utils.ts";
 import { insertAuditLog } from "../_shared/auditLog.ts";
+import { aplicarSubstituicaoNoTemplateData } from "../_shared/substituicao-cascade.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
