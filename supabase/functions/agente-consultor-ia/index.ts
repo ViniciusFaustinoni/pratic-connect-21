@@ -1906,6 +1906,47 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
       systemPrompt += `\n\n## CONVERSA EM ANDAMENTO — NÃO RESSAUDE\nO cliente já está em conversa ativa hoje (dentro da janela de ${habCfg.gate_saudacao_horas}h). Ele apenas mandou um cumprimento curto ("oi", "bom dia", etc.). NÃO repita a saudação de identificação ("Olá! Tudo bem? Para iniciarmos..."), NÃO use cerimônia de abertura de turno ("Como posso ajudá-lo hoje?", "Em que podemos te ajudar hoje?"). Responda curto e cordial usando o primeiro nome${primeiroNome ? ` (ex: "Oi, ${primeiroNome}! Como posso ajudar?")` : ""}. Se houver assunto/pedido na mesma mensagem, vá direto ao assunto sem rodeios.`;
     }
 
+    // Trava extra: IDENTIDADE JÁ CONFIRMADA dentro da janela canônica.
+    // Garante que a LLM não reabra a apresentação ("Sou Atendimento Praticcar…",
+    // "Como ainda não tenho seus dados…") quando o contato já foi identificado
+    // (CPF capturado OU nome confirmado) dentro de habCfg.gate_saudacao_horas
+    // ou no mesmo dia BRT. Caso Fagner LSilva/+5521976055231 10/06/26.
+    if (jaIdentificado && !contextoAgendamentoPendente) {
+      const cpfCapTrava = (contato as any).cpf_capturado_em ? new Date((contato as any).cpf_capturado_em) : null;
+      const nomeConfTrava = (contato as any).nome_confirmado_em ? new Date((contato as any).nome_confirmado_em) : null;
+      const ultIdentTrava = [cpfCapTrava, nomeConfTrava]
+        .filter((d): d is Date => !!d)
+        .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+      if (ultIdentTrava) {
+        const horasDesdeIdentTrava = (Date.now() - ultIdentTrava.getTime()) / 3_600_000;
+        const agoraBRTTrava = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const diaBrtNowTrava = `${agoraBRTTrava.getFullYear()}-${agoraBRTTrava.getMonth()}-${agoraBRTTrava.getDate()}`;
+        const ultBRTTrava = new Date(ultIdentTrava.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const diaBrtUltTrava = `${ultBRTTrava.getFullYear()}-${ultBRTTrava.getMonth()}-${ultBRTTrava.getDate()}`;
+        const gateTrava = Number((habCfg as any)?.gate_saudacao_horas) > 0
+          ? Number((habCfg as any).gate_saudacao_horas)
+          : 2;
+        const dentroJanelaTrava =
+          horasDesdeIdentTrava < gateTrava || diaBrtNowTrava === diaBrtUltTrava;
+        if (dentroJanelaTrava) {
+          const primeiroNomeTrava = (contato.nome || "").trim().split(/\s+/)[0] || "";
+          const cpfMaskTrava = contato.cpf
+            ? `${contato.cpf.slice(0, 3)}.***.***-${contato.cpf.slice(-2)}`
+            : null;
+          const tsTrava = ultIdentTrava.toLocaleString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          systemPrompt += `\n\n## IDENTIDADE JÁ CONFIRMADA NESTA SESSÃO\nO contato JÁ está identificado${primeiroNomeTrava ? ` como *${primeiroNomeTrava}*` : ""}${cpfMaskTrava ? ` (CPF ${cpfMaskTrava})` : ""}, confirmado hoje às ${tsTrava} (janela canônica de ${gateTrava}h).\n- PROIBIDO pedir CPF, nome completo, "informe seu nome ou CPF", "para localizar seu cadastro", "como ainda não tenho seus dados salvos por aqui" — em qualquer forma.\n- PROIBIDO reabrir a conversa com "Olá! Tudo bem? Sou Atendimento Praticcar…" ou repetir a saudação inicial de identificação.\n- Vá direto ao pedido do cliente. Se já houve resposta nesta rodada, responda APENAS o que ele perguntou agora — sem reapresentação.`;
+          console.log(`[agente-consultor-ia] [trava_identidade] bloco IDENTIDADE_JA_CONFIRMADA injetado (gate=${gateTrava}h, h_desde_ident=${horasDesdeIdentTrava.toFixed(2)})`);
+        }
+      }
+    }
+
+
+
+
 
 
     // Contexto de AGENDAMENTO PENDENTE — espelha cobranca/CPF, com tools p/ agir
