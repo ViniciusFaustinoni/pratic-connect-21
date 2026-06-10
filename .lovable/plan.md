@@ -1,38 +1,71 @@
-## Fase 2 — Saneamento pontual do caso Patrick Farias
+## Diagnóstico — o que o PDF revela
 
-Raiz já corrigida na Fase 1 (template + cascade fallback nas edges Autentique + tokens defensivos). Falta apenas reemitir o termo do contrato afetado para o cliente receber a versão com as placas no lugar certo.
+O PDF anexado é a retificação v1 emitida hoje. Mesmo com a Fase 1 (template + cascade fallback) já em produção, o termo ainda está incompleto:
 
-### Alvo
-- Associado: PATRICK FARIAS DE OLIVEIRA (CPF 180.146.127-95)
-- Contrato: `CTR-20260606172721-Q70HEK`
-- Substituição: placa anterior **RJN2A96** → placa nova **LTP7C50**
-- Sintoma: termo atual lista LTP7C50 como "veículo com cobertura cancelada"
+1. **Checkbox saiu vazio**: `(X) Subs. Placa (o veíc. terá a cob. do PSM cancelada)` — sem nenhuma placa depois. O token `{{substituicao.placa_anterior}}` resolveu para string vazia/`—` na retificação.
+2. **Bloco "DADOS DO VEÍCULO"** mostra só **LTP7C50** (novo). Não há nenhuma seção do veículo **substituído** (RJN2A96). O associado assina sem ciência clara de qual carro está sendo cancelado.
 
-### Passos
+O que o usuário quer (canônico): o termo precisa exibir, lado a lado e de forma inequívoca, **dois blocos**: veículo que sai (cancelado) e veículo que entra (novo).
 
-1. **Validar estado antes de retificar** (read-only)
-   - Confirmar `contratos` do Q70HEK: `status`, `assinado_em`, `substituicao_veiculo_id`, `veiculo_id` (deve apontar para o novo LTP7C50).
-   - Confirmar `substituicoes_veiculo` correspondente: `placa_anterior=RJN2A96`, `veiculo_novo_id=<LTP7C50>`.
-   - Conferir que o template em `documento_templates` já está com `{{substituicao.placa_anterior}}` (deploy Fase 1 aplicado).
+---
 
-2. **Reemitir o termo** via edge `retificar-termo-filiacao`
-   - Payload: `{ contrato_id, motivo: "correção placas substituição (placa cancelada deve ser RJN2A96)", forcar: true }`.
-   - A edge cria nova versão em `contrato_retificacoes`, dispara Autentique novo doc com `positions: gerarPosicoesAssinatura(...)`, envia para assinatura do Patrick.
-   - Termo antigo permanece como histórico (não apaga).
+## Fase A — Desbloquear o Patrick (operacional)
 
-3. **Verificação pós-envio**
-   - Conferir nova linha em `contrato_retificacoes` com `versao` incrementada.
-   - Conferir novo `autentique_document_id` no contrato.
-   - Baixar o PDF gerado e confirmar visualmente: `(X) Subs. Placa ... cancelada) RJN2A96` e dados do veículo novo = LTP7C50.
+Sequência:
 
-4. **Notificar operação**
-   - Mensagem para Maria Gleiciele: link novo de assinatura foi disparado ao cliente; pedir confirmação de recebimento antes de fechar o ticket.
+1. **Investigar por que a retificação v1 saiu sem `placa_anterior`** — ler edge `retificar-termo-filiacao` e confirmar se ela chama o mesmo helper de cascade usado em `autentique-create` (suspeita: a retificação reusa `templateData` salvo originalmente, sem repassar pelos novos fallbacks). Corrigir se for o caso.
+2. **Atualizar o template SUB** (passo da Fase B abaixo) — só depois é seguro reemitir, senão sai outro termo errado.
+3. **Reemitir retificação v2 do Patrick** chamando `retificar-termo-filiacao` novamente com o template já corrigido. v1 fica histórica.
+4. Verificar PDF gerado: chassi/placa anterior visíveis, novo veículo visível, ambos rotulados.
 
-### Não-objetivos
-- Nenhuma mudança de código/migration nesta fase — raiz já está corrigida.
-- Nenhum saneamento em massa de outros contratos (não há outros casos conhecidos pós-deploy; se aparecerem, abrir nova rodada).
-- Não mexer em `substituicoes_veiculo` / `contratos.veiculo_id` (dados já estão corretos; o problema era só de renderização do termo).
+Sem mexer em `contratos.veiculo_id`, `substituicoes_veiculo` ou `cotacoes` — dados já estão corretos.
 
-### Riscos
-- Se o cliente já tiver assinado o termo errado, a retificação gera segundo termo correto (versão controlada por `contrato_retificacoes`, padrão canônico já em uso).
-- Créditos Autentique: 1 doc adicional com PF_FACIAL.
+---
+
+## Fase B — Raiz: template + edges
+
+### B1. Template `documento_templates` codigo='SUB'
+
+Migração ajustando `conteudo`:
+
+- **Cláusula do checkbox**: trocar para texto explícito mesmo com fallback vazio:
+  > `(X) Subs. Placa — veículo {{substituicao.placa_anterior}} ({{substituicao.modelo_anterior}}) terá a cobertura do PSM cancelada`
+- **Novo bloco antes de "DADOS DO VEÍCULO"** (só renderiza em substituição, controlado por sentinela `OPT_VAZIO` já existente):
+  ```
+  VEÍCULO SUBSTITUÍDO (Cobertura Cancelada)
+  ┌─────────────┬──────────────────────────┐
+  │ Placa:      │ {{substituicao.placa_anterior}}
+  │ Marca/Modelo│ {{substituicao.modelo_anterior}}
+  │ Valor FIPE: │ {{substituicao.fipe_anterior}}
+  └─────────────┴──────────────────────────┘
+  ```
+- **Renomear** o bloco existente "DADOS DO VEÍCULO" para "**VEÍCULO NOVO (Substituto)**" no template SUB (só esse template — não toca AF1).
+
+### B2. Edges Autentique + retificação
+
+Em `_shared/template-utils.ts` + `autentique-create` + `autentique-create-by-token` + `retificar-termo-filiacao`:
+
+- Garantir que o helper de cascade (Fase 1) também alimente:
+  - `substituicao.modelo_anterior` (de `cotacoes.dados_extras.veiculo_antigo_modelo` → `solicitacoes_substituicao_placa.veiculo_antigo_snapshot.modelo` → `veiculos.marca + modelo`)
+  - `substituicao.fipe_anterior` (mesma cascade, com `formatCurrency`)
+- **`retificar-termo-filiacao`**: forçar reexecução do cascade a partir de `cotacao_id`/`contrato_id` em vez de reutilizar `dados_utilizados` antigos. Esse é provavelmente o motivo da v1 do Patrick ter saído vazia.
+- Sentinela `OPT_VAZIO`: continuar suprimindo `<tr>` quando os 3 campos vierem vazios (ex: contrato não-substituição).
+
+### B3. Atualizar memória
+
+`mem://logic/documents/termo-substituicao-placa-anterior-canonico` — incluir:
+- Novos tokens (`modelo_anterior`, `fipe_anterior`) e o bloco "VEÍCULO SUBSTITUÍDO" canônico.
+- Regra de que `retificar-termo-filiacao` SEMPRE reexecuta o cascade, nunca reutiliza payload antigo.
+
+---
+
+## Não-objetivos
+
+- Não alterar template AF1 (adesão comum) nem outros.
+- Sem saneamento em massa de outros contratos de substituição históricos (se aparecer caso novo, retificar individualmente).
+- Sem mudança em fluxo de Substituição no front (`SubstituicaoStatusCard`, `StepConclusao` etc.) — já leem direto de `substituicoes_veiculo`.
+
+## Risco
+
+- Crédito Autentique: +1 doc PF_FACIAL para reemitir Patrick v2.
+- Se o associado já assinou v1, v2 prevalece (padrão canônico `contrato_retificacoes` já em uso).
