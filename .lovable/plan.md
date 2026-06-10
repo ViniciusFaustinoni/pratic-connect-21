@@ -1,76 +1,72 @@
 
-## Diagnóstico (sem alterar dados)
+## O que aconteceu (hipótese principal)
 
-Confirmei no banco que as duas solicitações citadas estavam exatamente no padrão "status=`aguardando_vistoria` + `servico_vistoria_id` apontando para serviço criado só no backfill de ontem":
+O operador estava na vistoria interna do Monitoramento (rota `/instalador/instalacao/:id` aberta a partir de Serviços de Campo). O print mostra **dois contadores incoerentes na mesma tela**:
 
-- **LQY5543** (sol. `50e43757…`): criada 08/06 17:44, virou `aguardando_vistoria` no clique do Monitoramento, mas o `servicos` (`f634e0f8…`) só foi inserido em 09/06 22:49 (backfill). ~29 h em limbo.
-- **LUJ0G95** (sol. `aaf27c03…`): criada 05/06, idem — serviço (`38788e9a…`) inserido em 09/06 22:51. ~4 dias em limbo.
+- topo (canônico, leitura do servidor): **`0/31 fotos · ✗ vídeo`** + lista "Faltam: Selfie…, Chave, Chassi, vídeo 360°…"
+- corpo (`VistoriaFotoSequencial`, estado local): **"Todas as fotos foram enviadas! 30/30 obrigatórias"** + toast "Vídeo 360° enviado com sucesso!"
 
-A branch `solicitar_vistoria` em `supabase/functions/aprovar-troca-monitoramento/index.ts` hoje já materializa o `servicos` antes do UPDATE da solicitação. Antes da reescrita, ela só atualizava `status='aguardando_vistoria'` + WhatsApp — daí o sumiço da Atribuição Manual (que filtra por `servicos` vivos com `origem='troca_titularidade'`).
+A divergência só é possível quando o componente filho marca como "enviada" sem que a foto realmente exista em `vistoria_fotos` para a `vistoria_id` que a tela carrega. Por isso, ao sair e voltar, "some todas as fotos": o estado local é descartado e a verdade do servidor (vazia) aparece.
 
-Mesmo com a branch corrigida, o **fluxo canônico continua sem rede de segurança**:
+Há **duas causas que se somam**:
 
-1. INSERT do `servicos` e UPDATE da solicitação são feitos em chamadas separadas. Se o INSERT passar e o UPDATE falhar, há rollback manual; se o UPDATE passar e o INSERT for revertido por trigger silenciosa (ou regressão futura no código), volta a limbo.
-2. Não há **guard de banco** impedindo `status` virar `aguardando_vistoria`/`aguardando_manutencao` sem o `servico_*_id` correspondente apontando para serviço vivo.
-3. Não há **cron** que detecte solicitação parada em `aguardando_vistoria`/`aguardando_manutencao` com serviço NULL/cancelado/excluído.
-4. A tela de **Aprovações de Troca** (Monitoramento) não tem badge/aviso quando a solicitação está em `aguardando_vistoria` sem serviço vivo — coordenador só descobre quando alguém reclama.
+### Causa A — limbo visual (UI mente para o operador)
 
-Isso é o que mantém a possibilidade de limbo, mesmo com a edge function consertada.
+`src/components/vistorias/VistoriaFotoSequencial.tsx` mantém um `Set<string> uploadedLocally` que é populado pelo `useEffect` na transição `uploadingFoto` truthy → null (linhas 50–73). Esse efeito **não distingue sucesso de falha** — qualquer término de upload (até com `toast.error('Erro ao enviar foto')`) marca a foto como enviada localmente, alimenta a barra "30/30 obrigatórias" e mostra o card verde "Todas as fotos foram enviadas!". O `Progresso de mídias` no pai usa `vistoriaCompleta.fotos` (canônico) e por isso permanece em `0/31`.
 
-## Plano canônico (4 camadas, defesa em profundidade)
+### Causa B — fotos vão para uma `vistoria_id` órfã (raiz no banco)
 
-### 1. Atomicidade da transição (edge function)
+`useVistoriaCompletaPorServico` (em `src/hooks/useVistorias.ts:894`) resolve a vistoria nessa ordem: `servico.vistoria_origem_id` → `instalacao_origem_id` → `cotacao_id` → dedupe `em_analise` 24h → **cria nova vistoria** + tenta UPDATE em `servicos.vistoria_origem_id`. Cenários reais que produzem o sintoma:
 
-Substituir o par `INSERT servicos` + `UPDATE solicitacoes_troca_titularidade` por uma **RPC SQL `SECURITY DEFINER`** (`fn_troca_solicitar_vistoria`, `fn_troca_solicitar_retirada`, `fn_troca_agendar_manutencao`) que faz tudo numa transação única. Edge function passa a só validar e chamar a RPC. Fim do rollback manual com `await admin.from('servicos').delete()` no catch.
+1. **Race entre 2 abas/sessões abertas no mesmo serviço** (o operador disse "fiz 3 vezes"): cada execução do queryFn não vê `vistoria_origem_id` no servidor ainda → cria vistoria nova → as 30 fotos do "passo seguinte" caem na vistoria A, mas o refetch posterior trouxe vistoria B (a última gravada em `servicos.vistoria_origem_id`).
+2. **UPDATE silencioso falhando por RLS** (`updateVistErr` é só `console.error`) → a cada navegação o hook acha vistoria B/C/D, fotos espalhadas, nenhuma "casa" com a vistoria exibida.
+3. **Trigger `sync_vistoria_to_servicos` ou substituição por instalação canônica** (ver `mem://logic/operations/vistoria-entrada-equivale-instalacao` / `mem://logic/operations/servicos-um-canonico-por-origem`) reescreveu `vistoria_origem_id` no meio do trabalho — fotos da "vida anterior" ficam órfãs.
 
-### 2. Guard de banco (trigger BEFORE UPDATE em `solicitacoes_troca_titularidade`)
+A combinação A + B é exatamente o relato: a UI confirma 30/30 + vídeo OK, mas a vistoria que a tela carrega na próxima visita não tem nada.
 
-`trg_guard_troca_status_exige_servico`:
+## O que esta investigação vai entregar
 
-- `NEW.status = 'aguardando_vistoria'` exige `NEW.servico_vistoria_id` não-nulo apontando para `servicos` com `status NOT IN ('cancelada','excluida')`.
-- `NEW.status = 'aguardando_manutencao'` exige `NEW.servico_manutencao_id` idem.
-- Mensagem de erro com `HINT` apontando para a RPC canônica.
+Sem mexer em placas existentes (você já as moveu), o trabalho abaixo é só de diagnóstico + correção de raiz, deixando o canônico imune a esse limbo.
 
-Bloqueia regressões futuras (qualquer edge, script ou painel que tente atalho).
+### 1) Forense do caso real (read-only)
 
-### 3. Cron de detecção + auto-recuperação (`reconciliar-troca-titularidade-limbo`, 15 min)
+Localizar a vistoria do operador (telefone +55 21 97012-7002 e timestamp do print 10/06 09:34) e listar:
+- Todas as `vistorias` criadas nas últimas 24h para esse `associado_id` / `veiculo_id` / `cotacao_id` / `servico_id`.
+- Para cada uma: `vistoria_fotos.count`, `video_360_url`, `created_at`, `status`, `vistoriador_id`, `instalacao_id`.
+- Em `servicos`: `vistoria_origem_id` atual + histórico via `logs_auditoria` (entidade='servico').
+- Em `logs_auditoria` / `edge_function_logs` da janela 09:30–09:40: erros 23503 (FK), 42501 (RLS), `[Upload Foto]`, `[useVistoriaCompletaPorServico]`.
+- Confirmar se há vistoria "fantasma" com 30 fotos + vídeo perdida e a vistoria visível com 0.
 
-Varre `solicitacoes_troca_titularidade` onde:
+Se confirmado órfão, **migrar as fotos + `video_360_url` da vistoria órfã para a vistoria canônica do serviço** num script de migração pontual (saneamento), com auditoria.
 
-- `status IN ('aguardando_vistoria','aguardando_manutencao')`
-- AND (`servico_*_id IS NULL` OR serviço associado em `cancelada`/`excluida`/inexistente)
-- AND `updated_at < now() - interval '15 min'`
+### 2) Corrigir o limbo visual (Causa A — defesa imediata)
 
-Para cada uma:
+Em `src/components/vistorias/VistoriaFotoSequencial.tsx`:
+- O `uploadedLocally` só pode ser populado quando a foto realmente aparece em `fotosEnviadas` (prop vinda do servidor). Hoje ele se adianta cegamente.
+- Remover o `setUploadedLocally(...)` do `useEffect` de transição `uploadingFoto`. O contador deve **derivar 100% de `fotosEnviadas`** (que já recebe previews locais via `previewsFotos` no `ExecutarVistoriaCompleta`, e direto do servidor no `InstaladorChecklist`).
+- Adicionar fallback visual: enquanto `uploadingFoto === fotoId` mostra "Enviando…"; sem upload em curso e sem registro no servidor, mostra "pendente" — sem mentir.
 
-- Se há `tipo_vistoria_troca` e endereço gravado em `novo_titular_dados` → re-materializa via RPC canônica (mesmo caminho).
-- Senão → insere `notificacoes_sistema` (destino=role monitoramento, dedup 1h) + `analises_relacionamento` (`tipo='troca_limbo_pos_monitoramento'`) com link direto para a solicitação.
+### 3) Tornar a materialização da vistoria à prova de race (Causa B — raiz canônica)
 
-Loga tudo em `logs_auditoria` com prefixo `[reconcilia_troca_limbo]`.
+Em `useVistoriaCompletaPorServico` (`src/hooks/useVistorias.ts`):
+- Trocar o INSERT por uma RPC `fn_obter_ou_criar_vistoria_servico(servico_id uuid)` em SQL `SECURITY DEFINER` que, dentro de transação, faz `SELECT ... FOR UPDATE` no serviço, resolve por `vistoria_origem_id`/`instalacao_origem_id`/`cotacao_id`, dedupa por (associado, veículo, cotação, 24h) e só cria se não houver — depois UPDATE do serviço. Isso elimina race entre abas/refetches.
+- Propagar erro do UPDATE de `vistoria_origem_id` (hoje é `console.error` silencioso) — se falhar, toast e abortar (não retornar vistoria desvinculada).
 
-### 4. Visibilidade na fila do Monitoramento
+### 4) Anti-limbo no Serviços de Campo (defesa permanente)
 
-Na lista de Aprovações de Troca (`/monitoramento/aprovacoes-troca` e variantes):
-
-- Badge âmbar "**Sem serviço materializado**" em solicitações `aguardando_vistoria`/`aguardando_manutencao` cujo `servico_*_id` esteja NULL ou aponte para serviço cancelado.
-- Botão "**Re-materializar serviço**" no `ModalDetalhesTroca` (modo monitoramento) que chama a mesma RPC canônica.
-- Chip no topo da fila: "Em limbo: N" (count das mesmas).
-
-Mesma estratégia já usada para handoff fotos→rota (memória `handoff-fotos-rota-visibilidade`).
+Reaproveitar o padrão já criado para Troca (`useTrocaLimbo`): hook `useVistoriaLimbo` que detecta serviços/vistorias onde a UI do executor declara progresso mas o servidor diverge (ex.: `servicos.checklist_data` salvo + `vistoria_fotos.count = 0` + sem `video_360_url`). Mostrar badge âmbar no card do serviço em **Monitoramento › Serviços de Campo › Serviços** com ação "Reconciliar mídias" (chama RPC do passo 3 + invalida queries). Sem botão, o coordenador depende da reclamação do operador para descobrir.
 
 ## Detalhes técnicos
 
-- **Tabelas afetadas**: nenhuma alteração de schema; apenas novas funções/triggers/cron em migração.
-- **Migrations**:
-  - `fn_troca_solicitar_vistoria`, `fn_troca_solicitar_retirada`, `fn_troca_agendar_manutencao` (SECURITY DEFINER, GRANT EXECUTE TO service_role, authenticated).
-  - `trg_guard_troca_status_exige_servico` (BEFORE INSERT OR UPDATE OF status).
-  - `fn_reconciliar_troca_titularidade_limbo` + agendamento pg_cron 15 min.
-- **Edges**: `aprovar-troca-monitoramento` passa a chamar as RPCs; comportamento externo (payload/status codes) inalterado.
-- **Front**: `ModalDetalhesTroca`, `AprovacoesTroca`, `AprovacoesUnificadas` — adicionar badge/contador/botão "re-materializar".
-- **Memória**: registrar `mem://logic/operations/troca-titularidade-anti-limbo-pos-monitoramento` (princípio canônico + 4 camadas).
+- Arquivos tocados (correção):
+  - `src/components/vistorias/VistoriaFotoSequencial.tsx` — remover `uploadedLocally`; contagem 100% derivada de `fotosEnviadas`.
+  - `src/hooks/useVistorias.ts` — `useVistoriaCompletaPorServico` chama nova RPC; propaga erros de vinculação.
+  - `supabase/migrations/<ts>_fn_obter_ou_criar_vistoria_servico.sql` — função `SECURITY DEFINER` com lock, dedup e auditoria.
+  - `src/hooks/useVistoriaLimbo.ts` + chip/badge em `ServicoDetailModal.tsx` (ou no card de `ServicosCampoUnificado`).
+- Arquivos de leitura (forense, sem alterar): `useVistoriaCompleta.ts` (upload), `vistorias_*` no schema, `logs_auditoria`, `edge_function_logs`.
+- Sem mexer em: placas que você já reposicionou, fluxo público (`link público intocável`), `concluir-instalacao-*`.
+- Memória nova a salvar após confirmar: `mem://logic/operations/vistoria-interna-anti-limbo-fotos-video`.
 
-## O que NÃO faço
+## Pré-aprovação necessária
 
-- Não toco em LQY5543 / LUJ0G95 (já backfillados).
-- Não altero o gate canônico Cadastro→Monitoramento — a exceção `origem='troca_titularidade'` continua igual.
-- Não mexo em outros fluxos (substituição, sub-FIPE, manutenção avulsa).
+Pra começar a forense preciso saber se posso rodar leituras (read_query) na base de produção pra puxar o caso real do operador, ou se você prefere me passar a `servico_id` / placa / matrícula do incidente. Sem isso, vou só nas correções A, 3 e 4 às cegas.
