@@ -19,7 +19,7 @@ Fonte: `supabase/functions/_shared/substituicao-cascade.ts` exporta `aplicarSubs
 Consumido por **3 edges** (sem duplicar lógica em cada uma):
 - `autentique-create` (admin/back-office)
 - `autentique-create-by-token` (link público do cliente)
-- `retificar-termo-filiacao` (reemissão versionada) — **chama o cascade SEMPRE**, nunca reusa payload da retificação anterior. Esse era o bug original: a retificação v1 do Patrick saiu vazia porque executava só `mapearDadosParaTemplate` (que não preenche `templateData.substituicao`).
+- `retificar-termo-filiacao` (reemissão versionada) — **chama o cascade SEMPRE** E **prioriza `is_default_substituicao` quando `contratos.tipo_entrada IN ('substituicao_placa','substituicao')`** (mesma lógica do autentique-create). Antes da Fase 3 (10/06/2026) caía direto no `is_default_autentique` (AF1), gerando termo de filiação comum sem bloco de veículo substituído — caso Patrick v1/v2.
 
 Ordem de fallback (a primeira que tiver `placa_anterior` vence; campos faltantes são complementados pelas seguintes):
 1. `substituicoes_veiculo` (match `associado_id` + `veiculo_novo_id`) — materializada apenas no `efetivar-substituicao`. Vazia para emissão inicial.
