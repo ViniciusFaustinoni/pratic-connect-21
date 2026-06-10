@@ -8,6 +8,8 @@ import { ShieldCheck, Car, ArrowRight, FileSignature } from 'lucide-react';
 import { useSolicitacoesTroca, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { ModalDetalhesTroca } from '@/components/troca-titularidade/ModalDetalhesTroca';
 import { SgaSyncCrossBadge } from '@/components/troca-titularidade/SgaSyncCrossBadge';
+import { useTrocaLimbo } from '@/hooks/useTrocaLimbo';
+import { AlertTriangle } from 'lucide-react';
 
 export default function AprovacoesTroca() {
   const [aba, setAba] = useState<'pendentes'|'em_vistoria'|'aprovadas'|'recusadas'>('pendentes');
