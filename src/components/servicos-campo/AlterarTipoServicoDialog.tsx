@@ -120,7 +120,7 @@ export function AlterarTipoServicoDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="novo-tipo">Novo tipo *</Label>
-            <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as TipoServico)}>
+            <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as TipoServicoDB)}>
               <SelectTrigger id="novo-tipo">
                 <SelectValue placeholder="Selecione…" />
               </SelectTrigger>
