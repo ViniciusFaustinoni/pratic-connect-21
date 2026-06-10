@@ -620,8 +620,17 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
       )}
 
 
+      <AlterarTipoServicoDialog
+        open={alterarTipoOpen}
+        onOpenChange={setAlterarTipoOpen}
+        servicoId={servico.id}
+        tipoAtual={servico.tipo}
+        servicoLabel={`${TIPO_SERVICO_LABELS[servico.tipo] || servico.tipo}${servico.veiculo?.placa ? ` · ${servico.veiculo.placa}` : ''}`}
+        onSuccess={() => onOpenChange(false)}
+      />
 
     </>
+
   );
 }
 
