@@ -35944,6 +35944,19 @@ export type Database = {
         Args: { _marca: string; _modelo: string }
         Returns: string
       }
+      fn_detectar_troca_limbo: {
+        Args: { p_min_idade_minutos?: number }
+        Returns: {
+          motivo: string
+          placa: string
+          servico_id: string
+          servico_status: string
+          solicitacao_id: string
+          status: Database["public"]["Enums"]["status_troca_titularidade"]
+          updated_at: string
+          veiculo_id: string
+        }[]
+      }
       fn_determinar_numero_parcela_cobranca: {
         Args: { p_cobranca_id: string }
         Returns: number
@@ -36024,6 +36037,13 @@ export type Database = {
           acao: string
           placa: string
           veiculo_id: string
+        }[]
+      }
+      fn_reconciliar_troca_titularidade_limbo: {
+        Args: never
+        Returns: {
+          detectadas: number
+          notificadas: number
         }[]
       }
       fn_resolver_cadeia: {

@@ -8,10 +8,14 @@ import { ShieldCheck, Car, ArrowRight, FileSignature } from 'lucide-react';
 import { useSolicitacoesTroca, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { ModalDetalhesTroca } from '@/components/troca-titularidade/ModalDetalhesTroca';
 import { SgaSyncCrossBadge } from '@/components/troca-titularidade/SgaSyncCrossBadge';
+import { useTrocaLimbo } from '@/hooks/useTrocaLimbo';
+import { AlertTriangle } from 'lucide-react';
 
 export default function AprovacoesTroca() {
   const [aba, setAba] = useState<'pendentes'|'em_vistoria'|'aprovadas'|'recusadas'>('pendentes');
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  const { data: limboList } = useTrocaLimbo(0);
+  const limboIds = new Set((limboList ?? []).map((r) => r.solicitacao_id));
 
   const filtros: Record<typeof aba, StatusTroca[]> = {
     pendentes: ['aguardando_monitoramento'],
@@ -28,6 +32,11 @@ export default function AprovacoesTroca() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <ShieldCheck className="h-6 w-6 text-primary" />
           Aprovações
+          {limboIds.size > 0 && (
+            <Badge variant="destructive" className="ml-2 gap-1">
+              <AlertTriangle className="h-3 w-3" /> Em limbo: {limboIds.size}
+            </Badge>
+          )}
         </h1>
         <p className="text-muted-foreground">Solicitações aprovadas pelo Cadastro aguardando análise final do Monitoramento</p>
       </div>
@@ -62,6 +71,11 @@ export default function AprovacoesTroca() {
                             </Badge>
                           )}
                           <SgaSyncCrossBadge placa={s.veiculo?.placa} sgaStatus={(s as any).sga_status} />
+                          {limboIds.has(s.id) && (
+                            <Badge variant="destructive" className="gap-1">
+                              <AlertTriangle className="h-3 w-3" /> Sem serviço materializado
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <span className="font-medium">{s.associado_antigo?.nome}</span>

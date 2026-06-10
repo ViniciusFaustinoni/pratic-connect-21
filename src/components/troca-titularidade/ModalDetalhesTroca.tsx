@@ -38,6 +38,7 @@ import { ValidarImeiPorPlacaCard } from './ValidarImeiPorPlacaCard';
 import { validarImeiPorPlaca, type ValidacaoOrigem } from '@/lib/troca-titularidade/validarImeiPorPlaca';
 import { PontasPendentesCard } from './PontasPendentesCard';
 import { BypassAplicadoBanner } from '@/components/cadastro/BypassAplicadoBanner';
+import { useSolicitacaoEmLimbo } from '@/hooks/useTrocaLimbo';
 
 interface Props {
   open: boolean;
@@ -66,6 +67,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: solicitacao, isLoading } = useSolicitacaoTroca(solicitacaoId || undefined);
+  const limbo = useSolicitacaoEmLimbo(solicitacaoId);
   const [observacao, setObservacao] = useState('');
   const [motivoReprovar, setMotivoReprovar] = useState('');
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
@@ -481,6 +483,23 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   aprovadoMonitoramentoEm={solicitacao.aprovado_monitoramento_em}
                   efetivadaEm={solicitacao.efetivada_em}
                 />
+                {limbo && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Serviço de campo não materializado</AlertTitle>
+                    <AlertDescription className="space-y-1">
+                      <p>
+                        Esta solicitação está em <strong>{limbo.status.replace(/_/g, ' ')}</strong> sem serviço vivo
+                        ({limbo.motivo.replace(/_/g, ' ')}). O Monitoramento não conseguirá atribuir até que o serviço
+                        seja re-materializado.
+                      </p>
+                      <p className="text-xs">
+                        Reabra "Solicitar Vistoria/Retirada/Manutenção" para gerar um novo serviço. O cron de
+                        reconciliação avisa o time a cada 15 min enquanto persistir.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {solicitacao.servico_vistoria_id && (
                   <MiniCardVistoriaTroca servicoId={solicitacao.servico_vistoria_id} />
                 )}
