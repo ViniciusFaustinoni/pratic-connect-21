@@ -18,7 +18,12 @@ import { registrarLog } from '@/hooks/useAuditLog';
 import { TIPO_SERVICO_LABELS, type TipoServico } from '@/hooks/useServicos';
 
 // Conjunto canônico de tipos elegíveis (pré-execução) — alinhado ao escopo aprovado.
-const TIPOS_ELEGIVEIS: TipoServico[] = [
+// Subconjunto do enum do banco (tipo_servico) — exclui aliases legacy e tipo_sinistro.
+type TipoServicoDB =
+  | 'instalacao' | 'vistoria_entrada' | 'vistoria_manutencao'
+  | 'vistoria_retirada' | 'revistoria' | 'vistoria_periodica' | 'vistoria_saida';
+
+const TIPOS_ELEGIVEIS: TipoServicoDB[] = [
   'instalacao',
   'vistoria_entrada',
   'vistoria_manutencao',
