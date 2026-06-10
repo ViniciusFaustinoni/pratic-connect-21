@@ -1,71 +1,74 @@
-## Diagnóstico cruzado (logs + payloads)
+# Bug confirmado — Fagner (+55 21 97605-5231) em 10/06
 
-**Universo afetado:** 1 contrato `tipo_entrada='substituicao_placa'` em produção (CTR-20260606172721-Q70HEK / Patrick) — feature recém-ativada, blast radius pequeno mas o bug é universal: qualquer substituição futura cairia no mesmo template invertido.
+## O que aconteceu (cronologia real, fuso UTC)
 
-**Bug primário (template SUB — id `5802464d`):**
-```
-{{operacao.substituicao_placa}} Subs. Placa
-  (o veíc. terá a cob. do PSM cancelada) {{veiculo.placa}}
-```
-- `{{veiculo.placa}}` resolve para `contrato.veiculo_placa` em `termo-afiliacao-utils.ts:460` → sempre o **veículo NOVO** (LTP7C50).
-- O rótulo descreve por definição o **veículo ANTIGO** (RJN2A96).
-- Curiosamente o MESMO template já usa `{{substituicao.placa_anterior}}` corretamente num bloco mais à frente (pos 10078: *"substitui integralmente a proteção anteriormente vigente sobre o veículo de placa {{substituicao.placa_anterior}}…"*). A linha do cabeçalho ficou esquecida.
+| Hora | Direção | Conteúdo |
+|---|---|---|
+| 13:13:26 | entrada | "Bom dia" |
+| 13:13:35 | saída (IA) | Saudação canônica pedindo CPF |
+| 13:15:50 | entrada | `12400583730` (CPF) |
+| 13:16:12 | DB | `cpf_capturado_em` + `nome_confirmado_em` + `sga_associado_status=ativo` + `nome=FAGNER LUIZ DA SILVA` gravados |
+| 13:16:14 | saída (IA) | "Encontrei você, Fagner! Em que posso te ajudar hoje?" |
+| 13:16:56 | entrada | "Preciso atualizar o meu app" |
+| 13:17:02 | entrada | "Como faço?" |
+| 13:17:07 | saída (IA) | Resposta correta sobre o app |
+| **13:17:12** | **saída (IA)** | **"Olá! Tudo bem? Sou Atendimento Praticcar… Como ainda não tenho seus dados salvos por aqui, poderia me informar seu *nome completo* ou *CPF*…"** |
 
-**Bug secundário (popular `substituicao.placa_anterior`):** em `autentique-create/index.ts:611-628` o objeto `templateData.substituicao` só é populado quando existe linha em `substituicoes_veiculo` com `veiculo_novo_id = contrato.veiculo_id`. Mas essa linha **só nasce no `efetivar-substituicao`** (após retirada+instalação concluídas). O termo é emitido MUITO antes disso (assinatura no link público), então `templateData.substituicao` **sempre estará `undefined` no momento da geração**. Resultado: o engine `limparVariaveisNaoSubstituidas` substitui `{{substituicao.placa_anterior}}` por `—`. Para o Patrick, o bloco grande do meio do termo já saiu com `— (—)`.
+A última saída é exatamente o print do operador. **Já havia CPF, nome e status SGA carimbados há 1 minuto** — a IA simplesmente repetiu a abertura de identificação.
 
-**Fonte canônica disponível desde o início do fluxo (e ignorada):**
-- `solicitacoes_substituicao_placa` (criada no clique inicial) — tem `veiculo_antigo_id`, `veiculo_antigo_placa`, `veiculo_antigo_snapshot`.
-- `cotacoes.dados_extras.veiculo_antigo_id` / `veiculo_antigo_placa` / `veiculo_antigo_modelo` / `solicitacao_substituicao_id` (já gravado em todo cotação de substituição).
-- Conferido para Patrick — ambos populados corretamente.
+## Por que aconteceu
 
-**Front (UI) — sem inversão.** `SubstituicaoStatusCard`, `StepConclusao`, `AgendamentoSubstituicaoSeparado` e `EtapaAssinaturaSubstituicao` leem `veiculo_antigo_*` / `veiculo_novo_*` corretamente.
+Hoje a defesa contra "ressaudar / repedir identidade" está espalhada e não cobre o caso de mensagem-resposta dentro do mesmo dia:
 
----
+1. `gate_saudacao_horas` na habilidade `relacionamento` está em **2h** (default). Funciona pra saudação pura, mas não impede a LLM de re-pedir CPF dentro da janela.
+2. O bloco `2C — Supressão de saudação cerimoniosa` só atua quando a mensagem é uma saudação pura (`"oi"`, `"bom dia"`…). "Como faço?" não casa o regex, então nenhum bloco anti-ressaudação foi injetado no system prompt dessa rodada.
+3. O system prompt do path ASSOCIADO (linha 1595) tem regras de "não cumprimentar pelo primeiro nome", mas **não tem uma trava explícita "não peça nome nem CPF — já confirmados nesta sessão"**. Sem essa trava, a LLM (Gemini) reabriu a apresentação por conta própria.
+4. Bônus: o bloco `RECONFIRMAÇÃO LEVE` (linha 765) considera identidade "fresca" se passou <2h OU mesmo dia BRT. Pedido do usuário é alinhar tudo numa janela única de **1 dia**.
 
-## Plano (raiz primeiro, saneamento depois)
+## O que vou alterar (raiz, depois saneamento)
 
-### Fase 1 — Corrigir a raiz
+### Fase 1 — Raiz (sem mexer no resto do fluxo)
 
-**1.1 Corrigir template SUB (DB)**
-Migração idempotente trocando exatamente:
-```
-PSM cancelada) {{veiculo.placa}}
-```
-por
-```
-PSM cancelada) {{substituicao.placa_anterior}}
-```
-Apenas essa ocorrência (uso de `REPLACE` literal). Sem mexer no resto do template nem em outros templates.
+**1.1 Janela canônica de identidade = 24h, configurável por habilidade.**
+- Migration: setar `ia_habilidades.gate_saudacao_horas = 24` para slug `relacionamento` (default da coluna permanece 2).
+- `gate_saudacao_aplicar_identificados` segue `true`.
 
-**1.2 Popular `substituicao.placa_anterior` desde o início do fluxo**
-Em `autentique-create/index.ts` (e gêmeo `autentique-create-by-token`), após o bloco atual (linha 611):
-- Se `templateData.substituicao` continuar `undefined` E o contrato for `substituicao_placa`/`substituicao`, buscar fallback em CASCATA:
-  1. `cotacoes.dados_extras` → `veiculo_antigo_placa` + `veiculo_antigo_modelo` (+ `veiculo_antigo_fipe` se houver).
-  2. Se faltar algo, ler `solicitacoes_substituicao_placa` (via `dados_extras.solicitacao_substituicao_id` OU `cotacao_id`) e completar com `veiculo_antigo_placa`/`veiculo_antigo_snapshot.modelo`/`.valor_fipe`.
-- Popular `templateData.substituicao = { placa_anterior, modelo_anterior, fipe_anterior }`.
-- Log estruturado `[autentique-create] fallback substituicao via solicitacao` / `via dados_extras` para observabilidade.
+**1.2 Nova trava "IDENTIDADE JÁ CONFIRMADA" no system prompt do path ASSOCIADO** (`supabase/functions/agente-consultor-ia/index.ts`, branch `else if (isAssociado)` linha 1593).
+- Quando `cpf_capturado_em` OU `nome_confirmado_em` aconteceu nas últimas 24h (ou mesmo dia BRT), injeta bloco:
+  ```
+  ## IDENTIDADE JÁ CONFIRMADA NESTA SESSÃO
+  Este contato JÁ está identificado como {nome} (CPF {…}, status SGA {…}), confirmado em {hh:mm}.
+  - PROIBIDO pedir CPF, nome completo, "para localizar seu cadastro" ou qualquer reapresentação.
+  - PROIBIDO reabrir com "Olá! Sou Atendimento Praticcar…", "Como ainda não tenho seus dados…".
+  - Vá direto ao pedido do cliente.
+  ```
+- Mesma trava no path LEAD (linha 1797) quando o contato tem `nome_confirmado_em` nas últimas 24h (caso lead já tenha sido identificado por nome) — só para evitar a regressão simétrica, sem alterar o resto do prompt de lead.
 
-**1.3 Fallback adicional no engine de template** (defesa em profundidade)
-Em `template-utils.ts:303-311`, garantir que o branch sem `dados.substituicao` ainda define `substituicao.placa_anterior`/`modelo_anterior`/`fipe_anterior` como `—` em vez de deixar o token ser limpo pelo `limparVariaveisNaoSubstituidas` (que joga warning). Mantém saída limpa quando faltar dado de verdade.
+**1.3 Ampliar `identidadeFresca` (linha 765) para usar `habCfg.gate_saudacao_horas`** em vez do literal `< 2`.
+- Hoje: `horasDesdeReconf < 2 || horasDesdeUltima < 2 || mesmo dia BRT`.
+- Depois: `horasDesdeReconf < gate || horasDesdeUltima < gate || mesmo dia BRT`.
+- Efeito: reconfirmação leve não dispara dentro da janela canônica configurada.
 
-**1.4 Memória**
-Criar `mem://logic/documents/termo-substituicao-placa-anterior-canonico` resumindo: rótulo "cobertura cancelada" usa `{{substituicao.placa_anterior}}`; nunca `{{veiculo.placa}}`; fonte de dado em cascata cotacoes.dados_extras → solicitacoes_substituicao_placa → substituicoes_veiculo; substituicoes_veiculo só nasce no efetivar, então NÃO pode ser fonte única.
+**1.4 Memory.**
+- Atualizar `mem://logic/ia/saudacao-config-driven` (gate = 24h em relacionamento) e criar `mem://logic/ia/identidade-confirmada-trava-prompt` documentando o bloco injetado.
 
-### Fase 2 — Saneamento pontual (depois da Fase 1 estar deployada)
+### Fase 2 — Saneamento pontual (após Fase 1 no ar)
 
-**2.1 Re-emitir o termo do Patrick** via `retificar-termo-filiacao` (já existe — gera v2 versionada).
-- Payload: `contrato_id=6786afcc-…`, motivo `"correção de inversão antigo↔novo no rótulo de cobertura cancelada"`.
-- Validação: regerar localmente antes, conferir que cabeçalho mostra `RJN2A96` e bloco grande mostra `RJN2A96 (RENAULT DUSTER ZEN 1.6 16V FLEX MEC.)`.
-- Confirmar com o operador antes de enviar a re-assinatura ao cliente.
+- Não há sanitização de dados a fazer no contato do Fagner: identidade está correta no DB. O bug foi só de saída.
+- Validação no preview: enviar 2 mensagens seguidas do Fagner (ou mock) → confirmar que IA não ressolicita CPF/nome.
 
-**2.2 Smoke test** — abrir o link público de uma cotação de substituição em ambiente, baixar o PDF preview do termo e validar visualmente os dois pontos.
+## Fora de escopo (não vou tocar)
 
----
+- Roteador de habilidades, `loadHabilidadeContent`, prompt da habilidade `vendas`, kill-switch global, regras de transbordo, tools, FAQ.
+- Reset de identidade por divergência (linha 673) — segue intacto.
+- Habilidade `vendas` (gate continua 2h, está desativada).
 
-### Detalhes técnicos
-- Arquivos: migration em `supabase/migrations/`, `supabase/functions/autentique-create/index.ts`, `supabase/functions/autentique-create-by-token/index.ts`, `supabase/functions/_shared/template-utils.ts`.
-- Sem mudança de schema. Sem mexer em `efetivar-substituicao` / `criar-substituicao-agendamentos-separados` / `enviar-termo-cancelamento-substituicao` (todos auditados, sem inversão).
-- Sem mudança de comportamento para adesão / troca / migração / inclusão / reativação.
-- Idempotência: migração SQL roda `REPLACE` literal — se a string já não existir, não faz nada.
+## Arquivos previstos
 
-Confirma a Fase 1 (raiz) que eu sigo direto pra implementação, e a Fase 2 (Patrick) eu deixo pra depois sob seu OK?
+- `supabase/migrations/<novo>.sql` — `UPDATE ia_habilidades SET gate_saudacao_horas = 24 WHERE slug = 'relacionamento'`.
+- `supabase/functions/agente-consultor-ia/index.ts` — bloco "IDENTIDADE JÁ CONFIRMADA" + `identidadeFresca` parametrizado.
+- `.lovable/memories/logic/ia/saudacao-config-driven.md` (update) e `.lovable/memories/logic/ia/identidade-confirmada-trava-prompt.md` (novo).
+
+## Pergunta antes de implementar
+
+Confirma 24h como janela única? Se preferir outro valor (ex.: 12h, 8h "expediente"), me diz que ajusto a migration — o resto do código fica config-driven.
