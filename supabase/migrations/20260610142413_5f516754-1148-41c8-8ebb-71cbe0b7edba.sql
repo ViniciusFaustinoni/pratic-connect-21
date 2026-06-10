@@ -1,0 +1,1 @@
+UPDATE public.ia_habilidades SET gate_saudacao_horas = 24 WHERE slug = 'relacionamento';
