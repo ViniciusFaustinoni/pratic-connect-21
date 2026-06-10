@@ -29,6 +29,7 @@ import { CancelarServicoDialog } from './CancelarServicoDialog';
 import { DevolverAoCadastroDialog } from './DevolverAoCadastroDialog';
 import { MarcarManutencaoDialog } from '@/components/monitoramento/MarcarManutencaoDialog';
 import { MarcarRetiradaDialog } from '@/components/monitoramento/MarcarRetiradaDialog';
+import { AlterarTipoServicoDialog } from './AlterarTipoServicoDialog';
 
 import { LiberarServicoButton } from './LiberarServicoButton';
 import { usePermissions } from '@/hooks/usePermissions';
