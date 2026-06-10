@@ -46,7 +46,7 @@ export function AlterarTipoServicoDialog({
   open, onOpenChange, servicoId, tipoAtual, servicoLabel, onSuccess,
 }: Props) {
   const qc = useQueryClient();
-  const [novoTipo, setNovoTipo] = useState<TipoServico | ''>('');
+  const [novoTipo, setNovoTipo] = useState<TipoServicoDB | ''>('');
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
 
