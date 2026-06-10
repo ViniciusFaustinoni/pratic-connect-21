@@ -67,6 +67,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: solicitacao, isLoading } = useSolicitacaoTroca(solicitacaoId || undefined);
+  const limbo = useSolicitacaoEmLimbo(solicitacaoId);
   const [observacao, setObservacao] = useState('');
   const [motivoReprovar, setMotivoReprovar] = useState('');
   const [confirmandoReprovar, setConfirmandoReprovar] = useState(false);
