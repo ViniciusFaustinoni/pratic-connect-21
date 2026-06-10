@@ -369,13 +369,29 @@ serve(async (req) => {
       } catch (e) { console.warn("[retificar-termo] coberturas/benefícios:", e); }
     }
 
-    // Buscar template do plano ou default
+    // Buscar template do plano ou default (priorizando SUB em substituição)
+    const isSubstituicao =
+      contratoNovo!.tipo_entrada === 'substituicao_placa' ||
+      contratoNovo!.tipo_entrada === 'substituicao';
+
     let templateDB: any = null;
     const planoTemplateId = contratoNovo!.planos?.template_contrato_id;
-    if (planoTemplateId) {
+    if (planoTemplateId && !isSubstituicao) {
       const { data: tpl } = await supabase.from("documento_templates")
         .select("id, codigo, nome, conteudo").eq("id", planoTemplateId).eq("ativo", true).single();
       templateDB = tpl;
+    }
+    if (!templateDB && isSubstituicao) {
+      const { data: subDefault } = await supabase.from("documento_templates")
+        .select("id, codigo, nome, conteudo")
+        .eq("is_default_substituicao", true).eq("ativo", true)
+        .limit(1).maybeSingle();
+      if (subDefault) {
+        templateDB = subDefault;
+        console.log(`[retificar-termo-filiacao] Usando template default de SUBSTITUIÇÃO: ${subDefault.codigo}`);
+      } else {
+        console.warn('[retificar-termo-filiacao] Substituição sem template SUB default; caindo no AF1');
+      }
     }
     if (!templateDB) {
       const { data: tpls } = await supabase.from("documento_templates")
