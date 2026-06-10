@@ -307,6 +307,11 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       'substituicao.fipe_anterior': formatCurrency(dados.substituicao.fipe_anterior),
       'substituicao.tipo_operacao': 'Substituição de Placa',
     } : {
+      // Defesa em profundidade: mesmo sem dados de substituição, neutraliza os tokens
+      // para não vazar warning de "variável não substituída" e manter saída legível.
+      'substituicao.placa_anterior': '—',
+      'substituicao.modelo_anterior': '—',
+      'substituicao.fipe_anterior': '—',
       'substituicao.tipo_operacao': (dados.contrato.tipo_entrada === 'substituicao_placa' || dados.contrato.tipo_entrada === 'substituicao') ? 'Substituição de Placa' : 'Nova Adesão',
     }),
 
