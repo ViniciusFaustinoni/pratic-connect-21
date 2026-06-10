@@ -14,6 +14,8 @@ import { AlertTriangle } from 'lucide-react';
 export default function AprovacoesTroca() {
   const [aba, setAba] = useState<'pendentes'|'em_vistoria'|'aprovadas'|'recusadas'>('pendentes');
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  const { data: limboList } = useTrocaLimbo(0);
+  const limboIds = new Set((limboList ?? []).map((r) => r.solicitacao_id));
 
   const filtros: Record<typeof aba, StatusTroca[]> = {
     pendentes: ['aguardando_monitoramento'],
