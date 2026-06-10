@@ -276,7 +276,52 @@ export default function CotacaoContratacao() {
   // O passo de Pagamento sempre aparece — quando a adesão é isenta, o próprio
   // EtapaPagamentoCotacao detecta valor zero e dispara skipPaymentCheck automaticamente
   // (mesma regra usada na nova adesão). Não fazemos atalho aqui.
-  
+
+  // ===== Sub-FIPE isenta: detectar para reordenar Vistoria ANTES de Pagamento =====
+  // O backend `confirmar-adesao-zerada` exige `dados_extras.via_vistoria_sub_fipe`
+  // antes de confirmar a adesão isenta (3 vias canônicas: completa_celular,
+  // rf_celular, sem_fotos). Como a via é escolhida na etapa Vistoria e o
+  // stepper padrão coloca Pagamento ANTES de Vistoria, sub-FIPE isenta sempre
+  // batia em loop "Erro ao processar / Tentar novamente". Aqui detectamos o
+  // cenário (FIPE abaixo do mínimo + adesão isenta + via ainda não escolhida)
+  // e desviamos o cliente para a etapa Vistoria antes que ele dispare o edge.
+  const subFipeIsenta = useMemo(() => {
+    if (!cotacao) return false;
+    if (isTrocaTitularidade || isSubstituicao) return false;
+    const cenario = String((cotacao as any).cenario_adesao || '').toLowerCase();
+    const isIsenta = cenario.startsWith('isenta') || Number((cotacao as any).valor_adesao || 0) === 0;
+    if (!isIsenta) return false;
+    const fipe = Number((cotacao as any).veiculo_valor_fipe ?? (cotacao as any).valor_fipe ?? 0);
+    const precisa = exigeRastreador({
+      tipo: detectarTipoVeiculoDaCotacao(cotacao),
+      valorFipe: fipe,
+      combustivel: (cotacao as any).veiculo_combustivel || undefined,
+    } as any).exige;
+    return precisa === false; // sub-FIPE = dispensa rastreador
+  }, [cotacao, isTrocaTitularidade, isSubstituicao]);
+
+  const viaSubFipeSelecionada = useMemo(() => {
+    const via = (dadosExtras as any)?.via_vistoria_sub_fipe;
+    return via === 'completa_celular' || via === 'rf_celular' || via === 'sem_fotos';
+  }, [dadosExtras]);
+
+  // Quando entrar (ou estiver) na etapa Pagamento sem via escolhida, desvia
+  // para Vistoria (índice 4). Defesa: NÃO desviar se já houve algum agendamento
+  // presencial materializado (Via 3 concluída) — agendamentos_base/instalacoes
+  // já caracterizam a via mesmo se dados_extras não foi sincronizado.
+  useEffect(() => {
+    if (!subFipeIsenta) return;
+    if (viaSubFipeSelecionada) return;
+    if (hasInstalacaoAgendada || hasAgendamentoBase) return;
+    if (etapaAtual === 3) {
+      console.warn('[CotacaoContratacao] sub-FIPE isenta sem via — desviando Pagamento → Vistoria', {
+        cotacao_id: cotacao?.id,
+      });
+      setEtapaAtual(4);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subFipeIsenta, viaSubFipeSelecionada, etapaAtual, hasInstalacaoAgendada, hasAgendamentoBase, cotacao?.id]);
+
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Função para verificar se uma etapa específica já foi concluída
@@ -506,9 +551,15 @@ export default function CotacaoContratacao() {
         etapa = 5;
       }
 
+      // Sub-FIPE isenta sem via escolhida: NUNCA empurrar para Pagamento (3) —
+      // o gate canônico do `confirmar-adesao-zerada` precisa de via na Vistoria.
+      if (etapa === 3 && subFipeIsenta && !viaSubFipeSelecionada && !hasInstalacaoAgendada && !hasAgendamentoBase) {
+        etapa = 4;
+      }
+
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual, etapaAtual, isTrocaTitularidade, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, docsPendentes]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual, etapaAtual, isTrocaTitularidade, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, docsPendentes, subFipeIsenta, viaSubFipeSelecionada]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade segue a navOrder (Pagamento na sequência), igual à nova adesão.
