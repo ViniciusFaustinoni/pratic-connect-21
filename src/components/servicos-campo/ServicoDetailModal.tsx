@@ -19,7 +19,7 @@ import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
-  MapPinned, MoreHorizontal, Hash, Wrench, PackageMinus,
+  MapPinned, MoreHorizontal, Hash, Wrench, PackageMinus, ArrowRightLeft,
 
 } from 'lucide-react';
 
