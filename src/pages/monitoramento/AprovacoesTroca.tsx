@@ -71,6 +71,11 @@ export default function AprovacoesTroca() {
                             </Badge>
                           )}
                           <SgaSyncCrossBadge placa={s.veiculo?.placa} sgaStatus={(s as any).sga_status} />
+                          {limboIds.has(s.id) && (
+                            <Badge variant="destructive" className="gap-1">
+                              <AlertTriangle className="h-3 w-3" /> Sem serviço materializado
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <span className="font-medium">{s.associado_antigo?.nome}</span>
