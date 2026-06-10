@@ -1,18 +1,41 @@
 ---
 name: Termo de Substituição — placa anterior canônica
-description: Rótulo "cobertura cancelada" usa {{substituicao.placa_anterior}}; nunca {{veiculo.placa}}; fonte em cascata
+description: Termo SUB exibe 2 blocos (VEÍCULO SUBSTITUÍDO × VEÍCULO NOVO); cascade unificado em _shared/substituicao-cascade.ts
 type: feature
 ---
-No template `documento_templates` codigo='SUB' (is_default_substituicao=true), o rótulo "(o veíc. terá a cob. do PSM cancelada)" **deve sempre ser seguido por `{{substituicao.placa_anterior}}`**, NUNCA `{{veiculo.placa}}` — `veiculo.placa` resolve para `contratos.veiculo_placa`, que é sempre o veículo NOVO em substituições, gerando inversão antigo↔novo no termo.
+O **Termo de Substituição** (`documento_templates` codigo='SUB', is_default_substituicao=true) DEVE exibir dois blocos visualmente separados:
 
-**Fonte canônica em cascata para `templateData.substituicao` (usada em `autentique-create` e `autentique-create-by-token`):**
-1. `substituicoes_veiculo` (matched por `associado_id`+`veiculo_novo_id`) — fonte preferencial mas materializada SÓ no `efetivar-substituicao` (pós retirada+instalação). Para emissão inicial do termo está sempre vazia.
-2. `cotacoes.dados_extras.veiculo_antigo_placa` / `veiculo_antigo_modelo` / `veiculo_antigo_fipe` — gravados na criação da cotação de substituição.
-3. `solicitacoes_substituicao_placa` (matched por `dados_extras.solicitacao_substituicao_id` OU `cotacao_id`) — `veiculo_antigo_placa` + `veiculo_antigo_snapshot.modelo` / `.valor_fipe`.
-4. `veiculos` via `solicitacoes_substituicao_placa.veiculo_antigo_id` (best-effort para completar `marca+modelo` e `valor_fipe`).
+1. **Cláusula do tipo de operação** (sucessora do antigo "Subs. Placa (...cancelada) {{veiculo.placa}}"):
+   > `(X) Subs. Placa — veículo <strong>{{substituicao.placa_anterior}}</strong> ({{substituicao.modelo_anterior}}) terá a cobertura do PSM <strong>cancelada</strong>`
+2. **Bloco "VEÍCULO SUBSTITUÍDO (Cobertura Cancelada)"** com tabela de 3 linhas: Placa / Marca-Modelo / Valor FIPE, todos derivados de `{{substituicao.placa_anterior|modelo_anterior|fipe_anterior}}`.
+3. **Bloco "VEÍCULO NOVO (Substituto)"** — antigo "DADOS DO VEÍCULO" renomeado SÓ no template SUB (AF1/adesão comum mantém "DADOS DO VEÍCULO").
 
-**Defesa em profundidade em `_shared/template-utils.ts`:** quando `dados.substituicao` é `undefined`, popular explicitamente `substituicao.placa_anterior`/`modelo_anterior`/`fipe_anterior` como `—`, evitando warning de "variável não substituída" e mantendo saída legível.
+NUNCA usar `{{veiculo.placa}}` para identificar o veículo "que sai" — `veiculo.placa` resolve para `contratos.veiculo_placa`, que é sempre o NOVO em substituições.
 
-Front (`SubstituicaoStatusCard`, `StepConclusao`, `AgendamentoSubstituicaoSeparado`, `EtapaAssinaturaSubstituicao`) lê direto `veiculo_antigo_*`/`veiculo_novo_*` de `substituicoes_veiculo` — sem inversão.
+## Cascade canônico (helper compartilhado)
 
-Sanado em 10/06/2026 (caso CTR-20260606172721-Q70HEK / Patrick Farias / RJN2A96→LTP7C50).
+Fonte: `supabase/functions/_shared/substituicao-cascade.ts` exporta `aplicarSubstituicaoNoTemplateData(supabase, contrato, templateData, prefix)` e `resolverSubstituicaoCascade(...)`.
+
+Consumido por **3 edges** (sem duplicar lógica em cada uma):
+- `autentique-create` (admin/back-office)
+- `autentique-create-by-token` (link público do cliente)
+- `retificar-termo-filiacao` (reemissão versionada) — **chama o cascade SEMPRE**, nunca reusa payload da retificação anterior. Esse era o bug original: a retificação v1 do Patrick saiu vazia porque executava só `mapearDadosParaTemplate` (que não preenche `templateData.substituicao`).
+
+Ordem de fallback (a primeira que tiver `placa_anterior` vence; campos faltantes são complementados pelas seguintes):
+1. `substituicoes_veiculo` (match `associado_id` + `veiculo_novo_id`) — materializada apenas no `efetivar-substituicao`. Vazia para emissão inicial.
+2. `cotacoes.dados_extras.veiculo_antigo_placa` / `veiculo_antigo_modelo` / `veiculo_antigo_fipe` — gravado na criação da cotação de substituição.
+3. `solicitacoes_substituicao_placa` (via `dados_extras.solicitacao_substituicao_id` OU `cotacao_id`) — usa `veiculo_antigo_snapshot.modelo`/`.valor_fipe`.
+4. `veiculos` via `solicitacoes_substituicao_placa.veiculo_antigo_id` (best-effort para completar marca+modelo/FIPE).
+
+## Defesa em profundidade (template-utils)
+
+`_shared/template-utils.ts > construirMapaTokens` sempre popula `substituicao.placa_anterior|modelo_anterior|fipe_anterior` com `—` quando `dados.substituicao` é undefined, evitando warning de "variável não substituída" e mantendo saída legível.
+
+## Front
+
+`SubstituicaoStatusCard`, `StepConclusao`, `AgendamentoSubstituicaoSeparado`, `EtapaAssinaturaSubstituicao` leem direto `veiculo_antigo_*` / `veiculo_novo_*` de `substituicoes_veiculo` — sem inversão.
+
+## Histórico
+
+- **10/06/2026**: Fase 1 (cascade inicial + template trocando `{{veiculo.placa}}` por `{{substituicao.placa_anterior}}` na cláusula). Caso CTR-20260606172721-Q70HEK / Patrick Farias / RJN2A96→LTP7C50.
+- **10/06/2026**: Fase 2 — extração do cascade para `_shared/substituicao-cascade.ts`, aplicação em `retificar-termo-filiacao` (root cause da retificação v1 ter saído sem placa anterior), novo bloco "VEÍCULO SUBSTITUÍDO" e renomeação para "VEÍCULO NOVO (Substituto)". Patrick reemitido como retificação v2 (autentique_documento_id `8ee015a20d902d838e69ba377c21cd928e437685fd93188f6`).
