@@ -24,6 +24,7 @@ import {
 } from "../_shared/template-utils.ts";
 import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 import { ConsultorActionableError, respostaErroEstruturado, validarEmailOuLancar } from "../_shared/erroEstruturado.ts";
+import { aplicarSubstituicaoNoTemplateData } from "../_shared/substituicao-cascade.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
