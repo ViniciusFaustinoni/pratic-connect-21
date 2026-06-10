@@ -32,6 +32,11 @@ export default function AprovacoesTroca() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <ShieldCheck className="h-6 w-6 text-primary" />
           Aprovações
+          {limboIds.size > 0 && (
+            <Badge variant="destructive" className="ml-2 gap-1">
+              <AlertTriangle className="h-3 w-3" /> Em limbo: {limboIds.size}
+            </Badge>
+          )}
         </h1>
         <p className="text-muted-foreground">Solicitações aprovadas pelo Cadastro aguardando análise final do Monitoramento</p>
       </div>
