@@ -393,95 +393,9 @@ serve(async (req) => {
     }
 
     // ============= BUSCAR DADOS DE SUBSTITUIÇÃO (quando aplicável) =============
-    // Cascata canônica: substituicoes_veiculo → cotacoes.dados_extras → solicitacoes_substituicao_placa → veiculos.
-    // Necessário porque substituicoes_veiculo só nasce no efetivar-substituicao (pós retirada+instalação),
-    // e o termo é gerado MUITO antes disso.
-    if ((contrato.tipo_entrada === 'substituicao_placa' || contrato.tipo_entrada === 'substituicao') && contrato.associado_id) {
-      let placaAnterior = '';
-      let modeloAnterior = '';
-      let fipeAnterior = 0;
-      let fonte = '';
+    // Cascade canônico no helper compartilhado (`_shared/substituicao-cascade.ts`).
+    await aplicarSubstituicaoNoTemplateData(supabase, contrato, templateData, '[autentique-create-by-token]');
 
-      // 1) substituicoes_veiculo
-      if (contrato.veiculo_id) {
-        const { data: subst } = await supabase
-          .from('substituicoes_veiculo')
-          .select('veiculo_antigo_placa, veiculo_antigo_modelo, veiculo_antigo_fipe')
-          .eq('associado_id', contrato.associado_id)
-          .eq('veiculo_novo_id', contrato.veiculo_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (subst?.veiculo_antigo_placa) {
-          placaAnterior = subst.veiculo_antigo_placa;
-          modeloAnterior = subst.veiculo_antigo_modelo || '';
-          fipeAnterior = Number(subst.veiculo_antigo_fipe || 0);
-          fonte = 'substituicoes_veiculo';
-        }
-      }
-
-      // 2) cotacoes.dados_extras
-      let dadosExtras: any = {};
-      if (contrato.cotacao_id) {
-        const { data: cot } = await supabase
-          .from('cotacoes')
-          .select('dados_extras')
-          .eq('id', contrato.cotacao_id)
-          .maybeSingle();
-        dadosExtras = (cot as any)?.dados_extras || {};
-      }
-      if (!placaAnterior && dadosExtras.veiculo_antigo_placa) {
-        placaAnterior = dadosExtras.veiculo_antigo_placa;
-        modeloAnterior = dadosExtras.veiculo_antigo_modelo || modeloAnterior;
-        fipeAnterior = Number(dadosExtras.veiculo_antigo_fipe || fipeAnterior || 0);
-        fonte = 'cotacoes.dados_extras';
-      }
-
-      // 3) solicitacoes_substituicao_placa
-      if (!placaAnterior || !modeloAnterior) {
-        const solId = dadosExtras.solicitacao_substituicao_id;
-        const q = supabase
-          .from('solicitacoes_substituicao_placa')
-          .select('veiculo_antigo_placa, veiculo_antigo_snapshot, veiculo_antigo_id')
-          .order('created_at', { ascending: false })
-          .limit(1);
-        const { data: sol } = solId
-          ? await q.eq('id', solId).maybeSingle()
-          : (contrato.cotacao_id ? await q.eq('cotacao_id', contrato.cotacao_id).maybeSingle() : { data: null } as any);
-        if (sol) {
-          if (!placaAnterior) placaAnterior = sol.veiculo_antigo_placa || '';
-          const snap = (sol as any).veiculo_antigo_snapshot || {};
-          if (!modeloAnterior) modeloAnterior = snap.modelo || '';
-          if (!fipeAnterior) fipeAnterior = Number(snap.valor_fipe || snap.fipe || 0);
-          if (!fonte) fonte = 'solicitacoes_substituicao_placa';
-
-          // 4) veiculos (best-effort)
-          if ((!modeloAnterior || !fipeAnterior) && (sol as any).veiculo_antigo_id) {
-            const { data: vAnt } = await supabase
-              .from('veiculos')
-              .select('marca, modelo, valor_fipe')
-              .eq('id', (sol as any).veiculo_antigo_id)
-              .maybeSingle();
-            if (vAnt) {
-              if (!modeloAnterior) modeloAnterior = [vAnt.marca, vAnt.modelo].filter(Boolean).join(' ');
-              if (!fipeAnterior) fipeAnterior = Number(vAnt.valor_fipe || 0);
-              if (!fonte) fonte = 'veiculos';
-            }
-          }
-        }
-      }
-
-      if (placaAnterior) {
-        templateData.substituicao = {
-          placa_anterior: placaAnterior,
-          modelo_anterior: modeloAnterior,
-          fipe_anterior: fipeAnterior,
-        };
-        console.log(`[autentique-create-by-token] Dados de substituição via ${fonte}:`, placaAnterior, modeloAnterior || '(sem modelo)');
-      } else {
-        console.warn('[autentique-create-by-token] Contrato de substituição SEM placa anterior resolvida — tokens cairão para "—"');
-      }
-    }
 
 
     // ============= BUSCAR DADOS DE TROCA DE TITULARIDADE (quando aplicável) =============
