@@ -762,9 +762,15 @@ Deno.serve(async (req) => {
         ? `${ultimaIdentBRT.getFullYear()}-${ultimaIdentBRT.getMonth()}-${ultimaIdentBRT.getDate()}`
         : null;
 
+      // Janela canônica de identidade vem da habilidade (config-driven).
+      // Default 2h continua na coluna; em Relacionamento subimos para 24h
+      // para que cliente identificado no mesmo dia NÃO receba reapresentação.
+      const gateIdentHoras = Number((habCfg as any)?.gate_saudacao_horas) > 0
+        ? Number((habCfg as any).gate_saudacao_horas)
+        : 2;
       const identidadeFresca =
-        horasDesdeReconf < 2 ||
-        horasDesdeUltima < 2 ||
+        horasDesdeReconf < gateIdentHoras ||
+        horasDesdeUltima < gateIdentHoras ||
         (!!diaBrtIdent && diaBrtIdent === diaBrtAgora);
 
       if (!identidadeFresca) {
