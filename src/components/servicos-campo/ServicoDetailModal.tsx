@@ -19,7 +19,7 @@ import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
-  MapPinned, MoreHorizontal, Hash, Wrench, PackageMinus,
+  MapPinned, MoreHorizontal, Hash, Wrench, PackageMinus, ArrowRightLeft,
 
 } from 'lucide-react';
 
@@ -29,6 +29,7 @@ import { CancelarServicoDialog } from './CancelarServicoDialog';
 import { DevolverAoCadastroDialog } from './DevolverAoCadastroDialog';
 import { MarcarManutencaoDialog } from '@/components/monitoramento/MarcarManutencaoDialog';
 import { MarcarRetiradaDialog } from '@/components/monitoramento/MarcarRetiradaDialog';
+import { AlterarTipoServicoDialog } from './AlterarTipoServicoDialog';
 
 import { LiberarServicoButton } from './LiberarServicoButton';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -75,6 +76,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
   const [devolverOpen, setDevolverOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const [retiradaOpen, setRetiradaOpen] = useState(false);
+  const [alterarTipoOpen, setAlterarTipoOpen] = useState(false);
 
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
   const podeAcoesMonitor = !!(isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento);
@@ -279,6 +281,18 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                       </Button>
                     )}
 
+                    {podeAcoesMonitor && ['pendente','agendada','reagendada','em_rota','em_andamento','em_analise','imprevisto_pendente'].includes(servico.status) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9"
+                        onClick={() => setAlterarTipoOpen(true)}
+                        title="Corrigir o tipo do serviço quando foi marcado errado (antes da execução)"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                        Alterar tipo do serviço
+                      </Button>
+                    )}
 
                   </>
                 );
@@ -606,8 +620,17 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
       )}
 
 
+      <AlterarTipoServicoDialog
+        open={alterarTipoOpen}
+        onOpenChange={setAlterarTipoOpen}
+        servicoId={servico.id}
+        tipoAtual={servico.tipo}
+        servicoLabel={`${TIPO_SERVICO_LABELS[servico.tipo] || servico.tipo}${servico.veiculo?.placa ? ` · ${servico.veiculo.placa}` : ''}`}
+        onSuccess={() => onOpenChange(false)}
+      />
 
     </>
+
   );
 }
 
