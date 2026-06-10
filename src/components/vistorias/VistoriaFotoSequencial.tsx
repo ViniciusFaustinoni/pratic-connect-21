@@ -28,36 +28,42 @@ export function VistoriaFotoSequencial({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
   const prevUploadingRef = useRef<string | null>(null);
-  const [uploadedLocally, setUploadedLocally] = useState<Set<string>>(new Set());
 
   const fotoAtual = fotos[fotoAtualIndex];
   const totalFotos = fotos.length;
   const fotosObrigatorias = fotos.filter(f => !f.opcional);
   const totalObrigatorias = fotosObrigatorias.length;
-  const obrigatoriasEnviadas = fotosObrigatorias.filter(f => fotosEnviadas.some(e => e.tipo === f.id) || uploadedLocally.has(f.id)).length;
-  const fotosCompletasCount = fotos.filter(f => fotosEnviadas.some(e => e.tipo === f.id) || uploadedLocally.has(f.id)).length;
-  const todasCompletas = obrigatoriasEnviadas >= totalObrigatorias;
+  // CANÔNICO: contagem deriva 100% de `fotosEnviadas` (verdade do servidor +
+  // previews da fila offline). Antes mantínhamos um `uploadedLocally` que
+  // marcava como "enviada" qualquer término de upload — inclusive falhas —
+  // produzindo limbo visual: card "Todas as fotos foram enviadas!" mas o
+  // sumário do pai em 0/31 e, no refresh, tudo sumia. Ver
+  // mem://logic/operations/vistoria-interna-anti-limbo-fotos-video.
+  const obrigatoriasEnviadas = fotosObrigatorias.filter(f => fotosEnviadas.some(e => e.tipo === f.id)).length;
+  const fotosCompletasCount = fotos.filter(f => fotosEnviadas.some(e => e.tipo === f.id)).length;
+  const todasCompletas = totalObrigatorias > 0 && obrigatoriasEnviadas >= totalObrigatorias;
 
   const isFotoEnviada = useCallback((fotoId: string) => {
-    return fotosEnviadas.some(f => f.tipo === fotoId) || uploadedLocally.has(fotoId);
-  }, [fotosEnviadas, uploadedLocally]);
+    return fotosEnviadas.some(f => f.tipo === fotoId);
+  }, [fotosEnviadas]);
 
   const getFotoUrl = useCallback((fotoId: string) => {
     return fotosEnviadas.find(f => f.tipo === fotoId)?.arquivo_url;
   }, [fotosEnviadas]);
 
-  // Auto-avanço: quando upload completa, avança para próxima pendente
+  // Auto-avanço: SÓ pula para a próxima quando a foto realmente aparece em
+  // `fotosEnviadas` (servidor/fila confirmaram). Falha de upload mantém o
+  // operador na mesma foto, com o toast de erro do hook pai à mostra.
   useEffect(() => {
     if (prevUploadingRef.current && !uploadingFoto) {
       const uploadedId = prevUploadingRef.current;
-      // Track locally immediately — don't wait for react-query refetch
-      const newUploaded = new Set(uploadedLocally).add(uploadedId);
-      setUploadedLocally(newUploaded);
+      prevUploadingRef.current = null;
+      const confirmou = fotosEnviadas.some(e => e.tipo === uploadedId);
+      if (!confirmou) return;
 
       const timer = setTimeout(() => {
         const isPending = (f: VistoriaFotoConfig) =>
-          f.id !== uploadedId && !fotosEnviadas.some(e => e.tipo === f.id) && !newUploaded.has(f.id);
-
+          f.id !== uploadedId && !fotosEnviadas.some(e => e.tipo === f.id);
         const nextAfter = fotos.findIndex((f, i) => i > fotoAtualIndex && isPending(f));
         if (nextAfter >= 0) {
           setFotoAtualIndex(nextAfter);
@@ -66,11 +72,10 @@ export function VistoriaFotoSequencial({
           if (fromStart >= 0) setFotoAtualIndex(fromStart);
         }
       }, 300);
-      prevUploadingRef.current = null;
       return () => clearTimeout(timer);
     }
     prevUploadingRef.current = uploadingFoto;
-  }, [uploadingFoto]);
+  }, [uploadingFoto, fotosEnviadas, fotos, fotoAtualIndex]);
 
   // Scroll thumbnail ativa para o centro
   useEffect(() => {

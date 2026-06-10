@@ -36014,6 +36014,10 @@ export type Database = {
         Args: { p_cotacao_id: string }
         Returns: string
       }
+      fn_obter_ou_criar_vistoria_servico: {
+        Args: { p_servico_id: string }
+        Returns: string
+      }
       fn_parametro_comissao: { Args: { p_chave: string }; Returns: number }
       fn_placas_ativas_consultor: {
         Args: { p_vendedor_id: string }

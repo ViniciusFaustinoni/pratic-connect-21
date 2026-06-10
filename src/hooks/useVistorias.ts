@@ -894,251 +894,49 @@ export function useExecutarVistoria() {
 export function useVistoriaCompletaPorServico(servicoId: string | null) {
   return useQuery({
     queryKey: ['vistoria-completa-servico', servicoId],
-    // Retry automático em redes instáveis (5G/LTE em movimento). Backoff exponencial.
+    // Retry automático em redes instáveis (5G/LTE em movimento).
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
       if (!servicoId) return null;
 
-      // 1. Buscar dados do serviço para obter relacionamentos.
-      // Usa maybeSingle: o routeId pode pertencer a outras entidades
-      // (agendamentos_base.id, instalacoes.id) — nesse caso retorna null
-      // e os hooks de fallback (por instalação / por agendamento de base)
-      // assumem o trabalho. Não tratar isso como erro.
-      const { data: servico, error: servicoError } = await supabase
-        .from('servicos')
-        .select('associado_id, veiculo_id, profissional_id, contrato_id, cotacao_id, rota_id, vistoria_origem_id, instalacao_origem_id, data_agendada, hora_agendada, periodo, cep, logradouro, numero, bairro, cidade')
-        .eq('id', servicoId)
-        .maybeSingle();
+      // Resolução canônica via RPC com advisory lock por serviço — elimina
+      // race entre abas/refetches que criavam vistorias paralelas e deixavam
+      // fotos órfãs (ver mem://logic/operations/vistoria-interna-anti-limbo-fotos-video).
+      const { data: vistoriaId, error: rpcErr } = await supabase.rpc(
+        'fn_obter_ou_criar_vistoria_servico' as any,
+        { p_servico_id: servicoId },
+      );
 
-      if (servicoError) throw servicoError;
-      if (!servico) {
-        // Serviço não encontrado para este id — deixa os fallbacks resolverem.
+      if (rpcErr) {
+        console.error('[useVistoriaCompletaPorServico] RPC falhou:', rpcErr);
+        throw rpcErr;
+      }
+
+      if (!vistoriaId) {
+        // Serviço não encontrado para este id — deixa hooks de fallback
+        // (por instalação / por agendamento de base) assumirem.
         return null;
       }
 
-      // 2. Se o serviço já tem vistoria_origem_id, buscar essa vistoria
-      if (servico?.vistoria_origem_id) {
-        const { data: vistoriaExistente } = await supabase
-          .from('vistorias')
-          .select(`
-            *,
-            veiculo:veiculos(
-              id, placa, chassi, marca, modelo, 
-              ano_fabricacao, ano_modelo, cor,
-              associado:associados(id, nome, cpf, telefone)
-            ),
-            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
-            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
-            fotos:vistoria_fotos(*)
-          `)
-          .eq('id', servico.vistoria_origem_id)
-          .maybeSingle();
+      const { data: vistoria, error: fetchErr } = await supabase
+        .from('vistorias')
+        .select(`
+          *,
+          veiculo:veiculos(
+            id, placa, chassi, marca, modelo,
+            ano_fabricacao, ano_modelo, cor,
+            associado:associados(id, nome, cpf, telefone)
+          ),
+          associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+          vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+          fotos:vistoria_fotos(*)
+        `)
+        .eq('id', vistoriaId as unknown as string)
+        .single();
 
-        if (vistoriaExistente) {
-          return vistoriaExistente;
-        }
-      }
-
-      // 3. Se tem instalacao_origem_id, buscar vistoria vinculada a essa instalação
-      if (servico?.instalacao_origem_id) {
-        const { data: vistoriaInstalacao } = await supabase
-          .from('vistorias')
-          .select(`
-            *,
-            veiculo:veiculos(
-              id, placa, chassi, marca, modelo, 
-              ano_fabricacao, ano_modelo, cor,
-              associado:associados(id, nome, cpf, telefone)
-            ),
-            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
-            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
-            fotos:vistoria_fotos(*)
-          `)
-          .eq('instalacao_id', servico.instalacao_origem_id)
-          .maybeSingle();
-
-        if (vistoriaInstalacao) {
-          // Atualizar serviço com vistoria_origem_id (com checagem de erro)
-          const { error: updateErr } = await supabase
-            .from('servicos')
-            .update({ vistoria_origem_id: vistoriaInstalacao.id })
-            .eq('id', servicoId);
-          if (updateErr) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id:', updateErr);
-          return vistoriaInstalacao;
-        }
-      }
-
-      // 4. Se não encontrou, buscar por cotacao_id
-      if (servico?.cotacao_id) {
-        const { data: vistoriaCotacao } = await supabase
-          .from('vistorias')
-          .select(`
-            *,
-            veiculo:veiculos(
-              id, placa, chassi, marca, modelo, 
-              ano_fabricacao, ano_modelo, cor,
-              associado:associados(id, nome, cpf, telefone)
-            ),
-            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
-            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
-            fotos:vistoria_fotos(*)
-          `)
-          .eq('cotacao_id', servico.cotacao_id)
-          .maybeSingle();
-
-        if (vistoriaCotacao) {
-          // Atualizar serviço com vistoria_origem_id (com checagem de erro)
-          const { error: updateErr2 } = await supabase
-            .from('servicos')
-            .update({ vistoria_origem_id: vistoriaCotacao.id })
-            .eq('id', servicoId);
-          if (updateErr2) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id (cotação):', updateErr2);
-          return vistoriaCotacao;
-        }
-      }
-
-      // 5. Se ainda não existir, criar nova vistoria vinculada ao serviço
-      if (servico) {
-        console.log('[useVistoriaCompletaPorServico] Criando nova vistoria para serviço:', {
-          servicoId,
-          associado_id: servico.associado_id,
-          veiculo_id: servico.veiculo_id,
-          profissional_id: servico.profissional_id,
-        });
-
-        // Dedupe defensivo: se um INSERT anterior chegou ao banco mas a resposta
-        // foi perdida (rede flaky), evita criar duplicata. Procura vistoria
-        // recente em_analise para o mesmo trio (associado + veiculo + cotacao).
-        if (servico.cotacao_id) {
-          const { data: vistoriaRecente } = await supabase
-            .from('vistorias')
-            .select(`
-              *,
-              veiculo:veiculos(
-                id, placa, chassi, marca, modelo, 
-                ano_fabricacao, ano_modelo, cor,
-                associado:associados(id, nome, cpf, telefone)
-              ),
-              associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
-              vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
-              fotos:vistoria_fotos(*)
-            `)
-            .eq('associado_id', servico.associado_id)
-            .eq('veiculo_id', servico.veiculo_id)
-            .eq('cotacao_id', servico.cotacao_id)
-            .eq('status', 'em_analise')
-            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (vistoriaRecente) {
-            console.log('[useVistoriaCompletaPorServico] Dedupe: vistoria recente encontrada, reaproveitando', vistoriaRecente.id);
-            await supabase.from('servicos').update({ vistoria_origem_id: vistoriaRecente.id }).eq('id', servicoId);
-            return vistoriaRecente;
-          }
-        }
-
-        // Tentar criar com vistoriador_id primeiro
-        let novaVistoria = null;
-        let insertError = null;
-
-        const { data: vistoriaComVistoriador, error: errorComVistoriador } = await supabase
-          .from('vistorias')
-          .insert({
-            associado_id: servico.associado_id,
-            veiculo_id: servico.veiculo_id,
-            vistoriador_id: servico.profissional_id,
-            contrato_id: servico.contrato_id,
-            cotacao_id: servico.cotacao_id,
-            tipo: 'entrada',
-            status: 'em_analise',
-            // Necessários para o trigger sync_vistoria_to_servicos não falhar com NULL
-            data_agendada: servico.data_agendada,
-            horario_agendado: servico.hora_agendada,
-            endereco_cep: servico.cep,
-            endereco_logradouro: servico.logradouro,
-            endereco_numero: servico.numero,
-            endereco_bairro: servico.bairro,
-            endereco_cidade: servico.cidade,
-            rota_id: servico.rota_id,
-          })
-          .select(`
-            *,
-            veiculo:veiculos(
-              id, placa, chassi, marca, modelo, 
-              ano_fabricacao, ano_modelo, cor,
-              associado:associados(id, nome, cpf, telefone)
-            ),
-            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
-            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
-            fotos:vistoria_fotos(*)
-          `)
-          .single();
-
-        if (errorComVistoriador) {
-          console.warn('[useVistoriaCompletaPorServico] Falha ao criar com vistoriador, tentando sem:', errorComVistoriador);
-          
-          // Fallback: criar sem vistoriador_id (RLS permite)
-          const { data: vistoriaSemVistoriador, error: errorSemVistoriador } = await supabase
-            .from('vistorias')
-            .insert({
-              associado_id: servico.associado_id,
-              veiculo_id: servico.veiculo_id,
-              vistoriador_id: null, // Sem vistoriador - RLS permite
-              contrato_id: servico.contrato_id,
-              cotacao_id: servico.cotacao_id,
-              tipo: 'entrada',
-              status: 'em_analise',
-              // Necessários para o trigger sync_vistoria_to_servicos não falhar com NULL
-              data_agendada: servico.data_agendada,
-              horario_agendado: servico.hora_agendada,
-              endereco_cep: servico.cep,
-              endereco_logradouro: servico.logradouro,
-              endereco_numero: servico.numero,
-              endereco_bairro: servico.bairro,
-              endereco_cidade: servico.cidade,
-              rota_id: servico.rota_id,
-            })
-            .select(`
-              *,
-              veiculo:veiculos(
-                id, placa, chassi, marca, modelo, 
-                ano_fabricacao, ano_modelo, cor,
-                associado:associados(id, nome, cpf, telefone)
-              ),
-              associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
-              vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
-              fotos:vistoria_fotos(*)
-            `)
-            .single();
-
-          if (errorSemVistoriador) {
-            console.error('[useVistoriaCompletaPorServico] Erro ao criar vistoria (fallback também falhou):', {
-              errorOriginal: errorComVistoriador,
-              errorFallback: errorSemVistoriador,
-              servicoId,
-            });
-            throw errorSemVistoriador;
-          }
-
-          novaVistoria = vistoriaSemVistoriador;
-        } else {
-          novaVistoria = vistoriaComVistoriador;
-        }
-
-        // Atualizar serviço com vistoria_origem_id (com checagem de erro)
-        const { error: updateVistErr } = await supabase
-          .from('servicos')
-          .update({ vistoria_origem_id: novaVistoria.id })
-          .eq('id', servicoId);
-        if (updateVistErr) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id (nova):', updateVistErr);
-
-        console.log('[useVistoriaCompletaPorServico] Vistoria criada com sucesso:', novaVistoria.id);
-        return novaVistoria;
-      }
-
-      return null;
+      if (fetchErr) throw fetchErr;
+      return vistoria;
     },
     enabled: !!servicoId,
   });

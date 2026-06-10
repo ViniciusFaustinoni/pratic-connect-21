@@ -35,6 +35,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 import { ConcluirPrestadorExternoButton } from './ConcluirPrestadorExternoButton';
 import { RealizarVistoriaInternaButton } from './RealizarVistoriaInternaButton';
+import { BadgeVistoriaLimbo } from './BadgeVistoriaLimbo';
 
 import { cn } from '@/lib/utils';
 import {
@@ -287,6 +288,14 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 servico={servico}
                 onBeforeOpen={() => onOpenChange(false)}
               />
+
+              {isInstalacao && (
+                <BadgeVistoriaLimbo
+                  servicoId={servico.id}
+                  tipo={servico.tipo}
+                  status={servico.status}
+                />
+              )}
 
 
             </div>
