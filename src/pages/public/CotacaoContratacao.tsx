@@ -551,9 +551,15 @@ export default function CotacaoContratacao() {
         etapa = 5;
       }
 
+      // Sub-FIPE isenta sem via escolhida: NUNCA empurrar para Pagamento (3) —
+      // o gate canônico do `confirmar-adesao-zerada` precisa de via na Vistoria.
+      if (etapa === 3 && subFipeIsenta && !viaSubFipeSelecionada && !hasInstalacaoAgendada && !hasAgendamentoBase) {
+        etapa = 4;
+      }
+
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual, etapaAtual, isTrocaTitularidade, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, docsPendentes]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, dispensaVistoriaTroca, etapaDoStatus, setEtapaAtual, navegacaoManual, etapaAtual, isTrocaTitularidade, hasInstalacaoAgendada, hasAgendamentoBase, agendamentoConcluido, docsPendentes, subFipeIsenta, viaSubFipeSelecionada]);
 
   // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
   // Em troca de titularidade segue a navOrder (Pagamento na sequência), igual à nova adesão.
