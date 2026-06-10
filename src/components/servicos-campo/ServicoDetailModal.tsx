@@ -76,6 +76,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
   const [devolverOpen, setDevolverOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const [retiradaOpen, setRetiradaOpen] = useState(false);
+  const [alterarTipoOpen, setAlterarTipoOpen] = useState(false);
 
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
   const podeAcoesMonitor = !!(isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento);
