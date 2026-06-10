@@ -639,7 +639,15 @@ serve(async (req) => {
       }
 
       // 2) cotacoes.dados_extras
-      const dadosExtras = (contrato.cotacoes as any)?.dados_extras || {};
+      let dadosExtras: any = {};
+      if (contrato.cotacao_id) {
+        const { data: cot } = await supabase
+          .from('cotacoes')
+          .select('dados_extras')
+          .eq('id', contrato.cotacao_id)
+          .maybeSingle();
+        dadosExtras = (cot as any)?.dados_extras || {};
+      }
       if (!placaAnterior && dadosExtras.veiculo_antigo_placa) {
         placaAnterior = dadosExtras.veiculo_antigo_placa;
         modeloAnterior = dadosExtras.veiculo_antigo_modelo || modeloAnterior;
