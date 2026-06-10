@@ -281,6 +281,18 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                       </Button>
                     )}
 
+                    {podeAcoesMonitor && ['pendente','agendada','reagendada','em_rota','em_andamento','em_analise','imprevisto_pendente'].includes(servico.status) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-9"
+                        onClick={() => setAlterarTipoOpen(true)}
+                        title="Corrigir o tipo do serviço quando foi marcado errado (antes da execução)"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                        Alterar tipo do serviço
+                      </Button>
+                    )}
 
                   </>
                 );
