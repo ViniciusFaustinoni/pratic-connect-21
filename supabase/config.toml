@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.cron-solicitacoes-resumo-diario]
 verify_jwt = false
 
+[functions.cron-contas-pagar-lembrete-vencimento]
+verify_jwt = false
+
 [functions.analise-consistencia-relatos]
 verify_jwt = false
 
