@@ -7,6 +7,7 @@ export type PermissionKey =
   | 'isPrestador'
   | 'isDiretor'
   | 'isDiretorOnly'
+  | 'isSocio'
   | 'isGerente'
   | 'isSupervisor'
   | 'isGerenciaOrSupervisor'
@@ -117,6 +118,7 @@ export function usePermissions() {
   const isDesenvolvedor = hasRoleByName('desenvolvedor');
   const isAdminMaster = hasRoleByName('admin_master');
   const isDiretor = hasRole('diretor');
+  const isSocio = hasRoleByName('socio');
   const isAnalistaCadastro = hasRole('analista_cadastro');
   const isCoordenadorMonitoramento = hasRole('coordenador_monitoramento');
   const isInstaladorVistoriador = hasRole('instalador_vistoriador');
@@ -208,6 +210,7 @@ export function usePermissions() {
     // Identity flags
     isDiretor,
     isDiretorOnly: isDiretor,
+    isSocio,
     isGerente: hasRole('gerente_comercial'),
     isSupervisor: hasRole('supervisor_vendas'),
     isSupervisorVendas: hasRole('supervisor_vendas'),
