@@ -192,6 +192,7 @@ const PrestadoresList = lazy(() => import("./pages/assistencia/PrestadoresList")
 const PrestadorDetalhe = lazy(() => import("./pages/assistencia/PrestadorDetalhe"));
 
 // Financeiro
+const CentralFinanceira = lazy(() => import("./pages/financeiro/CentralFinanceira"));
 const FinanceiroDashboard = lazy(() => import("./pages/financeiro/FinanceiroDashboard"));
 const CobrancasLayout = lazy(() => import("./pages/financeiro/CobrancasLayout"));
 const CobrancasList = lazy(() => import("./pages/financeiro/CobrancasList"));
@@ -595,6 +596,7 @@ const App = () => (
               <Route path="/assistencia/prestadores/:id/editar" element={<PrestadorDetalhe />} />
               
               {/* Financeiro */}
+              <Route path="/financeiro/central" element={<CentralFinanceira />} />
               <Route path="/financeiro" element={<FinanceiroDashboard />} />
               {/* Módulo unificado de Cobranças (Faturas + Régua) */}
               <Route path="/financeiro/cobrancas" element={<CobrancasLayout />}>

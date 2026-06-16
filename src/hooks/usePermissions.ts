@@ -8,6 +8,8 @@ export type PermissionKey =
   | 'isDiretor'
   | 'isDiretorOnly'
   | 'isSocio'
+  | 'canViewFinanceiro'
+  | 'canGestaoFinanceira'
   | 'isGerente'
   | 'isSupervisor'
   | 'isGerenciaOrSupervisor'
@@ -293,6 +295,12 @@ export function usePermissions() {
 
     // E-mails de suspensão: admin_master, desenvolvedor e diretor
     canManageEmailsSuspensao: isAdminMaster || isDesenvolvedor || isDiretor,
+
+    // Financeiro: visível para gerência, diretoria, sócios e contabilidade
+    canViewFinanceiro:
+      isGerencia() || isDiretor || isSocio || isAdminMaster || isDesenvolvedor || hasPerm('canManageContabilidade'),
+    // Gestão financeira sensível (DRE, distribuição, empresas): diretoria e sócios
+    canGestaoFinanceira: isDiretor || isSocio || isAdminMaster || isDesenvolvedor,
   };
 
   return {
