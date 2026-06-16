@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, Scale, Wallet, Users } from 'lucide-react';
+import { TrendingUp, TrendingDown, Scale, Wallet, Users, FileText, FileSpreadsheet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { useRelatorioCustosReceitas } from '@/hooks/useRelatorioCustosReceitas';
+import { exportarCustosReceitasPDF, exportarCustosReceitasXlsx } from '@/lib/financeiro/exportRelatorio';
 
 const fmt = (v: number) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -29,7 +31,15 @@ export default function RelatorioCustosReceitas() {
           <h1 className="text-2xl font-bold tracking-tight">Relatório de Custos e Receitas</h1>
           <p className="text-muted-foreground">Receita, despesas por grupo, sócios e lucro do mês</p>
         </div>
-        <Input type="month" value={mesRef} onChange={(e) => setMesRef(e.target.value)} className="w-40" />
+        <div className="flex items-center gap-2">
+          <Input type="month" value={mesRef} onChange={(e) => setMesRef(e.target.value)} className="w-40" />
+          <Button variant="outline" disabled={!data} onClick={() => data && exportarCustosReceitasPDF(data, mesRef)}>
+            <FileText className="mr-2 h-4 w-4" /> PDF
+          </Button>
+          <Button variant="outline" disabled={!data} onClick={() => data && exportarCustosReceitasXlsx(data, mesRef)}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
