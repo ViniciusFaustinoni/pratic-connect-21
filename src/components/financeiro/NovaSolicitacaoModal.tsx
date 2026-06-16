@@ -31,6 +31,7 @@ const initialFormData = {
   descricao: '',
   valor: '',
   solicitante_nome: '',
+  solicitante_telefone: '',
   favorecido_nome: '',
   favorecido_documento: '',
   forma_pagamento: '',
@@ -50,6 +51,7 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
   const [formData, setFormData] = useState(() => ({
     ...initialFormData,
     solicitante_nome: profile?.nome ?? '',
+    solicitante_telefone: profile?.telefone ?? '',
   }));
   const [comprovante, setComprovante] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -66,7 +68,7 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
   const parseValor = (value: string) => parseFloat(value.replace(/\./g, '').replace(',', '.') || '0');
 
   const handleClose = () => {
-    setFormData({ ...initialFormData, solicitante_nome: profile?.nome ?? '' });
+    setFormData({ ...initialFormData, solicitante_nome: profile?.nome ?? '', solicitante_telefone: profile?.telefone ?? '' });
     setComprovante(null);
     onClose();
   };
@@ -108,6 +110,7 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
         valor: parseValor(formData.valor),
         solicitante_id: profile?.id ?? null,
         solicitante_nome: formData.solicitante_nome,
+        solicitante_telefone: formData.solicitante_telefone,
         favorecido_nome: formData.favorecido_nome || formData.solicitante_nome,
         favorecido_documento: formData.favorecido_documento,
         forma_pagamento: formData.forma_pagamento,
@@ -253,14 +256,25 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="solicitante_nome">Solicitante *</Label>
-            <Input
-              id="solicitante_nome"
-              value={formData.solicitante_nome}
-              onChange={(e) => handleChange('solicitante_nome', e.target.value)}
-              placeholder="Nome de quem está solicitando"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="solicitante_nome">Solicitante *</Label>
+              <Input
+                id="solicitante_nome"
+                value={formData.solicitante_nome}
+                onChange={(e) => handleChange('solicitante_nome', e.target.value)}
+                placeholder="Nome de quem está solicitando"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="solicitante_telefone">WhatsApp do solicitante</Label>
+              <Input
+                id="solicitante_telefone"
+                value={formData.solicitante_telefone}
+                onChange={(e) => handleChange('solicitante_telefone', e.target.value)}
+                placeholder="(00) 00000-0000"
+              />
+            </div>
           </div>
 
           {/* Favorecido */}

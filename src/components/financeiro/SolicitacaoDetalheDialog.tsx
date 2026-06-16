@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Loader2, CheckCircle2, XCircle, Clock, FileText, ExternalLink,
   ThumbsUp, ThumbsDown, Wallet,
@@ -39,6 +41,14 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
   const { profile } = useAuth();
   const permissions = usePermissions();
   const { data: aprovacoes = [] } = useAprovacoesSolicitacao(solicitacao?.id ?? null);
+  const { data: socios = [] } = useQuery({
+    queryKey: ['socios-lista'],
+    queryFn: async (): Promise<{ id: string; nome: string }[]> => {
+      const { data, error } = await (supabase as any).rpc('listar_socios');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const registrar = useRegistrarAprovacao();
   const cancelar = useCancelarSolicitacao();
@@ -54,6 +64,16 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
   const setorLabel =
     SOLICITACAO_SETORES.find((s) => s.value === solicitacao.setor)?.label ?? (solicitacao.setor || '—');
   const prioridade = SOLICITACAO_PRIORIDADE_CONFIG[solicitacao.prioridade];
+
+  // Lista de liberações por sócio (mostra quem liberou, rejeitou ou ainda está pendente)
+  const listaLiberacoes = socios.length > 0
+    ? socios.map((soc) => {
+        const v = aprovacoes.find((a) => a.socio_id === soc.id);
+        return { id: soc.id, nome: soc.nome, decisao: v?.decisao, created_at: v?.created_at, comentario: v?.comentario };
+      })
+    : aprovacoes.map((a) => ({
+        id: a.id, nome: a.socio_nome || 'Sócio', decisao: a.decisao, created_at: a.created_at, comentario: a.comentario,
+      }));
 
   const isSocio = permissions.isSocio;
   const podePagar =
@@ -141,24 +161,30 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
                 {solicitacao.aprovacoes_count}/{solicitacao.aprovacoes_necessarias} aprovações
               </span>
             </div>
-            {aprovacoes.length === 0 && (
+            {listaLiberacoes.length === 0 && (
               <p className="text-muted-foreground text-xs flex items-center gap-1">
                 <Clock className="h-3 w-3" /> Aguardando liberação dos sócios.
               </p>
             )}
-            {aprovacoes.map((a) => (
-              <div key={a.id} className="flex items-start gap-2">
-                {a.decisao === 'aprovado' ? (
+            {listaLiberacoes.map((item) => (
+              <div key={item.id} className="flex items-start gap-2">
+                {item.decisao === 'aprovado' ? (
                   <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                ) : (
+                ) : item.decisao === 'rejeitado' ? (
                   <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                ) : (
+                  <Clock className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 )}
                 <div className="flex-1">
-                  <span className="font-medium">{a.socio_nome || 'Sócio'}</span>{' '}
-                  <span className="text-muted-foreground">
-                    {a.decisao === 'aprovado' ? 'liberou' : 'rejeitou'} · {formatData(a.created_at)}
+                  <span className="font-medium">{item.nome}</span>{' '}
+                  <span className="text-muted-foreground text-xs">
+                    {item.decisao === 'aprovado'
+                      ? `liberou · ${formatData(item.created_at)}`
+                      : item.decisao === 'rejeitado'
+                        ? `rejeitou · ${formatData(item.created_at)}`
+                        : 'aguardando liberação'}
                   </span>
-                  {a.comentario && <p className="text-muted-foreground text-xs">{a.comentario}</p>}
+                  {item.comentario && <p className="text-muted-foreground text-xs">{item.comentario}</p>}
                 </div>
               </div>
             ))}

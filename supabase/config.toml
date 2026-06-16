@@ -1,5 +1,14 @@
 project_id = "iyxdgmukrrdkffraptsx"
 
+[functions.notificar-solicitacao-financeira]
+verify_jwt = false
+
+[functions.cron-solicitacoes-lembrete-vencimento]
+verify_jwt = false
+
+[functions.cron-solicitacoes-resumo-diario]
+verify_jwt = false
+
 [functions.analise-consistencia-relatos]
 verify_jwt = false
 

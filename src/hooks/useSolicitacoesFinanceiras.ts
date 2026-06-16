@@ -95,6 +95,7 @@ export interface SolicitacaoFinanceira {
   valor: number;
   solicitante_id: string | null;
   solicitante_nome: string;
+  solicitante_telefone: string | null;
   favorecido_nome: string | null;
   favorecido_documento: string | null;
   forma_pagamento: string | null;
@@ -142,6 +143,7 @@ export interface NovaSolicitacaoInput {
   valor: number;
   solicitante_id: string | null;
   solicitante_nome: string;
+  solicitante_telefone?: string;
   favorecido_nome?: string;
   favorecido_documento?: string;
   forma_pagamento?: string;
@@ -241,6 +243,13 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ['solicitacoes-financeiras-kpis'] });
 }
 
+// Dispara a notificação WhatsApp (fire-and-forget — nunca quebra a ação principal)
+function dispararNotificacao(solicitacaoId: string, evento: 'criada' | 'aprovacao_check' | 'pago') {
+  supabase.functions
+    .invoke('notificar-solicitacao-financeira', { body: { solicitacao_id: solicitacaoId, evento } })
+    .catch((e) => console.warn('[solicitacoes] falha ao notificar:', e));
+}
+
 export function useCriarSolicitacao() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -258,6 +267,7 @@ export function useCriarSolicitacao() {
           valor: input.valor,
           solicitante_id: input.solicitante_id,
           solicitante_nome: input.solicitante_nome,
+          solicitante_telefone: input.solicitante_telefone || null,
           favorecido_nome: input.favorecido_nome || null,
           favorecido_documento: input.favorecido_documento || null,
           forma_pagamento: input.forma_pagamento || null,
@@ -276,9 +286,10 @@ export function useCriarSolicitacao() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast.success('Solicitação enviada para liberação dos sócios!');
       invalidate(queryClient);
+      if (data?.id) dispararNotificacao(data.id, 'criada');
     },
     onError: () => toast.error('Erro ao enviar solicitação'),
   });
@@ -313,6 +324,8 @@ export function useRegistrarAprovacao() {
       toast.success(params.decisao === 'aprovado' ? 'Liberação registrada!' : 'Solicitação rejeitada.');
       invalidate(queryClient);
       queryClient.invalidateQueries({ queryKey: ['solicitacao-aprovacoes', params.solicitacaoId] });
+      // Verifica se a decisão final foi atingida e avisa o solicitante
+      dispararNotificacao(params.solicitacaoId, 'aprovacao_check');
     },
     onError: () => toast.error('Erro ao registrar decisão'),
   });
@@ -403,11 +416,12 @@ export function usePagarSolicitacao() {
 
       return conta;
     },
-    onSuccess: () => {
+    onSuccess: (_conta, params) => {
       toast.success('Pagamento efetuado e lançado em Contas a Pagar!');
       invalidate(queryClient);
       queryClient.invalidateQueries({ queryKey: ['contas-pagar'] });
       queryClient.invalidateQueries({ queryKey: ['contas-pagar-kpis'] });
+      dispararNotificacao(params.solicitacao.id, 'pago');
     },
     onError: () => toast.error('Erro ao efetuar pagamento'),
   });
