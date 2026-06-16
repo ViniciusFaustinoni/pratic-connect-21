@@ -116,6 +116,7 @@ export interface SolicitacaoFinanceira {
   pago_por: string | null;
   pago_em: string | null;
   conta_pagar_id: string | null;
+  empresa_id: string | null;
   observacao: string | null;
   criado_por: string | null;
   created_at: string;
@@ -374,6 +375,7 @@ export function usePagarSolicitacao() {
           subcategoria: solicitacao.subcategoria || null,
           referencia_id: solicitacao.id,
           referencia_tipo: 'solicitacao_financeira',
+          empresa_id: solicitacao.empresa_id ?? null,
           valor: solicitacao.valor,
           valor_pago: solicitacao.valor,
           data_emissao: hoje,

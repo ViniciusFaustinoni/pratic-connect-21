@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useEmpresas } from '@/hooks/useEmpresas';
 import {
   SolicitacaoFinanceira,
   useAprovacoesSolicitacao,
@@ -41,6 +42,7 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
   const { profile } = useAuth();
   const permissions = usePermissions();
   const { data: aprovacoes = [] } = useAprovacoesSolicitacao(solicitacao?.id ?? null);
+  const { data: empresas = [] } = useEmpresas();
   const { data: socios = [] } = useQuery({
     queryKey: ['socios-lista'],
     queryFn: async (): Promise<{ id: string; nome: string }[]> => {
@@ -64,6 +66,7 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
   const setorLabel =
     SOLICITACAO_SETORES.find((s) => s.value === solicitacao.setor)?.label ?? (solicitacao.setor || '—');
   const prioridade = SOLICITACAO_PRIORIDADE_CONFIG[solicitacao.prioridade];
+  const empresaNome = empresas.find((e) => e.id === solicitacao.empresa_id)?.nome ?? '—';
 
   // Lista de liberações por sócio (mostra quem liberou, rejeitou ou ainda está pendente)
   const listaLiberacoes = socios.length > 0
@@ -129,6 +132,7 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
             <div className="grid grid-cols-2 gap-2 text-muted-foreground">
               <span>Solicitante:</span><span className="text-foreground">{solicitacao.solicitante_nome}</span>
               <span>Setor:</span><span className="text-foreground">{setorLabel}</span>
+              <span>Empresa:</span><span className="text-foreground">{empresaNome}</span>
               <span>Favorecido:</span><span className="text-foreground">{solicitacao.favorecido_nome || solicitacao.solicitante_nome}</span>
               {solicitacao.numero_documento && (
                 <>
