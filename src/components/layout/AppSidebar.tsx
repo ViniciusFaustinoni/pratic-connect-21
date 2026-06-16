@@ -313,6 +313,7 @@ const menuConfig: {
         { title: 'Cobranças (Faturas)', url: '/financeiro/cobrancas', icon: Receipt },
         { title: 'Chat Cobrança', url: '/cobranca/chat', icon: MessageCircle },
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
+        { title: 'Importar Despesas', url: '/financeiro/importar', icon: Database },
         { title: 'Solicitações Financeiras', url: '/financeiro/solicitacoes', icon: ClipboardCheck },
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
