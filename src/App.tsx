@@ -207,6 +207,7 @@ const EmpresasFinanceiras = lazy(() => import("./pages/financeiro/EmpresasFinanc
 const VisaoFinanceira = lazy(() => import("./pages/financeiro/VisaoFinanceira"));
 const FechamentoDistribuicao = lazy(() => import("./pages/financeiro/FechamentoDistribuicao"));
 const ImportarDespesas = lazy(() => import("./pages/financeiro/ImportarDespesas"));
+const Receitas = lazy(() => import("./pages/financeiro/Receitas"));
 const Extrato = lazy(() => import("./pages/financeiro/Extrato"));
 // ExtratosBancarios removido — consolidado em /financeiro/extrato
 const ExtratoDetalhe = lazy(() => import("./pages/financeiro/ExtratoDetalhe"));
@@ -608,6 +609,7 @@ const App = () => (
               <Route path="/financeiro/visao" element={<VisaoFinanceira />} />
               <Route path="/financeiro/distribuicao" element={<FechamentoDistribuicao />} />
               <Route path="/financeiro/importar" element={<ImportarDespesas />} />
+              <Route path="/financeiro/receitas" element={<Receitas />} />
               <Route path="/financeiro/extrato" element={<Extrato />} />
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />

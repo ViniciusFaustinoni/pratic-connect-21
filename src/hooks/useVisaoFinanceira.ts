@@ -40,7 +40,7 @@ export function useVisaoFinanceira(ano: number, mes: number) {
       const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
       const fim = ultimoDia(ano, mes);
 
-      const [empresasRes, asaasRes, sgaRes, payRes] = await Promise.all([
+      const [empresasRes, asaasRes, sgaRes, payRes, receitasRes] = await Promise.all([
         sb.from('empresas').select('id, nome, tipo, papel, percentual_rateio, ativo'),
         sb.from('asaas_cobrancas')
           .select('pagamento_valor, status, data_vencimento')
@@ -51,14 +51,16 @@ export function useVisaoFinanceira(ano: number, mes: number) {
         sb.from('contas_pagar')
           .select('valor, valor_pago, status, categoria, empresa_id, data_vencimento')
           .gte('data_vencimento', inicio).lte('data_vencimento', fim).limit(10000),
+        sb.from('receitas').select('valor, data').gte('data', inicio).lte('data', fim).limit(10000),
       ]);
 
       const empresas = (empresasRes.data ?? []).filter((e: any) => e.ativo);
 
-      // Receita recebida no período (ASAAS + SGA)
+      // Receita recebida no período (ASAAS + SGA + receitas lançadas/importadas)
       const receita =
         (asaasRes.data ?? []).reduce((a: number, c: any) => a + Number(c.pagamento_valor || 0), 0) +
-        (sgaRes.data ?? []).reduce((a: number, c: any) => a + Number(c.valor_pago || 0), 0);
+        (sgaRes.data ?? []).reduce((a: number, c: any) => a + Number(c.valor_pago || 0), 0) +
+        (receitasRes.data ?? []).reduce((a: number, c: any) => a + Number(c.valor || 0), 0);
 
       // Despesas pagas no período
       const pagas = (payRes.data ?? []).filter((p: any) => p.status === 'pago');

@@ -53,18 +53,20 @@ async function calcularReceitaDespesa(ano: number, mes: number) {
   const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
   const fim = ultimoDia(ano, mes);
 
-  const [asaasRes, sgaRes, payRes] = await Promise.all([
+  const [asaasRes, sgaRes, payRes, receitasRes] = await Promise.all([
     sb.from('asaas_cobrancas').select('pagamento_valor, data_vencimento')
       .gte('data_vencimento', inicio).lte('data_vencimento', fim).limit(10000),
     sb.from('cobrancas').select('valor_pago, data_vencimento')
       .gte('data_vencimento', inicio).lte('data_vencimento', fim).limit(10000),
     sb.from('contas_pagar').select('valor, valor_pago, status, data_vencimento')
       .gte('data_vencimento', inicio).lte('data_vencimento', fim).limit(10000),
+    sb.from('receitas').select('valor, data').gte('data', inicio).lte('data', fim).limit(10000),
   ]);
 
   const receita =
     (asaasRes.data ?? []).reduce((a: number, c: any) => a + Number(c.pagamento_valor || 0), 0) +
-    (sgaRes.data ?? []).reduce((a: number, c: any) => a + Number(c.valor_pago || 0), 0);
+    (sgaRes.data ?? []).reduce((a: number, c: any) => a + Number(c.valor_pago || 0), 0) +
+    (receitasRes.data ?? []).reduce((a: number, c: any) => a + Number(c.valor || 0), 0);
   const despesa = (payRes.data ?? [])
     .filter((p: any) => p.status === 'pago')
     .reduce((a: number, p: any) => a + Number(p.valor_pago || p.valor || 0), 0);

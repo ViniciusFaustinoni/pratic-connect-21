@@ -311,6 +311,7 @@ const menuConfig: {
         { title: 'Visão Financeira', url: '/financeiro/visao', icon: Layers },
         { title: 'Distribuição de Lucro', url: '/financeiro/distribuicao', icon: Scale, permission: 'isDiretor' },
         { title: 'Cobranças (Faturas)', url: '/financeiro/cobrancas', icon: Receipt },
+        { title: 'Receitas', url: '/financeiro/receitas', icon: TrendingUp },
         { title: 'Chat Cobrança', url: '/cobranca/chat', icon: MessageCircle },
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
         { title: 'Importar Despesas', url: '/financeiro/importar', icon: Database },
