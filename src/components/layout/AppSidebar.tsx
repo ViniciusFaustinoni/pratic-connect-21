@@ -311,6 +311,7 @@ const menuConfig: {
         { title: 'Visão Financeira', url: '/financeiro/visao', icon: Layers },
         { title: 'Custos e Receitas', url: '/financeiro/relatorio-custos-receitas', icon: PieChart },
         { title: 'DRE Gerencial', url: '/financeiro/dre', icon: BarChart3, permission: 'isDiretor' },
+        { title: 'Dashboard Executivo', url: '/financeiro/dashboard-executivo', icon: PieChart, permission: 'isDiretor' },
         { title: 'Distribuição de Lucro', url: '/financeiro/distribuicao', icon: Scale, permission: 'isDiretor' },
         { title: 'Cobranças (Faturas)', url: '/financeiro/cobrancas', icon: Receipt },
         { title: 'Receitas', url: '/financeiro/receitas', icon: TrendingUp },
