@@ -19,6 +19,8 @@ import {
   SOLICITACAO_STATUS_CONFIG,
   SOLICITACAO_TIPO_LABEL,
   SOLICITACAO_CATEGORIAS,
+  SOLICITACAO_SETORES,
+  SOLICITACAO_PRIORIDADE_CONFIG,
 } from '@/hooks/useSolicitacoesFinanceiras';
 
 interface Props {
@@ -49,6 +51,9 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
   const status = SOLICITACAO_STATUS_CONFIG[solicitacao.status];
   const categoriaLabel =
     SOLICITACAO_CATEGORIAS.find((c) => c.value === solicitacao.categoria)?.label ?? solicitacao.categoria;
+  const setorLabel =
+    SOLICITACAO_SETORES.find((s) => s.value === solicitacao.setor)?.label ?? (solicitacao.setor || '—');
+  const prioridade = SOLICITACAO_PRIORIDADE_CONFIG[solicitacao.prioridade];
 
   const isSocio = permissions.isSocio;
   const podePagar =
@@ -88,6 +93,7 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
           <DialogTitle className="flex items-center gap-2">
             {SOLICITACAO_TIPO_LABEL[solicitacao.tipo] || solicitacao.tipo}
             <Badge variant={status?.variant || 'secondary'}>{status?.label || solicitacao.status}</Badge>
+            {prioridade && <Badge variant={prioridade.variant}>{prioridade.label}</Badge>}
           </DialogTitle>
         </DialogHeader>
 
@@ -102,8 +108,14 @@ export function SolicitacaoDetalheDialog({ solicitacao, open, onClose }: Props) 
             <Separator />
             <div className="grid grid-cols-2 gap-2 text-muted-foreground">
               <span>Solicitante:</span><span className="text-foreground">{solicitacao.solicitante_nome}</span>
+              <span>Setor:</span><span className="text-foreground">{setorLabel}</span>
               <span>Favorecido:</span><span className="text-foreground">{solicitacao.favorecido_nome || solicitacao.solicitante_nome}</span>
-              <span>Necessário até:</span><span className="text-foreground">{formatData(solicitacao.data_necessidade)}</span>
+              {solicitacao.numero_documento && (
+                <>
+                  <span>NF / Documento:</span><span className="text-foreground">{solicitacao.numero_documento}</span>
+                </>
+              )}
+              <span>Vencimento:</span><span className="text-foreground">{formatData(solicitacao.data_vencimento || solicitacao.data_necessidade)}</span>
               <span>Criada em:</span><span className="text-foreground">{formatData(solicitacao.created_at)}</span>
             </div>
             {solicitacao.observacao && (

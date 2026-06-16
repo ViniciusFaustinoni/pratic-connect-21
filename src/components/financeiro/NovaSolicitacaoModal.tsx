@@ -13,6 +13,8 @@ import {
   useCriarSolicitacao,
   SOLICITACAO_CATEGORIAS,
   SOLICITACAO_FORMAS_PAGAMENTO,
+  SOLICITACAO_SETORES,
+  SOLICITACAO_PRIORIDADES,
 } from '@/hooks/useSolicitacoesFinanceiras';
 
 interface NovaSolicitacaoModalProps {
@@ -22,7 +24,10 @@ interface NovaSolicitacaoModalProps {
 
 const initialFormData = {
   tipo: 'pagamento',
+  setor: '',
   categoria: '',
+  prioridade: 'normal',
+  numero_documento: '',
   descricao: '',
   valor: '',
   solicitante_nome: '',
@@ -33,7 +38,7 @@ const initialFormData = {
   agencia: '',
   conta: '',
   pix_chave: '',
-  data_necessidade: '',
+  data_vencimento: '',
   observacao: '',
 };
 
@@ -67,10 +72,12 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
   };
 
   const isValid =
+    formData.setor !== '' &&
     formData.categoria !== '' &&
     formData.descricao.trim() !== '' &&
     parseValor(formData.valor) > 0 &&
     formData.solicitante_nome.trim() !== '' &&
+    formData.data_vencimento !== '' &&
     !!comprovante;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,7 +100,10 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
 
       await criar.mutateAsync({
         tipo: formData.tipo as 'pagamento' | 'reembolso',
+        setor: formData.setor,
         categoria: formData.categoria,
+        prioridade: formData.prioridade as 'baixa' | 'normal' | 'alta' | 'urgente',
+        numero_documento: formData.numero_documento,
         descricao: formData.descricao,
         valor: parseValor(formData.valor),
         solicitante_id: profile?.id ?? null,
@@ -105,7 +115,7 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
         agencia: formData.agencia,
         conta: formData.conta,
         pix_chave: formData.pix_chave,
-        data_necessidade: formData.data_necessidade,
+        data_vencimento: formData.data_vencimento,
         observacao: formData.observacao,
         comprovante_url: urlData.publicUrl,
         criado_por: profile?.id ?? null,
@@ -130,7 +140,7 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Tipo + Categoria */}
+          {/* Tipo + Setor */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Tipo *</Label>
@@ -146,7 +156,26 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
             </div>
 
             <div className="space-y-2">
-              <Label>Categoria *</Label>
+              <Label>Setor *</Label>
+              <Select value={formData.setor} onValueChange={(v) => handleChange('setor', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOLICITACAO_SETORES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Conta/Despesa + Prioridade */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Conta / Despesa *</Label>
               <Select value={formData.categoria} onValueChange={(v) => handleChange('categoria', v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
@@ -160,15 +189,41 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label>Prioridade</Label>
+              <Select value={formData.prioridade} onValueChange={(v) => handleChange('prioridade', v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOLICITACAO_PRIORIDADES.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição *</Label>
+            <Label htmlFor="numero_documento">Nº da Nota Fiscal / Documento</Label>
+            <Input
+              id="numero_documento"
+              value={formData.numero_documento}
+              onChange={(e) => handleChange('numero_documento', e.target.value)}
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="descricao">Explicação / Justificativa *</Label>
             <Textarea
               id="descricao"
               value={formData.descricao}
               onChange={(e) => handleChange('descricao', e.target.value)}
-              placeholder="Do que se trata esta solicitação?"
+              placeholder="Explique o motivo desta solicitação"
               rows={2}
             />
           </div>
@@ -188,12 +243,12 @@ export function NovaSolicitacaoModal({ open, onClose }: NovaSolicitacaoModalProp
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="data_necessidade">Necessário até</Label>
+              <Label htmlFor="data_vencimento">Vencimento *</Label>
               <Input
-                id="data_necessidade"
+                id="data_vencimento"
                 type="date"
-                value={formData.data_necessidade}
-                onChange={(e) => handleChange('data_necessidade', e.target.value)}
+                value={formData.data_vencimento}
+                onChange={(e) => handleChange('data_vencimento', e.target.value)}
               />
             </div>
           </div>

@@ -21,6 +21,41 @@ export const SOLICITACAO_CATEGORIAS = [
   { value: 'outros', label: 'Outros' },
 ] as const;
 
+export const SOLICITACAO_SETORES = [
+  { value: 'comercial', label: 'Comercial / Vendas' },
+  { value: 'cadastro', label: 'Cadastro' },
+  { value: 'monitoramento', label: 'Monitoramento' },
+  { value: 'relacionamento', label: 'Relacionamento' },
+  { value: 'eventos', label: 'Eventos / Sinistros' },
+  { value: 'assistencia', label: 'Assistência 24h' },
+  { value: 'oficinas', label: 'Oficinas' },
+  { value: 'financeiro', label: 'Financeiro' },
+  { value: 'contabilidade', label: 'Contabilidade' },
+  { value: 'juridico', label: 'Jurídico' },
+  { value: 'rh', label: 'Recursos Humanos' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'ti', label: 'TI / Desenvolvimento' },
+  { value: 'diretoria', label: 'Diretoria' },
+  { value: 'outros', label: 'Outros' },
+] as const;
+
+export const SOLICITACAO_PRIORIDADES = [
+  { value: 'baixa', label: 'Baixa' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'alta', label: 'Alta' },
+  { value: 'urgente', label: 'Urgente' },
+] as const;
+
+export const SOLICITACAO_PRIORIDADE_CONFIG: Record<
+  string,
+  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+> = {
+  baixa: { label: 'Baixa', variant: 'outline' },
+  normal: { label: 'Normal', variant: 'secondary' },
+  alta: { label: 'Alta', variant: 'default' },
+  urgente: { label: 'Urgente', variant: 'destructive' },
+};
+
 export const SOLICITACAO_FORMAS_PAGAMENTO = [
   { value: 'pix', label: 'PIX' },
   { value: 'transferencia', label: 'Transferência Bancária' },
@@ -51,8 +86,11 @@ export const SOLICITACAO_TIPO_LABEL: Record<string, string> = {
 export interface SolicitacaoFinanceira {
   id: string;
   tipo: 'pagamento' | 'reembolso';
+  setor: string | null;
   categoria: string;
   subcategoria: string | null;
+  prioridade: 'baixa' | 'normal' | 'alta' | 'urgente';
+  numero_documento: string | null;
   descricao: string;
   valor: number;
   solicitante_id: string | null;
@@ -65,6 +103,7 @@ export interface SolicitacaoFinanceira {
   conta: string | null;
   pix_chave: string | null;
   data_necessidade: string | null;
+  data_vencimento: string | null;
   comprovante_url: string;
   anexos_extras: string[];
   status: 'pendente' | 'aprovado' | 'rejeitado' | 'pago' | 'cancelado';
@@ -94,8 +133,11 @@ export interface AprovacaoSolicitacao {
 
 export interface NovaSolicitacaoInput {
   tipo: 'pagamento' | 'reembolso';
+  setor?: string;
   categoria: string;
   subcategoria?: string;
+  prioridade?: 'baixa' | 'normal' | 'alta' | 'urgente';
+  numero_documento?: string;
   descricao: string;
   valor: number;
   solicitante_id: string | null;
@@ -107,7 +149,7 @@ export interface NovaSolicitacaoInput {
   agencia?: string;
   conta?: string;
   pix_chave?: string;
-  data_necessidade?: string;
+  data_vencimento?: string;
   comprovante_url: string;
   observacao?: string;
   criado_por: string | null;
@@ -207,8 +249,11 @@ export function useCriarSolicitacao() {
         .from('solicitacoes_financeiras')
         .insert({
           tipo: input.tipo,
+          setor: input.setor || null,
           categoria: input.categoria,
           subcategoria: input.subcategoria || null,
+          prioridade: input.prioridade || 'normal',
+          numero_documento: input.numero_documento || null,
           descricao: input.descricao,
           valor: input.valor,
           solicitante_id: input.solicitante_id,
@@ -220,7 +265,7 @@ export function useCriarSolicitacao() {
           agencia: input.agencia || null,
           conta: input.conta || null,
           pix_chave: input.pix_chave || null,
-          data_necessidade: input.data_necessidade || null,
+          data_vencimento: input.data_vencimento || null,
           comprovante_url: input.comprovante_url,
           observacao: input.observacao || null,
           criado_por: input.criado_por,
@@ -319,7 +364,7 @@ export function usePagarSolicitacao() {
           valor: solicitacao.valor,
           valor_pago: solicitacao.valor,
           data_emissao: hoje,
-          data_vencimento: solicitacao.data_necessidade || hoje,
+          data_vencimento: solicitacao.data_vencimento || solicitacao.data_necessidade || hoje,
           data_pagamento: hoje,
           forma_pagamento: solicitacao.forma_pagamento || null,
           banco: solicitacao.banco || null,
@@ -331,7 +376,13 @@ export function usePagarSolicitacao() {
           aprovado_por: pagoPor,
           aprovado_em: new Date().toISOString(),
           pago_por: pagoPor,
-          observacao: `Solicitação financeira (${SOLICITACAO_TIPO_LABEL[solicitacao.tipo] || solicitacao.tipo}): ${solicitacao.descricao}`,
+          observacao: [
+            `Solicitação financeira (${SOLICITACAO_TIPO_LABEL[solicitacao.tipo] || solicitacao.tipo})`,
+            solicitacao.setor ? `Setor: ${solicitacao.setor}` : null,
+            solicitacao.numero_documento ? `NF/Doc: ${solicitacao.numero_documento}` : null,
+            `Solicitante: ${solicitacao.solicitante_nome}`,
+            solicitacao.descricao,
+          ].filter(Boolean).join(' · '),
         })
         .select()
         .single();

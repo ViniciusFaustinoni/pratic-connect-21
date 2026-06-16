@@ -17,6 +17,8 @@ import {
   SOLICITACAO_STATUS_CONFIG,
   SOLICITACAO_TIPO_LABEL,
   SOLICITACAO_CATEGORIAS,
+  SOLICITACAO_SETORES,
+  SOLICITACAO_PRIORIDADE_CONFIG,
 } from '@/hooks/useSolicitacoesFinanceiras';
 
 const formatBRL = (v: number) =>
@@ -48,6 +50,8 @@ export default function SolicitacoesFinanceiras() {
 
   const categoriaLabel = (v: string) =>
     SOLICITACAO_CATEGORIAS.find((c) => c.value === v)?.label ?? v;
+  const setorLabel = (v: string | null) =>
+    SOLICITACAO_SETORES.find((s) => s.value === v)?.label ?? (v || '—');
 
   return (
     <div className="space-y-6">
@@ -122,17 +126,18 @@ export default function SolicitacoesFinanceiras() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Solicitante</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Categoria</TableHead>
+                  <TableHead>Setor</TableHead>
+                  <TableHead>Conta / Despesa</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                   <TableHead>Liberações</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Criada</TableHead>
+                  <TableHead>Vencimento</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtradas.map((s) => {
                   const status = SOLICITACAO_STATUS_CONFIG[s.status];
+                  const prioridade = SOLICITACAO_PRIORIDADE_CONFIG[s.prioridade];
                   return (
                     <TableRow
                       key={s.id}
@@ -140,10 +145,19 @@ export default function SolicitacoesFinanceiras() {
                       onClick={() => setSelecionada(s)}
                     >
                       <TableCell className="font-medium">
-                        <div>{s.solicitante_nome}</div>
-                        <div className="text-xs text-muted-foreground truncate max-w-[220px]">{s.descricao}</div>
+                        <div className="flex items-center gap-2">
+                          {s.solicitante_nome}
+                          {(s.prioridade === 'alta' || s.prioridade === 'urgente') && prioridade && (
+                            <Badge variant={prioridade.variant} className="text-[10px] px-1.5 py-0">
+                              {prioridade.label}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate max-w-[220px]">
+                          {SOLICITACAO_TIPO_LABEL[s.tipo] || s.tipo} · {s.descricao}
+                        </div>
                       </TableCell>
-                      <TableCell>{SOLICITACAO_TIPO_LABEL[s.tipo] || s.tipo}</TableCell>
+                      <TableCell>{setorLabel(s.setor)}</TableCell>
                       <TableCell>{categoriaLabel(s.categoria)}</TableCell>
                       <TableCell className="text-right font-medium">{formatBRL(s.valor)}</TableCell>
                       <TableCell>
@@ -154,7 +168,9 @@ export default function SolicitacoesFinanceiras() {
                       <TableCell>
                         <Badge variant={status?.variant || 'secondary'}>{status?.label || s.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{formatData(s.created_at)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatData(s.data_vencimento || s.data_necessidade)}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
