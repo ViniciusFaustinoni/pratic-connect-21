@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { Upload, FileSpreadsheet, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +26,7 @@ const CAMPOS = [
   { key: 'valor', label: 'Valor', obrigatorio: true },
   { key: 'data_vencimento', label: 'Data de vencimento', obrigatorio: true },
   { key: 'categoria', label: 'Categoria', obrigatorio: false },
+  { key: 'conta_codigo', label: 'Conta / Grupo (plano de contas)', obrigatorio: false },
   { key: 'data_pagamento', label: 'Data de pagamento', obrigatorio: false },
   { key: 'empresa', label: 'Empresa', obrigatorio: false },
   { key: 'fornecedor_documento', label: 'CPF/CNPJ', obrigatorio: false },
@@ -68,6 +70,13 @@ type Etapa = 'upload' | 'mapear' | 'concluido';
 export default function ImportarDespesas() {
   const fileRef = useRef<HTMLInputElement>(null);
   const { data: empresas = [] } = useEmpresas();
+  const { data: gruposValidos = [] } = useQuery({
+    queryKey: ['cats-despesa-codigos'],
+    queryFn: async (): Promise<string[]> => {
+      const { data } = await sb.from('categorias_financeiras').select('codigo').eq('tipo', 'despesa');
+      return (data ?? []).map((c: any) => c.codigo);
+    },
+  });
 
   const [etapa, setEtapa] = useState<Etapa>('upload');
   const [nomeArquivo, setNomeArquivo] = useState('');
@@ -107,6 +116,14 @@ export default function ImportarDespesas() {
     }
   };
 
+  // Deriva o grupo (2.NN) a partir de um valor como "2.08.16-SERVIÇOS" ou "2.08"
+  const deriveContaCodigo = (txt: any): string | null => {
+    const m = String(txt ?? '').match(/(\d+(?:\.\d+)+|\d+)/);
+    if (!m) return null;
+    const grupo = m[1].split('.').slice(0, 2).join('.');
+    return gruposValidos.includes(grupo) ? grupo : null;
+  };
+
   const empresaPorNome = (txt: any): string | null => {
     const s = String(txt ?? '').toLowerCase().trim();
     if (!s) return null;
@@ -134,6 +151,7 @@ export default function ImportarDespesas() {
       data_vencimento: toISODate(get('data_vencimento')),
       data_pagamento: dataPag,
       empresa_id: mapa['empresa'] != null ? empresaPorNome(get('empresa')) : null,
+      conta_codigo: mapa['conta_codigo'] != null ? deriveContaCodigo(get('conta_codigo')) : null,
       observacao: get('observacao') ? String(get('observacao')) : 'Importado de planilha',
       status,
     };
