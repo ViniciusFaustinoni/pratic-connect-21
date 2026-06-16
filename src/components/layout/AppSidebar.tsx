@@ -307,6 +307,7 @@ const menuConfig: {
       color: MENU_COLORS.financeiro,
       items: [
         { title: 'Dashboard', url: '/financeiro', icon: BarChart3 },
+        { title: 'Fluxo de Caixa', url: '/financeiro/fluxo-caixa', icon: Wallet },
         { title: 'Cobranças (Faturas)', url: '/financeiro/cobrancas', icon: Receipt },
         { title: 'Chat Cobrança', url: '/cobranca/chat', icon: MessageCircle },
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
