@@ -504,6 +504,13 @@ const SUPER_GROUPS: SuperGroup[] = [
     moduleIds: ['relacionamento', 'cobranca'],
   },
   {
+    id: 'financeiro',
+    label: 'Financeiro',
+    icon: DollarSign,
+    color: MENU_COLORS.financeiro,
+    moduleIds: ['financeiro', 'comissoes', 'contabilidade'],
+  },
+  {
     id: 'administrativo',
     label: 'Administrativo',
     icon: Building2,
@@ -515,7 +522,7 @@ const SUPER_GROUPS: SuperGroup[] = [
     label: 'Em Breve',
     icon: Clock,
     color: '#94a3b8',
-    moduleIds: ['eventos', 'assistencia', 'oficinas', 'financeiro', 'comissoes', 'contabilidade', 'juridico', 'rh', 'marketing', 'relatorios'],
+    moduleIds: ['eventos', 'assistencia', 'oficinas', 'juridico', 'rh', 'marketing', 'relatorios'],
   },
 ];
 
