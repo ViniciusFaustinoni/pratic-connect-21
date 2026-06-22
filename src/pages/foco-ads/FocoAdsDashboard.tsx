@@ -113,6 +113,9 @@ export default function FocoAdsDashboard() {
           <Button variant="secondary" size="sm" onClick={() => navigate('/foco-ads/automacoes')}>
             Automações <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
+          <Button size="sm" onClick={() => navigate('/foco-ads/chat')}>
+            <Sparkles className="mr-1 h-4 w-4" /> Copiloto IA
+          </Button>
         </div>
       </div>
 

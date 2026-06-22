@@ -131,7 +131,8 @@ antes de evoluir. Se (2), a Onda 1 (ingestão Meta) é pré-requisito real.
 | 3 — Execução c/ aprovação | `ads-executar-acao` + `_shared/ads-executor.ts` | ✅ |
 | 4 — Google Ads | `ads-google-sync` + `_shared/google-ads-client.ts` (exec: pausar/reativar) | ✅ |
 | 5 — Automações | `ads-automacoes-run` + tabela `ads_automacoes` (padrão DESLIGADO) | ✅ |
-| UI | `src/pages/foco-ads/*` (dashboard, achados, ações, automações) | ✅ |
+| Copiloto IA (chat) | `ads-ia-chat` (Claude Opus 4.8 + tool-use sobre dados reais; Meta ao vivo; só sugere) | ✅ |
+| UI | `src/pages/foco-ads/*` (dashboard, achados, ações, automações, chat) | ✅ |
 
 **Pendências conhecidas:** validar com tokens reais; aplicar migrations; tela de
 cadastro de credenciais Meta/Google em Integrações; Google `ajustar_verba`/`duplicar`.

@@ -15,6 +15,9 @@ verify_jwt = false
 [functions.ads-automacoes-run]
 verify_jwt = false
 
+[functions.ads-ia-chat]
+verify_jwt = false
+
 [functions.analise-consistencia-relatos]
 verify_jwt = false
 

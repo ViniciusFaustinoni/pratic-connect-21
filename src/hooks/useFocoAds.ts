@@ -360,6 +360,23 @@ export function useAtualizarAutomacao() {
   });
 }
 
+export interface ChatMsg {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** Envia o histórico de chat ao copiloto IA (Opus 4.8 + tool-use). */
+export function useChatCopiloto() {
+  return useMutation({
+    mutationFn: async (messages: ChatMsg[]): Promise<string> => {
+      const { data, error } = await sb.functions.invoke('ads-ia-chat', { body: { messages } });
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error || 'Falha no copiloto');
+      return data.resposta as string;
+    },
+  });
+}
+
 export interface NovaAcaoManual {
   plataforma: string;
   tipo: 'pausar' | 'reativar' | 'ajustar_verba' | 'duplicar';
