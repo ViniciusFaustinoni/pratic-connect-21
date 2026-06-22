@@ -237,6 +237,11 @@ CREATE POLICY "foco_ads_ver" ON public.ads_log_execucoes
 CREATE POLICY "foco_ads_guardrails_update" ON public.ads_guardrails_config
   FOR UPDATE TO authenticated USING (public.has_permission(auth.uid(), 'foco_ads.aprovar'));
 
+-- Criar acao proposta (a partir de um achado): quem aprova tambem pode propor.
+-- Isto NAO executa nada na Meta — so registra a proposta (status 'proposta').
+CREATE POLICY "foco_ads_acoes_insert" ON public.ads_acoes_propostas
+  FOR INSERT TO authenticated WITH CHECK (public.has_permission(auth.uid(), 'foco_ads.aprovar'));
+
 -- Aprovacao: registrar decisao e mudar status da acao.
 CREATE POLICY "foco_ads_aprovar_insert" ON public.ads_aprovacoes
   FOR INSERT TO authenticated WITH CHECK (public.has_permission(auth.uid(), 'foco_ads.aprovar'));

@@ -270,6 +270,10 @@ const Treinamentos = lazy(() => import("./pages/rh/Treinamentos"));
 const Recrutamento = lazy(() => import("./pages/rh/Recrutamento"));
 const JornadasProfissionais = lazy(() => import("./pages/rh/JornadasProfissionais"));
 
+// Foco Ads
+const FocoAdsDashboard = lazy(() => import("./pages/foco-ads/FocoAdsDashboard"));
+const FocoAdsAchados = lazy(() => import("./pages/foco-ads/FocoAdsAchados"));
+
 // Marketing
 const MarketingDashboard = lazy(() => import("./pages/marketing/MarketingDashboard"));
 const Campanhas = lazy(() => import("./pages/marketing/Campanhas"));
@@ -707,6 +711,10 @@ const App = () => (
               <Route path="/monitoramento/liberacoes-autovistoria" element={<LiberacoesAutoVistoria />} />
               <Route path="/monitoramento/aprovacoes-monitoramento" element={<AprovacoesUnificadas />} />
               
+              {/* Foco Ads */}
+              <Route path="/foco-ads" element={<FocoAdsDashboard />} />
+              <Route path="/foco-ads/achados" element={<FocoAdsAchados />} />
+
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
               <Route path="/marketing/campanhas" element={<Campanhas />} />
