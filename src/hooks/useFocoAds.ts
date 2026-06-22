@@ -131,6 +131,70 @@ export function useFocoAdsAnuncios(dias = 7) {
   });
 }
 
+export interface CampanhaLinha {
+  campanha_id: string;
+  campanha_externa: string | null;
+  plataforma: string;
+  nome: string;
+  objetivo: string;
+  status: string | null;
+  gasto: number;
+  conversas: number;
+  leads: number;
+}
+
+/** Campanhas com gasto agregado (somando os insights dos anuncios via hierarquia). */
+export function useFocoAdsCampanhas(dias = 7) {
+  return useQuery<CampanhaLinha[]>({
+    queryKey: ['foco-ads-campanhas', dias],
+    queryFn: async () => {
+      const [camps, conjs, ans, ins, contas] = await Promise.all([
+        sb.from('ads_campanhas').select('id, campanha_externa, nome, objetivo_norm, status, conta_id'),
+        sb.from('ads_conjuntos').select('id, campanha_id'),
+        sb.from('ads_anuncios').select('id, conjunto_id'),
+        sb.from('ads_insights_diarios')
+          .select('entidade_id, gasto, conversas, leads')
+          .eq('entidade_tipo', 'anuncio')
+          .gte('data', dataCorte(dias)),
+        sb.from('ads_contas').select('id, plataforma'),
+      ]);
+      if (camps.error) throw camps.error;
+
+      const contaPlat = new Map<string, string>((contas.data ?? []).map((c: any) => [c.id, c.plataforma]));
+      const conjToCamp = new Map<string, string>((conjs.data ?? []).map((c: any) => [c.id, c.campanha_id]));
+      const adToCamp = new Map<string, string>(
+        (ans.data ?? []).map((a: any) => [a.id, conjToCamp.get(a.conjunto_id) as string]).filter(([, c]) => !!c),
+      );
+
+      const agg = new Map<string, { gasto: number; conversas: number; leads: number }>();
+      for (const r of ins.data ?? []) {
+        const campId = adToCamp.get(r.entidade_id);
+        if (!campId) continue;
+        const cur = agg.get(campId) ?? { gasto: 0, conversas: 0, leads: 0 };
+        cur.gasto += Number(r.gasto || 0);
+        cur.conversas += Number(r.conversas || 0);
+        cur.leads += Number(r.leads || 0);
+        agg.set(campId, cur);
+      }
+
+      return (camps.data ?? [])
+        .map((c: any) => {
+          const a = agg.get(c.id) ?? { gasto: 0, conversas: 0, leads: 0 };
+          return {
+            campanha_id: c.id,
+            campanha_externa: c.campanha_externa ?? null,
+            plataforma: contaPlat.get(c.conta_id) ?? 'meta',
+            nome: c.nome ?? c.campanha_externa ?? c.id,
+            objetivo: c.objetivo_norm,
+            status: c.status ?? null,
+            gasto: a.gasto, conversas: a.conversas, leads: a.leads,
+          } as CampanhaLinha;
+        })
+        .sort((x: CampanhaLinha, y: CampanhaLinha) => y.gasto - x.gasto);
+    },
+  });
+}
+
 /** Achados da analise mais recente. */
 export function useFocoAdsAchados() {
   return useQuery<Achado[]>({

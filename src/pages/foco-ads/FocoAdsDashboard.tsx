@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ProporAcaoDialog } from '@/components/foco-ads/ProporAcaoDialog';
 import {
-  useFocoAdsResumo, useFocoAdsAnuncios, useSincronizarMeta, useSincronizarGoogle, useGerarAnalise,
+  useFocoAdsResumo, useFocoAdsAnuncios, useFocoAdsCampanhas, useSincronizarMeta, useSincronizarGoogle, useGerarAnalise,
 } from '@/hooks/useFocoAds';
 
 const brl = (v: number | null | undefined) =>
@@ -21,6 +21,7 @@ export default function FocoAdsDashboard() {
   const navigate = useNavigate();
   const [dias, setDias] = useState(7);
   const { data: resumo, isLoading: loadingResumo } = useFocoAdsResumo(dias);
+  const { data: campanhas, isLoading: loadingCampanhas } = useFocoAdsCampanhas(dias);
   const { data: anuncios, isLoading: loadingAnuncios } = useFocoAdsAnuncios(dias);
   const sync = useSincronizarMeta();
   const syncGoogle = useSincronizarGoogle();
@@ -146,6 +147,63 @@ export default function FocoAdsDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Tabela por campanha — edicao no nivel de campanha */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Campanhas no período</CardTitle>
+          <CardDescription>Pause/edite a campanha inteira ou ajuste a verba. Toda ação passa por aprovação.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingCampanhas ? (
+            <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : !campanhas?.length ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Sem campanhas ainda. Cadastre a credencial e clique em <strong>Sincronizar</strong>.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Campanha</TableHead>
+                  <TableHead>Objetivo</TableHead>
+                  <TableHead className="text-right">Gasto</TableHead>
+                  <TableHead className="text-right">Resultado</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {campanhas.map((c) => (
+                  <TableRow key={c.campanha_id}>
+                    <TableCell className="font-medium">{c.nome}</TableCell>
+                    <TableCell>
+                      <Badge variant={c.objetivo === 'messaging' ? 'default' : c.objetivo === 'lead' ? 'secondary' : 'outline'}>
+                        {c.objetivo === 'messaging' ? 'WhatsApp' : c.objetivo === 'lead' ? 'Lead' : 'Outro'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{brl(c.gasto)}</TableCell>
+                    <TableCell className="text-right">
+                      {c.objetivo === 'messaging' ? `${c.conversas} conv.` : c.objetivo === 'lead' ? `${c.leads} leads` : '—'}
+                    </TableCell>
+                    <TableCell><span className="text-xs text-muted-foreground">{c.status ?? '—'}</span></TableCell>
+                    <TableCell className="text-right">
+                      <ProporAcaoDialog
+                        plataforma={c.plataforma}
+                        entidadeTipo="campanha"
+                        entidadeId={c.campanha_id}
+                        entidadeExternaId={c.campanha_externa}
+                        nome={c.nome}
+                        trigger={<Button variant="ghost" size="sm"><Pencil className="mr-1 h-3.5 w-3.5" /> Propor</Button>}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Tabela por anuncio */}
       <Card>
