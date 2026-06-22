@@ -179,6 +179,64 @@ export function useGerarAnalise() {
   });
 }
 
+export interface AcaoProposta {
+  id: string;
+  plataforma: string;
+  tipo: 'pausar' | 'reativar' | 'ajustar_verba' | 'duplicar';
+  entidade_tipo: string;
+  entidade_id: string | null;
+  entidade_externa_id: string;
+  payload_proposto: Record<string, unknown>;
+  justificativa_ia: string | null;
+  status: 'proposta' | 'aprovada' | 'rejeitada' | 'executando' | 'executada' | 'falha' | 'revertida';
+  created_at: string;
+}
+
+const TIPO_LABEL: Record<AcaoProposta['tipo'], string> = {
+  pausar: 'Pausar',
+  reativar: 'Reativar',
+  ajustar_verba: 'Ajustar verba',
+  duplicar: 'Duplicar',
+};
+
+export function rotuloTipoAcao(t: AcaoProposta['tipo']): string {
+  return TIPO_LABEL[t] ?? t;
+}
+
+/** Lista as acoes propostas (fila de aprovacao). */
+export function useAcoesPropostas() {
+  return useQuery<AcaoProposta[]>({
+    queryKey: ['foco-ads-acoes'],
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from('ads_acoes_propostas')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as AcaoProposta[];
+    },
+  });
+}
+
+/**
+ * Decide uma acao: 'aprovar' (executa na Meta via edge function, exige
+ * foco_ads.executar) ou 'rejeitar' (nao executa, exige foco_ads.aprovar).
+ */
+export function useDecidirAcao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { acaoId: string; decisao: 'aprovar' | 'rejeitar'; comentario?: string }) => {
+      const { data, error } = await sb.functions.invoke('ads-executar-acao', {
+        body: { acao_id: args.acaoId, decisao: args.decisao, comentario: args.comentario ?? null },
+      });
+      if (error) throw error;
+      if (data && data.ok === false) throw new Error(data.error || 'Falha na operação');
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['foco-ads-acoes'] }),
+  });
+}
+
 /**
  * Cria uma ACAO PROPOSTA a partir de um achado. NAO executa nada na Meta —
  * apenas registra a proposta (status 'proposta') para futura aprovacao (Onda 3).
