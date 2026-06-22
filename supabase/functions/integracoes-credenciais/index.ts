@@ -112,6 +112,22 @@ const integracoesSchema: Record<string, { campos: { nome: string; label: string;
       { nome: 'api_url', label: 'URL da API Evolution', tipo: 'text', obrigatorio: true },
     ]
   },
+  meta_ads: {
+    campos: [
+      { nome: 'access_token', label: 'Access Token (permissão ads_management)', tipo: 'password', obrigatorio: true },
+      { nome: 'ad_account_id', label: 'Ad Account ID (ex: act_123456789 ou 123456789)', tipo: 'text', obrigatorio: true },
+    ]
+  },
+  google_ads: {
+    campos: [
+      { nome: 'developer_token', label: 'Developer Token', tipo: 'password', obrigatorio: true },
+      { nome: 'client_id', label: 'Client ID (OAuth)', tipo: 'text', obrigatorio: true },
+      { nome: 'client_secret', label: 'Client Secret (OAuth)', tipo: 'password', obrigatorio: true },
+      { nome: 'refresh_token', label: 'Refresh Token', tipo: 'password', obrigatorio: true },
+      { nome: 'customer_id', label: 'Customer ID (somente dígitos)', tipo: 'text', obrigatorio: true },
+      { nome: 'login_customer_id', label: 'Login Customer ID / MCC (opcional)', tipo: 'text', obrigatorio: false },
+    ]
+  },
 };
 
 serve(async (req) => {

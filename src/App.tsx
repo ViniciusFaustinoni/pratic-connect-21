@@ -158,6 +158,7 @@ const UsuarioForm = lazy(() => import("./pages/configuracoes/UsuarioForm"));
 const Integracoes = lazy(() => import("./pages/configuracoes/Integracoes"));
 const IntegracaoWhatsApp = lazy(() => import("./pages/configuracoes/IntegracaoWhatsApp"));
 const IntegracaoIA = lazy(() => import("./pages/configuracoes/IntegracaoIA"));
+const IntegracaoFocoAds = lazy(() => import("./pages/configuracoes/IntegracaoFocoAds"));
 
 const IntegracaoApiKeys = lazy(() => import("./pages/configuracoes/IntegracaoApiKeys"));
 const IntegracaoFontesLeads = lazy(() => import("./pages/configuracoes/IntegracaoFontesLeads"));
@@ -797,7 +798,8 @@ const App = () => (
                 <Route path="integracoes" element={<Integracoes />} />
                 <Route path="integracoes/whatsapp" element={<IntegracaoWhatsApp />} />
                 <Route path="integracoes/ia" element={<IntegracaoIA />} />
-                
+                <Route path="integracoes/foco-ads" element={<IntegracaoFocoAds />} />
+
                 <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />

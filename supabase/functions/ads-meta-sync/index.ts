@@ -74,7 +74,9 @@ serve(async (req) => {
       );
     }
 
-    const adAccountId = (body?.ad_account_id || creds.ad_account_id).trim();
+    const rawAccountId = (body?.ad_account_id || creds.ad_account_id).trim();
+    // O Graph API espera o node no formato act_<id>. Normaliza se vier so o numero.
+    const adAccountId = rawAccountId.startsWith("act_") ? rawAccountId : `act_${rawAccountId.replace(/\D/g, "")}`;
     const token = creds.access_token;
     const since = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
     const until = new Date().toISOString().slice(0, 10);

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plug, MessageSquare, CreditCard, MapPin, FileSignature, Zap, Mail,
   Search, Building2, CheckCircle, XCircle, Key, Inbox, ArrowRight,
-  Loader2, Settings, ExternalLink, HeartPulse, Code2, Sparkles, ScanText,
+  Loader2, Settings, ExternalLink, HeartPulse, Code2, Sparkles, ScanText, Megaphone,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
@@ -224,6 +224,19 @@ const categorias: Categoria[] = [
         icon: Inbox,
         href: '/configuracoes/integracoes/fontes-leads',
         extraInfo: (ctx) => ctx.leadsAtivas > 0 ? `${ctx.leadsAtivas} fonte(s) ativa(s)` : null,
+      },
+    ],
+  },
+  {
+    titulo: 'Tráfego Pago (Foco Ads)',
+    icone: '🎯',
+    items: [
+      {
+        id: 'foco-ads-credenciais',
+        nome: 'Credenciais Meta / Google Ads',
+        descricao: 'Tokens das plataformas de anúncios (criptografados)',
+        icon: Megaphone,
+        href: '/configuracoes/integracoes/foco-ads',
       },
     ],
   },
