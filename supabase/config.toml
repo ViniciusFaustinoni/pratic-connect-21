@@ -3,6 +3,9 @@ project_id = "iyxdgmukrrdkffraptsx"
 [functions.ads-meta-sync]
 verify_jwt = false
 
+[functions.ads-google-sync]
+verify_jwt = false
+
 [functions.ads-ia-analise]
 verify_jwt = false
 

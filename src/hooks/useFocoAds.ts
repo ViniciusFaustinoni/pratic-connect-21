@@ -166,6 +166,22 @@ export function useSincronizarMeta() {
   });
 }
 
+/** Dispara a sincronizacao de leitura do Google Ads (Onda 4). */
+export function useSincronizarGoogle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (dias = 7) => {
+      const { data, error } = await sb.functions.invoke('ads-google-sync', { body: { dias } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['foco-ads-resumo'] });
+      qc.invalidateQueries({ queryKey: ['foco-ads-anuncios'] });
+    },
+  });
+}
+
 /** Dispara a analise de IA (Onda 2). */
 export function useGerarAnalise() {
   const qc = useQueryClient();

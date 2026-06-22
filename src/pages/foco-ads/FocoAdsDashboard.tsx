@@ -8,7 +8,7 @@ import { MessageSquare, FileText, DollarSign, RefreshCw, Sparkles, AlertTriangle
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  useFocoAdsResumo, useFocoAdsAnuncios, useSincronizarMeta, useGerarAnalise,
+  useFocoAdsResumo, useFocoAdsAnuncios, useSincronizarMeta, useSincronizarGoogle, useGerarAnalise,
 } from '@/hooks/useFocoAds';
 
 const brl = (v: number | null | undefined) =>
@@ -22,12 +22,21 @@ export default function FocoAdsDashboard() {
   const { data: resumo, isLoading: loadingResumo } = useFocoAdsResumo(dias);
   const { data: anuncios, isLoading: loadingAnuncios } = useFocoAdsAnuncios(dias);
   const sync = useSincronizarMeta();
+  const syncGoogle = useSincronizarGoogle();
   const analise = useGerarAnalise();
 
   const onSync = () => {
     toast.promise(sync.mutateAsync(dias), {
       loading: 'Sincronizando dados da Meta…',
-      success: (r: any) => `Sincronizado: ${r?.insights ?? 0} linhas de insight.`,
+      success: (r: any) => `Meta sincronizada: ${r?.insights ?? 0} linhas de insight.`,
+      error: (e) => `Falha na sincronização: ${e?.message ?? e}`,
+    });
+  };
+
+  const onSyncGoogle = () => {
+    toast.promise(syncGoogle.mutateAsync(dias), {
+      loading: 'Sincronizando dados do Google…',
+      success: (r: any) => `Google sincronizado: ${r?.insights ?? 0} linhas de insight.`,
       error: (e) => `Falha na sincronização: ${e?.message ?? e}`,
     });
   };
@@ -66,7 +75,11 @@ export default function FocoAdsDashboard() {
           </div>
           <Button variant="outline" size="sm" onClick={onSync} disabled={sync.isPending}>
             <RefreshCw className={`mr-2 h-4 w-4 ${sync.isPending ? 'animate-spin' : ''}`} />
-            Sincronizar
+            Sincronizar Meta
+          </Button>
+          <Button variant="outline" size="sm" onClick={onSyncGoogle} disabled={syncGoogle.isPending}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${syncGoogle.isPending ? 'animate-spin' : ''}`} />
+            Sincronizar Google
           </Button>
           <Button size="sm" onClick={onAnalise} disabled={analise.isPending}>
             <Sparkles className="mr-2 h-4 w-4" />

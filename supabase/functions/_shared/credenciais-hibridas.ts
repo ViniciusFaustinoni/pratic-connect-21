@@ -26,6 +26,17 @@ interface CredenciaisMetaAds {
   ad_account_id: string;
 }
 
+interface CredenciaisGoogleAds {
+  developer_token: string;
+  client_id: string;
+  client_secret: string;
+  refresh_token: string;
+  /** Customer ID da conta de anuncios (somente digitos, sem hifens). */
+  customer_id: string;
+  /** MCC/login customer id (opcional, somente digitos). */
+  login_customer_id?: string;
+}
+
 function normalizarSecret(value: string | null | undefined): string | null {
   if (!value) return null;
 
@@ -245,5 +256,61 @@ export async function getCredenciaisMetaAds(supabase: any): Promise<CredenciaisM
   }
 
   console.error('[Credenciais] Meta Ads: nenhuma credencial encontrada');
+  return null;
+}
+
+/**
+ * Buscar credenciais Google Ads (Google Ads API) do banco ou ENV.
+ * CREDENCIAL CRITICA: o refresh_token concede acesso de escrita (pode gastar).
+ * Nunca logar segredos. Use somente server-side.
+ */
+export async function getCredenciaisGoogleAds(supabase: any): Promise<CredenciaisGoogleAds | null> {
+  const encryptionKey = Deno.env.get('INTEGRACOES_ENCRYPTION_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const soDigitos = (v?: string | null) => (v ? v.replace(/\D/g, '') : '');
+
+  try {
+    const { data: credencial, error } = await supabase
+      .from('integracoes_credenciais')
+      .select('credenciais_encrypted, iv, configurado')
+      .eq('integracao', 'google_ads')
+      .eq('configurado', true)
+      .maybeSingle();
+
+    if (!error && credencial?.credenciais_encrypted && credencial?.iv) {
+      console.log('[Credenciais] Google Ads: usando credenciais do banco de dados');
+      const d = await descriptografar(credencial.credenciais_encrypted, credencial.iv, encryptionKey);
+      const customerId = soDigitos(d.customer_id);
+      if (d.developer_token && d.client_id && d.client_secret && d.refresh_token && customerId) {
+        return {
+          developer_token: normalizarSecret(d.developer_token)!,
+          client_id: d.client_id,
+          client_secret: normalizarSecret(d.client_secret)!,
+          refresh_token: normalizarSecret(d.refresh_token)!,
+          customer_id: customerId,
+          login_customer_id: soDigitos(d.login_customer_id) || undefined,
+        };
+      }
+      console.warn('[Credenciais] Google Ads: credenciais do banco incompletas, tentando ENV...');
+    }
+  } catch (dbError) {
+    console.warn('[Credenciais] Google Ads: erro ao buscar do banco:', dbError);
+  }
+
+  const developer_token = normalizarSecret(Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN'));
+  const client_id = Deno.env.get('GOOGLE_ADS_CLIENT_ID');
+  const client_secret = normalizarSecret(Deno.env.get('GOOGLE_ADS_CLIENT_SECRET'));
+  const refresh_token = normalizarSecret(Deno.env.get('GOOGLE_ADS_REFRESH_TOKEN'));
+  const customer_id = soDigitos(Deno.env.get('GOOGLE_ADS_CUSTOMER_ID'));
+  const login_customer_id = soDigitos(Deno.env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID'));
+
+  if (developer_token && client_id && client_secret && refresh_token && customer_id) {
+    console.log('[Credenciais] Google Ads: usando credenciais do ENV');
+    return {
+      developer_token, client_id, client_secret, refresh_token, customer_id,
+      login_customer_id: login_customer_id || undefined,
+    };
+  }
+
+  console.error('[Credenciais] Google Ads: nenhuma credencial encontrada');
   return null;
 }

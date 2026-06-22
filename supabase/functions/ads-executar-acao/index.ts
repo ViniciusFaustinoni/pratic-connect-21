@@ -18,7 +18,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCredenciaisMetaAds } from "../_shared/credenciais-hibridas.ts";
+import { getCredenciaisMetaAds, getCredenciaisGoogleAds } from "../_shared/credenciais-hibridas.ts";
+import { getGoogleAccessToken, gaqlMutate, type GoogleAdsCreds } from "../_shared/google-ads-client.ts";
 import { checkPermission } from "../_shared/check-permission.ts";
 import { insertAuditLog } from "../_shared/auditLog.ts";
 
@@ -53,6 +54,82 @@ async function graphPost(id: string, params: Record<string, string>, token: stri
   const j = await r.json();
   if (!r.ok) throw new Error(`Meta POST ${r.status}: ${j?.error?.message || "erro"}`);
   return j;
+}
+
+interface ResultadoExecucao {
+  requestPayload: Record<string, unknown>;
+  undoPayload: Record<string, unknown>;
+  response: unknown;
+}
+
+// ----- Execucao na Meta -----
+async function executarMeta(
+  token: string, tipo: string, alvo: string, payload: Record<string, unknown>,
+): Promise<ResultadoExecucao> {
+  switch (tipo) {
+    case "pausar": {
+      const atual = await graphGet(alvo, "status", token);
+      const resp = await graphPost(alvo, { status: "PAUSED" }, token);
+      return { requestPayload: { status: "PAUSED" }, undoPayload: { tipo: "reativar", status: atual?.status ?? "ACTIVE" }, response: resp };
+    }
+    case "reativar": {
+      const atual = await graphGet(alvo, "status", token);
+      const resp = await graphPost(alvo, { status: "ACTIVE" }, token);
+      return { requestPayload: { status: "ACTIVE" }, undoPayload: { tipo: "pausar", status: atual?.status ?? "PAUSED" }, response: resp };
+    }
+    case "ajustar_verba": {
+      const atual = await graphGet(alvo, "daily_budget", token);
+      const reais = Number(payload?.daily_budget ?? payload?.verba_diaria ?? 0);
+      if (!reais || reais <= 0) throw new Error("daily_budget invalido no payload");
+      const req = { daily_budget: String(Math.round(reais * 100)) };
+      const resp = await graphPost(alvo, req, token);
+      return { requestPayload: req, undoPayload: { tipo: "ajustar_verba", daily_budget: atual?.daily_budget ?? null }, response: resp };
+    }
+    case "duplicar": {
+      const resp = await graphPost(`${alvo}/copies`, {}, token);
+      return { requestPayload: {}, undoPayload: { tipo: "manual", nota: "Excluir a copia criada se necessario" }, response: resp };
+    }
+    default:
+      throw new Error(`tipo de acao nao suportado: ${tipo}`);
+  }
+}
+
+// ----- Execucao no Google -----
+// Suporta pausar/reativar em campanha (campaigns) e conjunto (adGroups).
+// ajustar_verba/duplicar ainda nao suportados no Google (orcamento e recurso
+// separado; duplicacao exige montagem completa) — retorna erro explicito em vez
+// de chutar uma chamada que mexe em verba as cegas.
+async function executarGoogle(
+  creds: GoogleAdsCreds, tipo: string, entidadeTipo: string, alvo: string,
+): Promise<ResultadoExecucao> {
+  const accessToken = await getGoogleAccessToken(creds);
+  const cid = creds.customer_id;
+
+  let service: string;
+  let resourceName: string;
+  if (entidadeTipo === "campanha") {
+    service = "campaigns";
+    resourceName = `customers/${cid}/campaigns/${alvo}`;
+  } else if (entidadeTipo === "conjunto") {
+    service = "adGroups";
+    resourceName = `customers/${cid}/adGroups/${alvo}`;
+  } else {
+    throw new Error(`Google: ${entidadeTipo} ainda nao suportado para execucao (use campanha ou conjunto)`);
+  }
+
+  if (tipo === "pausar" || tipo === "reativar") {
+    const novo = tipo === "pausar" ? "PAUSED" : "ENABLED";
+    const anterior = tipo === "pausar" ? "ENABLED" : "PAUSED";
+    const op = [{ updateMask: "status", update: { resourceName, status: novo } }];
+    const resp = await gaqlMutate(creds, accessToken, service, op);
+    return {
+      requestPayload: { resourceName, status: novo },
+      undoPayload: { tipo: tipo === "pausar" ? "reativar" : "pausar", status: anterior },
+      response: resp,
+    };
+  }
+
+  throw new Error(`Google: acao '${tipo}' ainda nao suportada (apenas pausar/reativar)`);
 }
 
 serve(async (req) => {
@@ -122,11 +199,21 @@ serve(async (req) => {
       return json(409, { ok: false, error: `Acao em '${acao.status}' nao pode ser executada` });
     }
 
-    const creds = await getCredenciaisMetaAds(supabase);
-    if (!creds) return json(412, { ok: false, error: "Credenciais Meta Ads nao configuradas" });
-    const metaToken = creds.access_token;
+    const plataforma = (acao.plataforma as string) || "meta";
     const alvo = acao.entidade_externa_id as string;
     const payload = (acao.payload_proposto ?? {}) as Record<string, unknown>;
+
+    // Carrega credenciais da plataforma correta ANTES de alterar estado.
+    let metaToken: string | null = null;
+    let googleCreds: GoogleAdsCreds | null = null;
+    if (plataforma === "google") {
+      googleCreds = await getCredenciaisGoogleAds(supabase);
+      if (!googleCreds) return json(412, { ok: false, error: "Credenciais Google Ads nao configuradas" });
+    } else {
+      const creds = await getCredenciaisMetaAds(supabase);
+      if (!creds) return json(412, { ok: false, error: "Credenciais Meta Ads nao configuradas" });
+      metaToken = creds.access_token;
+    }
 
     // Marca executando (lock otimista) + registra aprovacao
     await supabase.from("ads_acoes_propostas").update({ status: "executando" }).eq("id", acaoId);
@@ -134,57 +221,27 @@ serve(async (req) => {
       acao_id: acaoId, aprovador_id: user.id, decisao: "aprovou", comentario,
     });
 
-    let requestPayload: Record<string, string> = {};
+    let requestPayload: Record<string, unknown> = {};
     let undoPayload: Record<string, unknown> = {};
-    let response: unknown = null;
 
     try {
-      switch (acao.tipo) {
-        case "pausar": {
-          const atual = await graphGet(alvo, "status", metaToken);
-          undoPayload = { tipo: "reativar", status: atual?.status ?? "ACTIVE" };
-          requestPayload = { status: "PAUSED" };
-          response = await graphPost(alvo, requestPayload, metaToken);
-          break;
-        }
-        case "reativar": {
-          const atual = await graphGet(alvo, "status", metaToken);
-          undoPayload = { tipo: "pausar", status: atual?.status ?? "PAUSED" };
-          requestPayload = { status: "ACTIVE" };
-          response = await graphPost(alvo, requestPayload, metaToken);
-          break;
-        }
-        case "ajustar_verba": {
-          const atual = await graphGet(alvo, "daily_budget", metaToken);
-          undoPayload = { tipo: "ajustar_verba", daily_budget: atual?.daily_budget ?? null };
-          // payload.daily_budget esperado em REAIS -> converte p/ centavos
-          const reais = Number(payload?.daily_budget ?? payload?.verba_diaria ?? 0);
-          if (!reais || reais <= 0) throw new Error("daily_budget invalido no payload");
-          requestPayload = { daily_budget: String(Math.round(reais * 100)) };
-          response = await graphPost(alvo, requestPayload, metaToken);
-          break;
-        }
-        case "duplicar": {
-          undoPayload = { tipo: "manual", nota: "Excluir a copia criada manualmente se necessario" };
-          requestPayload = {};
-          response = await graphPost(`${alvo}/copies`, requestPayload, metaToken);
-          break;
-        }
-        default:
-          throw new Error(`tipo de acao nao suportado: ${acao.tipo}`);
-      }
+      const resultado = plataforma === "google"
+        ? await executarGoogle(googleCreds!, acao.tipo, acao.entidade_tipo, alvo)
+        : await executarMeta(metaToken!, acao.tipo, alvo, payload);
+      requestPayload = resultado.requestPayload;
+      undoPayload = resultado.undoPayload;
 
       await supabase.from("ads_log_execucoes").insert({
         acao_id: acaoId,
-        request_payload: { tipo: acao.tipo, alvo, params: requestPayload }, // sem token
-        response_meta: response,
+        request_payload: { plataforma, tipo: acao.tipo, alvo, params: requestPayload }, // sem segredos
+        response_meta: resultado.response,
         sucesso: true,
         undo_payload: undoPayload,
       });
       await supabase.from("ads_acoes_propostas").update({ status: "executada" }).eq("id", acaoId);
       await insertAuditLog(supabase, {
         usuario_id: user.id, acao: "executar", modulo: "configuracoes",
-        descricao: `Foco Ads: acao ${acao.tipo} executada na Meta (alvo ${alvo})`,
+        descricao: `Foco Ads: acao ${acao.tipo} executada (${plataforma}, alvo ${alvo})`,
         tabela: "ads_acoes_propostas", registro_id: acaoId,
         dados_novos: { tipo: acao.tipo, params: requestPayload, undo: undoPayload },
       });
