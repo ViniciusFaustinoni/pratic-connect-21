@@ -1,9 +1,14 @@
 -- =============================================================================
--- PROPOSTA DE MODELO DE DADOS — Foco Ads  (NÃO É UMA MIGRATION / NÃO APLICAR)
+-- PROPOSTA DE MODELO DE DADOS — Foco Ads  (DOCUMENTO DE RACIONAL / NÃO APLICAR)
+-- =============================================================================
+-- >>> PROMOVIDO. A versão oficial e aplicável é a migration:
+-- >>>   supabase/migrations/20260622120000_foco_ads_modelo_dados.sql
+-- >>> que inclui correções: RLS completo nas 10 tabelas, CHECK constraints,
+-- >>> tabela ads_guardrails_config e concessão de permissões a super-admins.
+-- Este arquivo permanece apenas como racional anotado do desenho.
 -- =============================================================================
 -- Este arquivo está em docs/ de propósito: é um ARTEFATO DE REVISÃO.
 -- NÃO está em supabase/migrations/ para evitar auto-aplicação pelo Lovable/Supabase.
--- Depois de aprovado, será promovido para uma migration real (com timestamp).
 --
 -- Convenções seguidas (idênticas às migrations existentes do projeto):
 --   - id uuid PRIMARY KEY DEFAULT gen_random_uuid()
