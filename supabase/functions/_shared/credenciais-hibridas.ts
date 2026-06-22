@@ -19,6 +19,13 @@ interface CredenciaisRedeVeiculos {
   bearer_token: string;
 }
 
+interface CredenciaisMetaAds {
+  /** Token de usuario/sistema com permissao ads_management (CRITICO: pode gastar). */
+  access_token: string;
+  /** ID da conta de anuncios, ex.: act_123456789. */
+  ad_account_id: string;
+}
+
 function normalizarSecret(value: string | null | undefined): string | null {
   if (!value) return null;
 
@@ -191,5 +198,52 @@ export async function getCredenciaisRedeVeiculos(supabase: any): Promise<Credenc
   }
 
   console.error('[Credenciais] Rede Veículos: nenhuma credencial encontrada');
+  return null;
+}
+
+/**
+ * Buscar credenciais Meta Ads (Marketing API) do banco ou ENV.
+ * CREDENCIAL CRITICA: o access_token tem ads_management (pode ESCREVER/gastar).
+ * Nunca logar o token. Use somente server-side.
+ */
+export async function getCredenciaisMetaAds(supabase: any): Promise<CredenciaisMetaAds | null> {
+  const encryptionKey = Deno.env.get('INTEGRACOES_ENCRYPTION_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  try {
+    const { data: credencial, error } = await supabase
+      .from('integracoes_credenciais')
+      .select('credenciais_encrypted, iv, configurado')
+      .eq('integracao', 'meta_ads')
+      .eq('configurado', true)
+      .maybeSingle();
+
+    if (!error && credencial?.credenciais_encrypted && credencial?.iv) {
+      console.log('[Credenciais] Meta Ads: usando credenciais do banco de dados');
+      const decrypted = await descriptografar(
+        credencial.credenciais_encrypted,
+        credencial.iv,
+        encryptionKey,
+      );
+
+      const token = normalizarSecret(decrypted.access_token);
+      const adAccountId = decrypted.ad_account_id?.trim();
+      if (token && adAccountId) {
+        return { access_token: token, ad_account_id: adAccountId };
+      }
+      console.warn('[Credenciais] Meta Ads: credenciais do banco incompletas, tentando ENV...');
+    }
+  } catch (dbError) {
+    console.warn('[Credenciais] Meta Ads: erro ao buscar do banco:', dbError);
+  }
+
+  const token = normalizarSecret(Deno.env.get('META_ADS_ACCESS_TOKEN'));
+  const adAccountId = Deno.env.get('META_ADS_AD_ACCOUNT_ID')?.trim();
+
+  if (token && adAccountId) {
+    console.log('[Credenciais] Meta Ads: usando credenciais do ENV');
+    return { access_token: token, ad_account_id: adAccountId };
+  }
+
+  console.error('[Credenciais] Meta Ads: nenhuma credencial encontrada');
   return null;
 }
