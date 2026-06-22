@@ -253,6 +253,45 @@ export function useDecidirAcao() {
   });
 }
 
+export interface Automacao {
+  id: string;
+  nome: string;
+  plataforma: 'meta' | 'google' | 'todas';
+  gatilho: 'custo_conversa' | 'custo_lead' | 'with_issues';
+  modo: 'sinalizar' | 'executar';
+  ativo: boolean;
+  notificar: boolean;
+  acao_tipo: 'pausar' | 'reativar' | 'ajustar_verba' | 'duplicar';
+  ultima_execucao_em: string | null;
+}
+
+/** Lista as automacoes de guarda-corpo (Onda 5). */
+export function useAutomacoes() {
+  return useQuery<Automacao[]>({
+    queryKey: ['foco-ads-automacoes'],
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from('ads_automacoes')
+        .select('*')
+        .order('nome', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Automacao[];
+    },
+  });
+}
+
+/** Atualiza uma automacao (ligar/desligar a flag, mudar modo/notificar). */
+export function useAtualizarAutomacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; patch: Partial<Pick<Automacao, 'ativo' | 'modo' | 'notificar'>> }) => {
+      const { error } = await sb.from('ads_automacoes').update(args.patch).eq('id', args.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['foco-ads-automacoes'] }),
+  });
+}
+
 /**
  * Cria uma ACAO PROPOSTA a partir de um achado. NAO executa nada na Meta —
  * apenas registra a proposta (status 'proposta') para futura aprovacao (Onda 3).

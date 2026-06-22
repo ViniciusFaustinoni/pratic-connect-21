@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.ads-executar-acao]
 verify_jwt = false
 
+[functions.ads-automacoes-run]
+verify_jwt = false
+
 [functions.analise-consistencia-relatos]
 verify_jwt = false
 

@@ -274,6 +274,7 @@ const JornadasProfissionais = lazy(() => import("./pages/rh/JornadasProfissionai
 const FocoAdsDashboard = lazy(() => import("./pages/foco-ads/FocoAdsDashboard"));
 const FocoAdsAchados = lazy(() => import("./pages/foco-ads/FocoAdsAchados"));
 const FocoAdsAcoes = lazy(() => import("./pages/foco-ads/FocoAdsAcoes"));
+const FocoAdsAutomacoes = lazy(() => import("./pages/foco-ads/FocoAdsAutomacoes"));
 
 // Marketing
 const MarketingDashboard = lazy(() => import("./pages/marketing/MarketingDashboard"));
@@ -716,6 +717,7 @@ const App = () => (
               <Route path="/foco-ads" element={<FocoAdsDashboard />} />
               <Route path="/foco-ads/achados" element={<FocoAdsAchados />} />
               <Route path="/foco-ads/acoes" element={<FocoAdsAcoes />} />
+              <Route path="/foco-ads/automacoes" element={<FocoAdsAutomacoes />} />
 
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />

@@ -117,6 +117,22 @@ antes de evoluir. Se (2), a Onda 1 (ingestão Meta) é pré-requisito real.
 
 **Foco: Meta primeiro. Google é Onda 4.**
 
+### Estado de implementação (código)
+
+| Onda | Artefatos | Status |
+|---|---|---|
+| Modelo de dados | migrations `20260622120000_foco_ads_modelo_dados.sql` e `20260622130000_foco_ads_automacoes.sql` | ✅ código (aplicar via Lovable) |
+| 1 — Ingestão Meta | `ads-meta-sync` + `getCredenciaisMetaAds` | ✅ |
+| 2 — IA analista | `ads-ia-analise` (guardrails em código + IA Claude/Opus) | ✅ |
+| 3 — Execução c/ aprovação | `ads-executar-acao` + `_shared/ads-executor.ts` | ✅ |
+| 4 — Google Ads | `ads-google-sync` + `_shared/google-ads-client.ts` (exec: pausar/reativar) | ✅ |
+| 5 — Automações | `ads-automacoes-run` + tabela `ads_automacoes` (padrão DESLIGADO) | ✅ |
+| UI | `src/pages/foco-ads/*` (dashboard, achados, ações, automações) | ✅ |
+
+**Pendências conhecidas:** validar com tokens reais; aplicar migrations; tela de
+cadastro de credenciais Meta/Google em Integrações; Google `ajustar_verba`/`duplicar`.
+Credenciais: `integracao='meta_ads'` e `integracao='google_ads'` em `integracoes_credenciais`.
+
 ---
 
 ## 8. Regras de trabalho (obrigatórias)
