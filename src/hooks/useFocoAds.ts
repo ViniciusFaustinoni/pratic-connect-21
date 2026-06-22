@@ -14,6 +14,8 @@ export interface FocoAdsResumo {
 
 export interface AnuncioLinha {
   entidade_id: string;
+  anuncio_externo: string | null;
+  plataforma: string;
   nome: string;
   objetivo: string;
   gasto: number;
@@ -91,10 +93,10 @@ export function useFocoAdsAnuncios(dias = 7) {
     queryFn: async () => {
       const [{ data: ins, error: e1 }, { data: ans, error: e2 }] = await Promise.all([
         sb.from('ads_insights_diarios')
-          .select('entidade_id, objetivo_norm, gasto, conversas, leads')
+          .select('entidade_id, plataforma, objetivo_norm, gasto, conversas, leads')
           .eq('entidade_tipo', 'anuncio')
           .gte('data', dataCorte(dias)),
-        sb.from('ads_anuncios').select('id, nome, effective_status'),
+        sb.from('ads_anuncios').select('id, nome, effective_status, anuncio_externo'),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -105,6 +107,8 @@ export function useFocoAdsAnuncios(dias = 7) {
         const meta = nomes.get(r.entidade_id);
         const cur = agg.get(r.entidade_id) ?? {
           entidade_id: r.entidade_id,
+          anuncio_externo: meta?.anuncio_externo ?? null,
+          plataforma: r.plataforma ?? 'meta',
           nome: meta?.nome ?? r.entidade_id,
           objetivo: r.objetivo_norm,
           gasto: 0, conversas: 0, leads: 0,
@@ -289,6 +293,54 @@ export function useAtualizarAutomacao() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['foco-ads-automacoes'] }),
+  });
+}
+
+export interface NovaAcaoManual {
+  plataforma: string;
+  tipo: 'pausar' | 'reativar' | 'ajustar_verba' | 'duplicar';
+  entidade_tipo: 'campanha' | 'conjunto' | 'anuncio';
+  entidade_id: string | null;
+  entidade_externa_id: string;
+  nome?: string;
+  /** Para ajustar_verba: nova verba diaria em reais. */
+  daily_budget?: number;
+}
+
+/**
+ * Cria uma ACAO PROPOSTA manual (edicao direta pelo usuario). NAO executa —
+ * apenas registra a proposta (status 'proposta') para aprovacao + execucao.
+ */
+export function useCriarAcaoManual() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (acao: NovaAcaoManual) => {
+      if (!acao.entidade_externa_id) {
+        throw new Error('Sem ID externo da entidade — rode a sincronização primeiro.');
+      }
+      const payload: Record<string, unknown> = {};
+      if (acao.tipo === 'ajustar_verba') {
+        if (!acao.daily_budget || acao.daily_budget <= 0) throw new Error('Informe uma verba diária válida.');
+        payload.daily_budget = acao.daily_budget;
+      }
+      const { data: { user } } = await sb.auth.getUser();
+      const rotulo: Record<string, string> = {
+        pausar: 'Pausar', reativar: 'Reativar', ajustar_verba: 'Ajustar verba', duplicar: 'Duplicar',
+      };
+      const { error } = await sb.from('ads_acoes_propostas').insert({
+        plataforma: acao.plataforma,
+        tipo: acao.tipo,
+        entidade_tipo: acao.entidade_tipo,
+        entidade_id: acao.entidade_id,
+        entidade_externa_id: acao.entidade_externa_id,
+        payload_proposto: payload,
+        justificativa_ia: `Edição manual: ${rotulo[acao.tipo]}${acao.nome ? ` — ${acao.nome}` : ''}`,
+        status: 'proposta',
+        criado_por: user?.id ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['foco-ads-acoes'] }),
   });
 }
 

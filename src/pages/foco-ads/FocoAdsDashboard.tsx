@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { MessageSquare, FileText, DollarSign, RefreshCw, Sparkles, AlertTriangle, ChevronRight } from 'lucide-react';
+import { MessageSquare, FileText, DollarSign, RefreshCw, Sparkles, AlertTriangle, ChevronRight, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ProporAcaoDialog } from '@/components/foco-ads/ProporAcaoDialog';
 import {
   useFocoAdsResumo, useFocoAdsAnuncios, useSincronizarMeta, useSincronizarGoogle, useGerarAnalise,
 } from '@/hooks/useFocoAds';
@@ -171,6 +172,7 @@ export default function FocoAdsDashboard() {
                   <TableHead className="text-right">Resultado</TableHead>
                   <TableHead className="text-right">Custo unit.</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,6 +199,20 @@ export default function FocoAdsDashboard() {
                       ) : (
                         <span className="text-xs text-muted-foreground">{a.effective_status ?? '—'}</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ProporAcaoDialog
+                        plataforma={a.plataforma}
+                        entidadeTipo="anuncio"
+                        entidadeId={a.entidade_id}
+                        entidadeExternaId={a.anuncio_externo}
+                        nome={a.nome}
+                        trigger={
+                          <Button variant="ghost" size="sm">
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Propor
+                          </Button>
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
