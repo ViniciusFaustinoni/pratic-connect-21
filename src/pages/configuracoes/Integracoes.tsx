@@ -32,6 +32,7 @@ interface IntegracaoCard {
   plataformaCodigo?: 'softruck' | 'rede_veiculos';
   sempreAtivo?: boolean;
   diretorOnly?: boolean;
+  adminOnly?: boolean;
   extraInfo?: (ctx: StatusContext) => string | null;
 }
 
@@ -237,6 +238,7 @@ const categorias: Categoria[] = [
         descricao: 'Tokens das plataformas de anúncios (criptografados)',
         icon: Megaphone,
         href: '/configuracoes/integracoes/foco-ads',
+        adminOnly: true,
       },
     ],
   },
@@ -427,7 +429,7 @@ function IntegracaoCardUI({
 type DraftValues = Partial<Record<IntegracaoTipo, Record<string, string>>>;
 
 export default function Integracoes() {
-  const { isDiretor } = usePermissions();
+  const { isDiretor, isAdminMaster } = usePermissions();
   const navigate = useNavigate();
   const integracoes = useIntegracoesStatus();
   const { data: credenciais, refetch: refetchCredenciais } = useTodasIntegracoesCredenciais();
@@ -499,7 +501,7 @@ export default function Integracoes() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {cat.items
-              .filter((card) => !card.diretorOnly || isDiretor)
+              .filter((card) => (!card.diretorOnly || isDiretor) && (!card.adminOnly || isAdminMaster))
               .map((card) => (
               <IntegracaoCardUI
                 key={card.id}

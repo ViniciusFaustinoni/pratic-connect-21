@@ -8,6 +8,7 @@ import { MessageSquare, FileText, DollarSign, RefreshCw, Sparkles, AlertTriangle
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ProporAcaoDialog } from '@/components/foco-ads/ProporAcaoDialog';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   useFocoAdsResumo, useFocoAdsAnuncios, useFocoAdsCampanhas, useSincronizarMeta, useSincronizarGoogle, useGerarAnalise,
 } from '@/hooks/useFocoAds';
@@ -19,6 +20,7 @@ const PERIODOS = [7, 14, 30];
 
 export default function FocoAdsDashboard() {
   const navigate = useNavigate();
+  const { isAdminMaster } = usePermissions();
   const [dias, setDias] = useState(7);
   const { data: resumo, isLoading: loadingResumo } = useFocoAdsResumo(dias);
   const { data: campanhas, isLoading: loadingCampanhas } = useFocoAdsCampanhas(dias);
@@ -50,6 +52,21 @@ export default function FocoAdsDashboard() {
       error: (e) => `Falha na análise: ${e?.message ?? e}`,
     });
   };
+
+  if (!isAdminMaster) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="flex items-center gap-3 py-12 text-center">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <p className="text-muted-foreground">
+              Acesso restrito ao <strong>admin master</strong>. O módulo Foco Ads não está disponível para o seu perfil.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-4 md:p-6">

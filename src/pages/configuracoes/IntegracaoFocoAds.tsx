@@ -8,6 +8,7 @@ import { ArrowLeft, Eye, EyeOff, ShieldCheck, ShieldAlert, Save, RefreshCw, KeyR
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const FUNCOES_URL =
   (import.meta.env.VITE_SUPABASE_URL || 'https://iyxdgmukrrdkffraptsx.supabase.co') + '/functions/v1';
@@ -171,6 +172,23 @@ function IntegracaoForm({
 
 export default function IntegracaoFocoAds() {
   const navigate = useNavigate();
+  const { isAdminMaster } = usePermissions();
+
+  // Foco Ads e restrito ao admin_master (ve e edita). Demais nao acessam.
+  if (!isAdminMaster) {
+    return (
+      <div className="mx-auto max-w-3xl p-6">
+        <Card>
+          <CardContent className="flex items-center gap-3 py-12 text-center">
+            <ShieldAlert className="h-5 w-5 text-destructive" />
+            <p className="text-muted-foreground">
+              Acesso restrito ao <strong>admin master</strong>. Você não tem permissão para gerenciar as credenciais do Foco Ads.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const testarMeta = () => {
     toast.promise(

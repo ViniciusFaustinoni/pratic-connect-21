@@ -60,6 +60,10 @@ a infraestrutura existente sempre que possível (ver seção 6).
   pessoais de leads.
 - **Controle de acesso**: nem todo usuário pode executar ações de escrita. Prever
   **papéis** distintos — quem **só vê** vs. quem **aprova/executa**.
+  - **Decisão atual (política em vigor):** o módulo Foco Ads é **exclusivo do
+    `admin_master`** — só ele **vê e edita**. Nenhum outro papel acessa (nem para
+    visualizar). Permissões `foco_ads.ver`/`aprovar`/`executar` concedidas **apenas**
+    ao `admin_master` (migration `20260622140000`). UI e RLS reforçam isso.
 
 ---
 
