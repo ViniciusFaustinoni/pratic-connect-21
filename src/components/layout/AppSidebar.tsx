@@ -767,10 +767,17 @@ export function AppSidebar() {
   };
 
   const toggleSuperGroup = (sgId: string) => {
+    const isOpen = openSuperGroups.includes(sgId);
+    if (isOpen) {
+      // Ao fechar o grupo, recolhe também seus subgrupos para que
+      // ao reabrir tudo volte fechado (padrão: só abre ao clicar).
+      const sg = SUPER_GROUPS.find(s => s.id === sgId);
+      if (sg) {
+        setOpenGroups(prev => prev.filter(id => !sg.moduleIds.includes(id)));
+      }
+    }
     setOpenSuperGroups(prev =>
-      prev.includes(sgId)
-        ? prev.filter(id => id !== sgId)
-        : [...prev, sgId]
+      isOpen ? prev.filter(id => id !== sgId) : [...prev, sgId]
     );
   };
 
@@ -865,11 +872,13 @@ export function AppSidebar() {
                             {sg.label}
                           </div>
                           {sg.subGroups.map((group) => (
-                            <div key={group.id} className="mb-1">
-                              <div className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            <Collapsible key={group.id} className="group/popgroup mb-1">
+                              <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider transition-colors hover:bg-sidebar-accent/50 hover:text-foreground">
                                 <group.icon className="h-3 w-3" style={{ color: group.color }} />
-                                {group.label}
-                              </div>
+                                <span className="flex-1 text-left">{group.label}</span>
+                                <ChevronDown className="h-3 w-3 transition-transform duration-200 group-data-[state=open]/popgroup:rotate-180" />
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
                               <div className="space-y-0.5 pl-1">
                                 {group.items.map((item) => (
                                   <NavLink
@@ -890,7 +899,8 @@ export function AppSidebar() {
                                   </NavLink>
                                 ))}
                               </div>
-                            </div>
+                              </CollapsibleContent>
+                            </Collapsible>
                           ))}
                         </PopoverContent>
                       </Popover>
