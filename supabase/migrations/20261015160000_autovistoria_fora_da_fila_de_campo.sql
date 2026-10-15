@@ -17,14 +17,96 @@
 --             vira a "tarefa atual" e iniciar_rota_servico tenta 'em_rota',
 --             barrado pelo fn_guard_autovistoria_servico_disjunto (23514).
 --
--- Correção (somente leitura/mensagens; a atribuição em si é válida):
+-- Correção (a atribuição do técnico é válida e segue para o card de INSTALAÇÃO;
+-- só a cópia dela para o card de AUTOVISTORIA é descartada):
+--   (2) fn_guard_autovistoria_servico_disjunto: em UPDATE de card de
+--       autovistoria, (a) estado terminal não volta para 'agendada' e (b) não
+--       recebe técnico de campo. A escrita é neutralizada (mantém valores
+--       anteriores) e registrada em log — sem erro, para não abortar o restante
+--       do fluxo de atribuição, que grava em seguida o card de INSTALAÇÃO.
+--       Realocação do Monitoramento (flag on) segue para
+--       fn_guard_reabertura_servico_monitoramento, que já explica o bloqueio.
 --   (3) iniciar_rota_servico / iniciar_tarefa_servico: autovistoria responde
 --       ok=false com mensagem clara em vez de 400 de constraint.
 --   (4) buscar_tarefa_atual_profissional: autovistoria nunca é tarefa de campo.
---   Caso QQG4D99 liberado manualmente em 15/10: técnico atribuído no card de
---   INSTALAÇÃO INS-2026-01101. Causa raiz da reabertura do card de autovistoria
---   pela atribuição: pendente, a tratar à parte.
+--   (1) Saneamento: card de autovistoria agendado com técnico (QQG4D99,
+--       VEN-2026-01606) volta a 'cancelada', sem técnico — estado gravado pelo
+--       sistema às 15:48:40. O atendimento do caso já segue no card de
+--       INSTALAÇÃO INS-2026-01101 (técnico atribuído em 15/10).
 -- =============================================================================
+
+-- (2) Guard -------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.fn_guard_autovistoria_servico_disjunto()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_is_autovistoria boolean := false;
+  v_neutralizou text := '';
+BEGIN
+  -- Detecta autovistoria pela vistoria de origem OU pela modalidade do proprio servico
+  IF NEW.vistoria_origem_id IS NOT NULL THEN
+    SELECT (modalidade = 'autovistoria') INTO v_is_autovistoria
+    FROM public.vistorias
+    WHERE id = NEW.vistoria_origem_id;
+  END IF;
+  IF COALESCE(v_is_autovistoria, false) = false AND NEW.modalidade = 'autovistoria' THEN
+    v_is_autovistoria := true;
+  END IF;
+
+  IF COALESCE(v_is_autovistoria, false) = false THEN
+    RETURN NEW;
+  END IF;
+
+  -- 0) ERR-VISTH6: autovistoria e remota e nao entra na fila de campo. A
+  --    atribuicao de tecnico vale para o card de INSTALACAO; a copia dela para
+  --    este card e neutralizada (sem erro, para nao abortar o fluxo que grava a
+  --    instalacao logo em seguida). Realocacao (flag on) segue para
+  --    fn_guard_reabertura_servico_monitoramento, que explica o bloqueio.
+  IF TG_OP = 'UPDATE'
+     AND COALESCE(current_setting('app.realocacao_monitoramento', true), '') <> 'on' THEN
+    IF OLD.status::text IN ('cancelada','aprovada','reprovada','concluida')
+       AND NEW.status::text = 'agendada' THEN
+      v_neutralizou := v_neutralizou || ' status ' || OLD.status::text || '->agendada;';
+      NEW.status := OLD.status;
+    END IF;
+    IF NEW.profissional_id IS NOT NULL
+       AND NEW.profissional_id IS DISTINCT FROM OLD.profissional_id THEN
+      v_neutralizou := v_neutralizou || ' profissional_id '
+        || COALESCE(OLD.profissional_id::text, 'null') || '->' || NEW.profissional_id::text || ';';
+      NEW.profissional_id := OLD.profissional_id;
+    END IF;
+    IF v_neutralizou <> '' THEN
+      INSERT INTO public.logs_auditoria (acao, modulo, tabela, registro_id, descricao)
+      VALUES ('editar', 'operacoes', 'servicos', NEW.id,
+              '[AUTOVISTORIA_FORA_DO_CAMPO] escrita neutralizada:' || v_neutralizou
+              || ' (autovistoria nao vai a campo; a atribuicao vale no card de INSTALACAO).');
+    END IF;
+  END IF;
+
+  -- 1) Servico de autovistoria NUNCA pode vincular instalacao_origem_id
+  IF NEW.instalacao_origem_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Servico de autovistoria nao pode ser vinculado a instalacao fisica (instalacao_origem_id=%).', NEW.instalacao_origem_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 1b) Servico de autovistoria NUNCA pode ter tipo de tarefa de campo fisica.
+  --     Foi a causa-raiz do incidente SRZ3G30 (tipo alterado manualmente para 'instalacao' no agendamento).
+  IF NEW.tipo::text IN ('instalacao','manutencao','retirada') THEN
+    RAISE EXCEPTION 'Servico de autovistoria nao pode ter tipo de tarefa de campo (% ). Autovistoria e remota; agende a instalacao presencial em um servico proprio.', NEW.tipo
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 2) Status permitidos para servico de autovistoria (inclui concluida e agendada)
+  IF NEW.status NOT IN ('em_analise','aprovada','reprovada','cancelada','concluida','agendada') THEN
+    RAISE EXCEPTION 'Status % invalido para servico de autovistoria (permitidos: em_analise, aprovada, reprovada, cancelada, concluida, agendada).', NEW.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
 
 -- (3a) iniciar_rota_servico -----------------------------------------------------
 CREATE OR REPLACE FUNCTION public.iniciar_rota_servico(p_servico_id uuid)
@@ -153,3 +235,17 @@ BEGIN
   EXECUTE v_def;
 END
 $do$;
+
+-- (1) Saneamento do card do incidente --------------------------------------------
+-- Roda depois do guard: 'agendada'->'cancelada' e técnico->NULL não são
+-- neutralizados (OLD não é terminal; técnico novo é NULL).
+UPDATE public.servicos
+   SET status = 'cancelada',
+       profissional_id = NULL,
+       observacoes = COALESCE(observacoes, '') || E'\n' ||
+         '[' || to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') ||
+         '] SANEAMENTO ERR-VISTH6: card de autovistoria (ja aprovada) reaberto pela atribuicao de tecnico em 15/10 12:48; devolvido a cancelada, sem tecnico. Atendimento segue no card de INSTALACAO INS-2026-01101.',
+       updated_at = now()
+ WHERE id = '227a8e51-e9fa-4fae-ac57-bdeec29d26a6'
+   AND status = 'agendada'
+   AND modalidade = 'autovistoria';
